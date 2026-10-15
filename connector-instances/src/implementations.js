@@ -26,10 +26,11 @@ import {
   SSH_DEFINITION,
   SMTP_IMAP_DEFINITION,
 } from "./definitions.js";
+import { text } from "@noobot/shared/value";
 
-const command = (request = {}) => String(request?.input?.command || "").trim();
+const command = (request = {}) => text(request?.input?.command);
 const requiredSessionId = (value = "") => {
-  const sessionId = String(value || "").trim();
+  const sessionId = text(value);
   if (!sessionId) throw new TypeError("connector sessionId is required");
   return sessionId;
 };

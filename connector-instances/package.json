@@ -19,6 +19,7 @@
     "mysql2": "^3.24.6",
     "nodemailer": "^10.1.1",
     "pg": "^8.23.1",
-    "ssh2": "^1.17.0"
+    "ssh2": "^1.17.0",
+    "@noobot/shared": "file:../shared"
   }
 }

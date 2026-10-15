@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function sanitizeFileName(input = "", fallback = "untitled") {
-  const cleaned = String(input || "")
-    .trim()
+  const cleaned = text(input)
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
     .replace(/\s+/g, " ");
   return cleaned || fallback;
@@ -14,9 +15,7 @@ export function sanitizeFileName(input = "", fallback = "untitled") {
 
 export function dedupeTextList(items = []) {
   return Array.from(
-    new Set(
-      (Array.isArray(items) ? items : []).map((item) => String(item || "").trim()).filter(Boolean),
-    ),
+    new Set((Array.isArray(items) ? items : []).map((item) => text(item)).filter(Boolean)),
   );
 }
 

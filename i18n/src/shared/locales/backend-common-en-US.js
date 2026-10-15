@@ -4,18 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const BACKEND_COMMON_EN_US = {
   "agent.fetchGeneratedMediaFailed": (params = {}) =>
     `fetch generated media failed: HTTP ${Number(params.status || 500)}`,
   "agent.fetchRemoteMediaArtifactFailed": (params = {}) =>
-    `failed to fetch remote media artifact: ${String(params.url || "").trim()}${String(params.reason || "").trim() ? ` (${String(params.reason || "").trim()})` : ""}`,
+    `failed to fetch remote media artifact: ${text(params.url)}${text(params.reason) ? ` (${text(params.reason)})` : ""}`,
   "agent.subTaskLabelPrefix": "Subtask",
   "agent.toolLoopLimitReached": (params = {}) =>
     `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
   "agent.toolLoopLimitFinalizePrompt": (params = {}) =>
     `Tool-call turns reached the limit (${Number(params.maxTurns || 0)}). Stop calling tools and provide a final summary with actionable next steps.`,
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
-    `Tool "${String(params.toolName || "").trim() || "unknown"}" failed ${Number(params.maxFails || 5)} times consecutively. Loop stopped automatically.`,
+    `Tool "${text(params.toolName) || "unknown"}" failed ${Number(params.maxFails || 5)} times consecutively. Loop stopped automatically.`,
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
     `Tool calls have failed consecutively ${Number(params.failureCount || 0)} times. If the tool usage or parameter semantics are unclear, call ${String(params.helpToolName || "help")} to read the detailed manual for that tool.`,
   "agent.helpToolLoopPrompt": (params = {}) =>
@@ -58,8 +60,7 @@ export const BACKEND_COMMON_EN_US = {
   "common.fileNotFound": "file not found",
   "common.userIdRequired": "userId required",
   "common.atLeastOneUserRequired": "at least one user is required",
-  "common.duplicateUserId": (params = {}) =>
-    `duplicate userId: ${String(params.userId || "").trim()}`,
+  "common.duplicateUserId": (params = {}) => `duplicate userId: ${text(params.userId)}`,
   "common.getConnectorsFailed": "get connectors failed",
   "common.inputOutputDirRequired": "input/outputDir required",
   "common.invalidUrl": "invalid url",
@@ -111,7 +112,7 @@ export const BACKEND_COMMON_EN_US = {
   "model.apiKeyMissingForProviderAlias": "missing api key for provider alias",
   "model.nameRequired": "model name is required",
   "model.notConversationModel": (params = {}) =>
-    `model is not available for conversation switch: ${String(params.alias || "").trim()}`,
+    `model is not available for conversation switch: ${text(params.alias)}`,
   "services.handlerModuleNotFound": "service handler module not found",
   "services.handlerNotFound": "service handler not found",
   "services.handlerRequired": "service handler required",

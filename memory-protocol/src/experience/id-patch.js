@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { dedupeTextList, stripMarkdownFence } from "../text.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeText(text = "") {
   return stripMarkdownFence(String(text || ""))
@@ -19,7 +20,7 @@ function splitPatchLines(text = "") {
 }
 
 function unquote(value = "") {
-  const raw = String(value || "").trim();
+  const raw = text(value);
   if (!raw) return "";
   if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
     return raw.slice(1, -1).replace(/\\(["'])/g, "$1");

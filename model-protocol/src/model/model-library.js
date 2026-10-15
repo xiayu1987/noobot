@@ -8,6 +8,7 @@ import {
   normalizeModelPromptCacheSelection,
   normalizeModelReasoningConfiguration,
 } from "./provider-spec.js";
+import { text } from "@noobot/shared/value";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -47,7 +48,7 @@ function validateLibrary(payload) {
       throw new TypeError(`invalid model library provider: ${alias || "missing"}`);
     }
     for (const field of ["model", "api_key", "base_url"]) {
-      if (!String(provider[field] || "").trim()) {
+      if (!text(provider[field])) {
         throw new TypeError(`model library provider ${alias}.${field} is required`);
       }
     }
@@ -76,7 +77,7 @@ if (!GENERIC_PROVIDER_TEMPLATE) {
   throw new TypeError("model library defaults.generic_provider is required");
 }
 for (const field of ["model", "api_key", "base_url"]) {
-  if (!String(GENERIC_PROVIDER_TEMPLATE[field] || "").trim()) {
+  if (!text(GENERIC_PROVIDER_TEMPLATE[field])) {
     throw new TypeError(`model library generic provider ${field} is required`);
   }
 }
@@ -88,7 +89,7 @@ export function listModelLibraryOptions() {
     Object.freeze({
       key,
       model: provider.model,
-      description: String(provider.description || "").trim(),
+      description: text(provider.description),
       reasoning_effort: provider.reasoning_effort,
       tool_reasoning_effort: provider.tool_reasoning_effort,
       reasoning_effort_options: [...provider.reasoning_effort_options],
@@ -98,7 +99,7 @@ export function listModelLibraryOptions() {
 }
 
 export function resolveModelLibraryProvider(alias = "") {
-  const key = String(alias || "").trim();
+  const key = text(alias);
   const provider = MODEL_LIBRARY_PROVIDERS[key];
   return isPlainObject(provider) ? clone(provider) : null;
 }

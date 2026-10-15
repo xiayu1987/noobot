@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const ASSISTANCE_TOOL_SCHEMA = {
   help: {
     description: {
@@ -119,15 +121,14 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "请在对应平台开通 Images API 权限，或切换到已开通图片生成能力的模型/密钥。",
       "tools.multimodal.modelApiKeyMissing": "模型 API Key 缺失",
       "tools.multimodal.modelNotFound": (params = {}) =>
-        `未找到已配置的多模态生成模型：${String(params.model || "").trim()}`,
+        `未找到已配置的多模态生成模型：${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
-        `当前模型不支持多模态生成（图片）：${String(params.model || "").trim()}`,
+        `当前模型不支持多模态生成（图片）：${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedMessage":
         "请切换到支持图片生成的模型，或通过 model_name 指定支持生成的模型。",
       "tools.multimodal.taskFailed": "图片生成任务失败",
       "tools.multimodal.taskIdMissing": "图片生成任务 ID 缺失",
-      "tools.multimodal.taskTimeout": (params = {}) =>
-        `图片生成任务超时：${String(params.taskId || "").trim()}`,
+      "tools.multimodal.taskTimeout": (params = {}) => `图片生成任务超时：${text(params.taskId)}`,
       "tools.multimodal.capabilityUnavailable":
         "该模型当前无法完成图片生成，请检查模型配置或更换模型。",
     },
@@ -164,14 +165,14 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.fileTooLarge": (params = {}) =>
         `所有文件合计必须小于 ${Number(params.maxSizeMB || 50)} MB`,
       "tools.multimodalParse.directTextUnsupported": (params = {}) =>
-        `以下输入是可直接读取的文本，不属于多模态解析范围：${String(params.inputs || "").trim()}。请使用 read_file 或资源分段读取。`,
+        `以下输入是可直接读取的文本，不属于多模态解析范围：${text(params.inputs)}。请使用 read_file 或资源分段读取。`,
       "tools.multimodalParse.svgRasterizerUnavailable":
         "当前环境缺少 SVG 图像转换能力，无法将 SVG 交给多模态模型解析。",
       "tools.multimodalParse.defaultPrompt":
         "请完整解析所有文件内容，保留原始结构和关键信息，按文件区分内容，不要编造内容。",
       "tools.multimodalParse.modelNotFound": "未找到已启用多模态解析的模型",
       "tools.multimodalParse.defaultModelMissing": (params = {}) =>
-        `未配置以下输入类型的默认多模态解析模型：${String(params.modalities || "").trim()}`,
+        `未配置以下输入类型的默认多模态解析模型：${text(params.modalities)}`,
       "tools.multimodalParse.defaultModelConflict":
         "这些输入类型配置了不同的默认解析模型，请显式指定一个支持全部输入类型的 model_name",
     },
@@ -217,10 +218,10 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.fieldName": "字段名（返回对象的 key）",
       "tools.user_interaction.fieldRequired": "是否必填",
       "tools.user_interaction.invalidFieldsPayload": (params = {}) =>
-        `字段 payload 无效: ${String(params.reason || "").trim()}`,
+        `字段 payload 无效: ${text(params.reason)}`,
       "tools.user_interaction.invalidResponseObject": "交互返回对象无效",
       "tools.user_interaction.missingRequiredField": (params = {}) =>
-        `缺少必填字段: ${String(params.key || "").trim()}`,
+        `缺少必填字段: ${text(params.key)}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
         "字段名、显示名或说明命中凭据类敏感词，交互已被拦截。不得向用户索取密码、令牌、密钥、连接串等凭据；如确实不是凭据字段，请改用不含敏感词的字段名后重发。数据库或终端等需要凭据的场景由用户在客户端配置连接器，再通过 access_connector 访问。",
     },

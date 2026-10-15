@@ -4,18 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const BACKEND_COMMON_ZH_CN = {
   "agent.fetchGeneratedMediaFailed": (params = {}) =>
     `拉取生成媒体失败: HTTP ${Number(params.status || 500)}`,
   "agent.fetchRemoteMediaArtifactFailed": (params = {}) =>
-    `拉取远程媒体失败: ${String(params.url || "").trim()}${String(params.reason || "").trim() ? `（${String(params.reason || "").trim()}）` : ""}`,
+    `拉取远程媒体失败: ${text(params.url)}${text(params.reason) ? `（${text(params.reason)}）` : ""}`,
   "agent.subTaskLabelPrefix": "子任务",
   "agent.toolLoopLimitReached": (params = {}) =>
     `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
   "agent.toolLoopLimitFinalizePrompt": (params = {}) =>
     `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})。请停止继续调用工具，直接给出最终总结与可执行建议。`,
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
-    `工具「${String(params.toolName || "").trim() || "unknown"}」连续失败达到 ${Number(params.maxFails || 5)} 次，已自动停止循环。`,
+    `工具「${text(params.toolName) || "unknown"}」连续失败达到 ${Number(params.maxFails || 5)} 次，已自动停止循环。`,
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
     `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若不确定该工具的用法或参数语义，可调用 ${String(params.helpToolName || "help")} 工具查看该工具的详细使用说明。`,
   "agent.helpToolLoopPrompt": (params = {}) =>
@@ -57,8 +59,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "common.fileNotFound": "文件不存在",
   "common.userIdRequired": "userId 必填",
   "common.atLeastOneUserRequired": "至少需要一个用户",
-  "common.duplicateUserId": (params = {}) =>
-    `存在重复 userId: ${String(params.userId || "").trim()}`,
+  "common.duplicateUserId": (params = {}) => `存在重复 userId: ${text(params.userId)}`,
   "common.getConnectorsFailed": "获取连接器失败",
   "common.inputOutputDirRequired": "input 与 outputDir 必填",
   "common.invalidUrl": "无效 URL",
@@ -109,8 +110,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "init.workspaceTemplatePathRequired": "workspaceTemplatePath 必填",
   "model.apiKeyMissingForProviderAlias": "provider 别名缺少 API key",
   "model.nameRequired": "模型名称必填",
-  "model.notConversationModel": (params = {}) =>
-    `该模型不支持会话切换: ${String(params.alias || "").trim()}`,
+  "model.notConversationModel": (params = {}) => `该模型不支持会话切换: ${text(params.alias)}`,
   "services.handlerModuleNotFound": "未找到 service handler 模块",
   "services.handlerNotFound": "未找到 service handler",
   "services.handlerRequired": "service handler 必填",

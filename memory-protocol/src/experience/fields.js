@@ -5,6 +5,7 @@
  */
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
 import { EXPERIENCE_STRUCTURE_FIELDS } from "./structure.js";
+import { text } from "@noobot/shared/value";
 
 const EXPERIENCE_STAGES = Object.freeze(["daily", "weekly", "monthly", "yearly"]);
 
@@ -47,7 +48,7 @@ function createExperienceFields(definition = {}) {
     const seen = new Set();
     out[stage] = Object.freeze(
       items.map((item) => {
-        const key = String(item?.key || "").trim();
+        const key = text(item?.key);
         if (!FIELD_KEY_PATTERN.test(key)) {
           throw new Error(`invalid experience field key in ${stage}: ${key || "(empty)"}`);
         }

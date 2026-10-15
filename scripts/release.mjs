@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { bumpVersion, normalizeVersion, assertVersion, run } from "./bump-version.mjs";
+import { text } from "@noobot/shared/value";
 
 const execFileAsync = promisify(execFile);
 
@@ -57,7 +58,7 @@ async function gitOutput(args = []) {
     encoding: "utf8",
     maxBuffer: 1024 * 1024,
   });
-  return String(stdout || "").trim();
+  return text(stdout);
 }
 
 async function assertCleanWorkingTree() {

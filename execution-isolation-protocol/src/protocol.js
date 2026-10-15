@@ -12,6 +12,7 @@ import {
   isRestrictedHostExecutionView,
   isSandboxExecutionView,
 } from "./execution-views.js";
+import { text } from "@noobot/shared/value";
 
 export {
   TOOL_EXECUTION_VIEW,
@@ -65,9 +66,7 @@ export const WORKSPACE_SANDBOX_PATHS = Object.freeze({
 export { SHELL as COMMAND_SHELL } from "@noobot/platform-compatibility/platform";
 
 function normalizeIsolationMode(input = "") {
-  return String(input || "")
-    .trim()
-    .toLowerCase();
+  return text(input).toLowerCase();
 }
 
 export function isSandboxIsolationMode(mode = "") {
@@ -113,7 +112,7 @@ function objectOrEmpty(value) {
 }
 
 function requiredString(value, field) {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!normalized) throw new Error(`${field} is required`);
   if (normalized.includes("\0")) throw new Error(`${field} contains a null byte`);
   return normalized;
@@ -178,9 +177,7 @@ function normalizeOptionalLockWaitTimeout(value) {
 }
 
 function normalizeSandboxProvider(input = SANDBOX_PROVIDER.DOCKER) {
-  const provider = String(input || "")
-    .trim()
-    .toLowerCase();
+  const provider = text(input).toLowerCase();
   if (provider !== SANDBOX_PROVIDER.DOCKER) {
     throw new Error(`invalid workspace sandbox provider: ${provider}`);
   }
@@ -195,9 +192,7 @@ export function resolveSandboxProviderExecutable(provider = SANDBOX_PROVIDER.DOC
 }
 
 function normalizeDockerContainerScope(input = DOCKER_CONTAINER_SCOPE.USER) {
-  const scope = String(input || "")
-    .trim()
-    .toLowerCase();
+  const scope = text(input).toLowerCase();
   if (!Object.values(DOCKER_CONTAINER_SCOPE).includes(scope)) {
     throw new Error(`invalid workspace sandbox scope: ${scope}`);
   }
@@ -223,7 +218,7 @@ export function normalizeSandboxMounts(input = []) {
     return Object.freeze({
       source,
       target,
-      description: String(mount.description || "").trim(),
+      description: text(mount.description),
       readOnly: mount.readOnly === true,
     });
   });
@@ -374,7 +369,7 @@ export function resolveSandboxMountMappings(isolation = {}) {
 }
 
 export function resolveToolExecutionClass(toolName = "") {
-  const normalizedName = String(toolName || "").trim();
+  const normalizedName = text(toolName);
   const executionClass = TOOL_EXECUTION_REGISTRY[normalizedName];
   if (!executionClass) throw new Error(`tool execution class is not registered: ${normalizedName}`);
   return executionClass;

@@ -5,6 +5,7 @@
  */
 import { execFile } from "node:child_process";
 import { normalizePlatform, PLATFORM } from "./platform.js";
+import { text } from "@noobot/shared/value";
 
 const WINDOWS_PROCESS_ENV_KEYS = Object.freeze([
   "SystemRoot",
@@ -46,7 +47,7 @@ export function resolveCommandLookupExecutable(platform = process.platform) {
 }
 
 export function resolveCommandShimExecutable(command = "", platform = process.platform) {
-  const executable = String(command || "").trim();
+  const executable = text(command);
   if (!executable) throw new TypeError("command is required");
   return normalizePlatform(platform) === PLATFORM.WINDOWS ? `${executable}.cmd` : executable;
 }
@@ -63,10 +64,7 @@ export function decodeCommandOutput(
     void 0;
   }
   if (normalizePlatform(platform) !== PLATFORM.WINDOWS) return bytes.toString("utf8");
-  const normalizedLocale = String(locale || "")
-    .trim()
-    .toLowerCase()
-    .replaceAll("_", "-");
+  const normalizedLocale = text(locale).toLowerCase().replaceAll("_", "-");
   const language = normalizedLocale.split("-")[0];
   const encoding =
     language === "zh"
@@ -82,7 +80,7 @@ export function resolveLibreOfficeExecutable({
   sourceEnv = process.env,
 } = {}) {
   for (const key of LIBREOFFICE_EXECUTABLE_ENV_KEYS) {
-    const value = String(sourceEnv[key] || "").trim();
+    const value = text(sourceEnv[key]);
     if (value) return value;
   }
   return normalizePlatform(platform) === PLATFORM.WINDOWS ? "soffice.exe" : "libreoffice";
@@ -92,12 +90,11 @@ export function resolveBrowserExecutable({
   playwrightExecutable = "",
   sourceEnv = process.env,
 } = {}) {
-  return String(
+  return text(
     sourceEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH ||
       sourceEnv.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ||
-      playwrightExecutable ||
-      "",
-  ).trim();
+      playwrightExecutable,
+  );
 }
 
 export function buildRestrictedProcessEnv({
@@ -118,7 +115,7 @@ export function buildRestrictedProcessEnv({
 
 export function resolveBrowserProfileRoot({ sourceEnv = process.env } = {}) {
   for (const key of BROWSER_PROFILE_ROOT_ENV_KEYS) {
-    const value = String(sourceEnv[key] || "").trim();
+    const value = text(sourceEnv[key]);
     if (value) return value;
   }
   return "";
@@ -133,7 +130,7 @@ export function supportsHeadedBrowser({
   sourceEnv = process.env,
 } = {}) {
   if (normalizePlatform(platform) !== PLATFORM.LINUX) return true;
-  return HEADED_DISPLAY_ENV_KEYS.some((key) => String(sourceEnv[key] || "").trim().length > 0);
+  return HEADED_DISPLAY_ENV_KEYS.some((key) => text(sourceEnv[key]).length > 0);
 }
 
 function buildRestrictedProcessEnvironment({ home, temp, platform, sourceEnv, runElectronAsNode }) {
@@ -145,11 +142,11 @@ function buildRestrictedProcessEnvironment({ home, temp, platform, sourceEnv, ru
     ...(runElectronAsNode ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
   };
   for (const key of NETWORK_PROXY_ENV_KEYS) {
-    if (String(sourceEnv[key] || "").trim()) environment[key] = sourceEnv[key];
+    if (text(sourceEnv[key])) environment[key] = sourceEnv[key];
   }
   if (normalizePlatform(platform) === PLATFORM.WINDOWS) {
     for (const key of WINDOWS_PROCESS_ENV_KEYS) {
-      if (String(sourceEnv[key] || "").trim()) environment[key] = sourceEnv[key];
+      if (text(sourceEnv[key])) environment[key] = sourceEnv[key];
     }
     environment.USERPROFILE = home;
     environment.TEMP = temp;

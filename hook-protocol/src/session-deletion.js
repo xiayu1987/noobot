@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function normalizeSessionIds(sessionIds = []) {
   if (!Array.isArray(sessionIds)) return [];
-  return [...new Set(sessionIds.map((value) => String(value || "").trim()).filter(Boolean))];
+  return [...new Set(sessionIds.map((value) => text(value)).filter(Boolean))];
 }
 
 export function createSessionDeletionHookResult({
@@ -48,6 +50,6 @@ export function mergeSessionDeletionIds(...sessionIdGroups) {
 export function resolveSessionDeletionTargets(context = {}) {
   const deletedSessionIds = normalizeSessionIds(context?.deletedSessionIds);
   if (deletedSessionIds.length) return deletedSessionIds;
-  const fallbackSessionId = String(context?.sessionId || "").trim();
+  const fallbackSessionId = text(context?.sessionId);
   return fallbackSessionId ? [fallbackSessionId] : [];
 }

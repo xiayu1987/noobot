@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function createSerializedWindowIndex({ field, limit } = {}) {
-  const fieldName = String(field || "").trim();
+  const fieldName = text(field);
   const maximum = Math.max(1, Number(limit) || 0);
   if (!fieldName) throw new TypeError("createSerializedWindowIndex requires field");
   const indexes = new WeakMap();

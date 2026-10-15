@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const ASSISTANCE_TOOL_SCHEMA = {
   help: {
     description: {
@@ -139,15 +141,15 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "Enable Images API on your platform, or switch to a model/key with image generation enabled.",
       "tools.multimodal.modelApiKeyMissing": "model api key missing",
       "tools.multimodal.modelNotFound": (params = {}) =>
-        `configured multimodal generation model not found: ${String(params.model || "").trim()}`,
+        `configured multimodal generation model not found: ${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
-        `Current model does not support multimodal image generation: ${String(params.model || "").trim()}`,
+        `Current model does not support multimodal image generation: ${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedMessage":
         "Switch to a model that supports image generation, or specify one via model_name.",
       "tools.multimodal.taskFailed": "image generation task failed",
       "tools.multimodal.taskIdMissing": "image generation task id missing",
       "tools.multimodal.taskTimeout": (params = {}) =>
-        `image generation task timeout: ${String(params.taskId || "").trim()}`,
+        `image generation task timeout: ${text(params.taskId)}`,
       "tools.multimodal.capabilityUnavailable":
         "This model cannot serve image generation right now. Check the model configuration or use another model.",
     },
@@ -184,7 +186,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.fileTooLarge": (params = {}) =>
         `The combined file size must be smaller than ${Number(params.maxSizeMB || 50)} MB`,
       "tools.multimodalParse.directTextUnsupported": (params = {}) =>
-        `The following inputs are directly readable text and are outside multimodal parsing: ${String(params.inputs || "").trim()}. Use read_file or resource chunk reading.`,
+        `The following inputs are directly readable text and are outside multimodal parsing: ${text(params.inputs)}. Use read_file or resource chunk reading.`,
       "tools.multimodalParse.svgRasterizerUnavailable":
         "The current environment has no SVG rasterizer, so the SVG cannot be parsed by a multimodal model.",
       "tools.multimodalParse.defaultPrompt":
@@ -192,7 +194,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.modelNotFound":
         "No model is configured with multimodal parsing enabled",
       "tools.multimodalParse.defaultModelMissing": (params = {}) =>
-        `No default multimodal parsing model is configured for: ${String(params.modalities || "").trim()}`,
+        `No default multimodal parsing model is configured for: ${text(params.modalities)}`,
       "tools.multimodalParse.defaultModelConflict":
         "The input types use different default parsing models; specify one model_name that supports every input type",
     },
@@ -239,10 +241,10 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.fieldName": "Field name (key in returned object)",
       "tools.user_interaction.fieldRequired": "Whether required",
       "tools.user_interaction.invalidFieldsPayload": (params = {}) =>
-        `invalid fields payload: ${String(params.reason || "").trim()}`,
+        `invalid fields payload: ${text(params.reason)}`,
       "tools.user_interaction.invalidResponseObject": "invalid interaction response object",
       "tools.user_interaction.missingRequiredField": (params = {}) =>
-        `missing required field: ${String(params.key || "").trim()}`,
+        `missing required field: ${text(params.key)}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
         "A field name, display name, or description matched a credential keyword, so the interaction was blocked. Never ask the user for passwords, tokens, keys, or connection strings; if the field is not a credential, rename it without the sensitive keyword and send the request again. For database or terminal access that genuinely needs credentials, the user configures a connector in the client and you reach it through access_connector.",
     },

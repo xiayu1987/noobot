@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const SYSTEM_RUNTIME_COUNTER_KEYS = Object.freeze([
   "phaseSummaryLoopCount",
   "taskCheckLoopCount",
@@ -58,5 +60,5 @@ export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
   systemRuntime.needsPhaseSummary = systemRuntime.needsPhaseSummary === true;
   systemRuntime.phaseSummaryByCharsPrompted = systemRuntime.phaseSummaryByCharsPrompted === true;
   systemRuntime.mainFlowFinalNoToolsTurnActive = false;
-  systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
+  systemRuntime.currentTurnUserMessage = text(userMessage);
 }

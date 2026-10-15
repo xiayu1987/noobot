@@ -6,6 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
@@ -30,7 +31,7 @@ const ALL_PROJECTS = {
 
 const args = process.argv.slice(2);
 const projectArg = args.find((item) => item.startsWith("--project="));
-const selected = projectArg ? String(projectArg.split("=")[1] || "").trim() : "";
+const selected = projectArg ? text(projectArg.split("=")[1]) : "";
 
 const projects = selected
   ? Object.fromEntries(Object.entries(ALL_PROJECTS).filter(([name]) => name === selected))

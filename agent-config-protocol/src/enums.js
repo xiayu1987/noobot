@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const PROVIDER_FORMAT = {
   OPENAI_COMPATIBLE: "openai_compatible",
 };
@@ -97,9 +99,7 @@ const CONTEXT_RUNTIME_CAPABILITY = Object.freeze({
 });
 
 export function normalizeWithAliases(input = "", aliasesMap = {}) {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   if (!value) return "";
   for (const [canonical, aliases] of Object.entries(aliasesMap)) {
     if (aliases.map((a) => String(a).toLowerCase()).includes(value)) {
@@ -110,22 +110,18 @@ export function normalizeWithAliases(input = "", aliasesMap = {}) {
 }
 
 export function normalizeProviderFormat(input = "") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   if (value === PROVIDER_FORMAT.OPENAI_COMPATIBLE) return PROVIDER_FORMAT.OPENAI_COMPATIBLE;
   return "";
 }
 
 export function normalizeMcpServerType(input = "") {
-  const value = String(input || "").trim();
+  const value = text(input);
   return Object.values(MCP_SERVER_TYPE).includes(value) ? value : "";
 }
 
 export function normalizePluginMode(input = PLUGIN_MODE.OFF) {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   return value === PLUGIN_MODE.ON ? PLUGIN_MODE.ON : PLUGIN_MODE.OFF;
 }
 
@@ -139,7 +135,7 @@ export function normalizeContextSection(input = "") {
 
 export function normalizeContextSectionSelection(input = []) {
   const values = Array.isArray(input) ? input : [];
-  if (values.some((value) => String(value || "").trim() === "*")) return null;
+  if (values.some((value) => text(value) === "*")) return null;
   return new Set(values.map(normalizeContextSection).filter(Boolean));
 }
 
@@ -157,7 +153,7 @@ export function normalizeContextPolicy(contextPolicy = {}) {
       : {};
   return Object.freeze({
     promptSections: Object.freeze(
-      promptSections.some((value) => String(value || "").trim() === "*")
+      promptSections.some((value) => text(value) === "*")
         ? ["*"]
         : [...normalizeContextSectionSelection(promptSections)],
     ),

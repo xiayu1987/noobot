@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
+import { text } from "@noobot/shared/value";
 
 export function detectPathPlatform(value = "", platformHint = "") {
   const hinted = normalizePlatform(platformHint);
   if (hinted) return hinted;
-  const source = String(value || "").trim();
+  const source = text(value);
   if (/^(?:[a-z]:[\\/]|\\\\|\/\/[^/\\]+[/\\][^/\\]+)/i.test(source)) {
     return PLATFORM.WINDOWS;
   }
@@ -16,7 +17,7 @@ export function detectPathPlatform(value = "", platformHint = "") {
 }
 
 function decodeFileUrl(value = "") {
-  const source = String(value || "").trim();
+  const source = text(value);
   if (!/^file:/i.test(source)) return source;
   try {
     const url = new URL(source);

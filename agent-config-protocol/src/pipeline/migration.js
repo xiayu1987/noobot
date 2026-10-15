@@ -5,6 +5,7 @@
  */
 
 import { isPlainObject } from "../utils.js";
+import { text } from "@noobot/shared/value";
 
 const RETIRED_CONFIG_PATHS = Object.freeze(
   [
@@ -61,8 +62,7 @@ export function normalizeConfigMigrations(migrations = []) {
       throw new TypeError(`invalid config migration at index ${index}`);
     return Object.freeze({
       name:
-        String((typeof entry === "function" ? entry.name : entry?.name) || "").trim() ||
-        `migration#${index + 1}`,
+        text(typeof entry === "function" ? entry.name : entry?.name) || `migration#${index + 1}`,
       migrate,
     });
   });

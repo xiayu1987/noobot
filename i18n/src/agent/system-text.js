@@ -5,9 +5,10 @@
  */
 import { BACKEND_I18N } from "./backend-messages.js";
 import { DEFAULT_LOCALE, normalizeLocale, pickLocaleText } from "../shared/index.js";
+import { text } from "@noobot/shared/value";
 
 function resolveLocaleFromEnv() {
-  const lang = String(process.env.NOOBOT_LANG || process.env.LANG || "").trim();
+  const lang = text(process.env.NOOBOT_LANG || process.env.LANG);
   return normalizeLocale(lang, DEFAULT_LOCALE);
 }
 

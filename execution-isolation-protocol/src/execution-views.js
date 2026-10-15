@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const TOOL_EXECUTION_VIEW = Object.freeze({
   WORKSPACE_SANDBOX: "workspace_sandbox",
   SERVICE_HOST: "service_host",
@@ -12,7 +14,7 @@ export const TOOL_EXECUTION_VIEW = Object.freeze({
 });
 
 function normalizeExecutionView(input = "") {
-  return String(input || "").trim();
+  return text(input);
 }
 
 export function isSandboxExecutionView(executionView = "") {

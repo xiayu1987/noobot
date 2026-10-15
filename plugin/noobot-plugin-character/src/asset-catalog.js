@@ -9,9 +9,10 @@ import { resolvePluginAssetsRelativePath } from "@noobot/workspace-protocol";
 import { CHARACTER_PLUGIN_ID } from "./contract.js";
 import { AnimationAssetSchema } from "./animation-protocol.js";
 import { migrateLegacyAssetDescriptor } from "./asset-metadata-migration.js";
+import { text } from "@noobot/shared/value";
 
 async function readCharacterAssetCatalog(basePath) {
-  const workspacePath = String(basePath || "").trim();
+  const workspacePath = text(basePath);
   if (!workspacePath) throw new Error("character asset workspace path is required");
   const catalogPath = path.resolve(
     workspacePath,
@@ -39,7 +40,7 @@ async function readCharacterAssetCatalog(basePath) {
 export async function readSelectedCharacterAssets(config = {}) {
   const selectedIds = new Set(
     Array.isArray(config.selectedCharacterAssetIds)
-      ? config.selectedCharacterAssetIds.map((item) => String(item || "").trim())
+      ? config.selectedCharacterAssetIds.map((item) => text(item))
       : [],
   );
   if (!selectedIds.size) return [];

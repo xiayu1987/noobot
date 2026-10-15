@@ -17,6 +17,7 @@ import flamingoSampleUrl from "../../assets/samples/Flamingo.glb?url";
 import horseSampleUrl from "../../assets/samples/Horse.glb?url";
 import parrotSampleUrl from "../../assets/samples/Parrot.glb?url";
 import { useCharacterLocale } from "../i18n/index.js";
+import { text } from "@noobot/shared/value";
 
 const ImportedCharacterViewer = defineAsyncComponent(() => import("./ImportedCharacterViewer.vue"));
 
@@ -63,7 +64,7 @@ const selectedIds = computed(
   () =>
     new Set(
       Array.isArray(props.pluginModelConfig?.selectedCharacterAssetIds)
-        ? props.pluginModelConfig.selectedCharacterAssetIds.map((item) => String(item || "").trim())
+        ? props.pluginModelConfig.selectedCharacterAssetIds.map((item) => text(item))
         : [],
     ),
 );
@@ -87,7 +88,7 @@ function select(asset) {
   writeConfig({ selectedCharacterAssetIds: [...selected] });
 }
 async function remove(asset) {
-  const assetId = String(asset?.assetId || "").trim();
+  const assetId = text(asset?.assetId);
   if (!assetId) return;
   error.value = "";
   try {

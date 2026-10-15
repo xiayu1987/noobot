@@ -7,6 +7,7 @@ import { executeSendEmail } from "./send-email.js";
 import { executeListEmail } from "./list-email.js";
 import { executeReadEmail } from "./read-email.js";
 import { executeListFolders } from "./list-folders.js";
+import { text } from "@noobot/shared/value";
 
 export async function executeEmailOperation({
   operation = "",
@@ -15,7 +16,7 @@ export async function executeEmailOperation({
   attachmentHandler = null,
 } = {}) {
   try {
-    const action = String(operation || "").trim();
+    const action = text(operation);
     const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {};
     if (!["send", "list", "read", "list_folders"].includes(action)) {
       throw new Error("Email operation is invalid");

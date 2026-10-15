@@ -7,6 +7,7 @@ import {
   assertConnectorInstanceImplementation,
   projectConnectorInstanceDefinition,
 } from "@noobot/connector-protocol";
+import { text } from "@noobot/shared/value";
 
 export class ConnectorInstanceRegistry {
   constructor() {
@@ -24,7 +25,7 @@ export class ConnectorInstanceRegistry {
   }
 
   require(instanceType = "") {
-    const normalizedType = String(instanceType || "").trim();
+    const normalizedType = text(instanceType);
     const implementation = this.implementations.get(normalizedType);
     if (!implementation)
       throw new TypeError(`connector instance is not registered: ${normalizedType}`);

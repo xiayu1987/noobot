@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const PLUGIN_PROTOCOL_VERSION = 2;
 
 export const PLUGIN_SURFACE = Object.freeze({
@@ -108,8 +110,8 @@ export function createPluginContributionIdentity({
   surface = "",
   localId = "",
 } = {}) {
-  const normalizedPluginId = String(pluginId || "").trim();
-  const normalizedLocalId = String(localId || "").trim();
+  const normalizedPluginId = text(pluginId);
+  const normalizedLocalId = text(localId);
   if (!normalizedPluginId)
     throw new PluginProtocolError("PLUGIN_ID_REQUIRED", "pluginId is required");
   if (!normalizedLocalId)
@@ -132,7 +134,7 @@ export function createPluginLifecycleRecord({
   error = null,
   details = {},
 } = {}) {
-  const normalizedEvent = String(event || "").trim();
+  const normalizedEvent = text(event);
   if (!Object.values(PLUGIN_LIFECYCLE_EVENT).includes(normalizedEvent)) {
     throw new PluginProtocolError(
       "PLUGIN_LIFECYCLE_EVENT_INVALID",
@@ -141,8 +143,8 @@ export function createPluginLifecycleRecord({
   }
   const record = {
     event: normalizedEvent,
-    pluginId: String(entry?.pluginId || entry?.manifest?.id || "").trim(),
-    pluginVersion: String(entry?.manifest?.version || "").trim(),
+    pluginId: text(entry?.pluginId || entry?.manifest?.id),
+    pluginVersion: text(entry?.manifest?.version),
     protocolVersion: Number(entry?.manifest?.protocolVersion || PLUGIN_PROTOCOL_VERSION),
     surface: requirePluginSurface(entry?.surface),
     ...(details && typeof details === "object" ? details : {}),
@@ -166,9 +168,7 @@ class PluginProtocolError extends Error {
 }
 
 export function requirePluginSurface(surface = "") {
-  const normalized = String(surface || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(surface).toLowerCase();
   if (!Object.values(PLUGIN_SURFACE).includes(normalized)) {
     throw new PluginProtocolError(
       "PLUGIN_SURFACE_INVALID",
@@ -179,7 +179,7 @@ export function requirePluginSurface(surface = "") {
 }
 
 export function validatePluginActivationResult(result = {}, { pluginId = "", surface = "" } = {}) {
-  const expectedPluginId = String(pluginId || "").trim();
+  const expectedPluginId = text(pluginId);
   const expectedSurface = requirePluginSurface(surface);
   if (!result || typeof result !== "object" || Array.isArray(result)) {
     throw new PluginProtocolError(
@@ -193,13 +193,13 @@ export function validatePluginActivationResult(result = {}, { pluginId = "", sur
       `plugin activation protocolVersion must equal ${PLUGIN_PROTOCOL_VERSION}`,
     );
   }
-  if (String(result.pluginId || "").trim() !== expectedPluginId) {
+  if (text(result.pluginId) !== expectedPluginId) {
     throw new PluginProtocolError(
       "PLUGIN_ACTIVATION_ID_MISMATCH",
       `plugin activation id mismatch: ${expectedPluginId}`,
     );
   }
-  if (String(result.surface || "").trim() !== expectedSurface) {
+  if (text(result.surface) !== expectedSurface) {
     throw new PluginProtocolError(
       "PLUGIN_ACTIVATION_SURFACE_MISMATCH",
       `plugin activation surface mismatch: ${expectedSurface}`,
@@ -221,7 +221,7 @@ export function validatePluginActivationResult(result = {}, { pluginId = "", sur
 }
 
 export function createPluginActivationResult({ pluginId = "", surface = "", dispose = null } = {}) {
-  const normalizedPluginId = String(pluginId || "").trim();
+  const normalizedPluginId = text(pluginId);
   if (!normalizedPluginId)
     throw new PluginProtocolError("PLUGIN_ID_REQUIRED", "pluginId is required");
   return validatePluginActivationResult(

@@ -11,15 +11,15 @@ import {
   resolveSandboxMountMappings,
   resolveWorkspaceSandboxLayout,
 } from "@noobot/execution-isolation-protocol";
+import { text } from "@noobot/shared/value";
 
 export function resolveRuntimeUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
-  return String(
+  return text(
     userId ||
       runtime?.systemRuntime?.userId ||
       runtime?.userId ||
-      agentContext?.context?.identity?.userId ||
-      "",
-  ).trim();
+      agentContext?.context?.identity?.userId,
+  );
 }
 
 function resolveConfiguredMountMappings(runtime = {}) {
@@ -109,10 +109,10 @@ export function resolveSandboxPath({
   const sandboxRoot = WORKSPACE_SANDBOX_PATHS.ROOT;
 
   const normalizedHostPath = normalizeSlashPath(hostPath || path);
-  if (!normalizedHostPath && !String(relativePath || "").trim()) return "";
+  if (!normalizedHostPath && !text(relativePath)) return "";
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
-  const hostBasePath = String(runtime?.basePath || "").trim();
+  const hostBasePath = text(runtime?.basePath);
   const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
   if (sandboxUserRoot && normalizedHostBasePath && normalizedHostPath) {
     if (normalizedHostPath === normalizedHostBasePath) return sandboxUserRoot;
@@ -122,7 +122,7 @@ export function resolveSandboxPath({
   }
 
   const mappedByConfig = mapPathByMappings(normalizedHostPath, resolveSandboxPathMappings(runtime));
-  if (mappedByConfig) return String(mappedByConfig || "").trim();
+  if (mappedByConfig) return text(mappedByConfig);
 
   const normalizedSandboxRoot = normalizeSlashPath(sandboxRoot);
   if (normalizedSandboxRoot) {
@@ -149,10 +149,10 @@ export function resolveHostPath({ path = "", sandboxPath = "", runtime = {} } = 
     normalizedSandboxPath,
     resolveSandboxPathMappings(runtime),
   );
-  if (mappedByConfig) return String(mappedByConfig || "").trim();
+  if (mappedByConfig) return text(mappedByConfig);
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
-  const hostBasePath = String(runtime?.basePath || "").trim();
+  const hostBasePath = text(runtime?.basePath);
   const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
   const normalizedSandboxUserRoot = normalizeSlashPath(sandboxUserRoot);
   if (normalizedSandboxUserRoot && normalizedHostBasePath) {

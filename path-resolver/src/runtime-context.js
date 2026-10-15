@@ -12,6 +12,7 @@ import {
   isSandboxExecutionView,
   resolveWorkspaceSandboxLayout,
 } from "@noobot/execution-isolation-protocol";
+import { text } from "@noobot/shared/value";
 
 function resolveRuntimeHostRoot({
   runtime = {},
@@ -19,13 +20,12 @@ function resolveRuntimeHostRoot({
   runtimeBasePath = "",
   workspacePath = "",
 } = {}) {
-  return String(
+  return text(
     runtimeBasePath ||
       workspacePath ||
       runtime?.basePath ||
-      agentContext?.context?.environment?.workspace?.basePath ||
-      "",
-  ).trim();
+      agentContext?.context?.environment?.workspace?.basePath,
+  );
 }
 
 export function resolveRuntimeWorkspaceRoot({
@@ -33,9 +33,7 @@ export function resolveRuntimeWorkspaceRoot({
   globalConfig = {},
   workspaceRoot = "",
 } = {}) {
-  return String(
-    workspaceRoot || globalConfig?.workspaceRoot || runtime?.globalConfig?.workspaceRoot || "",
-  ).trim();
+  return text(workspaceRoot || globalConfig?.workspaceRoot || runtime?.globalConfig?.workspaceRoot);
 }
 
 function uniqueNormalizedPaths(paths = []) {
@@ -53,7 +51,7 @@ function resolveStaticPathDirectories({ runtime = {}, agentContext = null } = {}
 }
 
 export function isHostFilesystemSentinel(value = "") {
-  return String(value || "").trim() === HOST_FILESYSTEM_ROOT;
+  return text(value) === HOST_FILESYSTEM_ROOT;
 }
 
 export function resolveRuntimePathContext({
@@ -190,9 +188,9 @@ export function resolveAgentPathContext({
   const staticDirectories = resolveStaticPathDirectories({ runtime, agentContext });
   if (!Object.keys(staticDirectories).length) return baseContext;
 
-  const directoryView = String(
-    staticDirectories.view || baseContext.directories.view || baseContext.view || "",
-  ).trim();
+  const directoryView = text(
+    staticDirectories.view || baseContext.directories.view || baseContext.view,
+  );
   const directories = {
     ...baseContext.directories,
     ...staticDirectories,
@@ -202,7 +200,7 @@ export function resolveAgentPathContext({
       : baseContext.directories.allowedRoots,
   };
   const isSandboxView = directories.view === PATH_VIEWS.SANDBOX;
-  const staticRootDirectory = String(directories.rootDirectory || "").trim();
+  const staticRootDirectory = text(directories.rootDirectory);
   const hostRootDirectory =
     !isSandboxView && staticRootDirectory ? staticRootDirectory : baseContext.hostRootDirectory;
   const hostAllowedRoots =

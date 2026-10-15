@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
+import { text } from "@noobot/shared/value";
 
 const SHORT_MEMORY_RECORD_ROLES = new Set(["user", "assistant"]);
 
@@ -11,10 +12,10 @@ export function toShortMemoryRecords(messages = []) {
   const out = [];
   for (const messageItem of Array.isArray(messages) ? messages : []) {
     if (isInjectedMessage(messageItem)) continue;
-    const role = String(messageItem?.role || "").trim();
+    const role = text(messageItem?.role);
     if (!SHORT_MEMORY_RECORD_ROLES.has(role)) continue;
-    if (role === "assistant" && String(messageItem?.type || "").trim() === "tool_call") continue;
-    const content = String(messageItem?.content || "").trim();
+    if (role === "assistant" && text(messageItem?.type) === "tool_call") continue;
+    const content = text(messageItem?.content);
     if (!content) continue;
     out.push({ role, content });
   }
@@ -34,13 +35,11 @@ export function sortShortMemoryItems(items = []) {
 
 export function excludeShortMemoryItemsBySessionIds(items = [], sessionIds = []) {
   const deletedSessionIds = new Set(
-    (Array.isArray(sessionIds) ? sessionIds : [])
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
+    (Array.isArray(sessionIds) ? sessionIds : []).map((value) => text(value)).filter(Boolean),
   );
   return (Array.isArray(items) ? items : []).filter((item) => {
-    const sessionId = String(item?.sessionId || "").trim();
-    const parentSessionId = String(item?.parentSessionId || "").trim();
+    const sessionId = text(item?.sessionId);
+    const parentSessionId = text(item?.parentSessionId);
     return !deletedSessionIds.has(sessionId) && !deletedSessionIds.has(parentSessionId);
   });
 }

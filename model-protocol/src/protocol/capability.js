@@ -4,6 +4,7 @@
  */
 import { MODEL_CAPABILITY_KIND } from "../capabilities/capability-kinds.js";
 import { MODEL_OPERATION_KIND } from "./operation.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizeModelCapabilities(input = {}) {
   return Object.freeze({
@@ -17,7 +18,7 @@ export function normalizeModelCapabilities(input = {}) {
 }
 
 export function supportsModelCapability(modelSpec = {}, capability = "") {
-  const normalizedCapability = String(capability || "").trim();
+  const normalizedCapability = text(capability);
   if (!Object.values(MODEL_CAPABILITY_KIND).includes(normalizedCapability)) {
     throw new TypeError(`unsupported model capability: ${normalizedCapability || "missing"}`);
   }
@@ -25,7 +26,7 @@ export function supportsModelCapability(modelSpec = {}, capability = "") {
 }
 
 export function requireModelOperationCapability(modelSpec = {}, operationKind = "") {
-  const normalizedOperationKind = String(operationKind || "").trim();
+  const normalizedOperationKind = text(operationKind);
   if (
     normalizedOperationKind === MODEL_OPERATION_KIND.WEB_SEARCH &&
     !supportsModelCapability(modelSpec, MODEL_CAPABILITY_KIND.WEB_SEARCH)

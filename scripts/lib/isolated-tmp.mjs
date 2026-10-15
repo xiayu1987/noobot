@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { withoutRuntimeInstancePaths } from "@noobot/runtime-topology-protocol/instance-paths";
 import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
+import { text } from "@noobot/shared/value";
 
 export const ISOLATED_TMP_ENV = "NOOBOT_TEST_TMP_DIR";
 const DEFAULT_TMP_MIN_AGE_MS = 60 * 60 * 1000;
@@ -35,7 +36,7 @@ export function acquireIsolatedTmpDir({
   env = process.env,
   tmpRoot = os.tmpdir(),
 }) {
-  const inherited = String(env[ISOLATED_TMP_ENV] || "").trim();
+  const inherited = text(env[ISOLATED_TMP_ENV]);
   if (inherited) return { dir: inherited, created: false };
   pruneOldest(tmpRoot, (name) => name.startsWith(prefix), Math.max(0, keep - 1), { minAgeMs });
   return { dir: mkdtempSync(path.join(tmpRoot, prefix)), created: true };

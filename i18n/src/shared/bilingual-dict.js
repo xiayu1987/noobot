@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function toBilingualDict(zhMap = {}, enMap = {}) {
   const keys = new Set([...Object.keys(zhMap || {}), ...Object.keys(enMap || {})]);
   const output = {};
@@ -11,7 +13,7 @@ export function toBilingualDict(zhMap = {}, enMap = {}) {
     const zhValue = zhMap?.[key];
     const enValue = enMap?.[key];
     output[key] = {
-      "zh-CN": typeof zhValue === "function" ? zhValue : String(zhValue || "").trim(),
+      "zh-CN": typeof zhValue === "function" ? zhValue : text(zhValue),
       "en-US": typeof enValue === "function" ? enValue : String(enValue ?? zhValue ?? "").trim(),
     };
   }

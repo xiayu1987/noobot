@@ -4,15 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 const SSH_COMMAND_TIMEOUT_MS = 30000;
 
 function resolveSshConnection(connectionInfo = {}) {
   const source = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
   return {
-    host: String(source.host || "").trim(),
+    host: text(source.host),
     port: Number(source.port || 22),
-    username: String(source.username || "").trim(),
+    username: text(source.username),
     password: String(source.password || ""),
     timeoutMs: SSH_COMMAND_TIMEOUT_MS,
   };
@@ -30,13 +31,13 @@ async function importSsh2() {
 const sshShellStates = new Map();
 
 function requireChannelKey(channelKey = "") {
-  const key = String(channelKey || "").trim();
+  const key = text(channelKey);
   if (!key) throw new TypeError("SSH connector channelKey is required");
   return key;
 }
 
 function resetSshState(key = "", expectedState = null) {
-  const normalizedKey = String(key || "").trim();
+  const normalizedKey = text(key);
   if (!normalizedKey) return;
   const state = sshShellStates.get(normalizedKey);
   if (!state) return;
@@ -179,7 +180,7 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
       stdout += String(chunk || "");
       const parsed = parseSshCommandOutput(stdout, token);
       if (!parsed) return;
-      done({ ...parsed, stderr: String(stderr || "").trim() });
+      done({ ...parsed, stderr: text(stderr) });
     };
     const onStderr = (chunk) => {
       stderr += String(chunk || "");
@@ -208,7 +209,7 @@ export async function executeSshCommand({
   connectionInfo = {},
   channelKey = "",
 } = {}) {
-  const cmd = String(command || "").trim();
+  const cmd = text(command);
   if (!cmd) {
     return { ok: false, code: 400, stdout: "", stderr: "ssh command required" };
   }
@@ -243,7 +244,7 @@ export function closeSshChannel({ channelKey = "" } = {}) {
 }
 
 export function closeSshConnectorChannels({ connectorKey = "" } = {}) {
-  const prefix = `${String(connectorKey || "").trim()}::`;
+  const prefix = `${text(connectorKey)}::`;
   if (prefix === "::") return 0;
   let closedCount = 0;
   for (const key of [...sshShellStates.keys()]) {

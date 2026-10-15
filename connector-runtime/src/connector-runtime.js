@@ -15,9 +15,10 @@ import {
   projectPublicConnector,
 } from "@noobot/connector-protocol";
 import { ConnectorInstanceRegistry } from "./instance-registry.js";
+import { text } from "@noobot/shared/value";
 
 const requiredText = (value, label) => {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!normalized) throw new TypeError(`${label} is required`);
   return normalized;
 };
@@ -169,7 +170,7 @@ export class ConnectorRuntime {
   async _record(userId, connectorId) {
     const record = await this.repository.get({ userId, connectorId });
     if (!record) throw new TypeError("connector not found");
-    if (record.ownerUserId !== String(userId || "").trim()) {
+    if (record.ownerUserId !== text(userId)) {
       throw new TypeError("connector does not belong to current user");
     }
     return Object.freeze({

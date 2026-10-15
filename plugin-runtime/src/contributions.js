@@ -7,9 +7,10 @@ import {
   EXTENSION_ARBITRATION,
   requireDeclaredFrontendContribution,
 } from "@noobot/plugin-protocol";
+import { text } from "@noobot/shared/value";
 
 function normalizeString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 const REGISTRY_SNAPSHOT = Symbol("plugin-runtime.extension-registry-snapshot");
 

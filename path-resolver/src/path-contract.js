@@ -10,6 +10,7 @@ import {
   normalizeSlashPath,
 } from "./platform.js";
 import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
+import { text } from "@noobot/shared/value";
 
 export const PATH_REF_VIEWS = Object.freeze({
   WORKSPACE: "workspace",
@@ -183,7 +184,7 @@ export const TOOL_PATH_CONTRACTS = Object.freeze({
 
 export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = {}) {
   if (input && typeof input === "object" && !Array.isArray(input)) {
-    const view = String(input.view || "").trim();
+    const view = text(input.view);
     if (!Object.values(PATH_REF_VIEWS).includes(view))
       throw new Error(`invalid logical path view: ${view || "missing"}`);
     if (view === PATH_REF_VIEWS.ATTACHMENT) {
@@ -191,7 +192,7 @@ export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = 
         throw new Error("attachment path identity required");
       return Object.freeze({ view, identity: Object.freeze({ ...input.identity }) });
     }
-    const logicalPath = String(input.path || "").trim();
+    const logicalPath = text(input.path);
     if (!logicalPath) throw new Error(`${view} path required`);
     return Object.freeze({
       view,
@@ -419,8 +420,8 @@ export function authorizePathRef({
     return Object.freeze({ allowed: false, code: "path_view_not_accepted", pathRef, capability });
   const isSuperAdmin = principal?.role === "super_admin";
   if (pathRef.view === "workspace") {
-    const owner = String(pathRef.owner || principal?.userId || "").trim();
-    const principalId = String(principal?.userId || "").trim();
+    const owner = text(pathRef.owner || principal?.userId);
+    const principalId = text(principal?.userId);
     const workspaceRule = isSuperAdmin
       ? effectivePolicy.roles.superAdmin.workspace
       : effectivePolicy.roles.regularUser.workspace;

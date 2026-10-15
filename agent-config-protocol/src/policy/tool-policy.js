@@ -6,6 +6,7 @@
 
 import { PROGRAMMING_REQUIRED_TOOL_NAMES } from "./scenario-policy.js";
 import { normalizeStringList } from "../utils.js";
+import { text } from "@noobot/shared/value";
 
 const normalizeStringArrayFallback = (input = []) => normalizeStringList(input);
 
@@ -97,13 +98,9 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   const policy =
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object" ? runConfig.toolPolicy : {};
   const normalize = normalizeStringArrayFallback;
-  const mode = String(policy.mode || "")
-    .trim()
-    .toLowerCase();
+  const mode = text(policy.mode).toLowerCase();
   const customTools = Array.isArray(policy.customTools)
-    ? policy.customTools.filter(
-        (item) => item && typeof item === "object" && String(item.name || "").trim(),
-      )
+    ? policy.customTools.filter((item) => item && typeof item === "object" && text(item.name))
     : [];
   const includedNames = new Set(normalize(policy.includeToolNames));
   if (runConfig.allowUserInteraction !== false && policy.forceIncludeUserInteraction !== false) {
@@ -117,13 +114,11 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
 
   if (Array.isArray(runConfig?.pluginTools)) {
     for (const contribution of runConfig.pluginTools) {
-      const name = String(contribution?.name || "").trim();
+      const name = text(contribution?.name);
       if (name) allow.add(name);
     }
   }
-  const scenario = String(runConfig.scenario || runConfig.scenarioProfile?.key || "")
-    .trim()
-    .toLowerCase();
+  const scenario = text(runConfig.scenario || runConfig.scenarioProfile?.key).toLowerCase();
   if (mode !== "custom_only" && (scenario === "coding" || scenario === "programming")) {
     for (const name of PROGRAMMING_REQUIRED_TOOL_NAMES) allow.add(name);
   }
@@ -133,7 +128,7 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   const result = [];
   const seen = new Set();
   for (const item of tools) {
-    const name = String(item?.name || "").trim();
+    const name = text(item?.name);
     if (name && !seen.has(name)) {
       seen.add(name);
       result.push(item);

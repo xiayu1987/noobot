@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const EXPERIENCE_PATCH_LABELS = Object.freeze({
   id: "integer",
   domain: "Domain",
@@ -73,8 +75,8 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "You are Noobot's memory processor. Apply the requested consolidation protocol only to the memory material in the current request. Do not add facts that were not provided or output content outside the protocol.",
     experiencePatchLabels: EXPERIENCE_PATCH_LABELS,
     prompt: (params = {}) => {
-      const fieldModel = String(params.fieldModel || "").trim();
-      const existingLongMemory = String(params.existingLongMemory || "").trim();
+      const fieldModel = text(params.fieldModel);
+      const existingLongMemory = text(params.existingLongMemory);
       const patchGrammar = (params.patchGrammar || []).join("\n");
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
       return [
@@ -94,17 +96,17 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     patchCorrectionPrompt: (params = {}) =>
       [
-        String(params.prompt || "").trim(),
-        `Previous output:\n${String(params.previousOutput || "").trim() || "(empty)"}`,
-        `Validation error: ${String(params.error || "").trim()}`,
+        text(params.prompt),
+        `Previous output:\n${text(params.previousOutput) || "(empty)"}`,
+        `Validation error: ${text(params.error)}`,
         "The previous output failed patch protocol validation. Output the complete patch again strictly following the patch protocol; when no change is needed output exactly one line NOOP.",
       ].join("\n\n"),
     dailyExperiencePrompt: (params = {}) => {
-      const knownDomainText = String(params.knownDomainText || "").trim();
+      const knownDomainText = text(params.knownDomainText);
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "System Instruction:",
         "Analyze the following short-term memories, classify them into known domains, or create new domains.",
@@ -129,12 +131,12 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       ].join("\n");
     },
     weeklySummaryPrompt: (params = {}) => {
-      const domainName = String(params.domainName || "").trim();
-      const knownCategoryText = String(params.knownCategoryText || "").trim();
+      const domainName = text(params.domainName);
+      const knownCategoryText = text(params.knownCategoryText);
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "System Instruction:",
         `Create a structured weekly synthesis for the past 7 days of records in domain [${domainName}].`,
@@ -159,12 +161,12 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       ].join("\n");
     },
     monthlySummaryPrompt: (params = {}) => {
-      const domainName = String(params.domainName || "").trim();
-      const knownTreeText = String(params.knownTreeText || "").trim();
+      const domainName = text(params.domainName);
+      const knownTreeText = text(params.knownTreeText);
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "System Instruction:",
         `Analyze monthly summaries for domain [${domainName}] and focus on pattern recognition.`,
@@ -188,12 +190,12 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       ].join("\n");
     },
     yearlySummaryPrompt: (params = {}) => {
-      const domainName = String(params.domainName || "").trim();
-      const knownTreeText = String(params.knownTreeText || "").trim();
+      const domainName = text(params.domainName);
+      const knownTreeText = text(params.knownTreeText);
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "System Instruction:",
         `Review one year of retrospectives for domain [${domainName}] at a high strategic level.`,

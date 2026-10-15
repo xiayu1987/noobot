@@ -10,11 +10,12 @@ import {
   safeParseAnimationProtocol,
 } from "../../src/animation-protocol.js";
 import { CHARACTER_ANIMATION_ARTIFACT_TYPE, CHARACTER_PLUGIN_ID } from "../../src/contract.js";
+import { text } from "@noobot/shared/value";
 
 export const animationRuntimeState = reactive({ sessionId: "", cards: [], revision: 0 });
 
 export function resetAnimationRuntimeState(sessionId = "") {
-  animationRuntimeState.sessionId = String(sessionId || "").trim();
+  animationRuntimeState.sessionId = text(sessionId);
   animationRuntimeState.cards.splice(0);
   animationRuntimeState.revision = 0;
 }
@@ -40,7 +41,7 @@ function parseEnvelopeArtifact(envelope) {
   const result = safeParseAnimationProtocol(envelope?.payload?.data?.protocol);
   if (!result.success) return { error: { applied: false, reason: "invalid_animation_protocol" } };
   const protocol = result.data;
-  if (String(envelope?.payload?.artifactId || "").trim() !== protocol.animationId) {
+  if (text(envelope?.payload?.artifactId) !== protocol.animationId) {
     return {
       error: { applied: false, reason: "artifact_id_mismatch", animationId: protocol.animationId },
     };
@@ -52,7 +53,7 @@ function applyAnimationCard(envelope, protocol, assets) {
   let card = animationRuntimeState.cards.find(
     (candidate) => candidate.animationId === protocol.animationId,
   );
-  const eventId = String(envelope?.identity?.eventId || "").trim();
+  const eventId = text(envelope?.identity?.eventId);
   if (!eventId)
     return { applied: false, reason: "missing_event_id", animationId: protocol.animationId };
   if (card?.eventIds.includes(eventId)) {
@@ -97,7 +98,7 @@ function applyAnimationCard(envelope, protocol, assets) {
 }
 
 export function applyAnimationRuntimeEvent(envelope = {}) {
-  const sessionId = String(envelope?.identity?.sessionId || "").trim();
+  const sessionId = text(envelope?.identity?.sessionId);
   const rejection = rejectEnvelope(envelope, sessionId);
   if (rejection) return rejection;
   if (!animationRuntimeState.sessionId) animationRuntimeState.sessionId = sessionId;

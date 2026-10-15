@@ -11,17 +11,18 @@ import {
 } from "./constants.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "./operation.js";
 import { MODEL_ADAPTER_ID } from "../model/model-adapter.js";
+import { text } from "@noobot/shared/value";
 
 const MODEL_ATTEMPT_STATUSES = new Set(Object.values(MODEL_ATTEMPT_STATUS));
 const MODEL_ATTEMPT_KINDS = new Set(Object.values(MODEL_ATTEMPT_KIND));
 const MODEL_ADAPTER_IDS = new Set(Object.values(MODEL_ADAPTER_ID));
 
 function normalizeModelExecutionProvider(provider = {}) {
-  const adapterId = String(provider?.adapterId || "").trim();
+  const adapterId = text(provider?.adapterId);
   if (!MODEL_ADAPTER_IDS.has(adapterId)) {
     throw new TypeError(`invalid model execution adapter id: ${adapterId || "missing"}`);
   }
-  const operatorId = String(provider?.operatorId || "").trim();
+  const operatorId = text(provider?.operatorId);
   if (!operatorId) {
     throw new TypeError("model execution provider requires operatorId");
   }
@@ -29,7 +30,7 @@ function normalizeModelExecutionProvider(provider = {}) {
 }
 
 export function requireModelAttemptStatus(value) {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!MODEL_ATTEMPT_STATUSES.has(normalized)) {
     throw new TypeError(`invalid model attempt status: ${normalized || "missing"}`);
   }
@@ -37,7 +38,7 @@ export function requireModelAttemptStatus(value) {
 }
 
 export function requireModelAttemptKind(value) {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!MODEL_ATTEMPT_KINDS.has(normalized)) {
     throw new TypeError(`invalid model attempt kind: ${normalized || "missing"}`);
   }

@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeProviderSpec } from "./provider-spec.js";
+import { text } from "@noobot/shared/value";
 
 export function requireModelSpec(input = {}) {
-  const model = String(input.model || "").trim();
+  const model = text(input.model);
   if (!model) throw new TypeError("model spec.model is required");
   const provider = normalizeProviderSpec(input);
 
@@ -16,7 +17,7 @@ export function requireModelSpec(input = {}) {
   return Object.freeze({
     ...canonicalInput,
     model,
-    alias: String(input.alias || "").trim(),
+    alias: text(input.alias),
     operatorId: provider.operatorId,
     adapterId: provider.adapterId,
   });

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const EXPERIENCE_PATCH_LABELS = Object.freeze({
   id: "整数ID",
   domain: "领域",
@@ -71,8 +73,8 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "你是 Noobot 的记忆处理器。只根据当前请求提供的记忆材料执行指定的整理协议；不得补充未提供的事实，也不得输出协议之外的内容。",
     experiencePatchLabels: EXPERIENCE_PATCH_LABELS,
     prompt: (params = {}) => {
-      const fieldModel = String(params.fieldModel || "").trim();
-      const existingLongMemory = String(params.existingLongMemory || "").trim();
+      const fieldModel = text(params.fieldModel);
+      const existingLongMemory = text(params.existingLongMemory);
       const patchGrammar = (params.patchGrammar || []).join("\n");
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
       return [
@@ -92,17 +94,17 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     patchCorrectionPrompt: (params = {}) =>
       [
-        String(params.prompt || "").trim(),
-        `【上次输出】\n${String(params.previousOutput || "").trim() || "（空）"}`,
-        `【校验错误】${String(params.error || "").trim()}`,
+        text(params.prompt),
+        `【上次输出】\n${text(params.previousOutput) || "（空）"}`,
+        `【校验错误】${text(params.error)}`,
         "上次输出未通过补丁协议校验。请严格按补丁协议重新输出完整补丁；无变更时只输出一行 NOOP。",
       ].join("\n\n"),
     dailyExperiencePrompt: (params = {}) => {
-      const knownDomainText = String(params.knownDomainText || "").trim();
+      const knownDomainText = text(params.knownDomainText);
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "系统指令：",
         "请分析以下短期记忆，归类到已知领域，或在必要时创建新领域。",
@@ -127,12 +129,12 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       ].join("\n");
     },
     weeklySummaryPrompt: (params = {}) => {
-      const domainName = String(params.domainName || "").trim();
-      const knownCategoryText = String(params.knownCategoryText || "").trim();
+      const domainName = text(params.domainName);
+      const knownCategoryText = text(params.knownCategoryText);
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "系统指令：",
         `请对领域 [${domainName}] 最近 7 天的记录进行结构化周总结。`,
@@ -157,12 +159,12 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       ].join("\n");
     },
     monthlySummaryPrompt: (params = {}) => {
-      const domainName = String(params.domainName || "").trim();
-      const knownTreeText = String(params.knownTreeText || "").trim();
+      const domainName = text(params.domainName);
+      const knownTreeText = text(params.knownTreeText);
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "系统指令：",
         `分析以下【${domainName}】领域过去一个月的总结，目标是模式识别。`,
@@ -186,12 +188,12 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       ].join("\n");
     },
     yearlySummaryPrompt: (params = {}) => {
-      const domainName = String(params.domainName || "").trim();
-      const knownTreeText = String(params.knownTreeText || "").trim();
+      const domainName = text(params.domainName);
+      const knownTreeText = text(params.knownTreeText);
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim();
-      const fieldGuide = String(params.fieldGuide || "").trim();
-      const patchExample = String(params.patchExample || "").trim();
+      const patchProtocol = text(params.patchProtocol);
+      const fieldGuide = text(params.fieldGuide);
+      const patchExample = text(params.patchExample);
       return [
         "系统指令：",
         `站在高维视角审视【${domainName}】领域过去一年的全部复盘。`,

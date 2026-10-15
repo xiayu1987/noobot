@@ -6,6 +6,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 
 const root = process.cwd();
 
@@ -22,7 +23,7 @@ const workspaces = await Promise.all(
   })),
 );
 const internalPackageNames = new Set(
-  workspaces.map(({ packageJson }) => String(packageJson.name || "").trim()).filter(Boolean),
+  workspaces.map(({ packageJson }) => text(packageJson.name)).filter(Boolean),
 );
 const failures = [];
 

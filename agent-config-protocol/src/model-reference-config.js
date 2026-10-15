@@ -5,6 +5,7 @@
 import { isPlainObject } from "./utils.js";
 import { resolveModelLibraryProvider } from "@noobot/model-protocol";
 import { MULTIMODAL_CONFIG_OPERATION } from "./multimodal-config.js";
+import { text } from "@noobot/shared/value";
 
 function setStringValues(target, value) {
   if (!isPlainObject(target)) return;
@@ -14,7 +15,7 @@ function setStringValues(target, value) {
 }
 
 export function applyPrimaryModelReferencesToConfigFile(config = {}, modelAlias = "") {
-  const alias = String(modelAlias || "").trim();
+  const alias = text(modelAlias);
   if (!isPlainObject(config) || !alias) return config;
   const providers = isPlainObject(config.providers) ? config.providers : {};
   if (!isPlainObject(providers[alias])) {
@@ -60,7 +61,7 @@ export function ensureModelProviderInConfigFile(
   modelAlias = "",
   { providerTemplate = null } = {},
 ) {
-  const alias = String(modelAlias || "").trim();
+  const alias = text(modelAlias);
   if (!isPlainObject(config)) throw new TypeError("config must be an object");
   if (!alias) throw new TypeError("model alias is required");
   if (!isPlainObject(config.providers)) config.providers = {};

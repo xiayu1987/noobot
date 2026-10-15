@@ -21,7 +21,8 @@
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "three": "^0.186.1",
     "zod": "^4.6.7",
-    "@noobot/workspace-protocol": "file:../../workspace-protocol"
+    "@noobot/workspace-protocol": "file:../../workspace-protocol",
+    "@noobot/shared": "file:../../shared"
   },
   "peerDependencies": {
     "noobot-chat": "^4.1.3"

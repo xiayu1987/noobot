@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const HOOK_PROTOCOL_VERSION = 2;
 
 export const HOOK_EXECUTION = Object.freeze({
@@ -95,7 +97,7 @@ const allHookPoints = Object.values(HOOK_POINT).flatMap((domain) => Object.value
 const hookPointDomains = Object.freeze(new Set(Object.values(HOOK_POINT_DOMAIN)));
 
 export function hookPointDomain(point = "") {
-  const normalized = String(point || "").trim();
+  const normalized = text(point);
   const separatorIndex = normalized.indexOf(".");
   if (separatorIndex <= 0 || separatorIndex === normalized.length - 1) return "";
   const domain = normalized.slice(0, separatorIndex);
@@ -109,7 +111,7 @@ export function requireHookPointDomain(point = "") {
 }
 
 export function isHookPointInDomain(point = "", domain = "") {
-  const normalizedDomain = String(domain || "").trim();
+  const normalizedDomain = text(domain);
   return Boolean(normalizedDomain) && hookPointDomain(point) === normalizedDomain;
 }
 
@@ -134,7 +136,7 @@ export const HOOK_POINT_DESCRIPTORS = Object.freeze(
 );
 
 export function requireHookPointDescriptor(point = "") {
-  const normalizedPoint = String(point || "").trim();
+  const normalizedPoint = text(point);
   const descriptor = HOOK_POINT_DESCRIPTORS[normalizedPoint];
   if (!descriptor) throw new TypeError(`unknown hook point: ${normalizedPoint || "<empty>"}`);
   return descriptor;

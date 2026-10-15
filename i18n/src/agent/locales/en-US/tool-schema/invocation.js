@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const INVOCATION_TOOL_SCHEMA = {
   call_mcp_task: {
     description: {
@@ -84,15 +86,15 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.service.customParamMustNotBeEmpty": "custom_param must not be empty",
       "tools.service.endpointNameRequired": "endpointName required",
       "tools.service.endpointNotFound": (params = {}) =>
-        `endpoint not found: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+        `endpoint not found: ${text(params.serviceName)}.${text(params.endpointName)}`,
       "tools.service.endpointUrlMissing": (params = {}) =>
-        `endpoint url missing: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+        `endpoint url missing: ${text(params.serviceName)}.${text(params.endpointName)}`,
       "tools.service.queryStringMustBeObject": "queryString must be an object",
       "tools.service.serviceDisabled": (params = {}) =>
-        `service disabled: ${String(params.serviceName || "").trim()}`,
+        `service disabled: ${text(params.serviceName)}`,
       "tools.service.serviceNameRequired": "serviceName required",
       "tools.service.serviceNotFound": (params = {}) =>
-        `service not found: ${String(params.serviceName || "").trim()}`,
+        `service not found: ${text(params.serviceName)}`,
       "tools.service.userIdMissing": "userId missing in context",
     },
   },
@@ -121,19 +123,19 @@ export const INVOCATION_TOOL_SCHEMA = {
     },
     texts: {
       "tools.script.commandNotInstalled": (params = {}) =>
-        `${String(params.commandName || "").trim()} is not installed. Please install ${String(params.commandName || "").trim()} first.`,
+        `${text(params.commandName)} is not installed. Please install ${text(params.commandName)} first.`,
       "tools.script.criticalCancelled":
         "The critical-risk script was not confirmed by the user and execution was cancelled.",
       "tools.script.concise.lineWorkdir": (params = {}) =>
-        `Default working directory: ${String(params.workdir || "").trim()}`,
+        `Default working directory: ${text(params.workdir)}`,
       "tools.script.concise.lineShell": (params = {}) =>
-        `Command interpreter: ${String(params.shell || "").trim()}. Use that interpreter's syntax; on Windows, invoke powershell or pwsh explicitly for PowerShell syntax.`,
+        `Command interpreter: ${text(params.shell)}. Use that interpreter's syntax; on Windows, invoke powershell or pwsh explicitly for PowerShell syntax.`,
       "tools.script.concise.lineRelativeBase": (params = {}) =>
-        `Relative paths are resolved from: ${String(params.workdir || "").trim()}`,
+        `Relative paths are resolved from: ${text(params.workdir)}`,
       "tools.script.concise.linePaths": (params = {}) =>
-        `Use only paths under ${String(params.root || "").trim()} (or relative paths).`,
+        `Use only paths under ${text(params.root)} (or relative paths).`,
       "tools.script.concise.lineExtraRoots": (params = {}) =>
-        `Extra mounted roots: ${String(params.roots || "").trim()}`,
+        `Extra mounted roots: ${text(params.roots)}`,
       "tools.script.commonUserInstallHint":
         '- For persistent software install, prefer user-space methods: npm --prefix "$HOME/.npm-global", pip install --user, or put binaries in $HOME/bin',
       "tools.script.docker.reuse":
@@ -144,7 +146,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.script.docker.mounts.title": "- Extra mounts:",
       "tools.script.docker.mounts.none": "- No extra mounts configured.",
       "tools.script.docker.mounts.item": (params = {}) =>
-        `  - ${String(params.source || "").trim()} -> ${String(params.target || "").trim()}${String(params.description || "").trim() ? ` (${String(params.description || "").trim()})` : ""}`,
+        `  - ${text(params.source)} -> ${text(params.target)}${text(params.description) ? ` (${text(params.description)})` : ""}`,
       "tools.script.localModePathHint":
         "Use relative paths under this directory for input/output files.",
       "tools.script.localModeTitle": "Execute script (local mode).",

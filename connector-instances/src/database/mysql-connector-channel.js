@@ -8,6 +8,7 @@ import {
   normalizeConnectionSource,
   resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
+import { text } from "@noobot/shared/value";
 
 function resolveMysqlConnection(connectionInfo = {}) {
   const source = normalizeConnectionSource(connectionInfo);
@@ -34,7 +35,7 @@ async function importMysqlPromise() {
 const mysqlPools = new Map();
 
 function poolKey(channelKey = "") {
-  const key = String(channelKey || "").trim();
+  const key = text(channelKey);
   if (!key) throw new TypeError("mysql connector channelKey is required");
   return key;
 }
@@ -64,7 +65,7 @@ export async function executeMysqlCommand({
   channelKey = "",
   abortSignal = null,
 } = {}) {
-  const sql = String(command || "").trim();
+  const sql = text(command);
   if (!sql) {
     return { ok: false, code: 400, stdout: "", stderr: "mysql command required" };
   }

@@ -8,6 +8,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { init, parse } from "es-module-lexer";
 import { parse as parseJavaScript } from "espree";
+import { text } from "@noobot/shared/value";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const defaultIgnoredDirectories = [
@@ -59,9 +60,7 @@ function resolveRelativeModule(fromFile, specifier) {
 
 function exportedNames(records = []) {
   return new Set(
-    records
-      .map((record) => String(record?.name || "").trim())
-      .filter((name) => name && name !== "default"),
+    records.map((record) => text(record?.name)).filter((name) => name && name !== "default"),
   );
 }
 

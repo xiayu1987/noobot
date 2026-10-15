@@ -5,11 +5,12 @@
  */
 import { AnimationAssetSchema } from "../animation-protocol.js";
 import { migrateLegacyAssetDescriptor } from "../asset-metadata-migration.js";
+import { text } from "@noobot/shared/value";
 
 const GLB_MIME_TYPE = "model/gltf-binary";
 
 function requestUserId(req = {}) {
-  const userId = String(req?.auth?.userId || "").trim();
+  const userId = text(req?.auth?.userId);
   if (!userId) {
     const error = new Error("authenticated character asset user is required");
     error.statusCode = 401;
@@ -54,7 +55,7 @@ function canonicalResource(assetId, version, size) {
 
 function parseDescriptor(req = {}) {
   const descriptor = AnimationAssetSchema.parse(req.body);
-  const assetId = String(req.params?.assetId || "").trim();
+  const assetId = text(req.params?.assetId);
   const expectedUrl = `/api/internal/character/assets/${encodeURIComponent(assetId)}/${descriptor.resource.version}`;
   if (descriptor.assetId !== assetId || descriptor.resource.url !== expectedUrl) {
     const error = new Error("character asset descriptor does not match its resource identity");

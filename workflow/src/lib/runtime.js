@@ -12,6 +12,7 @@ import BackAction from "../engine/bizinst/action/back-action.js";
 import StopAction from "../engine/bizinst/action/stop-action.js";
 import { compileWorkflowSemantic } from "./compiler.js";
 import { randomUUID } from "node:crypto";
+import { text } from "@noobot/shared/value";
 const WORKFLOW_INSTANCE_STORE = new Map();
 let WORKFLOW_RUNTIME_ID_COUNTER = 0;
 
@@ -38,8 +39,8 @@ function summarizeActionRecords(treeRecord = null) {
   return records.map((record) => {
     const action = record?.getAction?.();
     return {
-      actionName: String(action?.getName?.() || "").trim(),
-      actionKind: String(action?.getActionKind?.() || "").trim(),
+      actionName: text(action?.getName?.()),
+      actionKind: text(action?.getActionKind?.()),
     };
   });
 }
@@ -98,7 +99,7 @@ function setNodeStateWorkflowRuntime(nodeState = null, patch = {}) {
 function ensureActionNodeStateRuntimeId(actionNodeState = null) {
   if (!actionNodeState) return "";
   const current = getNodeStateWorkflowRuntime(actionNodeState);
-  const existing = String(current?.actionNodeStateId || current?.nodeStateId || "").trim();
+  const existing = text(current?.actionNodeStateId || current?.nodeStateId);
   if (existing) return existing;
   const id = nextWorkflowRuntimeId("wf_action_state");
   setNodeStateWorkflowRuntime(actionNodeState, {
@@ -111,7 +112,7 @@ function ensureActionNodeStateRuntimeId(actionNodeState = null) {
 function ensureStepStateRuntimeId(stepState = null) {
   if (!stepState) return "";
   const current = getStepStateWorkflowRuntime(stepState);
-  const existing = String(current?.stepId || "").trim();
+  const existing = text(current?.stepId);
   if (existing) return existing;
   const actionNodeState = stepState?.getActionNodeState?.() || null;
   const actionNodeStateId = ensureActionNodeStateRuntimeId(actionNodeState);
@@ -226,7 +227,7 @@ export function executeWorkflowSemantic({ semantic = {}, options = {} } = {}) {
 }
 
 function resolveInstanceId(input = "") {
-  const normalized = String(input || "").trim();
+  const normalized = text(input);
   if (normalized) return normalized;
   return `wf_inst_${randomUUID()}`;
 }
@@ -244,13 +245,13 @@ function describePendingSteps(bizinst = null) {
     const actionNodeStateId = ensureActionNodeStateRuntimeId(actionNodeState);
     return {
       index,
-      nodeId: String(node?.workflowNodeId || "").trim(),
-      nodeName: String(node?.getName?.() || "").trim(),
+      nodeId: text(node?.workflowNodeId),
+      nodeName: text(node?.getName?.()),
       nodeType: Number(node?.getNodeType?.()),
       actionNodeStateId,
       stepId,
       stepIndex: stepStates.indexOf(stepState),
-      stepStatus: String(workflowRuntime?.status || "").trim(),
+      stepStatus: text(workflowRuntime?.status),
       stepFailure:
         workflowRuntime?.failure && typeof workflowRuntime.failure === "object"
           ? workflowRuntime.failure
@@ -267,13 +268,13 @@ function describeActionStepState(stepState = null) {
     : [];
   const workflowRuntime = getStepStateWorkflowRuntime(stepState);
   return {
-    nodeId: String(node?.workflowNodeId || "").trim(),
-    nodeName: String(node?.getName?.() || "").trim(),
+    nodeId: text(node?.workflowNodeId),
+    nodeName: text(node?.getName?.()),
     nodeType: Number(node?.getNodeType?.()),
     actionNodeStateId: ensureActionNodeStateRuntimeId(actionNodeState),
     stepId: ensureStepStateRuntimeId(stepState),
     stepIndex: stepStates.indexOf(stepState),
-    stepStatus: String(workflowRuntime?.status || "").trim(),
+    stepStatus: text(workflowRuntime?.status),
     stepFailure:
       workflowRuntime?.failure && typeof workflowRuntime.failure === "object"
         ? workflowRuntime.failure
@@ -283,7 +284,7 @@ function describeActionStepState(stepState = null) {
 
 function findCurrentStepState({ record = null, pendingStep = {}, stepId = "" } = {}) {
   const steps = snapshotCurrentSteps(record?.bizinst || null);
-  const normalizedStepId = String(stepId || pendingStep?.stepId || "").trim();
+  const normalizedStepId = text(stepId || pendingStep?.stepId);
   if (normalizedStepId) {
     const matchedById = steps.find(
       (stepState) => ensureStepStateRuntimeId(stepState) === normalizedStepId,
@@ -294,14 +295,14 @@ function findCurrentStepState({ record = null, pendingStep = {}, stepId = "" } =
   if (Number.isFinite(index) && index >= 0 && steps[Math.floor(index)]) {
     return steps[Math.floor(index)];
   }
-  const nodeId = String(pendingStep?.nodeId || "").trim();
+  const nodeId = text(pendingStep?.nodeId);
   const stepIndex = Number(pendingStep?.stepIndex);
   if (nodeId && Number.isFinite(stepIndex)) {
     return (
       steps.find((stepState) => {
         const actionNodeState = stepState?.getActionNodeState?.();
         const node = actionNodeState?.getNode?.();
-        if (String(node?.workflowNodeId || "").trim() !== nodeId) return false;
+        if (text(node?.workflowNodeId) !== nodeId) return false;
         const stepStates = Array.isArray(actionNodeState?.getStepStates?.())
           ? actionNodeState.getStepStates()
           : [];
@@ -392,25 +393,17 @@ export function resolveWorkflowUpstreamActionSteps({
 }
 
 function normalizeSemanticNodeId(input = "") {
-  return String(input || "").trim();
+  return text(input);
 }
 
 function isSemanticActionNode(node = null) {
   if (!node || typeof node !== "object") return false;
-  return (
-    String(node?.type || "")
-      .trim()
-      .toLowerCase() === "action"
-  );
+  return text(node?.type).toLowerCase() === "action";
 }
 
 function isSemanticStateNode(node = null) {
   if (!node || typeof node !== "object") return false;
-  return (
-    String(node?.type || "")
-      .trim()
-      .toLowerCase() === "state"
-  );
+  return text(node?.type).toLowerCase() === "state";
 }
 
 function buildSemanticRelationIndex(semantic = {}) {
@@ -445,10 +438,10 @@ function resolveSemanticFromInput({ semantic = null, instanceId = "" } = {}) {
 function resolveNodeIdFromInput({ semantic = {}, nodeId = "", pendingStep = {} } = {}) {
   const direct = normalizeSemanticNodeId(nodeId || pendingStep?.nodeId);
   if (direct) return direct;
-  const nodeName = String(pendingStep?.nodeName || "").trim();
+  const nodeName = text(pendingStep?.nodeName);
   if (!nodeName) return "";
   const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
-  const matched = nodes.find((node = {}) => String(node?.name || "").trim() === nodeName);
+  const matched = nodes.find((node = {}) => text(node?.name) === nodeName);
   return normalizeSemanticNodeId(matched?.id);
 }
 
@@ -543,7 +536,7 @@ export function startWorkflowInstanceById({
 }
 
 function getWorkflowInstanceRecord({ instanceId = "" } = {}) {
-  const id = String(instanceId || "").trim();
+  const id = text(instanceId);
   if (!id) return null;
   return WORKFLOW_INSTANCE_STORE.get(id) || null;
 }
@@ -569,7 +562,7 @@ export function advanceWorkflowInstanceById({
 } = {}) {
   const record = getWorkflowInstanceRecord({ instanceId });
   if (!record) {
-    throw new Error(`workflow instance not found: ${String(instanceId || "").trim()}`);
+    throw new Error(`workflow instance not found: ${text(instanceId)}`);
   }
   const steps = snapshotCurrentSteps(record.bizinst);
   if (!steps.length) return getWorkflowInstanceSnapshot({ instanceId: record.instanceId });
@@ -591,7 +584,7 @@ export function advanceWorkflowInstanceById({
 }
 
 export function releaseWorkflowInstance({ instanceId = "" } = {}) {
-  const id = String(instanceId || "").trim();
+  const id = text(instanceId);
   if (!id) return false;
   return WORKFLOW_INSTANCE_STORE.delete(id);
 }

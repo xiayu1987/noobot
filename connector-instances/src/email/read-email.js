@@ -5,6 +5,7 @@
  */
 import { createImapClient, normalizeEmailConnectionInfo } from "./connection.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { text } from "@noobot/shared/value";
 
 const BINARY_MIME_TYPE = "application/octet-stream";
 
@@ -30,16 +31,13 @@ async function saveEmailAttachments({ attachmentHandler = null, parsedEmail = nu
     const contentBuffer = Buffer.isBuffer(attachmentItem?.content) ? attachmentItem.content : null;
     if (!contentBuffer || !contentBuffer.length) continue;
     attachmentIndex += 1;
-    const fileName =
-      String(attachmentItem?.filename || "").trim() || `email_attachment_${attachmentIndex}`;
+    const fileName = text(attachmentItem?.filename) || `email_attachment_${attachmentIndex}`;
     const mimeType = String(attachmentItem?.contentType || BINARY_MIME_TYPE)
       .trim()
       .toLowerCase();
-    const contentDisposition = String(attachmentItem?.contentDisposition || "")
-      .trim()
-      .toLowerCase();
+    const contentDisposition = text(attachmentItem?.contentDisposition).toLowerCase();
     const isInline = contentDisposition === "inline" || Boolean(attachmentItem?.cid);
-    const contentId = String(attachmentItem?.cid || "").trim();
+    const contentId = text(attachmentItem?.cid);
     artifacts.push({
       name: fileName,
       mimeType,
@@ -174,7 +172,7 @@ function appendInlineAttachmentHtml(baseHtml, descriptors) {
 function formatAddressList(addressField) {
   if (!Array.isArray(addressField?.value)) return [];
   return addressField.value.map((addressItem) =>
-    `${String(addressItem?.name || "").trim()} <${String(addressItem?.address || "").trim()}>`.trim(),
+    `${text(addressItem?.name)} <${text(addressItem?.address)}>`.trim(),
   );
 }
 
@@ -183,7 +181,7 @@ function buildReadEmailHeaders({ folder, resolvedUid, fetchedMessage, parsedEmai
     action: "read",
     folder,
     uid: Number(fetchedMessage?.uid || resolvedUid),
-    subject: String(parsedEmail?.subject || fetchedMessage?.envelope?.subject || "").trim(),
+    subject: text(parsedEmail?.subject || fetchedMessage?.envelope?.subject),
     from: formatAddressList(parsedEmail?.from),
     to: formatAddressList(parsedEmail?.to),
     cc: formatAddressList(parsedEmail?.cc),
@@ -196,8 +194,8 @@ function buildReadEmailBody(parsedEmail, attachments) {
     .filter((attachmentItem) => attachmentItem?.email_is_inline === true)
     .map(describeInlineAttachment);
   return {
-    text: appendInlineAttachmentText(String(parsedEmail?.text || "").trim(), descriptors),
-    html: appendInlineAttachmentHtml(String(parsedEmail?.html || "").trim(), descriptors),
+    text: appendInlineAttachmentText(text(parsedEmail?.text), descriptors),
+    html: appendInlineAttachmentHtml(text(parsedEmail?.html), descriptors),
   };
 }
 

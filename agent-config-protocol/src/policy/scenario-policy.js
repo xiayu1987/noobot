@@ -5,6 +5,7 @@
  */
 
 import { isPlainObject } from "../utils.js";
+import { text } from "@noobot/shared/value";
 
 export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming", "text"]);
 export const PROGRAMMING_SCENARIO_KEY = "programming";
@@ -118,7 +119,7 @@ function cloneJson(value) {
 }
 
 function normalizeScenarioKey(value = "") {
-  const key = String(value || "").trim();
+  const key = text(value);
   return BUILTIN_SCENARIO_KEYS.includes(key) ? key : "";
 }
 

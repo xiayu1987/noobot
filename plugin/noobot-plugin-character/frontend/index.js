@@ -14,6 +14,7 @@ import { EVENT_FAMILY } from "@noobot/event-protocol";
 import { CHARACTER_ANIMATION_ARTIFACT_TYPE, CHARACTER_PLUGIN_ID } from "../src/contract.js";
 import { configureImportedAssetStore } from "./runtime/importedAssetStore.js";
 import { useCharacterLocale } from "./i18n/index.js";
+import { text } from "@noobot/shared/value";
 
 function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
   if (
@@ -21,8 +22,8 @@ function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
     envelope?.payload?.pluginId === CHARACTER_PLUGIN_ID &&
     envelope?.payload?.artifactType === CHARACTER_ANIMATION_ARTIFACT_TYPE
   ) {
-    const eventSessionId = String(envelope?.identity?.sessionId || "").trim();
-    const activeSessionId = String(context?.sessionId || "").trim();
+    const eventSessionId = text(envelope?.identity?.sessionId);
+    const activeSessionId = text(context?.sessionId);
 
     if (activeSessionId && eventSessionId && activeSessionId !== eventSessionId) return false;
     if (eventSessionId && animationRuntimeState.sessionId !== eventSessionId) {
@@ -34,7 +35,7 @@ function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
 }
 
 function hydrateCharacterSessionArtifacts({ mainSessionDoc = {}, sessionItem = {} } = {}) {
-  const sessionId = String(mainSessionDoc?.sessionId || sessionItem?.sessionId || "").trim();
+  const sessionId = text(mainSessionDoc?.sessionId || sessionItem?.sessionId);
   if (!sessionId) return 0;
   if (animationRuntimeState.sessionId !== sessionId) resetAnimationRuntimeState(sessionId);
   const events = Array.isArray(mainSessionDoc?.sessionArtifactEvents)
@@ -47,7 +48,7 @@ function hydrateCharacterSessionArtifacts({ mainSessionDoc = {}, sessionItem = {
     (count, envelope) =>
       count +
       Number(
-        String(envelope?.identity?.sessionId || "").trim() === sessionId &&
+        text(envelope?.identity?.sessionId) === sessionId &&
           applyAnimationRuntimeEvent(envelope).applied === true,
       ),
     0,
@@ -57,7 +58,7 @@ function hydrateCharacterSessionArtifacts({ mainSessionDoc = {}, sessionItem = {
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
-  const pluginId = String(ctx?.pluginMeta?.pluginId || "").trim();
+  const pluginId = text(ctx?.pluginMeta?.pluginId);
   if (typeof contribute !== "function" || !points) {
     throw new Error("frontend contribution API is required");
   }

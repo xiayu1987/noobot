@@ -11,7 +11,8 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@noobot/plugin-protocol": "file:../plugin-protocol"
+    "@noobot/plugin-protocol": "file:../plugin-protocol",
+    "@noobot/shared": "file:../shared"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

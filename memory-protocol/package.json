@@ -23,6 +23,7 @@
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test \"__tests__/**/*.test.js\""
   },
   "dependencies": {
-    "@noobot/context-protocol": "file:../context-protocol"
+    "@noobot/context-protocol": "file:../context-protocol",
+    "@noobot/shared": "file:../shared"
   }
 }

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const FILE_MUTATION_PROTOCOL = "noobot.file-mutation-result";
 export const FILE_MUTATION_VERSION = 2;
 
@@ -119,8 +121,8 @@ export function assertFileMutationResult(value) {
       if (aggregate === null || aggregate === undefined) return false;
       return (
         !aggregate ||
-        !String(aggregate.scopeId || "").trim() ||
-        !String(aggregate.path || "").trim() ||
+        !text(aggregate.scopeId) ||
+        !text(aggregate.path) ||
         !Number.isInteger(aggregate.revision) ||
         aggregate.revision < 1 ||
         !Number.isInteger(aggregate.diffCount) ||

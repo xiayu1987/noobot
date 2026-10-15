@@ -14,6 +14,7 @@ import {
   PLUGIN_SURFACE,
   requirePluginSurface,
 } from "@noobot/plugin-protocol";
+import { text } from "@noobot/shared/value";
 
 export * from "./core.js";
 export * from "./contributions.js";
@@ -23,11 +24,7 @@ const runtimeCache = new Map();
 
 function normalizePluginIds(pluginIds = []) {
   return Array.from(
-    new Set(
-      (Array.isArray(pluginIds) ? pluginIds : [])
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
-    ),
+    new Set((Array.isArray(pluginIds) ? pluginIds : []).map((item) => text(item)).filter(Boolean)),
   ).sort((left, right) => left.localeCompare(right));
 }
 
@@ -37,9 +34,7 @@ function normalizeLoadOptions({
   surface = PLUGIN_SURFACE.AGENT,
 } = {}) {
   return Object.freeze({
-    pluginRootDir: path.resolve(
-      String(pluginRootDir || "").trim() || resolveDefaultPluginRootDir(),
-    ),
+    pluginRootDir: path.resolve(text(pluginRootDir) || resolveDefaultPluginRootDir()),
     pluginIds: normalizePluginIds(pluginIds),
     surface: requirePluginSurface(surface),
   });
@@ -63,7 +58,7 @@ function resolveDefaultPluginRootDir() {
 }
 
 async function discoverNoobotPluginManifests({ pluginRootDir = "" } = {}) {
-  const root = path.resolve(String(pluginRootDir || "").trim() || resolveDefaultPluginRootDir());
+  const root = path.resolve(text(pluginRootDir) || resolveDefaultPluginRootDir());
   let directoryEntries;
   try {
     directoryEntries = await readdir(root, { withFileTypes: true });
@@ -223,7 +218,7 @@ export function listLoadedNoobotPluginEntries(runtime = null) {
 }
 
 export function resolveLoadedNoobotPlugin(runtime = null, pluginId = "") {
-  const normalized = String(pluginId || "").trim();
+  const normalized = text(pluginId);
   return normalized && runtime?.registry instanceof Map
     ? runtime.registry.get(normalized) || null
     : null;

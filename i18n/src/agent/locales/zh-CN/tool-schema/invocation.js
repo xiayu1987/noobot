@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const INVOCATION_TOOL_SCHEMA = {
   call_mcp_task: {
     description: {
@@ -81,15 +83,13 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.service.customParamMustNotBeEmpty": "custom_param 不能为空",
       "tools.service.endpointNameRequired": "endpointName 必填",
       "tools.service.endpointNotFound": (params = {}) =>
-        `端点不存在: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+        `端点不存在: ${text(params.serviceName)}.${text(params.endpointName)}`,
       "tools.service.endpointUrlMissing": (params = {}) =>
-        `端点 URL 缺失: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+        `端点 URL 缺失: ${text(params.serviceName)}.${text(params.endpointName)}`,
       "tools.service.queryStringMustBeObject": "queryString 必须是对象",
-      "tools.service.serviceDisabled": (params = {}) =>
-        `服务已禁用: ${String(params.serviceName || "").trim()}`,
+      "tools.service.serviceDisabled": (params = {}) => `服务已禁用: ${text(params.serviceName)}`,
       "tools.service.serviceNameRequired": "serviceName 必填",
-      "tools.service.serviceNotFound": (params = {}) =>
-        `服务不存在: ${String(params.serviceName || "").trim()}`,
+      "tools.service.serviceNotFound": (params = {}) => `服务不存在: ${text(params.serviceName)}`,
       "tools.service.userIdMissing": "上下文缺少 userId",
     },
   },
@@ -118,18 +118,17 @@ export const INVOCATION_TOOL_SCHEMA = {
     },
     texts: {
       "tools.script.commandNotInstalled": (params = {}) =>
-        `${String(params.commandName || "").trim()} 未安装，请先安装 ${String(params.commandName || "").trim()}`,
+        `${text(params.commandName)} 未安装，请先安装 ${text(params.commandName)}`,
       "tools.script.criticalCancelled": "用户未确认最高风险脚本，已取消执行。",
-      "tools.script.concise.lineWorkdir": (params = {}) =>
-        `默认工作目录：${String(params.workdir || "").trim()}`,
+      "tools.script.concise.lineWorkdir": (params = {}) => `默认工作目录：${text(params.workdir)}`,
       "tools.script.concise.lineShell": (params = {}) =>
-        `命令解释器：${String(params.shell || "").trim()}。必须使用该解释器的语法；Windows PowerShell 语法需显式调用 powershell 或 pwsh。`,
+        `命令解释器：${text(params.shell)}。必须使用该解释器的语法；Windows PowerShell 语法需显式调用 powershell 或 pwsh。`,
       "tools.script.concise.lineRelativeBase": (params = {}) =>
-        `相对路径基准：${String(params.workdir || "").trim()}`,
+        `相对路径基准：${text(params.workdir)}`,
       "tools.script.concise.linePaths": (params = {}) =>
-        `仅使用 ${String(params.root || "").trim()} 下路径（或相对路径）。`,
+        `仅使用 ${text(params.root)} 下路径（或相对路径）。`,
       "tools.script.concise.lineExtraRoots": (params = {}) =>
-        `额外挂载可用根目录：${String(params.roots || "").trim()}`,
+        `额外挂载可用根目录：${text(params.roots)}`,
       "tools.script.commonUserInstallHint":
         '- 软件累加建议使用用户态安装：如 npm --prefix "$HOME/.npm-global"、pip install --user、将二进制放到 $HOME/bin',
       "tools.script.docker.reuse":
@@ -140,7 +139,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.script.docker.mounts.title": "- 额外挂载目录：",
       "tools.script.docker.mounts.none": "- 未配置额外挂载目录。",
       "tools.script.docker.mounts.item": (params = {}) =>
-        `  - ${String(params.source || "").trim()} -> ${String(params.target || "").trim()}${String(params.description || "").trim() ? `（${String(params.description || "").trim()}）` : ""}`,
+        `  - ${text(params.source)} -> ${text(params.target)}${text(params.description) ? `（${text(params.description)}）` : ""}`,
       "tools.script.localModePathHint": "输入输出文件请使用该目录下相对路径。",
       "tools.script.localModeTitle": "执行脚本（local 模式）。",
       "tools.script.localModeWorkspacePrefix": "命令在本机目录执行：",

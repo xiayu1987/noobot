@@ -3,22 +3,22 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function isZhLocale(locale = "") {
-  const normalized = String(locale || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(locale).toLowerCase();
   return normalized.startsWith("zh");
 }
 
 export function resolveLocaleFromRequest(request = null) {
   try {
     const requestUrl = new URL(request?.url || "", "http://localhost");
-    const explicitLocale = String(requestUrl.searchParams.get("locale") || "").trim();
+    const explicitLocale = text(requestUrl.searchParams.get("locale"));
     if (explicitLocale) return explicitLocale;
   } catch {
     void 0;
   }
-  const acceptLanguage = String(request?.headers?.["accept-language"] || "").trim();
+  const acceptLanguage = text(request?.headers?.["accept-language"]);
   if (!acceptLanguage) return "";
   return acceptLanguage.split(",")[0]?.trim() || "";
 }
@@ -48,7 +48,7 @@ const ZH_CN_MAP = new Map([
 ]);
 
 export function localizeAgentProxyMessage(message = "", locale = "") {
-  const normalizedMessage = String(message || "").trim();
+  const normalizedMessage = text(message);
   if (!normalizedMessage || !isZhLocale(locale)) return normalizedMessage;
 
   const unsupportedPrefix = "agentProxy unsupported action: ";

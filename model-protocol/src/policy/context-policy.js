@@ -2,6 +2,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 export const MODEL_CONTEXT_SEQUENCE_POLICY = Object.freeze({
   CHECKPOINT_APPEND_ONLY: "checkpoint_append_only",
   INDEPENDENT_REQUEST: "independent_request",
@@ -10,7 +12,7 @@ export const MODEL_CONTEXT_SEQUENCE_POLICY = Object.freeze({
 const MODEL_CONTEXT_SEQUENCE_POLICIES = new Set(Object.values(MODEL_CONTEXT_SEQUENCE_POLICY));
 
 export function requireModelContextSequencePolicy(value) {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!MODEL_CONTEXT_SEQUENCE_POLICIES.has(normalized)) {
     throw new TypeError(`invalid model context sequence policy: ${normalized || "missing"}`);
   }

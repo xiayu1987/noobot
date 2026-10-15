@@ -8,6 +8,7 @@ import {
   readPluginSelectionInput,
   resolvePluginSelection,
 } from "../normalization/plugin-selection.js";
+import { text } from "@noobot/shared/value";
 
 export function createPluginConfigPlan({
   runConfig = {},
@@ -19,7 +20,7 @@ export function createPluginConfigPlan({
   return {
     ...selection,
     plugins: manifests
-      .filter((manifest) => selectedSet.has(String(manifest?.pluginId || "").trim()))
+      .filter((manifest) => selectedSet.has(text(manifest?.pluginId)))
       .filter((manifest) => effectiveConfig?.plugins?.[manifest.pluginId]?.enabled !== false)
       .map((manifest) => ({
         pluginId: manifest.pluginId,

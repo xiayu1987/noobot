@@ -12,6 +12,7 @@ import {
   ATTACHMENT_RELATION_TYPE,
   parsePersistedAttachmentRecord,
 } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 const workspaceRoot = path.resolve(
   process.argv.find((argument) => argument.startsWith("--workspace="))?.slice(12) || "workspace",
@@ -48,15 +49,15 @@ function legacyIdentity(record, scope) {
 }
 
 function identityLookupKey({ sessionId, attachmentId }) {
-  return JSON.stringify([String(sessionId || "").trim(), String(attachmentId || "").trim()]);
+  return JSON.stringify([text(sessionId), text(attachmentId)]);
 }
 
 function buildIdentityRegistry(indexSources) {
   const registry = new Map();
   for (const { file, source } of indexSources) {
     const scope = {
-      sessionId: String(source?.sessionId || "").trim(),
-      attachmentSource: String(source?.attachmentSource || "").trim(),
+      sessionId: text(source?.sessionId),
+      attachmentSource: text(source?.attachmentSource),
     };
     if (!scope.sessionId || !scope.attachmentSource) {
       throw new Error(`invalid_attachment_index_scope:${file}`);
@@ -83,10 +84,8 @@ function buildIdentityRegistry(indexSources) {
 function migrateRelation(record, identity, identityRegistry) {
   const parsedResult = record?.parsedResult;
   if (!parsedResult || typeof parsedResult !== "object" || Array.isArray(parsedResult)) return [];
-  const targetAttachmentId = String(parsedResult.attachmentId || "").trim();
-  const createdAt = String(
-    parsedResult.updatedAt || record.updatedAt || record.createdAt || "",
-  ).trim();
+  const targetAttachmentId = text(parsedResult.attachmentId);
+  const createdAt = text(parsedResult.updatedAt || record.updatedAt || record.createdAt);
   if (!targetAttachmentId || !createdAt) throw new Error("invalid_legacy_parsed_result");
   const targetIdentity = identityRegistry.get(
     identityLookupKey({
@@ -100,16 +99,16 @@ function migrateRelation(record, identity, identityRegistry) {
       relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
       sourceIdentity: identity,
       targetIdentity,
-      name: String(parsedResult.name || "").trim() || undefined,
-      mimeType: String(parsedResult.mimeType || "").trim() || undefined,
+      name: text(parsedResult.name) || undefined,
+      mimeType: text(parsedResult.mimeType) || undefined,
       size:
         Number.isSafeInteger(parsedResult.size) && parsedResult.size >= 0
           ? parsedResult.size
           : undefined,
-      storageRef: String(parsedResult.relativePath || "").trim()
+      storageRef: text(parsedResult.relativePath)
         ? { kind: "attachment-store", ref: String(parsedResult.relativePath).trim() }
         : undefined,
-      producer: String(parsedResult.tool || "").trim()
+      producer: text(parsedResult.tool)
         ? { type: "tool", id: String(parsedResult.tool).trim() }
         : undefined,
       createdAt,
@@ -123,11 +122,11 @@ function migrateRecord(record, scope, identityRegistry) {
   }
   const identity = legacyIdentity(record, scope);
   const sourceDescriptor = record?.descriptor || record;
-  const createdAt = String(record?.createdAt || "").trim();
+  const createdAt = text(record?.createdAt);
   const updatedAt = String(record?.updatedAt || createdAt).trim();
   const storageRef = record?.storageRef || {
     kind: "attachment-store",
-    ref: String(record?.relativePath || "").trim(),
+    ref: text(record?.relativePath),
   };
   return parsePersistedAttachmentRecord({
     schema: ATTACHMENT_RECORD_SCHEMA,
@@ -135,16 +134,16 @@ function migrateRecord(record, scope, identityRegistry) {
     identity,
     descriptor: definedEntries({
       identity,
-      clientAttachmentId: String(sourceDescriptor?.clientAttachmentId || "").trim() || undefined,
-      name: String(sourceDescriptor?.name || "").trim(),
-      mimeType: String(sourceDescriptor?.mimeType || "").trim(),
+      clientAttachmentId: text(sourceDescriptor?.clientAttachmentId) || undefined,
+      name: text(sourceDescriptor?.name),
+      mimeType: text(sourceDescriptor?.mimeType),
       size:
         Number.isSafeInteger(sourceDescriptor?.size) && sourceDescriptor.size >= 0
           ? sourceDescriptor.size
           : undefined,
-      contentSha256: String(sourceDescriptor?.contentSha256 || "").trim() || undefined,
+      contentSha256: text(sourceDescriptor?.contentSha256) || undefined,
       owner: sourceDescriptor?.owner,
-      generationSource: String(sourceDescriptor?.generationSource || "").trim() || undefined,
+      generationSource: text(sourceDescriptor?.generationSource) || undefined,
       generatedByModel:
         typeof sourceDescriptor?.generatedByModel === "boolean"
           ? sourceDescriptor.generatedByModel
@@ -161,8 +160,8 @@ function migrateRecord(record, scope, identityRegistry) {
 
 function migrateIndex(file, source, identityRegistry) {
   const scope = {
-    sessionId: String(source?.sessionId || "").trim(),
-    attachmentSource: String(source?.attachmentSource || "").trim(),
+    sessionId: text(source?.sessionId),
+    attachmentSource: text(source?.attachmentSource),
   };
   if (!scope.sessionId || !scope.attachmentSource)
     throw new Error(`invalid_attachment_index_scope:${file}`);

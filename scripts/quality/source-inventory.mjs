@@ -5,6 +5,7 @@
  */
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 
 const FIRST_PARTY_AUXILIARY_ROOTS = Object.freeze(["scripts", "user-template"]);
 
@@ -46,7 +47,7 @@ async function readRootWorkspacePaths(repositoryRoot) {
       `quality source inventory requires explicit workspace paths: ${unsupported.join(", ")}`,
     );
   }
-  return workspaceEntries.map((entry) => String(entry || "").trim()).filter(Boolean);
+  return workspaceEntries.map((entry) => text(entry)).filter(Boolean);
 }
 
 export async function getFirstPartySourceRoots({ repositoryRoot } = {}) {

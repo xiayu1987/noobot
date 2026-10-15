@@ -5,6 +5,7 @@
  */
 import { dedupeTextList } from "../text.js";
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
+import { text } from "@noobot/shared/value";
 
 const EXPERIENCE_METADATA_ERROR_CODE = "EXPERIENCE_METADATA_DOCUMENT_INVALID";
 
@@ -21,10 +22,10 @@ function metadataError(message) {
 function normalizeWeeklyBatches(batches = []) {
   return (Array.isArray(batches) ? batches : [])
     .map((item = {}) => ({
-      weekLabel: String(item.weekLabel || "").trim(),
+      weekLabel: text(item.weekLabel),
       dates: dedupeTextList(item.dates || []),
       domainCount: Number(item.domainCount || 0) || 0,
-      createdAt: String(item.createdAt || "").trim(),
+      createdAt: text(item.createdAt),
     }))
     .filter((item) => item.weekLabel);
 }
@@ -34,7 +35,7 @@ export function normalizeExperienceMetadata(raw = null) {
   return {
     domainNames: dedupeTextList(source?.domainNames || []),
     weeklyBatches: normalizeWeeklyBatches(source?.weeklyBatches),
-    updatedAt: String(source?.updatedAt || "").trim(),
+    updatedAt: text(source?.updatedAt),
   };
 }
 

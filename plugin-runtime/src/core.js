@@ -10,11 +10,10 @@ import {
   validatePluginContributionReceipt,
   validatePluginActivationResult,
 } from "@noobot/plugin-protocol";
+import { text } from "@noobot/shared/value";
 
 function normalizePath(path = []) {
-  const normalized = Array.isArray(path)
-    ? path.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
+  const normalized = Array.isArray(path) ? path.map((item) => text(item)).filter(Boolean) : [];
   if (!normalized.length) throw new TypeError("plugin capability facade path is required");
   return normalized;
 }
@@ -262,7 +261,7 @@ function createScopeHandle({
   return Object.freeze({
     entries: Object.freeze([...entries]),
     getActivation(pluginId) {
-      return activations.get(String(pluginId || "").trim());
+      return activations.get(text(pluginId));
     },
     get lifecycleEvents() {
       return Object.freeze([...lifecycleEvents]);

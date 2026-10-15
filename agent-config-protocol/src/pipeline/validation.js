@@ -5,6 +5,7 @@
  */
 
 import { AgentConfigProtocolError, CONFIG_ERROR_CODE } from "../contract/errors.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizeConfigValidators(validators = []) {
   return (Array.isArray(validators) ? validators : []).map((entry, index) => {
@@ -13,8 +14,7 @@ export function normalizeConfigValidators(validators = []) {
       throw new TypeError(`invalid config validator at index ${index}`);
     return Object.freeze({
       name:
-        String((typeof entry === "function" ? entry.name : entry?.name) || "").trim() ||
-        `validator#${index + 1}`,
+        text(typeof entry === "function" ? entry.name : entry?.name) || `validator#${index + 1}`,
       validate,
     });
   });
@@ -29,10 +29,7 @@ export async function validateEffectiveConfig({
   const warnings = [];
   for (const validator of normalizeConfigValidators(validators)) {
     const result = await validator.validate({ rawConfig, resolvedConfig, context });
-    const detail =
-      result && typeof result === "object"
-        ? String(result.error || result.message || "").trim()
-        : "";
+    const detail = result && typeof result === "object" ? text(result.error || result.message) : "";
     if (result === false || result?.ok === false) {
       throw new AgentConfigProtocolError(
         detail
@@ -43,9 +40,7 @@ export async function validateEffectiveConfig({
     }
     if (typeof result === "string" && result.trim()) warnings.push(result.trim());
     if (Array.isArray(result?.warnings)) {
-      warnings.push(
-        ...result.warnings.map((warning) => String(warning || "").trim()).filter(Boolean),
-      );
+      warnings.push(...result.warnings.map((warning) => text(warning)).filter(Boolean));
     }
   }
   return warnings;

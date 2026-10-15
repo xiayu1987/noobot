@@ -13,9 +13,10 @@ import {
   WORKSPACE_USER_CONFIGURATION_ENTRIES,
   isWorkspacePathSegment,
 } from "../../workspace-protocol/src/layout.js";
+import { text } from "@noobot/shared/value";
 
 function requireAbsoluteDir(value, label) {
-  const dir = String(value || "").trim();
+  const dir = text(value);
   if (!path.isAbsolute(dir)) throw new Error(`${label} must be an absolute path`);
   return dir;
 }
@@ -38,7 +39,7 @@ async function copyEntry(sourceRoot, targetRoot, relativePath) {
 }
 
 function requireUserId(value) {
-  const userId = String(value || "").trim();
+  const userId = text(value);
   if (!isWorkspacePathSegment(userId)) throw new Error(`invalid workspace userId: ${userId}`);
   return userId;
 }

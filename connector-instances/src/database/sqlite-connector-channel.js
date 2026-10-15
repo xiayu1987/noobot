@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { importDefaultOrModule, normalizeConnectionSource } from "./common-db-connector-channel.js";
+import { text } from "@noobot/shared/value";
 
 function resolveSqliteConnection(connectionInfo = {}) {
   const source = normalizeConnectionSource(connectionInfo);
-  return { filePath: String(source.file_path || "").trim(), timeoutMs: 30000 };
+  return { filePath: text(source.file_path), timeoutMs: 30000 };
 }
 
 async function importBetterSqlite3() {
@@ -17,7 +18,7 @@ async function importBetterSqlite3() {
 const sqliteDatabases = new Map();
 
 function databaseKey(channelKey = "") {
-  const key = String(channelKey || "").trim();
+  const key = text(channelKey);
   if (!key) throw new TypeError("sqlite connector channelKey is required");
   return key;
 }
@@ -32,7 +33,7 @@ function getSqliteDatabase(Database, conn = {}, channelKey = "") {
 }
 
 function looksLikeQuery(sql = "") {
-  return /^(select|pragma|with|explain)\b/i.test(String(sql || "").trim());
+  return /^(select|pragma|with|explain)\b/i.test(text(sql));
 }
 
 export async function executeSqliteCommand({
@@ -40,7 +41,7 @@ export async function executeSqliteCommand({
   connectionInfo = {},
   channelKey = "",
 } = {}) {
-  const sql = String(command || "").trim();
+  const sql = text(command);
   if (!sql) {
     return {
       ok: false,

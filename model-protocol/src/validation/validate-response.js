@@ -11,6 +11,7 @@ import {
 import { requireInvocationIdentity } from "../protocol/invocation.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "../protocol/operation.js";
 import { hasUsableModelChatOutput } from "../protocol/output.js";
+import { text } from "@noobot/shared/value";
 
 const RESPONSE_KEYS = Object.freeze([
   "protocol",
@@ -83,7 +84,7 @@ function validateAttempt(value, index) {
     throw new TypeError(`${path}.attempt must be a positive integer`);
   }
   if (!ATTEMPT_STATUSES.has(attempt.status)) throw new TypeError(`${path}.status is invalid`);
-  if (!String(attempt.kind || "").trim()) throw new TypeError(`${path}.kind is required`);
+  if (!text(attempt.kind)) throw new TypeError(`${path}.kind is required`);
   if (typeof attempt.streaming !== "boolean")
     throw new TypeError(`${path}.streaming must be a boolean`);
   if (attempt.output !== undefined) validateOutput(attempt.output, `${path}.output`);

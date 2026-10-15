@@ -13,6 +13,7 @@ import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
 import { sanitizeUserConfig } from "../policy/user-override.js";
 import { CONFIG_NODE_ACCESS, USER_CONFIG_MERGE_MODE } from "../contract/repair.js";
 import { MODEL_PROVIDER_AGENT_CONFIG_CONTRACT } from "../contract/config-structure.js";
+import { text } from "@noobot/shared/value";
 
 function projectProviderFields(provider, access) {
   if (!isPlainObject(provider)) return {};
@@ -74,13 +75,13 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
 
 export function applySessionModelOverride(userConfig = {}, modelAlias = "") {
   const safeUser = sanitizeUserConfig(userConfig);
-  const alias = String(modelAlias || "").trim();
+  const alias = text(modelAlias);
   if (!alias) return safeUser;
   return { ...safeUser, defaultProvider: alias };
 }
 
 export function hasOwnConfigKey(source = {}, key = "") {
-  const normalizedKey = String(key || "").trim();
+  const normalizedKey = text(key);
   return Boolean(
     normalizedKey &&
     isPlainObject(source) &&
@@ -100,7 +101,7 @@ export function resolveRunConfigValue({
   normalize = (value) => value,
   fallback = undefined,
 } = {}) {
-  const normalizedKey = String(key || "").trim();
+  const normalizedKey = text(key);
   const normalizer = typeof normalize === "function" ? normalize : (value) => value;
   if (!normalizedKey) return fallback;
   if (hasOwnConfigKey(runConfig, normalizedKey)) {

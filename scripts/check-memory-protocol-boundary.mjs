@@ -21,7 +21,7 @@ const sourceFiles = createRelativeSourceCollector({
 });
 
 const PACKAGE_IMPORT_ALLOWLIST = Object.freeze({
-  [PROTOCOL_DIR]: ["@noobot/context-protocol/"],
+  [PROTOCOL_DIR]: ["@noobot/context-protocol/", "@noobot/shared/"],
   [REPAIR_DIR]: ["@noobot/memory-protocol/"],
 });
 

@@ -5,6 +5,7 @@
  */
 import { reactive, readonly } from "vue";
 import { deleteImportedAsset, listImportedAssets } from "./importedAssetStore.js";
+import { text } from "@noobot/shared/value";
 
 const state = reactive({ assets: [], loading: false });
 let refreshPromise = null;
@@ -29,7 +30,7 @@ export async function refreshCharacterAssetCatalog() {
 }
 
 export function recordCharacterAsset(asset) {
-  const assetId = String(asset?.assetId || "").trim();
+  const assetId = text(asset?.assetId);
   if (!assetId) throw new TypeError("character asset ID is required");
   revision += 1;
   state.assets = [...state.assets.filter((item) => item.assetId !== assetId), asset].sort(
@@ -38,7 +39,7 @@ export function recordCharacterAsset(asset) {
 }
 
 export async function removeCharacterAsset(asset) {
-  const assetId = String(asset?.assetId || "").trim();
+  const assetId = text(asset?.assetId);
   await deleteImportedAsset(assetId);
   revision += 1;
   state.assets = state.assets.filter((item) => item.assetId !== assetId);

@@ -28,11 +28,10 @@ import {
   CHARACTER_ANIMATION_UPDATE_TOOL_ID,
   CHARACTER_CAMERA_PRESET_LIST_TOOL_ID,
 } from "./contract.js";
+import { text } from "@noobot/shared/value";
 
 function validateAssetReferences(asset, character) {
-  const allowedClips = new Set(
-    (asset.animations || []).map((item) => String(item?.name || "").trim()),
-  );
+  const allowedClips = new Set((asset.animations || []).map((item) => text(item?.name)));
   const unknownClip = character.segments.find(
     (segment) => segment.type === "native_clip" && !allowedClips.has(segment.clip),
   )?.clip;
@@ -42,7 +41,7 @@ function validateAssetReferences(asset, character) {
       clip: unknownClip,
       availableClips: [...allowedClips],
     };
-  const allowedNodes = new Set((asset.nodes || []).map((item) => String(item || "").trim()));
+  const allowedNodes = new Set((asset.nodes || []).map((item) => text(item)));
   const unknownNode = character.segments
     .filter((segment) => segment.type === "keyframes")
     .flatMap((segment) => segment.tracks)

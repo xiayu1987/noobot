@@ -7,6 +7,7 @@
 import { mergeConfig } from "../pipeline/effective-config.js";
 import { isPlainObject, normalizeStringList } from "../utils.js";
 import { removeDeniedToolNamesFromAllow } from "../policy/tool-policy.js";
+import { text } from "@noobot/shared/value";
 
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {
@@ -107,13 +108,11 @@ export class RunConfigResolver {
         mcpServers: scenarioMcpServerItems,
       },
     };
-    const requestedRuntimeModel = String(normalizedRunConfig?.runtimeModel || "").trim();
+    const requestedRuntimeModel = text(normalizedRunConfig?.runtimeModel);
     if (requestedRuntimeModel) {
       resolvedRunConfig.runtimeModel = requestedRuntimeModel;
     }
-    const toolPolicyMode = String(normalizedRunConfig?.toolPolicy?.mode || "")
-      .trim()
-      .toLowerCase();
+    const toolPolicyMode = text(normalizedRunConfig?.toolPolicy?.mode).toLowerCase();
     if (scenarioToolNames.length && !hasAllTools && toolPolicyMode !== "custom_only") {
       const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)
         ? normalizedRunConfig.toolPolicy

@@ -5,6 +5,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 
 export const WORKSPACE_ROOT_ENV = "NOOBOT_WORKSPACE_ROOT";
 export const GLOBAL_CONFIG_PATH_ENV = "NOOBOT_GLOBAL_CONFIG_PATH";
@@ -14,8 +15,8 @@ export function resolveGlobalConfigPath({ serviceDir, filePath = "", env = proce
   if (!serviceDir || !path.isAbsolute(serviceDir)) {
     throw new TypeError("resolveGlobalConfigPath requires an absolute serviceDir");
   }
-  const explicitPath = String(filePath || "").trim();
-  const envPath = String(env?.[GLOBAL_CONFIG_PATH_ENV] || "").trim();
+  const explicitPath = text(filePath);
+  const envPath = text(env?.[GLOBAL_CONFIG_PATH_ENV]);
   return path.resolve(serviceDir, explicitPath || envPath || DEFAULT_GLOBAL_CONFIG_RELATIVE_PATH);
 }
 

@@ -14,6 +14,7 @@ import {
 import { resolveSandboxMount, resolveSandboxUserRoot, resolveHostPath } from "./sandbox-mapping.js";
 import { WORKSPACE_SANDBOX_PATHS } from "@noobot/execution-isolation-protocol";
 import { isPathWithinRoot } from "./path-contract.js";
+import { text } from "@noobot/shared/value";
 
 const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
 
@@ -34,7 +35,7 @@ const TOOL_PATH_SCOPE_ERRORS = new Set([
 ]);
 
 export function isToolPathScopeError(error = "") {
-  return TOOL_PATH_SCOPE_ERRORS.has(String(error || "").trim());
+  return TOOL_PATH_SCOPE_ERRORS.has(text(error));
 }
 
 function normalizeWorkspaceRootAlias(value = "") {
@@ -49,7 +50,7 @@ function normalizeWorkspaceRootAlias(value = "") {
 }
 
 export function classifyToolInputPath(inputPath = "", { agentContext = null } = {}) {
-  const raw = String(inputPath || "").trim();
+  const raw = text(inputPath);
   if (!raw) {
     return {
       view: TOOL_PATH_VIEWS.EMPTY,

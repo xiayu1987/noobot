@@ -10,6 +10,7 @@ import {
   HOOK_PROTOCOL_VERSION,
   requireHookPointDescriptor,
 } from "./points.js";
+import { text } from "@noobot/shared/value";
 
 export const HOOK_OUTCOME_STATUS = Object.freeze({
   OK: "ok",
@@ -22,7 +23,7 @@ export class HookExecutionError extends Error {
   constructor({ point = "", outcomes = [] } = {}) {
     const firstFailure = outcomes.find((outcome) => outcome?.status !== HOOK_OUTCOME_STATUS.OK);
     const failureLocation = `${point}${firstFailure?.handlerId ? `#${firstFailure.handlerId}` : ""}`;
-    const failureMessage = String(firstFailure?.error?.message || "").trim();
+    const failureMessage = text(firstFailure?.error?.message);
     super(
       `hook execution failed: ${failureLocation}${failureMessage ? `: ${failureMessage}` : ""}`,
     );
@@ -148,7 +149,7 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
   function on(point, handler, options = {}) {
     const descriptor = requireHookPointDescriptor(point);
     if (typeof handler !== "function") throw new TypeError("hook handler is required");
-    const id = String(options?.id || "").trim();
+    const id = text(options?.id);
     if (!id) throw new TypeError(`hook handler id is required: ${descriptor.point}`);
     const handlers = registry.get(descriptor.point) || [];
     if (handlers.some((registration) => registration.id === id)) {
@@ -183,7 +184,7 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
 
   function off(point, handlerId) {
     const descriptor = requireHookPointDescriptor(point);
-    const normalizedId = String(handlerId || "").trim();
+    const normalizedId = text(handlerId);
     if (!normalizedId) return false;
     const handlers = registry.get(descriptor.point) || [];
     const nextHandlers = handlers.filter((registration) => registration.id !== normalizedId);

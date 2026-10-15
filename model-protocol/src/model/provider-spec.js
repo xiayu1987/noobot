@@ -6,6 +6,7 @@
 import { resolveModelAdapterId } from "./model-adapter.js";
 import { MODEL_IMAGE_GENERATION_API_TYPE } from "./model-capabilities.js";
 import { MODEL_FAMILY_ID, resolveModelFamilyId } from "./model-family.js";
+import { text } from "@noobot/shared/value";
 
 export {
   MODEL_ADAPTER_ID,
@@ -572,9 +573,7 @@ const OPERATOR_ID_BY_HOST = Object.freeze({
 });
 
 function requireIdentity(value, field) {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(value).toLowerCase();
   if (!normalized) throw new TypeError(`model spec.${field} is required`);
   return normalized;
 }
@@ -587,7 +586,7 @@ export function normalizeProviderSpec(input = {}) {
 }
 
 export function resolveModelOperatorId({ base_url = "" } = {}) {
-  const endpoint = String(base_url || "").trim();
+  const endpoint = text(base_url);
   if (!endpoint || /^\$\{[^}]+\}$/.test(endpoint)) return MODEL_PROVIDER_ID.GENERIC;
   let host = "";
   try {

@@ -6,17 +6,18 @@
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as THREE from "three";
 import { saveImportedAsset } from "./importedAssetStore.js";
+import { text } from "@noobot/shared/value";
 
 export async function importGlbAsset({ blob, name, assetId, canonicalRotation = [0, 0, 0, 1] }) {
   if (!(blob instanceof Blob)) throw new TypeError("GLB import requires a Blob");
-  const resolvedAssetId = String(assetId || "").trim();
+  const resolvedAssetId = text(assetId);
   if (!resolvedAssetId) throw new TypeError("GLB import requires an asset ID");
   const objectUrl = URL.createObjectURL(blob);
   try {
     const gltf = await new GLTFLoader().loadAsync(objectUrl);
     const nodes = [];
     gltf.scene.traverse((node) => {
-      const nodeName = String(node?.name || "").trim();
+      const nodeName = text(node?.name);
       if (nodeName) nodes.push(nodeName);
     });
     const bounds = new THREE.Box3().setFromObject(gltf.scene);
@@ -32,7 +33,7 @@ export async function importGlbAsset({ blob, name, assetId, canonicalRotation = 
         format: "glb",
         size: blob.size,
         animations: (gltf.animations || []).map((clip) => ({
-          name: String(clip.name || "").trim(),
+          name: text(clip.name),
           duration: Number(clip.duration.toFixed(4)),
           tracks: clip.tracks.length,
         })),

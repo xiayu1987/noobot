@@ -5,6 +5,7 @@
  */
 import { parseIdPatchCommands, parseKvPayload, parseListField } from "./id-patch.js";
 import { dedupeTextList, sanitizeFileName } from "../text.js";
+import { text } from "@noobot/shared/value";
 
 function reportPatchParseError({
   rawContent = "",
@@ -12,7 +13,7 @@ function reportPatchParseError({
   error = "",
   onParseError = null,
 } = {}) {
-  if (!String(rawContent || "").trim() || typeof onParseError !== "function") return;
+  if (!text(rawContent) || typeof onParseError !== "function") return;
   onParseError({
     stage,
     rawContent,
@@ -103,7 +104,7 @@ export function collectPatchItemsByFieldMap({
 function groupItemsByCategory(items = [], mapSubItem = null) {
   const categoryMap = new Map();
   for (const item of Array.isArray(items) ? items : []) {
-    const key = String(item?.category || "").trim();
+    const key = text(item?.category);
     if (!key) continue;
     const current = categoryMap.get(key) || [];
     const subItem = typeof mapSubItem === "function" ? mapSubItem(item) : null;

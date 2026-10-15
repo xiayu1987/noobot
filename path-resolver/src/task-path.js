@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath, normalizeSlashPath } from "./platform.js";
+import { text } from "@noobot/shared/value";
 
 export const TASK_PATH_KINDS = Object.freeze({
   INPUT: "input",
@@ -13,9 +14,7 @@ export const TASK_PATH_KINDS = Object.freeze({
 const TASK_PATH_KIND_SET = new Set(Object.values(TASK_PATH_KINDS));
 
 function normalizeTaskPathKind(kind = "") {
-  const normalized = String(kind || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(kind).toLowerCase();
   if (!TASK_PATH_KIND_SET.has(normalized))
     throw new TypeError("task path kind must be input, output, or temp");
   return normalized;
@@ -70,7 +69,7 @@ export function isTaskPath(value = "", { kind = "", allowRoot = true } = {}) {
 
 export function resolveTaskPath({ token = "", roots = {}, kind = "", allowRoot = false } = {}) {
   const parsed = parseTaskPath(token, { kind, allowRoot });
-  const root = String(roots?.[parsed.kind] || "").trim();
+  const root = text(roots?.[parsed.kind]);
   if (!root) throw new Error(`${parsed.kind} task path root is required`);
   const resolvedRoot = filePath.resolve(root);
   const resolvedPath = parsed.relative

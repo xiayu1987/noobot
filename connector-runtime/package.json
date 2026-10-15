@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@noobot/connector-protocol": "file:../connector-protocol",
-    "@noobot/path-resolver": "file:../path-resolver"
+    "@noobot/path-resolver": "file:../path-resolver",
+    "@noobot/shared": "file:../shared"
   }
 }

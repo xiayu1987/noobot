@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "./utils.js";
+import { text } from "@noobot/shared/value";
 
 export const MULTIMODAL_CONFIG_OPERATION = Object.freeze({
   PARSING: "parsing",
@@ -22,13 +23,7 @@ const MODALITIES = new Set(Object.values(MULTIMODAL_CONFIG_MODALITY));
 function normalizeRequiredModalities(value = []) {
   return Array.from(
     new Set(
-      (Array.isArray(value) ? value : [])
-        .map((item) =>
-          String(item || "")
-            .trim()
-            .toLowerCase(),
-        )
-        .filter(Boolean),
+      (Array.isArray(value) ? value : []).map((item) => text(item).toLowerCase()).filter(Boolean),
     ),
   );
 }
@@ -37,9 +32,7 @@ export function resolveMultimodalDefaultModelSelection(
   effectiveConfig = {},
   { operation = "", modalities = [] } = {},
 ) {
-  const normalizedOperation = String(operation || "")
-    .trim()
-    .toLowerCase();
+  const normalizedOperation = text(operation).toLowerCase();
   if (!OPERATIONS.has(normalizedOperation)) {
     throw new TypeError(
       `unsupported multimodal config operation: ${normalizedOperation || "missing"}`,
@@ -54,9 +47,7 @@ export function resolveMultimodalDefaultModelSelection(
   const defaultModels = isPlainObject(operationConfig?.defaultModels)
     ? operationConfig.defaultModels
     : {};
-  const modelAliases = requiredModalities.map((modality) =>
-    String(defaultModels?.[modality] || "").trim(),
-  );
+  const modelAliases = requiredModalities.map((modality) => text(defaultModels?.[modality]));
   const missingModalities = requiredModalities.filter((_, index) => !modelAliases[index]);
   const configuredAliases = Array.from(new Set(modelAliases.filter(Boolean)));
   return Object.freeze({

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createImapClient, normalizeEmailConnectionInfo } from "./connection.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeListPaging(payload = {}) {
   const page = Number(payload?.page || 1);
@@ -25,9 +26,7 @@ function toEmailMessageTimestamp(dateValue = "") {
 function normalizeEmailAddressList(addressList = []) {
   return Array.isArray(addressList)
     ? addressList.map((addressItem) =>
-        `${String(addressItem?.name || "").trim()} <${String(
-          addressItem?.address || "",
-        ).trim()}>`.trim(),
+        `${text(addressItem?.name)} <${text(addressItem?.address)}>`.trim(),
       )
     : [];
 }
@@ -35,7 +34,7 @@ function normalizeEmailAddressList(addressList = []) {
 function normalizeEmailSummary(messageItem = {}) {
   return {
     uid: Number(messageItem?.uid || 0),
-    subject: String(messageItem?.envelope?.subject || "").trim(),
+    subject: text(messageItem?.envelope?.subject),
     from: normalizeEmailAddressList(messageItem?.envelope?.from),
     date: String(messageItem?.internalDate || ""),
   };

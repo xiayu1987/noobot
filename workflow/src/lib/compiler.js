@@ -11,11 +11,10 @@ import StateNode from "../design/model/node/state-node.js";
 import ActionNode from "../design/model/node/action-node.js";
 import CompositeNode from "../design/model/node/composite-node.js";
 import ENodeType from "../design/model/node/enums/node-type.js";
+import { text } from "@noobot/shared/value";
 
 function toStateType(value = "") {
-  const key = String(value || "")
-    .trim()
-    .toLowerCase();
+  const key = text(value).toLowerCase();
   if (key === "start") return 0;
   if (key === "end") return 1;
   if (key === "branch") return 2;
@@ -28,7 +27,7 @@ function toStateType(value = "") {
 
 function ensureNodeDefinitions(input = {}) {
   const nodes = Array.isArray(input?.nodes) ? input.nodes.slice() : [];
-  const byId = new Map(nodes.map((node) => [String(node.id || "").trim(), node]));
+  const byId = new Map(nodes.map((node) => [text(node.id), node]));
   if (!byId.has("start")) {
     nodes.unshift({ id: "start", name: "start", type: "state", stateType: 0 });
     byId.set("start", nodes[0]);
@@ -59,7 +58,7 @@ export function compileWorkflowSemantic(semantic = {}) {
         .trim()
         .toLowerCase() === "composite";
     const node = isAction ? new ActionNode() : isComposite ? new CompositeNode() : new StateNode();
-    node.workflowNodeId = String(nodeDef?.id || "").trim();
+    node.workflowNodeId = text(nodeDef?.id);
     node.setName(String(nodeDef?.name || nodeDef?.id || "node").trim());
     node.setNodeType(
       isAction ? ENodeType.ActionNode : isComposite ? ENodeType.CompositeNode : ENodeType.StateNode,
@@ -68,14 +67,14 @@ export function compileWorkflowSemantic(semantic = {}) {
       node.setStateType(toStateType(nodeDef?.stateType));
     }
     node.setModel(model);
-    nodeMap.set(String(nodeDef?.id || "").trim(), node);
+    nodeMap.set(text(nodeDef?.id), node);
   }
 
   const flowtos = [];
   const rlats = [];
   for (const [index, flowDef] of flowDefs.entries()) {
-    const startNode = nodeMap.get(String(flowDef?.from || "").trim());
-    const endNode = nodeMap.get(String(flowDef?.to || "").trim());
+    const startNode = nodeMap.get(text(flowDef?.from));
+    const endNode = nodeMap.get(text(flowDef?.to));
     if (!startNode || !endNode) continue;
 
     const flowto = new Flowto();

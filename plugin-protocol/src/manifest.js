@@ -18,6 +18,7 @@ import {
   PLUGIN_SURFACE_HOST_PORTS,
 } from "./activation.js";
 import { EXTENSION_POINT_DEFINITIONS, FRONTEND_EXTENSION_KIND } from "./frontend.js";
+import { text } from "@noobot/shared/value";
 
 const strictString = z.string().trim().min(1);
 const frontendModuleSpecifierSchema = strictString.refine(
@@ -328,7 +329,7 @@ export function parsePluginManifest(input = {}) {
 }
 
 export function contributionsForSurface(manifest = {}, surface = "") {
-  const normalized = String(surface || "").trim();
+  const normalized = text(surface);
   return manifest?.contributes?.[normalized] || null;
 }
 
@@ -343,8 +344,8 @@ export function requireDeclaredPluginHook(
   registrationId = "",
 ) {
   const hooks = contributionsForSurface(manifest, surface)?.hooks?.registers || [];
-  const normalizedPoint = String(point || "").trim();
-  const normalizedId = String(registrationId || "").trim();
+  const normalizedPoint = text(point);
+  const normalizedId = text(registrationId);
   const declaration = hooks.find(
     (item) => item.point === normalizedPoint && item.id === normalizedId,
   );
@@ -358,7 +359,7 @@ export function requireDeclaredPluginHook(
 
 export function requireDeclaredPluginHookEmission(manifest = {}, surface = "", point = "") {
   const hooks = contributionsForSurface(manifest, surface)?.hooks?.emits || [];
-  if (!hooks.includes(String(point || "").trim())) {
+  if (!hooks.includes(text(point))) {
     throw new TypeError(
       `plugin ${manifest?.id || "<unknown>"} did not declare hook emission ${point}`,
     );
@@ -367,7 +368,7 @@ export function requireDeclaredPluginHookEmission(manifest = {}, surface = "", p
 }
 
 export function requireDeclaredPluginRoute(manifest = {}, routeId = "") {
-  const normalized = String(routeId || "").trim();
+  const normalized = text(routeId);
   const route = (manifest?.contributes?.service?.routes || []).find(
     (item) => item.id === normalized,
   );
@@ -379,7 +380,7 @@ export function requireDeclaredPluginRoute(manifest = {}, routeId = "") {
 }
 
 export function requireDeclaredPluginTool(manifest = {}, toolId = "") {
-  const normalized = String(toolId || "").trim();
+  const normalized = text(toolId);
   const tool = (manifest?.contributes?.agent?.tools || []).find((item) => item.id === normalized);
   if (!tool)
     throw new TypeError(`plugin ${manifest?.id || "<unknown>"} did not declare tool ${normalized}`);
@@ -391,8 +392,8 @@ export function requireDeclaredFrontendContribution(
   contributionId = "",
   point = "",
 ) {
-  const normalizedId = String(contributionId || "").trim();
-  const normalizedPoint = String(point || "").trim();
+  const normalizedId = text(contributionId);
+  const normalizedPoint = text(point);
   const declaration = (manifest?.contributes?.frontend?.extensions || []).find(
     (item) => item.id === normalizedId && item.point === normalizedPoint,
   );
@@ -407,13 +408,13 @@ export function requireDeclaredFrontendContribution(
 function contributionReceiptKey(item = {}) {
   switch (item?.type) {
     case "hook":
-      return `hook:${String(item.registrationId || "").trim()}:${String(item.point || "").trim()}`;
+      return `hook:${text(item.registrationId)}:${text(item.point)}`;
     case "route":
-      return `route:${String(item.routeId || "").trim()}`;
+      return `route:${text(item.routeId)}`;
     case "tool":
-      return `tool:${String(item.toolId || "").trim()}`;
+      return `tool:${text(item.toolId)}`;
     case "extension":
-      return `extension:${String(item.contributionId || "").trim()}:${String(item.point || "").trim()}`;
+      return `extension:${text(item.contributionId)}:${text(item.point)}`;
     default:
       throw new TypeError(
         `unsupported plugin contribution receipt type: ${String(item?.type || "<empty>")}`,
@@ -432,7 +433,7 @@ function declaredContributionKeys(manifest = {}, surface = "") {
 }
 
 export function validatePluginContributionReceipt(manifest = {}, surface = "", receipt = []) {
-  const normalizedSurface = String(surface || "").trim();
+  const normalizedSurface = text(surface);
   const expected = declaredContributionKeys(manifest, normalizedSurface);
   const actual = (Array.isArray(receipt) ? receipt : []).map(contributionReceiptKey);
   const actualSet = new Set(actual);

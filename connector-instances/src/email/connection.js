@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function trimText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function normalizeEmailConnectionInfo(connectionInfo = {}) {

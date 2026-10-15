@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const SUPPORTED_LOCALES = new Set(["zh-CN", "en-US"]);
 export const DEFAULT_LOCALE = "zh-CN";
 
 export function normalizeLocale(inputLocale = "", fallbackLocale = DEFAULT_LOCALE) {
-  const normalized = String(inputLocale || "").trim();
+  const normalized = text(inputLocale);
   if (SUPPORTED_LOCALES.has(normalized)) return normalized;
   const lowered = normalized.toLowerCase();
   if (lowered.startsWith("zh")) return "zh-CN";
@@ -20,7 +22,7 @@ export function resolveLocaleFromAcceptLanguage(
   acceptLanguage = "",
   fallbackLocale = DEFAULT_LOCALE,
 ) {
-  const headerText = String(acceptLanguage || "").trim();
+  const headerText = text(acceptLanguage);
   if (!headerText) return normalizeLocale("", fallbackLocale);
   const first = headerText
     .split(",")
@@ -44,7 +46,7 @@ export function pickLocaleText({
   fallbackLocale = DEFAULT_LOCALE,
   params = {},
 } = {}) {
-  const normalizedKey = String(key || "").trim();
+  const normalizedKey = text(key);
   const row = dict?.[normalizedKey] || {};
   const normalizedLocale = normalizeLocale(locale, fallbackLocale);
   const value =

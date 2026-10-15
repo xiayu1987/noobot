@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { text } from "@noobot/shared/value";
 
 function printUsage() {
   console.log(
@@ -46,7 +47,7 @@ async function analyzeFile({ filePath = "", topN = 20, useNormalize = true } = {
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
   for await (const rawLine of rl) {
-    const trimmed = String(rawLine || "").trim();
+    const trimmed = text(rawLine);
     totalLines += 1;
     if (!trimmed) {
       emptyLines += 1;

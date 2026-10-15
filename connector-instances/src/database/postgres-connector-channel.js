@@ -8,6 +8,7 @@ import {
   normalizeConnectionSource,
   resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
+import { text } from "@noobot/shared/value";
 
 function resolvePostgresConnection(connectionInfo = {}) {
   const source = normalizeConnectionSource(connectionInfo);
@@ -33,7 +34,7 @@ async function importPg() {
 const postgresPools = new Map();
 
 function poolKey(channelKey = "") {
-  const key = String(channelKey || "").trim();
+  const key = text(channelKey);
   if (!key) throw new TypeError("postgres connector channelKey is required");
   return key;
 }
@@ -66,7 +67,7 @@ export async function executePostgresCommand({
   channelKey = "",
   abortSignal = null,
 } = {}) {
-  const sql = String(command || "").trim();
+  const sql = text(command);
   if (!sql) {
     return {
       ok: false,

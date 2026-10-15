@@ -7,6 +7,7 @@ import {
   MODEL_INPUT_PROCESSING_KIND,
   classifyModelInputProcessing,
 } from "../model/model-input-processing.js";
+import { text } from "@noobot/shared/value";
 
 export const MODEL_OPERATION_KIND = Object.freeze({
   CHAT: "chat",
@@ -52,14 +53,14 @@ function normalizeImageOptions(input = {}) {
     throw new TypeError("model operation.options.n must be an integer between 1 and 10");
   }
   const imageUrls = source.imageUrls === undefined ? [] : source.imageUrls;
-  if (!Array.isArray(imageUrls) || imageUrls.some((value) => !String(value || "").trim())) {
+  if (!Array.isArray(imageUrls) || imageUrls.some((value) => !text(value))) {
     throw new TypeError("model operation.options.imageUrls must be an array of non-empty strings");
   }
   return Object.freeze({
-    size: String(source.size || "").trim(),
-    resolution: String(source.resolution || "").trim(),
+    size: text(source.size),
+    resolution: text(source.resolution),
     n: count,
-    quality: String(source.quality || "").trim(),
+    quality: text(source.quality),
     imageUrls: Object.freeze(imageUrls.map((value) => String(value).trim())),
   });
 }
@@ -110,7 +111,7 @@ export function normalizeModelOperation(input = {}) {
       return Object.freeze({
         mimeType,
         data: requireText(attachment.data, `${attachmentPath}.data`),
-        fileName: String(attachment.fileName || "").trim(),
+        fileName: text(attachment.fileName),
       });
     });
     return Object.freeze({
@@ -136,8 +137,8 @@ function normalizeImageArtifact(value, index) {
   const path = `model response.result.imageArtifacts[${index}]`;
   const artifact = requirePlainObject(value, path);
   rejectUnknownKeys(artifact, ["fileName", "b64Json", "url"], path);
-  const b64Json = String(artifact.b64Json || "").trim();
-  const url = String(artifact.url || "").trim();
+  const b64Json = text(artifact.b64Json);
+  const url = text(artifact.url);
   if (!b64Json && !url) throw new TypeError(`${path} requires b64Json or url`);
   return Object.freeze({
     fileName: requireText(artifact.fileName, `${path}.fileName`),
@@ -150,15 +151,13 @@ function normalizeWebSearchSource(value = {}, path = "") {
   const source = requirePlainObject(value, path);
   rejectUnknownKeys(source, ["title", "url"], path);
   return Object.freeze({
-    title: String(source.title || "").trim(),
+    title: text(source.title),
     url: requireText(source.url, `${path}.url`),
   });
 }
 
 export function normalizeModelOperationResult(kind, input = {}) {
-  const operationKind = String(kind || "")
-    .trim()
-    .toLowerCase();
+  const operationKind = text(kind).toLowerCase();
   if (!OPERATION_KINDS.has(operationKind)) {
     throw new TypeError(`unsupported model operation result: ${operationKind || "missing"}`);
   }
@@ -172,7 +171,7 @@ export function normalizeModelOperationResult(kind, input = {}) {
     if (!Array.isArray(source.sources))
       throw new TypeError("model response.result.sources must be an array");
     return Object.freeze({
-      rawText: String(source.rawText || "").trim(),
+      rawText: text(source.rawText),
       sources: Object.freeze(
         source.sources.map((item, index) =>
           normalizeWebSearchSource(item, `model response.result.sources[${index}]`),
@@ -183,7 +182,7 @@ export function normalizeModelOperationResult(kind, input = {}) {
   if (operationKind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
     rejectUnknownKeys(source, ["rawText", "output"], "model response.result");
     return Object.freeze({
-      rawText: String(source.rawText || "").trim(),
+      rawText: text(source.rawText),
       output: Array.isArray(source.output) ? Object.freeze([...source.output]) : Object.freeze([]),
     });
   }
@@ -201,10 +200,10 @@ export function normalizeModelOperationResult(kind, input = {}) {
   if (source.rawTask !== undefined)
     requirePlainObject(source.rawTask, "model response.result.rawTask");
   return Object.freeze({
-    rawText: String(source.rawText || "").trim(),
+    rawText: text(source.rawText),
     imageArtifacts: Object.freeze(source.imageArtifacts.map(normalizeImageArtifact)),
     output: Object.freeze([...(source.output || [])]),
-    taskId: String(source.taskId || "").trim(),
+    taskId: text(source.taskId),
     ...(source.rawTask === undefined ? {} : { rawTask: Object.freeze({ ...source.rawTask }) }),
   });
 }

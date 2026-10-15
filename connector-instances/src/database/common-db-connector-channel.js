@@ -3,17 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 export function normalizeConnectionSource(connectionInfo = {}) {
   return connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
 }
 
 export function resolveDatabaseConnection({ source = {}, defaultPort = 0 } = {}) {
   return {
-    host: String(source.host || "").trim(),
+    host: text(source.host),
     port: Number(source.port || defaultPort),
-    user: String(source.username || "").trim(),
+    user: text(source.username),
     password: String(source.password || ""),
-    database: String(source.database || "").trim(),
+    database: text(source.database),
   };
 }
 

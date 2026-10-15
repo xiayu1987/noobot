@@ -5,6 +5,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 
 function sliceJsonObject(text = "", start = 0) {
   let depth = 0;
@@ -53,14 +54,12 @@ function requestMessages(body = {}) {
       : Array.isArray(body?.input)
         ? body.input
         : [];
-  const instructions = String(body?.instructions || "").trim();
+  const instructions = text(body?.instructions);
   return instructions ? [{ role: "system", content: instructions }, ...input] : input;
 }
 
 function messageRole(message = {}) {
-  return String(message?.role || message?.lc_kwargs?.role || "")
-    .trim()
-    .toLowerCase();
+  return text(message?.role || message?.lc_kwargs?.role).toLowerCase();
 }
 
 function isSystemLike(message) {

@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 const DB = "noobot-character-assets-v2";
 const STORE = "glb";
 let authenticatedRequest = null;
@@ -87,7 +89,7 @@ export async function listImportedAssets() {
 }
 
 export async function saveImportedAsset(metadata, blob) {
-  const assetId = String(metadata?.assetId || "").trim();
+  const assetId = text(metadata?.assetId);
   if (!assetId || !(blob instanceof Blob)) {
     throw new TypeError("imported GLB requires asset metadata and a Blob");
   }
@@ -123,7 +125,7 @@ export async function saveImportedAsset(metadata, blob) {
 }
 
 export async function deleteImportedAsset(asset = {}) {
-  const assetId = String(asset?.assetId || asset || "").trim();
+  const assetId = text(asset?.assetId || asset);
   if (!assetId) throw new TypeError("character asset ID is required");
   const response = await requireService()(
     `/api/internal/character/assets/${encodeURIComponent(assetId)}`,
@@ -135,9 +137,9 @@ export async function deleteImportedAsset(asset = {}) {
 }
 
 export async function loadImportedAsset(asset = {}) {
-  const assetId = String(asset?.assetId || "").trim();
-  const version = String(asset?.resource?.version || "").trim();
-  const resourceUrl = String(asset?.resource?.url || "").trim();
+  const assetId = text(asset?.assetId);
+  const version = text(asset?.resource?.version);
+  const resourceUrl = text(asset?.resource?.url);
   if (!assetId || !version || !resourceUrl) {
     throw new TypeError("character asset requires canonical resource metadata");
   }
