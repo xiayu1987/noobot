@@ -5,6 +5,7 @@
  */
 
 import { text } from "@noobot/shared/value";
+import { isExecutionAbortError, resolveExecutionAbortMessage } from "@noobot/session-protocol";
 
 export function resolveWorkflowAgentContext(ctx = {}) {
   return ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
@@ -21,32 +22,19 @@ export function resolveWorkflowAbortSignal(ctx = {}) {
 }
 
 function createWorkflowAbortError(ctx = {}) {
-  const signal = resolveWorkflowAbortSignal(ctx);
-  const reason = signal?.reason;
-  const reasonText =
-    typeof reason === "string"
-      ? reason
-      : reason && typeof reason === "object"
-        ? text(reason?.message || reason?.reason || reason?.type)
-        : "";
-  const error = new Error(reasonText || "workflow aborted");
+  const error = new Error(
+    resolveExecutionAbortMessage({
+      abortSignal: resolveWorkflowAbortSignal(ctx),
+      fallback: "workflow aborted",
+    }),
+  );
   error.name = "AbortError";
   error.code = "ABORT_ERR";
   return error;
 }
 
 export function isWorkflowAbortError(error = null, ctx = {}) {
-  const name = text(error?.name).toLowerCase();
-  const code = text(error?.code).toUpperCase();
-  const message = text(error?.message || error).toLowerCase();
-  return (
-    resolveWorkflowAbortSignal(ctx)?.aborted === true ||
-    name === "aborterror" ||
-    code === "ABORT_ERR" ||
-    message.includes("abort") ||
-    message.includes("aborted") ||
-    message.includes("stopped by user")
-  );
+  return isExecutionAbortError({ error, abortSignal: resolveWorkflowAbortSignal(ctx) });
 }
 
 export function throwIfWorkflowAborted(ctx = {}) {
