@@ -129,7 +129,8 @@ export function createParentExecutionScope(runtimePatch = {}) {
 }
 
 export function createCompleteStrategy(overrides = {}) {
-  const turnScopeId = String(overrides.turnScopeId || "turn-1").trim();
+  const turnScopeId = overrides.turnScopeId ?? "turn-1";
+  const executionId = overrides.executionId ?? `agent:${turnScopeId}`;
   return {
     userId: "u1",
     sessionId: "sub1",
@@ -137,7 +138,9 @@ export function createCompleteStrategy(overrides = {}) {
     parentDialogProcessId: "parent-dialog",
     dialogProcessId: "sub-dialog",
     turnScopeId,
-    executionId: `agent:${turnScopeId}`,
+    commandId: turnScopeId,
+    executionId,
+    rootExecutionId: executionId,
     relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
     allowedRoot: "runtime/plugin-data/workflow/session",
     ...overrides,

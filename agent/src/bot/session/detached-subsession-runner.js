@@ -30,14 +30,14 @@ function assertDetachedSubSessionStrategy(strategy = {}) {
     "sessionId",
     "dialogProcessId",
     "turnScopeId",
+    "commandId",
     "executionId",
+    "rootExecutionId",
     "relativeDir",
     "allowedRoot",
   ];
   if (required.some((key) => !text(strategy?.[key]))) {
-    throw new TypeError(
-      "detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, relativeDir and allowedRoot",
-    );
+    throw new TypeError(`detached sub-session strategy requires ${required.join(", ")}`);
   }
 }
 
@@ -162,14 +162,17 @@ function resolveChildStrategyIdentity(strategy) {
     subSessionId: text(strategy.sessionId),
     subDialogProcessId: text(strategy.dialogProcessId),
     turnScopeId: text(strategy.turnScopeId),
+    commandId: text(strategy.commandId),
     executionId: text(strategy.executionId),
+    parentExecutionId: text(strategy.parentExecutionId),
+    rootExecutionId: text(strategy.rootExecutionId),
     relativeDir: text(strategy.relativeDir),
     allowedRoot: text(strategy.allowedRoot),
   };
 }
 
 async function prepareDetachedExecution(dependencies, request, inheritedRuntime, identity) {
-  const { strategy = {}, metadata = {}, runConfigPatch = {}, parentContext = {} } = request;
+  const { strategy = {}, runConfigPatch = {}, parentContext = {} } = request;
   const inheritedRunConfig = clearParentTurnTransactionIdentity({
     ...(isObjectRecord(parentContext.runConfig)
       ? parentContext.runConfig
@@ -179,7 +182,7 @@ async function prepareDetachedExecution(dependencies, request, inheritedRuntime,
   });
   const mergedRunConfig = createDetachedRunConfig(
     dependencies,
-    { strategy, metadata, runConfigPatch },
+    { strategy, runConfigPatch },
     inheritedRunConfig,
     inheritedRuntime,
     identity,
@@ -213,7 +216,7 @@ async function prepareDetachedExecution(dependencies, request, inheritedRuntime,
 
 function createDetachedRunConfig(
   dependencies,
-  { strategy, metadata, runConfigPatch },
+  { strategy, runConfigPatch },
   inheritedRunConfig,
   inheritedRuntime,
   identity,
@@ -235,10 +238,9 @@ function createDetachedRunConfig(
   else delete config.runtimeModel;
   config.executionId = identity.executionId;
   config.executionKind = "agent";
-  config.parentExecutionId = text(strategy.parentExecutionId || metadata.parentExecutionId);
-  config.rootExecutionId = String(
-    strategy.rootExecutionId || metadata.rootExecutionId || identity.executionId,
-  ).trim();
+  config.parentExecutionId = identity.parentExecutionId;
+  config.rootExecutionId = identity.rootExecutionId;
+  config.commandId = identity.commandId;
   const presentationMessageId = `msg_${randomUUID()}`;
   config.presentationMessageId = presentationMessageId;
   config.messageId = `msg_event_${presentationMessageId}`;
@@ -256,6 +258,7 @@ function assertPreparedRunConfig(config) {
 }
 
 function bindDetachedMessageIdentity(effectiveRunConfig, mergedRunConfig) {
+  effectiveRunConfig.commandId = mergedRunConfig.commandId;
   effectiveRunConfig.presentationMessageId = mergedRunConfig.presentationMessageId;
   effectiveRunConfig.messageId = mergedRunConfig.messageId;
   delete effectiveRunConfig.assistantMessageId;
@@ -310,12 +313,7 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
       persistenceContext,
       upstream: { dialogProcessId: identity.subDialogProcessId },
     }),
-    commandId: String(
-      request.strategy?.commandId ||
-        request.runConfigPatch?.commandId ||
-        identity.turnScopeId ||
-        identity.subSessionId,
-    ).trim(),
+    commandId: identity.commandId,
     commit: createLifecycleCommitter(session, lifecycleIdentity, identity.scopedEventListener),
   };
 }

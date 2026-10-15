@@ -30,13 +30,13 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：1111 条，385 个文件。
+总计：1103 条，382 个文件。
 
 | 模块                             | 文件数 | 回退链 |
 | -------------------------------- | ------ | ------ |
 | `client/noobot-chat`             | 103    | 386    |
-| `agent`                          | 92     | 206    |
-| `plugin/noobot-plugin-workflow`  | 36     | 117    |
+| `agent`                          | 90     | 200    |
+| `plugin/noobot-plugin-workflow`  | 35     | 115    |
 | `plugin/noobot-plugin-harness`   | 30     | 90     |
 | `service`                        | 30     | 81     |
 | `authoritative-state`            | 5      | 31     |
@@ -71,17 +71,19 @@
 
 ## 4. 待决项
 
-| 项                                | 现状                                                                                                               | 需要的决定                                     |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `createFailedNodeAgentResult`     | 子会话超时或抛错且无 lifecycle 时走该分支，节点记为失败、workflow 继续                                             | 是否改为节点失败即终止整个 workflow            |
-| `commandId`                       | `turn-command`、`agent-transport-consumption`、`current-user-turn`、workflow `authority-event-commit` 四处各自回退 | 以 `turnCommand.commandId` 为唯一来源（建议）  |
-| `userId`                          | `runtime.userId` 来自 `identity.userId`，`ctx.userId` 来自 hook meta，同源未确认                                   | 确认后只保留一层                               |
-| `NODE_AGENT_EXECUTE` failure 结构 | 公开 hook 未定义 `stepFailure` 形状，`normalizeFailure` 读 `message \|\| reason \|\| code`                         | 协议固定为 `{ source, code, message }`（建议） |
+| 项                                | 现状                                                                                                             | 需要的决定                                       |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `createFailedNodeAgentResult`     | 子会话超时或抛错且无 lifecycle 时走该分支，节点记为失败、workflow 继续                                           | 是否改为节点失败即终止整个 workflow              |
+| `userId`                          | workflow 已只读 `ctx.userId`；`runtime.userId` 与 hook meta 是否传同一入参尚未逐行确认                           | 确认后删除 `runtime.userId` 读取                 |
+| turn lifecycle 输入事件           | `turn-state.js:177` 读 `causationId \|\| commandId`；`commit-turn-lifecycle.js:23-53` 一组 `event.X \|\| turn.X` | lifecycle 协议批次：定输入事件必带字段后删除回退 |
+| `NODE_AGENT_EXECUTE` failure 结构 | 公开 hook 未定义 `stepFailure` 形状，`normalizeFailure` 读 `message \|\| reason \|\| code`                       | 协议固定为 `{ source, code, message }`（建议）   |
 
 ## 5. 批次记录
 
-| 提交        | 模块     | 内容                                                   |
-| ----------- | -------- | ------------------------------------------------------ |
-| `3d9f986d3` | workflow | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写     |
-| `716593609` | workflow | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType` |
-| `74c3842c1` | workflow | abort 判定改用 session-protocol 执行中止协议           |
+| 提交        | 模块            | 内容                                                                                                                        |
+| ----------- | --------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `3d9f986d3` | workflow        | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写                                                                          |
+| `716593609` | workflow        | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                      |
+| `74c3842c1` | workflow        | abort 判定改用 session-protocol 执行中止协议                                                                                |
+| `08148dccd` | scripts         | 回退链守卫与本清单                                                                                                          |
+| 本批        | agent、workflow | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed` |

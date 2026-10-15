@@ -16,6 +16,7 @@ function safeId(value = "") {
 
 const WORKFLOW_RUN_IDENTITY_FIELDS = Object.freeze([
   "turnScopeId",
+  "commandId",
   "executionId",
   "rootExecutionId",
   "messageId",

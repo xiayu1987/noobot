@@ -76,7 +76,8 @@ test("Agent transport consumption proves normalized fields reached their runtime
   });
   assert.equal(result.presentation.userMessageIdConsumed, true);
   assert.equal(result.presentation.assistantMessageIdConsumed, true);
-  assert.equal(result.concurrency.commandIdConsumed, true);
+  assert.equal(result.concurrency.commandId, "turn-1");
+  assert.equal("commandIdConsumed" in result.concurrency, false);
   assert.equal(result.concurrency.expectedAggregateVersion, 3);
   assert.equal(result.concurrency.expectedAggregateVersionConsumed, true);
   assert.equal(result.concurrency.committedAggregateVersion, 4);

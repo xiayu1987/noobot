@@ -116,7 +116,7 @@ export async function prepareWorkflowPlanningMessage({
     attachments: [],
   });
   const identity = resolveWorkflowRunIdentity(ctx);
-  const { turnScopeId, messageId, presentationMessageId, executionId } = identity;
+  const { turnScopeId, messageId, presentationMessageId, executionId, commandId } = identity;
   const runtimeData = {
     sessionId: text(ctx?.sessionId),
     dialogProcessId: text(ctx?.dialogProcessId),
@@ -132,6 +132,7 @@ export async function prepareWorkflowPlanningMessage({
   await commitWorkflowRuntimeEvent({
     ctx,
     eventType: WORKFLOW_RUNTIME_EVENT.PLANNING,
+    commandId,
     payload: runtimeData,
     orderingDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
     orderingScopeId: workflowRunId,

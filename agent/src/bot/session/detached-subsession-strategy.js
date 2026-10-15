@@ -25,6 +25,7 @@ export function createAgentDetachedSubSessionStrategy({
   const sessionId = randomUUID();
   const dialogProcessId = randomUUID();
   const turnScopeId = `internal-turn:${randomUUID()}`;
+  const executionId = deriveAgentExecutionId({ turnScopeId });
   return Object.freeze({
     userId: normalizedUserId,
     sessionId,
@@ -32,7 +33,9 @@ export function createAgentDetachedSubSessionStrategy({
     parentDialogProcessId: normalizedParentDialogProcessId,
     dialogProcessId,
     turnScopeId,
-    executionId: deriveAgentExecutionId({ turnScopeId }),
+    commandId: turnScopeId,
+    executionId,
+    rootExecutionId: executionId,
     relativeDir: `${AGENT_DETACHED_SESSION_ROOT}/${sessionId}`,
     allowedRoot: AGENT_DETACHED_SESSION_ROOT,
   });

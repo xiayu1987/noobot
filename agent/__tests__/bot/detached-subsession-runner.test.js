@@ -51,6 +51,7 @@ test("detached sub-session delegates execution and persistence to the main runne
       parentDialogProcessId: "parent-dialog",
       dialogProcessId: "sub-dialog",
       turnScopeId: "turn-1",
+      commandId: "turn-1",
       executionId: "agent:turn-1",
       parentExecutionId: "workflow:root",
       rootExecutionId: "workflow:root",
@@ -292,7 +293,7 @@ test("detached sub-session rejects an incomplete persistence and identity strate
         parentSessionId: "parent1",
       },
     }),
-    /detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, relativeDir and allowedRoot/,
+    /detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, commandId, executionId, rootExecutionId, relativeDir, allowedRoot/,
   );
 });
 
@@ -320,6 +321,8 @@ test("agent detached strategy resolves through the authoritative scoped persiste
     );
 
     assert.equal(strategy.allowedRoot, AGENT_DETACHED_SESSION_ROOT);
+    assert.equal(strategy.commandId, strategy.turnScopeId);
+    assert.equal(strategy.rootExecutionId, strategy.executionId);
     assert.equal(strategy.relativeDir, `${AGENT_DETACHED_SESSION_ROOT}/${strategy.sessionId}`);
     assert.equal(
       scope.sessionDir,
@@ -514,7 +517,8 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(runConfig.resumeDialogProcessId, undefined);
   assert.equal(runConfig.resumeTurnScopeId, undefined);
   assert.equal(runConfig.expectedAggregateVersion, undefined);
-  assert.equal(runConfig.commandId, undefined);
+  assert.equal(runConfig.commandId, "child-turn");
+  assert.notEqual(runConfig.commandId, "root-continue-command");
   assert.equal(runConfig.reuseExistingUserTurn, undefined);
   assert.equal(Number.isFinite(Date.parse(runConfig.thinkingStartedAt)), true);
   assert.notEqual(runConfig.thinkingStartedAt, "2026-07-26T12:00:00.000Z");
@@ -535,7 +539,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(calls.mergePayload.baseRunConfig.commandId, undefined);
 });
 
-test("detached sub-session preserves child-owned transaction fields from its patch", async () => {
+test("detached sub-session takes commandId from strategy and other child-owned fields from its patch", async () => {
   const { calls, deps } = createDeps();
   const runner = createDetachedSubSessionRunner(deps);
 
@@ -547,11 +551,11 @@ test("detached sub-session preserves child-owned transaction fields from its pat
     runConfigPatch: {
       turnScopeId: "child-turn",
       expectedAggregateVersion: 0,
-      commandId: "child-command",
       thinkingStartedAt: "2026-07-26T12:30:00.000Z",
     },
     strategy: createCompleteStrategy({
       turnScopeId: "child-turn",
+      commandId: "child-command",
       executionId: "agent:child-turn",
     }),
   });
@@ -559,6 +563,7 @@ test("detached sub-session preserves child-owned transaction fields from its pat
   const runConfig = calls.runSessionPayloads[0].runConfig;
   assert.equal(runConfig.expectedAggregateVersion, 0);
   assert.equal(runConfig.commandId, "child-command");
+  assert.equal(calls.lifecyclePayloads.at(-1)?.commandId, "child-command:completed");
   assert.equal(runConfig.thinkingStartedAt, "2026-07-26T12:30:00.000Z");
 });
 

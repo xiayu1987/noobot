@@ -8,9 +8,9 @@ import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime
 import { PLUGIN_ID } from "../constants.js";
 import { text } from "@noobot/shared/value";
 
-function resolveWorkflowCommitScope({ ctx, runtime, payload }) {
+function resolveWorkflowCommitScope({ ctx, payload }) {
   return {
-    userId: text(runtime?.userId || ctx?.userId),
+    userId: text(ctx?.userId),
     sessionId: text(ctx?.sessionId),
     turnScopeId: text(payload?.turnScopeId),
   };
@@ -37,9 +37,11 @@ function projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revisio
   };
 }
 
-function projectWorkflowEventCausality({ payload, runtime }) {
+function projectWorkflowEventCausality({ commandId, payload }) {
+  const normalizedCommandId = text(commandId);
+  if (!normalizedCommandId) throw new TypeError("workflow authority event commandId is required");
   return {
-    commandId: text(payload?.commandId || runtime?.runConfig?.commandId),
+    commandId: normalizedCommandId,
     correlationId: text(payload?.workflowRunId),
   };
 }
@@ -76,6 +78,7 @@ async function dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope 
 export async function commitWorkflowRuntimeEvent({
   ctx = {},
   eventType = "",
+  commandId = "",
   payload = {},
   orderingDomain = "",
   orderingScopeId = "",
@@ -85,14 +88,14 @@ export async function commitWorkflowRuntimeEvent({
 } = {}) {
   const runtime = resolveWorkflowCommitRuntime(ctx);
   const sessionManager = requireWorkflowCommitCapability(runtime);
-  const { userId, sessionId, turnScopeId } = resolveWorkflowCommitScope({ ctx, runtime, payload });
+  const { userId, sessionId, turnScopeId } = resolveWorkflowCommitScope({ ctx, payload });
   const persistenceScope = resolveWorkflowPersistenceScope(runtime);
   const committed = await sessionManager.commitAuthorityEvent({
     userId,
     sessionId,
     family: WORKFLOW_RUNTIME_FAMILY,
     identity: projectWorkflowEventIdentity({ eventType, messageId, executionId, turnScopeId }),
-    causality: projectWorkflowEventCausality({ payload, runtime }),
+    causality: projectWorkflowEventCausality({ commandId, payload }),
     ordering: projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision }),
     producer: { type: "plugin", id: PLUGIN_ID },
     payload,

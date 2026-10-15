@@ -16,6 +16,7 @@ import {
 test("workflow run and node identities are stable and attempt-scoped", () => {
   const runConfig = {
     turnScopeId: "turn-1",
+    commandId: "command-1",
     executionId: "run-explicit",
     rootExecutionId: "root-1",
     messageId: "msg-1",

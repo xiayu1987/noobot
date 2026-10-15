@@ -60,6 +60,7 @@ async function publishWorkflowNodeStateCommitted({ ctx = {}, fact = null } = {})
   return commitWorkflowRuntimeEvent({
     ctx,
     eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+    commandId: node.commandId,
     payload: {
       workflowRunId: node.workflowRunId,
       nodeExecutionId: node.nodeExecutionId,

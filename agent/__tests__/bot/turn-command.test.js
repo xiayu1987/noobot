@@ -32,6 +32,7 @@ test("turn command keeps existing-session context separate from continue action"
     message: "continue",
     runConfig: {
       resumeFromStoppedSnapshot: true,
+      commandId: "continue-1",
       resumeDialogProcessId: "dp-old",
       resumeTurnScopeId: "turn-old",
     },
@@ -53,7 +54,7 @@ test("turn command carries the frontend user message identity into persistence",
     sessionId: "s1",
     turnScopeId: "turn-1",
     message: "hello",
-    runConfig: { userMessageId: "  msg_user-1  " },
+    runConfig: { commandId: "turn-1", userMessageId: "  msg_user-1  " },
   });
 
   assert.equal(command.messageId, "msg_user-1");
@@ -72,6 +73,7 @@ test("turn command separates external user turns from backend-owned internal run
     turnScopeId: internalTurnScopeId,
     message: "parse content",
     caller: "bot",
+    runConfig: { commandId: internalTurnScopeId },
   });
   const payload = toCommitTurnPayload(internal);
   assert.equal(internal.origin, "internal");

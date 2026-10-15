@@ -45,6 +45,7 @@ test("workflow authority commit uses the protocol persistence scope", async () =
   const result = await commitWorkflowRuntimeEvent({
     ctx,
     eventType: "workflow_node_state_committed",
+    commandId: "command-1",
     payload: { workflowRunId: "workflow-run-1", turnScopeId: "turn-child-1" },
     orderingDomain: "workflow",
     orderingScopeId: "workflow-run-1",
@@ -54,6 +55,31 @@ test("workflow authority commit uses the protocol persistence scope", async () =
   assert.equal(commits.length, 1);
   assert.equal(commits[0].persistenceScope, persistenceScope);
   assert.equal(commits[0].identity.turnScopeId, "turn-child-1");
+  assert.equal(commits[0].userId, "user-1");
+  assert.deepEqual(commits[0].causality, {
+    commandId: "command-1",
+    correlationId: "workflow-run-1",
+  });
   assert.equal("persistenceContext" in commits[0], false);
   assert.equal(events[0].data.persistenceScope, persistenceScope);
+
+  await assert.rejects(
+    commitWorkflowRuntimeEvent({
+      ctx: {
+        ...ctx,
+        agentContext: {
+          bindings: {
+            runtime: {
+              ...ctx.agentContext.bindings.runtime,
+              runConfig: { commandId: "runtime-command" },
+            },
+          },
+        },
+      },
+      eventType: "workflow_node_state_committed",
+      payload: { workflowRunId: "workflow-run-1", turnScopeId: "turn-child-1" },
+    }),
+    /workflow authority event commandId is required/,
+  );
+  assert.equal(commits.length, 1);
 });

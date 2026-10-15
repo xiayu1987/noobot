@@ -17,10 +17,8 @@ import { text } from "@noobot/shared/value";
 
 function applyCanonicalRunMessageIdentity(runConfig = {}) {
   const turnScopeId = text(runConfig?.turnScopeId);
-  const presentationMessageId = String(
-    runConfig?.presentationMessageId || `msg_${turnScopeId}`,
-  ).trim();
-  const messageId = String(runConfig?.messageId || `msg_event_${presentationMessageId}`).trim();
+  const presentationMessageId = text(runConfig?.presentationMessageId) || `msg_${turnScopeId}`;
+  const messageId = text(runConfig?.messageId) || `msg_event_${presentationMessageId}`;
   const executionId = deriveAgentExecutionId({
     executionId: runConfig?.executionId,
     turnScopeId,
@@ -28,7 +26,8 @@ function applyCanonicalRunMessageIdentity(runConfig = {}) {
   runConfig.presentationMessageId = presentationMessageId;
   runConfig.messageId = messageId;
   runConfig.executionId = executionId;
-  runConfig.rootExecutionId = String(runConfig?.rootExecutionId || executionId).trim();
+  runConfig.rootExecutionId = text(runConfig?.rootExecutionId) || executionId;
+  runConfig.commandId = text(runConfig?.commandId) || turnScopeId;
   return { turnScopeId, presentationMessageId, messageId, executionId };
 }
 
@@ -129,9 +128,9 @@ export async function initializeSessionRun({
       turnScopeId,
       resumeFromStoppedSnapshot,
       executionId: text(resolvedRunConfig?.executionId),
-      executionKind: String(resolvedRunConfig?.executionKind || "agent").trim(),
+      executionKind: text(resolvedRunConfig?.executionKind) || "agent",
       parentExecutionId: text(resolvedRunConfig?.parentExecutionId),
-      rootExecutionId: text(resolvedRunConfig?.rootExecutionId || resolvedRunConfig?.executionId),
+      rootExecutionId: resolvedRunConfig.rootExecutionId,
     },
   });
   lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));

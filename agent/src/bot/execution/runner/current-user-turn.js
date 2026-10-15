@@ -254,7 +254,7 @@ export async function prepareCurrentUserTurn({
         messageUid: text(currentUserMessage?.messageUid),
         attachments: canonicalAttachments,
         expectedAggregateVersion: committedTurnResult?.aggregateVersion,
-        commandId: `${String(turnCommand?.commandId || acceptanceReceipt?.commandId || resolvedRunConfig?.commandId || turnScopeId).trim()}:attachments.bind`,
+        commandId: `${resolvedRunConfig.commandId}:attachments.bind`,
         persistenceContext,
       });
       currentUserMessage = attachmentBinding?.userMessage;

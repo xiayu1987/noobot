@@ -75,7 +75,7 @@ function normalizeCommitTurnRequest(payload) {
     messageOrigin: trimText(messageOrigin).toLowerCase(),
     userMetaMaterialized: userMetaMaterialized === true,
   };
-  request.commandId = String(commandId || request.turnScopeId).trim();
+  request.commandId = trimText(commandId);
   request.requestHash = createTurnCommitFingerprint({
     action: request.action,
     content: request.content,

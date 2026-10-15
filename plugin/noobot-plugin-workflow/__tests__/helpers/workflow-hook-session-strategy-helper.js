@@ -285,6 +285,9 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   if (!String(runConfig.turnScopeId || "").trim()) {
     runConfig.turnScopeId = `test-turn:${sessionId}:${dialogProcessId}`;
   }
+  if (!String(runConfig.commandId || "").trim()) {
+    runConfig.commandId = runConfig.turnScopeId;
+  }
   if (!String(runConfig.executionId || "").trim()) {
     runConfig.executionId = deriveAgentExecutionId({ turnScopeId: runConfig.turnScopeId });
   }

@@ -44,7 +44,7 @@ export function createTurnCommand({
     message: text(message),
     messageId: trim(runConfig?.userMessageId),
     expectedAggregateVersion: runConfig?.expectedAggregateVersion,
-    commandId: trim(runConfig?.commandId || turnScopeId),
+    commandId: trim(runConfig?.commandId),
     sourceIdentity: resume
       ? {
           dialogProcessId: trim(runConfig?.resumeDialogProcessId),

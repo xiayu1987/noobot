@@ -89,8 +89,7 @@ function summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatch
 function summarizeConcurrency({ resolvedRunConfig, turnCommand, committedTurnResult }) {
   const expectedAggregateVersion = resolvedRunConfig?.expectedAggregateVersion;
   return {
-    commandId: clean(turnCommand?.commandId || resolvedRunConfig?.commandId),
-    commandIdConsumed: Boolean(clean(turnCommand?.commandId)),
+    commandId: clean(resolvedRunConfig?.commandId),
     expectedAggregateVersion: expectedAggregateVersion ?? null,
     expectedAggregateVersionConsumed:
       expectedAggregateVersion === turnCommand?.expectedAggregateVersion,
