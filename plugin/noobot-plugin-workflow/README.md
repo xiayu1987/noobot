@@ -9,8 +9,8 @@
 5. 每个节点通过 hook `workflow_node_agent_execute` 派发 agent 执行
 6. workflow 侧仅管理实例流转，不负责节点 agent 编排
 
-> 也支持注入 `nodeAgentExecutor`，由宿主为节点提供执行实现。
-> 动作节点建议始终提供 `task` 字段，插件会把该字段原样作为子模型任务指令（不附加“工作流”描述）。
+> 节点执行扩展统一走 `NODE_AGENT_EXECUTE` hook。
+> 动作节点建议始终提供 `task` 字段，插件会把该字段原样作为子模型任务指令（不附加“工作流”描述）；DSL 只识别 `task` 与 `stateType`，不接受别名。
 
 ## DSL 协议（v1）
 

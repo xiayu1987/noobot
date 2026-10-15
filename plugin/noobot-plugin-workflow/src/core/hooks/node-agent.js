@@ -373,14 +373,6 @@ async function resolveNodeAgentResult({
 }) {
   if (failure)
     return createFailedNodeAgentResult(pendingStep, subSession, failure, resolvedNodeIdentity);
-  const directAction =
-    typeof options?.nodeAgentExecutor === "function"
-      ? await options.nodeAgentExecutor(hookPayload)
-      : null;
-  throwIfWorkflowAborted(ctx);
-  if (directAction && typeof directAction === "object") {
-    return createNodeAgentResult(directAction, subSession, resolvedNodeIdentity);
-  }
   const emitted = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload);
   throwIfWorkflowAborted(ctx);
   const action = emitted.outcomes

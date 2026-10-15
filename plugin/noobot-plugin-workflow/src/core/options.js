@@ -85,8 +85,6 @@ export function normalizeOptions(input = {}) {
       typeof source?.capabilityModelInvoker === "function" ? source.capabilityModelInvoker : null,
     resolveModelMessages:
       typeof source?.resolveModelMessages === "function" ? source.resolveModelMessages : null,
-    nodeAgentExecutor:
-      typeof source?.nodeAgentExecutor === "function" ? source.nodeAgentExecutor : null,
     subSessionRunner:
       typeof source?.subSessionRunner === "function" ? source.subSessionRunner : null,
     generatedArtifactPersister:

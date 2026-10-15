@@ -155,6 +155,27 @@ test("parseWorkflowDslText keeps action node task field", () => {
   assert.equal(actionNode?.task, "请输出节点A完成");
 });
 
+test("parseWorkflowDslText reads only task and stateType attributes", () => {
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="开始"',
+      'NODE id=split type=state state=branch name="分叉"',
+      'NODE id=act type=action name="节点A" taskText="别名" instruction="别名" mission="别名"',
+      'NODE id=end type=state stateType=end name="结束"',
+      "EDGE from=start to=split",
+      "EDGE from=split to=act",
+      "EDGE from=act to=end",
+      "END",
+    ].join("\n"),
+  );
+  const nodes = semantic?.nodes || [];
+  const splitNode = nodes.find((item) => item?.id === "split");
+  const actionNode = nodes.find((item) => item?.id === "act");
+  assert.equal(Object.hasOwn(actionNode, "task"), false);
+  assert.equal(splitNode?.stateType, 0);
+});
+
 test("parseWorkflowDslText keeps quoted task when value contains spaces", () => {
   const semantic = parseWorkflowDslText(
     [

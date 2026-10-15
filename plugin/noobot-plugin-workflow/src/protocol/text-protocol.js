@@ -241,13 +241,13 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
         );
       }
       nodeSet.add(id);
-      const task = text(attrs.task || attrs.taskText || attrs.instruction || attrs.mission);
+      const task = text(attrs.task);
       const attachments = parseNodeAttachmentRefs(attrs.attachments || "");
       semantic.nodes.push({
         id,
         name,
         type,
-        stateType: toStateType(attrs.stateType || attrs.state || ""),
+        stateType: toStateType(attrs.stateType || ""),
         ...(task ? { task } : {}),
         ...(attachments.length ? { attachments } : {}),
       });
