@@ -43,7 +43,7 @@ export function resolveSubSessionFinalOutput(subSession = {}) {
   const messages = Array.isArray(result?.messages) ? result.messages : [];
   const lastAssistantContent = findLastAssistantContent(messages);
   if (lastAssistantContent) return lastAssistantContent;
-  return text(result?.answer || result?.output);
+  return text(result?.answer);
 }
 
 export function stripHarnessReviewAppendix(inputText = "") {

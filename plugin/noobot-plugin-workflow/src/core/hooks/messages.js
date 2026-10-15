@@ -13,7 +13,7 @@ import { projectAuxiliaryHistoryMessages } from "@noobot/context-protocol/assemb
 import { text } from "@noobot/shared/value";
 
 function resolveAssistantOutput(agentResult = {}) {
-  const direct = text(agentResult?.output || agentResult?.answer);
+  const direct = text(agentResult?.output);
   if (direct) return direct;
   const messages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {

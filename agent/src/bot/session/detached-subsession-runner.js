@@ -540,13 +540,13 @@ async function commitDetachedCompletion(dependencies, lifecycle) {
 
 function projectDetachedResult(result, identity, prepared, terminalLifecycle) {
   const dialogProcessId = identity.subDialogProcessId;
-  const transferEnvelopes = collectTransferEnvelopes(result?.turnMessages);
+  const messages = readArray(result?.messages);
+  const transferEnvelopes = collectTransferEnvelopes(messages);
   return {
     userId: identity.userId,
     sessionId: identity.subSessionId,
     parentSessionId: identity.parentSessionId,
     dialogProcessId,
-    persisted: result?.session || null,
     lifecycle: createDetachedTerminalReceipt({
       lifecycle: terminalLifecycle?.turn || result?.lifecycle,
       executionId: prepared.mergedRunConfig.executionId,
@@ -556,9 +556,9 @@ function projectDetachedResult(result, identity, prepared, terminalLifecycle) {
       parentSessionId: identity.parentSessionId,
       parentDialogProcessId: identity.parentDialogProcessId,
       caller: CALLER_ROLE.BOT,
-      answer: text(result?.output || result?.answer),
+      answer: text(result?.answer),
       traces: readArray(result?.traces),
-      messages: readArray(result?.turnMessages),
+      messages,
       ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
       turnTasks: readArray(result?.turnTasks),
       dialogProcessId,

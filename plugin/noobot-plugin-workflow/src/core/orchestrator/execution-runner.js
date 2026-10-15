@@ -134,7 +134,6 @@ function buildNodeAgentRunRecord({
     nodeDialogProcessId: refs.nodeDialogProcessId,
     agentDialogProcessId: refs.agentDialogProcessId,
     nodeSessionId: refs.nodeSessionId,
-    nodeSessionPersistedPath: text(refs.subSession.persisted?.outputDir),
     actionNodeStateId: refs.actionNodeStateId,
     stepId: refs.stepId,
     stepIndex: refs.stepIndex,

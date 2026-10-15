@@ -50,13 +50,13 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1103 处 / 382 个文件；内联 trim 兜底 617 处 / 268 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 1100 处 / 381 个文件；内联 trim 兜底 614 处 / 267 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ----------- |
 | `client/noobot-chat`             | 386    | 178            | 0           |
-| `agent`                          | 200    | 132            | 0           |
-| `plugin/noobot-plugin-workflow`  | 115    | 89             | 0           |
+| `agent`                          | 199    | 131            | 0           |
+| `plugin/noobot-plugin-workflow`  | 113    | 87             | 0           |
 | `plugin/noobot-plugin-harness`   | 90     | 67             | 0           |
 | `service`                        | 81     | 39             | 0           |
 | `authoritative-state`            | 31     | 11             | 0           |
@@ -92,22 +92,24 @@
 
 ## 4. 待决项
 
-| 项                                | 现状                                                                                                             | 需要的决定                                       |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `createFailedNodeAgentResult`     | 子会话超时或抛错且无 lifecycle 时走该分支，节点记为失败、workflow 继续                                           | 是否改为节点失败即终止整个 workflow              |
-| `userId`                          | workflow 已只读 `ctx.userId`；`runtime.userId` 与 hook meta 是否传同一入参尚未逐行确认                           | 确认后删除 `runtime.userId` 读取                 |
-| turn lifecycle 输入事件           | `turn-state.js:177` 读 `causationId \|\| commandId`；`commit-turn-lifecycle.js:23-53` 一组 `event.X \|\| turn.X` | lifecycle 协议批次：定输入事件必带字段后删除回退 |
-| `NODE_AGENT_EXECUTE` failure 结构 | 公开 hook 未定义 `stepFailure` 形状，`normalizeFailure` 读 `message \|\| reason \|\| code`                       | 协议固定为 `{ source, code, message }`（建议）   |
+| 项                                | 现状                                                                                                                                             | 需要的决定                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `createFailedNodeAgentResult`     | 子会话超时或抛错且无 lifecycle 时走该分支，节点记为失败、workflow 继续                                                                           | 是否改为节点失败即终止整个 workflow                                                  |
+| `userId`                          | workflow 已只读 `ctx.userId`；`runtime.userId` 与 hook meta 是否传同一入参尚未逐行确认                                                           | 确认后删除 `runtime.userId` 读取                                                     |
+| turn lifecycle 输入事件           | `turn-state.js:177` 读 `causationId \|\| commandId`；`commit-turn-lifecycle.js:23-53` 一组 `event.X \|\| turn.X`                                 | lifecycle 协议批次：定输入事件必带字段后删除回退                                     |
+| `NODE_AGENT_EXECUTE` failure 结构 | 公开 hook 未定义 `stepFailure` 形状，`normalizeFailure` 读 `message \|\| reason \|\| code`                                                       | 协议固定为 `{ source, code, message }`（建议）                                       |
+| detached 终态回执                 | `detached-subsession-runner.js:453/551` 读 `terminalLifecycle?.turn \|\| lifecycle`；`createDetachedTerminalReceipt` 读 `state \|\| branchState` | 确认 `applyTurnLifecycleEvent` applied/deduplicated/provision 三路必带 `turn` 后删除 |
 
 ## 5. 批次记录
 
-| 提交        | 模块                  | 内容                                                                                                                                 |
-| ----------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `3d9f986d3` | workflow              | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写                                                                                   |
-| `716593609` | workflow              | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                               |
-| `74c3842c1` | workflow              | abort 判定改用 session-protocol 执行中止协议                                                                                         |
-| `08148dccd` | scripts               | 回退链守卫与本清单                                                                                                                   |
-| `b62dfd769` | agent、workflow       | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed`          |
-| `5e8207f13` | scripts               | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                                    |
-| `acec6da42` | 全仓                  | 单字段 `String(x \|\| d).trim()` 301 处改为 `text(x)`/`(text(x) \|\| d)`；82 处 `text` 遮蔽改名；守卫增加 `textShadow` 规则          |
-| 待回填      | shared、model-runtime | `message-diagnostics` 单字段 trim 改用 `text()`；`response-normalizer` 本地内容提取器改名 `extractContentText`，消除与 `text()` 同名 |
+| 提交        | 模块                  | 内容                                                                                                                                                                                                                               |
+| ----------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `3d9f986d3` | workflow              | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写                                                                                                                                                                                 |
+| `716593609` | workflow              | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                                                                                                                             |
+| `74c3842c1` | workflow              | abort 判定改用 session-protocol 执行中止协议                                                                                                                                                                                       |
+| `08148dccd` | scripts               | 回退链守卫与本清单                                                                                                                                                                                                                 |
+| `b62dfd769` | agent、workflow       | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed`                                                                                                        |
+| `5e8207f13` | scripts               | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                                                                                                                                  |
+| `acec6da42` | 全仓                  | 单字段 `String(x \|\| d).trim()` 301 处改为 `text(x)`/`(text(x) \|\| d)`；82 处 `text` 遮蔽改名；守卫增加 `textShadow` 规则                                                                                                        |
+| `38885d5be` | shared、model-runtime | `message-diagnostics` 单字段 trim 改用 `text()`；`response-normalizer` 本地内容提取器改名 `extractContentText`，消除与 `text()` 同名                                                                                               |
+| 待回填      | agent、workflow       | detached 子会话投影只读 finalizer 的 `answer`/`messages`（缺陷修正：`messages` 与 `transferEnvelopes` 此前恒为空）；删除恒空的 `persisted`/`nodeSessionPersistedPath`；workflow agent 结果只读 `output`、session 结果只读 `answer` |

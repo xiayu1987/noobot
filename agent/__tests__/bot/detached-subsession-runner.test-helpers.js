@@ -33,13 +33,12 @@ export function createDeps(overrides = {}) {
       async runSession(payload = {}) {
         calls.runSessionPayloads.push(payload);
         return {
-          output: "agent answer",
+          answer: "agent answer",
           traces: [{ type: "trace" }],
           turnTasks: [{ taskId: "t1" }],
-          turnMessages: [{ role: "assistant", content: "agent answer" }],
+          messages: [{ role: "assistant", content: "agent answer" }],
           dialogProcessId: payload.dialogProcessId || "sub-dialog",
           lifecycle: { executionState: "completed" },
-          session: { sessionId: payload.sessionId, aggregateVersion: 3 },
         };
       },
     },

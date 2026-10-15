@@ -146,11 +146,38 @@ test("detached sub-session delegates execution and persistence to the main runne
     calls.lifecyclePayloads.every((item) => item.dialogProcessId === result.dialogProcessId),
     true,
   );
-  assert.equal(result.persisted.aggregateVersion, 3);
+  assert.equal("persisted" in result, false);
   assert.equal(result.lifecycle.executionState, "completed");
   assert.equal(result.result.answer, "agent answer");
   assert.deepEqual(result.result.messages, [{ role: "assistant", content: "agent answer" }]);
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
+});
+
+test("detached sub-session projects finalizer messages and their transfer envelopes", async () => {
+  const { deps } = createDeps();
+  const envelope = { transferId: "tr-1", kind: "file" };
+  const messages = [
+    { role: "assistant", content: "done", transferEnvelopes: [envelope] },
+    { role: "tool", content: "dup", transferEnvelopes: [envelope] },
+  ];
+  const baseRunSession = deps.sessionRunner.runSession;
+  deps.sessionRunner.runSession = async (payload) => ({
+    ...(await baseRunSession(payload)),
+    answer: "final answer",
+    messages,
+  });
+  const runner = createDetachedSubSessionRunner(deps);
+
+  const result = await runner({
+    parentExecutionScope: createParentExecutionScope(),
+    parentContext: createParentContext(),
+    message: "hello",
+    strategy: createCompleteStrategy(),
+  });
+
+  assert.equal(result.result.answer, "final answer");
+  assert.deepEqual(result.result.messages, messages);
+  assert.deepEqual(result.result.transferEnvelopes, [envelope]);
 });
 
 test("detached sub-session uses the selected parent model over a stale runtime model", async () => {
@@ -425,7 +452,7 @@ test("detached sub-session rejects a runner result with a second dialog identity
   const { calls, deps } = createDeps({
     sessionRunner: {
       async runSession() {
-        return { output: "done", dialogProcessId: "foreign-dialog" };
+        return { answer: "done", dialogProcessId: "foreign-dialog" };
       },
     },
   });
