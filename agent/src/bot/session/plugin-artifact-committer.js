@@ -25,7 +25,7 @@ export async function commitPluginArtifact({
     artifactType: artifact?.artifactType,
     artifactId: artifact?.artifactId,
     sessionId,
-    turnScopeId: text(system.turnScopeId || system.config?.turnScopeId),
+    turnScopeId: text(system.turnScopeId),
     data: artifact?.data,
     operation: text(artifact?.operation) || "created",
     baseRevision: artifact?.baseRevision == null ? null : Number(artifact.baseRevision),

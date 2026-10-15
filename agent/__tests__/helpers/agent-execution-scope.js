@@ -32,12 +32,7 @@ export function createTestAgentExecutionScope(
     dialogProcessId: String(
       identity.dialogProcessId || systemRuntime?.dialogProcessId || "d-1",
     ).trim(),
-    turnScopeId: String(
-      identity.turnScopeId ||
-        systemRuntime?.turnScopeId ||
-        systemRuntime?.config?.turnScopeId ||
-        "t-1",
-    ).trim(),
+    turnScopeId: String(identity.turnScopeId || systemRuntime?.turnScopeId || "t-1").trim(),
     runId: text(identity.runId) || "r-1",
     messageId: String(identity.messageId || systemRuntime?.messageId || "m-1").trim(),
   };

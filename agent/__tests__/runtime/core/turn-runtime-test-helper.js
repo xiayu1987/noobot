@@ -77,9 +77,6 @@ export function bindTestTurnMessageEventDomain(runtime = {}, identity = "test-tu
   systemRuntime.sessionId = String(systemRuntime.sessionId || `session-${suffix}`);
   systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || `dialog-${suffix}`);
   systemRuntime.turnScopeId = String(systemRuntime.turnScopeId || `turn-${suffix}`);
-  systemRuntime.config =
-    systemRuntime.config && typeof systemRuntime.config === "object" ? systemRuntime.config : {};
-  systemRuntime.config.turnScopeId = systemRuntime.turnScopeId;
   bindAssistantMessageEventStream(runtime, {
     messageId: `message-${suffix}`,
     presentationMessageId: `presentation-${suffix}`,

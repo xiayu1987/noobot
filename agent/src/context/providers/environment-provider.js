@@ -125,9 +125,6 @@ export function buildDynamicInfo({
     dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     turnScopeId: normalizedTurnScopeId,
     now,
-    config: {
-      ...config,
-      ...(normalizedTurnScopeId ? { turnScopeId: normalizedTurnScopeId } : {}),
-    },
+    config,
   };
 }

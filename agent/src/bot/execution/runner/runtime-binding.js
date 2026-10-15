@@ -91,9 +91,6 @@ export async function bindAgentDispatchRuntime({
   systemRuntime.sessionId = sessionId;
   systemRuntime.dialogProcessId = dialogProcessId;
   systemRuntime.turnScopeId = turnScopeId;
-  systemRuntime.config =
-    systemRuntime.config && typeof systemRuntime.config === "object" ? systemRuntime.config : {};
-  systemRuntime.config.turnScopeId = turnScopeId;
   systemRuntime.sessionDir = text(sessionDir);
   dispatchRuntime.currentUserMessageUid = text(currentUserMessage?.messageUid);
   dispatchRuntime.currentUserMessageOrigin = text(currentUserMessage?.messageOrigin).toLowerCase();

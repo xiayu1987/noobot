@@ -50,12 +50,12 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1065 处 / 380 个文件；内联 trim 兜底 561 处 / 262 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 1062 处 / 379 个文件；内联 trim 兜底 558 处 / 261 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ----------- |
 | `client/noobot-chat`             | 365    | 158            | 0           |
-| `agent`                          | 186    | 119            | 0           |
+| `agent`                          | 183    | 116            | 0           |
 | `plugin/noobot-plugin-workflow`  | 112    | 86             | 0           |
 | `plugin/noobot-plugin-harness`   | 90     | 47             | 0           |
 | `service`                        | 81     | 39             | 0           |
@@ -101,7 +101,6 @@
 | turn lifecycle 输入事件                    | `turn-state.js:177` 读 `causationId \|\| commandId`；`commit-turn-lifecycle.js:23-53` 一组 `event.X \|\| turn.X`                                      | lifecycle 协议批次：定输入事件必带字段后删除回退                              |
 | 子会话投影 `turnScopeId`/`dialogProcessId` | 后端 `message-event-stream` 已只读 `systemRuntime.dialogProcessId`/`turnScopeId`；`validateMessageEnvelope` 仍不强制 `identity.turnScopeId`           | 在协议中强制后，再删 `subSessionEventProjection` 中的 `\|\| currentSession.X` |
 | `runConfig.systemRuntimePatch`             | `build-system-context.js` 只有读取方，src 中没有写入方                                                                                                | 确认无外部扩展写入后删除读取分支                                              |
-| `systemRuntime.config.turnScopeId`         | `runtime-binding` 与 `systemRuntime.turnScopeId` 同值写入；`plugin-artifact-committer`、`agent-context-accessor`、`extensions/hooks` 仍读 `config` 层 | 下一切片删除 `config` 层读取，再删写入                                        |
 | `SESSION_RUN_EVENT.LOCAL_FAILURE`          | src 中只有 `eventNormalization`、`turnReducer` 两个消费方，没有构造方，仅测试发送                                                                     | 确认无外部扩展发送后，连同消费分支和测试一并删除                              |
 | registry `canonicalTimingObserved`         | 只剩 `applyTurnTimingUpdate` 自身去重比较在读，不影响投影值                                                                                           | 确认快照重放的 `applied` 语义不依赖它后删除                                   |
 | `user-template/default-user/services`      | 已有 `package.json`（`type: module`）；handler 复制到用户工作区后由 `integrations/services` 动态加载，须自包含，不能依赖 `@noobot/shared`；已计入基线 | 建议：保持计数，不排除、不引入共享包；回退多为配置默认值，按边界代码对待      |
@@ -128,4 +127,5 @@
 | `d6e96d374` | client                        | 计时字段统一为 `startedAt`/`finishedAt`：后端持久化的 `turnTimings.thinking*` 只在 `applyTurnTimingSnapshot` 入口映射一次；`sendFlow` 改发 `startedAt`；删除 reducer、selectors、snapshot projection、messageRuntime、`SharedChatMessageItem` 的双名兜底，以及 reducer 中无写入方的 `rawEvent.canonicalTimingObserved` 分支                                                        |
 | `2b3e9e56a` | agent                         | 消息事件 payload 身份只取已绑定的 stream 与 `systemRuntime`：删除 `parentSessionId`、`dialogProcessId`（含无独立写入方的 `currentDialogProcessId`）、`workflowRunId`、`nodeExecutionId` 的 `data`/`state` 回退，commit input 的 `sessionId`、`turnScopeId` 收敛为 `systemRuntime` 单一来源；删除 `agent-dispatch` 重复字面量兜底；新增反向用例（旧代码中 `data` 可覆盖已绑定身份） |
 | `a166ef0a5` | workflow                      | 节点失败一律终止并提交 FAILED（缺陷修正：子会话抛出无 lifecycle 的错误时，节点此前停在 RUNNING）；删除 `createFailedNodeAgentResult`、`createWorkflowNodeFailure` 与 `stepFailure` 透传、上游失败行链路及 4 个 i18n 键；节点 failure 固定为 `{ source, code, message }`，`normalizeFailure` 缺字段即拒绝                                                                           |
-| 待回填      | client、i18n                  | 终态 `error` 且 `failure.message` 非空时，在标签下追加 `turnTerminalErrorDetail`（`user_stopped` 不显示）；恢复该键（中英）                                                                                                                                                                                                                                                        |
+| `2f30eae41` | client、i18n                  | 终态 `error` 且 `failure.message` 非空时，在标签下追加 `turnTerminalErrorDetail`（`user_stopped` 不显示）；恢复该键（中英）                                                                                                                                                                                                                                                        |
+| 待回填      | agent                         | `turnScopeId` 只取 `systemRuntime.turnScopeId`：删除 `buildDynamicInfo` 与 `runtime-binding` 对 `systemRuntime.config.turnScopeId` 的同值重复写入；删除 accessor、hooks、`plugin-artifact-committer` 的 `config` 层读取、accessor 的 `runConfig` 回退（`getRuntimeRunConfig`）与 hooks 中无写入方的 `runtime.turnScopeId`；删除 `system-prompt-formatter` 重复字面量 `\|\| "user"` |

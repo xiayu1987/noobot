@@ -74,7 +74,6 @@ test("composeSystemInfoSections projects only model-owned execution context", ()
       turnScopeId: "turn-secret",
       config: {
         allowUserInteraction: false,
-        turnScopeId: "turn-config-secret",
         safeConfirm: true,
         safeConfirmLevel: "critical",
         sanitizeOutput: true,

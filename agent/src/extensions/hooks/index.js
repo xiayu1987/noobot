@@ -101,9 +101,7 @@ function resolveHookRuntimeMeta(runtime = {}) {
     sessionId: text(systemRuntime?.sessionId || runtime?.sessionId),
     parentSessionId: normalizeParentSessionId(systemRuntime?.parentSessionId),
     dialogProcessId: text(runtime?.systemRuntime?.dialogProcessId),
-    turnScopeId: text(
-      systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runtime?.turnScopeId,
-    ),
+    turnScopeId: text(systemRuntime?.turnScopeId),
     caller: text(systemRuntime?.caller),
   };
 }
