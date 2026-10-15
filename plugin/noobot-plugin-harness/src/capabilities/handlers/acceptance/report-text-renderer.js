@@ -56,7 +56,7 @@ function extractAcceptanceReportFields(report = {}) {
   return {
     mode: String(data.mode || "").trim() || "active",
     forcedReason: String(data.forcedReason || "").trim(),
-    acceptedAt: String(data.acceptedAt || "").trim() || "",
+    acceptedAt: String(data.acceptedAt || "").trim(),
     planText: String(data.planText || data?.plan?.planText || "").trim(),
     checklist: Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [],
     summary: data?.summary && typeof data.summary === "object" ? data.summary : {},
