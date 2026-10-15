@@ -14,7 +14,7 @@ describe("normalizeSessionRunEvent", () => {
   it("reads authoritative state from the turn payload for lifecycle events", () => {
     const normalized = normalizeSessionRunEvent({
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      sequence: 7,
+      seq: 7,
       raw: { turn: { state: "COMPLETED" } },
     });
     expect(normalized.state).toBe("completed");
@@ -73,13 +73,38 @@ describe("normalizeSessionRunEvent", () => {
     expect(other.dialogProcessId).toBe("dialog-1");
   });
 
-  it("routes sequence into transportSeq for backend state events", () => {
+  it("routes seq into transportSeq for backend state events", () => {
     const normalized = normalizeSessionRunEvent({
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      sequence: 12,
+      seq: 12,
     });
     expect(normalized.transportSeq).toBe(12);
     expect(normalized.lifecycleSeq).toBe(0);
+  });
+
+  it("keeps derived sequences at zero for local events", () => {
+    const normalized = normalizeSessionRunEvent({
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      seq: 5,
+      transportSeq: 9,
+      lifecycleSeq: 9,
+    });
+    expect(normalized.seq).toBe(5);
+    expect(normalized.transportSeq).toBe(0);
+    expect(normalized.lifecycleSeq).toBe(0);
+  });
+
+  it("normalizes a missing or zero seq to zero without reading aliases", () => {
+    const missing = normalizeSessionRunEvent({
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      sequence: 4,
+    });
+    const zero = normalizeSessionRunEvent({
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      seq: 0,
+    });
+    expect([missing.seq, missing.lifecycleSeq, missing.transportSeq]).toEqual([0, 0, 0]);
+    expect([zero.seq, zero.lifecycleSeq, zero.transportSeq]).toEqual([0, 0, 0]);
   });
 
   it("falls back through timestamp, updatedAt then createdAt", () => {

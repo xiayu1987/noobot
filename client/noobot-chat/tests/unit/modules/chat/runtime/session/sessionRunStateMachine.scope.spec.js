@@ -58,7 +58,7 @@ const terminalResolved = (state) => ({
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
   revision: 10,
-  sequence: 10,
+  seq: 10,
   ...completionCommit,
 });
 

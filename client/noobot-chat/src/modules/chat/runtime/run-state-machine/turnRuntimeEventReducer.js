@@ -56,7 +56,7 @@ function createObservation({ registry, event, rawEvent, route, turnScopeId }) {
       canonicalSessionId: canonicalId,
       turnKey: executionTurnKey(canonicalId, turnScopeId),
       eventId: text(rawEvent.eventId || rawEvent.id),
-      sequence: Number(event.seq || rawEvent.sequence || 0),
+      sequence: event.seq,
       source: text(event.source || rawEvent.source),
       authority: text(event.authority || rawEvent.authority || "none"),
       ...values,

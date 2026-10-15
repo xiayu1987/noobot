@@ -63,7 +63,7 @@ const terminalResolved = (state, overrides = {}) => ({
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
   revision: 100,
-  sequence: 100,
+  seq: 100,
   ...completionCommit,
   terminalMaterialization: { terminalStatus: { status: state }, messages: [] },
   ...(state.endsWith("_failed")
@@ -454,10 +454,7 @@ describe("turn runtime interaction lifecycle", () => {
     completed = apply(completed, { ...processingStarted, seq: 4 });
     completed = apply(completed, { ...processingCompleted, seq: 5 });
     completed = apply(completed, { ...authoritativeCompleted, seq: 6 });
-    completed = apply(
-      completed,
-      terminalResolved(TURN_STATE.COMPLETED, { revision: 6, sequence: 6 }),
-    );
+    completed = apply(completed, terminalResolved(TURN_STATE.COMPLETED, { revision: 6, seq: 6 }));
     expect(
       reduceTurnRuntimeEvent(completed, {
         ...identity,
@@ -469,5 +466,31 @@ describe("turn runtime interaction lifecycle", () => {
       applied: false,
       reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED,
     });
+  });
+
+  it("rejects stale transport and lifecycle sequences on their own channel", () => {
+    const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, seq: 1 });
+    const transported = apply(requesting, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.SENDING,
+      seq: 5,
+    });
+    expect(transported.transportSeq).toBe(5);
+    expect(
+      reduceTurnRuntimeEvent(transported, {
+        ...identity,
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: BackendChannelState.SENDING,
+        seq: 4,
+      }),
+    ).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.STALE_SEQUENCE });
+
+    const accepted = apply(transported, { ...actionAccepted, seq: 3 });
+    const processing = apply(accepted, { ...processingStarted, seq: 8 });
+    expect(processing.lifecycleSeq).toBe(8);
+    expect(processing.transportSeq).toBe(5);
+    expect(
+      reduceTurnRuntimeEvent(processing, { ...identity, ...actionAccepted, seq: 7 }),
+    ).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.STALE_SEQUENCE });
   });
 });

@@ -21,17 +21,15 @@ const TURN_START_EVENT_TYPES = Object.freeze([
   SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
 ]);
 
-const BACKEND_STATE_EVENT_TYPES = Object.freeze([
+export const TRANSPORT_EVENT_TYPES = new Set([
   SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
   SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
 ]);
 
-function isAuthoritativeEventType(type) {
-  return (
-    type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE ||
-    type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
-  );
-}
+export const AUTHORITATIVE_EVENT_TYPES = new Set([
+  SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+  SESSION_RUN_EVENT.TERMINAL_RESOLVED,
+]);
 
 function resolveRuntimeAuthority(type, rawEvent = {}) {
   if (rawEvent?.authority) return trim(rawEvent.authority);
@@ -61,7 +59,7 @@ function resolveTurnState(rawEvent = {}) {
 }
 
 function resolveEventState(type, rawEvent, wireState) {
-  if (isAuthoritativeEventType(type)) return resolveTurnState(rawEvent);
+  if (AUTHORITATIVE_EVENT_TYPES.has(type)) return resolveTurnState(rawEvent);
   if (type === SESSION_RUN_EVENT.LOCAL_FAILURE) return normalizeState(rawEvent?.failureState);
   return wireState;
 }
@@ -78,15 +76,11 @@ function resolveIdentityFields(rawEvent, turnMeta, type) {
 }
 
 function resolveSequenceFields(rawEvent, type) {
-  const rawSequence = Number(rawEvent?.sequence || rawEvent?.seq || 0);
+  const seq = Number(rawEvent?.seq || 0);
   return {
-    seq: rawSequence,
-    transportSeq: BACKEND_STATE_EVENT_TYPES.includes(type)
-      ? rawSequence
-      : Number(rawEvent?.transportSeq || 0),
-    lifecycleSeq: isAuthoritativeEventType(type)
-      ? rawSequence
-      : Number(rawEvent?.lifecycleSeq || 0),
+    seq,
+    transportSeq: TRANSPORT_EVENT_TYPES.has(type) ? seq : 0,
+    lifecycleSeq: AUTHORITATIVE_EVENT_TYPES.has(type) ? seq : 0,
     revision: Number(rawEvent?.revision || 0),
     summaryVersion: Number(rawEvent?.summaryVersion || 0),
   };

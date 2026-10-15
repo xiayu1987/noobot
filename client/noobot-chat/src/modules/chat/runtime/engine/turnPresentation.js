@@ -110,7 +110,7 @@ function authoritativeTurnSequence(turnRuntimeRegistry = {}, sessionId = "", tur
   const normalizedTurnScopeId = text(turnScopeId);
   const bucket = turnRuntimeRegistry?.sessions?.[normalizedSessionId];
   const turn = bucket?.turns?.[normalizedTurnScopeId];
-  return Number(turn?.sequence || turn?.lifecycleSeq || 0);
+  return Number(turn?.lifecycleSeq || 0);
 }
 
 function terminalErrorText(status = {}) {

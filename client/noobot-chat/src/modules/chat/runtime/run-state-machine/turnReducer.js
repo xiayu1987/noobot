@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
-import { normalizeSessionRunEvent } from "./eventNormalization.js";
+import {
+  AUTHORITATIVE_EVENT_TYPES,
+  normalizeSessionRunEvent,
+  TRANSPORT_EVENT_TYPES,
+} from "./eventNormalization.js";
 import { deriveTurnEventType, TURN_EVENT } from "@noobot/session-protocol";
 import {
   projectAuthoritativeTerminalTurnState,
@@ -46,10 +50,6 @@ const STOP_REQUEST_EVENTS = new Set([
   SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
   SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY,
 ]);
-const TRANSPORT_EVENTS = new Set([
-  SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-  SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-]);
 const SETTLED_EVENTS = new Set([
   SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED,
   SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED,
@@ -60,10 +60,6 @@ const LOCAL_FAILURE_EVENTS = new Set([
   SESSION_RUN_EVENT.LOCAL_FAILURE,
   SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
   SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
-]);
-const AUTHORITATIVE_EVENTS = new Set([
-  SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-  SESSION_RUN_EVENT.TERMINAL_RESOLVED,
 ]);
 const TRANSPORT_FAILURE_STATES = new Set([
   BackendChannelState.ERROR,
@@ -106,7 +102,7 @@ function targetState(current, event) {
 
 function classifyInteraction(event) {
   return {
-    transport: TRANSPORT_EVENTS.has(event.type),
+    transport: TRANSPORT_EVENT_TYPES.has(event.type),
     actionStart: ACTION_START_EVENTS.has(event.type),
     stopStart: STOP_REQUEST_EVENTS.has(event.type),
     completionStart: event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
@@ -135,7 +131,7 @@ function interactionRejection(current, event, kind) {
   if (kind.actionStart && current.commandPending === true) {
     return TURN_TRANSITION_REASON.ILLEGAL_TRANSITION;
   }
-  const incomingSeq = Number(event.transportSeq || event.seq || 0);
+  const incomingSeq = event.transportSeq;
   if (kind.transport && incomingSeq > 0 && Number(current.transportSeq || 0) > incomingSeq) {
     return TURN_TRANSITION_REASON.STALE_SEQUENCE;
   }
@@ -162,7 +158,7 @@ function resolveTransportSequence(current, kind, incomingSeq) {
 }
 
 function projectInteraction(current, event, kind) {
-  const incomingSeq = Number(event.transportSeq || event.seq || 0);
+  const incomingSeq = event.transportSeq;
   const transportState = kind.transport
     ? text(event.backendState || event.state)
     : text(current.transportState);
@@ -226,7 +222,7 @@ function allowsUserStopping(currentState, current, event) {
 }
 
 function allowsUserStopCompleted(currentState, current, event) {
-  if (!AUTHORITATIVE_EVENTS.has(event.type)) return false;
+  if (!AUTHORITATIVE_EVENT_TYPES.has(event.type)) return false;
   if (currentState === FrontendRunState.USER_STOPPING) return true;
   if (currentState === FrontendRunState.PROCESSING) return true;
   return currentState === FrontendRunState.ACTION_REQUESTING && text(current.action) === "stop";
@@ -276,7 +272,7 @@ function orderingRejection(current, event, eventSeq, eventRevision) {
   if (current.terminalResolved === true && event.type !== SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return TURN_TRANSITION_REASON.TERMINAL_LOCKED;
   }
-  const currentSeq = AUTHORITATIVE_EVENTS.has(event.type)
+  const currentSeq = AUTHORITATIVE_EVENT_TYPES.has(event.type)
     ? Number(current.lifecycleSeq || 0)
     : Number(current.seq || 0);
   if (eventSeq > 0 && currentSeq > eventSeq) return TURN_TRANSITION_REASON.STALE_SEQUENCE;
@@ -352,7 +348,7 @@ function projectNextTurn(current, event, facts, state, sequences) {
   const capabilities = deriveTurnCapabilities(state, {
     canStop: rawCapabilities.canStop === true,
   });
-  const authoritative = AUTHORITATIVE_EVENTS.has(event.type);
+  const authoritative = AUTHORITATIVE_EVENT_TYPES.has(event.type);
   return {
     ...currentValue,
     state,
@@ -365,10 +361,7 @@ function projectNextTurn(current, event, facts, state, sequences) {
     seq: Math.max(Number(currentValue.seq || 0), sequences.eventSeq),
     transportSeq: Math.max(Number(currentValue.transportSeq || 0), sequences.transportSeq),
     lifecycleSeq: authoritative
-      ? Math.max(
-          Number(currentValue.lifecycleSeq || 0),
-          Number(event.lifecycleSeq || event.seq || 0),
-        )
+      ? Math.max(Number(currentValue.lifecycleSeq || 0), event.lifecycleSeq)
       : Number(currentValue.lifecycleSeq || 0),
     revision: Math.max(Number(currentValue.revision || 0), sequences.eventRevision),
     lifecycleObserved: currentValue.lifecycleObserved === true || authoritative,
@@ -378,18 +371,17 @@ function projectNextTurn(current, event, facts, state, sequences) {
     authoritativeCompletionCommit: facts.authoritativeCommit,
     ...projectAuthorityFields(currentValue, event),
     finalizeIntent: event.finalizeIntent || currentValue.finalizeIntent || null,
-    failure: AUTHORITATIVE_EVENTS.has(event.type) ? event.failure : currentValue.failure || null,
+    failure: AUTHORITATIVE_EVENT_TYPES.has(event.type)
+      ? event.failure
+      : currentValue.failure || null,
   };
 }
 
 export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const event = normalizeSessionRunEvent(rawEvent);
-  const transportProjection = TRANSPORT_EVENTS.has(event.type);
   const sequences = {
-    transportSeq: transportProjection
-      ? Number(event.transportSeq || event.seq || 0)
-      : Number(event.transportSeq || 0),
-    eventSeq: Number(event.lifecycleSeq || event.seq || 0),
+    transportSeq: event.transportSeq,
+    eventSeq: event.seq,
     eventRevision: Number(event.revision || 0),
   };
   const terminalReason = initialTerminalRejection(current, event);
