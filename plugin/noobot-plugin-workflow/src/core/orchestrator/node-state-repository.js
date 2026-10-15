@@ -57,7 +57,7 @@ function normalizeIdentity(input = {}) {
       : [],
     nodeId: normalizeText(identity.nodeId),
     nodeName: normalizeText(identity.nodeName),
-    attempt: Math.max(1, Math.floor(Number(identity.attempt || 1) || 1)),
+    attempt: Math.max(1, Math.floor(Number(identity.attempt) || 1)),
     dependencies: Array.isArray(identity.dependencies)
       ? identity.dependencies.map((item) => normalizeText(item)).filter(Boolean)
       : [],

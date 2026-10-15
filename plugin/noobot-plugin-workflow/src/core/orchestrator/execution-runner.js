@@ -40,20 +40,12 @@ import { text } from "@noobot/shared/value";
 function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = {} } = {}) {
   const nodeId = text(pendingStep?.nodeId);
   if (!nodeId || !Array.isArray(planningNodeSessions) || !planningNodeSessions.length) return null;
-  const attempt = Math.max(
-    1,
-    Math.floor(Number(pendingStep?.attempt || pendingStep?.attemptIndex || 1) || 1),
-  );
-  const matches = planningNodeSessions.filter((item = {}) => {
-    const itemNodeId = text(item?.nodeId);
-    const itemAttempt = Math.max(1, Math.floor(Number(item?.attempt || 1) || 1));
-    return itemNodeId === nodeId && itemAttempt === attempt;
-  });
+  const matches = planningNodeSessions.filter((item = {}) => text(item?.nodeId) === nodeId);
   if (matches.length !== 1) {
     throw new Error(
       matches.length > 1
-        ? `duplicate workflow node identity for ${nodeId} attempt ${attempt}`
-        : `missing workflow node identity for ${nodeId} attempt ${attempt}`,
+        ? `duplicate workflow node identity for ${nodeId}`
+        : `missing workflow node identity for ${nodeId}`,
     );
   }
   const identity = matches[0] || {};
@@ -68,9 +60,7 @@ function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = 
   ];
   const missingFields = requiredFields.filter((field) => !text(identity?.[field]));
   if (missingFields.length) {
-    throw new Error(
-      `incomplete workflow node identity for ${nodeId} attempt ${attempt}: ${missingFields.join(",")}`,
-    );
+    throw new Error(`incomplete workflow node identity for ${nodeId}: ${missingFields.join(",")}`);
   }
   return identity;
 }
@@ -90,14 +80,7 @@ function resolveWorkflowExecutionLimits(options = {}) {
 }
 
 function resolveItemStepFailure(item = {}) {
-  const candidates = [item?.effectiveAction, item?.action];
-  for (const action of candidates) {
-    const failure = action?.stepFailure;
-    if (failure && typeof failure === "object") return failure;
-    const message = text(failure);
-    if (message) return { message };
-  }
-  return null;
+  return item.effectiveAction.stepFailure || null;
 }
 
 function resolveStepItemRefs(item = {}) {
@@ -143,7 +126,7 @@ function buildNodeAgentRunRecord({
   return {
     transition: transitions,
     step: item?.step || null,
-    action: item?.effectiveAction || item?.action || null,
+    action: item.effectiveAction,
     workflowRunId: refs.workflowRunId,
     nodeExecutionId: refs.nodeExecutionId,
     commandId: refs.commandId,
@@ -504,7 +487,7 @@ export async function runWorkflowExecution({
         );
         rememberCompletedStepResult({
           completedStepResults,
-          item,
+          item: recordItem,
           semantic,
           transitions,
           ctx,

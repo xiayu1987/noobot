@@ -194,7 +194,45 @@ test("runWorkflowExecution resolves each node task by nodeId even when node name
   assert.equal(messagesByDialog.get(identityB.dialogProcessId), "task of b");
 });
 
-test("runWorkflowExecution rejects duplicate planning identities for the same node attempt", async () => {
+test("runWorkflowExecution commits a failed child lifecycle to node state and rejects with the terminal error", async () => {
+  const semantic = buildSemantic();
+  const workflowRunId = "wf_run_failure";
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+  const { ctx } = buildCtx();
+  const repository = createInMemoryWorkflowNodeStateRepository();
+  const options = buildOptions({
+    subSessionRunner: async (call) => {
+      throw Object.assign(new Error("child crashed"), {
+        lifecycle: {
+          executionId: call.strategy.executionId,
+          executionKind: "agent",
+          state: "action_failed",
+          revision: 2,
+          sequence: 2,
+          failure: { code: "CHILD_CRASHED", message: "child crashed" },
+        },
+      });
+    },
+  });
+  options.workflowNodeStateRepository = repository;
+  await assert.rejects(
+    runWorkflowExecution({
+      hookManager: { emit: async () => ({ outcomes: [] }) },
+      options,
+      ctx,
+      semantic,
+      workflowRunId,
+      planningNodeSessions,
+    }),
+    (error) => error.code === "CHILD_CRASHED" && error.nodeTerminalCommitted === true,
+  );
+  const snapshot = await repository.getSnapshot({ workflowRunId });
+  const node = snapshot.nodes.find((item) => item.nodeId === "a");
+  assert.equal(node.status, "failed");
+  assert.deepEqual(node.failure, { message: "child crashed", code: "CHILD_CRASHED", name: "" });
+});
+
+test("runWorkflowExecution rejects duplicate planning identities for the same node", async () => {
   const semantic = buildSemantic();
   const workflowRunId = "wf_run_d1";
   const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
@@ -288,6 +326,6 @@ test("runWorkflowExecution rejects planning identity without nodeName", async ()
       workflowRunId,
       planningNodeSessions: broken,
     }),
-    /incomplete workflow node identity for a attempt 1: nodeName/,
+    /incomplete workflow node identity for a: nodeName/,
   );
 });
