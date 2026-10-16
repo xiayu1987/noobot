@@ -19,6 +19,7 @@ export function canonicalMessageEvent({
   sequence = 1,
   sessionId = "session-1",
   turnScopeId = "turn-1",
+  dialogProcessId = "dialog-1",
   messageId = `message-${sequence}`,
   eventType = MESSAGE_EVENT_TYPE.THINKING,
   text = "content",
@@ -41,7 +42,7 @@ export function canonicalMessageEvent({
     },
     producer: { type: "test", id: "agent-proxy-test" },
     occurredAt: "2026-08-17T00:00:00.000Z",
-    payload: { eventType, presentationMessageId: messageId, text },
+    payload: { eventType, presentationMessageId: messageId, dialogProcessId, text },
   });
 }
 

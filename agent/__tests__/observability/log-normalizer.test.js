@@ -27,7 +27,7 @@ function runtimeForTurn({
   let sequence = 0;
   const runtime = {
     runConfig: { messageId, presentationMessageId },
-    systemRuntime: { sessionId: "session-1", turnScopeId: "turn-1" },
+    systemRuntime: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
     sessionManager: {
       async commitMessageEvent({ sessionId, turnScopeId, messageId: committedMessageId, payload }) {
         sequence += 1;
@@ -202,6 +202,7 @@ test("workflow ownership is immutable and emitted by the common message stream",
       sessionId: "child-session",
       parentSessionId: "root-session",
       turnScopeId: "turn-workflow",
+      dialogProcessId: "dialog-workflow",
     },
   };
   let sequence = 0;
@@ -267,9 +268,19 @@ test("authoritative message envelope validation rejects partial events", () => {
     ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: "message-1", sequence: 0 },
     producer: { type: "test", id: "message-event-validation" },
     occurredAt: "2026-01-01T00:00:00.000Z",
-    payload: { eventType: "llm_delta", presentationMessageId: "presentation-1", text: "token" },
+    payload: {
+      eventType: "llm_delta",
+      presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
+      text: "token",
+    },
   });
   assert.equal(validateProtocolEvent(envelope).valid, true);
+  assert.equal(
+    validateProtocolEvent({ ...envelope, payload: { ...envelope.payload, dialogProcessId: "" } })
+      .valid,
+    false,
+  );
   assert.equal(
     validateProtocolEvent({ ...envelope, payload: { ...envelope.payload, text: undefined } }).valid,
     false,

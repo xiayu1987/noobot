@@ -52,6 +52,7 @@ function messageEnvelope(payload = null) {
     payload: payload || {
       eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       text: "complete body",
     },
   });

@@ -32,6 +32,7 @@ export function canonicalMessageEvent(overrides = {}) {
     sessionId: "session-1",
     messageId: "message-1",
     presentationMessageId: "message-1",
+    dialogProcessId: "dialog-1",
     sequence: 1,
     occurredAt: "2026-01-01T00:00:00.000Z",
     turnScopeId: "turn-1",

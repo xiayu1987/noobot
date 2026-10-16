@@ -65,6 +65,7 @@ test("transient delta eventSent is routed to the stream-delta debug category", a
     payload: {
       eventType: MESSAGE_EVENT_TYPE.LLM_DELTA,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       text: "chunk",
     },
   });
@@ -84,6 +85,7 @@ test("persistent message event eventSent keeps the default backend-websocket rou
     payload: {
       eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       text: "complete body",
     },
   });
@@ -112,6 +114,7 @@ function slowFinalContent() {
     payload: {
       eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       text: "body",
     },
   });
@@ -155,6 +158,7 @@ test("fast websocket send callback is not logged as slow", async () => {
     payload: {
       eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       text: "body",
     },
   });

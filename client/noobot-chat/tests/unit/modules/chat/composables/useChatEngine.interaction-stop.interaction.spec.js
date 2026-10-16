@@ -27,11 +27,14 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       interactionType: "confirm",
       content: "confirm?",
     };
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "local-int", "dp-int", "interaction_pending", {
         seq: 2,
       });
-      onEvent({ event: StreamEventEnum.INTERACTION_REQUEST, data: pendingInteraction });
+      onEvent({
+        event: StreamEventEnum.INTERACTION_REQUEST,
+        data: { ...pendingInteraction, turnScopeId: payload.identity.turnScopeId },
+      });
       emitChannelState(onEvent, "local-int", "dp-int", "user_stopped", { seq: 3 });
       onEvent({
         event: StreamEventEnum.USER_STOPPED,
@@ -179,11 +182,12 @@ describe("useChatEngine.interaction-stop: interaction", () => {
   it("interaction_request with lifecycle=resolved & ackMode=auto should auto ack and not enter pending", async () => {
     const setPendingInteractionRequest = vi.fn();
     const submitInteractionResponse = vi.fn();
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.INTERACTION_REQUEST,
         data: {
           sessionId: "local-auto-resolved",
+          turnScopeId: payload.identity.turnScopeId,
           dialogProcessId: "dp-auto",
           requestId: "req-auto",
           interactionType: "post_action_notice",
@@ -236,8 +240,11 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       resolvedBy: "system",
       interactionData: { reason: "timeout" },
     };
-    const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({ event: StreamEventEnum.INTERACTION_REQUEST, data: failedRequest });
+    const stream = vi.fn(async (payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.INTERACTION_REQUEST,
+        data: { ...failedRequest, turnScopeId: payload.identity.turnScopeId },
+      });
     });
     const { engine } = createHarness({
       sessionId: "local-timeout",

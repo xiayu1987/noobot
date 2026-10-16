@@ -29,6 +29,7 @@ function messageEnvelope({
   sequence = 1,
   sessionId = "session-1",
   turnScopeId = "turn-1",
+  dialogProcessId = "dialog-1",
   messageId = "message-1",
   eventType = MESSAGE_EVENT_TYPE.THINKING,
   text = "content",
@@ -54,6 +55,7 @@ function messageEnvelope({
     payload: {
       eventType,
       presentationMessageId: messageId,
+      dialogProcessId,
       text,
     },
   });
@@ -210,7 +212,7 @@ test("message event tracing only accepts the shared authoritative envelope", () 
     authoritativeSequence: 7,
     sessionId: "session-1",
     turnScopeId: "turn-1",
-    dialogProcessId: "",
+    dialogProcessId: "dialog-1",
   });
   assert.equal(
     resolveMessageEventTrace("subagent_message_event", authoritative, 11).protocolKind,

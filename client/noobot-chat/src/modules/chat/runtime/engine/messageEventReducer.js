@@ -66,8 +66,7 @@ function conflicts(message, event) {
 }
 
 function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap, transient }) {
-  if (event.payload.dialogProcessId && !targetMessage.dialogProcessId)
-    targetMessage.dialogProcessId = event.payload.dialogProcessId;
+  targetMessage.dialogProcessId = event.payload.dialogProcessId;
   Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
   targetMessage.hasFirstStreamEvent = true;
 

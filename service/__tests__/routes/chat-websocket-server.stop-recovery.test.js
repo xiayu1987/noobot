@@ -138,6 +138,7 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
           payload: {
             eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_START,
             presentationMessageId: "msg-refresh-presentation",
+            dialogProcessId: "dp-refresh",
             toolCallId: "call-refresh",
             tool: "read_file",
             args: {},

@@ -413,7 +413,6 @@ describe("useChatEngine.send-stream", () => {
     const { engine, activeSession, activeTurnRuntime, sending } = createHarness({
       sessionId: "s-missing-turn",
       stream,
-      autoPatchStreamTurnScopeId: false,
       deps: {
         fetchSessionDetail: vi.fn(async () => ({ sessionId: "s-missing-turn" })),
         applySessionDetail,

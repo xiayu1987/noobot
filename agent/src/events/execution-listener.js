@@ -20,9 +20,10 @@ function projectExecutionLogRecord(event = "", data = {}) {
   if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
   const envelope = data?.envelope;
   const validation = validateProtocolEvent(envelope);
-  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
-    return { event, data };
+  if (!validation.valid) {
+    throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
   }
+  if (validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) return { event, data };
   return {
     event: envelope.payload.eventType,
     data: {

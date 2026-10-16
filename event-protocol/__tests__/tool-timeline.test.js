@@ -49,6 +49,7 @@ function event(eventType, sequence, extra = {}) {
     payload: {
       eventType,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       toolCallId: "call-1",
       tool: "read_file",
       ...extra,

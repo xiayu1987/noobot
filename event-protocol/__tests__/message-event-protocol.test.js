@@ -30,6 +30,7 @@ function payload(overrides = {}) {
   return {
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_START,
     presentationMessageId: "presentation-1",
+    dialogProcessId: "dialog-1",
     tool: "read_file",
     toolCallId: "call-1",
     ...overrides,
@@ -152,9 +153,9 @@ test("user interjection events carry one canonical thinking content fact", () =>
       },
     }).errors,
     [
+      "missing_dialog_process_id",
       "missing_user_interjection_fact_timestamp",
       "missing_user_interjection_fact_dialog_process_id",
-      "missing_user_interjection_dialog_process_id",
     ],
   );
 });

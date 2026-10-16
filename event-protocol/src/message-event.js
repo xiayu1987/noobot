@@ -177,6 +177,7 @@ function validatePayloadEnvelope(value) {
     (field) => `noncanonical_${field}`,
   );
   if (!text(value?.presentationMessageId)) errors.push("missing_presentation_message_id");
+  if (!text(value?.dialogProcessId)) errors.push("missing_dialog_process_id");
   const workflowRunId = text(value?.workflowRunId);
   if (Boolean(workflowRunId) !== Boolean(text(value?.nodeExecutionId))) {
     errors.push("incomplete_workflow_identity");
@@ -222,12 +223,6 @@ function validateUserInterjectionFact(contentFact) {
   );
 }
 
-function validateUserInterjection(value) {
-  const errors = validateUserInterjectionFact(value?.contentFact);
-  if (!text(value?.dialogProcessId)) errors.push("missing_user_interjection_dialog_process_id");
-  return errors;
-}
-
 function validateToolCallStart(value) {
   const errors = [];
   if (!text(value?.tool)) errors.push("missing_tool");
@@ -259,7 +254,7 @@ function validateEventTypeFields(value, eventType) {
   }
   if (ACTIVITY_EVENT_TYPES.has(eventType)) errors.push(...requireEventText(value));
   if (eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
-    errors.push(...validateUserInterjection(value));
+    errors.push(...validateUserInterjectionFact(value?.contentFact));
   }
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START)
     errors.push(...validateToolCallStart(value));

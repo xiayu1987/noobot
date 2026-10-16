@@ -291,6 +291,7 @@ test("execution listener persists the canonical message fact instead of the priv
     payload: {
       eventType: "tool_call_start",
       presentationMessageId: "presentation-a",
+      dialogProcessId: "dialog-a",
       tool: "read_file",
       toolCallId: "call-a",
     },
@@ -336,7 +337,7 @@ test("execution listener forwards transient message events without persisting th
       ordering: { domain: "message-event", scopeId: "message-a", sequence },
       producer: { type: "agent", id: "message-runtime" },
       occurredAt: "2026-08-16T00:00:00.000Z",
-      payload: { presentationMessageId: "presentation-a", ...payload },
+      payload: { presentationMessageId: "presentation-a", dialogProcessId: "dialog-a", ...payload },
     });
   const transientEnvelopes = [
     messageEnvelope("delta-a", 0, { eventType: "llm_delta", text: "he" }),
@@ -431,6 +432,40 @@ test("execution listener classifies agent context diagnostics under the dedicate
   assert.equal(persisted[0].type, "agent_context_debug");
 });
 
+test("execution listener rejects committed authority events that violate the protocol", () => {
+  const persisted = [];
+  const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: { onEvent: async () => true },
+  });
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId: "event-invalid",
+      eventType: "message_event",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+      messageId: "message-invalid",
+    },
+    ordering: { domain: "message-event", scopeId: "message-invalid", sequence: 1 },
+    producer: { type: "agent", id: "test-agent" },
+    occurredAt: "2026-08-16T00:00:00.000Z",
+    payload: {
+      eventType: "authoritative_final_content",
+      presentationMessageId: "presentation-invalid",
+      text: "body",
+    },
+  });
+
+  assert.throws(
+    () => listener.onEvent({ event: "authority_event_committed", data: { envelope } }),
+    /invalid committed authority event: missing_dialog_process_id/,
+  );
+  assert.equal(persisted.length, 0);
+});
+
 test("execution listener exposes rejected asynchronous upstream delivery at the final barrier", async () => {
   const listener = createExecutionEventListener({
     sessionManager: { appendExecutionLog: async () => {} },
@@ -456,6 +491,7 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
     payload: {
       eventType: "authoritative_final_content",
       presentationMessageId: "presentation-final",
+      dialogProcessId: "dialog-final",
       text: "complete body",
     },
   });

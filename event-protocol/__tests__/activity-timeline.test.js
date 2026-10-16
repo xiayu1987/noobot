@@ -117,6 +117,7 @@ test("rejects incomplete envelopes and noncanonical activity records", () => {
     validateMessageEventPayload({
       eventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
     }).errors,
     ["missing_text"],
   );
