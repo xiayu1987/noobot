@@ -455,9 +455,7 @@ class SubscriberBroadcastMethods {
     this.broadcastChannelEvent(channel, {
       sequence: Number(channel?.eventSequence || 0),
       event: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
-      data: this._buildConversationStatePayload(channel, stateItem, {
-        updatedAtMs: Number(stateItem?.updatedAtMs || nowMs()),
-      }),
+      data: stateItem,
     });
   }
 
@@ -470,34 +468,13 @@ class SubscriberBroadcastMethods {
 
   buildChannelStateSnapshot(channel) {
     if (!channel) return [];
-    const stateList = Array.from(channel.conversationStateByDialogProcessId.values()).sort(
-      (left, right) => Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
+    const stateList = Array.from(channel.conversationStateByScope.values()).sort(
+      (left, right) => left.updatedAtMs - right.updatedAtMs,
     );
     return stateList.map((stateItem) => ({
       event: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
-      data: this._buildConversationStatePayload(channel, stateItem, {
-        updatedAtMs: Number(stateItem?.updatedAtMs || 0),
-      }),
+      data: stateItem,
     }));
-  }
-
-  _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
-    const state = text(stateItem?.state);
-    const dialogProcessId = text(stateItem?.dialogProcessId);
-    const createdAtMs = Number(stateItem?.createdAtMs || stateItem?.updatedAtMs || nowMs());
-    const updatedAtMs = Number(overrides?.updatedAtMs ?? stateItem?.updatedAtMs ?? nowMs());
-    return {
-      sessionId: String(stateItem?.sessionId || ""),
-      dialogProcessId,
-      turnScopeId: text(stateItem?.turnScopeId),
-      state,
-      sourceEvent: String(stateItem?.sourceEvent || ""),
-      seq: Number(stateItem?.seq || 0),
-      createdAtMs,
-      createdAt: new Date(createdAtMs).toISOString(),
-      updatedAtMs,
-      ...(text(stateItem?.requestId) ? { requestId: String(stateItem.requestId).trim() } : {}),
-    };
   }
 
   sendSocketEvent(targetSocket, envelope) {

@@ -11,7 +11,7 @@ import {
   createTurnRuntimeRegistryState,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   SESSION_RUN_EVENT,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
@@ -32,7 +32,7 @@ describe("chatEngine message runtime patch isolation", () => {
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     const event = {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       sessionId: "a",
       turnScopeId: "ta",
       dialogProcessId: "da",
@@ -65,7 +65,7 @@ describe("chatEngine message runtime patch isolation", () => {
     });
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       sessionId: "a",
       turnScopeId: "ta",
       dialogProcessId: "da",

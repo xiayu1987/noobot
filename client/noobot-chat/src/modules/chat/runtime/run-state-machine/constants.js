@@ -3,13 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_TERMINAL_STATES } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
+import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
 
-export const USER_STOP_REQUEST_STORAGE_KEY =
-  "noobot:session-run-state-machine:user-stop-requests:v1";
-export const USER_STOP_REQUEST_TTL_MS = TIME_THRESHOLDS.client.stopRequestTtlMs;
 export const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
 export const SESSION_RUN_MESSAGE_RUNTIME_ACTION = Object.freeze({
   NONE: "none",
@@ -21,24 +18,14 @@ export const SESSION_RUN_MESSAGE_RUNTIME_REASON = Object.freeze({
   OBSOLETE_PENDING_ASSISTANT: "obsolete_pending_assistant",
 });
 
-export const BackendChannelState = Object.freeze({
-  NO_CONVERSATION: "no_conversation",
-  SENDING: "sending",
-  INTERACTION_PENDING: "interaction_pending",
-  STOPPING: "stopping",
-  RECONNECTING: "reconnecting",
-  COMPLETED: "completed",
-  USER_STOPPED: "user_stopped",
-  ERROR: "error",
-  EXPIRED: "expired",
-});
+export { AGENT_CHANNEL_STATE };
 
 export const BackendTerminalStates = Object.freeze([
-  BackendChannelState.COMPLETED,
-  BackendChannelState.USER_STOPPED,
-  BackendChannelState.ERROR,
-  BackendChannelState.EXPIRED,
-  BackendChannelState.NO_CONVERSATION,
+  AGENT_CHANNEL_STATE.COMPLETED,
+  AGENT_CHANNEL_STATE.USER_STOPPED,
+  AGENT_CHANNEL_STATE.ERROR,
+  AGENT_CHANNEL_STATE.EXPIRED,
+  AGENT_CHANNEL_STATE.NO_CONVERSATION,
 ]);
 
 const AUTHORITATIVE_TERMINAL_STATES = TURN_TERMINAL_STATES;
@@ -108,9 +95,9 @@ export const SESSION_RUN_EVENT = Object.freeze({
 
 export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
   FrontendRunState.ACTION_REQUESTING,
-  BackendChannelState.SENDING,
-  BackendChannelState.RECONNECTING,
-  BackendChannelState.INTERACTION_PENDING,
+  AGENT_CHANNEL_STATE.SENDING,
+  AGENT_CHANNEL_STATE.RECONNECTING,
+  AGENT_CHANNEL_STATE.INTERACTION_PENDING,
   FrontendRunState.CONTINUE_REQUESTING,
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
@@ -130,13 +117,13 @@ export const MESSAGE_TERMINAL_OUTCOME_PRECEDENCE = Object.freeze({
 });
 
 export const MESSAGE_TERMINAL_STATE_OUTCOME = Object.freeze({
-  [BackendChannelState.COMPLETED]: MESSAGE_TERMINAL_OUTCOME.GENERATED,
+  [AGENT_CHANNEL_STATE.COMPLETED]: MESSAGE_TERMINAL_OUTCOME.GENERATED,
   [FrontendRunState.FRONTEND_COMPLETED]: MESSAGE_TERMINAL_OUTCOME.GENERATED,
-  [BackendChannelState.USER_STOPPED]: MESSAGE_TERMINAL_OUTCOME.STOPPED,
+  [AGENT_CHANNEL_STATE.USER_STOPPED]: MESSAGE_TERMINAL_OUTCOME.STOPPED,
   [FrontendRunState.USER_STOP_COMPLETED]: MESSAGE_TERMINAL_OUTCOME.STOPPED,
-  [BackendChannelState.ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
-  [BackendChannelState.EXPIRED]: MESSAGE_TERMINAL_OUTCOME.FAILED,
-  [BackendChannelState.NO_CONVERSATION]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [AGENT_CHANNEL_STATE.ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [AGENT_CHANNEL_STATE.EXPIRED]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [AGENT_CHANNEL_STATE.NO_CONVERSATION]: MESSAGE_TERMINAL_OUTCOME.FAILED,
   [FrontendRunState.CANCELLED]: MESSAGE_TERMINAL_OUTCOME.FAILED,
   [FrontendRunState.ACTION_REQUEST_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
   [FrontendRunState.PROCESSING_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,

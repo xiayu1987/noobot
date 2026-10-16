@@ -4,35 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
 
-export const TIMELINE_AUTHORITY = Object.freeze({
-  AUTHORITATIVE: "authoritative",
-});
-
-export const SEQUENCE_DOMAIN = Object.freeze({
-  MESSAGE: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-});
-
 const sequenceOf = (value = {}) => {
-  const sequence = Number(value.sequence ?? value.seq);
+  const sequence = Number(value.sequence);
   return Number.isFinite(sequence) && sequence > 0 ? sequence : null;
 };
 
 const timestampOf = (value = {}) => {
-  const timestamp = Date.parse(text(value.timelineTimestamp || value.timestamp || value.ts));
+  const timestamp = Date.parse(text(value.timestamp));
   return Number.isFinite(timestamp) ? timestamp : null;
 };
-
-const sequenceScopeOf = (value = {}) =>
-  text(value.sequenceScopeId || value.sequenceScope || value.messageId);
 
 function resolveSequenceIdentity(value = {}) {
   return {
     domain: text(value.sequenceDomain),
     sequence: sequenceOf(value),
-    scope: sequenceScopeOf(value),
+    scope: text(value.sequenceScopeId),
   };
 }
 

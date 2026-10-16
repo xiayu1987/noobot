@@ -23,6 +23,7 @@ export function compactThinkingTimeline(items = []) {
   const compactFact = (fact = {}, summary = "", result = null) => ({
     eventId: text(fact.eventId),
     sequence: fact.sequence,
+    ...(text(fact.timestamp) ? { timestamp: String(fact.timestamp).trim() } : {}),
     ...(text(fact.sequenceScopeId) ? { sequenceScopeId: String(fact.sequenceScopeId).trim() } : {}),
     ...(text(fact.authority) ? { authority: String(fact.authority).trim() } : {}),
     ...(text(fact.sequenceDomain) ? { sequenceDomain: String(fact.sequenceDomain).trim() } : {}),
@@ -197,7 +198,7 @@ function projectDisplayToolCalls(toolCalls) {
   return toolCalls
     .map((toolCall = {}) => ({
       id: text(toolCall?.id),
-      name: text(toolCall?.function?.name || toolCall?.name),
+      name: text(toolCall?.function?.name),
     }))
     .filter((item) => item.id || item.name);
 }

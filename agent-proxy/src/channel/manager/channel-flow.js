@@ -7,15 +7,18 @@ import {
   AGENT_PROXY_ERROR,
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
-  CONVERSATION_SCOPE_KEY,
-  CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
   UPSTREAM_CLOSE_REASON,
 } from "../../shared/constants.js";
 import { normalizeApiKey, createChannelKey, buildFingerprint } from "../../shared/utils.js";
 import { writeAgentProxyRouteDebugEvent } from "../../runtime-events/route-debug-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
-import { AGENT_COMMAND, RUN_COMMAND_TYPES } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_CHANNEL_STATE,
+  AGENT_CHANNEL_STATE_SCOPE,
+  AGENT_COMMAND,
+  RUN_COMMAND_TYPES,
+} from "@noobot/agent-transport-protocol";
 import { text } from "@noobot/shared/value";
 
 function projectForwardCommandType(payload) {
@@ -52,23 +55,17 @@ function projectResolvedInteractionIdentity(resolvedEnvelope) {
   };
 }
 
-function buildInteractionConversationPatch({
-  resolved,
-  currentState,
-  hasRemainingInteraction,
-  requestId,
-}) {
-  const current = currentState ?? {};
+function buildInteractionConversationPatch({ resolved, hasRemainingInteraction, requestId }) {
   return {
+    scope: AGENT_CHANNEL_STATE_SCOPE.TURN,
     sessionId: resolved.sessionId,
     dialogProcessId: resolved.dialogProcessId,
-    turnScopeId: resolved.turnScopeId || text(current.turnScopeId),
+    turnScopeId: resolved.turnScopeId,
     state: hasRemainingInteraction
-      ? CONVERSATION_STATE.INTERACTION_PENDING
-      : CONVERSATION_STATE.SENDING,
+      ? AGENT_CHANNEL_STATE.INTERACTION_PENDING
+      : AGENT_CHANNEL_STATE.SENDING,
     sourceEvent: AGENT_COMMAND.INTERACTION_RESPONSE,
-    seq: Math.max(Number(current.seq || 0), resolved.sequence),
-    createdAtMs: Number(current.createdAtMs || 0),
+    seq: resolved.sequence,
     requestId,
   };
 }
@@ -264,19 +261,12 @@ class ChannelFlowMethods {
     this.requestChannelMap.delete(requestId);
     if (!resolvedEnvelope) return;
     const resolved = projectResolvedInteractionIdentity(resolvedEnvelope);
-    const stateKey = resolved.dialogProcessId || CONVERSATION_SCOPE_KEY;
-    const currentState = channel.conversationStateByDialogProcessId.get(stateKey) || null;
     const hasRemainingInteraction = Array.from(channel.pendingInteractionRequests.values()).some(
-      (envelope) => text((envelope?.payload ?? {}).dialogProcessId) === resolved.dialogProcessId,
+      (envelope) => text(envelope.identity.turnScopeId) === resolved.turnScopeId,
     );
     this.updateConversationState(
       channel,
-      buildInteractionConversationPatch({
-        resolved,
-        currentState,
-        hasRemainingInteraction,
-        requestId,
-      }),
+      buildInteractionConversationPatch({ resolved, hasRemainingInteraction, requestId }),
     );
   }
 
@@ -376,11 +366,11 @@ class ChannelFlowMethods {
     const previousActivityPhase = channel.activity.phase;
     const previousTransportPhase = channel.transport.phase;
     channel.eventJournal.reset();
-    channel.conversationStateByDialogProcessId = new Map();
+    channel.conversationStateByScope = new Map();
     this.updateConversationState(channel, {
+      scope: AGENT_CHANNEL_STATE_SCOPE.SESSION,
       sessionId: channel.identity.sessionId,
-      dialogProcessId: "",
-      state: CONVERSATION_STATE.NO_CONVERSATION,
+      state: AGENT_CHANNEL_STATE.NO_CONVERSATION,
       sourceEvent: CONVERSATION_SOURCE_EVENT.RESTART,
       seq: 0,
     });

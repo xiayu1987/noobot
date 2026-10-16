@@ -19,7 +19,6 @@ export function createChatEngineSender({
   activeSession,
   activeSessionId,
   allowUserInteraction,
-  applyConversationState,
   applyConversationStateFromEvent,
   appendMessage,
   findCanonicalMessageById,
@@ -87,18 +86,14 @@ export function createChatEngineSender({
   };
   const streamHandlerDependencies = {
     activeSession,
-    activeSessionId,
-    applyConversationState,
     applyConversationStateFromEvent,
     applyWorkflowRuntimeEvent,
     reduceSubSessionMessageEvent,
     clearMissingInteractionPayloadTimer,
     clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
     findCanonicalMessageById,
     findCanonicalMessagesById,
     materializeTurnPresentation,
-    foldMessagesForView,
     logSessionEvent,
     makeViewMessage,
     mergeAssistantAttachments,
@@ -166,7 +161,6 @@ export function createChatEngineSender({
       appendMessage,
       upsertCanonicalAssistantMessage,
       activeSession,
-      applyConversationState,
       translate,
       navigateToLastMessage,
       messageText: explicitMessageText,
@@ -176,7 +170,6 @@ export function createChatEngineSender({
       reuseExistingUserTurn,
       attachmentFiles: explicitAttachmentFiles,
       userAttachments: explicitUserAttachments,
-      turnStartedAtMs,
     });
     debugLogger.prepareAfter({
       reuseExistingUserTurn,
@@ -189,16 +182,13 @@ export function createChatEngineSender({
       filesToSend,
     });
 
-    const errorRef = { value: null };
     try {
       return await executeSendStream({
         activeSession,
-        applyRunStateEvent,
         applyTurnLifecycleEnvelope,
         chatWebSocketClient,
         clearUploads,
         debugLogger,
-        errorRef,
         filesToSend,
         navigateOnFirstResponseOnce,
         payloadPreferences,
@@ -213,18 +203,13 @@ export function createChatEngineSender({
     } catch (error) {
       applySendErrorState({
         error,
-        errorEventData: errorRef.value || error?.data || null,
         activeSession,
         botMessage: botMsg,
-        applyConversationState,
         clearPendingInteraction,
         notify,
         translate,
       });
-      debugLogger.error({
-        error,
-        hasStreamErrorEventData: Boolean(errorRef.value),
-      });
+      debugLogger.error({ error });
       return false;
     } finally {
       finalizeSendCleanup({

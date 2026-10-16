@@ -8,12 +8,7 @@ import {
   applyCanonicalToolTimelineEvent,
   resolveCanonicalToolTimelineStatus,
 } from "@noobot/event-protocol/tool-timeline";
-import {
-  compareTimelineFacts,
-  preferTimelineFact,
-  SEQUENCE_DOMAIN,
-  TIMELINE_AUTHORITY,
-} from "./timelineFact.js";
+import { compareTimelineFacts, preferTimelineFact } from "./timelineFact.js";
 import { parseTaskCheckReceipt } from "@noobot/context-protocol/task/check-receipt";
 import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
@@ -21,8 +16,6 @@ import { isToolResultFailure } from "../../model/toolLogFormatting.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { createWeakArrayIndex } from "@noobot/timeline-runtime";
 import { isPlainObject, text } from "@noobot/shared/value";
-
-const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
 
 function parseToolResultObject(value) {
   if (isPlainObject(value)) return value;
@@ -57,9 +50,6 @@ function canonicalAttachments(attachments = []) {
   });
 }
 
-const TOOL_TIMELINE_AUTHORITY = TIMELINE_AUTHORITY;
-const TOOL_SEQUENCE_DOMAIN = SEQUENCE_DOMAIN;
-
 function toolCallIdOf(value = {}) {
   return text(value.toolCallId);
 }
@@ -74,31 +64,6 @@ function timelineKey(value = {}) {
 const toolTimelineIndex = createWeakArrayIndex({
   keyOf: (entry) => text(entry?.key) || timelineKey(entry),
 });
-
-function isAuthoritativeToolFacet(value = {}) {
-  if (text(value?.authority) === TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE) return true;
-  const eventType = text(value?.log?.eventType || value?.eventType).toLowerCase();
-  return [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(eventType);
-}
-
-function facetAuthority(value = {}) {
-  return isAuthoritativeToolFacet(value) ? TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE : "";
-}
-
-function facetSequenceDomain(value = {}) {
-  const explicit = text(value?.sequenceDomain);
-  if (explicit) return explicit;
-  return isAuthoritativeToolFacet(value) ? TOOL_SEQUENCE_DOMAIN.MESSAGE : "";
-}
-
-function normalizeFacetMetadata(value = {}) {
-  if (!value || typeof value !== "object") return value;
-  return {
-    ...value,
-    authority: facetAuthority(value),
-    sequenceDomain: facetSequenceDomain(value),
-  };
-}
 
 function stringifyToolDetail(value) {
   if (value === undefined || value === null) return "";
@@ -147,11 +112,11 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "", includeDeta
       : {}),
     detailValue: canonicalDetail,
     ...(includeDetail ? { detailText: stringifyToolDetail(canonicalDetail) } : {}),
-    sequence: sequenceOf(facet),
+    sequence: Number(facet.sequence || 0),
     sequenceScopeId: text(facet.sequenceScopeId),
-    authority: facetAuthority(facet),
-    sequenceDomain: facetSequenceDomain(facet),
-    timelineTimestamp: text(facet.timestamp),
+    authority: text(facet.authority),
+    sequenceDomain: text(facet.sequenceDomain),
+    timestamp: text(facet.timestamp),
   };
 }
 
@@ -291,22 +256,17 @@ export function mergeToolTimelines(...timelines) {
     const key = text(candidate?.key) || timelineKey(candidate);
     if (!key) continue;
     const previous = merged.get(key) || {};
-    const newerFacet = (left, right) => {
-      const normalizedLeft = normalizeFacetMetadata(left);
-      const normalizedRight = normalizeFacetMetadata(right);
-      return preferTimelineFact(normalizedLeft, normalizedRight);
-    };
     const mergedEntry = {
       ...previous,
       ...candidate,
       key,
       call:
         previous.call && candidate?.call
-          ? newerFacet(previous.call, candidate.call)
+          ? preferTimelineFact(previous.call, candidate.call)
           : candidate?.call || previous.call,
       resultEvent:
         previous.resultEvent && candidate?.resultEvent
-          ? newerFacet(previous.resultEvent, candidate.resultEvent)
+          ? preferTimelineFact(previous.resultEvent, candidate.resultEvent)
           : candidate?.resultEvent || previous.resultEvent,
     };
     merged.set(key, {

@@ -245,7 +245,7 @@ describe("lifecycle architecture guard", () => {
     const evaluation = source("src/modules/chat/runtime/run-state-machine/evaluation.js");
     expect(reducer).not.toContain("current.lifecycleObserved !== true");
     expect(reducer).not.toMatch(
-      /backendState\s*===\s*BackendChannelState\.SENDING\)\s*return\s+FrontendRunState\.PROCESSING/,
+      /backendState\s*===\s*AGENT_CHANNEL_STATE\.SENDING\)\s*return\s+FrontendRunState\.PROCESSING/,
     );
     expect(reducer).not.toMatch(/normalizedBackendState[\s\S]*canStop/);
     expect(reducer).toContain("commandPending");

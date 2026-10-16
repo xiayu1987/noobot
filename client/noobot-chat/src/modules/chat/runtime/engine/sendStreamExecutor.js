@@ -7,25 +7,12 @@ import { createSendStreamEventHandler } from "./sendStreamEventRouter.js";
 import { createAuthorityResolutionTracker } from "./authorityResolutionTracker.js";
 import { createTurnPayloadBuilder } from "./sendPayloadBuilder.js";
 
-function createStreamStateView(errorRef) {
-  return {
-    get lastStreamErrorEventData() {
-      return errorRef.value;
-    },
-    set lastStreamErrorEventData(value) {
-      errorRef.value = value;
-    },
-  };
-}
-
 export async function executeSendStream({
   activeSession,
-  applyRunStateEvent,
   applyTurnLifecycleEnvelope,
   chatWebSocketClient,
   clearUploads,
   debugLogger,
-  errorRef,
   filesToSend,
   navigateOnFirstResponseOnce,
   payloadPreferences,
@@ -74,19 +61,13 @@ export async function executeSendStream({
     filesToSend,
     botMessage,
   });
-  const authorityResolutions = createAuthorityResolutionTracker({
-    applyRunStateEvent,
-    applyTurnLifecycleEnvelope,
-  });
+  const authorityResolutions = createAuthorityResolutionTracker({ applyTurnLifecycleEnvelope });
   const handleStreamEvent = createSendStreamEventHandler({
     ...streamHandlerDependencies,
-    applyRunStateEvent: authorityResolutions.applyTrackedRunStateEvent,
     applyTurnLifecycleEnvelope: authorityResolutions.applyTrackedTurnLifecycleEnvelope,
     botMessage,
     navigateOnFirstResponseOnce,
-    requestedTextStreaming,
     sessionId,
-    streamState: createStreamStateView(errorRef),
     turnScopeId,
   });
   await sessionAggregateVersionManager.runAggregateVersionedStream({

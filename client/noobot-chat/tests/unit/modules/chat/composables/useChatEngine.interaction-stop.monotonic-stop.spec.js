@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, activateRuntimeTurn } from "../helpers/useChatEngineHarness.js";
-import { BackendChannelState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { AGENT_CHANNEL_STATE } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: monotonic-stop", () => {
@@ -36,7 +36,7 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
       dialogProcessId: "dp-stop",
       turnScopeId: "turn-stop",
       channelState: {
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         dialogProcessId: "dp-stop",
         turnScopeId: "turn-stop",
       },
@@ -69,7 +69,7 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
         dialogProcessId: "dp-new",
         turnScopeId: "turn-new",
         channelState: {
-          state: BackendChannelState.SENDING,
+          state: AGENT_CHANNEL_STATE.SENDING,
           dialogProcessId: "dp-new",
           turnScopeId: "turn-new",
         },

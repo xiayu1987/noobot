@@ -5,10 +5,8 @@
  */
 export function applySendErrorState({
   error,
-  errorEventData,
   activeSession,
   botMessage,
-  applyConversationState: _applyConversationState,
   clearPendingInteraction,
   notify,
   translate,

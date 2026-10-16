@@ -17,7 +17,7 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnRuntimeStoreActions } from "../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
@@ -256,7 +256,7 @@ describe("useChatEngine.session-detail", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: activeSession.sessionId,
       turnScopeId: freshTurnScopeId,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     applyTurnRuntimeEvent(registry, {
@@ -269,7 +269,7 @@ describe("useChatEngine.session-detail", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: activeSession.sessionId,
       turnScopeId: freshTurnScopeId,
-      state: BackendChannelState.USER_STOPPED,
+      state: AGENT_CHANNEL_STATE.USER_STOPPED,
       seq: 4,
     });
     const terminalResult = applyTurnTerminalResolution(

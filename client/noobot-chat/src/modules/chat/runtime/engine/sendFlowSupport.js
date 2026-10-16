@@ -29,9 +29,7 @@ export function createUserMessageId() {
 
 export function isEventForCurrentTurn(data = {}, botMessage = {}) {
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
-  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
-  if (!botTurnScopeId || !eventTurnScopeId) return true;
-  return eventTurnScopeId === botTurnScopeId;
+  return normalizeTrimmedString(data?.turnScopeId) === botTurnScopeId;
 }
 
 export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {

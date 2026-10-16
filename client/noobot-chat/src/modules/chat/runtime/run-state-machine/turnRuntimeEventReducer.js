@@ -47,12 +47,12 @@ function resolveTurnRuntimeConflict({
   return "";
 }
 
-function createObservation({ registry, event, rawEvent, route, turnScopeId }) {
+function createObservation({ registry, event, rawEvent, requestedSessionId, turnScopeId }) {
   return (values = {}) => {
     const canonicalId = text(values.turn?.sessionId || values.canonicalSessionId);
     return {
       registry,
-      requestedSessionId: text(event.sessionId || route?.sessionId),
+      requestedSessionId,
       canonicalSessionId: canonicalId,
       turnKey: executionTurnKey(canonicalId, turnScopeId),
       eventId: text(rawEvent.eventId),
@@ -102,7 +102,7 @@ function projectTurn({ current, transition, event, rawEvent, sessionId, turnScop
     updatedAtMs: nowMs,
     updatedAt: text(event.updatedAt || currentValue.updatedAt),
     source: text(event.source || currentValue.source),
-    sourceEvent: text(event.sourceEvent || event.type || currentValue.sourceEvent),
+    sourceEvent: text(event.sourceEvent || event.type),
     authority: event.authority,
     finishedAtMs: terminal ? Number(currentValue.finishedAtMs || nowMs) : 0,
     startedAt: text(startedAt),
@@ -141,9 +141,16 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   const event = normalizeSessionRunEvent(rawEvent);
   const route = resolveRoute(next, event.dialogProcessId);
   const turnScopeId = turnKey(event.turnScopeId || route?.turnScopeId);
-  const observe = createObservation({ registry: next, event, rawEvent, route, turnScopeId });
+  const routedSessionId = text(event.sessionId || route?.sessionId);
+  const observe = createObservation({
+    registry: next,
+    event,
+    rawEvent,
+    requestedSessionId: routedSessionId,
+    turnScopeId,
+  });
   if (!turnScopeId) return observe({ turn: null, applied: false, reason: "missing_turn_identity" });
-  const requestedSessionId = canonicalSessionId(text(event.sessionId || route?.sessionId));
+  const requestedSessionId = canonicalSessionId(routedSessionId);
   if (isTurnRuntimeDeleted(next, { sessionId: requestedSessionId, turnScopeId })) {
     return observe({
       turn: null,

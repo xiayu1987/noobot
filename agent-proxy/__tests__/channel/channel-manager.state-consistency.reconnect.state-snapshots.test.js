@@ -163,14 +163,18 @@ test("reconnect preserves cached authoritative states without synthesizing curre
     sessionId: "session-current-run",
     dialogProcessId: "dp-old",
     turnScopeId: "turn-old",
+    scope: "turn",
     state: "user_stopped",
+    sourceEvent: "turn.stop.completed",
     seq: 12,
   });
   manager.updateConversationState(channel, {
     sessionId: "session-current-run",
     dialogProcessId: "dp-current",
     turnScopeId: "turn-current",
+    scope: "turn",
     state: "completed",
+    sourceEvent: "turn.completed",
     seq: 20,
   });
   channel.status = "done";

@@ -9,7 +9,7 @@ import {
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
   MESSAGE_IN_FLIGHT_CHANNEL_STATES,
   MESSAGE_TERMINAL_OUTCOME,
@@ -23,16 +23,16 @@ import { isTerminalRunState, resolveStateTerminalOutcome } from "./terminalOutco
 import { isPlainObject } from "@noobot/shared/value";
 
 const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
-  BackendChannelState.SENDING,
-  BackendChannelState.RECONNECTING,
-  BackendChannelState.INTERACTION_PENDING,
+  AGENT_CHANNEL_STATE.SENDING,
+  AGENT_CHANNEL_STATE.RECONNECTING,
+  AGENT_CHANNEL_STATE.INTERACTION_PENDING,
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
   FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
   FrontendRunState.USER_STOPPING,
 ]);
 
-const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([BackendChannelState.SENDING]);
+const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([AGENT_CHANNEL_STATE.SENDING]);
 
 function isFinalizedAssistantMessage(messageItem = {}) {
   if (getMessageRole(messageItem) !== "assistant") return false;
@@ -207,7 +207,7 @@ function buildFailedMessageRuntimePatch({
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      state: normalizeState(stateSnapshot?.state) || BackendChannelState.ERROR,
+      state: normalizeState(stateSnapshot?.state) || AGENT_CHANNEL_STATE.ERROR,
     },
     terminalOutcome: MESSAGE_TERMINAL_OUTCOME.FAILED,
   };
@@ -222,7 +222,7 @@ function buildStoppedMessageRuntimePatch({
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      state: BackendChannelState.USER_STOPPED,
+      state: AGENT_CHANNEL_STATE.USER_STOPPED,
       sessionId: trim(channelState?.sessionId),
       dialogProcessId:
         getMessageDialogProcessId(messageItem) || trim(channelState?.dialogProcessId),
@@ -263,7 +263,7 @@ export function resolveSessionRunMessageRuntimePatch({
   if (
     stateBelongsToActiveSession &&
     terminalOwnsMessage &&
-    normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED
+    normalizeState(stateSnapshot?.backendState) === AGENT_CHANNEL_STATE.USER_STOPPED
   ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
@@ -285,7 +285,7 @@ export function resolveSessionRunMessageRuntimePatch({
   if (
     stateBelongsToActiveSession &&
     (normalizeState(stateSnapshot?.state) === FrontendRunState.USER_STOP_COMPLETED ||
-      normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED) &&
+      normalizeState(stateSnapshot?.backendState) === AGENT_CHANNEL_STATE.USER_STOPPED) &&
     (terminalOwnsMessage ||
       messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] ||
       resolveSessionRunStateForMessage({

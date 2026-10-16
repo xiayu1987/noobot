@@ -12,7 +12,7 @@ import {
   createWorkflowEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
@@ -113,7 +113,7 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-terminal-order",
       turnScopeId: "turn-terminal-order",
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 93,
     });
     await api.applyReconnectEvent(StreamEventEnum.DONE, {
@@ -302,7 +302,7 @@ describe("useReconnectReplay", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "s-1",
       turnScopeId: "client-current",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
     });
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {

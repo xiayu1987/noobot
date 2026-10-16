@@ -210,47 +210,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
             toolCallId: "call-one",
             tool: "execute_script",
             status: "completed",
-            resultEvent: {
-              eventId: "event-one",
-              transferEnvelopes: [
-                {
-                  protocol: "noobot.semantic-transfer",
-                  version: 2,
-                  transferId:
-                    "transfer:assistant-one:tool:call-one:output:tool_result_text:artifact",
-                  messageId: "assistant-one",
-                  identity: {
-                    sessionId: "s-tool-artifacts",
-                    turnScopeId: "turn-one",
-                    runId: "run-one",
-                    producer: { type: "tool", id: "call-one" },
-                  },
-                  direction: "output",
-                  payload: {
-                    mode: "attachment",
-                    attachments: [
-                      {
-                        identity: {
-                          attachmentId: "artifact-one",
-                          sessionId: "s-tool-artifacts",
-                          attachmentSource: "tool",
-                        },
-                        role: "primary",
-                        name: "stdout.txt",
-                        mimeType: "text/plain",
-                      },
-                    ],
-                  },
-                  intent: {
-                    source: "tool",
-                    reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
-                    scenario: "tool",
-                    strategy: "tool_result_text",
-                  },
-                  meta: { persisted: true },
-                },
-              ],
-            },
+            resultEvent: { eventId: "event-one" },
           },
         ],
       },
@@ -266,6 +226,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
         type: "tool_result",
         tool_call_id: "call-one",
         toolName: "execute_script",
+        ts: "2026-01-01T00:00:00.000Z",
         turnScopeId: "turn-one",
         dialogProcessId: "dialog-one",
         transferEnvelopes: [
@@ -318,6 +279,8 @@ test("session display summary binds completed tool artifacts to one explicit ass
     "artifact-one",
   );
   assert.equal("writtenFiles" in first.toolTimeline[0].resultEvent, false);
+  assert.equal(first.toolTimeline[0].tool, "execute_script");
+  assert.equal(first.toolTimeline[0].resultEvent.timestamp, "2026-01-01T00:00:00.000Z");
   assert.equal(second.toolTimeline, undefined);
   assert.equal(summary.stats.displayToolLogCount, 1);
   assert.equal(summary.stats.unassignedToolArtifactCount, 0);

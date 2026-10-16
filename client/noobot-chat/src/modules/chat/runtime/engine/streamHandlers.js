@@ -120,7 +120,7 @@ export function handleInteractionRequestStreamEvent({
   );
   clearMissingInteractionPayloadTimer({
     sessionId: normalizeTrimmedString(normalizedInteractionRequest?.sessionId),
-    dialogProcessId: normalizeTrimmedString(normalizedInteractionRequest?.dialogProcessId),
+    turnScopeId: normalizeTrimmedString(normalizedInteractionRequest?.turnScopeId),
   });
   navigateOnFirstResponseOnce?.();
   if (tryAutoResolveInteraction(normalizedInteractionRequest)) {

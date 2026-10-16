@@ -5,7 +5,8 @@
  */
 import { ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { normalizeTimePair } from "../model/timeFields.js";
+import { toIsoTime } from "../model/timeFields.js";
+import { AGENT_CHANNEL_STATE, AGENT_CHANNEL_STATE_SCOPE } from "@noobot/agent-transport-protocol";
 import {
   buildChatWebSocketUrl,
   buildLogWebSocketUrl,
@@ -186,31 +187,23 @@ export function useChatSession({
     resolveActiveSessionIdentity,
   });
 
-  function trackConversationState(stateEntry = {}) {
-    const state = text(stateEntry?.state);
-    if (!state) return;
-    const sessionId = text(stateEntry?.sessionId);
-    const turnScopeId = text(stateEntry?.turnScopeId);
-    const dialogProcessId = text(stateEntry?.dialogProcessId);
-    const stateIdentity = turnScopeId
-      ? `turnScope:${turnScopeId}`
-      : dialogProcessId
-        ? `dialogProcess:${dialogProcessId}`
-        : "";
-    const stateKey = `${sessionId || "__session__"}::${stateIdentity || "__session__"}`;
-    const { createdAtMs, updatedAtMs, createdAt, updatedAt } = normalizeTimePair(stateEntry, {
-      nowFallback: true,
-    });
-    const applied = stateEntry?.applied !== false;
+  function trackConversationState(channelState = {}) {
+    const { scope, state, sessionId, sourceEvent, seq, createdAtMs, updatedAtMs } = channelState;
+    const turnScopeId = text(channelState.turnScopeId);
+    const dialogProcessId = text(channelState.dialogProcessId);
+    const stateKey = `${sessionId}::${scope === AGENT_CHANNEL_STATE_SCOPE.TURN ? turnScopeId : scope}`;
+    const createdAt = toIsoTime(createdAtMs);
+    const updatedAt = toIsoTime(updatedAtMs);
     const normalizedEntry = {
-      source: text(stateEntry?.source),
-      sourceEvent: text(stateEntry?.sourceEvent),
+      source: text(channelState.source),
+      scope,
+      sourceEvent,
       state,
       sessionId,
       turnScopeId,
       dialogProcessId,
-      seq: Number(stateEntry?.seq || 0),
-      applied,
+      seq,
+      applied: channelState.applied,
       createdAtMs,
       updatedAtMs,
       createdAt,
@@ -222,10 +215,7 @@ export function useChatSession({
     };
     conversationStateTimeline.value = [
       ...conversationStateTimeline.value,
-      {
-        ...normalizedEntry,
-        ts: updatedAt,
-      },
+      { ...normalizedEntry, ts: updatedAt },
     ].slice(-80);
     sessionLogWebSocketClient.log({
       scope: "session",
@@ -242,30 +232,26 @@ export function useChatSession({
       sessionId,
       dialogProcessId,
       turnScopeId,
-      source: normalizedEntry.source || "conversation_state",
-      sourceEvent: normalizedEntry.sourceEvent,
-      seq: normalizedEntry.seq,
+      source: normalizedEntry.source,
+      sourceEvent,
+      seq,
       createdAtMs,
       updatedAtMs,
       createdAt,
       updatedAt,
     });
 
-    if (state.toLowerCase() === "user_stopped" && sessionId && turnScopeId) {
+    if (state === AGENT_CHANNEL_STATE.USER_STOPPED && turnScopeId) {
       const currentSessionId = resolveActiveSessionIdentity();
       const currentTurn = resolveSessionTurnRuntime(
         turnRuntimeRegistry.value,
         currentSessionId,
         resolveActiveTurnScopeIdentity(),
       );
-      const identityMatches =
-        sessionId === currentSessionId &&
-        Boolean(currentTurn) &&
-        ((turnScopeId && currentTurn.turnScopeId === turnScopeId) ||
-          (!turnScopeId && dialogProcessId && currentTurn.dialogProcessId === dialogProcessId));
       const reconciliationKey = `${sessionId}::${turnScopeId}`;
       if (
-        identityMatches &&
+        sessionId === currentSessionId &&
+        currentTurn?.turnScopeId === turnScopeId &&
         !currentTurn.terminal &&
         !pendingStoppedSummaryReconciliations.has(reconciliationKey)
       ) {
@@ -518,7 +504,6 @@ export function useChatSession({
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     submitInteractionResponse,
-    refreshSessionsAsync: chatList.fetchSessions,
     onConversationState: trackConversationState,
     chatWebSocketClient,
     sessionLogWebSocketClient,

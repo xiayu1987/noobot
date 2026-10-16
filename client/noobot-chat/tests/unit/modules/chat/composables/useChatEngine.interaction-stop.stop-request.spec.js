@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, activateRuntimeTurn } from "../helpers/useChatEngineHarness.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -167,7 +167,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         role: RoleEnum.ASSISTANT,
         content: "partial after refresh",
         channelState: {
-          state: BackendChannelState.SENDING,
+          state: AGENT_CHANNEL_STATE.SENDING,
           dialogProcessId: "dp-channel-identity",
           turnScopeId: "turn-channel-identity",
         },

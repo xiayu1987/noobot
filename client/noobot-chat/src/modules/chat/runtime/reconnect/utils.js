@@ -5,7 +5,6 @@
  */
 import { RoleEnum } from "../../model/chatConstants.js";
 import { getMessageDialogProcessId, getMessageRole } from "../../model/messageIdentity.js";
-import { nowIso } from "../../model/timeFields.js";
 import { text } from "@noobot/shared/value";
 
 export function _trimStr(x) {
@@ -22,21 +21,4 @@ export function _isAssistantRole(msg) {
 
 export function _matchesDialogProcessId(msg, dpId) {
   return getMessageDialogProcessId(msg) === _trimStr(dpId);
-}
-
-export function normalizeExecutionLogForRealtime(logItem = {}) {
-  const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
-  const rawEvent = _trimStr(logItem?.event);
-  const textValue = _trimStr(data?.text || logItem?.text);
-  return {
-    ...data,
-    event:
-      String(data?.event || rawEvent || logItem?.status || "execution_step").trim() ||
-      "execution_step",
-    type: String(data?.type || logItem?.type || "execution").trim() || "execution",
-    category: String(data?.category || logItem?.category || "execution").trim() || "execution",
-    dialogProcessId: text(data?.dialogProcessId || logItem?.dialogProcessId),
-    ts: _trimStr(data?.ts || logItem?.ts) || nowIso(),
-    text: textValue,
-  };
 }

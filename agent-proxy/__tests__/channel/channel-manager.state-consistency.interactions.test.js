@@ -217,7 +217,7 @@ test("failed interaction lifecycle closes the pending request across proxy and r
   );
   assert.ok(terminal);
   assert.equal(channel.pendingInteractionRequests.has("req-timeout"), false);
-  assert.equal(channel.conversationStateByDialogProcessId.get("dp-timeout")?.state, "sending");
+  assert.equal(channel.conversationStateByScope.get("turn-timeout")?.state, "sending");
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(client, { currentSessionId: "session-timeout" });
@@ -411,7 +411,7 @@ test("workflow child terminal state does not own root channel retention", () => 
 
   assert.equal(channel.activity.phase, "running");
   assert.equal(channel.retention.phase, "active");
-  assert.equal(channel.conversationStateByDialogProcessId.get("child-dialog")?.state, "completed");
+  assert.equal(channel.conversationStateByScope.get("child-turn")?.state, "completed");
 });
 
 test("authoritative terminal lifecycle closes pending interactions for the same turn", () => {
@@ -485,7 +485,7 @@ test("invalid interaction_request has no journal, route, pending, or state side 
   assert.equal(channel.eventJournal.events.length, 0);
   assert.equal(channel.pendingInteractionRequests.has("req-invalid"), false);
   assert.equal(manager.requestChannelMap.has("req-invalid"), false);
-  assert.equal(channel.conversationStateByDialogProcessId.has("dp-invalid"), false);
+  assert.equal(channel.conversationStateByScope.has("turn-invalid"), false);
 });
 
 test("only an authoritative lifecycle envelope projects conversation state", () => {
@@ -514,7 +514,7 @@ test("only an authoritative lifecycle envelope projects conversation state", () 
       phase: "processing",
     }),
   );
-  assert.equal(channel.conversationStateByDialogProcessId.get("dp-authority")?.state, "sending");
+  assert.equal(channel.conversationStateByScope.get("turn-authority")?.state, "sending");
 });
 
 test("interaction_response should resolve channel by pending requestId", () => {

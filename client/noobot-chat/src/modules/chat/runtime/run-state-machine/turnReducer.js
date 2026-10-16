@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
+import { AGENT_CHANNEL_STATE, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
 import {
   AUTHORITATIVE_EVENT_TYPES,
   normalizeSessionRunEvent,
@@ -62,9 +62,9 @@ const LOCAL_FAILURE_EVENTS = new Set([
   SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
 ]);
 const TRANSPORT_FAILURE_STATES = new Set([
-  BackendChannelState.ERROR,
-  BackendChannelState.EXPIRED,
-  BackendChannelState.NO_CONVERSATION,
+  AGENT_CHANNEL_STATE.ERROR,
+  AGENT_CHANNEL_STATE.EXPIRED,
+  AGENT_CHANNEL_STATE.NO_CONVERSATION,
 ]);
 
 function lowerToken(value) {
@@ -169,7 +169,7 @@ function projectInteraction(current, event, kind) {
     pendingCommandType: resolvePendingCommandType(current, kind, commandPending),
     transportState,
     transportSeq: resolveTransportSequence(current, kind, incomingSeq),
-    reconnecting: transportState === BackendChannelState.RECONNECTING,
+    reconnecting: transportState === AGENT_CHANNEL_STATE.RECONNECTING,
     lastTransportError:
       kind.transport && TRANSPORT_FAILURE_STATES.has(transportState)
         ? transportState
@@ -217,7 +217,7 @@ function allowsUserStopping(currentState, current, event) {
   }
   return (
     currentState === FrontendRunState.PROCESSING &&
-    new Set([BackendChannelState.STOPPING, BackendChannelState.USER_STOPPED]).has(
+    new Set([AGENT_CHANNEL_STATE.STOPPING, AGENT_CHANNEL_STATE.USER_STOPPED]).has(
       lowerToken(event.backendState || event.raw?.state),
     )
   );

@@ -3,15 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
   SESSION_RUN_EVENT,
-  clearRememberedStopRequests,
-  rememberStopRequestedEvent,
   resolveEventScope,
-  resolveRememberedStopRequestedEvent,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   reduceTurnRuntimeEvent,
@@ -24,7 +21,7 @@ const processingStarted = {
   eventType: TURN_EVENT.PROCESSING_STARTED,
   phase: TURN_PHASE.PROCESSING,
   state: TURN_STATE.PROCESSING,
-  executionState: BackendChannelState.SENDING,
+  executionState: AGENT_CHANNEL_STATE.SENDING,
   capabilities: { actionLocked: true, canStop: true },
 };
 const actionAccepted = {
@@ -62,19 +59,6 @@ const terminalResolved = (state) => ({
   ...completionCommit,
 });
 
-function installStorage() {
-  const map = new Map();
-  Object.defineProperty(globalThis, "localStorage", {
-    configurable: true,
-    value: {
-      getItem: (key) => (map.has(key) ? map.get(key) : null),
-      setItem: (key, value) => map.set(key, String(value)),
-      removeItem: (key) => map.delete(key),
-      clear: () => map.clear(),
-    },
-  });
-}
-
 const identity = { sessionId: "s1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" };
 function apply(current, event) {
   const result = reduceTurnRuntimeEvent(current, { ...identity, ...event });
@@ -83,11 +67,6 @@ function apply(current, event) {
 }
 
 describe("sessionRunStateMachine scope separation", () => {
-  beforeEach(() => {
-    installStorage();
-    clearRememberedStopRequests();
-  });
-
   it.each([
     SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
@@ -103,7 +82,7 @@ describe("sessionRunStateMachine scope separation", () => {
     const started = apply(localRequest, actionAccepted);
     const transport = apply(started, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
     });
     expect(transport).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
     expect(apply(transport, processingStarted)).toMatchObject({
@@ -113,7 +92,7 @@ describe("sessionRunStateMachine scope separation", () => {
     const transportOnly = reduceTurnRuntimeEvent(started, {
       ...identity,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.INTERACTION_PENDING,
+      state: AGENT_CHANNEL_STATE.INTERACTION_PENDING,
     });
     expect(transportOnly).toMatchObject({ applied: true });
     expect(started).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
@@ -218,28 +197,6 @@ describe("sessionRunStateMachine scope separation", () => {
     stopping = apply(stopping, stopProcessingCompleted);
     stopping = apply(stopping, terminalResolved(TURN_STATE.STOP_COMPLETED));
     expect(stopping).toMatchObject({ ...identity, state: FrontendRunState.USER_STOP_COMPLETED });
-  });
-
-  it("keeps remembered stop requests scoped to the exact Turn", () => {
-    rememberStopRequestedEvent({
-      sessionId: "s1",
-      dialogProcessId: "dialog-old",
-      turnScopeId: "turn-old",
-    });
-    expect(
-      resolveRememberedStopRequestedEvent({
-        sessionId: "s1",
-        dialogProcessId: "dialog-old",
-        turnScopeId: "turn-new",
-      }),
-    ).toBeNull();
-    expect(
-      resolveRememberedStopRequestedEvent({
-        sessionId: "s1",
-        dialogProcessId: "dialog-old",
-        turnScopeId: "turn-old",
-      }),
-    ).toMatchObject({ turnScopeId: "turn-old" });
   });
 
   it("resolves event scope from turnScopeId only", () => {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 export {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
   isAuthoritativeTerminalState,
   isLegacyTerminalDiscoveryState,
@@ -66,8 +66,3 @@ export {
   resolveTurnRuntimeView,
   resolveSessionRunStateForMessage,
 } from "./run-state-machine/messageRuntime.js";
-export {
-  clearRememberedStopRequests,
-  rememberStopRequestedEvent,
-  resolveRememberedStopRequestedEvent,
-} from "./run-state-machine/stopRequests.js";

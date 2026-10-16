@@ -5,7 +5,16 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
-import { createTurnLifecycleEnvelope, createTurnReplacementCommit } from "@noobot/session-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  createTurnReplacementCommit,
+  TURN_EVENT,
+} from "@noobot/session-protocol";
+import {
+  AGENT_CHANNEL_STATE,
+  AGENT_CHANNEL_STATE_SCOPE,
+  createAgentChannelState,
+} from "@noobot/agent-transport-protocol";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -296,11 +305,11 @@ export const createHarness = ({
     interactionSubmitting,
     clearPendingInteraction: vi.fn(() => {
       pendingInteractionRequest.value = null;
+      interactionSubmitting.value = false;
     }),
     clearPendingInteractionIfObsolete: vi.fn(),
     setPendingInteractionRequest: vi.fn(),
     submitInteractionResponse: vi.fn(),
-    refreshSessionsAsync: vi.fn(),
     chatWebSocketClient: {
       stream: stream
         ? vi.fn(async (payload, onEvent) => {
@@ -436,15 +445,25 @@ export const assistantMessage = (activeSession) =>
   activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT);
 
 export const emitChannelState = (onEvent, sessionId, dialogProcessId, state, data = {}) => {
-  const normalizedDialogProcessId = text(dialogProcessId);
-  const turnScopePatch =
-    data?.turnScopeId !== undefined || !normalizedDialogProcessId
+  const timestampMs = Date.now();
+  const sessionScoped = state === AGENT_CHANNEL_STATE.NO_CONVERSATION;
+  const channelState = createAgentChannelState({
+    scope: sessionScoped ? AGENT_CHANNEL_STATE_SCOPE.SESSION : AGENT_CHANNEL_STATE_SCOPE.TURN,
+    sessionId,
+    state,
+    sourceEvent: data.sourceEvent ?? (sessionScoped ? "init" : TURN_EVENT.PROCESSING_STARTED),
+    seq: data.seq ?? 1,
+    createdAtMs: timestampMs,
+    updatedAtMs: timestampMs,
+    ...(sessionScoped
       ? {}
-      : { turnScopeId: currentStreamTurnScopeId };
-  onEvent({
-    event: StreamEventEnum.CHANNEL_STATE,
-    data: { sessionId, dialogProcessId, state, ...turnScopePatch, ...data },
+      : {
+          turnScopeId: data.turnScopeId ?? currentStreamTurnScopeId,
+          dialogProcessId,
+          requestId: data.requestId,
+        }),
   });
+  onEvent({ event: StreamEventEnum.CHANNEL_STATE, data: channelState });
 };
 
 function authorityEventInput(source = {}) {

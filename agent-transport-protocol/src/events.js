@@ -22,10 +22,114 @@ export const AGENT_TRANSPORT_ERROR_CODE = Object.freeze({
 const EXACT_PAYLOAD_EVENTS = new Set([
   AGENT_TRANSPORT_EVENT.ERROR,
   AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+  AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
 ]);
 
 export function usesExactAgentTransportPayload(eventName) {
   return EXACT_PAYLOAD_EVENTS.has(text(eventName));
+}
+
+export const AGENT_CHANNEL_STATE = Object.freeze({
+  NO_CONVERSATION: "no_conversation",
+  SENDING: "sending",
+  INTERACTION_PENDING: "interaction_pending",
+  STOPPING: "stopping",
+  RECONNECTING: "reconnecting",
+  COMPLETED: "completed",
+  USER_STOPPED: "user_stopped",
+  ERROR: "error",
+  EXPIRED: "expired",
+});
+
+export const AGENT_CHANNEL_STATE_SCOPE = Object.freeze({
+  SESSION: "session",
+  TURN: "turn",
+});
+
+const CHANNEL_STATES = new Set(Object.values(AGENT_CHANNEL_STATE));
+const CHANNEL_STATE_SCOPES = new Set(Object.values(AGENT_CHANNEL_STATE_SCOPE));
+const CHANNEL_STATE_FIELDS = new Set([
+  "protocolVersion",
+  "scope",
+  "sessionId",
+  "turnScopeId",
+  "dialogProcessId",
+  "state",
+  "sourceEvent",
+  "seq",
+  "createdAtMs",
+  "updatedAtMs",
+  "requestId",
+]);
+const TURN_ONLY_CHANNEL_STATE_FIELDS = ["turnScopeId", "dialogProcessId", "requestId"];
+
+export function createAgentChannelState({
+  scope = "",
+  sessionId = "",
+  turnScopeId = "",
+  dialogProcessId = "",
+  state = "",
+  sourceEvent = "",
+  seq = 0,
+  createdAtMs = 0,
+  updatedAtMs = 0,
+  requestId = "",
+} = {}) {
+  const channelState = {
+    protocolVersion: 1,
+    scope: text(scope),
+    sessionId: text(sessionId),
+    state: text(state),
+    sourceEvent: text(sourceEvent),
+    seq: Number(seq),
+    createdAtMs: Number(createdAtMs),
+    updatedAtMs: Number(updatedAtMs),
+    ...(text(turnScopeId) ? { turnScopeId: text(turnScopeId) } : {}),
+    ...(text(dialogProcessId) ? { dialogProcessId: text(dialogProcessId) } : {}),
+    ...(text(requestId) ? { requestId: text(requestId) } : {}),
+  };
+  const validation = validateAgentChannelState(channelState);
+  if (!validation.valid) throw new TypeError(validation.errors.join(","));
+  return Object.freeze(channelState);
+}
+
+function collectChannelStateScopeErrors(channelState, errors) {
+  const scope = channelState.scope;
+  if (!CHANNEL_STATE_SCOPES.has(scope)) {
+    errors.push("invalid_channel_state_scope");
+    return;
+  }
+  if (scope === AGENT_CHANNEL_STATE_SCOPE.TURN) {
+    if (!text(channelState.turnScopeId)) errors.push("missing_channel_state_turn_scope_id");
+    return;
+  }
+  for (const key of TURN_ONLY_CHANNEL_STATE_FIELDS) {
+    if (channelState[key] !== undefined) errors.push(`session_channel_state_has_${key}`);
+  }
+}
+
+export function validateAgentChannelState(channelState = {}) {
+  const errors = [];
+  if (!channelState || typeof channelState !== "object" || Array.isArray(channelState)) {
+    return { valid: false, errors: ["channel_state_not_object"] };
+  }
+  for (const key of Object.keys(channelState)) {
+    if (!CHANNEL_STATE_FIELDS.has(key)) errors.push(`unknown_channel_state_field:${key}`);
+  }
+  if (Number(channelState.protocolVersion) !== 1) errors.push("unsupported_channel_state_version");
+  if (!text(channelState.sessionId)) errors.push("missing_channel_state_session_id");
+  if (!CHANNEL_STATES.has(channelState.state)) errors.push("invalid_channel_state");
+  if (!text(channelState.sourceEvent)) errors.push("missing_channel_state_source_event");
+  if (!Number.isInteger(channelState.seq) || channelState.seq < 0) {
+    errors.push("invalid_channel_state_seq");
+  }
+  for (const key of ["createdAtMs", "updatedAtMs"]) {
+    if (!Number.isFinite(channelState[key]) || channelState[key] <= 0) {
+      errors.push(`invalid_channel_state_${key}`);
+    }
+  }
+  collectChannelStateScopeErrors(channelState, errors);
+  return { valid: errors.length === 0, errors };
 }
 
 export const AGENT_COMMAND_RECEIPT_OUTCOME = Object.freeze({

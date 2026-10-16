@@ -44,7 +44,6 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
     appendMessage,
     upsertCanonicalAssistantMessage,
     appended,
-    applyConversationState: vi.fn(),
     translate: vi.fn((key) => key),
     scrollBottom: vi.fn(),
     isImageMime: vi.fn(() => false),

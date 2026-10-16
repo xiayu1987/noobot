@@ -224,8 +224,12 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
   });
   manager.updateConversationState(channel, {
     sessionId,
+    scope: "turn",
+    turnScopeId: "turn-reconnect-state-baseline",
     dialogProcessId: "dp-reconnect-state-baseline",
-    state: "processing",
+    state: "sending",
+    sourceEvent: "turn.processing",
+    seq: 3,
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   const reconnectPromise = manager.handleReconnect(client, {
@@ -235,8 +239,12 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
 
   manager.updateConversationState(channel, {
     sessionId,
+    scope: "turn",
+    turnScopeId: "turn-reconnect-state-baseline",
     dialogProcessId: "dp-reconnect-state-baseline",
     state: "completed",
+    sourceEvent: "turn.completed",
+    seq: 4,
   });
 
   const pendingRequest = channel.pendingSnapshotRequests.get(forwarded[0]?.commandId);

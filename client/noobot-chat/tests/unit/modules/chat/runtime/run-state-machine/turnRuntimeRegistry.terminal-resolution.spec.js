@@ -15,7 +15,7 @@ import {
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   SESSION_RUN_EVENT,
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   COMPOSER_PRIMARY_ACTION,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { resolveComposerPrimaryAction } from "../../../../../../src/modules/chat/runtime/run-state-machine/composerAction.js";
@@ -35,7 +35,7 @@ it("does not compare reconnect transport sequence with terminal lifecycle sequen
       sessionId: "s-refresh",
       turnScopeId: "t-refresh",
       dialogProcessId: "dp-refresh",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 163,
     }).applied,
   ).toBe(true);
@@ -168,7 +168,7 @@ it("keeps stopping after real-time user_stopped until the authoritative summary 
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
   applyTurnRuntimeEvent(registry, {
@@ -203,7 +203,7 @@ it("keeps stopping after real-time user_stopped until the authoritative summary 
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.USER_STOPPED,
+    state: AGENT_CHANNEL_STATE.USER_STOPPED,
     seq: 4,
   });
 
@@ -249,7 +249,7 @@ it("rejects stale or conflicting real-time user_stopped events", () => {
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 6,
   });
 
@@ -258,7 +258,7 @@ it("rejects stale or conflicting real-time user_stopped events", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.USER_STOPPED,
+      state: AGENT_CHANNEL_STATE.USER_STOPPED,
       seq: 4,
     }).applied,
   ).toBe(false);
@@ -267,7 +267,7 @@ it("rejects stale or conflicting real-time user_stopped events", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "other-dialog",
-      state: BackendChannelState.USER_STOPPED,
+      state: AGENT_CHANNEL_STATE.USER_STOPPED,
       seq: 7,
     }).applied,
   ).toBe(false);
@@ -339,7 +339,7 @@ it.each([
         sessionId: "s1",
         turnScopeId: "t1",
         dialogProcessId: "dp1",
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         seq: 3,
       });
       applyTurnRuntimeEvent(registry, {
@@ -428,14 +428,14 @@ it("does not let an early detail acknowledgement settle a Turn", () => {
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
   backendState(registry, {
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.COMPLETED,
+    state: AGENT_CHANNEL_STATE.COMPLETED,
     seq: 3,
   });
 
@@ -483,14 +483,14 @@ it("uses the preallocated Session identity without deferred detail authority", (
     sessionId: "backend-session",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
   backendState(registry, {
     sessionId: "backend-session",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.COMPLETED,
+    state: AGENT_CHANNEL_STATE.COMPLETED,
     seq: 3,
   });
 
@@ -557,14 +557,14 @@ it("uses Session + Turn scope as terminal authority despite a changed dialog rou
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "new-dp",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
   backendState(registry, {
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "new-dp",
-    state: BackendChannelState.COMPLETED,
+    state: AGENT_CHANNEL_STATE.COMPLETED,
     seq: 3,
   });
 
@@ -582,14 +582,14 @@ it("completes a normal request when final detail carries a different dialog rout
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "runtime-dp",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
   backendState(registry, {
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "runtime-dp",
-    state: BackendChannelState.COMPLETED,
+    state: AGENT_CHANNEL_STATE.COMPLETED,
     seq: 3,
   });
 
@@ -652,14 +652,14 @@ it("discards repeated legacy detail acknowledgements and never completes another
     sessionId: "s1",
     turnScopeId: "new",
     dialogProcessId: "new-dp",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
   backendState(registry, {
     sessionId: "s1",
     turnScopeId: "new",
     dialogProcessId: "new-dp",
-    state: BackendChannelState.COMPLETED,
+    state: AGENT_CHANNEL_STATE.COMPLETED,
     seq: 3,
   });
 

@@ -129,10 +129,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
               toolCallId: "call-1",
               status: "completed",
               call: { eventId: "tool-call-1" },
-              resultEvent: {
-                eventId: "tool-result-1",
-                transferEnvelopes: [],
-              },
+              resultEvent: { eventId: "tool-result-1" },
             },
           ],
           tool_calls: [

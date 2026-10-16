@@ -17,7 +17,7 @@ import {
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   SESSION_RUN_EVENT,
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { backendState, sendStart, settleTerminal } from "./turnRuntimeRegistryTestFixtures.js";
 
@@ -57,7 +57,7 @@ it("tombstones a confirmed deletion and rejects late replay for the same Session
     sessionId: "s1",
     turnScopeId: "deleted-turn",
     dialogProcessId: "dp-deleted",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
 
@@ -88,7 +88,7 @@ it("prunes old or excess terminal turns per session while protecting continuable
       sessionId,
       turnScopeId,
       dialogProcessId,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: sequence - 2,
       timestamp,
     });
@@ -97,7 +97,7 @@ it("prunes old or excess terminal turns per session while protecting continuable
       sessionId,
       turnScopeId,
       dialogProcessId,
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: sequence - 1,
       timestamp,
     });
@@ -130,7 +130,7 @@ it("removes a session bucket and only its route index entries", () => {
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
   sendStart(registry, { sessionId: "s2", turnScopeId: "t2" });
@@ -138,7 +138,7 @@ it("removes a session bucket and only its route index entries", () => {
     sessionId: "s2",
     turnScopeId: "t2",
     dialogProcessId: "dp2",
-    state: BackendChannelState.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     seq: 2,
   });
 

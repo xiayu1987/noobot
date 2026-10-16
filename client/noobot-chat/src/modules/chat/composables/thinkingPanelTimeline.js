@@ -11,7 +11,7 @@ import {
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
 } from "../model/messageIdentity.js";
-import { sanitizeExecutionLogForDisplay } from "../runtime/engine/utils.js";
+import { projectExecutionLogDisplay } from "../runtime/engine/utils.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugLogger.js";
 import { logStateMachineDebug } from "../../debug/loggers/stateMachineLogger.js";
@@ -151,7 +151,7 @@ export function useThinkingTimeline(
       event: String(logItem?.event || ""),
       type: String(logItem?.type || ""),
       category: String(logItem?.category || ""),
-      sequence: logItem?.sequence ?? logItem?.seq ?? null,
+      sequence: logItem?.sequence ?? null,
       textLength: inputText.length,
       textPreview: inputText.slice(0, 240),
     };
@@ -172,9 +172,7 @@ export function useThinkingTimeline(
   }
 
   function projectExecutionTimeline(toolLogs = []) {
-    const allLogs = toolLogs
-      .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
-      .filter(Boolean);
+    const allLogs = toolLogs.map(projectExecutionLogDisplay);
     return {
       toolLogs,
       allLogs,

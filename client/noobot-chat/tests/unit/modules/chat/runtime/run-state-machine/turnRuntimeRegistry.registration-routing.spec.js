@@ -20,7 +20,7 @@ import {
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   SESSION_RUN_EVENT,
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   COMPOSER_PRIMARY_ACTION,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { resolveComposerPrimaryAction } from "../../../../../../src/modules/chat/runtime/run-state-machine/composerAction.js";
@@ -85,7 +85,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
@@ -117,7 +117,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       commandPending: false,
     });
   });
-  it.each([BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING])(
+  it.each([AGENT_CHANNEL_STATE.RECONNECTING, AGENT_CHANNEL_STATE.INTERACTION_PENDING])(
     "keeps %s action-locked but rejects stop without mutating the turn",
     (state) => {
       const registry = createTurnRuntimeRegistryState();
@@ -155,14 +155,14 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     const result = applyTurnRuntimeEvent(registry, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "s1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 3,
     });
     expect(result.turn).toMatchObject({
@@ -179,7 +179,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       backendState(registry, {
         sessionId: "s1",
         turnScopeId: "t1",
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         seq: 2,
       }).applied,
     ).toBe(true);
@@ -187,14 +187,14 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 6,
     });
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 7,
     });
     settleTerminal(registry, {
@@ -209,7 +209,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
         sessionId: "s1",
         turnScopeId: "t1",
         dialogProcessId: "dp2",
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         seq: 7,
       }).applied,
     ).toBe(false);
@@ -258,7 +258,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "s1",
       turnScopeId: "old",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 99,
     });
     expect(late.applied).toBe(false);
@@ -290,7 +290,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp-other",
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 3,
     });
     expect(dialogMismatch).toMatchObject({
@@ -305,7 +305,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 0,
     });
     applyTurnRuntimeEvent(registry, {
@@ -317,7 +317,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     const lateSending = backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 0,
     });
 
@@ -333,20 +333,20 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     sendStart(registry, { sessionId: "s2", turnScopeId: "t2" });
     backendState(registry, {
       sessionId: "s2",
       turnScopeId: "t2",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     backendState(registry, {
       sessionId: "s2",
       turnScopeId: "t2",
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 3,
     });
     expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("requesting");
@@ -359,7 +359,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s1",
       turnScopeId: "workflow-node:turn-1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
 
@@ -382,14 +382,14 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s1",
       turnScopeId: "workflow-node_shared",
       dialogProcessId: "dp1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     backendState(registry, {
       sessionId: "s2",
       turnScopeId: "workflow-node:shared",
       dialogProcessId: "dp2",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     lifecycle(registry, {
@@ -450,7 +450,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
 
@@ -471,7 +471,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 3,
     });
     expect(selectSessionTurnRuntime(registry, "s2")).toMatchObject({
@@ -486,7 +486,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
 
@@ -497,7 +497,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       turnScopeId: "t1",
       dialogProcessId: "dp1",
       state: "",
-      backendState: BackendChannelState.SENDING,
+      backendState: AGENT_CHANNEL_STATE.SENDING,
     });
     expect(
       selectTurnMessageRuntime(registry, { sessionId: "s1", dialogProcessId: "dp1" }),
@@ -522,7 +522,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
     applyTurnRuntimeEvent(registry, {
@@ -534,7 +534,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
-      state: BackendChannelState.USER_STOPPED,
+      state: AGENT_CHANNEL_STATE.USER_STOPPED,
       seq: 4,
     });
     settleTerminal(registry, {

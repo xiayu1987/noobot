@@ -6,8 +6,6 @@
 import { RoleEnum } from "../../model/chatConstants.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
-import { BackendChannelState } from "../sessionRunStateMachine.js";
-import { nowMs, toIsoTime } from "../../model/timeFields.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import { text } from "@noobot/shared/value";
 
@@ -71,7 +69,6 @@ export function prepareChatSend({
   appendMessage,
   upsertCanonicalAssistantMessage,
   activeSession,
-  applyConversationState,
   translate,
   navigateToLastMessage,
   messageText = "",
@@ -81,7 +78,6 @@ export function prepareChatSend({
   reuseExistingUserTurn = false,
   attachmentFiles = null,
   userAttachments = null,
-  turnStartedAtMs = 0,
 }) {
   const normalizedTurnScopeId = text(turnScopeId);
   const explicitText = typeof messageText === "string" ? messageText.trim() : "";
@@ -124,18 +120,6 @@ export function prepareChatSend({
     sessionId,
     turnScopeId: normalizedTurnScopeId,
   });
-  const resolvedTurnStartedAtMs = Number(turnStartedAtMs) > 0 ? Number(turnStartedAtMs) : nowMs();
-  const thinkingStartedAt = toIsoTime(resolvedTurnStartedAtMs);
-  applyConversationState(
-    {
-      state: BackendChannelState.SENDING,
-      sessionId,
-      turnScopeId: botMessage.turnScopeId,
-      createdAtMs: resolvedTurnStartedAtMs,
-      createdAt: thinkingStartedAt,
-    },
-    { botMessage },
-  );
 
   let navigatedOnFirstResponse = false;
   const navigateOnFirstResponseOnce = () => {

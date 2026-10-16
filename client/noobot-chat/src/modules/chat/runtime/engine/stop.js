@@ -5,9 +5,12 @@
  */
 import { RoleEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
-import { SESSION_RUN_EVENT, rememberStopRequestedEvent } from "../sessionRunStateMachine.js";
 import {
-  getMessageDialogProcessId,
+  FrontendRunState,
+  SESSION_RUN_EVENT,
+  normalizeSessionRunEvent,
+} from "../sessionRunStateMachine.js";
+import {
   getMessageParentDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
@@ -132,17 +135,11 @@ export function stopSending({
     return false;
   }
   const expectedTurnScopeId = normalizeTrimmedString(turnRuntime.turnScopeId);
-  const expectedDialogProcessId = normalizeTrimmedString(turnRuntime.dialogProcessId);
-  const pendingAssistantMessage = (session?.messages || []).find((messageItem) => {
-    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-    const messageTurnScopeId = getMessageTurnScopeId(messageItem);
-    if (expectedTurnScopeId && messageTurnScopeId === expectedTurnScopeId) return true;
-    return (
-      !expectedTurnScopeId &&
-      expectedDialogProcessId &&
-      getMessageDialogProcessId(messageItem) === expectedDialogProcessId
-    );
-  });
+  const pendingAssistantMessage = (session?.messages || []).find(
+    (messageItem) =>
+      getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+      getMessageTurnScopeId(messageItem) === expectedTurnScopeId,
+  );
   logResendDebug("stop.request", () => ({
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
     turnRuntime,
@@ -167,7 +164,9 @@ export function stopSending({
     stopPayload,
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   }));
-  const stopEvent = rememberStopRequestedEvent({
+  const stopEvent = normalizeSessionRunEvent({
+    type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOPPING,
     sessionId: stopPayload.identity.sessionId,
     dialogProcessId: stopPayload.identity.dialogProcessId,
     turnScopeId: stopPayload.identity.turnScopeId,

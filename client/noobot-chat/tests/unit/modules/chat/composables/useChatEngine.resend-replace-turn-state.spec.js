@@ -10,7 +10,7 @@ import {
   makeTurnReplacementResponse,
 } from "../helpers/useChatEngineHarness.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -92,7 +92,7 @@ describe("useChatEngine.resend replacement turn state", () => {
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
-    expect(activeTurnRuntime.value.backendState).toBe(BackendChannelState.SENDING);
+    expect(activeTurnRuntime.value.backendState).toBe(AGENT_CHANNEL_STATE.SENDING);
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
   });
 });

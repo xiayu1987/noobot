@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BackendChannelState, FrontendRunState, STATUS_STEP_STAGE } from "./constants.js";
+import { AGENT_CHANNEL_STATE, FrontendRunState, STATUS_STEP_STAGE } from "./constants.js";
 import { isStageStatusStepState, resolvePendingCommandStatusStep } from "./statusStep.js";
 import {
   canonicalSessionId,
@@ -27,9 +27,9 @@ export function turnRuntimeDisplayState(turn = null) {
   if (
     [
       FrontendRunState.PROCESSING,
-      BackendChannelState.SENDING,
-      BackendChannelState.RECONNECTING,
-      BackendChannelState.INTERACTION_PENDING,
+      AGENT_CHANNEL_STATE.SENDING,
+      AGENT_CHANNEL_STATE.RECONNECTING,
+      AGENT_CHANNEL_STATE.INTERACTION_PENDING,
     ].includes(state)
   ) {
     return STATUS_STEP_STAGE.SENDING;
@@ -137,7 +137,7 @@ export function selectTurnMessageRuntime(
   }
   if (normalizedSessionId && turn.sessionId !== normalizedSessionId) return null;
   const state =
-    turn.state === BackendChannelState.SENDING ? FrontendRunState.PROCESSING : turn.state || "";
+    turn.state === AGENT_CHANNEL_STATE.SENDING ? FrontendRunState.PROCESSING : turn.state || "";
   return {
     state,
     backendState: turn.backendState || "",
@@ -161,9 +161,9 @@ export function selectTurnMessageRuntime(
           FrontendRunState.PROCESSING,
           FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
           FrontendRunState.USER_STOPPING,
-          BackendChannelState.SENDING,
-          BackendChannelState.RECONNECTING,
-          BackendChannelState.INTERACTION_PENDING,
+          AGENT_CHANNEL_STATE.SENDING,
+          AGENT_CHANNEL_STATE.RECONNECTING,
+          AGENT_CHANNEL_STATE.INTERACTION_PENDING,
         ].includes(turn.state)),
     startedAt: turn.startedAt || "",
     finishedAt: turn.finishedAt || "",

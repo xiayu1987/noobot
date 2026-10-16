@@ -21,18 +21,6 @@ export const CHANNEL_RETENTION_PHASE = Object.freeze({
   EXPIRED: "expired",
 });
 
-export const CONVERSATION_STATE = {
-  NO_CONVERSATION: "no_conversation",
-  SENDING: "sending",
-  INTERACTION_PENDING: "interaction_pending",
-  COMPLETED: "completed",
-  USER_STOPPED: "user_stopped",
-  ERROR: "error",
-  STOPPING: "stopping",
-  RECONNECTING: "reconnecting",
-  EXPIRED: "expired",
-};
-
 export const CLIENT_ROLE = {
   USER: "user",
   SUPER_ADMIN: "super_admin",
@@ -58,7 +46,7 @@ export const CONVERSATION_SOURCE_EVENT = {
   INTERACTION_RESPONSE: WS_ACTION.INTERACTION_RESPONSE,
 };
 
-export const CONVERSATION_SCOPE_KEY = "__session__";
+export const SESSION_CHANNEL_STATE_KEY = "__session__";
 
 export const TRANSPORT_TRACE_PROTOCOL_KIND = Object.freeze({
   MESSAGE_EVENT: "message_event",

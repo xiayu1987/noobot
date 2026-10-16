@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function createAuthorityResolutionTracker({
-  applyRunStateEvent,
-  applyTurnLifecycleEnvelope,
-}) {
+export function createAuthorityResolutionTracker({ applyTurnLifecycleEnvelope }) {
   const pending = [];
 
   const track = (result) => {
@@ -23,7 +20,6 @@ export function createAuthorityResolutionTracker({
   };
 
   return {
-    applyTrackedRunStateEvent: (event) => track(applyRunStateEvent?.(event)),
     applyTrackedTurnLifecycleEnvelope: (envelope) => track(applyTurnLifecycleEnvelope?.(envelope)),
     async drain() {
       while (pending.length > 0) {

@@ -109,7 +109,7 @@ function logResolved(ctx, { botMessage }) {
   }));
 }
 
-function logError(ctx, { error, hasStreamErrorEventData }) {
+function logError(ctx, { error }) {
   logResendDebug("send.catch.error", () => ({
     turnScopeId: ctx.turnScopeId,
     error: errorText(error),
@@ -124,7 +124,6 @@ function logError(ctx, { error, hasStreamErrorEventData }) {
     message: errorText(error),
     data: {
       error: errorText(error),
-      hasStreamErrorEventData: Boolean(hasStreamErrorEventData),
     },
   });
 }

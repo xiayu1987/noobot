@@ -175,7 +175,7 @@ test("invalid authoritative lifecycle has no journal or state projection side ef
   const journalSequenceBefore = Number(channel.eventJournal?.sequence || 0);
   const metricsBefore = { ...manager.successfulDataPlaneMetrics };
   const lifecycleWindowsBefore = channel.lifecycleWindowsBySessionId.size;
-  const conversationStatesBefore = channel.conversationStateByDialogProcessId.size;
+  const conversationStatesBefore = channel.conversationStateByScope.size;
 
   const result = manager.pushChannelEvent(channel, "turn_lifecycle", {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
@@ -198,7 +198,7 @@ test("invalid authoritative lifecycle has no journal or state projection side ef
   assert.equal(result, null);
   assert.equal(Number(channel.eventJournal?.sequence || 0), journalSequenceBefore);
   assert.equal(channel.lifecycleWindowsBySessionId.size, lifecycleWindowsBefore);
-  assert.equal(channel.conversationStateByDialogProcessId.size, conversationStatesBefore);
+  assert.equal(channel.conversationStateByScope.size, conversationStatesBefore);
   assert.deepEqual(manager.successfulDataPlaneMetrics, metricsBefore);
 });
 
@@ -462,7 +462,9 @@ test("stop action should broadcast stopping state before terminal", () => {
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   manager.updateConversationState(channel, {
+    scope: "turn",
     sessionId: "session-1",
+    turnScopeId: "turn-1",
     dialogProcessId: "dp-1",
     state: "stopping",
     sourceEvent: "stop",
@@ -793,10 +795,7 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
     [JSON.parse(JSON.stringify(terminal))],
   );
   assert.equal(listEvents(client, "channel_state").length, 0);
-  assert.equal(
-    channel.conversationStateByDialogProcessId.get("dialog-lifecycle-live")?.state,
-    "completed",
-  );
+  assert.equal(channel.conversationStateByScope.get("turn-lifecycle-live")?.state, "completed");
 });
 
 test("upstream close reason user_stopped is transport metadata, not confirmation", () => {

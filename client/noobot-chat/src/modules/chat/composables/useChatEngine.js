@@ -76,7 +76,6 @@ export function useChatEngine({
   clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
   submitInteractionResponse,
-  refreshSessionsAsync,
   onConversationState,
   chatWebSocketClient,
   sessionLogWebSocketClient,
@@ -281,25 +280,20 @@ export function useChatEngine({
   });
 
   const {
-    applyConversationState,
     applyConversationStateFromEvent,
     clearMissingInteractionPayloadTimer,
     disposeConversationState,
     tryAutoResolveInteraction,
   } = createChatEngineConversationState({
     activeSession,
-    activeSessionId,
     interactionSubmitting,
     pendingInteractionRequest,
     clearPendingInteraction,
     clearPendingInteractionIfObsolete,
-    setPendingInteractionRequest,
     submitInteractionResponse,
-    refreshSessionsAsync,
     onConversationState,
     notify,
     translate,
-    applyAssistantFailureState,
   });
 
   function stopSending(executionId = "") {
@@ -322,7 +316,6 @@ export function useChatEngine({
     ensureConnected,
   };
   const senderConversationDeps = {
-    applyConversationState,
     applyConversationStateFromEvent,
     applyAssistantFailureState,
     applySessionDetail,

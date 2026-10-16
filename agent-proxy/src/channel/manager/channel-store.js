@@ -8,10 +8,14 @@ import {
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CLIENT_ROLE,
-  CONVERSATION_SCOPE_KEY,
-  CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
+  SESSION_CHANNEL_STATE_KEY,
 } from "../../shared/constants.js";
+import {
+  AGENT_CHANNEL_STATE,
+  AGENT_CHANNEL_STATE_SCOPE,
+  createAgentChannelState,
+} from "@noobot/agent-transport-protocol";
 import { normalizeApiKey, nowMs, parseChannelKey } from "../../shared/utils.js";
 import {
   isFailedTurnState,
@@ -33,13 +37,13 @@ import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
 import { text } from "@noobot/shared/value";
 
 const RUNNING_CONVERSATION_STATES = Object.freeze([
-  CONVERSATION_STATE.SENDING,
-  CONVERSATION_STATE.INTERACTION_PENDING,
+  AGENT_CHANNEL_STATE.SENDING,
+  AGENT_CHANNEL_STATE.INTERACTION_PENDING,
 ]);
 const TERMINAL_CONVERSATION_STATES = Object.freeze([
-  CONVERSATION_STATE.COMPLETED,
-  CONVERSATION_STATE.USER_STOPPED,
-  CONVERSATION_STATE.ERROR,
+  AGENT_CHANNEL_STATE.COMPLETED,
+  AGENT_CHANNEL_STATE.USER_STOPPED,
+  AGENT_CHANNEL_STATE.ERROR,
 ]);
 
 function readAuthoritativeLifecycle(channel, eventData) {
@@ -60,31 +64,29 @@ function rejectedFrameIdentity(data) {
 
 function readLifecycleScope(eventData, lifecycle) {
   const identity = eventData.identity || {};
-  const occurredAt = eventData.occurredAt;
   return {
     eventName: text(lifecycle.eventType),
     dialogProcessId: text(lifecycle.dialogProcessId),
     turnScopeId: text(identity.turnScopeId),
     sessionId: text(identity.sessionId),
     seq: Number(eventData.ordering?.sequence || 0),
-    createdAtMs: Number((occurredAt ? Date.parse(occurredAt) : 0) || 0),
   };
 }
 
 function resolveTerminalConversationState(eventName, lifecycleState) {
-  if (isFailedTurnState(lifecycleState)) return CONVERSATION_STATE.ERROR;
+  if (isFailedTurnState(lifecycleState)) return AGENT_CHANNEL_STATE.ERROR;
   if (lifecycleState === TURN_STATE.STOP_COMPLETED || eventName === TURN_EVENT.STOP_COMPLETED) {
-    return CONVERSATION_STATE.USER_STOPPED;
+    return AGENT_CHANNEL_STATE.USER_STOPPED;
   }
-  return CONVERSATION_STATE.COMPLETED;
+  return AGENT_CHANNEL_STATE.COMPLETED;
 }
 
 function resolveLifecycleConversationState(eventName, lifecycle) {
   const lifecycleState = text(lifecycle.state);
   if ([TURN_STATE.PROCESSING, TURN_STATE.COMPLETION_REQUESTING].includes(lifecycleState)) {
-    return CONVERSATION_STATE.SENDING;
+    return AGENT_CHANNEL_STATE.SENDING;
   }
-  if (lifecycleState === TURN_STATE.STOPPING) return CONVERSATION_STATE.STOPPING;
+  if (lifecycleState === TURN_STATE.STOPPING) return AGENT_CHANNEL_STATE.STOPPING;
   if (isTerminalTurnEvent(eventName) || isTerminalTurnState(lifecycleState)) {
     return resolveTerminalConversationState(eventName, lifecycleState);
   }
@@ -141,7 +143,7 @@ function cleanupTerminalChannel(store, channel, scope, nextState) {
   });
   store.markChannelTerminal(
     channel,
-    nextState === CONVERSATION_STATE.COMPLETED ? CHANNEL_STATUS.DONE : nextState,
+    nextState === AGENT_CHANNEL_STATE.COMPLETED ? CHANNEL_STATUS.DONE : nextState,
   );
 }
 
@@ -225,7 +227,7 @@ class ChannelStoreMethods {
       ownerApiKey: "",
       ownerUserId: "",
       _errorHandled: false,
-      conversationStateByDialogProcessId: new Map(),
+      conversationStateByScope: new Map(),
     };
     Object.defineProperties(nextChannel, {
       upstreamSocket: {
@@ -295,9 +297,9 @@ class ChannelStoreMethods {
     }
     this.channelStore.set(normalizedChannelKey, nextChannel);
     this.updateConversationState(nextChannel, {
+      scope: AGENT_CHANNEL_STATE_SCOPE.SESSION,
       sessionId: nextChannel.identity.sessionId,
-      dialogProcessId: "",
-      state: CONVERSATION_STATE.NO_CONVERSATION,
+      state: AGENT_CHANNEL_STATE.NO_CONVERSATION,
       sourceEvent: CONVERSATION_SOURCE_EVENT.INIT,
       seq: 0,
       broadcast: false,
@@ -411,14 +413,14 @@ class ChannelStoreMethods {
       const protocolEnvelope = envelope.data;
       const interaction = protocolEnvelope.payload;
       const requestId = text(interaction.requestId);
-      const lifecycle = (text(interaction.lifecycle) || "pending").toLowerCase();
-      if (isTerminalInteractionLifecycle(lifecycle)) {
+      if (isTerminalInteractionLifecycle(interaction.lifecycle)) {
         channel.pendingInteractionRequests.delete(requestId);
         this.requestChannelMap.delete(requestId);
         this.updateConversationState(channel, {
+          scope: AGENT_CHANNEL_STATE_SCOPE.TURN,
           dialogProcessId: interaction.dialogProcessId,
           turnScopeId: protocolEnvelope.identity.turnScopeId,
-          state: CONVERSATION_STATE.SENDING,
+          state: AGENT_CHANNEL_STATE.SENDING,
           sourceEvent: INTERACTION_EVENT_TYPE.REQUEST,
           seq: Number(protocolEnvelope.ordering.sequence),
           sessionId: protocolEnvelope.identity.sessionId,
@@ -431,9 +433,10 @@ class ChannelStoreMethods {
         });
         channel.pendingInteractionRequests.set(requestId, protocolEnvelope);
         this.updateConversationState(channel, {
+          scope: AGENT_CHANNEL_STATE_SCOPE.TURN,
           dialogProcessId: interaction.dialogProcessId,
           turnScopeId: protocolEnvelope.identity.turnScopeId,
-          state: CONVERSATION_STATE.INTERACTION_PENDING,
+          state: AGENT_CHANNEL_STATE.INTERACTION_PENDING,
           sourceEvent: INTERACTION_EVENT_TYPE.REQUEST,
           seq: Number(protocolEnvelope.ordering.sequence),
           sessionId: protocolEnvelope.identity.sessionId,
@@ -526,15 +529,15 @@ class ChannelStoreMethods {
     if (!turnScopeId) return null;
     const dialogProcessId = text(lifecycle?.dialogProcessId);
     const conversationState = channels
-      .flatMap((channel) => [...(channel?.conversationStateByDialogProcessId?.values?.() || [])])
-      .filter((item) => text(item?.turnScopeId) === turnScopeId)
-      .sort((left, right) => Number(right?.updatedAtMs || 0) - Number(left?.updatedAtMs || 0))
+      .map((channel) => channel.conversationStateByScope.get(turnScopeId))
+      .filter(Boolean)
+      .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
       .at(0);
     const projectedState =
       text(conversationState?.state) ||
       (eventType === TURN_EVENT.STOP_ACCEPTED
-        ? CONVERSATION_STATE.STOPPING
-        : CONVERSATION_STATE.SENDING);
+        ? AGENT_CHANNEL_STATE.STOPPING
+        : AGENT_CHANNEL_STATE.SENDING);
     return {
       ...lifecycle,
       sessionId: normalizedSessionId,
@@ -549,53 +552,43 @@ class ChannelStoreMethods {
   updateConversationState(
     channel,
     {
-      dialogProcessId = "",
-      state = "",
-      sourceEvent = "",
-      seq = 0,
-      broadcast = true,
-      sessionId = "",
+      scope,
+      sessionId,
       turnScopeId = "",
-      createdAtMs = 0,
+      dialogProcessId = "",
+      state,
+      sourceEvent,
+      seq,
       requestId = "",
-    } = {},
+      broadcast = true,
+    },
   ) {
-    if (!channel) return null;
-    const normalizedState = text(state);
-    if (!normalizedState) return null;
-    const normalizedDialogProcessId = text(dialogProcessId);
-    const stateKey = normalizedDialogProcessId || CONVERSATION_SCOPE_KEY;
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) {
-      throw new TypeError(`updateConversationState requires sessionId: ${normalizedState}`);
-    }
-    const normalizedTurnScopeId = text(turnScopeId);
-    const previousStateItem = channel.conversationStateByDialogProcessId.get(stateKey) || null;
+    const stateKey =
+      scope === AGENT_CHANNEL_STATE_SCOPE.SESSION ? SESSION_CHANNEL_STATE_KEY : text(turnScopeId);
+    const previousStateItem = channel.conversationStateByScope.get(stateKey) || null;
     if (
       previousStateItem &&
-      previousStateItem.state === normalizedState &&
-      Number(previousStateItem.seq || 0) === Number(seq || 0) &&
-      (!normalizedTurnScopeId || text(previousStateItem?.turnScopeId) === normalizedTurnScopeId) &&
-      text(previousStateItem?.sourceEvent) === text(sourceEvent) &&
-      text(previousStateItem?.requestId) === text(requestId)
+      previousStateItem.state === state &&
+      previousStateItem.seq === seq &&
+      previousStateItem.sourceEvent === sourceEvent &&
+      text(previousStateItem.requestId) === text(requestId)
     ) {
       return previousStateItem;
     }
-    const nextCreatedAtMs = Number(
-      createdAtMs || previousStateItem?.createdAtMs || previousStateItem?.updatedAtMs || nowMs(),
-    );
-    const stateItem = {
-      sessionId: normalizedSessionId,
-      dialogProcessId: normalizedDialogProcessId,
-      turnScopeId: normalizedTurnScopeId || text(previousStateItem?.turnScopeId),
-      state: normalizedState,
-      sourceEvent: text(sourceEvent),
-      seq: Number(seq || 0),
-      createdAtMs: Number.isFinite(nextCreatedAtMs) ? nextCreatedAtMs : nowMs(),
-      updatedAtMs: nowMs(),
-      requestId: text(requestId),
-    };
-    channel.conversationStateByDialogProcessId.set(stateKey, stateItem);
+    const updatedAtMs = nowMs();
+    const stateItem = createAgentChannelState({
+      scope,
+      sessionId,
+      turnScopeId,
+      dialogProcessId,
+      state,
+      sourceEvent,
+      seq,
+      createdAtMs: previousStateItem?.createdAtMs ?? updatedAtMs,
+      updatedAtMs,
+      requestId,
+    });
+    channel.conversationStateByScope.set(stateKey, stateItem);
     this.logSessionEvent(channel, {
       category: "state",
       event: "agentProxy.conversation.state",
@@ -604,6 +597,7 @@ class ChannelStoreMethods {
       turnScopeId: stateItem.turnScopeId,
       data: {
         channelKey: channel.key,
+        scope: stateItem.scope,
         state: stateItem.state,
         sourceEvent: stateItem.sourceEvent,
         seq: stateItem.seq,
@@ -628,12 +622,12 @@ class ChannelStoreMethods {
       cleanupTerminalChannel(this, channel, scope, nextState);
     }
     this.updateConversationState(channel, {
+      scope: AGENT_CHANNEL_STATE_SCOPE.TURN,
       dialogProcessId: scope.dialogProcessId,
       turnScopeId: scope.turnScopeId,
       state: nextState,
       sourceEvent: scope.eventName,
       seq: scope.seq,
-      createdAtMs: scope.createdAtMs,
       sessionId: scope.sessionId,
       requestId: text(lifecycle.requestId),
       broadcast: false,

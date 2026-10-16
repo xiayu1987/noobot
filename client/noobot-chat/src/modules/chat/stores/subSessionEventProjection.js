@@ -51,9 +51,7 @@ export function buildSubSessionContainerIdentity(eventData = {}, currentSession 
     turnScopeId: text(eventData?.turnScopeId || currentSession.turnScopeId),
     workflowRunId: text(eventData?.workflowRunId || currentSession.workflowRunId),
     nodeExecutionId: text(eventData?.nodeExecutionId || currentSession.nodeExecutionId),
-    updatedAt:
-      currentSession.updatedAt ||
-      text(eventData?.updatedAt || eventData?.createdAt || eventData?.timestamp),
+    updatedAt: currentSession.updatedAt || text(eventData?.updatedAt),
   };
 }
 
@@ -155,7 +153,7 @@ export function materializeTurnPresentationMessages({
       id: sourceId,
       messageId: sourceId,
       sessionId,
-      createdAt: source.createdAt || source.ts || occurredAt,
+      createdAt: source.ts || occurredAt,
     };
     if (sourceIndex >= 0) messages[sourceIndex] = { ...messages[sourceIndex], ...materialized };
     else messages.push(materialized);

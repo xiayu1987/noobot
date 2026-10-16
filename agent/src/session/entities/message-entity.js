@@ -211,7 +211,7 @@ function applyMessageRuntimeFields(target, message) {
 
 function applyMessageToolFields(target, message) {
   const toolCallId = text(message?.tool_call_id);
-  const toolName = text(message?.toolName || message?.tool_name);
+  const toolName = text(message?.toolName);
   const contextPolicy = resolveToolContextPolicy(message);
   if (toolCallId) target.tool_call_id = toolCallId;
   if (toolName) target.toolName = toolName;

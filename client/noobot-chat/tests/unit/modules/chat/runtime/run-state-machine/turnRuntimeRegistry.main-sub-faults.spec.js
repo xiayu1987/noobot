@@ -13,7 +13,7 @@ import {
   resolveTurnRuntimeByScope,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   SESSION_RUN_EVENT,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import {
@@ -181,7 +181,7 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
       "child-turn",
       "dp-child",
       {
-        state: BackendChannelState.ERROR,
+        state: AGENT_CHANNEL_STATE.ERROR,
         seq: 6,
         error: "late child failure",
       },

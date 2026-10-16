@@ -15,38 +15,9 @@ import {
   EVENT_FAMILY,
   INTERACTION_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 
 describe("useChatEngine.interaction-stop: interaction", () => {
-  it("expired channel_state does not start a session-refresh recovery branch", async () => {
-    const refreshSessionsAsync = vi.fn(async () => {});
-    const stream = vi.fn(async (_payload, onEvent) => {
-      emitChannelState(onEvent, "local-expired", "dp-expired", "expired");
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: { sessionId: "local-expired", dialogProcessId: "dp-expired" },
-      });
-    });
-    const { engine, deps } = createHarness({
-      sessionId: "local-expired",
-      stream,
-      pendingInteraction: {
-        requestId: "req-1",
-        sessionId: "local-expired",
-        dialogProcessId: "dp-expired",
-      },
-      interactionSubmittingValue: true,
-      deps: {
-        refreshSessionsAsync,
-        clearPendingInteractionIfObsolete: vi.fn(() => true),
-      },
-    });
-
-    await engine.send();
-
-    expect(deps.clearPendingInteraction).toHaveBeenCalled();
-    expect(refreshSessionsAsync).not.toHaveBeenCalled();
-  });
-
   it("interaction_request is the only event that restores a pending interaction", async () => {
     const setPendingInteractionRequest = vi.fn();
     const pendingInteraction = {
@@ -150,7 +121,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       });
       emitChannelState(onEvent, "local-int-send", "dp-int-send", "sending", { seq: 2 });
       emitChannelState(onEvent, "local-int-send", "dp-int-send", "sending", {
-        sourceEvent: "interaction_response",
+        sourceEvent: AGENT_COMMAND.INTERACTION_RESPONSE,
         requestId: "req-int-send",
         seq: 3,
       });
@@ -203,33 +174,6 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       message: "chat.interactionPayloadMissing",
     });
     vi.useRealTimers();
-  });
-
-  it("expired transport state does not manufacture a refresh failure", async () => {
-    const notify = vi.fn();
-    const stream = vi.fn(async (_payload, onEvent) => {
-      emitChannelState(onEvent, "local-expired-fail", "dp-expired-fail", "expired", {
-        seq: 2,
-      });
-    });
-    const { engine, activeSession, sending, canStop } = createHarness({
-      sessionId: "local-expired-fail",
-      stream,
-      deps: {
-        notify,
-        refreshSessionsAsync: vi.fn(async () => false),
-      },
-    });
-
-    await engine.send();
-
-    const assistant = assistantMessage(activeSession);
-
-    expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(false);
-    expect(assistant?.terminalOutcome).not.toBe("generated");
-    expect(assistant?.error).not.toBe("chat.expiredRefreshFailed");
-    expect(notify).not.toHaveBeenCalled();
   });
 
   it("interaction_request with lifecycle=resolved & ackMode=auto should auto ack and not enter pending", async () => {

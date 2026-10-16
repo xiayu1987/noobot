@@ -41,7 +41,7 @@ test("data-plane events do not create channel business state from start payload"
   );
 
   assert.equal(listEvents(client, "channel_state").length, 0);
-  assert.equal(channel.conversationStateByDialogProcessId.has("dp-turn-scope"), false);
+  assert.equal(channel.conversationStateByScope.has("turn-scope-1"), false);
 });
 
 test("reconnect does not derive authoritative sending state from a running transport", () => {

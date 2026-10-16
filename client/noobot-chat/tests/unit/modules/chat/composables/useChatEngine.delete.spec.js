@@ -10,7 +10,7 @@ import {
   makeSession,
 } from "../helpers/useChatEngineHarness.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
@@ -167,7 +167,7 @@ describe("useChatEngine.delete", () => {
       queueMicrotask(() => {
         target.stopState = "user_stopped";
         target.channelState = {
-          state: BackendChannelState.USER_STOPPED,
+          state: AGENT_CHANNEL_STATE.USER_STOPPED,
           turnScopeId: target.turnScopeId,
           dialogProcessId: target.dialogProcessId,
         };
@@ -565,7 +565,7 @@ describe("useChatEngine.delete", () => {
       turnScopeId,
       role: RoleEnum.ASSISTANT,
       content: "target",
-      channelState: { state: BackendChannelState.USER_STOPPED, turnScopeId },
+      channelState: { state: AGENT_CHANNEL_STATE.USER_STOPPED, turnScopeId },
     };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];

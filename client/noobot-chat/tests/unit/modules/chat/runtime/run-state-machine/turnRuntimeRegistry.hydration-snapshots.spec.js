@@ -16,7 +16,7 @@ import {
   applyTurnTimingSnapshot,
   isTurnRuntimeDeleted,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { BackendChannelState } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { AGENT_CHANNEL_STATE } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { backendState, settleTerminal, snapshot } from "./turnRuntimeRegistryTestFixtures.js";
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
@@ -597,7 +597,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 999,
     });
 

@@ -18,7 +18,6 @@ import {
   isIgnoredSubSessionEvent,
   routeMessageProjectionEvent,
 } from "./messageProjectionRouter.js";
-import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
 import { buildStreamEventLogEntry } from "./streamEventLogEntry.js";
 import { logPluginRuntimeDiagnostics } from "../../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
 import { logStreamDeltaDebug } from "../../../debug/loggers/streamDeltaDebugLogger.js";
@@ -45,7 +44,6 @@ export function logStreamEvent(entry, authoritativeEvent, logSessionEvent) {
 function routePostProjectionEvent(event, data, context) {
   const {
     activeSession,
-    applyConversationStateFromEvent,
     botMessage,
     clearMissingInteractionPayloadTimer,
     clearPendingInteraction,
@@ -55,7 +53,6 @@ function routePostProjectionEvent(event, data, context) {
     tryAutoResolveInteraction,
     setPendingInteractionRequest,
     logSessionEvent,
-    terminalRouteContext,
     ignoredSubSessionEvent,
     channelSessionId,
     protocolEnvelope,
@@ -69,16 +66,6 @@ function routePostProjectionEvent(event, data, context) {
     event !== StreamEventEnum.ATTACHMENT_LIFECYCLE &&
     !isInteractionForCurrentChannel &&
     !isEventForCurrentTurn(data || {}, botMessage)
-  )
-    return true;
-  applyConversationStateFromEvent(event, data || {}, {
-    botMessage,
-    fallbackDialogProcessId: normalizeTrimmedString(botMessage.dialogProcessId),
-    fallbackTurnScopeId: normalizeTrimmedString(botMessage.turnScopeId),
-  });
-  if (
-    event === StreamEventEnum.CHANNEL_STATE &&
-    routeTerminalStreamEvent(event, data, terminalRouteContext)
   )
     return true;
   if (
@@ -103,8 +90,6 @@ function routePostProjectionEvent(event, data, context) {
       setPendingInteractionRequest,
       clearPendingInteraction,
     });
-  } else {
-    routeTerminalStreamEvent(event, data, terminalRouteContext);
   }
   return true;
 }
@@ -158,45 +143,21 @@ function routeAuthoritativeRuntimeEvent({
   return routed;
 }
 
-function pickTerminalRouteContext(context) {
-  return {
-    activeSession: context.activeSession,
-    activeSessionId: context.activeSessionId,
-    applyConversationState: context.applyConversationState,
-    applyRunStateEvent: context.applyRunStateEvent,
-    botMessage: context.botMessage,
-    clearPendingInteraction: context.clearPendingInteraction,
-    foldMessagesForView: context.foldMessagesForView,
-    makeViewMessage: context.makeViewMessage,
-    mergeAssistantAttachments: context.mergeAssistantAttachments,
-    navigateOnFirstResponseOnce: context.navigateOnFirstResponseOnce,
-    requestedTextStreaming: context.requestedTextStreaming,
-    streamState: context.streamState,
-  };
-}
-
 export function createSendStreamEventHandler(context) {
   const {
     activeSession,
-    activeSessionId,
-    applyConversationState,
     applyConversationStateFromEvent,
-    applyRunStateEvent,
     applyTurnLifecycleEnvelope,
     applyWorkflowRuntimeEvent,
     botMessage: botMsg,
     clearMissingInteractionPayloadTimer,
     clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
-    foldMessagesForView,
     logSessionEvent,
     makeViewMessage,
     mergeAssistantAttachments,
     navigateOnFirstResponseOnce,
-    requestedTextStreaming,
     sessionId,
     setPendingInteractionRequest,
-    streamState,
     tryAutoResolveInteraction,
     turnScopeId,
     findCanonicalMessageById,
@@ -231,6 +192,10 @@ export function createSendStreamEventHandler(context) {
       botMessage: summarizeDebugMessage(botMsg),
     }));
 
+    if (event === StreamEventEnum.CHANNEL_STATE) {
+      applyConversationStateFromEvent(event, data);
+      return;
+    }
     if (
       routeForeignTurnLifecycleEvent(event, data, {
         activeSession,
@@ -279,27 +244,17 @@ export function createSendStreamEventHandler(context) {
     )
       return;
     const ignoredSubSessionEvent = isIgnoredSubSessionEvent(event, data);
-    const terminalContext = pickTerminalRouteContext(context);
     routePostProjectionEvent(event, data, {
       activeSession,
-      activeSessionId,
-      applyConversationState,
-      applyConversationStateFromEvent,
-      applyRunStateEvent,
       botMessage: botMsg,
       clearMissingInteractionPayloadTimer,
       clearPendingInteraction,
-      clearPendingInteractionIfObsolete,
-      foldMessagesForView,
       makeViewMessage,
       mergeAssistantAttachments,
       navigateOnFirstResponseOnce,
-      requestedTextStreaming,
-      streamState,
       tryAutoResolveInteraction,
       setPendingInteractionRequest,
       logSessionEvent,
-      terminalRouteContext: terminalContext,
       ignoredSubSessionEvent,
       channelSessionId,
       protocolEnvelope,

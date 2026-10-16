@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
@@ -41,13 +41,13 @@ describe("sessionRunStateMachine message runtime", () => {
       messageItem: {
         role: "assistant",
         pending: true,
-        channelState: { state: BackendChannelState.SENDING },
+        channelState: { state: AGENT_CHANNEL_STATE.SENDING },
       },
-      turnStatus: { status: BackendChannelState.COMPLETED },
+      turnStatus: { status: AGENT_CHANNEL_STATE.COMPLETED },
     });
 
     expect(view).toMatchObject({
-      state: BackendChannelState.COMPLETED,
+      state: AGENT_CHANNEL_STATE.COMPLETED,
       running: false,
       inFlightAssistant: false,
       source: "persisted",
@@ -58,11 +58,11 @@ describe("sessionRunStateMachine message runtime", () => {
     const view = resolveTurnRuntimeView({
       messageItem: { role: "assistant", pending: false },
       turnStatus: { status: "queued" },
-      realtimeState: { state: BackendChannelState.SENDING },
+      realtimeState: { state: AGENT_CHANNEL_STATE.SENDING },
     });
 
     expect(view).toMatchObject({
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       running: true,
       inFlightAssistant: true,
       source: "realtime",
@@ -130,7 +130,7 @@ describe("sessionRunStateMachine message runtime", () => {
     expect(
       resolveSessionRunStateForMessage({
         stateSnapshot: createInitialSessionRunState({
-          state: BackendChannelState.SENDING,
+          state: AGENT_CHANNEL_STATE.SENDING,
           sessionId: "s2",
           dialogProcessId: "d1",
           priority: 40,
@@ -161,7 +161,7 @@ describe("sessionRunStateMachine message runtime", () => {
       content: "",
       [SESSION_RUN_MESSAGE_RUNTIME_MARK]: "sending|s-active|d-active|turn-active|",
       channelState: {
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         sessionId: "s-active",
         dialogProcessId: "d-active",
         turnScopeId: "turn-active",
@@ -194,7 +194,7 @@ describe("sessionRunStateMachine message runtime", () => {
       resolveSessionRunMessageRuntimePatch({
         stateSnapshot: createInitialSessionRunState({
           state: FrontendRunState.USER_STOP_COMPLETED,
-          backendState: BackendChannelState.USER_STOPPED,
+          backendState: AGENT_CHANNEL_STATE.USER_STOPPED,
           sessionId: "s-other",
           dialogProcessId: "d-other",
           turnScopeId: "turn-other",
@@ -215,7 +215,7 @@ describe("sessionRunStateMachine message runtime", () => {
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
       channelState: {
-        state: BackendChannelState.USER_STOPPED,
+        state: AGENT_CHANNEL_STATE.USER_STOPPED,
         dialogProcessId: "d1",
         turnScopeId: "turn-1",
       },
@@ -231,7 +231,7 @@ describe("sessionRunStateMachine message runtime", () => {
       resolveSessionRunMessageRuntimePatch({
         stateSnapshot: createInitialSessionRunState({
           state: FrontendRunState.USER_STOPPING,
-          backendState: BackendChannelState.STOPPING,
+          backendState: AGENT_CHANNEL_STATE.STOPPING,
           sessionId: "s1",
           dialogProcessId: "d1",
           turnScopeId: "turn-1",
@@ -256,13 +256,13 @@ describe("sessionRunStateMachine message runtime", () => {
       resolveTurnRuntimeView({
         messageItem: assistant,
         turnStatus: {
-          status: BackendChannelState.USER_STOPPED,
+          status: AGENT_CHANNEL_STATE.USER_STOPPED,
           dialogProcessId: "d1",
           turnScopeId: "turn-1",
         },
       }),
     ).toMatchObject({
-      state: BackendChannelState.USER_STOPPED,
+      state: AGENT_CHANNEL_STATE.USER_STOPPED,
       running: false,
       source: "persisted",
     });
@@ -290,7 +290,7 @@ describe("sessionRunStateMachine message runtime", () => {
     expect(
       resolveSessionRunMessageRuntimePatch({
         stateSnapshot: createInitialSessionRunState({
-          state: BackendChannelState.SENDING,
+          state: AGENT_CHANNEL_STATE.SENDING,
           sessionId: "s1",
         }),
         messageItem: oldAssistant,
@@ -312,7 +312,7 @@ describe("sessionRunStateMachine message runtime", () => {
       role: "assistant",
       pending: true,
       channelState: {
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         sessionId: "s1",
         dialogProcessId: "d1",
         turnScopeId: "turn-1",
@@ -321,7 +321,7 @@ describe("sessionRunStateMachine message runtime", () => {
       },
     };
     expect(getMessageRuntimeChannelState(sendingMessage)).toMatchObject({
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       sessionId: "s1",
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
@@ -331,7 +331,7 @@ describe("sessionRunStateMachine message runtime", () => {
         startedAt: "2026-01-01T00:00:00.000Z",
       }),
     ).toMatchObject({
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       pending: true,
       running: true,
       inFlightAssistant: true,
@@ -347,7 +347,7 @@ describe("sessionRunStateMachine message runtime", () => {
         channelState: { status: "reconnecting" },
       }),
     ).toMatchObject({
-      state: BackendChannelState.RECONNECTING,
+      state: AGENT_CHANNEL_STATE.RECONNECTING,
       running: true,
       inFlightAssistant: true,
       canStopTarget: false,
@@ -359,7 +359,7 @@ describe("sessionRunStateMachine message runtime", () => {
         channelState: "interaction_pending",
       }),
     ).toMatchObject({
-      state: BackendChannelState.INTERACTION_PENDING,
+      state: AGENT_CHANNEL_STATE.INTERACTION_PENDING,
       running: true,
       inFlightAssistant: true,
       canStopTarget: false,

@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
-import { CONVERSATION_SOURCE_EVENT, CONVERSATION_STATE } from "../../src/shared/constants.js";
+import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
+import { CONVERSATION_SOURCE_EVENT } from "../../src/shared/constants.js";
 import { canonicalMessageEvent } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
@@ -38,10 +39,11 @@ test("ChannelManager omits successful data-plane logs but retains state logs", (
     }),
   );
   manager.updateConversationState(channel, {
+    scope: "turn",
     sessionId: "session-1",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
-    state: CONVERSATION_STATE.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     sourceEvent: CONVERSATION_SOURCE_EVENT.INIT,
     seq: 1,
     requestId: "request-1",
@@ -57,7 +59,8 @@ test("ChannelManager omits successful data-plane logs but retains state logs", (
   assert.equal(records[0].event.turnScopeId, "turn-1");
   assert.deepEqual(records[0].event.data, {
     channelKey,
-    state: CONVERSATION_STATE.SENDING,
+    scope: "turn",
+    state: AGENT_CHANNEL_STATE.SENDING,
     sourceEvent: CONVERSATION_SOURCE_EVENT.INIT,
     seq: 1,
     requestId: "request-1",
@@ -116,18 +119,20 @@ test("ChannelManager conversation state requires an explicit sessionId", () => {
   assert.throws(
     () =>
       manager.updateConversationState(channel, {
-        state: CONVERSATION_STATE.SENDING,
+        scope: "session",
+        state: AGENT_CHANNEL_STATE.SENDING,
         sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
         seq: 2,
         broadcast: false,
       }),
-    /updateConversationState requires sessionId/,
+    /missing_channel_state_session_id/,
   );
   assert.equal(records.length, 0);
 
   manager.updateConversationState(channel, {
+    scope: "session",
     sessionId: "session-from-key",
-    state: CONVERSATION_STATE.SENDING,
+    state: AGENT_CHANNEL_STATE.SENDING,
     sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
     seq: 2,
     broadcast: false,

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
   SESSION_RUN_EVENT,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -29,7 +29,7 @@ const processingStarted = {
   eventType: TURN_EVENT.PROCESSING_STARTED,
   state: TURN_STATE.PROCESSING,
   phase: TURN_PHASE.PROCESSING,
-  executionState: BackendChannelState.SENDING,
+  executionState: AGENT_CHANNEL_STATE.SENDING,
   capabilities: { actionLocked: true, canStop: true },
 };
 const processingCompleted = {
@@ -101,7 +101,7 @@ describe("turn runtime interaction lifecycle", () => {
     const requesting = apply(localRequest, actionAccepted);
     const transport = apply(requesting, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
     });
     expect(transport.state).toBe(FrontendRunState.ACTION_REQUESTING);
     expect(deriveTurnCapabilities(transport.state, transport).canStop).toBe(false);
@@ -109,8 +109,8 @@ describe("turn runtime interaction lifecycle", () => {
     expect(processing.state).toBe(FrontendRunState.PROCESSING);
 
     for (const state of [
-      BackendChannelState.RECONNECTING,
-      BackendChannelState.INTERACTION_PENDING,
+      AGENT_CHANNEL_STATE.RECONNECTING,
+      AGENT_CHANNEL_STATE.INTERACTION_PENDING,
     ]) {
       const result = reduceTurnRuntimeEvent(requesting, {
         ...identity,
@@ -384,7 +384,7 @@ describe("turn runtime interaction lifecycle", () => {
       ...identity,
       state: FrontendRunState.PROCESSING,
       lifecycleObserved: true,
-      backendState: BackendChannelState.SENDING,
+      backendState: AGENT_CHANNEL_STATE.SENDING,
     };
     const result = reduceTurnRuntimeEvent(processing, {
       ...identity,
@@ -442,12 +442,12 @@ describe("turn runtime interaction lifecycle", () => {
       reduceTurnRuntimeEvent(requesting, {
         ...identity,
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         seq: 1,
       }),
     ).toMatchObject({
       applied: true,
-      next: { transportState: BackendChannelState.SENDING, transportSeq: 1 },
+      next: { transportState: AGENT_CHANNEL_STATE.SENDING, transportSeq: 1 },
     });
 
     let completed = apply(requesting, { ...actionAccepted, seq: 3 });
@@ -459,7 +459,7 @@ describe("turn runtime interaction lifecycle", () => {
       reduceTurnRuntimeEvent(completed, {
         ...identity,
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         seq: 7,
       }),
     ).toMatchObject({
@@ -472,7 +472,7 @@ describe("turn runtime interaction lifecycle", () => {
     const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, seq: 1 });
     const transported = apply(requesting, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       seq: 5,
     });
     expect(transported.transportSeq).toBe(5);
@@ -480,7 +480,7 @@ describe("turn runtime interaction lifecycle", () => {
       reduceTurnRuntimeEvent(transported, {
         ...identity,
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: BackendChannelState.SENDING,
+        state: AGENT_CHANNEL_STATE.SENDING,
         seq: 4,
       }),
     ).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.STALE_SEQUENCE });

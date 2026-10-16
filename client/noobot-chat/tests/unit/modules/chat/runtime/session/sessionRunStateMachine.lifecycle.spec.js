@@ -3,12 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
   SESSION_RUN_EVENT,
-  clearRememberedStopRequests,
   evaluateSessionRunState,
   normalizeSessionRunEvent,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -23,7 +22,7 @@ const processingStarted = {
   eventType: TURN_EVENT.PROCESSING_STARTED,
   state: TURN_STATE.PROCESSING,
   phase: TURN_PHASE.PROCESSING,
-  executionState: BackendChannelState.SENDING,
+  executionState: AGENT_CHANNEL_STATE.SENDING,
   capabilities: { actionLocked: true, canStop: true },
 };
 const actionAccepted = {
@@ -61,19 +60,6 @@ const terminalResolved = (state) => ({
   ...completionCommit,
 });
 
-function installStorage() {
-  const map = new Map();
-  Object.defineProperty(globalThis, "localStorage", {
-    configurable: true,
-    value: {
-      getItem: (key) => (map.has(key) ? map.get(key) : null),
-      setItem: (key, value) => map.set(key, String(value)),
-      removeItem: (key) => map.delete(key),
-      clear: () => map.clear(),
-    },
-  });
-}
-
 function apply(current, event) {
   const result = reduceTurnRuntimeEvent(current, {
     sessionId: "s1",
@@ -86,11 +72,6 @@ function apply(current, event) {
 }
 
 describe("sessionRunStateMachine lifecycle", () => {
-  beforeEach(() => {
-    installStorage();
-    clearRememberedStopRequests();
-  });
-
   it("normalizes aliases and evaluates the stop-summary phase", () => {
     const event = normalizeSessionRunEvent({
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
@@ -99,7 +80,7 @@ describe("sessionRunStateMachine lifecycle", () => {
       turnScopeId: " c1 ",
     });
     expect(event).toMatchObject({
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
       sessionId: "s1",
       turnScopeId: "c1",
     });
@@ -150,7 +131,7 @@ describe("sessionRunStateMachine lifecycle", () => {
     const requesting = apply(localRequest, actionAccepted);
     const transport = apply(requesting, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.SENDING,
+      state: AGENT_CHANNEL_STATE.SENDING,
     });
     expect(deriveTurnCapabilities(transport.state, transport).canStop).toBe(false);
     const processing = apply(transport, processingStarted);

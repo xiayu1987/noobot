@@ -15,7 +15,7 @@ import {
   emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -260,7 +260,7 @@ describe("useChatEngine.send-stream", () => {
     expect(activeTurnRuntime.value).toEqual(
       expect.objectContaining({
         state: FrontendRunState.PROCESSING,
-        backendState: BackendChannelState.SENDING,
+        backendState: AGENT_CHANNEL_STATE.SENDING,
       }),
     );
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
@@ -788,7 +788,7 @@ describe("useChatEngine.send-stream", () => {
         state: "stop_completed",
       });
     });
-    const { engine, activeSession, sending, activeTurnRuntime } = createHarness({
+    const { engine, sending, activeTurnRuntime } = createHarness({
       sessionId: "local-2",
       stream,
       terminalResolutionState: "stop_completed",
@@ -797,9 +797,8 @@ describe("useChatEngine.send-stream", () => {
     await engine.send();
 
     await vi.waitFor(() => expect(sending.value).toBe(false));
-    const assistant = assistantMessage(activeSession);
-    expect(assistant?.dialogProcessId).toBe("dp-state");
     expect(activeTurnRuntime.value).toMatchObject({
+      dialogProcessId: "dp-state",
       state: FrontendRunState.USER_STOP_COMPLETED,
       terminal: "user_stopped",
     });

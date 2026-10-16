@@ -13,7 +13,7 @@ import {
   emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
 import {
-  BackendChannelState,
+  AGENT_CHANNEL_STATE,
   FrontendRunState,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -541,7 +541,7 @@ describe("useChatEngine.resend stopped state", () => {
     expect(secondPlaceholder.stopState).toBeUndefined();
     expect(secondPlaceholder.channelState?.state).not.toBe("user_stopped");
     expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
-    expect(activeTurnRuntime.value.backendState).toBe(BackendChannelState.SENDING);
+    expect(activeTurnRuntime.value.backendState).toBe(AGENT_CHANNEL_STATE.SENDING);
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
