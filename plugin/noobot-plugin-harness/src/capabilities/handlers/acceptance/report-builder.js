@@ -7,8 +7,8 @@ import {
   ACCEPTANCE_MODE,
   LOCALE,
   buildPlanSnapshot,
+  createChecklistItem,
   defaultTaskChecklist,
-  normalizeChecklistItem,
   translateI18nText,
 } from "./deps.js";
 import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
@@ -72,18 +72,6 @@ function resolveAcceptanceStatusForChecklistItem(item = {}, byPlan = {}) {
   if (isMainStep) return null;
   const parentKey = text(item?.mainStepIndex);
   if (parentKey && map[parentKey]) return map[parentKey];
-  return null;
-}
-
-function resolveModelAcceptanceForChecklistItem(normalized = {}, modelAcceptanceByPlan = {}) {
-  const byPlan =
-    modelAcceptanceByPlan && typeof modelAcceptanceByPlan === "object" ? modelAcceptanceByPlan : {};
-  const exactKey = text(normalized?.index);
-  if (exactKey && byPlan[exactKey]) return byPlan[exactKey];
-  const isMainStep = normalized?.isMainStep !== false;
-  if (isMainStep) return null;
-  const parentKey = text(normalized?.mainStepIndex);
-  if (parentKey && byPlan[parentKey]) return byPlan[parentKey];
   return null;
 }
 
@@ -166,12 +154,7 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
     const mainId = Number(main?.id);
     const mainTask = text(main?.content);
     if (!Number.isFinite(mainId) || !mainTask) continue;
-    checklist.push({
-      index: mainId,
-      mainStepIndex: mainId,
-      isMainStep: true,
-      task: mainTask,
-    });
+    checklist.push(createChecklistItem({ mainId, task: mainTask }));
     const subPlans = Array.isArray(subPlansByMainId[String(mainId)])
       ? subPlansByMainId[String(mainId)]
       : [];
@@ -179,12 +162,7 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
       const subIndex = Number(sub?.subIndex);
       const subTask = text(sub?.content);
       if (!Number.isFinite(subIndex) || !subTask) continue;
-      checklist.push({
-        index: Number(`${mainId}.${subIndex}`),
-        mainStepIndex: mainId,
-        isMainStep: false,
-        task: subTask,
-      });
+      checklist.push(createChecklistItem({ mainId, subIndex, task: subTask }));
     }
   }
   return checklist;
@@ -209,18 +187,14 @@ export function buildAcceptanceReport({
     latestModelAcceptance?.byPlan && typeof latestModelAcceptance.byPlan === "object"
       ? latestModelAcceptance.byPlan
       : {};
-  const items = checklist.map((task, index) => {
-    const normalized = normalizeChecklistItem(task, index, locale);
-    const persistedAcceptance = resolvePlanAcceptanceForChecklistItem(bucket, normalized);
-    const modelAcceptance = resolveModelAcceptanceForChecklistItem(
-      normalized,
-      modelAcceptanceByPlan,
-    );
+  const items = checklist.map((item) => {
+    const persistedAcceptance = resolvePlanAcceptanceForChecklistItem(bucket, item);
+    const modelAcceptance = resolveAcceptanceStatusForChecklistItem(item, modelAcceptanceByPlan);
     const persistedMappedStatus =
       text(persistedAcceptance?.taskStatus) ||
       mapModelAcceptanceStatusToTaskStatus(persistedAcceptance?.status);
     const modelMappedStatus = mapModelAcceptanceStatusToTaskStatus(modelAcceptance?.status);
-    const baseStatus = evaluateTaskStatus(normalized, state);
+    const baseStatus = evaluateTaskStatus(item, state);
     const status = persistedMappedStatus || modelMappedStatus || baseStatus;
     const statusSource = persistedMappedStatus
       ? "plan_acceptance_status"
@@ -228,7 +202,7 @@ export function buildAcceptanceReport({
         ? "phase_acceptance_report"
         : "signal";
     return {
-      ...normalized,
+      ...item,
       status,
       statusSource,
       planAcceptance: persistedAcceptance

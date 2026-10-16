@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  DEFAULT_SUBTASK_OWNERS,
   DEFAULT_TASK_OWNER,
   DEFAULT_TASK_TEMPLATE,
   HARNESS_I18N_KEYSET,
@@ -41,11 +40,6 @@ export function translateI18nText(locale = LOCALE.ZH_CN, key = "", params = {}) 
 
 export function getDefaultTaskOwner(locale = LOCALE.ZH_CN) {
   return DEFAULT_TASK_OWNER[locale] || DEFAULT_TASK_OWNER[LOCALE.ZH_CN];
-}
-
-export function getDefaultSubtaskOwners(locale = LOCALE.ZH_CN) {
-  const owners = DEFAULT_SUBTASK_OWNERS[locale] || DEFAULT_SUBTASK_OWNERS[LOCALE.ZH_CN];
-  return Array.isArray(owners) ? [...owners] : [];
 }
 
 export function getTaskTemplate(locale = LOCALE.ZH_CN) {

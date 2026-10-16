@@ -15,7 +15,7 @@ import {
   applyPhaseAcceptanceReportToPlanStatus,
   resolvePlanAcceptanceForChecklistItem,
 } from "../../src/capabilities/handlers/shared/plan/acceptance-status.js";
-import { normalizeChecklistItem } from "../../src/capabilities/handlers/shared/checklist-utils.js";
+import { createChecklistItem } from "../../src/capabilities/handlers/shared/checklist-utils.js";
 
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({
@@ -28,12 +28,19 @@ test("acceptance report checklist includes first-level sub plans from planText",
   assert.equal("planText" in report.plan, false);
   const checklist = report.finalPlanChecklist;
   assert.equal(checklist.length, 4);
-  assert.equal(checklist[0].index, 1);
-  assert.equal(checklist[1].index, 1.1);
+  assert.deepEqual(checklist[0], {
+    ...createChecklistItem({ mainId: 1, task: "主计划一" }),
+    status: "pending",
+    statusSource: "signal",
+    planAcceptance: undefined,
+    modelAcceptance: undefined,
+  });
+  assert.equal(checklist[0].index, "1");
+  assert.equal(checklist[1].index, "1.1");
   assert.equal(checklist[1].isMainStep, false);
   assert.equal(checklist[1].mainStepIndex, 1);
-  assert.equal(checklist[2].index, 1.2);
-  assert.equal(checklist[3].index, 2);
+  assert.equal(checklist[2].index, "1.2");
+  assert.equal(checklist[3].index, "2");
 });
 
 test("summary checklist context preserves complete plan sub-plans from planText", () => {
@@ -97,13 +104,33 @@ test("phase acceptance status is written back to complete plan checklist context
   assert.equal(report.finalPlanChecklist[0].statusSource, "plan_acceptance_status");
 });
 
-test("sub-plan acceptance resolves its parent only through the normalized mainStepIndex", () => {
+test("sub-plan acceptance resolves its parent only through mainStepIndex", () => {
   const bucket = { planAcceptanceStatusByPlanId: { 1: { planId: "1", status: "pass" } } };
-  const normalized = normalizeChecklistItem({ index: 7, parentIndex: 1 }, 0);
-  assert.equal(normalized.mainStepIndex, 1);
-  assert.equal(resolvePlanAcceptanceForChecklistItem(bucket, normalized)?.status, "pass");
+  const item = createChecklistItem({ mainId: 1, subIndex: 7, task: "子计划" });
+  assert.deepEqual(item, { index: "1.7", mainStepIndex: 1, isMainStep: false, task: "子计划" });
+  assert.equal(resolvePlanAcceptanceForChecklistItem(bucket, item)?.status, "pass");
   assert.equal(
-    resolvePlanAcceptanceForChecklistItem(bucket, { index: 7, isMainStep: false, parentIndex: 1 }),
+    resolvePlanAcceptanceForChecklistItem(bucket, {
+      index: "1.7",
+      isMainStep: false,
+      parentIndex: 1,
+    }),
     null,
   );
+  assert.equal(resolvePlanAcceptanceForChecklistItem(bucket, { id: "1", isMainStep: true }), null);
+});
+
+test("sub-plan 1.10 keeps its own planId and never collides with 1.1", () => {
+  const planText = ["1. 主计划一", "1.1 子计划一", "1.10 子计划十"].join("\n");
+  const bucket = {
+    planText,
+    planAcceptanceStatusByPlanId: { "1.10": { planId: "1.10", status: "pass" } },
+  };
+  const report = buildAcceptanceReport({ bucket, state: { locale: "zh-CN", signals: {} } });
+  const [, sub1, sub10] = report.finalPlanChecklist;
+  assert.equal(sub1.index, "1.1");
+  assert.equal(sub10.index, "1.10");
+  assert.equal(sub1.status, "pending");
+  assert.equal(sub10.status, "completed");
+  assert.equal(sub10.statusSource, "plan_acceptance_status");
 });

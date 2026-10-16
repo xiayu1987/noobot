@@ -11,11 +11,7 @@ import { I18N_RUNTIME_LABELS } from "./i18n/runtime-labels.js";
 export { LOCALE } from "./i18n/locale.js";
 export { HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS } from "./i18n/scenario-policy-texts.js";
 export { HARNESS_I18N_KEYSET } from "./i18n/keyset.js";
-export {
-  DEFAULT_TASK_OWNER,
-  DEFAULT_SUBTASK_OWNERS,
-  DEFAULT_TASK_TEMPLATE,
-} from "./i18n/defaults.js";
+export { DEFAULT_TASK_OWNER, DEFAULT_TASK_TEMPLATE } from "./i18n/defaults.js";
 
 export const I18N_TEXT = Object.freeze({
   [LOCALE.ZH_CN]: Object.freeze({

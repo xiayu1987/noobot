@@ -11,11 +11,6 @@ export const DEFAULT_TASK_OWNER = Object.freeze({
   [LOCALE.EN_US]: "primary_task_owner",
 });
 
-export const DEFAULT_SUBTASK_OWNERS = Object.freeze({
-  [LOCALE.ZH_CN]: ["subtask_owner_alpha", "subtask_owner_beta"],
-  [LOCALE.EN_US]: ["subtask_owner_alpha", "subtask_owner_beta"],
-});
-
 export const DEFAULT_TASK_TEMPLATE = Object.freeze({
   [LOCALE.ZH_CN]: Object.freeze({
     PARSE_ATTACHMENT: "解析附件",

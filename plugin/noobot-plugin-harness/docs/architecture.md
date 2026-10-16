@@ -51,3 +51,5 @@ Current summary-driven plan update pipeline:
 ### Acceptance input model
 
 Acceptance semantic validation reads the plan only from `bucket.planText` and parses the checklist from it. The bucket stores no separate checklist; v5 migration removes the legacy `taskChecklist`/`taskChecklistSource` fields. Acceptance reports keep `planText` and `finalPlanChecklist` as their only plan and checklist fields; v6 migration removes the duplicated `taskChecklist` and `plan.planText` from persisted acceptance reports, including those embedded in review reports.
+
+Checklist items carry only `index` (string plan id), `mainStepIndex`, `isMainStep` and `task`; v7 migration removes the unread `owner`, `subOwners`, `input`, `output` and `files` fields from persisted report items. Numeric `index` values in reports persisted before v7 are left as is: the original id (`1.1` vs `1.10`) cannot be recovered from the number, and new reports are rebuilt from `bucket.planText`.

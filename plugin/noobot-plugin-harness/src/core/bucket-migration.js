@@ -97,17 +97,35 @@ function arrayField(target = {}, key = "") {
   return Array.isArray(target[key]) ? target[key] : [];
 }
 
-function removeAcceptanceReportDuplicateFields(bucket = {}) {
+function listPersistedAcceptanceReports(bucket = {}) {
   const reviewReports = [bucket.lastReviewReport, ...arrayField(bucket, "reviewReports")];
-  const reports = [
+  return [
     bucket.lastAcceptanceReport,
     ...arrayField(bucket, "acceptanceReports"),
     ...reviewReports.map((review) => review?.acceptanceReport),
-  ];
-  for (const report of reports) {
-    if (!isPlainObject(report)) continue;
+  ].filter(isPlainObject);
+}
+
+function removeAcceptanceReportDuplicateFields(bucket = {}) {
+  for (const report of listPersistedAcceptanceReports(bucket)) {
     delete report.taskChecklist;
     if (isPlainObject(report.plan)) delete report.plan.planText;
+  }
+}
+
+const REMOVED_CHECKLIST_ITEM_FIELDS = Object.freeze([
+  "owner",
+  "subOwners",
+  "input",
+  "output",
+  "files",
+]);
+
+function removeChecklistItemDeadFields(bucket = {}) {
+  for (const report of listPersistedAcceptanceReports(bucket)) {
+    for (const item of arrayField(report, "finalPlanChecklist").filter(isPlainObject)) {
+      for (const key of REMOVED_CHECKLIST_ITEM_FIELDS) delete item[key];
+    }
   }
 }
 
@@ -115,6 +133,7 @@ const MIGRATION_STEPS = Object.freeze([
   { toVersion: 4, migrate: (bucket, state) => migratePlanUpdateState(state) },
   { toVersion: 5, migrate: (bucket) => removeTaskChecklistFields(bucket) },
   { toVersion: 6, migrate: (bucket) => removeAcceptanceReportDuplicateFields(bucket) },
+  { toVersion: 7, migrate: (bucket) => removeChecklistItemDeadFields(bucket) },
 ]);
 
 export function migrateHarnessBucket(ctx = {}) {

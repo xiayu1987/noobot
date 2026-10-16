@@ -159,7 +159,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryRules:
       "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出 checkpoint 后主流程任务的唯一下一步动作，不是小结辅助流程自身的下一步；只要仍有可执行的 in-progress 或 todo，必须指向最高优先级未完成项，禁止仅因本次小结已经生成就填写 final。",
     previousSummaryContextHeader: "【上一次小结】",
-    checklistTaskDefaultNameTemplate: "任务 {index}",
     planChecklistContextHeader: "【当前完整计划清单】",
     planChecklistCurrentTaskGoalHeader: "【当前任务目标】",
     planChecklistTasksHeader: "【任务清单】",
@@ -391,7 +390,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryRules:
       "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with exactly one next action for the main task after the checkpoint, not for the summary auxiliary flow itself; whenever an executable in-progress or todo item remains, point to the highest-priority unfinished item and never use final merely because this summary was generated.",
     previousSummaryContextHeader: "[Previous Summary]",
-    checklistTaskDefaultNameTemplate: "Task {index}",
     planChecklistContextHeader: "[Current Complete Plan Checklist]",
     planChecklistCurrentTaskGoalHeader: "[Current Task Goal]",
     planChecklistTasksHeader: "[Task Checklist]",

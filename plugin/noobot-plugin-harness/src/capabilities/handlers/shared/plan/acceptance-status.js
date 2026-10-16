@@ -240,7 +240,7 @@ function resolvePlanAcceptanceForPlanId(bucket = {}, planId = "") {
 }
 
 export function resolvePlanAcceptanceForChecklistItem(bucket = {}, item = {}) {
-  const exactId = normalizePlanId(item?.index ?? item?.id);
+  const exactId = normalizePlanId(item?.index);
   if (exactId) {
     const exact = resolvePlanAcceptanceForPlanId(bucket, exactId);
     if (exact) return exact;

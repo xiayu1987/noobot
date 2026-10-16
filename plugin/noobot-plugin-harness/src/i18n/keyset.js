@@ -192,9 +192,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     CONVERGED_REASON: "planRefinementConvergedReason",
     FAILED_REASON: "planRefinementFailedReason",
   }),
-  CHECKLIST: Object.freeze({
-    TASK_DEFAULT_NAME_TEMPLATE: "checklistTaskDefaultNameTemplate",
-  }),
   SYSTEM_PROMPT: Object.freeze({
     POLICY_GENERAL: "harnessPolicyGeneralPrompt",
     POLICY_TEXT: "harnessPolicyTextPrompt",

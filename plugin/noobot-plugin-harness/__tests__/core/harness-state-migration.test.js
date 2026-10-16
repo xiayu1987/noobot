@@ -142,13 +142,67 @@ test("v5 to v6 migration removes duplicated fields from persisted acceptance rep
   ensureTestAgentExecutionScope(ctx);
 
   assert.throws(() => ensureHarnessBucket(ctx), /harness_bucket_migration_required:5/);
-  assert.deepEqual(migrateHarnessBucket(ctx), { migrated: true, fromVersion: 5, toVersion: 6 });
+  assert.deepEqual(migrateHarnessBucket(ctx), {
+    migrated: true,
+    fromVersion: 5,
+    toVersion: HARNESS_BUCKET_VERSION,
+  });
   for (const report of [lastAcceptanceReport, listedReport, reviewEmbedded, lastReviewEmbedded]) {
     assert.equal("taskChecklist" in report, false);
     assert.equal("planText" in report.plan, false);
     assert.equal(report.planText, "1. 主计划");
     assert.deepEqual(report.finalPlanChecklist, [{ index: 1 }]);
     assert.equal(report.plan.totalGoal, "goal");
+  }
+});
+
+test("v6 to v7 migration removes dead checklist item fields and keeps index untouched", () => {
+  const legacyReport = () => ({
+    finalPlanChecklist: [
+      {
+        index: 1.1,
+        mainStepIndex: 1,
+        isMainStep: false,
+        task: "子计划",
+        status: "pending",
+        owner: "primary_task_owner",
+        subOwners: [],
+        input: "",
+        output: "",
+        files: { create: [], modify: [], delete: [] },
+      },
+    ],
+  });
+  const lastAcceptanceReport = legacyReport();
+  const listedReport = legacyReport();
+  const reviewEmbedded = legacyReport();
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          __harnessBucketVersion: 6,
+          state: { flags: {}, counters: {}, signals: {}, pending: {} },
+          lastAcceptanceReport,
+          acceptanceReports: [listedReport],
+          reviewReports: [{ acceptanceReport: reviewEmbedded }],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  ensureTestAgentExecutionScope(ctx);
+
+  assert.throws(() => ensureHarnessBucket(ctx), /harness_bucket_migration_required:6/);
+  assert.deepEqual(migrateHarnessBucket(ctx), {
+    migrated: true,
+    fromVersion: 6,
+    toVersion: HARNESS_BUCKET_VERSION,
+  });
+  for (const report of [lastAcceptanceReport, listedReport, reviewEmbedded]) {
+    assert.deepEqual(report.finalPlanChecklist, [
+      { index: 1.1, mainStepIndex: 1, isMainStep: false, task: "子计划", status: "pending" },
+    ]);
   }
 });
 

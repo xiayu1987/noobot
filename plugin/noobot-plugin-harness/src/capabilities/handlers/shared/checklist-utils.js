@@ -4,63 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "./constants.js";
-import {
-  HARNESS_I18N_KEYSET,
-  getDefaultSubtaskOwners,
-  getDefaultTaskOwner,
-  getTaskTemplate,
-  translateI18nText,
-} from "./i18n.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { getDefaultTaskOwner, getTaskTemplate } from "./i18n.js";
+import { text } from "@noobot/shared/value";
 
-function normalizeFilePlan(files = null) {
-  const source = isPlainObject(files) ? files : {};
-  const readArray = (...keys) => {
-    for (const key of keys) {
-      if (Array.isArray(source[key])) return source[key].map((item) => text(item)).filter(Boolean);
-    }
-    return [];
-  };
+export function createChecklistItem({ mainId = 0, subIndex = null, task = "" } = {}) {
+  const isMainStep = subIndex === null;
   return {
-    create: readArray("create", "created", "add", "\u65b0\u589e", "new"),
-    modify: readArray("modify", "modified", "change", "update", "\u4fee\u6539"),
-    delete: readArray("delete", "deleted", "remove", "\u5220\u9664"),
-  };
-}
-
-export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_CN) {
-  const source = item && typeof item === "object" ? item : {};
-  const normalizedIndex = Number(source.index ?? source.seq ?? source.id ?? index + 1);
-  const mainStepCandidate = Number(
-    source.mainStepIndex ?? source.parentIndex ?? source.refineFrom ?? source.refinementOf,
-  );
-  const hasMainStepCandidate = Number.isFinite(mainStepCandidate);
-  const resolvedMainStepIndex = hasMainStepCandidate ? mainStepCandidate : normalizedIndex;
-  const isMainStep =
-    source.isMainStep === true ||
-    !hasMainStepCandidate ||
-    resolvedMainStepIndex === normalizedIndex;
-  const fallbackTaskName = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.CHECKLIST.TASK_DEFAULT_NAME_TEMPLATE,
-    {
-      index: index + 1,
-    },
-  );
-  return {
-    index: normalizedIndex,
-    mainStepIndex: Number(resolvedMainStepIndex),
+    index: isMainStep ? String(mainId) : `${mainId}.${subIndex}`,
+    mainStepIndex: mainId,
     isMainStep,
-    task: text(source.task ?? source.name ?? source.todo) || fallbackTaskName,
-    owner:
-      String(source.owner ?? source.assignee ?? getDefaultTaskOwner(locale)).trim() ||
-      getDefaultTaskOwner(locale),
-    subOwners: Array.isArray(source.subOwners ?? source.subTaskOwners)
-      ? (source.subOwners ?? source.subTaskOwners).map((name) => text(name)).filter(Boolean)
-      : [],
-    input: text(source.input ?? source.inputs ?? source.requiredInput),
-    output: text(source.output ?? source.outputs ?? source.expectedOutput),
-    files: normalizeFilePlan(source.files ?? source.fileChanges ?? source.filePlan),
+    task,
   };
 }
 
@@ -79,45 +32,11 @@ export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
 }
 
 export function defaultTaskChecklist(locale = LOCALE.ZH_CN) {
-  const owner = getDefaultTaskOwner(locale);
   const template = getTaskTemplate(locale);
-  const emptyFiles = () => ({ create: [], modify: [], delete: [] });
   return [
-    {
-      index: 1,
-      task: template.PARSE_ATTACHMENT,
-      owner,
-      subOwners: [],
-      input: "user attachments/context",
-      output: "parsed attachment/context data",
-      files: emptyFiles(),
-    },
-    {
-      index: 2,
-      task: template.EXECUTE_CORE,
-      owner,
-      subOwners: [],
-      input: "task requirements and parsed data",
-      output: "core task result",
-      files: emptyFiles(),
-    },
-    {
-      index: 3,
-      task: template.START_SUBTASK,
-      owner,
-      subOwners: getDefaultSubtaskOwners(locale),
-      input: "delegable subtasks",
-      output: "started subtask records",
-      files: emptyFiles(),
-    },
-    {
-      index: 4,
-      task: template.WAIT_SUBTASK_RESULT,
-      owner,
-      subOwners: [],
-      input: "started subtask records",
-      output: "merged subtask results",
-      files: emptyFiles(),
-    },
-  ];
+    template.PARSE_ATTACHMENT,
+    template.EXECUTE_CORE,
+    template.START_SUBTASK,
+    template.WAIT_SUBTASK_RESULT,
+  ].map((task, position) => createChecklistItem({ mainId: position + 1, task }));
 }

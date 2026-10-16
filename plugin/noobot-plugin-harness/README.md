@@ -237,6 +237,8 @@ Otherwise refinement is rejected (`planning_refinement_rejected_invalid_target_m
 
 `bucket.planText` is the single source of the plan. The semantic validation payload carries only `planText` plus `acceptanceState`, `toolSignals` and `finalOutput`. An acceptance report carries the plan only as top-level `planText` and the checklist only as `finalPlanChecklist`, parsed from `planText`; when no plan exists, the default checklist template is used. The `plan` snapshot holds plan metadata (goal, owner, revisions) without repeating `planText`.
 
+Each checklist item is built by `createChecklistItem` and has exactly four protocol fields: `index` (string plan id such as `"1"` or `"1.10"`), `mainStepIndex` (number of the parent main plan), `isMainStep` and `task`. The report adds status fields (`status`, `statusSource`, acceptance details) on top. Plan ids are always matched as strings, so `1.1` and `1.10` stay distinct.
+
 ## Acceptance semantic validation
 
 By default, acceptance includes semantic validation (when `capabilityModelInvoker` is available) in addition to rule-based checks. To explicitly configure it:

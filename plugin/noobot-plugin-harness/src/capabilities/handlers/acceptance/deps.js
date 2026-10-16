@@ -43,7 +43,7 @@ export { invokeCapabilityModel } from "../shared/model/invocation-utils.js";
 export {
   buildPlanSnapshot,
   defaultTaskChecklist,
-  normalizeChecklistItem,
+  createChecklistItem,
 } from "../shared/checklist-utils.js";
 
 export { disableBlockedCalls, disableBlockedToolsInRegistry } from "../shared/tool-utils.js";

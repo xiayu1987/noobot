@@ -4,13 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import {
-  DEFAULT_SUBTASK_OWNERS as HARNESS_DEFAULT_SUBTASK_OWNERS,
-  DEFAULT_TASK_OWNER as HARNESS_DEFAULT_TASK_OWNER,
-  DEFAULT_TASK_TEMPLATE as HARNESS_DEFAULT_TASK_TEMPLATE,
-  I18N_TEXT as HARNESS_I18N_TEXT,
-  LOCALE as HARNESS_LOCALE,
-} from "../../../i18n.js";
+import { I18N_TEXT as HARNESS_I18N_TEXT, LOCALE as HARNESS_LOCALE } from "../../../i18n.js";
 
 export const FAILURE_THRESHOLD = Object.freeze({
   CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
@@ -25,12 +19,6 @@ export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
 });
 
 export const LOCALE = HARNESS_LOCALE;
-
-export const DEFAULT_TASK_OWNER = HARNESS_DEFAULT_TASK_OWNER;
-
-export const DEFAULT_SUBTASK_OWNERS = HARNESS_DEFAULT_SUBTASK_OWNERS;
-
-export const DEFAULT_TASK_TEMPLATE = HARNESS_DEFAULT_TASK_TEMPLATE;
 
 export const ACCEPTANCE_MODE = Object.freeze({
   ACTIVE: "active",
@@ -82,7 +70,7 @@ export const GUIDANCE_WEB_TOOL_NAMES = [...WORKFLOW_PARAMS.guidance.web.toolName
 export const TASK_ACCEPTANCE_TOOL_NAME = WORKFLOW_PARAMS.acceptance.tools.taskAcceptanceToolName;
 export const PLAN_REFINEMENT_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.planRefinementToolName;
 
-export const HARNESS_BUCKET_VERSION = 6;
+export const HARNESS_BUCKET_VERSION = 7;
 
 export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   llmTurns: 0,
