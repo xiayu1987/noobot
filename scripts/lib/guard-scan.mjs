@@ -3,9 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
 
 const BASE_IGNORE_DIRECTORIES = ["node_modules", ".git", "dist", "build", "coverage"];
 
@@ -71,6 +72,47 @@ export function collectSourceFiles(directories, options = {}) {
     for (const file of walkSourceFiles(directory, options)) seen.add(file);
   }
   return [...seen];
+}
+
+const REPORTED_LINE_VIOLATIONS = 80;
+
+export function runForbiddenLineGuard(options) {
+  const { label, root, directories, scan, rulesFor, guidance, violations = [] } = options;
+  const files = collectSourceFiles(
+    directories.map((directory) => path.join(root, directory)),
+    scan,
+  );
+  if (!files.length) {
+    console.error(`[${label}] failed`);
+    console.error("no source files matched the scan targets; check TARGET_DIRS");
+    process.exit(1);
+  }
+  for (const file of files) {
+    const relative = path.relative(root, file).split(path.sep).join("/");
+    const rules = rulesFor(relative);
+    readFileSync(file, "utf8")
+      .split(/\r?\n/)
+      .forEach((line, index) => {
+        for (const { field, regex } of rules) {
+          if (regex.test(line)) {
+            violations.push({ field, file: relative, line: index + 1, text: line.trim() });
+          }
+        }
+      });
+  }
+  if (!violations.length) {
+    console.log(`[${label}] ok`);
+    return;
+  }
+  console.error(`[${label}] failed`);
+  for (const message of guidance) console.error(message);
+  for (const violation of violations.slice(0, REPORTED_LINE_VIOLATIONS)) {
+    console.error(`- ${violation.file}:${violation.line} ${violation.field}: ${violation.text}`);
+  }
+  if (violations.length > REPORTED_LINE_VIOLATIONS) {
+    console.error(`... and ${violations.length - REPORTED_LINE_VIOLATIONS} more violation(s)`);
+  }
+  process.exit(1);
 }
 
 export function createRelativeSourceCollector(options = {}) {

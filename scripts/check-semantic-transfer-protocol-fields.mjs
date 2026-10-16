@@ -4,10 +4,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { resolveRepoRoot } from "./lib/repo-root.mjs";
-import { collectSourceFiles, ignorePathParts } from "./lib/guard-scan.mjs";
+import { ignorePathParts, runForbiddenLineGuard } from "./lib/guard-scan.mjs";
 
 const ROOT = resolveRepoRoot();
 const TARGET_DIRS = [
@@ -35,72 +33,23 @@ const ATTACHMENT_LEGACY_FIELDS = [
   { field: "AttachmentMetas", regex: /\bAttachmentMetas\b/ },
 ];
 const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = ["agent/src/artifacts/"];
-const ATTACHMENT_LEGACY_ALLOWED_FILES = new Set([
-  "agent/src/artifacts/runtime/artifact-service.js",
-]);
 
-function isAttachmentLegacyAllowed(relPath = "") {
-  return (
-    ATTACHMENT_LEGACY_ALLOWED_FILES.has(relPath) ||
-    ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix))
-  );
+function isAttachmentLegacyAllowed(relPath) {
+  return ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
 }
 
-function toPosix(filePath) {
-  return filePath.split(path.sep).join("/");
-}
-
-function collectLineViolations(line, items, file, lineNumber, violations) {
-  for (const item of items) {
-    if (item.regex.test(line)) {
-      violations.push({
-        field: item.field,
-        file,
-        line: lineNumber,
-        text: line.trim(),
-      });
-    }
-  }
-}
-
-const violations = [];
-const scannedFiles = collectSourceFiles(
-  TARGET_DIRS.map((relDir) => path.join(ROOT, relDir)),
-  { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS },
-);
-if (!scannedFiles.length) {
-  console.error("[check-semantic-transfer-protocol-fields] failed");
-  console.error("no source files matched the scan targets; check TARGET_DIRS");
-  process.exit(1);
-}
-for (const file of scannedFiles) {
-  const rel = toPosix(path.relative(ROOT, file));
-  const lines = readFileSync(file, "utf8").split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    collectLineViolations(line, FORBIDDEN_FIELDS, rel, index + 1, violations);
-    if (!isAttachmentLegacyAllowed(rel)) {
-      collectLineViolations(line, ATTACHMENT_LEGACY_FIELDS, rel, index + 1, violations);
-    }
-  }
-}
-
-if (violations.length) {
-  console.error("[check-semantic-transfer-protocol-fields] failed");
-  console.error("semantic-transfer protocol fields must use transferEnvelopes only.");
-  console.error(
+runForbiddenLineGuard({
+  label: "check-semantic-transfer-protocol-fields",
+  root: ROOT,
+  directories: TARGET_DIRS,
+  scan: { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS },
+  rulesFor: (relPath) =>
+    isAttachmentLegacyAllowed(relPath)
+      ? FORBIDDEN_FIELDS
+      : [...FORBIDDEN_FIELDS, ...ATTACHMENT_LEGACY_FIELDS],
+  guidance: [
+    "semantic-transfer protocol fields must use transferEnvelopes only.",
     "Remove legacy transferResult/nodeResultTransferResult and attachmentMetas compatibility from source chains.",
-  );
-  console.error(
     "attachmentMetas/inputAttachmentMetas may only exist inside attach/semantic-transfer adapter boundaries.",
-  );
-  for (const violation of violations.slice(0, 80)) {
-    console.error(`- ${violation.file}:${violation.line} ${violation.field}: ${violation.text}`);
-  }
-  if (violations.length > 80) {
-    console.error(`... and ${violations.length - 80} more violation(s)`);
-  }
-  process.exit(1);
-}
-
-console.log("[check-semantic-transfer-protocol-fields] ok");
+  ],
+});

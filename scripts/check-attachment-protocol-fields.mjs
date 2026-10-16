@@ -4,10 +4,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { resolveRepoRoot } from "./lib/repo-root.mjs";
-import { collectSourceFiles, ignorePathParts } from "./lib/guard-scan.mjs";
+import { ignorePathParts, runForbiddenLineGuard } from "./lib/guard-scan.mjs";
 
 const ROOT = resolveRepoRoot();
 const TARGET_DIRS = [
@@ -54,10 +54,6 @@ const ATTACHMENT_SOURCE_LITERAL_PATTERNS = [
   },
 ];
 
-function toPosix(filePath) {
-  return filePath.split(path.sep).join("/");
-}
-
 const violations = [];
 const FORBIDDEN_PROTOCOL_FILES = ["attachment-protocol/src/attachment-model.js"];
 for (const relativePath of FORBIDDEN_PROTOCOL_FILES) {
@@ -74,40 +70,15 @@ const FORBIDDEN_LINE_PATTERNS = [
   ...LEGACY_ATTACHMENT_FIELD_PATTERNS,
   ...ATTACHMENT_SOURCE_LITERAL_PATTERNS,
 ];
-const scannedFiles = collectSourceFiles(
-  TARGET_DIRS.map((relDir) => path.join(ROOT, relDir)),
-  { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS },
-);
-if (!scannedFiles.length) {
-  console.error("[check-attachment-protocol-fields] failed");
-  console.error("no source files matched the scan targets; check TARGET_DIRS");
-  process.exit(1);
-}
-for (const file of scannedFiles) {
-  const rel = toPosix(path.relative(ROOT, file));
-  const lines = readFileSync(file, "utf8").split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    for (const item of FORBIDDEN_LINE_PATTERNS) {
-      if (!item.regex.test(line)) continue;
-      violations.push({ field: item.field, file: rel, line: index + 1, text: line.trim() });
-    }
-  }
-}
-
-if (violations.length) {
-  console.error("[check-attachment-protocol-fields] failed");
-  console.error(
+runForbiddenLineGuard({
+  label: "check-attachment-protocol-fields",
+  root: ROOT,
+  directories: TARGET_DIRS,
+  scan: { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS },
+  rulesFor: () => FORBIDDEN_LINE_PATTERNS,
+  guidance: [
     "Attachment metadata aliases are forbidden outside the versioned attachment protocol.",
-  );
-  console.error("All producers and consumers must use canonical attachment fields.");
-  for (const violation of violations.slice(0, 80)) {
-    console.error(`- ${violation.file}:${violation.line} ${violation.field}: ${violation.text}`);
-  }
-  if (violations.length > 80) {
-    console.error(`... and ${violations.length - 80} more violation(s)`);
-  }
-  process.exit(1);
-}
-
-console.log("[check-attachment-protocol-fields] ok");
+    "All producers and consumers must use canonical attachment fields.",
+  ],
+  violations,
+});
