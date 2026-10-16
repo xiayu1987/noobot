@@ -29,7 +29,7 @@ export function summarizeStateMachineMessage(message = {}) {
     messageId: message.messageId || "",
     sourceMessageId: message.sourceMessageId || "",
     presentationMessageId: message.presentationMessageId || "",
-    role: message.role || message.messageRole || message.type || "",
+    role: message.role || message.type || "",
     sessionId: message.sessionId || message.owner?.sessionId || "",
     dialogProcessId: message.dialogProcessId || message.owner?.dialogProcessId || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",

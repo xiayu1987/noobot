@@ -122,7 +122,7 @@ export function normalizeTurnMeta(raw = {}) {
 }
 
 export function getMessageRole(messageItem = {}) {
-  const explicitRole = normalizeRoleAlias(messageItem?.role || messageItem?.messageRole);
+  const explicitRole = normalizeRoleAlias(messageItem?.role);
   if (explicitRole) return explicitRole;
   if (hasNaturalUserMarker(messageItem)) return "user";
   return getLangChainMessageKind(messageItem);

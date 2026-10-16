@@ -33,9 +33,10 @@ describe("noobot-chat monotonic message action rules", () => {
     ).toBe(false);
   }
 
-  it("ignores removed authorRole/senderRole aliases when detecting user messages", () => {
+  it("ignores removed authorRole/senderRole/messageRole aliases when detecting user messages", () => {
     expect(isUserMessage({ authorRole: "user" })).toBe(false);
     expect(isUserMessage({ senderRole: "user" })).toBe(false);
+    expect(isUserMessage({ messageRole: "user" })).toBe(false);
     expect(isUserMessage({ role: "user" })).toBe(true);
   });
 

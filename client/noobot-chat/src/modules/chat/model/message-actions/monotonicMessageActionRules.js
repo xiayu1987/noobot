@@ -16,7 +16,7 @@ function normalizeText(value = "") {
 }
 
 function normalizeMessageRole(messageItem = {}) {
-  const explicitRole = normalizeText(messageItem?.role || messageItem?.messageRole);
+  const explicitRole = normalizeText(messageItem?.role);
   if (explicitRole === "human") return "user";
   if (explicitRole === "ai" || explicitRole === "bot") return "assistant";
   if (explicitRole === "function") return "tool";

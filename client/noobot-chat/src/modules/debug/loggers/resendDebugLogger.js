@@ -22,7 +22,7 @@ export function summarizeDebugMessage(message = {}) {
     id: message.messageId || "",
     sourceMessageId: message.sourceMessageId || "",
     presentationMessageId: message.presentationMessageId || "",
-    role: message.role || message.messageRole || message.type || "",
+    role: message.role || message.type || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",
     dialogProcessId: message.dialogProcessId || message.owner?.dialogProcessId || "",
     parentDialogProcessId: message.parentDialogProcessId || "",

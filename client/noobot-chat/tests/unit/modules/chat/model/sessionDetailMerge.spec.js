@@ -169,4 +169,20 @@ describe("mergeCanonicalSessionDetail", () => {
     });
     expect(merged.messages[0].toolTimeline).toEqual([{ eventId: "tool-2" }]);
   });
+
+  it("does not treat the removed messageRole alias as assistant role for presentation merge", () => {
+    const message = (messageId) => ({
+      messageId,
+      messageRole: "assistant",
+      presentationMessageId: "presentation-alias",
+      type: "message",
+      content: messageId,
+      pending: false,
+    });
+    const merged = mergeCanonicalSessionDetail(
+      { sessionId: "session-1", messages: [message("a1")] },
+      { sessionId: "session-1", messages: [message("a2")] },
+    );
+    expect(merged.messages.map((item) => item.messageId)).toEqual(["a1", "a2"]);
+  });
 });

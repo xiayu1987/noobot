@@ -6,7 +6,7 @@
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function messageRole(item = {}) {
-  return text(item?.role || item?.messageRole).toLowerCase();
+  return text(item?.role).toLowerCase();
 }
 
 function isPersistedFinalAssistant(item = {}) {
