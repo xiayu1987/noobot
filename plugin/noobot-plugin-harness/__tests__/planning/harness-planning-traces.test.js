@@ -25,10 +25,9 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async () =>
-        createTestModelResponse(
-          '{"taskOwner":"Noobot","taskChecklist":[{"index":1,"task":"检查上下文","owner":"Noobot"}]}',
-          { toolCalls: [{ name: "call_service", id: "c1", status: "executed" }] },
-        ),
+        createTestModelResponse("1. 检查上下文", {
+          toolCalls: [{ name: "call_service", id: "c1", status: "executed" }],
+        }),
     },
   );
 

@@ -67,7 +67,6 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   const agentContext = {
     payload: {
       harness: {
-        taskChecklist: [{ index: 1, task: "执行核心任务", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },

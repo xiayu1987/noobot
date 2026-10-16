@@ -126,7 +126,6 @@ function applyPlanText(
   state = {},
   rawText = "",
   source = "unknown",
-  summary = "",
   meta = {},
 ) {
   const parsedProtocol = parsePlanningTextProtocol(rawText);
@@ -173,7 +172,6 @@ function applyPlanText(
     source,
     stage: "main_plan",
     revisedAt: new Date().toISOString(),
-    summary: text(summary) || undefined,
     currentTaskGoal: text(bucket.currentTaskGoal) || undefined,
     planText: bucket.planText,
     checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
@@ -221,7 +219,7 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
     locale,
     HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_PLAN_TEXT,
   );
-  const applied = applyPlanText(ctx, bucket, state, fallbackText, "default_plan_text", "", {});
+  const applied = applyPlanText(ctx, bucket, state, fallbackText, "default_plan_text", {});
   if (!applied) return false;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
@@ -246,7 +244,7 @@ export async function processPlanningResult(
   const { bucket, state } = holder;
   const responseText = text(rawText);
   if (responseText) {
-    const applied = applyPlanText(ctx, bucket, state, responseText, source, "", meta);
+    const applied = applyPlanText(ctx, bucket, state, responseText, source, meta);
     if (!applied) {
       const attempts = increasePlanningCaptureAttempts(state);
       const shouldRetry = attempts < MAX_PLANNING_CAPTURE_ATTEMPTS;
@@ -258,7 +256,6 @@ export async function processPlanningResult(
           checklistCount: 0,
           attempts,
           emptyResponse: false,
-          jsonRepairAttempted: false,
         };
       }
       applyDefaultPlanText(ctx, locale, "planning_invalid_nonempty_response");
@@ -269,7 +266,6 @@ export async function processPlanningResult(
         checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
         attempts,
         emptyResponse: false,
-        jsonRepairAttempted: false,
       };
     }
     return {
@@ -279,7 +275,6 @@ export async function processPlanningResult(
       checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
       attempts: 0,
       emptyResponse: false,
-      jsonRepairAttempted: false,
     };
   }
 
@@ -293,7 +288,6 @@ export async function processPlanningResult(
       checklistCount: 0,
       attempts,
       emptyResponse: true,
-      jsonRepairAttempted: false,
     };
   }
 
@@ -305,6 +299,5 @@ export async function processPlanningResult(
     checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
     attempts,
     emptyResponse: true,
-    jsonRepairAttempted: false,
   };
 }

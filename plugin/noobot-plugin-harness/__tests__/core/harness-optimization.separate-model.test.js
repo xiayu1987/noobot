@@ -30,12 +30,7 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
       capabilityModelInvoker: async () => {
         invokerCalls += 1;
         await new Promise((resolve) => setTimeout(resolve, 80));
-        return createTestModelResponse(
-          JSON.stringify({
-            taskOwner: "admin",
-            taskChecklist: [{ index: 1, task: "inspect planning path", owner: "admin" }],
-          }),
-        );
+        return createTestModelResponse("1. inspect planning path");
       },
     },
   };
@@ -61,7 +56,7 @@ test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when
   const ctx = createTestHookContext();
   const payload = {
     purpose: "planning",
-    content: '{"taskOwner":"admin","taskChecklist":[{"index":1,"task":"x","owner":"admin"}]}',
+    content: "1. x",
     dedupe: true,
   };
 
@@ -167,7 +162,7 @@ test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", 
 
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
     purpose: "planning",
-    content: '{"taskOwner":"admin","taskChecklist":[{"index":1,"task":"x","owner":"admin"}]}',
+    content: "1. x",
     dedupe: true,
   });
 
@@ -205,12 +200,7 @@ test("planning separate_model uses injected resolveModelMessages from harness me
       },
       capabilityModelInvoker: async ({ messages = [] } = {}) => {
         capturedMessages = messages;
-        return createTestModelResponse(
-          JSON.stringify({
-            taskOwner: "admin",
-            taskChecklist: [{ index: 1, task: "ok", owner: "admin" }],
-          }),
-        );
+        return createTestModelResponse("1. ok");
       },
     },
   };

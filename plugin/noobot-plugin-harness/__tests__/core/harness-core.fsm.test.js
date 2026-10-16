@@ -235,9 +235,7 @@ test("harness FSM remains planning when checklist is absent", async () => {
     ai: { content: "先读取上下文" },
     agentContext: {
       payload: {
-        harness: {
-          taskChecklist: [],
-        },
+        harness: {},
       },
     },
   });

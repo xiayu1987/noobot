@@ -140,7 +140,6 @@ test("harness capability hook can take over and remove agent internal forced mes
         payload: {
           harness: {
             planText: "1. 已有主计划",
-            taskChecklist: [{ index: 1, task: "已有主计划" }],
             state: {
               flags: { planningCaptured: true, planningPromptInjected: true },
             },
@@ -206,7 +205,6 @@ test("harness message takeover keeps system context before injected ctx messages
         payload: {
           harness: {
             planText: "1. 已有主计划",
-            taskChecklist: [{ index: 1, task: "已有主计划" }],
             state: {
               flags: { planningCaptured: true, planningPromptInjected: true },
             },
@@ -260,7 +258,6 @@ test("harness ctx message takeover writes through message store views", async ()
         payload: {
           harness: {
             planText: "1. 已有主计划",
-            taskChecklist: [{ index: 1, task: "已有主计划" }],
             state: {
               flags: { planningCaptured: true, planningPromptInjected: true },
             },
@@ -463,7 +460,6 @@ test("harness ctx message takeover ignores id markers echoed in tool results", a
         payload: {
           harness: {
             planText: "1. 已有主计划",
-            taskChecklist: [{ index: 1, task: "已有主计划" }],
             state: { flags: { planningCaptured: true, planningPromptInjected: true } },
           },
         },

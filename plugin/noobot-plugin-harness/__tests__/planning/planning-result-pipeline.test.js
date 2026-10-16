@@ -239,7 +239,6 @@ test("planning result pipeline schedules retry when payload has no main plan", a
 
   assert.equal(result.captured, false);
   assert.equal(result.retryScheduled, true);
-  assert.equal(result.jsonRepairAttempted, false);
   assert.equal(result.sourceType, "none");
 });
 
@@ -302,7 +301,6 @@ test("planning result pipeline keeps waiting when malformed payload is non-empty
     },
   );
 
-  assert.equal(result.jsonRepairAttempted, false);
   assert.equal(result.retryScheduled, true);
   assert.equal(result.sourceType, "none");
 });

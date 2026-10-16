@@ -22,9 +22,7 @@ test("harness review keeps its report internal by default", async () => {
   const agentContext = {
     payload: {
       messages: { system: [], history: [] },
-      harness: {
-        taskChecklist: [{ index: 1, task: "执行核心任务", owner: "owner" }],
-      },
+      harness: {},
     },
   };
   const result = { output: "done" };

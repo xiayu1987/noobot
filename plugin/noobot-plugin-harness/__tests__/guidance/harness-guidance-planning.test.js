@@ -31,7 +31,7 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
 
-test("harness summary triggers complete revised plan and acceptance uses latest checklist", async () => {
+test("harness summary relay without captured plan keeps final acceptance on default checklist", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
   registerHarnessCore(
@@ -46,60 +46,6 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
         if (payload.purpose === "summary") {
           return createTestModelResponse("已完成：完成初始检查\n小结完成");
         }
-        if (payload.purpose === "planning_refinement") {
-          return createTestModelResponse(
-            JSON.stringify({
-              totalGoal: "完成 harness 计划闭环",
-              taskOwner: "primary_task_owner",
-              nextPhase: { objective: "实现验收闭环", checklistIndexes: [2] },
-              taskChecklist: [
-                {
-                  index: 1,
-                  task: "完成初始检查",
-                  owner: "primary_task_owner",
-                  input: "用户请求",
-                  output: "检查结果",
-                  files: { create: [], modify: ["src/a.js"], delete: [] },
-                },
-                {
-                  index: 2,
-                  task: "实现验收闭环",
-                  owner: "primary_task_owner",
-                  input: "阶段小结和当前计划",
-                  output: "最终计划清单验收结果",
-                  files: { create: ["reports/acceptance.json"], modify: [], delete: [] },
-                },
-              ],
-            }),
-          );
-        }
-        if (payload.purpose === "planning_revision") {
-          return createTestModelResponse(
-            JSON.stringify({
-              totalGoal: "完成 harness 计划闭环",
-              taskOwner: "primary_task_owner",
-              nextPhase: { objective: "实现验收闭环", checklistIndexes: [2] },
-              taskChecklist: [
-                {
-                  index: 1,
-                  task: "完成初始检查",
-                  owner: "primary_task_owner",
-                  input: "用户请求",
-                  output: "检查结果",
-                  files: { create: [], modify: ["src/a.js"], delete: [] },
-                },
-                {
-                  index: 2,
-                  task: "实现验收闭环",
-                  owner: "primary_task_owner",
-                  input: "阶段小结和当前计划",
-                  output: "最终计划清单验收结果",
-                  files: { create: ["reports/acceptance.json"], modify: [], delete: [] },
-                },
-              ],
-            }),
-          );
-        }
         return createTestModelResponse("{}");
       },
     },
@@ -111,7 +57,6 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
     payload: {
       messages: { system: [], history: [] },
       harness: {
-        taskChecklist: [{ index: 1, task: "完成初始检查", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: {
@@ -174,7 +119,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
   );
 });
 
-test("planning_revision reuses summary model messages in separate_model flow", async () => {
+test("summary separate_model invocation uses flat structured_v1 messages", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
   registerHarnessCore(
@@ -197,50 +142,6 @@ test("planning_revision reuses summary model messages in separate_model flow", a
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "summary") return createTestModelResponse("小结完成");
-        if (payload.purpose === "planning_refinement") {
-          return createTestModelResponse(
-            JSON.stringify({
-              totalGoal: "完成计划细化",
-              taskOwner: "primary_task_owner",
-              taskChecklist: [
-                {
-                  index: 1,
-                  task: "细化计划",
-                  owner: "primary_task_owner",
-                  input: "阶段小结和历史执行",
-                  output: "细化后的执行清单",
-                  files: {
-                    create: [],
-                    modify: ["src/capabilities/handlers/guidance.js"],
-                    delete: [],
-                  },
-                },
-              ],
-            }),
-          );
-        }
-        if (payload.purpose === "planning_revision") {
-          return createTestModelResponse(
-            JSON.stringify({
-              totalGoal: "完成计划修复",
-              taskOwner: "primary_task_owner",
-              taskChecklist: [
-                {
-                  index: 1,
-                  task: "修复计划",
-                  owner: "primary_task_owner",
-                  input: "阶段小结和历史执行",
-                  output: "更新后的计划清单",
-                  files: {
-                    create: [],
-                    modify: ["src/capabilities/handlers/guidance.js"],
-                    delete: [],
-                  },
-                },
-              ],
-            }),
-          );
-        }
         return createTestModelResponse("{}");
       },
     },
@@ -256,7 +157,6 @@ test("planning_revision reuses summary model messages in separate_model flow", a
       messages: { system: [], history: [] },
       harness: {
         planText: "1. 初始计划",
-        taskChecklist: [{ index: 1, task: "初始计划", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
@@ -319,7 +219,6 @@ test("planning_refinement is scheduled independently after revision main-plan ch
       messages: { system: [], history: [] },
       harness: {
         planText: "1. 初始计划",
-        taskChecklist: [{ index: 1, task: "初始计划", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: {
@@ -371,7 +270,6 @@ test("harness summary without completion marker still triggers planning revision
     payload: {
       messages: { system: [], history: [] },
       harness: {
-        taskChecklist: [{ index: 1, task: "完成初始检查", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
@@ -403,23 +301,13 @@ test("harness summary without completion marker still triggers planning revision
   );
 });
 
-test("guidance handler inject mode can schedule and capture planning revision without invoker", async () => {
+test("guidance handler inject mode does not schedule planning revision without captured plan", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = {
     payload: {
       messages: { system: [], history: [] },
       harness: {
         totalGoal: "初始目标",
-        taskChecklist: [
-          {
-            index: 1,
-            task: "完成初始检查",
-            owner: "primary_task_owner",
-            input: "用户请求",
-            output: "检查结果",
-            files: { create: [], modify: [], delete: [] },
-          },
-        ],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
@@ -479,29 +367,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
   const revisionCtx = {
     messages: secondCtx.modelContext.messages,
     ai: {
-      content: JSON.stringify({
-        totalGoal: "完成 inject 模式计划闭环",
-        taskOwner: "primary_task_owner",
-        nextPhase: { objective: "完成最终验收", checklistIndexes: [2] },
-        taskChecklist: [
-          {
-            index: 1,
-            task: "完成初始检查",
-            owner: "primary_task_owner",
-            input: "用户请求",
-            output: "检查结果",
-            files: { create: [], modify: ["src/a.js"], delete: [] },
-          },
-          {
-            index: 2,
-            task: "完成最终验收",
-            owner: "primary_task_owner",
-            input: "修正后的计划清单",
-            output: "验收报告",
-            files: { create: ["reports/acceptance.json"], modify: [], delete: [] },
-          },
-        ],
-      }),
+      content: "已完成：完成初始检查",
     },
     agentContext,
   };

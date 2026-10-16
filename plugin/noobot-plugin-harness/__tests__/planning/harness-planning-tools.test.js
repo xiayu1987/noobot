@@ -404,9 +404,7 @@ test("harness planning separate model uses resolved planning tool allowlist", as
       },
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return createTestModelResponse(
-          '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
-        );
+        return createTestModelResponse("1. 执行核心任务");
       },
     },
   );

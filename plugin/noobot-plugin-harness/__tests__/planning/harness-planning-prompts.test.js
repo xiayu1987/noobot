@@ -274,9 +274,7 @@ test("harness planning separate model keeps latest user goal in planning context
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return createTestModelResponse(
-          '{"totalGoal":"完成用户请求","taskOwner":"AI Agent","nextPhase":{"objective":"推进首步","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"分析用户目标","owner":"AI Agent","subOwners":[],"input":"用户诉求与上下文","output":"可执行任务分解","files":{"create":[],"modify":[],"delete":[]}}]}',
-        );
+        return createTestModelResponse("1. 分析用户目标");
       },
     },
   );

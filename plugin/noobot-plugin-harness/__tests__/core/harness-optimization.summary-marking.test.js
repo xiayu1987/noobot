@@ -101,7 +101,6 @@ test("summary checkpoint requests restored incremental messages missing from the
         payload: {
           harness: {
             state,
-            taskChecklist: [],
             acceptanceReports: [],
             reviewReports: [],
             planningRawOutputs: [],
@@ -284,7 +283,6 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
         payload: {
           harness: {
             state,
-            taskChecklist: [],
             acceptanceReports: [],
             reviewReports: [],
             planningRawOutputs: [],
@@ -424,7 +422,6 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
               signals: {},
               pending: {},
             },
-            taskChecklist: [],
             acceptanceReports: [],
             reviewReports: [],
             planningRawOutputs: [],
@@ -503,7 +500,6 @@ test("guidance summary checkpoint retains classified Harness control-tool eviden
         payload: {
           harness: {
             state: { counters: {}, flags: {}, signals: {}, pending: {} },
-            taskChecklist: [],
             acceptanceReports: [],
             reviewReports: [],
             planningRawOutputs: [],
@@ -588,7 +584,6 @@ test("guidance summary checkpoint selects matching messageBlocks instead of flat
               signals: {},
               pending: {},
             },
-            taskChecklist: [],
             acceptanceReports: [],
             reviewReports: [],
             planningRawOutputs: [],
@@ -696,7 +691,6 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
                 summaryCheckpointMessageIds: [],
               },
             },
-            taskChecklist: [],
             acceptanceReports: [],
             reviewReports: [],
             planningRawOutputs: [],

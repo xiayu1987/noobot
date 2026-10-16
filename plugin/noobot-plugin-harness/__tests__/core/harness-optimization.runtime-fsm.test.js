@@ -43,7 +43,6 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
               acceptanceSemanticValidation: { reportIndex: 3 },
             },
           },
-          taskChecklist: [],
           acceptanceReports: [],
           reviewReports: [],
           planningRawOutputs: [],

@@ -44,7 +44,6 @@ test("final acceptance separate model receives revised plan, all phase checklist
             { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：pass" },
             { acceptedAt: "2026-05-27T00:10:00.000Z", content: "阶段验收清单二：warn" },
           ],
-          taskChecklist: [{ index: 1, task: "核心实现" }],
           state: {
             flags: { planningCaptured: true, acceptanceRequested: false },
             counters: {},
@@ -148,7 +147,6 @@ test("harness active request_task_acceptance semantic validation receives agent 
     payload: {
       tools: { registry: [] },
       harness: {
-        taskChecklist: [{ index: 1, task: "执行核心任务" }],
         state: {
           flags: {},
           counters: {},
@@ -236,7 +234,6 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     payload: {
       tools: { registry: [] },
       harness: {
-        taskChecklist: [{ index: 1, task: "pending task" }],
         state,
         logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
@@ -317,7 +314,6 @@ test("harness active request_task_acceptance falls back to closure meta when con
     payload: {
       tools: { registry: [] },
       harness: {
-        taskChecklist: [{ index: 1, task: "执行核心任务" }],
         state: {
           flags: {},
           counters: {},
