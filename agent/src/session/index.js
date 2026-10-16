@@ -6,7 +6,7 @@
 import { PathResolver } from "./path-resolver.js";
 import { SessionPathResolver } from "./session-path-resolver.js";
 import { StorageService } from "./storage-service.js";
-import { normalizeMessagesEntity, normalizeTaskEntity } from "./entities/normalizers.js";
+import { normalizeTaskEntity } from "./entities/normalizers.js";
 import { FileSystemSessionTreeRepository } from "./repositories/file-system-session-tree-repository.js";
 import { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
 import { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
@@ -116,8 +116,6 @@ export function createSessionServices(
     sessionPathResolver,
     sessionTreeRepository,
     storageService,
-    normalizeMessages: (messages, options = {}) =>
-      normalizeMessagesEntity(messages, nowFn, options),
     now: nowFn,
   });
 

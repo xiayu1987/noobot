@@ -631,6 +631,7 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
     );
     const snapshotPayload = {
       sessionId: rootSessionId,
+      aggregateVersion: 0,
       messages: [
         {
           messageUid: "sm_attachment_source",

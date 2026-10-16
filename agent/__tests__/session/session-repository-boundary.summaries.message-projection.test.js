@@ -13,6 +13,7 @@ import { canonicalActivity } from "./session-repository-boundary.summaries.fixtu
 test("session display summary projects persisted messageId and messageUid without identity fallback", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "identity-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "user",
@@ -39,6 +40,7 @@ test("session display summary projects persisted messageId and messageUid withou
 test("session display summary preserves the canonical internal control message type", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "internal-control-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "user",
@@ -60,6 +62,7 @@ test("session display summary preserves the canonical internal control message t
 test("session display summary retains a workflow final assistant with stable presentation identity", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "workflow-final-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",
@@ -83,6 +86,7 @@ test("session display summary retains a workflow final assistant with stable pre
 test("session display summary does not synthesize a missing workflow presentation identity", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "workflow-lifecycle-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",
@@ -113,6 +117,7 @@ test("session display summary rejects an active Turn without canonical presentat
     () =>
       buildSessionDisplaySummary({
         sessionId: "invalid-active-turn-session",
+        aggregateVersion: 0,
         messages: [],
         turnLifecycle: {
           activeTurnScopeId: "turn-active",
@@ -128,6 +133,7 @@ test("session display summary rejects an active Turn presentation identity owned
     () =>
       buildSessionDisplaySummary({
         sessionId: "conflicting-active-turn-session",
+        aggregateVersion: 0,
         messages: [
           {
             role: "user",
@@ -154,6 +160,7 @@ test("session display summary rejects an active Turn presentation identity owned
 test("session display summary does not duplicate an active Turn with persisted assistant facts", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "active-turn-with-facts",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",
@@ -198,6 +205,7 @@ test("session display summary does not duplicate an active Turn with persisted a
 test("session display summary projects one explicit assistant presentation from many model messages", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "assistant-presentation-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",
@@ -269,6 +277,7 @@ test("session display summary rejects multiple canonical assistants for one pres
     () =>
       buildSessionDisplaySummary({
         sessionId: "duplicate-presentation-session",
+        aggregateVersion: 0,
         messages: [
           {
             role: "assistant",

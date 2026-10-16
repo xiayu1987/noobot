@@ -37,6 +37,7 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
     async findById() {
       return {
         sessionId: "s1",
+        aggregateVersion: 0,
         parentSessionId: "",
         messages: [],
       };
@@ -101,6 +102,7 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
   const saved = [];
   const session = {
     sessionId: "s1",
+    aggregateVersion: 0,
     parentSessionId: "",
     messages: [],
     turnTimings: [],
@@ -162,6 +164,7 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
   const saved = [];
   const session = {
     sessionId: "s1",
+    aggregateVersion: 0,
     parentSessionId: "",
     messages: [],
     turnTimings: [],
@@ -238,7 +241,7 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
   const session = {
     sessionId: "s1",
     parentSessionId: "",
-    version: 1,
+    aggregateVersion: 1,
     messages: [
       { role: "assistant", content: "keep", turnScopeId: "turn-keep", dialogProcessId: "dp-keep" },
       { role: "user", content: "hi", turnScopeId: "turn-delete", dialogProcessId: "dp-delete" },
@@ -298,7 +301,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
   const session = {
     sessionId: "s1",
     parentSessionId: "",
-    version: 1,
+    aggregateVersion: 1,
     messages: [
       { role: "user", content: "keep", turnScopeId: "turn-keep", dialogProcessId: "dp-keep" },
       { role: "assistant", content: "old", turnScopeId: "turn-old", dialogProcessId: "dp-old" },

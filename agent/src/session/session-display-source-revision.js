@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash } from "node:crypto";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import {
+  requireSessionAggregateVersion,
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+} from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
 export const SESSION_SOURCE_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
@@ -60,7 +63,7 @@ export function createSessionDisplaySourceRevision(session = {}) {
     customTitle: text(session?.customTitle),
     createdAt: text(session?.createdAt),
     updatedAt: text(session?.updatedAt),
-    aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
+    aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     turnTimings: session?.turnTimings || [],
     turnLifecycle: session?.turnLifecycle || {},
     sessionArtifactEvents: session?.sessionArtifactEvents || [],

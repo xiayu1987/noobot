@@ -19,6 +19,7 @@ test("snapshot reads legacy transfer reasons only after canonical Session migrat
       sessionDir: root,
       sessionPayload: {
         sessionId: "legacy-transfer-session",
+        aggregateVersion: 0,
         messages: [
           {
             ...canonicalMessages([{ role: "assistant", content: "parsed" }])[0],

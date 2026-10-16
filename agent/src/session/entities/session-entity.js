@@ -7,7 +7,10 @@
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { validateProtocolEvent } from "@noobot/event-protocol";
-import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
+import {
+  assertSessionAggregateInvariants,
+  requireSessionAggregateVersion,
+} from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
@@ -153,7 +156,7 @@ function createNormalizedSessionEntity(session, context, messages) {
     ...normalizedBase,
     sessionId: context.sessionId,
     parentSessionId: context.parentSessionId,
-    aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
+    aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     caller: firstText(session?.caller, "user"),
     modelAlias: String(session?.modelAlias || ""),
     currentTaskId: text(session?.currentTaskId),

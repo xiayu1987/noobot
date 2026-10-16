@@ -39,7 +39,9 @@ export {
   SESSION_COMMAND,
   assertSessionCommand,
   createSessionCommand,
+  isSessionAggregateVersion,
   normalizeExpectedAggregateVersion,
+  requireSessionAggregateVersion,
   validateSessionCommand,
 } from "./command/session-command.js";
 export * from "./command/command-fingerprint.js";
@@ -55,6 +57,7 @@ export * from "./command/turn-replace-command.js";
 export * from "./command/message-delete-command.js";
 export * from "./lifecycle/turn-state.js";
 export * from "./lifecycle/turn-event.js";
+export * from "./lifecycle/turn-command-id.js";
 export * from "./lifecycle/turn-recovery.js";
 export * from "./lifecycle/turn-execution-state.js";
 export * from "./lifecycle/turn-commit-action.js";

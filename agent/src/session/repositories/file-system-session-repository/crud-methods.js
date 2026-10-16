@@ -13,6 +13,7 @@ import {
   SESSION_ERROR_CODE,
   createSessionDeletedError,
   normalizeParentSessionId,
+  requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -103,6 +104,7 @@ class SessionCrudMethods {
           {
             sessionId,
             parentSessionId: resolvedParentSessionId || "",
+            aggregateVersion: 0,
             caller: meta?.caller || "user",
             modelAlias: meta?.modelAlias || "",
             currentTaskId: "",
@@ -133,6 +135,7 @@ class SessionCrudMethods {
       {
         sessionId,
         parentSessionId,
+        aggregateVersion: 0,
         caller: meta?.caller || "user",
         modelAlias: meta?.modelAlias || "",
         currentTaskId: "",
@@ -252,8 +255,14 @@ class SessionCrudMethods {
           throw error;
         }
         if (expectedAggregateVersion !== undefined && expectedAggregateVersion !== null) {
-          const actualVersion = Number(persistedForChecks?.aggregateVersion || 0);
-          if (actualVersion !== Number(expectedAggregateVersion)) {
+          if (!persistedForChecks) {
+            const error = new Error("session aggregate version expected for a missing session");
+            error.statusCode = 409;
+            error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
+            throw error;
+          }
+          const actualVersion = requireSessionAggregateVersion(persistedForChecks.aggregateVersion);
+          if (actualVersion !== expectedAggregateVersion) {
             const error = new Error("session aggregate version conflict");
             error.statusCode = 409;
             error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;

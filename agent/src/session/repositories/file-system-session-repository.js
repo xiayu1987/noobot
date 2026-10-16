@@ -18,7 +18,6 @@ export class FileSystemSessionRepository {
     sessionPathResolver,
     sessionTreeRepository,
     storageService,
-    normalizeMessages,
     now = () => new Date().toISOString(),
     mutationLockTimeoutMs = 30000,
     mutationLockStaleMs = 60000,
@@ -31,7 +30,6 @@ export class FileSystemSessionRepository {
     this.sessionPathResolver = sessionPathResolver;
     this.sessionTreeRepository = sessionTreeRepository;
     this.storageService = storageService;
-    this.normalizeMessages = normalizeMessages;
     this.normalizeSelectedConnectorIds = normalizeSelectedConnectorIds;
     this.now = now;
     this.mutationLockTimeoutMs = Math.max(1, Number(mutationLockTimeoutMs) || 30000);

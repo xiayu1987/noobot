@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { deriveAgentExecutionId, normalizeParentSessionId } from "@noobot/session-protocol";
+import {
+  deriveAgentExecutionId,
+  deriveTurnCommandId,
+  normalizeParentSessionId,
+} from "@noobot/session-protocol";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -33,7 +37,7 @@ export function createAgentDetachedSubSessionStrategy({
     parentDialogProcessId: normalizedParentDialogProcessId,
     dialogProcessId,
     turnScopeId,
-    commandId: turnScopeId,
+    commandId: deriveTurnCommandId(turnScopeId),
     executionId,
     rootExecutionId: executionId,
     relativeDir: `${AGENT_DETACHED_SESSION_ROOT}/${sessionId}`,

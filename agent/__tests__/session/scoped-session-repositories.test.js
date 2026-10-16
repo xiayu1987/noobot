@@ -26,8 +26,6 @@ import { createSessionFacade } from "../../src/session/index.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 import { StorageService } from "../../src/session/storage-service.js";
-import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { normalizeMessagesEntity } from "../../src/session/entities/message-entity.js";
 import { normalizeTaskEntity } from "../../src/session/entities/task-entity.js";
 import {
   ScopedSessionLocationResolver,
@@ -77,8 +75,6 @@ function buildHarness() {
           storageService,
         }),
         storageService,
-        normalizeMessages: normalizeMessagesEntity,
-        normalizeSelectedConnectorIds,
       });
       const taskRepo = new FileSystemTaskRepository({
         pathResolver,
@@ -124,7 +120,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
       dialogProcessId: "dialog-replaced",
       turnScopeId: "turn-replaced",
     };
-    await sessionRepo.save("alice", { sessionId, messages: [keep, replaced] });
+    await sessionRepo.save("alice", { sessionId, aggregateVersion: 0, messages: [keep, replaced] });
 
     const replacement = (suffix) => ({
       messageUid: `replacement-${suffix}`,
@@ -134,8 +130,16 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
       turnScopeId: `turn-${suffix}`,
     });
     await Promise.all([
-      sessionRepo.save("alice", { sessionId, messages: [keep, replacement("a")] }),
-      sessionRepo.save("alice", { sessionId, messages: [keep, replacement("b")] }),
+      sessionRepo.save("alice", {
+        sessionId,
+        aggregateVersion: 0,
+        messages: [keep, replacement("a")],
+      }),
+      sessionRepo.save("alice", {
+        sessionId,
+        aggregateVersion: 0,
+        messages: [keep, replacement("b")],
+      }),
     ]);
 
     const scope = await sessionRepo.resolveSessionScope("alice", sessionId, "");
@@ -672,13 +676,36 @@ test("session save rejects entity parentSessionId that conflicts with the explic
   try {
     for (const explicitParent of ["p2", ""]) {
       await assert.rejects(
-        sessionRepo.save("alice", { sessionId: "child", parentSessionId: "p1" }, explicitParent),
+        sessionRepo.save(
+          "alice",
+          { sessionId: "child", parentSessionId: "p1", aggregateVersion: 0 },
+          explicitParent,
+        ),
         { code: "SESSION_PARENT_SESSION_SCOPE_CONFLICT", statusCode: 409 },
       );
     }
     assert.equal(await sessionRepo.storageService.exists(sessionFile("child")), false);
-    await sessionRepo.save("alice", { sessionId: "child", parentSessionId: "p1" }, "p1");
+    await sessionRepo.save(
+      "alice",
+      { sessionId: "child", parentSessionId: "p1", aggregateVersion: 0 },
+      "p1",
+    );
     assert.equal((await readJson(sessionFile("child"))).parentSessionId, "p1");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("protocol repair of a missing Session reports not found without recording a repair failure", async () => {
+  const harness = buildHarness();
+  const { sessionRepo } = await harness.setup();
+  try {
+    await assert.rejects(sessionRepo.repairSessionProtocol("alice", "missing-session"), {
+      code: "SESSION_ARTIFACT_NOT_FOUND",
+      statusCode: 404,
+    });
+    const lifecycle = await sessionRepo._readSessionLifecycleRecord("alice", "missing-session");
+    assert.notEqual(lifecycle?.repair?.status, "failed");
   } finally {
     await harness.cleanup();
   }

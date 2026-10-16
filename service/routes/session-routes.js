@@ -163,7 +163,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
           sessionDocCount: sessionDocs.length,
           sessionDocs: sessionDocs.map((doc = {}) => ({
             sessionId: text(doc.sessionId),
-            aggregateVersion: Number(doc.aggregateVersion || 0),
+            aggregateVersion: doc.aggregateVersion,
             turnOrderCount: Array.isArray(doc.turnOrder) ? doc.turnOrder.length : 0,
             turnOrderMessageCount: Array.isArray(doc.turnOrder)
               ? doc.turnOrder.reduce(
@@ -453,7 +453,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       data: {
         commandId: text(result?.turnReplacement?.commandId),
         replacementDialogProcessId: text(result?.turnReplacement?.replacementDialogProcessId),
-        committedAggregateVersion: Number(result?.turnReplacement?.committedAggregateVersion || 0),
+        committedAggregateVersion: result?.turnReplacement?.committedAggregateVersion,
         lifecycleSequence: Number(lifecycle?.sequence || 0),
         activeTurnScopeId: text(lifecycle?.activeTurnScopeId),
         remainingTurnScopeIds: Object.keys(lifecycle?.turns || {}).sort(),

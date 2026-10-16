@@ -52,6 +52,7 @@ test("message-local lifecycle fields cannot become authoritative terminal facts"
   const session = normalizeSessionEntity(
     {
       sessionId: "s1",
+      aggregateVersion: 0,
       messages: [
         {
           messageUid: "sm_noncanonical_terminal_user",
@@ -80,6 +81,7 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
   const session = normalizeSessionEntity(
     {
       sessionId: "s-lifecycle",
+      aggregateVersion: 0,
       updatedAt: now(),
       messages: [
         {
@@ -112,6 +114,7 @@ test("action failure before message persistence remains terminal after summary h
   const session = normalizeSessionEntity(
     {
       sessionId: "s-action-failure",
+      aggregateVersion: 0,
       updatedAt: now(),
       messages: [],
       turnLifecycle: terminalLifecycle({
@@ -137,6 +140,7 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
   const parent = normalizeSessionEntity(
     {
       sessionId: "parent",
+      aggregateVersion: 0,
       turnLifecycle: terminalLifecycle({
         turnScopeId: "parent-turn",
         dialogProcessId: "parent-dialog",
@@ -147,6 +151,7 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
   const child = normalizeSessionEntity(
     {
       sessionId: "child",
+      aggregateVersion: 0,
       parentSessionId: "parent",
       turnLifecycle: terminalLifecycle({
         turnScopeId: "child-turn",
@@ -169,6 +174,7 @@ test("synthetic placeholders cannot enter persistence or summary", () => {
   const session = normalizeSessionEntity(
     {
       sessionId: "s-placeholder",
+      aggregateVersion: 0,
       messages: [
         {
           messageUid: "sm_placeholder_assistant",

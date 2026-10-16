@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { validateTurnReplacementCommit } from "../lifecycle/turn-replacement.js";
-import { SESSION_COMMAND } from "./session-command.js";
+import { SESSION_COMMAND, isSessionAggregateVersion } from "./session-command.js";
+
+const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
 import { isPlainObject, text as clean } from "@noobot/shared/value";
 
 function isCanonicalText(value) {
@@ -79,8 +81,14 @@ export function normalizeCommandReceipt(receipt = {}) {
   const type = clean(receipt.type);
   const requestHash = clean(receipt.requestHash);
   if (!commandId || !type || !requestHash) return null;
-  const aggregateVersion = Number(receipt.aggregateVersion || 0);
-  if (!Number.isSafeInteger(aggregateVersion) || aggregateVersion < 0) return null;
+  const isSessionCommand = SESSION_COMMAND_TYPES.has(type);
+  if (
+    isSessionCommand
+      ? !isSessionAggregateVersion(receipt.aggregateVersion)
+      : Object.hasOwn(receipt, "aggregateVersion")
+  ) {
+    return null;
+  }
   for (const field of ["revision", "sequence"]) {
     if (
       receipt[field] !== undefined &&
@@ -94,7 +102,7 @@ export function normalizeCommandReceipt(receipt = {}) {
     commandId,
     type,
     requestHash,
-    aggregateVersion,
+    ...(isSessionCommand ? { aggregateVersion: receipt.aggregateVersion } : {}),
     committedAt: clean(receipt.committedAt),
     ...(clean(receipt.turnScopeId) ? { turnScopeId: clean(receipt.turnScopeId) } : {}),
     ...(result ? { result } : {}),

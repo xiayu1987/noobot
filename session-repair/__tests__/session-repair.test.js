@@ -201,6 +201,7 @@ function historicalMultimodalParseEnvelope(overrides = {}) {
 function multimodalParseMigrationSession(envelope = historicalMultimodalParseEnvelope()) {
   return {
     sessionId: "session-1",
+    aggregateVersion: 2,
     turnLifecycle: { turns: {}, commandReceipts: [] },
     messages: [
       {
@@ -239,6 +240,7 @@ test("migrates the legacy message id field into messageId", () => {
   const source = {
     schemaVersion: 7,
     sessionId: "session-1",
+    aggregateVersion: 3,
     messages: [
       { messageUid: "u1", id: "m1", role: "user" },
       { messageUid: "u2", id: "m2", messageId: "m2", role: "assistant" },
@@ -266,6 +268,7 @@ test("rejects messages whose legacy id conflicts with messageId", () => {
       migrateSessionDocument({
         schemaVersion: 7,
         sessionId: "session-1",
+        aggregateVersion: 1,
         messages: [{ messageUid: "u1", id: "provider-1", messageId: "m1" }],
       }),
     (error) => error.code === "SESSION_MESSAGE_ID_CONFLICT",
@@ -276,6 +279,7 @@ test("runs every message migration step even after an earlier step changed the m
   const source = {
     schemaVersion: 6,
     sessionId: "session-1",
+    aggregateVersion: 1,
     messages: [
       {
         messageUid: "u1",

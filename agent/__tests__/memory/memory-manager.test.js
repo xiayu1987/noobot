@@ -577,6 +577,7 @@ test("captureSessionToShortMemory skips injected messages", async () => {
     sessionDir: path.join(userRoot, "runtime/session", normalizedParentSessionId, "s1"),
     sessionPayload: {
       sessionId: "s1",
+      aggregateVersion: 0,
       messages: [
         {
           messageUid: "sm_memory_user",

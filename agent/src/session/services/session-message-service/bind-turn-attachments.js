@@ -11,13 +11,13 @@ import {
   decideAggregateConcurrency,
   decideCommandIdempotency,
   normalizeExpectedAggregateVersion,
+  requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
 import {
   INVALID_CANONICAL_ATTACHMENT_ERROR_CODE,
   assertCanonicalAttachments,
   dedupeAttachments,
 } from "./attachment-helpers.js";
-import { resolveAggregateVersion } from "./anchor-utils.js";
 import { text } from "@noobot/shared/value";
 
 function prepareAttachmentBinding({
@@ -120,7 +120,7 @@ export async function bindTurnAttachments({
           session,
           userMessage: messages[messageIndex],
           attachments: messages[messageIndex].attachments || [],
-          aggregateVersion: resolveAggregateVersion(session),
+          aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
           deduplicated: true,
         };
       }
@@ -135,7 +135,7 @@ export async function bindTurnAttachments({
           code: SESSION_ERROR_CODE.TURN_ATTACHMENTS_ALREADY_BOUND,
         });
       }
-      const currentVersion = resolveAggregateVersion(session);
+      const currentVersion = requireSessionAggregateVersion(session?.aggregateVersion);
       const concurrency = decideAggregateConcurrency({
         expectedAggregateVersion: normalizedExpectedVersion,
         aggregateVersion: currentVersion,
@@ -176,13 +176,13 @@ export async function bindTurnAttachments({
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const savedSession =
-        (await this.sessionRepo.findById(
-          identity.userId,
-          identity.sessionId,
-          resolvedParentSessionId,
-          persistenceContext,
-        )) || session;
+      const savedSession = await this.sessionRepo.findById(
+        identity.userId,
+        identity.sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
+      );
+      if (!savedSession) throw new TypeError("attachment binding saved Session is missing");
       const savedMessage = (savedSession.messages || []).find(
         (message) => text(message?.messageUid) === identity.messageUid,
       );
@@ -191,7 +191,7 @@ export async function bindTurnAttachments({
         session: savedSession,
         userMessage: savedMessage,
         attachments: savedMessage.attachments || [],
-        aggregateVersion: resolveAggregateVersion(savedSession),
+        aggregateVersion: requireSessionAggregateVersion(savedSession.aggregateVersion),
         deduplicated: false,
       };
     },

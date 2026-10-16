@@ -5,6 +5,7 @@
  */
 import { isPlainObject, text as clean } from "@noobot/shared/value";
 import { createSessionScope, validateSessionScope } from "../identity.js";
+import { SESSION_ERROR_CODE } from "../errors.js";
 import { SESSION_PROTOCOL_VERSION } from "../version.js";
 
 export const SESSION_COMMAND = Object.freeze({
@@ -64,22 +65,28 @@ export function assertSessionCommand(command = {}) {
   if (!result.valid) throw new TypeError(`invalid session command: ${result.errors.join(",")}`);
   return command;
 }
+export function isSessionAggregateVersion(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+export function requireSessionAggregateVersion(value, field = "aggregateVersion") {
+  if (isSessionAggregateVersion(value)) return value;
+  throw Object.assign(new TypeError(`${field} must be a non-negative safe integer`), {
+    statusCode: 400,
+    code: SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
+  });
+}
+
 export function normalizeExpectedAggregateVersion(value) {
   if (value === null || value === undefined || value === "") return null;
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw Object.assign(
-      new TypeError("expectedAggregateVersion must be a non-negative safe integer"),
-      { statusCode: 400, code: "INVALID_SESSION_AGGREGATE_VERSION" },
-    );
-  }
-  return value;
+  return requireSessionAggregateVersion(value, "expectedAggregateVersion");
 }
 export function decideAggregateConcurrency({ expectedAggregateVersion, aggregateVersion } = {}) {
-  if (!Number.isInteger(aggregateVersion) || aggregateVersion < 0)
+  if (!isSessionAggregateVersion(aggregateVersion))
     return Object.freeze({ allowed: false, reason: "invalid_aggregate_version" });
   if (expectedAggregateVersion === null)
     return Object.freeze({ allowed: true, nextAggregateVersion: aggregateVersion + 1 });
-  if (!Number.isInteger(expectedAggregateVersion) || expectedAggregateVersion < 0)
+  if (!isSessionAggregateVersion(expectedAggregateVersion))
     return Object.freeze({ allowed: false, reason: "invalid_expected_aggregate_version" });
   return expectedAggregateVersion === aggregateVersion
     ? Object.freeze({ allowed: true, nextAggregateVersion: aggregateVersion + 1 })

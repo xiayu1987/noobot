@@ -292,7 +292,11 @@ test("session summary references canonical thinking detail without copying its t
     },
   ];
 
-  const summary = buildSessionDisplaySummary({ sessionId: "child-session", messages });
+  const summary = buildSessionDisplaySummary({
+    sessionId: "child-session",
+    aggregateVersion: 0,
+    messages,
+  });
   const summaryMessage = summary.messages.find((item) => item.messageId === "final-assistant");
   const detail = buildThinkingDetailPayload(
     {
@@ -331,7 +335,11 @@ test("session summary does not copy large tool payloads retained by thinking det
     },
   ];
 
-  const summary = buildSessionDisplaySummary({ sessionId: "large-session", messages });
+  const summary = buildSessionDisplaySummary({
+    sessionId: "large-session",
+    aggregateVersion: 0,
+    messages,
+  });
   const detail = buildThinkingDetailPayload(
     {
       sessionId: "large-session",
@@ -354,6 +362,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
       sessionDir,
       sessionPayload: {
         sessionId: "scoped-session",
+        aggregateVersion: 0,
         messages: [
           {
             messageUid: "sm-one",

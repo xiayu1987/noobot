@@ -14,11 +14,6 @@ export function resolveTurnScopeId(message = {}) {
   return normalizeAnchorValue(message?.turnScopeId || "");
 }
 
-export function resolveAggregateVersion(session = {}) {
-  const version = Number(session?.aggregateVersion || 0);
-  return Number.isFinite(version) ? version : 0;
-}
-
 export function uniqueValues(values = []) {
   return [...new Set(values.map((value) => normalizeAnchorValue(value)).filter(Boolean))];
 }

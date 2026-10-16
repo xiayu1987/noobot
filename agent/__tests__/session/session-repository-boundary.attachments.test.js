@@ -32,6 +32,7 @@ async function withTempWorkspace(fn) {
 test("session display summary should keep canonical attachment fields", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "s-attachments",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",
@@ -62,6 +63,7 @@ test("session display summary should keep canonical attachment fields", () => {
 test("session display summary keeps rich attachment fields for preview and parsed result", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "s-rich-attachments",
+    aggregateVersion: 0,
     messages: [
       {
         role: "user",
@@ -139,6 +141,7 @@ test("session display summary keeps rich attachment fields for preview and parse
 test("session display summary derives attachments from transfer envelopes", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "s-transfer-attachments",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",
@@ -197,6 +200,7 @@ test("session display summary derives attachments from transfer envelopes", () =
 test("session display summary binds completed tool artifacts to one explicit assistant turn", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "s-tool-artifacts",
+    aggregateVersion: 0,
     messages: [
       {
         messageId: "assistant-one",
@@ -290,6 +294,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
 test("session display summary does not guess ownership for an unmatched tool artifact turn", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "s-unmatched-artifact",
+    aggregateVersion: 0,
     messages: [
       {
         id: "assistant-one",
@@ -360,6 +365,7 @@ test("session artifact persistence should normalize attachment fields before wri
       now: () => "2026-05-14T00:00:00.000Z",
       sessionPayload: {
         sessionId: "s-attachments",
+        aggregateVersion: 0,
         caller: "user",
         messages: [
           {

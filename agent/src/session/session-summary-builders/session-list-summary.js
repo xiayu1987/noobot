@@ -5,8 +5,9 @@
  */
 import { buildMessageSummary } from "./message-summary-projection.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 
-export const SESSIONS_SUMMARY_SCHEMA_VERSION = 2;
+export const SESSIONS_SUMMARY_SCHEMA_VERSION = 3;
 
 export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
   const sessionId = text(session?.sessionId);
@@ -27,7 +28,7 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
     createdAt: text(session?.createdAt),
     updatedAt: text(session?.updatedAt),
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
-    aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
+    aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     title:
       customTitle ||
       (firstUserMessage
@@ -59,7 +60,6 @@ export function buildUnavailableSessionSummary({
     createdAt: text(createdAt),
     updatedAt: text(updatedAt),
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
-    aggregateVersion: 0,
     title: text(title) || normalizedSessionId.slice(0, 8),
     messages: [],
     messageCount: 0,
@@ -87,7 +87,9 @@ export function normalizeSessionsSummaryPayload(
       createdAt: text(item?.createdAt),
       updatedAt: text(item?.updatedAt),
       depth: Number.isFinite(Number(item?.depth)) ? Number(item.depth) : 0,
-      aggregateVersion: Math.max(0, Number(item?.aggregateVersion) || 0),
+      ...(item?.availability === "unavailable"
+        ? {}
+        : { aggregateVersion: requireSessionAggregateVersion(item?.aggregateVersion) }),
       title: text(item?.title) || text(item?.sessionId).slice(0, 8),
       messageCount: Number.isFinite(Number(item?.messageCount)) ? Number(item.messageCount) : 0,
       lastMessage: isPlainObject(item?.lastMessage) ? item.lastMessage : null,

@@ -29,7 +29,7 @@ import {
 } from "../src/index.js";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 8);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 9);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -100,7 +100,10 @@ test("canonical assistant presentation is unique and fully identified per Turn",
 
 test("Session artifact schema versions are explicit protocol facts", () => {
   assert.equal(resolveSessionArtifactSchemaVersion(undefined), 0);
-  assert.equal(resolveSessionArtifactSchemaVersion(SESSION_ARTIFACT_SCHEMA_VERSION), 8);
+  assert.equal(
+    resolveSessionArtifactSchemaVersion(SESSION_ARTIFACT_SCHEMA_VERSION),
+    SESSION_ARTIFACT_SCHEMA_VERSION,
+  );
   for (const value of [null, "7", 7.1, -1]) {
     assert.throws(
       () => resolveSessionArtifactSchemaVersion(value),
@@ -252,6 +255,19 @@ test("session command has one strict identity and concurrency coordinate", () =>
   assert.equal(validateSessionCommand({ ...command, expectedVersion: 4 }).valid, false);
 });
 
+test("command receipts own aggregate versions only for Session commands", () => {
+  const base = { commandId: "command-1", requestHash: "hash-1" };
+  assert.equal(normalizeCommandReceipt({ ...base, type: SESSION_COMMAND.TURN_COMMIT }), null);
+  assert.equal(
+    normalizeCommandReceipt({ ...base, type: "turn.accepted", aggregateVersion: 0 }),
+    null,
+  );
+  assert.equal(
+    Object.hasOwn(normalizeCommandReceipt({ ...base, type: "turn.accepted" }), "aggregateVersion"),
+    false,
+  );
+});
+
 test("aggregate concurrency and command idempotency are deterministic", () => {
   assert.deepEqual(
     decideAggregateConcurrency({ expectedAggregateVersion: 3, aggregateVersion: 3 }),
@@ -278,7 +294,14 @@ test("aggregate concurrency and command idempotency are deterministic", () => {
       commandId: "c1",
       type: SESSION_COMMAND.TURN_COMMIT,
       requestHash: "h2",
-      receipts: [{ commandId: "c1", type: SESSION_COMMAND.TURN_COMMIT, requestHash: "h1" }],
+      receipts: [
+        {
+          commandId: "c1",
+          type: SESSION_COMMAND.TURN_COMMIT,
+          requestHash: "h1",
+          aggregateVersion: 1,
+        },
+      ],
     }).reason,
     "command_id_reuse_conflict",
   );

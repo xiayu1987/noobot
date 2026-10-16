@@ -8,7 +8,6 @@ import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/m
 import { randomUUID } from "node:crypto";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
-import { resolveAggregateVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
@@ -20,6 +19,7 @@ import {
   normalizeDialogProcessId,
   resolveTurnCommitAction,
   validateSessionProvisionIntent,
+  requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
 import { createSessionMessageUid } from "../../../context/session/message-uid.js";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
@@ -91,7 +91,7 @@ function findTurnScopeUserMessage(session, turnScopeId) {
 }
 
 function resolveTurnAggregateConcurrency(session, expectedAggregateVersion) {
-  const actualVersion = resolveAggregateVersion(session);
+  const actualVersion = requireSessionAggregateVersion(session?.aggregateVersion);
   const concurrency = decideAggregateConcurrency({
     expectedAggregateVersion:
       expectedAggregateVersion === undefined ? null : Number(expectedAggregateVersion),
@@ -356,7 +356,7 @@ export async function applyTurnLifecycleEvent({
         userMessage,
         dialogProcessId: text(result.turn?.dialogProcessId),
         turnStatus: result.turn?.terminalStatus || null,
-        aggregateVersion: resolveAggregateVersion(session),
+        aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
       };
     },
     parentSessionId,
@@ -439,7 +439,7 @@ async function provisionSessionWithInitialTurn({
         session,
         userMessage,
         dialogProcessId: text(result.turn?.dialogProcessId),
-        aggregateVersion: resolveAggregateVersion(session),
+        aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
         sessionCreated: isNew,
       };
     },
@@ -569,7 +569,7 @@ export async function assertReusedUserTurnIdentity({
     session,
     userMessage: targetMessage,
     messageIndex: targetIndex,
-    aggregateVersion: resolveAggregateVersion(session),
+    aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     dialogProcessId: normalizedDialogProcessId,
   };
 }

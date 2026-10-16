@@ -111,7 +111,6 @@ function normalizeCommandReceipt(item) {
     type: clean(item.type),
     turnScopeId: clean(item.turnScopeId),
     requestHash: clean(item.requestHash),
-    aggregateVersion: integer(item.aggregateVersion),
     result: isPlainObject(item.result) ? structuredClone(item.result) : {},
     revision: integer(item.revision),
     sequence: integer(item.sequence),

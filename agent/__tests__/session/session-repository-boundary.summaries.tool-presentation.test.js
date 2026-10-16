@@ -17,6 +17,7 @@ test("session summary projects attachment identities without object stringificat
   };
   const summary = buildSessionDisplaySummary({
     sessionId: "summary-session",
+    aggregateVersion: 0,
     messages: [
       {
         id: "assistant-1",
@@ -59,6 +60,7 @@ test("session summary projects attachment identities without object stringificat
 test("session summary uses the canonical tool presentation protocol", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "tool-summary-session",
+    aggregateVersion: 0,
     messages: [
       {
         id: "assistant-tool-summary",

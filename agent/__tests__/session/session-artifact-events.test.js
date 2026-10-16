@@ -105,8 +105,7 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     },
     async save(_userId, next) {
       session = structuredClone(next);
-      session.aggregateVersion += 1;
-      return session;
+      return true;
     },
   };
   const service = new SessionMessageService({
@@ -114,7 +113,7 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     now: () => "2026-08-29T00:00:00.000Z",
   });
 
-  await service.commitAuthorityEvent({
+  const committed = await service.commitAuthorityEvent({
     userId: "admin",
     sessionId: "session-1",
     family: EVENT_FAMILY.PLUGIN_ARTIFACT,
@@ -163,6 +162,9 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
 
   assert.equal((await readAuthorityOutbox(sessionDir)).length, 1);
   assert.equal(session.sessionArtifactEvents.length, 1);
+  assert.equal(session.aggregateVersion, 1);
+  assert.equal(committed.aggregateVersion, 1);
+  assert.equal(committed.envelope.ordering.aggregateVersion, 1);
   assert.equal(
     session.sessionArtifactEvents[0].payload.data.protocol.animationId,
     "session-animation",
@@ -240,8 +242,7 @@ test("plugin artifact replacement increments revision and rejects a stale base r
     },
     async save(_userId, next) {
       session = structuredClone(next);
-      session.aggregateVersion += 1;
-      return session;
+      return true;
     },
   };
   const service = new SessionMessageService({

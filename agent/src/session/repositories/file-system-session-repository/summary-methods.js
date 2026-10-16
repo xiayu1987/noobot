@@ -51,7 +51,7 @@ class SessionSummaryMethods {
       this._sessionsSummaryFile(normalizedUserId),
       { sessions: [], updatedAt: this.now() },
     );
-    if (Number(payload?.schemaVersion || 0) !== SESSIONS_SUMMARY_SCHEMA_VERSION) {
+    if (payload?.schemaVersion !== SESSIONS_SUMMARY_SCHEMA_VERSION) {
       return this.rebuildSessionsSummary(normalizedUserId);
     }
     return normalizeSessionsSummaryPayload(payload, this.now);

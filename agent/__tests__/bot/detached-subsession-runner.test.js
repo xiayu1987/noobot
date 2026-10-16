@@ -135,7 +135,7 @@ test("detached sub-session delegates execution and persistence to the main runne
     relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
     allowedRoot: "runtime/plugin-data/workflow/session",
   });
-  assert.equal(completedLifecycle.completionCommitId, "turn-1:completed");
+  assert.equal(completedLifecycle.completionCommitId, "turn-1:turn.completed");
   assert.deepEqual(completedLifecycle.terminalStatus, { command: "completed" });
 
   assert.equal(result.sessionId, "sub1");
@@ -445,7 +445,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     outbox[3].envelope.payload.summaryVersion,
     persisted.turnLifecycle.turns["turn-persisted"].summaryVersion,
   );
-  assert.equal(outbox[3].envelope.payload.completionCommitId, "turn-persisted:completed");
+  assert.equal(outbox[3].envelope.payload.completionCommitId, "turn-persisted:turn.completed");
 });
 
 test("detached sub-session rejects a runner result with a second dialog identity", async () => {
@@ -590,7 +590,7 @@ test("detached sub-session takes commandId from strategy and other child-owned f
   const runConfig = calls.runSessionPayloads[0].runConfig;
   assert.equal(runConfig.expectedAggregateVersion, 0);
   assert.equal(runConfig.commandId, "child-command");
-  assert.equal(calls.lifecyclePayloads.at(-1)?.commandId, "child-command:completed");
+  assert.equal(calls.lifecyclePayloads.at(-1)?.commandId, "child-command:turn.completed");
   assert.equal(runConfig.thinkingStartedAt, "2026-07-26T12:30:00.000Z");
 });
 
@@ -636,7 +636,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   assert.match(stoppedLifecycle.turnScopeId, /^internal-turn:/);
   assert.equal(
     stoppedLifecycle.completionCommitId,
-    `${stoppedLifecycle.turnScopeId}:stop-completed`,
+    `${stoppedLifecycle.turnScopeId}:turn.stop_completed`,
   );
   assert.deepEqual(stoppedLifecycle.terminalStatus, { command: "user_stopped" });
   assert.equal(Object.hasOwn(abortError, "lifecycle"), false);

@@ -91,7 +91,7 @@ function summarizeConcurrency({ resolvedRunConfig, committedTurnResult }) {
   return {
     commandId: clean(resolvedRunConfig?.commandId),
     expectedAggregateVersion: expectedAggregateVersion ?? null,
-    committedAggregateVersion: Number(committedTurnResult?.aggregateVersion || 0) || null,
+    committedAggregateVersion: committedTurnResult?.aggregateVersion ?? null,
   };
 }
 

@@ -119,6 +119,7 @@ test("dialog order accepts only canonical dialogOrdinal and messageUid fields", 
   const normalized = normalizeSessionEntity(
     {
       sessionId: "s1",
+      aggregateVersion: 0,
       messages: [
         {
           role: "user",
@@ -154,6 +155,7 @@ test("dialog order accepts only canonical dialogOrdinal and messageUid fields", 
 test("messages without a persistent messageUid are rejected", () => {
   const invalid = {
     sessionId: "s1",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",

@@ -7,7 +7,6 @@ import { createSessionMessageUid } from "../../../context/session/message-uid.js
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import {
-  resolveAggregateVersion,
   createMessageAnchorMatcher,
   resolveUserTurnStartIndex,
   clearReplacementUserRuntimeState,
@@ -26,6 +25,7 @@ import {
   normalizeExpectedAggregateVersion,
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
+  requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
 import { commitTurnDeletion, commitTurnReplacement } from "@noobot/authoritative-state/application";
 import {
@@ -93,7 +93,7 @@ async function prepareSessionCommand({
       }),
     };
   }
-  const currentVersion = resolveAggregateVersion(session);
+  const currentVersion = requireSessionAggregateVersion(session?.aggregateVersion);
   const concurrency = decideAggregateConcurrency({
     expectedAggregateVersion,
     aggregateVersion: currentVersion,
@@ -146,7 +146,7 @@ function createCommandResult({
   return {
     session,
     ...receiptResult,
-    aggregateVersion: resolveAggregateVersion(session),
+    aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     committedAggregateVersion,
     commandId,
     removedAuthorityOutboxEvents,

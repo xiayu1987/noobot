@@ -34,6 +34,8 @@ import {
 } from "@noobot/session-repair";
 import { text } from "@noobot/shared/value";
 
+const SESSION_ARTIFACT_NOT_FOUND = "SESSION_ARTIFACT_NOT_FOUND";
+
 class SessionArtifactMethods {
   async repairSessionProtocol(
     userId = "",
@@ -105,7 +107,7 @@ class SessionArtifactMethods {
       if (isSessionDisplaySummaryCurrent(summary, manifest)) {
         return { summary, migrated: false, rebuilt: false };
       }
-      const migrated = Number(manifest?.schemaVersion || 0) !== SESSION_ARTIFACT_SCHEMA_VERSION;
+      const migrated = manifest?.schemaVersion !== SESSION_ARTIFACT_SCHEMA_VERSION;
       const session = await this.findById(
         userId,
         normalizedSessionId,
@@ -178,8 +180,9 @@ class SessionArtifactMethods {
         );
         const manifest = await this.storageService.readJson(scope.sessionFile, null);
         const session =
+          manifest &&
           createSessionDisplaySourceRevision(candidateSession) ===
-          createSessionDisplaySourceRevision(manifest)
+            createSessionDisplaySourceRevision(manifest)
             ? candidateSession
             : await this._readNormalizedSession(scope, sessionId, parentSessionId);
         await rebuildSessionDisplaySummaryArtifact({
@@ -325,6 +328,7 @@ class SessionArtifactMethods {
         try {
           await this._readNormalizedSession(scope, sessionId, parentSessionId);
         } catch (validationError) {
+          if (validationError?.code === SESSION_ARTIFACT_NOT_FOUND) throw validationError;
           repairTrigger = validationError;
         }
         if (!repairTrigger) {
@@ -405,20 +409,18 @@ class SessionArtifactMethods {
     const session = await readSessionArtifact({
       storageService: this.storageService,
       sessionDir: scope.sessionDir,
-      fallback: {},
     });
-    const normalized = normalizeSessionEntity(
-      {
-        ...session,
-        sessionId: text(session.sessionId || sessionId),
-        parentSessionId: text(session.parentSessionId || parentSessionId),
-        caller: text(session.caller) || "user",
-        modelAlias: String(session.modelAlias || ""),
-        messages: this.normalizeMessages(session.messages || [], { sessionId }),
-        selectedConnectorIds: this.normalizeSelectedConnectorIds(session.selectedConnectorIds),
-      },
-      { now: this.now, sessionId, parentSessionId },
-    );
+    if (!session) {
+      const error = new Error("session not found");
+      error.code = SESSION_ARTIFACT_NOT_FOUND;
+      error.statusCode = 404;
+      throw error;
+    }
+    const normalized = normalizeSessionEntity(session, {
+      now: this.now,
+      sessionId,
+      parentSessionId,
+    });
     const summaryRepair = reconcileCompletedTurnSummaryMarks(normalized);
     if (summaryRepair.changed) {
       const error = new Error("completed turn summary marks require canonical Session repair");

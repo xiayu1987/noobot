@@ -16,6 +16,7 @@ import {
   SESSION_SOURCE_SCHEMA_VERSION,
 } from "../session-display-source-revision.js";
 import { text } from "@noobot/shared/value";
+import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 28;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
@@ -43,7 +44,7 @@ function hasValidTransferEnvelopes(value, visited = new WeakSet()) {
 
 function hasExpectedSummaryVersions(payload) {
   return (
-    Number(payload?.schemaVersion || 0) === SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION &&
+    payload.schemaVersion === SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION &&
     Number(payload?.source?.sessionSchemaVersion || 0) === SESSION_SOURCE_SCHEMA_VERSION
   );
 }
@@ -75,8 +76,10 @@ export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
 
 export function isSessionDisplaySummaryCurrent(payload = null, sessionManifest = null) {
   if (!isSessionDisplaySummaryPayload(payload, sessionManifest?.sessionId)) return false;
-  if (Number(sessionManifest?.schemaVersion || 0) !== SESSION_SOURCE_SCHEMA_VERSION) return false;
-  if (Number(payload?.aggregateVersion || 0) !== Number(sessionManifest?.aggregateVersion || 0))
+  if (sessionManifest?.schemaVersion !== SESSION_SOURCE_SCHEMA_VERSION) return false;
+  if (
+    payload.aggregateVersion !== requireSessionAggregateVersion(sessionManifest?.aggregateVersion)
+  )
     return false;
   if (Number(payload?.stats?.messageCount || 0) !== sessionManifest?.messageOrder?.length)
     return false;

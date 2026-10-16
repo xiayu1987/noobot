@@ -38,6 +38,7 @@ import {
 import { requireOutboxSessionDir, resolveOutboxSessionDir } from "./outbox-scope.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
+import { decideAggregateConcurrency } from "@noobot/session-protocol";
 
 async function readOutboxSessionDir(service, userId, sessionId, parentSessionId, context) {
   const resolvedParentSessionId = await service._resolveParentSessionId(
@@ -64,6 +65,39 @@ function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "
       Math.max(0, Number(floor) || 0),
     ) + 1
   );
+}
+
+function decidePluginArtifactRevision(session, payload) {
+  const artifactKey = pluginArtifactKey(payload);
+  const currentArtifact =
+    projectPluginArtifacts(session.sessionArtifactEvents || [])[artifactKey] || null;
+  const currentRevision = currentArtifact ? Number(currentArtifact.revision) : 0;
+  const expectedRevision = payload?.baseRevision == null ? null : Number(payload.baseRevision);
+  if (payload?.operation === "replaced" && !currentArtifact) {
+    return {
+      committed: false,
+      reason: "artifact_not_found",
+      code: PLUGIN_ARTIFACT_ERROR_CODE.NOT_FOUND,
+      currentRevision: 0,
+    };
+  }
+  if (payload?.operation === "replaced" && expectedRevision !== currentRevision) {
+    return {
+      committed: false,
+      reason: "revision_conflict",
+      code: PLUGIN_ARTIFACT_ERROR_CODE.REVISION_CONFLICT,
+      currentRevision,
+    };
+  }
+  if (payload?.operation === "created" && currentArtifact) {
+    return {
+      committed: false,
+      reason: "artifact_exists",
+      code: PLUGIN_ARTIFACT_ERROR_CODE.ALREADY_EXISTS,
+      currentRevision,
+    };
+  }
+  return { revision: payload?.operation === "replaced" ? currentRevision + 1 : 1 };
 }
 
 export async function commitAuthorityEvent({
@@ -105,40 +139,22 @@ export async function commitAuthorityEvent({
       const eventPayload = { ...payload };
       const descriptor = getEventFamily(family);
       const isArtifact = descriptor?.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
-      const artifactKey = isArtifact ? pluginArtifactKey(payload) : "";
-      const currentArtifact = isArtifact
-        ? projectPluginArtifacts(session.sessionArtifactEvents || [])[artifactKey] || null
-        : null;
-      const currentRevision = currentArtifact ? Number(currentArtifact.revision) : 0;
-      const expectedRevision = payload?.baseRevision == null ? null : Number(payload.baseRevision);
-      if (isArtifact && payload?.operation === "replaced" && !currentArtifact) {
-        return {
-          committed: false,
-          reason: "artifact_not_found",
-          code: PLUGIN_ARTIFACT_ERROR_CODE.NOT_FOUND,
-          currentRevision: 0,
-        };
-      }
-      if (isArtifact && payload?.operation === "replaced" && expectedRevision !== currentRevision) {
-        return {
-          committed: false,
-          reason: "revision_conflict",
-          code: PLUGIN_ARTIFACT_ERROR_CODE.REVISION_CONFLICT,
-          currentRevision,
-        };
-      }
-      if (isArtifact && payload?.operation === "created" && currentArtifact) {
-        return {
-          committed: false,
-          reason: "artifact_exists",
-          code: PLUGIN_ARTIFACT_ERROR_CODE.ALREADY_EXISTS,
-          currentRevision,
-        };
-      }
       if (isArtifact) {
-        eventPayload.revision = payload?.operation === "replaced" ? currentRevision + 1 : 1;
+        const artifactDecision = decidePluginArtifactRevision(session, payload);
+        if (artifactDecision.committed === false) return artifactDecision;
+        eventPayload.revision = artifactDecision.revision;
       }
-      const actualVersion = Math.max(0, Number(session.aggregateVersion) || 0);
+      const isSessionArtifactEvent = descriptor?.sessionArtifact === true;
+      const concurrency = isSessionArtifactEvent
+        ? decideAggregateConcurrency({
+            expectedAggregateVersion: null,
+            aggregateVersion: session.aggregateVersion,
+          })
+        : null;
+      if (concurrency && !concurrency.allowed) {
+        throw new TypeError(`authority event commit rejected: ${concurrency.reason}`);
+      }
+      const baseAggregateVersion = session.aggregateVersion;
       const occurredAt = this.now();
       const outboxSessionDir = await requireOutboxSessionDir(
         this,
@@ -173,7 +189,7 @@ export async function commitAuthorityEvent({
           scopeId: orderingScopeId,
           sequence,
           ...(isArtifact ? { revision: eventPayload.revision } : {}),
-          aggregateVersion: actualVersion + 1,
+          ...(concurrency ? { aggregateVersion: concurrency.nextAggregateVersion } : {}),
         },
         producer,
         occurredAt,
@@ -183,8 +199,8 @@ export async function commitAuthorityEvent({
       if (!validation.valid) {
         throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
       }
-      const isSessionArtifactEvent = validation.descriptor?.sessionArtifact === true;
       if (isSessionArtifactEvent) {
+        session.aggregateVersion = concurrency.nextAggregateVersion;
         session.sessionArtifactEvents = [...(session.sessionArtifactEvents || []), envelope];
         session.updatedAt = occurredAt;
       }
@@ -198,16 +214,16 @@ export async function commitAuthorityEvent({
         ]),
       );
       if (!isSessionArtifactEvent) {
-        return { committed: true, envelope, aggregateVersion: actualVersion };
+        return { committed: true, envelope };
       }
-      const saved = await this.sessionRepo.save(owner.userId, session, resolvedParentSessionId, {
-        expectedAggregateVersion: actualVersion,
+      await this.sessionRepo.save(owner.userId, session, resolvedParentSessionId, {
+        expectedAggregateVersion: baseAggregateVersion,
         persistenceContext,
       });
       return {
         committed: true,
         envelope,
-        aggregateVersion: saved?.aggregateVersion ?? actualVersion + 1,
+        aggregateVersion: concurrency.nextAggregateVersion,
       };
     },
     parentSessionId,

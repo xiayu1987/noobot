@@ -11,6 +11,11 @@ import {
   RUN_COMMAND_TYPES,
 } from "./constants.js";
 import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
+import {
+  deriveInteractionCommandId,
+  deriveStopCommandId,
+  deriveTurnCommandId,
+} from "@noobot/session-protocol/turn-command-id";
 import { createRunPreferences, validateRunPreferences } from "./run-preferences.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
@@ -80,12 +85,12 @@ function createIdentity(input = {}) {
 }
 
 const DERIVED_COMMAND_ID_SOURCES = Object.freeze({
-  [AGENT_COMMAND.SEND]: (command) => clean(command.identity?.turnScopeId),
-  [AGENT_COMMAND.RESEND]: (command) => clean(command.identity?.turnScopeId),
-  [AGENT_COMMAND.CONTINUE]: (command) => clean(command.identity?.turnScopeId),
-  [AGENT_COMMAND.STOP]: (command) => `stop:${clean(command.identity?.turnScopeId)}`,
+  [AGENT_COMMAND.SEND]: (command) => deriveTurnCommandId(command.identity?.turnScopeId),
+  [AGENT_COMMAND.RESEND]: (command) => deriveTurnCommandId(command.identity?.turnScopeId),
+  [AGENT_COMMAND.CONTINUE]: (command) => deriveTurnCommandId(command.identity?.turnScopeId),
+  [AGENT_COMMAND.STOP]: (command) => deriveStopCommandId(command.identity?.turnScopeId),
   [AGENT_COMMAND.INTERACTION_RESPONSE]: (command) =>
-    `interaction:${clean(command.interaction?.requestId)}`,
+    deriveInteractionCommandId(command.interaction?.requestId),
 });
 
 export function deriveAgentCommandId(command) {
@@ -421,7 +426,7 @@ export function validateAgentCommand(command) {
 }
 
 function validateDerivedCommandId(command, commandType, errors) {
-  if (!DERIVED_COMMAND_ID_SOURCES[commandType] || !clean(command.commandId)) return;
+  if (errors.length > 0 || !DERIVED_COMMAND_ID_SOURCES[commandType]) return;
   if (clean(command.commandId) !== deriveAgentCommandId(command)) {
     errors.push("command_id_not_derived");
   }

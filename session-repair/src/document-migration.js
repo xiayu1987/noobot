@@ -15,9 +15,11 @@ import {
   TURN_PHASE,
   TURN_STATE,
   TURN_TERMINAL_STATUS,
+  SESSION_ARTIFACT_AGGREGATE_VERSION_CONTRACT_SCHEMA_VERSION,
   SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   createTurnCommitFingerprint,
+  isSessionAggregateVersion,
   createTurnLifecycleCommandId,
   isTurnCommitContinuation,
   normalizeTurnCommitMetadata,
@@ -32,6 +34,8 @@ import {
 } from "./semantic-transfer-migrations.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { stableId } from "./repair-primitives.js";
+
+const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
 
 function validateTransferCollections(value) {
   if (!value || typeof value !== "object") return false;
@@ -418,7 +422,10 @@ function migrateTurnCommitReceipts(context) {
       type: SESSION_COMMAND.TURN_COMMIT,
       turnScopeId: text(message.turnScopeId),
       requestHash,
-      aggregateVersion: Number(next.aggregateVersion || 0),
+      aggregateVersion: requireAggregateVersion(
+        next.aggregateVersion,
+        SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
+      ),
       result: { messageUid: text(message.messageUid) },
       committedAt: text(message.ts),
     });
@@ -456,7 +463,10 @@ function migrateMutationReceipt(lifecycle, receipt) {
     commandId,
     type,
     requestHash: text(receipt.requestHash),
-    aggregateVersion: Number(receipt.aggregateVersion || 0),
+    aggregateVersion: requireAggregateVersion(
+      receipt.aggregateVersion,
+      "SESSION_MUTATION_RECEIPT_UNMIGRATABLE",
+    ),
     result: isPlainObject(receipt.result) ? structuredClone(receipt.result) : {},
     committedAt: text(receipt.committedAt),
   });
@@ -470,16 +480,69 @@ function migrateMutationReceipts(context) {
   markMigrated(context, "session-command-receipts-v1");
 }
 
-function migrateAggregateVersion(context) {
-  const { next } = context;
-  if (!("version" in next || "revision" in next)) return;
-  next.aggregateVersion = Math.max(
-    0,
-    Number(next.aggregateVersion || next.version || next.revision) || 0,
+function requireAggregateVersion(value, code) {
+  if (isSessionAggregateVersion(value)) return value;
+  throw migrationError("Session aggregate version cannot be migrated", code);
+}
+
+function isUncommittedSessionDocument(next, lifecycle) {
+  const messages = Array.isArray(next.messages) ? next.messages : [];
+  const receipts = Array.isArray(lifecycle.commandReceipts) ? lifecycle.commandReceipts : [];
+  return messages.length === 0 && receipts.length === 0;
+}
+
+function resolveContractAggregateVersion(next, lifecycle) {
+  if ("version" in next || "revision" in next) {
+    const candidates = ["aggregateVersion", "version", "revision"]
+      .filter((field) => Object.hasOwn(next, field))
+      .map((field) => next[field]);
+    if (new Set(candidates).size !== 1) {
+      throw migrationError(
+        "Session aggregate version fields conflict",
+        "SESSION_AGGREGATE_VERSION_UNMIGRATABLE",
+      );
+    }
+    delete next.version;
+    delete next.revision;
+    return requireAggregateVersion(candidates[0], "SESSION_AGGREGATE_VERSION_UNMIGRATABLE");
+  }
+  if (Object.hasOwn(next, "aggregateVersion")) {
+    return requireAggregateVersion(
+      next.aggregateVersion,
+      SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
+    );
+  }
+  if (isUncommittedSessionDocument(next, lifecycle)) return 0;
+  throw migrationError(
+    "Session aggregate version is missing for a committed Session",
+    "SESSION_AGGREGATE_VERSION_UNMIGRATABLE",
   );
-  delete next.version;
-  delete next.revision;
-  markMigrated(context, "session-aggregate-version-v1");
+}
+
+function stripLifecycleReceiptAggregateVersions(lifecycle) {
+  if (!Array.isArray(lifecycle.commandReceipts)) return false;
+  let stripped = false;
+  for (const receipt of lifecycle.commandReceipts) {
+    if (!isPlainObject(receipt) || SESSION_COMMAND_TYPES.has(text(receipt.type))) continue;
+    if (!Object.hasOwn(receipt, "aggregateVersion")) continue;
+    delete receipt.aggregateVersion;
+    stripped = true;
+  }
+  return stripped;
+}
+
+function migrateAggregateVersionContract(context) {
+  if (context.sourceSchemaVersion >= SESSION_ARTIFACT_AGGREGATE_VERSION_CONTRACT_SCHEMA_VERSION) {
+    return;
+  }
+  const { next, lifecycle } = context;
+  const before = next.aggregateVersion;
+  const hadLegacy = "version" in next || "revision" in next;
+  next.aggregateVersion = resolveContractAggregateVersion(next, lifecycle);
+  const stripped = stripLifecycleReceiptAggregateVersions(lifecycle);
+  if (hadLegacy || stripped || before !== next.aggregateVersion) {
+    markMigrated(context, "session-aggregate-version-contract-v1");
+  }
 }
 
 function migrateDocumentMessage(context, message, index) {
@@ -517,7 +580,6 @@ function migrateDocumentMessages(context) {
     reconcileCompletedTurnSummaryMarks(next),
     "completed-turn-summary-marks",
   );
-  if (isPlainObject(next.message)) next.message = migrateDocumentMessage(context, next.message, 0);
   context.migrations.push(...completedSemanticTransferMigrationNames(context.transferMigration));
 }
 
@@ -604,6 +666,7 @@ function createDocumentMigrationContext(document, suppliedSessionId) {
     lifecycle,
     turns: ensureRecordField(lifecycle, "turns"),
     sessionId,
+    sourceSchemaVersion,
     transferMigration,
     migrateArtifactProtocol:
       sourceSchemaVersion <= SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
@@ -611,11 +674,11 @@ function createDocumentMigrationContext(document, suppliedSessionId) {
 }
 
 const DOCUMENT_MIGRATION_STEPS = Object.freeze([
+  migrateAggregateVersionContract,
   migrateLifecycleCommandReceipts,
   migrateTurnStatuses,
   migrateTurnCommitReceipts,
   migrateMutationReceipts,
-  migrateAggregateVersion,
   migrateDocumentMessages,
   migrateReplacedTurns,
   dropLegacyTerminalCommits,

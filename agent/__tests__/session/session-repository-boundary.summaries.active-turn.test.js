@@ -19,6 +19,7 @@ import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 test("session display summary materializes the active Turn presentation in the zero-event window", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "active-turn-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "user",
@@ -74,6 +75,7 @@ test("session display summary materializes the active Turn presentation in the z
 test("session display summary materializes stopped Turn details on its stable presentation", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "stopped-turn-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "user",
@@ -193,6 +195,7 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
   const presentationMessageId = "presentation-active-timeline";
   const summary = buildSessionDisplaySummary({
     sessionId: "active-timeline-session",
+    aggregateVersion: 0,
     messages: [
       {
         role: "assistant",

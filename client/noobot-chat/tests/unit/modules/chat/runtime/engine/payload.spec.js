@@ -13,18 +13,21 @@ describe("buildChatPayload model preferences", () => {
       buildChatPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: true } },
         message: "new",
+        turnScopeId: "turn-1",
       }).session.createIfAbsent,
     ).toBe(true);
     expect(
       buildChatPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: false } },
         message: "existing",
+        turnScopeId: "turn-1",
       }).session.createIfAbsent,
     ).toBe(false);
     expect(
       buildChatPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: true } },
         message: "continue",
+        turnScopeId: "turn-1",
         continueFromStopped: true,
       }).session.createIfAbsent,
     ).toBe(false);
@@ -32,6 +35,7 @@ describe("buildChatPayload model preferences", () => {
       buildChatPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: true } },
         message: "resend",
+        turnScopeId: "turn-1",
         reuseExistingUserTurn: true,
         dialogProcessId: "dialog-resend",
       }).session.createIfAbsent,
@@ -39,30 +43,40 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("disables text streaming by default", () => {
-    expect(buildChatPayload({ message: "x" }).preferences.streaming).toBe(false);
-    expect(buildChatPayload({ message: "x" }).preferences.frontendThresholdsEnabled).toBe(false);
+    expect(buildChatPayload({ message: "x", turnScopeId: "turn-1" }).preferences.streaming).toBe(
+      false,
+    );
+    expect(
+      buildChatPayload({ message: "x", turnScopeId: "turn-1" }).preferences
+        .frontendThresholdsEnabled,
+    ).toBe(false);
   });
 
   it("enables output sanitization by default and sends an explicit opt-out", () => {
-    expect(buildChatPayload({ message: "x" }).preferences.sanitizeOutput).toBe(true);
     expect(
-      buildChatPayload({ message: "x", sanitizeOutput: false }).preferences.sanitizeOutput,
+      buildChatPayload({ message: "x", turnScopeId: "turn-1" }).preferences.sanitizeOutput,
+    ).toBe(true);
+    expect(
+      buildChatPayload({ message: "x", turnScopeId: "turn-1", sanitizeOutput: false }).preferences
+        .sanitizeOutput,
     ).toBe(false);
   });
 
   it("normalizes and sends the safety confirmation level", () => {
     expect(
-      buildChatPayload({ message: "x", safeConfirmLevel: { value: "HIGH" } }).preferences
-        .confirmationLevel,
+      buildChatPayload({ message: "x", turnScopeId: "turn-1", safeConfirmLevel: { value: "HIGH" } })
+        .preferences.confirmationLevel,
     ).toBe("high");
     expect(
-      buildChatPayload({ message: "x", safeConfirmLevel: "invalid" }).preferences.confirmationLevel,
+      buildChatPayload({ message: "x", turnScopeId: "turn-1", safeConfirmLevel: "invalid" })
+        .preferences.confirmationLevel,
     ).toBe("low");
   });
   it("writes selectedModel and current scenario pluginModelConfig to preferences", () => {
     const payload = buildChatPayload({
       userId: "admin",
       message: "hello",
+      turnScopeId: "turn-1",
       requestedTextStreaming: true,
       botScenario: "programming",
       selectedModel: "main-programming",
@@ -131,6 +145,7 @@ describe("buildChatPayload model preferences", () => {
     const payload = buildChatPayload({
       userId: "admin",
       message: "hello",
+      turnScopeId: "turn-1",
       selectedPlugins: [" harness ", "workflow", ""],
     });
 

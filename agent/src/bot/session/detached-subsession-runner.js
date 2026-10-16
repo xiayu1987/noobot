@@ -14,6 +14,7 @@ import {
   createAssistantMessageEventId,
   createSessionPersistenceScope,
   createTurnAcceptanceReceipt,
+  createTurnLifecycleCommandId,
   isExecutionAbortError,
 } from "@noobot/session-protocol";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
@@ -369,10 +370,14 @@ function createLifecycleCommitter(session, lifecycleIdentity, scopedEventListene
   };
 }
 
+function lifecycleCommandId(lifecycle, eventType, phase = "") {
+  return createTurnLifecycleCommandId({ commandId: lifecycle.commandId, eventType, phase });
+}
+
 async function commitDetachedStart(lifecycle, startedAt, request, identity, runConfig) {
   const accepted = await lifecycle.commit({
-    commandId: `${lifecycle.commandId}:accepted`,
-    causationId: `${lifecycle.commandId}:accepted`,
+    commandId: lifecycleCommandId(lifecycle, TURN_EVENT.ACTION_ACCEPTED),
+    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.ACTION_ACCEPTED),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: TURN_ACTION.SEND,
@@ -389,8 +394,8 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
     },
   });
   await lifecycle.commit({
-    commandId: `${lifecycle.commandId}:processing-started`,
-    causationId: `${lifecycle.commandId}:processing-started`,
+    commandId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_STARTED),
+    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_STARTED),
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: TURN_PHASE.PROCESSING,
     executionState: "sending",
@@ -466,19 +471,19 @@ async function commitDetachedError(error, dependencies, request, runtime, identi
 
 async function commitDetachedStop(dependencies, lifecycle) {
   await lifecycle.commit({
-    commandId: `${lifecycle.commandId}:stop-accepted`,
-    causationId: `${lifecycle.commandId}:stop-accepted`,
+    commandId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_ACCEPTED),
+    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_ACCEPTED),
     eventType: TURN_EVENT.STOP_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: TURN_ACTION.STOP,
   });
   await lifecycle.commit({
-    commandId: `${lifecycle.commandId}:stop-processing-completed`,
-    causationId: `${lifecycle.commandId}:stop-processing-completed`,
+    commandId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_PROCESSING_COMPLETED),
+    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_PROCESSING_COMPLETED),
     eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
     phase: TURN_PHASE.STOP,
   });
-  const completionCommitId = `${lifecycle.commandId}:stop-completed`;
+  const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.STOP_COMPLETED);
   return lifecycle.commit({
     commandId: completionCommitId,
     causationId: completionCommitId,
@@ -493,8 +498,8 @@ async function commitDetachedStop(dependencies, lifecycle) {
 
 function commitDetachedFailure(error, lifecycle) {
   return lifecycle.commit({
-    commandId: `${lifecycle.commandId}:failed`,
-    causationId: `${lifecycle.commandId}:failed`,
+    commandId: lifecycleCommandId(lifecycle, TURN_EVENT.FAILED, TURN_PHASE.PROCESSING),
+    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.FAILED, TURN_PHASE.PROCESSING),
     eventType: TURN_EVENT.FAILED,
     phase: TURN_PHASE.PROCESSING,
     failure: {
@@ -524,12 +529,12 @@ function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, er
 
 async function commitDetachedCompletion(dependencies, lifecycle) {
   await lifecycle.commit({
-    commandId: `${lifecycle.commandId}:processing-completed`,
-    causationId: `${lifecycle.commandId}:processing-completed`,
+    commandId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_COMPLETED),
+    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_COMPLETED),
     eventType: TURN_EVENT.PROCESSING_COMPLETED,
     phase: TURN_PHASE.COMPLETION,
   });
-  const completionCommitId = `${lifecycle.commandId}:completed`;
+  const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.COMPLETED);
   return lifecycle.commit({
     commandId: completionCommitId,
     causationId: completionCommitId,

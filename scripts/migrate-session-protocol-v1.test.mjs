@@ -31,13 +31,20 @@ test("migrates entity message identity without creating an identity for presenta
   const workspaceRoot = path.join(temporaryRoot, "workspace");
   const backupRoot = path.join(temporaryRoot, "backup");
   const sessionDirectory = path.join(workspaceRoot, "user", "runtime", "session", "session-1");
-  const summaryFile = path.join(sessionDirectory, "session-summary.json");
-  fs.mkdirSync(sessionDirectory, { recursive: true });
+  const sessionFile = path.join(sessionDirectory, "session.json");
+  const turnRecordFile = path.join(sessionDirectory, "turns", "turn-1.jsonl");
+  const summaryProjectionFile = path.join(sessionDirectory, "session-summary.json");
+  fs.mkdirSync(path.dirname(turnRecordFile), { recursive: true });
+  const turnRecord = `${JSON.stringify({ op: "upsert", messageUid: "sm_turn_1", message: { role: "user" } })}\n`;
+  const summaryProjection = `${JSON.stringify({ schemaVersion: 28, sessionId: "session-1" })}\n`;
+  fs.writeFileSync(turnRecordFile, turnRecord);
+  fs.writeFileSync(summaryProjectionFile, summaryProjection);
   fs.writeFileSync(
-    summaryFile,
+    sessionFile,
     `${JSON.stringify(
       {
         sessionId: "session-1",
+        aggregateVersion: 3,
         messages: [
           {
             role: "user",
@@ -74,6 +81,7 @@ test("migrates entity message identity without creating an identity for presenta
 
   try {
     const dryRun = runMigration(workspaceRoot, backupRoot);
+    assert.equal(dryRun.filesScanned, 1);
     assert.equal(dryRun.filesChanged, 1);
     assert.equal(dryRun.written, false);
 
@@ -81,12 +89,15 @@ test("migrates entity message identity without creating an identity for presenta
     assert.equal(written.filesChanged, 1);
     assert.equal(written.written, true);
 
-    const migrated = JSON.parse(fs.readFileSync(summaryFile, "utf8"));
+    const migrated = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
     assert.match(migrated.messages[0].messageUid, /^sm_migrated_[a-f0-9]{32}$/);
     assert.equal("messageUid" in migrated.messages[1], false);
     assert.equal(migrated.messages[1].sourceMessageUid, "sm_source_2");
     assert.equal("messageUid" in migrated.messages[2], false);
     assert.equal(migrated.messages[2].sourceMessageUid, "sm_source_3");
+    assert.equal(migrated.aggregateVersion, 3);
+    assert.equal(fs.readFileSync(turnRecordFile, "utf8"), turnRecord);
+    assert.equal(fs.readFileSync(summaryProjectionFile, "utf8"), summaryProjection);
 
     const converged = runMigration(workspaceRoot, path.join(temporaryRoot, "unused-backup"));
     assert.equal(converged.filesChanged, 0);

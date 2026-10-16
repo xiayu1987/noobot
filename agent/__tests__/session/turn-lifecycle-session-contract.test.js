@@ -271,6 +271,7 @@ test("noncanonical terminal snapshots are discarded without mutating Turns", () 
   const normalized = normalizeSessionEntity(
     {
       sessionId: "legacy",
+      aggregateVersion: 0,
       messages: [],
       turnLifecycle: {
         sequence: 1,
