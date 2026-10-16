@@ -224,7 +224,6 @@
     "path-resolver/src/path-contract.js": 1,
     "path-resolver/src/runtime-context.js": 10,
     "path-resolver/src/sandbox-mapping.js": 1,
-    "path-resolver/src/view.js": 3,
     "platform-compatibility/src/process.js": 1,
     "plugin-protocol/src/activation.js": 1,
     "plugin/noobot-plugin-character/camera-presets/schema.js": 1,

@@ -180,8 +180,7 @@ test("patch_file: sharedTools cannot remap a Windows host path", async () => {
       globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
       sharedTools: {
         resolveHostPath(payload = {}) {
-          return String(payload.path || payload.sandboxPath || "").replaceAll("\\", "/") ===
-            "C:/outside/visible.txt"
+          return String(payload.sandboxPath).replaceAll("\\", "/") === "C:/outside/visible.txt"
             ? outsideFile
             : "";
         },
@@ -234,8 +233,7 @@ test("patch_file: apply_patch also rejects sharedTools host remapping", async ()
       globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
       sharedTools: {
         resolveHostPath(payload = {}) {
-          return String(payload.path || payload.sandboxPath || "").replaceAll("\\", "/") ===
-            "C:/outside/visible.txt"
+          return String(payload.sandboxPath).replaceAll("\\", "/") === "C:/outside/visible.txt"
             ? outsideFile
             : "";
         },

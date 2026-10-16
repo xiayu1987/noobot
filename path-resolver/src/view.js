@@ -25,9 +25,9 @@ function resolveHostPlatform(agentContext = null) {
 function explicitViewMappings(context = {}) {
   const mappings = Array.isArray(context?.mappings) ? context.mappings : [];
   return mappings.map((item = {}) => ({
-    host: normalizeSlashPath(item.host || item.hostPath || item.source || ""),
-    sandbox: normalizeSlashPath(item.sandbox || item.sandboxPath || item.target || ""),
-    client: normalizeSlashPath(item.client || item.clientPath || ""),
+    host: normalizeSlashPath(item.host),
+    sandbox: normalizeSlashPath(item.sandbox),
+    client: normalizeSlashPath(item.client),
   }));
 }
 export function convertPathView({

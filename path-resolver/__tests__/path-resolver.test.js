@@ -33,9 +33,60 @@ import {
   resolvePathPolicy,
   resolvePathRef,
   resolveToolInputPath,
+  resolveHostPath,
   resolveRuntimeUserId,
   TOOL_PATH_CONTRACTS,
 } from "../src/index.js";
+
+const mountRuntime = {
+  basePath: "/srv/workspaces/u1",
+  systemRuntime: { userId: "u1" },
+  globalConfig: {
+    security: {
+      executionIsolation: {
+        mode: "sandbox",
+        sandbox: {
+          provider: "docker",
+          scope: "user",
+          mounts: [
+            { source: "C:\\data", target: "/data" },
+            { source: "/srv/assets", target: "/data/assets" },
+          ],
+        },
+      },
+    },
+  },
+};
+
+test("resolveHostPath maps the longest sandbox mount target back to its host source", () => {
+  assert.equal(
+    resolveHostPath({ sandboxPath: "/data/assets/a.png", runtime: mountRuntime }),
+    "/srv/assets/a.png",
+  );
+  assert.equal(
+    resolveHostPath({ sandboxPath: "/data/x.txt", runtime: mountRuntime }),
+    "C:/data/x.txt",
+  );
+  assert.equal(resolveHostPath({ sandboxPath: "/data", runtime: mountRuntime }), "C:/data");
+});
+
+test("resolveHostPath reads only sandboxPath", () => {
+  assert.equal(resolveHostPath({ path: "/data/x.txt", runtime: mountRuntime }), "");
+});
+
+test("convertPathView mappings accept only host, sandbox and client keys", () => {
+  const result = convertPathView({
+    path: "/srv/project/file.txt",
+    sourceView: PATH_VIEWS.HOST,
+    targetView: PATH_VIEWS.SANDBOX,
+    mappings: [
+      { hostPath: "/srv/project", sandboxPath: "/workspace/project" },
+      { source: "/srv/project", target: "/workspace/project" },
+    ],
+  });
+  assert.equal(result.mapped, false);
+  assert.equal(result.path, "/srv/project/file.txt");
+});
 
 test("resolveRuntimeUserId reads runtime identity only from systemRuntime", () => {
   assert.equal(

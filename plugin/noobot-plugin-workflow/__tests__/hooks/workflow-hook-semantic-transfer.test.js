@@ -121,11 +121,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
               if (!normalized) return "";
               return `/injected${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
             },
-            resolveSandboxPath({ hostPath = "" } = {}) {
-              const normalized = String(hostPath || "").trim();
-              if (!normalized) return "";
-              return `/workspace${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
-            },
             semanticTransfer: createSemanticTransferTool({
               calls: semanticTransferCalls,
               prefix: "wf-node-result",

@@ -217,10 +217,8 @@ export function resolveToolInputPath({
       }
     }
     const mappedBySandbox = resolveHostPath({
-      path: classified.normalized,
       sandboxPath: classified.normalized,
       runtime: { ...runtime, basePath: runtime?.basePath || normalizedWorkspace },
-      agentContext,
     });
     if (mappedBySandbox) {
       return {

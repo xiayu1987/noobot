@@ -824,9 +824,6 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
         resolveAttachmentDisplayPath({ meta = {} } = {}) {
           return String(meta?.path || "").replace(basePath, "/injected/primary-user");
         },
-        resolveSandboxPath({ hostPath }) {
-          return String(hostPath || "").replace(basePath, "/workspace/primary-user");
-        },
       },
     },
     agentContext: {

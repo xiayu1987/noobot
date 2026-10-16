@@ -30,49 +30,13 @@ export function resolveSandboxUserRoot(runtime = {}) {
   }).userRoot;
 }
 
-function mapPathByMappings(filePath = "", mappings = []) {
-  const normalizedFilePath = normalizeSlashPath(filePath);
-  if (!normalizedFilePath || !Array.isArray(mappings) || !mappings.length) return "";
-  for (const mapping of mappings) {
-    const source = normalizeSlashPath(mapping?.source || "");
-    const target = normalizeSlashPath(mapping?.target || "");
-    if (!source || !target) continue;
-    if (normalizedFilePath === source) return target;
-    if (normalizedFilePath.startsWith(`${source}/`)) {
-      return `${target}${normalizedFilePath.slice(source.length)}`;
-    }
-  }
-  return "";
-}
-
-function mapPathByReverseMappings(filePath = "", mappings = []) {
-  const normalizedFilePath = normalizeSlashPath(filePath);
-  if (!normalizedFilePath || !Array.isArray(mappings) || !mappings.length) return "";
-  const normalizedMappings = mappings
-    .map((mapping) => ({
-      source: normalizeSlashPath(mapping?.source || ""),
-      target: normalizeSlashPath(mapping?.target || ""),
-    }))
-    .filter((mapping) => Boolean(mapping.source && mapping.target))
-    .sort((leftItem, rightItem) => rightItem.target.length - leftItem.target.length);
-  for (const mapping of normalizedMappings) {
-    if (normalizedFilePath === mapping.target) return mapping.source;
-    if (normalizedFilePath.startsWith(`${mapping.target}/`)) {
-      return `${mapping.source}${normalizedFilePath.slice(mapping.target.length)}`;
-    }
-  }
-  return "";
-}
-
 export function resolveSandboxPathMappings(runtime = {}) {
   return resolveConfiguredMountMappings(runtime)
-    .map((item) => (item && typeof item === "object" ? item : {}))
     .map((item) => ({
-      source: normalizeSlashPath(item?.source || ""),
-      target: normalizeSlashPath(item?.target || ""),
-      readOnly: item?.readOnly === true,
+      source: normalizeSlashPath(item.source),
+      target: item.target,
+      readOnly: item.readOnly,
     }))
-    .filter((item) => Boolean(item.source && item.target))
     .sort((leftItem, rightItem) => rightItem.source.length - leftItem.source.length);
 }
 
@@ -93,58 +57,14 @@ export function resolveSandboxMount({ sandboxPath = "", runtime = {} } = {}) {
   });
 }
 
-export function resolveSandboxPath({
-  path = "",
-  hostPath = "",
-  relativePath = "",
-  runtime = {},
-} = {}) {
+export function resolveHostPath({ sandboxPath = "", runtime = {} } = {}) {
   const isolation = resolveExecutionIsolation(runtime?.globalConfig || {});
   if (!isSandboxIsolationMode(isolation.mode)) return "";
-  const sandboxRoot = WORKSPACE_SANDBOX_PATHS.ROOT;
-
-  const normalizedHostPath = normalizeSlashPath(hostPath || path);
-  if (!normalizedHostPath && !text(relativePath)) return "";
-
-  const sandboxUserRoot = resolveSandboxUserRoot(runtime);
-  const hostBasePath = text(runtime?.basePath);
-  const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
-  if (sandboxUserRoot && normalizedHostBasePath && normalizedHostPath) {
-    if (normalizedHostPath === normalizedHostBasePath) return sandboxUserRoot;
-    if (normalizedHostPath.startsWith(`${normalizedHostBasePath}/`)) {
-      return `${sandboxUserRoot}${normalizedHostPath.slice(normalizedHostBasePath.length)}`;
-    }
-  }
-
-  const mappedByConfig = mapPathByMappings(normalizedHostPath, resolveSandboxPathMappings(runtime));
-  if (mappedByConfig) return text(mappedByConfig);
-
-  const normalizedSandboxRoot = normalizeSlashPath(sandboxRoot);
-  if (normalizedSandboxRoot) {
-    if (sandboxUserRoot && normalizedHostPath && normalizedHostBasePath) {
-      if (normalizedHostPath === normalizedHostBasePath) return sandboxUserRoot;
-      if (normalizedHostPath.startsWith(`${normalizedHostBasePath}/`)) {
-        return `${sandboxUserRoot}${normalizedHostPath.slice(normalizedHostBasePath.length)}`;
-      }
-    }
-    const normalizedRelativePath = normalizeSlashPath(relativePath).replace(/^\/+/, "");
-    if (normalizedRelativePath) return `${normalizedSandboxRoot}/${normalizedRelativePath}`;
-  }
-
-  return "";
-}
-
-export function resolveHostPath({ path = "", sandboxPath = "", runtime = {} } = {}) {
-  const isolation = resolveExecutionIsolation(runtime?.globalConfig || {});
-  if (!isSandboxIsolationMode(isolation.mode)) return "";
-  const normalizedSandboxPath = normalizeSlashPath(sandboxPath || path);
+  const normalizedSandboxPath = normalizeSlashPath(sandboxPath);
   if (!normalizedSandboxPath) return "";
 
-  const mappedByConfig = mapPathByReverseMappings(
-    normalizedSandboxPath,
-    resolveSandboxPathMappings(runtime),
-  );
-  if (mappedByConfig) return text(mappedByConfig);
+  const mount = resolveSandboxMount({ sandboxPath: normalizedSandboxPath, runtime });
+  if (mount) return mount.hostPath;
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
   const hostBasePath = text(runtime?.basePath);
