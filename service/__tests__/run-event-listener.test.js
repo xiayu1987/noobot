@@ -21,9 +21,7 @@ function createListener(overrides = {}) {
       return true;
     },
     sessionId: "root-session",
-    registerActiveRun: () => {},
     getCurrentRunMeta: () => ({ turnScopeId: "turn-1", dialogProcessId: "dialog-1" }),
-    getCurrentRunHandle: () => null,
     getCurrentTurnScopeId: () => "turn-1",
     ...overrides,
   });
@@ -218,12 +216,10 @@ test("run-event-listener audits envelope-free run events from their route-projec
 
 test("run-event-listener ignores child-session lifecycle for root run coordination", () => {
   const running = [];
-  const registered = [];
   const runMeta = { turnScopeId: "turn-1", dialogProcessId: "dialog-1" };
   const { listener } = createListener({
     onRootRunning: (data) => running.push(data),
     getCurrentRunMeta: () => runMeta,
-    registerActiveRun: (handle) => registered.push(handle),
   });
   listener.onEvent({
     event: "agent_lifecycle_state_changed",
@@ -236,6 +232,4 @@ test("run-event-listener ignores child-session lifecycle for root run coordinati
     },
   });
   assert.deepEqual(running, []);
-  assert.equal(runMeta.dialogProcessId, "dialog-1");
-  assert.deepEqual(registered, []);
 });

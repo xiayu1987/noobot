@@ -102,6 +102,10 @@ test("authority snapshots only terminal Turns represented by canonical messages"
 
 test("authority owns terminal readiness decisions", () => {
   const lifecycle = { turns: { active: turn() } };
+  assert.throws(
+    () => resolveAuthoritativeTurnTerminal({ lifecycle, sessionId: "s1", turnScopeId: "turn-1" }),
+    /requires commandId/,
+  );
   assert.equal(
     resolveAuthoritativeTurnTerminal({
       lifecycle,

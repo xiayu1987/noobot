@@ -93,15 +93,10 @@ export async function createAppDependencies({
     requireSuperAdmin,
   } = authService;
 
-  const chatRunService = createChatRunService({
-    getBot: () => bot,
-    readWorkspaceUsers,
+  const { mapAgentRunCommand } = createChatRunService({
     normalizeLocale,
     defaultLocale: DEFAULT_LOCALE,
-    translateText,
-    connectorAccessPort,
   });
-  const { mapAgentRunCommand, handleChat } = chatRunService;
 
   const configScopeService = createConfigScopeService({
     readWorkspaceConfigParams,
@@ -201,7 +196,6 @@ export async function createAppDependencies({
       templateRootPath,
       buildWorkspaceTree,
       workspaceRootPath,
-      handleChat,
       translateText,
     }),
   };

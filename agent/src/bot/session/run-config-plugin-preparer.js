@@ -49,8 +49,14 @@ function plainObject(value) {
   return isPlainObject(value) ? value : {};
 }
 
+function requireTurnScopeId(turnScopeId = "") {
+  const scopeId = text(turnScopeId);
+  if (!scopeId) throw new TypeError("execution intent requires turnScopeId");
+  return scopeId;
+}
+
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
-  const scopeId = text(turnScopeId || runConfig?.turnScopeId);
+  const scopeId = requireTurnScopeId(turnScopeId);
   const executionId = deriveAgentExecutionId({
     executionId: runConfig?.executionId,
     turnScopeId: scopeId,
@@ -128,7 +134,7 @@ export class RunConfigPluginPreparer {
     }
     const declaration = declarations[0];
     if (!declaration) return createAgentExecutionIntent({ runConfig, turnScopeId });
-    const scopeId = text(turnScopeId || runConfig?.turnScopeId);
+    const scopeId = requireTurnScopeId(turnScopeId);
     const executionId = text(runConfig?.executionId) || `${declaration.idPrefix}:${scopeId}`;
     return Object.freeze({
       executionId,

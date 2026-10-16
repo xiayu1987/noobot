@@ -16,6 +16,8 @@ import { createStateCommitter } from "../../src/runtime/tool-execution/state-com
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext, getMessageId } from "@noobot/context-protocol";
+import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
+import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
 function createWorkspaceService(baseDir) {
@@ -343,27 +345,26 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     async getSessionTurns() {
       return persistedTurns;
     },
-    async commitTurn(payload = {}) {
+    async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;
       const userMessage = {
         messageUid,
-        id: payload.messageId || messageUid,
-        messageId: payload.messageId || messageUid,
+        id: messageUid,
+        messageId: messageUid,
         role: "user",
         type: "message",
-        content: payload.content,
+        content: "hello plugin",
         userName: payload.userId,
         sessionId: payload.sessionId,
         parentSessionId: payload.parentSessionId,
         dialogProcessId: payload.dialogProcessId,
-        parentDialogProcessId: payload.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        messageOrigin: payload.messageOrigin || "natural",
-        userMetaMaterialized: payload.userMetaMaterialized === true,
-        attachments: payload.attachments || [],
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
+        attachments: [],
       };
       persistedTurns.push(userMessage);
-      return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };
+      return { userMessage };
     },
     async saveCurrentTurnTasks(payload = {}) {
       savedCurrentTurnTasksPayload = payload;
@@ -453,12 +454,20 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   const result = await engine.runSession({
     userId: "u1",
     sessionId,
-    message: "hello plugin",
-    runConfig: {
+    dialogProcessId: "dp-scope-smoke",
+    turnAcceptance: createTurnAcceptanceReceipt({
+      commandId: "turn-scope-smoke",
+      sessionId,
       turnScopeId: "turn-scope-smoke",
-      executionId: "agent:turn-scope-smoke",
+      dialogProcessId: "dp-scope-smoke",
+      messageUid: "sm_turn-scope-smoke",
+      aggregateVersion: 1,
+    }),
+    message: "hello plugin",
+    turnScopeId: "turn-scope-smoke",
+    runConfig: {
+      ...createAcceptedRunIdentity("turn-scope-smoke", { commandId: "turn-scope-smoke" }),
       executionKind: "agent",
-      rootExecutionId: "agent:turn-scope-smoke",
       selectedPlugins: ["harness"],
       plugins: {
         harness: {

@@ -62,7 +62,7 @@ async function saveFailureReport(context, failure) {
       sessionId,
       parentSessionId: context.parentSessionId,
       dialogProcessId,
-      turnScopeId: context.turnScopeId || context.resolvedRunConfig?.turnScopeId,
+      turnScopeId: context.turnScopeId,
       caller: context.caller,
       startedAt: context.resolvedRunConfig?.thinkingStartedAt,
       finishedAt: context.now(),

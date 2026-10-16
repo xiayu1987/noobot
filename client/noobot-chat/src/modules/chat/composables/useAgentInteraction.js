@@ -243,7 +243,6 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     try {
       sendJson(
         createInteractionResponseCommand({
-          commandId: `interaction:${request.requestId}`,
           identity: {
             sessionId,
             dialogProcessId: request?.dialogProcessId,

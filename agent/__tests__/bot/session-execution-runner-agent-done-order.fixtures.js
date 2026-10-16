@@ -8,6 +8,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
+import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
+import { text } from "@noobot/shared/value";
 import { SessionExecutionRunner } from "../../src/bot/execution/runner.js";
 import { finalizeAgentTurn } from "../../src/bot/execution/runner/result-finalizer.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
@@ -76,7 +79,8 @@ export function createRunner({
   if (!defaultRuntime.currentTurnMessages) {
     defaultRuntime.currentTurnMessages = createCurrentTurnMessagesStore([]);
   }
-  return new SessionExecutionRunner({
+  const acceptedUserMessages = new Map();
+  const runner = new SessionExecutionRunner({
     agentRunner:
       agentRunner ||
       (async () => {
@@ -114,7 +118,6 @@ export function createRunner({
     }),
     resolveScenarioRunConfig: (runConfig) => runConfig,
     prepareRunConfig: ({ runConfig: inputRunConfig }) => ({
-      turnScopeId: inputRunConfig?.turnScopeId || runConfig?.turnScopeId || "turn-default",
       ...inputRunConfig,
       ...runConfig,
     }),
@@ -133,30 +136,9 @@ export function createRunner({
       }
       return prepared;
     },
-    commitSessionTurn: async (payload = {}) => {
-      callOrder.push("commitSessionTurn");
-      const messageUid = `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-      return {
-        aggregateVersion: 1,
-        attachments: payload.attachments || [],
-        userMessage: {
-          messageUid,
-          id: payload.messageId || messageUid,
-          messageId: payload.messageId || messageUid,
-          role: "user",
-          type: "message",
-          content: payload.content,
-          userName: payload.userId,
-          sessionId: payload.sessionId,
-          parentSessionId: payload.parentSessionId,
-          dialogProcessId: payload.dialogProcessId,
-          parentDialogProcessId: payload.parentDialogProcessId,
-          turnScopeId: payload.turnScopeId,
-          messageOrigin: payload.messageOrigin || "natural",
-          userMetaMaterialized: payload.userMetaMaterialized === true,
-          attachments: payload.attachments || [],
-        },
-      };
+    assertReusedUserTurnIdentity: async (payload = {}) => {
+      callOrder?.push("assertReusedUserTurnIdentity");
+      return { userMessage: acceptedUserMessages.get(text(payload.turnScopeId)) };
     },
     getSessionTurns,
     getTurnSummaryCheckpointState,
@@ -169,6 +151,39 @@ export function createRunner({
     },
     now: () => "2026-05-21T00:00:00.000Z",
   });
+  runner.runAcceptedSession = (request = {}) => {
+    const turnScopeId = text(request.turnScopeId);
+    const acceptedRunConfig = createAcceptedRunIdentity(turnScopeId, request.runConfig);
+    const messageUid = `sm_test_${turnScopeId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+    acceptedUserMessages.set(turnScopeId, {
+      messageUid,
+      messageId: acceptedRunConfig.userMessageId,
+      role: "user",
+      type: "message",
+      content: request.message,
+      userName: request.userId,
+      sessionId: "session-used",
+      dialogProcessId: "dialog-1",
+      turnScopeId,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+      attachments: [],
+    });
+    return runner.runSession({
+      ...request,
+      turnScopeId,
+      runConfig: acceptedRunConfig,
+      turnAcceptance: createTurnAcceptanceReceipt({
+        commandId: acceptedRunConfig.commandId,
+        sessionId: "session-used",
+        turnScopeId,
+        dialogProcessId: "dialog-1",
+        messageUid,
+        aggregateVersion: 1,
+      }),
+    });
+  };
+  return runner;
 }
 
 export function collectLifecycleStates(events) {

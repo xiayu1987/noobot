@@ -578,7 +578,6 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   const forwarded = manager.forwardToUpstream(
     channel,
     createTurnStopCommand({
-      commandId: "stop:turn-stop",
       identity: {
         sessionId: "session-stop",
         dialogProcessId: "dp-stop",
@@ -634,7 +633,6 @@ test("forwardToUpstream reports a closed upstream without throwing", () => {
       manager.forwardToUpstream(
         channel,
         createTurnStopCommand({
-          commandId: "stop:closed-upstream",
           identity: {
             sessionId: "session-closed-upstream",
             turnScopeId: "turn-closed-upstream",

@@ -13,9 +13,8 @@ import { findPendingInteraction } from "../../ws/chat-websocket/pending-interact
 
 const OWNER = "user-cross";
 
-function responseCommand(commandId, sessionId, turnScopeId, requestId, response) {
+function responseCommand(sessionId, turnScopeId, requestId, response) {
   return createInteractionResponseCommand({
-    commandId,
     identity: {
       sessionId,
       parentSessionId: "",
@@ -78,7 +77,7 @@ test("a new connection answers an interaction registered by a detached connectio
     canonicalRunOwnerId: OWNER,
   });
   handleInteractionResponse(
-    responseCommand("answer-1", "session-cross", "turn-cross", requestId, { value: "yes" }),
+    responseCommand("session-cross", "turn-cross", requestId, { value: "yes" }),
   );
 
   assert.deepEqual(await pending, { value: "yes" });
@@ -103,9 +102,7 @@ test("another owner cannot answer the interaction", async () => {
     resolveBot: () => ({}),
     canonicalRunOwnerId: "intruder",
   });
-  handleInteractionResponse(
-    responseCommand("answer-2", "session-foreign", "turn-foreign", requestId, {}),
-  );
+  handleInteractionResponse(responseCommand("session-foreign", "turn-foreign", requestId, {}));
   assert.equal(receipts.length, 1);
   assert.equal(JSON.stringify(receipts[0]).includes("interaction_not_found"), true);
   assert.ok(findPendingInteraction({ requestId, ownerUserId: OWNER }));

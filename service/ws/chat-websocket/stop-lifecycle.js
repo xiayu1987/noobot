@@ -15,34 +15,18 @@ import { text } from "@noobot/shared/value";
 export function buildStoppedPartialAssistant({
   stopPayload = {},
   runMeta = {},
-  result = {},
   fallbackMessage = "",
 } = {}) {
   const sourcePartial =
     stopPayload?.partialAssistant && typeof stopPayload.partialAssistant === "object"
       ? stopPayload.partialAssistant
       : {};
-  const dialogProcessId =
-    normalizeRunIdentityPart(sourcePartial.dialogProcessId) ||
-    normalizeRunIdentityPart(stopPayload?.dialogProcessId) ||
-    normalizeRunIdentityPart(runMeta?.dialogProcessId) ||
-    normalizeRunIdentityPart(result?.dialogProcessId);
-  const turnScopeId =
-    normalizeRunIdentityPart(sourcePartial.turnScopeId) ||
-    normalizeRunIdentityPart(stopPayload?.turnScopeId) ||
-    normalizeRunIdentityPart(runMeta?.turnScopeId);
-  const sessionId =
-    normalizeRunIdentityPart(sourcePartial.sessionId) ||
-    normalizeRunIdentityPart(stopPayload?.sessionId) ||
-    normalizeRunIdentityPart(runMeta?.sessionId) ||
-    normalizeRunIdentityPart(result?.sessionId);
-  const content = text(sourcePartial.content ?? fallbackMessage);
   return {
     ...sourcePartial,
-    content,
-    sessionId,
-    dialogProcessId,
-    turnScopeId,
+    content: text(sourcePartial.content ?? fallbackMessage),
+    sessionId: normalizeRunIdentityPart(runMeta?.sessionId),
+    dialogProcessId: normalizeRunIdentityPart(runMeta?.dialogProcessId),
+    turnScopeId: normalizeRunIdentityPart(runMeta?.turnScopeId),
   };
 }
 

@@ -130,9 +130,6 @@ function syncRunState({
   eventData,
   childRunEvent,
   sessionId,
-  currentRunMeta,
-  currentRunHandle,
-  registerActiveRun,
   resolveTurnScopeId,
   onRootRunning,
 }) {
@@ -152,22 +149,12 @@ function syncRunState({
       onRootRunning(eventData);
     }
   }
-  const eventDialogProcessId = text(eventData?.dialogProcessId);
-  if (eventDialogProcessId && currentRunMeta && !childRunEvent) {
-    currentRunMeta.dialogProcessId = eventDialogProcessId;
-    if (currentRunHandle) {
-      currentRunHandle.dialogProcessId = eventDialogProcessId;
-      registerActiveRun(currentRunHandle);
-    }
-  }
 }
 
 export function createRunEventListener({
   sendEvent,
   sessionId,
-  registerActiveRun,
   getCurrentRunMeta = () => null,
-  getCurrentRunHandle = () => null,
   getCurrentTurnScopeId = () => "",
   onRootRunning = null,
   onCommittedTurnLifecycle = null,
@@ -187,8 +174,6 @@ export function createRunEventListener({
       }
       const eventData = eventPayload?.data || {};
       onEventReceived?.(buildEventAudit(eventName, eventData));
-      const currentRunMeta = getCurrentRunMeta();
-      const currentRunHandle = getCurrentRunHandle();
       if (eventName === AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED) {
         if (typeof onCommittedTurnLifecycle === "function") {
           return onCommittedTurnLifecycle(eventData?.envelope || eventData, {
@@ -226,9 +211,6 @@ export function createRunEventListener({
         eventData,
         childRunEvent,
         sessionId,
-        currentRunMeta,
-        currentRunHandle,
-        registerActiveRun,
         resolveTurnScopeId,
         onRootRunning,
       });

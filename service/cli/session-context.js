@@ -26,11 +26,6 @@ export function splitStartupArgs(argv = []) {
   return { startupArgs, cliArgs };
 }
 
-export function normalizeAggregateVersion(value) {
-  const parsed = Number(value ?? 0);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
-}
-
 export function resolveCliAuthInfo({ userId, superUserId, superAdminRole, isForbiddenUserScope }) {
   const admin = { userId: superUserId, role: superAdminRole };
   if (!superUserId) throw new CliUsageError("no super admin user is configured");
@@ -46,7 +41,7 @@ export async function resolveSessionTarget({ bot, userId, invocation }) {
     if (!latest?.sessionId) throw new CliUsageError("no session to continue");
     return {
       sessionId: latest.sessionId,
-      aggregateVersion: normalizeAggregateVersion(latest.aggregateVersion),
+      aggregateVersion: latest.aggregateVersion,
       createSession: false,
     };
   }
@@ -63,7 +58,7 @@ export async function readAggregateVersion({ bot, userId, sessionId }) {
   const sessions = Array.isArray(result?.sessions) ? result.sessions : [];
   const session = sessions.find((item) => String(item?.sessionId || "") === sessionId);
   if (!session) throw new CliUsageError(`session not found: ${sessionId}`);
-  return normalizeAggregateVersion(session.aggregateVersion);
+  return session.aggregateVersion;
 }
 
 export async function probeRunningService(env = process.env) {

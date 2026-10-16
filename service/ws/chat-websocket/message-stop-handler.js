@@ -68,7 +68,6 @@ export function createMessageStopHandler({
       sessionId: target.sessionId,
       parentSessionId: trimmed(command.identity.parentSessionId),
       turnScopeId: target.turnScopeId,
-      dialogProcessId: trimmed(command.identity.dialogProcessId),
       commandId: stopLifecycleCommandId(target.stopCommandId, TURN_EVENT.STOP_ACCEPTED),
       causationId: target.stopCommandId,
       eventType: TURN_EVENT.STOP_ACCEPTED,
@@ -86,9 +85,7 @@ export function createMessageStopHandler({
     state.currentStopPayload = {
       userId: target.userId,
       sessionId: target.sessionId,
-      dialogProcessId: trimmed(
-        command.identity.dialogProcessId || state.currentRunMeta?.dialogProcessId,
-      ),
+      dialogProcessId: target.dialogProcessId,
       turnScopeId: target.turnScopeId,
       partialAssistant: command.stop?.partialAssistant || {},
       commandId: target.stopCommandId,
@@ -170,6 +167,7 @@ export function createMessageStopHandler({
     };
     const accepted = await commitStopAccepted(command, target);
     if (rejectedCommit(command, accepted, "stop_not_allowed")) return;
+    target.dialogProcessId = accepted.turn.dialogProcessId;
     markStopRequested(command, target);
     recordStopLifecycle(
       "service.websocket.run.cancel.requested",

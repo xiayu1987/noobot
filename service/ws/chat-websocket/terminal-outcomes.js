@@ -89,17 +89,16 @@ export function createTurnFinalizer({
     webSocket.close(1011, "timeout");
   };
 
-  const finalizeUserStopped = async (state, { result = {} } = {}) => {
+  const finalizeUserStopped = async (state) => {
     const stopPayload = state.stopPayload || state.abortSignal?.reason?.stopPayload || {};
     const stoppedMessage = translateText("ws.dialogStoppedByUser", state.locale);
     const stoppedPartialAssistant = buildStoppedPartialAssistant({
       stopPayload,
       runMeta: state.runMeta,
-      result,
       fallbackMessage: stoppedMessage,
     });
-    const stopCommandId =
-      text(stopPayload?.commandId) || `stop:${stoppedPartialAssistant.turnScopeId}`;
+    const stopCommandId = text(stopPayload?.commandId);
+    if (!stopCommandId) throw new TypeError("user stop finalization requires the stop commandId");
     const processed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: stoppedPartialAssistant.sessionId,
@@ -157,7 +156,7 @@ export function createTurnFinalizer({
     webSocket.close(1000, "user_stopped");
   };
 
-  const finalizeCompleted = async (state, { result = {}, commandId = "" } = {}) => {
+  const finalizeCompleted = async (state, { commandId = "" } = {}) => {
     const rootCommandId = text(commandId) || state.identity.commandRoot;
     const completionCommitId = createTurnLifecycleCommandId({
       commandId: rootCommandId,
@@ -166,10 +165,10 @@ export function createTurnFinalizer({
     });
     const completed = await commitTurnLifecycle({
       userId: state.identity.userId,
-      sessionId: result.sessionId || state.identity.sessionId,
+      sessionId: state.identity.sessionId,
       parentSessionId: state.identity.parentSessionId,
       turnScopeId: state.identity.turnScopeId,
-      dialogProcessId: result.dialogProcessId || state.identity.dialogProcessId,
+      dialogProcessId: state.identity.dialogProcessId,
       commandId: completionCommitId,
       causationId: rootCommandId,
       eventType: TURN_EVENT.COMPLETED,
@@ -180,10 +179,10 @@ export function createTurnFinalizer({
     if (!completed?.applied && !completed?.deduplicated) {
       await commitTurnLifecycle({
         userId: state.identity.userId,
-        sessionId: result.sessionId || state.identity.sessionId,
+        sessionId: state.identity.sessionId,
         parentSessionId: state.identity.parentSessionId,
         turnScopeId: state.identity.turnScopeId,
-        dialogProcessId: result.dialogProcessId || state.identity.dialogProcessId,
+        dialogProcessId: state.identity.dialogProcessId,
         commandId: createTurnLifecycleCommandId({
           commandId: rootCommandId,
           eventType: TURN_EVENT.FAILED,

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  TURN_ACTION,
   TURN_EVENT,
   TURN_PHASE,
   createCommandRequestHash,
@@ -58,7 +59,9 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
   );
   const messageId = text(input.messageId || currentValue.messageId);
   const action =
-    eventType === TURN_EVENT.STOP_ACCEPTED ? "stop" : text(input.action || currentValue.action);
+    eventType === TURN_EVENT.STOP_ACCEPTED
+      ? TURN_ACTION.STOP
+      : text(input.action || currentValue.action);
   const continuationSource = normalizeTurnContinuationSource(
     input.continuationSource || currentValue.continuationSource,
   );
@@ -95,6 +98,13 @@ function validateRequestIdentity(request) {
     text(input.presentationMessageId) !== current.presentationMessageId
   ) {
     return "turn_presentation_identity_conflict";
+  }
+  if (
+    current?.dialogProcessId &&
+    text(input.dialogProcessId) &&
+    text(input.dialogProcessId) !== current.dialogProcessId
+  ) {
+    return "turn_dialog_process_identity_conflict";
   }
   return "";
 }
@@ -173,7 +183,7 @@ function validateRequestedAction(request) {
   ) {
     return "session_action_conflict";
   }
-  if (eventType === TURN_EVENT.ACTION_ACCEPTED && action === "continue") {
+  if (eventType === TURN_EVENT.ACTION_ACCEPTED && action === TURN_ACTION.CONTINUE) {
     if (!continuationSource) return "continue_source_identity_incomplete";
     const continuation = decideTurnContinuation({
       lifecycle,
@@ -324,7 +334,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
 export function commitLifecycleTransition(request, projection, requestHash, nowValue) {
   const { lifecycle, turnScopeId, commandId, eventType } = request;
   const { turn, revision, sequence } = projection;
-  if (eventType === TURN_EVENT.ACTION_ACCEPTED && request.action === "continue") {
+  if (eventType === TURN_EVENT.ACTION_ACCEPTED && request.action === TURN_ACTION.CONTINUE) {
     lifecycle.turns[request.continuationSource.turnScopeId].continuedByTurnScopeId = turnScopeId;
   }
   lifecycle.turns[turnScopeId] = turn;

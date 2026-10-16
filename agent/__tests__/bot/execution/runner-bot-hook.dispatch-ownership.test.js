@@ -100,7 +100,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "build workflow",
@@ -143,7 +143,8 @@ test("before-dispatch takeover can claim root processing before the hook complet
     });
   });
   const runner = createRunner({ botHookManager });
-  const runPromise = runner.runSession({
+  const runPromise = runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -192,7 +193,8 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
     });
   });
   const runner = createRunner({ botHookManager });
-  await runner.runSession({
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -237,7 +239,8 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "workflow task",
@@ -281,7 +284,13 @@ test("a handled workflow failure terminates the root Turn without Agent fallback
 
   await assert.rejects(
     () =>
-      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "workflow task",
+        runConfig: {},
+      }),
     (error) => error?.code === "WORKFLOW_NODE_FAILED" && error?.cause?.dispatchOwner === "workflow",
   );
   assert.equal(rootAgentCalls, 0);
@@ -304,7 +313,13 @@ test("a claimed dispatch hook failure cannot fall back to the root Agent", async
 
   await assert.rejects(
     () =>
-      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "workflow task",
+        runConfig: {},
+      }),
     /workflow owner failed/,
   );
   assert.equal(rootAgentCalls, 0);
@@ -331,7 +346,13 @@ test("a claimed dispatch cannot pass the same task back to the root Agent", asyn
 
   await assert.rejects(
     () =>
-      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "workflow task",
+        runConfig: {},
+      }),
     (error) => error?.code === "BOT_DISPATCH_CLAIM_RELEASE_FORBIDDEN",
   );
   assert.equal(rootAgentCalls, 0);
@@ -353,7 +374,13 @@ test("a structured dispatch takeover must claim ownership before returning handl
 
   await assert.rejects(
     () =>
-      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "workflow task",
+        runConfig: {},
+      }),
     (error) => error?.code === "BOT_DISPATCH_CLAIM_REQUIRED",
   );
   assert.equal(rootAgentCalls, 0);

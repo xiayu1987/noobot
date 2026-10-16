@@ -36,3 +36,9 @@ export function assertCanonicalAssistantPresentation(message = {}) {
   }
   return message;
 }
+
+export function createAssistantMessageEventId(presentationMessageId = "") {
+  const normalized = clean(presentationMessageId);
+  if (!normalized) throw new TypeError("assistant presentationMessageId is required");
+  return `msg_event_${normalized}`;
+}

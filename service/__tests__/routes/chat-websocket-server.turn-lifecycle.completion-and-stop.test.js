@@ -27,8 +27,6 @@ test("summary failure is classified as completion without authoritative complete
     ...payload,
     sessionId: "s-completion-failure",
     turnScopeId: "turn-completion-failure",
-    commandId: "command-completion-failure",
-    config: { turnScopeId: "turn-completion-failure" },
   };
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
@@ -53,13 +51,19 @@ test("summary failure is classified as completion without authoritative complete
 
 test("authoritative stop follows accepted -> stop processed -> stop summary completed", async () => {
   const authoritative = createAuthoritativeBot();
-  authoritative.bot.runSession = async ({ sessionId, runConfig, eventListener, abortSignal }) => {
+  authoritative.bot.runSession = async ({
+    sessionId,
+    turnScopeId,
+    runConfig,
+    eventListener,
+    abortSignal,
+  }) => {
     eventListener.onEvent({
       event: "agent_lifecycle_state_changed",
       data: {
         state: "running",
         sessionId,
-        turnScopeId: runConfig.turnScopeId,
+        turnScopeId,
         dialogProcessId: "dp-stop-authoritative",
       },
     });
@@ -76,13 +80,10 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
         ...payload,
         sessionId: "s-stop-authoritative",
         turnScopeId: "turn-stop-authoritative",
-        commandId: "command-stop-authoritative",
-        config: { turnScopeId: "turn-stop-authoritative" },
       },
       stopPayload: {
         sessionId: "s-stop-authoritative",
         turnScopeId: "turn-stop-authoritative",
-        commandId: "stop-command-authoritative",
         expectedRevision: 2,
         partialAssistant: {
           turnScopeId: "turn-stop-authoritative",
@@ -114,7 +115,7 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-stop-authoritative");
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-stop-authoritative");
-    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-stop-authoritative");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dialog:turn-stop-authoritative");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
   } finally {

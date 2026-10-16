@@ -11,7 +11,6 @@ import {
   isDialogProcessKey,
   SESSION_COMMAND,
 } from "@noobot/session-protocol";
-import crypto from "node:crypto";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -109,7 +108,7 @@ function summarizeWorkflowSessionMessages(result = {}) {
   );
 }
 
-export function registerSessionRoutes(app, { bot, handleChat, translateText, pluginHost } = {}) {
+export function registerSessionRoutes(app, { bot, translateText, pluginHost } = {}) {
   if (!pluginHost) throw new TypeError("session routes require the activated service plugin host");
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
@@ -259,7 +258,8 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     if (Object.keys(req.query || {}).some((key) => key !== "commandId")) {
       throw new TypeError("unsupported terminal resolution query field");
     }
-    const commandId = text(req.query?.commandId) || crypto.randomUUID();
+    const commandId = text(req.query?.commandId);
+    if (!commandId) throw new TypeError("terminal resolution requires commandId");
     const resolution = await bot.session.resolveTurnTerminalState({
       userId,
       sessionId,
@@ -578,6 +578,4 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
       },
     ),
   );
-
-  app.post("/chat", handleChat);
 }

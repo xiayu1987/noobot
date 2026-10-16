@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after } from "node:test";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
@@ -45,6 +46,7 @@ export function harness(initial = {}) {
       }
       session = structuredClone(next);
     },
+    async writeSessionDisplaySummary() {},
   };
   return {
     service: new SessionMessageService({
@@ -56,6 +58,34 @@ export function harness(initial = {}) {
     get: () => structuredClone(session),
     locks: () => lockCalls,
   };
+}
+
+export async function acceptTurn(
+  service,
+  { turnScopeId, content = "message", messageId = `msg_${turnScopeId}`, ...extra },
+) {
+  const accepted = await service.applyTurnLifecycleEvent({
+    userId: "u1",
+    sessionId: "s1",
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: TURN_PHASE.ACTION,
+    action: "send",
+    turnScopeId,
+    commandId: `accept-${turnScopeId}`,
+    causationId: `accept-${turnScopeId}`,
+    messageId: `turn-${turnScopeId}`,
+    presentationMessageId: `presentation-${turnScopeId}`,
+    expectedRevision: 0,
+    userMessage: {
+      content,
+      messageId,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    },
+    ...extra,
+  });
+  if (!accepted.applied) throw new Error(`acceptTurn rejected: ${accepted.reason}`);
+  return accepted;
 }
 
 export const canonical = (id = "a1") => ({

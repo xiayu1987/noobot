@@ -26,7 +26,8 @@ test("SessionExecutionRunner does not let currentSessionModelAlias override sele
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -60,7 +61,8 @@ test("SessionExecutionRunner restores currentSessionModelAlias when selectedMode
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -79,7 +81,8 @@ test("SessionExecutionRunner preserves provided thinkingStartedAt", async () => 
     return { answer: "ok" };
   };
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -104,7 +107,8 @@ test("SessionExecutionRunner disposes the plugin activation scope exactly once a
     }),
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -134,7 +138,8 @@ test("SessionExecutionRunner disposes the plugin activation scope exactly once a
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
         userId: "u1",
         sessionId: "s1",
         message: "hello",

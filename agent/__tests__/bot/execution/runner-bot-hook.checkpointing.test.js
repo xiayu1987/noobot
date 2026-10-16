@@ -58,7 +58,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "root-1",
@@ -159,7 +159,7 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "task",
@@ -223,7 +223,7 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "task",
@@ -263,7 +263,7 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "task",
@@ -287,7 +287,8 @@ test("SessionExecutionRunner validates scoped persistence identity before execut
     assertPersistenceContextIdentity: (context, identity) => calls.push({ context, identity }),
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "child-1",
     parentSessionId: "root-1",

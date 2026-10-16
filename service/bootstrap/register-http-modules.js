@@ -44,7 +44,6 @@ export async function registerHttpModules(
     buildWorkspaceTree,
     connectorRuntime,
     workspaceRootPath,
-    handleChat,
     translateText,
     pluginRootDir,
   } = {},
@@ -144,7 +143,6 @@ export async function registerHttpModules(
 
   registerSessionRoutes(app, {
     bot,
-    handleChat,
     translateText,
     pluginHost: servicePluginHost,
   });

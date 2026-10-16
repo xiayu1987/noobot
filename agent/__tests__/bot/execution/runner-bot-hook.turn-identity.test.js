@@ -10,72 +10,43 @@ import {
   createTestBotHookManager,
   HOOK_POINT,
   createTestAgentExecutionScope,
+  persistedUserMessage,
 } from "./runner-bot-hook.fixtures.js";
+import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
 
-test("SessionExecutionRunner passes prepared turnScopeId into context building", async () => {
-  let capturedRunConfig = null;
-  let appendedTurnScopeId = null;
+test("SessionExecutionRunner rejects a prepared turnScopeId that diverges from the accepted Turn", async () => {
   const runner = createRunner({
     prepareRunConfig: (payload = {}) => ({
       ...(payload?.runConfig || {}),
       turnScopeId: "client-turn:prepared",
     }),
-    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
-      capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
-      return { agentContext: runtimeAgentContext, runtimeAgentContext };
-    },
-    commitSessionTurn: async (payload = {}) => {
-      appendedTurnScopeId = payload.turnScopeId;
-      return {
-        attachments: [],
-        userMessage: {
-          messageUid: "sm_prepared",
-          role: "user",
-          content: payload.content,
-          dialogProcessId: payload.dialogProcessId,
-          turnScopeId: payload.turnScopeId,
-        },
-      };
-    },
   });
 
-  await runner.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    message: "hello",
-    runConfig: {},
-  });
-
-  assert.equal(capturedRunConfig?.turnScopeId, "client-turn:prepared");
-  assert.equal(appendedTurnScopeId, "client-turn:prepared");
+  await assert.rejects(
+    runner.runAcceptedSession({
+      userId: "u1",
+      sessionId: "s1",
+      message: "hello",
+      turnScopeId: "client-turn:accepted",
+    }),
+    (error) =>
+      /Turn acceptance receipt does not match the current execution identity/.test(
+        error?.cause?.message || error?.message,
+      ),
+  );
 });
 
 test("SessionExecutionRunner merges top-level turnScopeId before context building", async () => {
   let capturedRunConfig = null;
-  let appendedTurnScopeId = null;
   const runner = createRunner({
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
       const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
-    commitSessionTurn: async (payload = {}) => {
-      appendedTurnScopeId = payload.turnScopeId;
-      return {
-        attachments: [],
-        userMessage: {
-          messageUid: "sm_top_level",
-          role: "user",
-          content: payload.content,
-          dialogProcessId: payload.dialogProcessId,
-          turnScopeId: payload.turnScopeId,
-        },
-      };
-    },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -84,87 +55,55 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
   });
 
   assert.equal(capturedRunConfig?.turnScopeId, "client-turn:top-level");
-  assert.equal(appendedTurnScopeId, "client-turn:top-level");
 });
 
-test("SessionExecutionRunner commits a normal send for a new turn in an existing session", async () => {
-  let committedPayload = null;
-  let beforeRunContext = null;
-  const botHookManager = createTestBotHookManager();
-  botHookManager.on(HOOK_POINT.BOT.BEFORE_SESSION_RUN, (context = {}) => {
-    beforeRunContext = context;
-  });
-  const runner = createRunner({
-    botHookManager,
-    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
-      usedSessionId: "s1",
-      dialogProcessId: "dp-next",
-      sessionLoadState: "loaded",
-      userConfig: {},
-      currentSessionModelAlias: "",
-      runtimeEventListener: eventListener,
-    }),
-    commitSessionTurn: async (payload = {}) => {
-      committedPayload = payload;
-      return { attachments: [], aggregateVersion: 2 };
-    },
-  });
-
-  await runner.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    message: "normal next message",
-    runConfig: { turnScopeId: "turn-next" },
-  });
-
-  assert.equal(committedPayload?.action, "send");
-  assert.equal(committedPayload?.resumeDialogProcessId, undefined);
-  assert.equal(committedPayload?.resumeTurnScopeId, undefined);
-  assert.equal(beforeRunContext?.sessionLoadState, "loaded");
-  assert.equal(beforeRunContext?.isContinue, false);
-});
-
-test("SessionExecutionRunner commits continue only for a stopped snapshot resume", async () => {
-  let committedPayload = null;
-  let beforeRunContext = null;
-  const botHookManager = createTestBotHookManager();
-  botHookManager.on(HOOK_POINT.BOT.BEFORE_SESSION_RUN, (context = {}) => {
-    beforeRunContext = context;
-  });
-  const runner = createRunner({
-    botHookManager,
-    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
-      usedSessionId: "s1",
-      dialogProcessId: "dp-resumed",
-      sessionLoadState: "loaded",
-      userConfig: {},
-      currentSessionModelAlias: "",
-      runtimeEventListener: eventListener,
-    }),
-    commitSessionTurn: async (payload = {}) => {
-      committedPayload = payload;
-      return { attachments: [], aggregateVersion: 2 };
-    },
-  });
-
-  await runner.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    message: "resume stopped turn",
+for (const { name, dialogProcessId, turnScopeId, runConfig, isContinue } of [
+  {
+    name: "a normal send for a new turn in an existing session",
+    dialogProcessId: "dp-next",
+    turnScopeId: "turn-next",
+    runConfig: {},
+    isContinue: false,
+  },
+  {
+    name: "continue only for a stopped snapshot resume",
+    dialogProcessId: "dp-resumed",
+    turnScopeId: "turn-resumed",
     runConfig: {
-      turnScopeId: "turn-resumed",
       resumeFromStoppedSnapshot: true,
       resumeDialogProcessId: "dp-stopped",
       resumeTurnScopeId: "turn-stopped",
     },
-  });
+    isContinue: true,
+  },
+]) {
+  test(`SessionExecutionRunner runs ${name}`, async () => {
+    let beforeRunContext = null;
+    const botHookManager = createTestBotHookManager();
+    botHookManager.on(HOOK_POINT.BOT.BEFORE_SESSION_RUN, (context = {}) => {
+      beforeRunContext = context;
+    });
+    const runner = createRunner({
+      botHookManager,
+      initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+        usedSessionId: "s1",
+        dialogProcessId,
+        sessionLoadState: "loaded",
+        userConfig: {},
+        currentSessionModelAlias: "",
+        runtimeEventListener: eventListener,
+      }),
+    });
 
-  assert.equal(committedPayload?.action, "continue");
-  assert.equal(committedPayload?.resumeDialogProcessId, "dp-stopped");
-  assert.equal(committedPayload?.resumeTurnScopeId, "turn-stopped");
-  assert.equal(beforeRunContext?.sessionLoadState, "loaded");
-  assert.equal(beforeRunContext?.isContinue, true);
-});
+    await runner.runAcceptedSession(
+      { userId: "u1", sessionId: "s1", message: "next", turnScopeId, runConfig },
+      { dialogProcessId },
+    );
+
+    assert.equal(beforeRunContext?.sessionLoadState, "loaded");
+    assert.equal(beforeRunContext?.isContinue, isContinue);
+  });
+}
 
 test("SessionExecutionRunner asserts reused user with prepared attachments after context building", async () => {
   const calls = [];
@@ -180,6 +119,7 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
     }),
     assertReusedUserTurnIdentity: async (payload = {}) => {
       calls.push({ type: "assert", payload });
+      return { userMessage: persistedUserMessage(payload) };
     },
     prepareTurnInput: async () => ({
       userMessageAttachments: [
@@ -218,10 +158,10 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
     dialogProcessId: "dp-new",
     message: "edited",
     attachments: [{ name: "doc.docx", size: 12 }],
-    runConfig: {
+    turnScopeId: "client-turn:edited",
+    runConfig: createAcceptedRunIdentity("client-turn:edited", {
       reuseExistingUserTurn: true,
-      turnScopeId: "client-turn:edited",
-    },
+    }),
   });
 
   assert.deepEqual(
@@ -260,6 +200,7 @@ test("SessionExecutionRunner preserves the precommitted reused Turn dialogProces
     }),
     assertReusedUserTurnIdentity: async (payload = {}) => {
       calls.push(payload);
+      return { userMessage: persistedUserMessage(payload) };
     },
   });
 
@@ -268,10 +209,10 @@ test("SessionExecutionRunner preserves the precommitted reused Turn dialogProces
     sessionId: "s1",
     dialogProcessId: "dp-new",
     message: "edited",
-    runConfig: {
+    turnScopeId: "client-turn:edited",
+    runConfig: createAcceptedRunIdentity("client-turn:edited", {
       reuseExistingUserTurn: true,
-      turnScopeId: "client-turn:edited",
-    },
+    }),
   });
 
   assert.deepEqual(calls[1], {
@@ -291,9 +232,9 @@ test("SessionExecutionRunner rejects reused Turn execution without a precommitte
       userId: "u1",
       sessionId: "s1",
       message: "edited",
+      turnScopeId: "client-turn:edited",
       runConfig: {
         reuseExistingUserTurn: true,
-        turnScopeId: "client-turn:edited",
       },
     }),
     (error) => error?.cause?.code === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID",

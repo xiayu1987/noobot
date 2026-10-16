@@ -49,7 +49,6 @@ export function buildRunCommand({
   const isContinue = invocation.action === CLI_ACTION.RESUME_TURN;
   return createTurnRunCommand({
     commandType: isContinue ? AGENT_COMMAND.CONTINUE : AGENT_COMMAND.SEND,
-    commandId: identity.turnScopeId,
     identity: { sessionId: identity.sessionId, turnScopeId: identity.turnScopeId },
     input: { message: invocation.message, attachments },
     preferences: invocation.preferences,
@@ -94,7 +93,6 @@ export async function runCliTurn({
     stopRequested = true;
     connection.send(
       createTurnStopCommand({
-        commandId: `stop:${identity.turnScopeId}`,
         identity: {
           sessionId: identity.sessionId,
           turnScopeId: identity.turnScopeId,
@@ -128,7 +126,6 @@ export async function runCliTurn({
     if (!connection.isOpen()) return;
     connection.send(
       createInteractionResponseCommand({
-        commandId: `interaction:${request.requestId}`,
         identity: {
           sessionId: identity.sessionId,
           turnScopeId: identity.turnScopeId,

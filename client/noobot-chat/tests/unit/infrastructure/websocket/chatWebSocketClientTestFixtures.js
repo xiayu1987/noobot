@@ -58,7 +58,6 @@ export const flushPromises = () => Promise.resolve();
 export function streamCommand(identity = {}) {
   return createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    commandId: `test-stream:${identity.turnScopeId || "unscoped"}`,
     identity,
     input: { message: "test", attachments: [] },
   });

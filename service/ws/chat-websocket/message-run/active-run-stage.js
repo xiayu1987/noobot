@@ -30,7 +30,7 @@ async function recordPluginDebug(context, command, run) {
     userId: text(run.userId),
     sessionId: text(run.sessionId),
     dialogProcessId: text(run.dialogProcessId),
-    turnScopeId: text(run.normalizedRunConfig.turnScopeId || context.state.currentTurnScopeId),
+    turnScopeId: text(run.turnScopeId),
     data: {
       requestedSelectedPlugins: command.preferences.selectedPlugins,
       normalizedSelectedPlugins: run.normalizedRunConfig.selectedPlugins,
@@ -71,7 +71,7 @@ function createRunMeta(context, command, run) {
     parentSessionId: text(run.parentSessionId),
     parentDialogProcessId: text(run.parentDialogProcessId),
     dialogProcessId: text(run.dialogProcessId),
-    turnScopeId: text(run.normalizedRunConfig.turnScopeId || context.state.currentTurnScopeId),
+    turnScopeId: text(run.turnScopeId),
     messageId: text(run.normalizedRunConfig.messageId),
     presentationMessageId: text(run.normalizedRunConfig.presentationMessageId),
   };

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { commitTurn } from "./session-message-service/commit-turn.js";
 import { bindTurnAttachments } from "./session-message-service/bind-turn-attachments.js";
 import { appendTurns } from "./session-message-service/append-turn.js";
 import { commitMessageEvent } from "./session-message-service/message-event.js";
@@ -91,9 +90,6 @@ export class SessionMessageService {
     );
   }
 
-  async commitTurn(payload = {}) {
-    return commitTurn.call(this, payload);
-  }
   async bindTurnAttachments(payload = {}) {
     return bindTurnAttachments.call(this, payload);
   }

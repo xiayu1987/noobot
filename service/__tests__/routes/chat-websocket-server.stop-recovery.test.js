@@ -46,7 +46,6 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
         }
         return {
           sessionId: "s1",
-          dialogProcessId: "dp-next-run",
           answer: "next ok",
           messages: [],
           traces: [],
@@ -81,7 +80,7 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-stop-before-next");
-    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-stop-before-next");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dialog:turn-stop-before-next");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
 
@@ -100,7 +99,7 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
         item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.COMPLETED,
     );
     assert.equal(completedEvent?.data?.identity?.sessionId, "s1");
-    assert.equal(completedEvent?.data?.payload?.dialogProcessId, "dp-next-run");
+    assert.equal(completedEvent?.data?.payload?.dialogProcessId, "dialog:turn-next-run");
   } finally {
     await closeServer(server);
   }

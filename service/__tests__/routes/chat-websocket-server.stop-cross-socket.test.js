@@ -27,13 +27,13 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
           summaryVersion: previousSummaryVersion + 1,
         };
       },
-      runSession: async ({ abortSignal, sessionId, runConfig, eventListener }) => {
+      runSession: async ({ abortSignal, sessionId, turnScopeId, runConfig, eventListener }) => {
         eventListener.onEvent({
           event: "agent_lifecycle_state_changed",
           data: {
             state: "running",
             sessionId,
-            turnScopeId: runConfig.turnScopeId,
+            turnScopeId,
           },
         });
         await new Promise((resolve) => {
@@ -164,13 +164,13 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
       userId: request.headers.authorization === "Bearer owner-a-key" ? "owner-a" : "owner-b",
     }),
     bot: {
-      runSession: async ({ abortSignal, sessionId, runConfig, eventListener }) => {
+      runSession: async ({ abortSignal, sessionId, turnScopeId, runConfig, eventListener }) => {
         eventListener.onEvent({
           event: "agent_lifecycle_state_changed",
           data: {
             state: "running",
             sessionId,
-            turnScopeId: runConfig.turnScopeId,
+            turnScopeId,
           },
         });
         await new Promise((resolve) => {
@@ -276,13 +276,13 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
   const server = await startServerWithWs({
     resolveAuthByApiKey: () => ({ userId: "canonical-owner" }),
     bot: {
-      runSession: async ({ abortSignal, sessionId, runConfig, eventListener }) => {
+      runSession: async ({ abortSignal, sessionId, turnScopeId, runConfig, eventListener }) => {
         eventListener.onEvent({
           event: "agent_lifecycle_state_changed",
           data: {
             state: "running",
             sessionId,
-            turnScopeId: runConfig.turnScopeId,
+            turnScopeId,
           },
         });
         await new Promise((resolve) => {

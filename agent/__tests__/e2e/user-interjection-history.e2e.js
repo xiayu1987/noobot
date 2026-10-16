@@ -14,6 +14,7 @@ import { SessionExecutionEngine } from "../../src/bot/session/session-execution-
 import { appendUserInterjectionMessage } from "../../src/runtime/turn/turn-context-message-appender.js";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
+import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
 test("session execution preserves every user interjection into the next model history", async () => {
@@ -50,6 +51,17 @@ test("session execution preserves every user interjection into the next model hi
       return { sessionDir: path.join(root, userId, "runtime", "session", resolvedSessionId) };
     },
     async appendExecutionLog() {},
+    async upsertTurnTiming() {},
+    async saveExecutionReport() {},
+    async getTurnSummaryCheckpointState() {
+      return null;
+    },
+    async getRootSessionId({ sessionId: rootSessionId }) {
+      return rootSessionId;
+    },
+    async getContextProjection() {
+      return { messages: [], sourceRevision: "" };
+    },
     async appendTurns({ turns = [] } = {}) {
       persistedTurns.push(...turns);
       return { appended: true, reason: "", turns };
@@ -57,26 +69,25 @@ test("session execution preserves every user interjection into the next model hi
     async getSessionTurns() {
       return persistedTurns;
     },
-    async commitTurn(payload = {}) {
+    async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `user:${payload.turnScopeId}`;
       const userMessage = {
         messageUid,
-        id: payload.messageId || messageUid,
-        messageId: payload.messageId || messageUid,
+        id: messageUid,
+        messageId: messageUid,
         role: "user",
         type: "message",
-        content: payload.content,
+        content: "start task",
         userName: payload.userId,
         sessionId: payload.sessionId,
         parentSessionId: payload.parentSessionId,
         dialogProcessId: payload.dialogProcessId,
-        parentDialogProcessId: payload.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
         summarized: false,
       };
       persistedTurns.push(userMessage);
-      return { userMessage, attachments: [], aggregateVersion: 1 };
+      return { userMessage };
     },
     async commitTurnSummaryCheckpoint() {
       return { committed: true, markedCount: 1, checkpointRevision: 1 };
@@ -177,6 +188,14 @@ test("session execution preserves every user interjection into the next model hi
       message: "start task",
       dialogProcessId,
       turnScopeId,
+      turnAcceptance: createTurnAcceptanceReceipt({
+        commandId: turnScopeId,
+        sessionId,
+        turnScopeId,
+        dialogProcessId,
+        messageUid: `user:${turnScopeId}`,
+        aggregateVersion: 1,
+      }),
       runConfig: {
         executionId: `agent:${turnScopeId}`,
         executionKind: "agent",

@@ -40,7 +40,6 @@ export class SessionExecutionRunner {
     commitSummaryCheckpoint,
     appendAgentMessages,
     assertPersistenceContextIdentity,
-    commitSessionTurn,
     bindSessionTurnAttachments,
     assertReusedUserTurnIdentity,
     getSessionTurns,
@@ -70,7 +69,6 @@ export class SessionExecutionRunner {
     this.commitSummaryCheckpoint = commitSummaryCheckpoint;
     this.appendAgentMessages = appendAgentMessages;
     this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
-    this.commitSessionTurn = commitSessionTurn;
     this.bindSessionTurnAttachments = bindSessionTurnAttachments;
     this.assertReusedUserTurnIdentity = assertReusedUserTurnIdentity;
     this.getSessionTurns = getSessionTurns;
@@ -198,40 +196,32 @@ export class SessionExecutionRunner {
       resolvedRuntimeEventListener = runtimeEventListener;
       lifecycle = initializedLifecycle;
 
-      const {
-        buildContextPayload,
-        canonicalAttachments,
-        currentUserMessage,
-        turnCommand: effectiveTurnCommand,
-        committedTurnResult,
-      } = await prepareCurrentUserTurn({
-        prepareTurnInput: this.prepareTurnInput,
-        assertReusedUserTurnIdentity: this.assertReusedUserTurnIdentity,
-        commitSessionTurn: this.commitSessionTurn,
-        bindSessionTurnAttachments: this.bindSessionTurnAttachments,
-        normalizedMessage,
-        attachments,
-        systemMessages,
-        eventListener: runtimeEventListener,
-        userInteractionBridge,
-        abortSignal,
-        parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-        persistenceContext,
-        persistenceScope: persistenceScopeValidation.scope,
-        contextMode,
-        userId,
-        sessionId: usedSessionId,
-        parentSessionId,
-        dialogProcessId,
-        parentDialogProcessId,
-        turnScopeId: resolvedTurnScopeId,
-        caller,
-        userConfig,
-        resolvedRunConfig,
-        requestRunConfig,
-        scenarioResolvedRunConfig,
-        turnAcceptance,
-      });
+      const { buildContextPayload, canonicalAttachments, currentUserMessage, committedTurnResult } =
+        await prepareCurrentUserTurn({
+          prepareTurnInput: this.prepareTurnInput,
+          assertReusedUserTurnIdentity: this.assertReusedUserTurnIdentity,
+          bindSessionTurnAttachments: this.bindSessionTurnAttachments,
+          attachments,
+          systemMessages,
+          eventListener: runtimeEventListener,
+          userInteractionBridge,
+          abortSignal,
+          parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+          persistenceContext,
+          persistenceScope: persistenceScopeValidation.scope,
+          contextMode,
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+          caller,
+          userConfig,
+          resolvedRunConfig,
+          requestRunConfig,
+          scenarioResolvedRunConfig,
+          turnAcceptance,
+        });
       if (typeof this.prepareAgentTurnExecution !== "function") {
         throw new Error("prepareAgentTurnExecution is required");
       }
@@ -267,7 +257,6 @@ export class SessionExecutionRunner {
         currentUserMessage,
         resolvedRunConfig,
         userInterjectionPort,
-        turnCommand: effectiveTurnCommand,
         committedTurnResult,
       });
       if (dispatchRuntime && typeof dispatchRuntime === "object") {

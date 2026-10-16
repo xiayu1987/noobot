@@ -45,7 +45,8 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     },
   });
 
-  const result = await runner.runSession({
+  const result = await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -114,7 +115,8 @@ test("runner failures expose the committed execution lifecycle snapshot", async 
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
         userId: "u1",
         sessionId: "s1",
         message: "task",
@@ -150,7 +152,8 @@ test("runner failure owns lifecycle metadata without mutating an immutable abort
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
         userId: "u1",
         sessionId: "s1",
         message: "task",
@@ -183,7 +186,8 @@ test("SessionExecutionRunner emits bot error hooks", async () => {
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
         userId: "u1",
         sessionId: "s1",
         message: "hello",
@@ -210,7 +214,13 @@ function createReportingRunner(overrides = {}) {
   return { reports, runner };
 }
 
-const reportRunPayload = { userId: "u1", sessionId: "s1", message: "task", runConfig: {} };
+const reportRunPayload = {
+  userId: "u1",
+  sessionId: "s1",
+  message: "task",
+  turnScopeId: "turn-default",
+  runConfig: {},
+};
 
 test("after_session_run hook failures stay isolated and keep the completed report", async () => {
   const botHookManager = createTestBotHookManager();
@@ -219,7 +229,7 @@ test("after_session_run hook failures stay isolated and keep the completed repor
   });
   const { reports, runner } = createReportingRunner({ botHookManager });
 
-  const result = await runner.runSession(reportRunPayload);
+  const result = await runner.runAcceptedSession(reportRunPayload);
 
   assert.equal(result.answer, "ok");
   assert.deepEqual(
@@ -235,7 +245,7 @@ test("a failure after finalize overwrites the completed report with a failed rep
     },
   });
 
-  await assert.rejects(() => runner.runSession(reportRunPayload), /post finalize failed/);
+  await assert.rejects(() => runner.runAcceptedSession(reportRunPayload), /post finalize failed/);
   assert.deepEqual(
     reports.map((report) => report.status),
     ["completed", "failed"],

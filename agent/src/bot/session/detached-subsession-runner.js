@@ -8,8 +8,10 @@ import { AGENT_RUN_EVENT, createExecutionEventListener, emitEvent } from "../../
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import {
+  TURN_ACTION,
   TURN_EVENT,
   TURN_PHASE,
+  createAssistantMessageEventId,
   createSessionPersistenceScope,
   createTurnAcceptanceReceipt,
   isExecutionAbortError,
@@ -77,17 +79,15 @@ async function runDetachedSubSession(dependencies, request) {
     identity,
     prepared.effectiveRunConfig,
   );
-  prepared.turnAcceptance = accepted.userMessage
-    ? createTurnAcceptanceReceipt({
-        commandId: lifecycle.commandId,
-        sessionId: identity.subSessionId,
-        turnScopeId: identity.turnScopeId,
-        dialogProcessId: identity.subDialogProcessId,
-        messageUid: accepted.userMessage.messageUid,
-        aggregateVersion: accepted.aggregateVersion,
-        committedEventPublished: false,
-      })
-    : null;
+  prepared.turnAcceptance = createTurnAcceptanceReceipt({
+    commandId: lifecycle.commandId,
+    sessionId: identity.subSessionId,
+    turnScopeId: identity.turnScopeId,
+    dialogProcessId: identity.subDialogProcessId,
+    messageUid: accepted.userMessage.messageUid,
+    aggregateVersion: accepted.aggregateVersion,
+    committedEventPublished: false,
+  });
   let result;
   try {
     result = await executeDetachedSession(
@@ -243,7 +243,7 @@ function createDetachedRunConfig(
   config.commandId = identity.commandId;
   const presentationMessageId = `msg_${randomUUID()}`;
   config.presentationMessageId = presentationMessageId;
-  config.messageId = `msg_event_${presentationMessageId}`;
+  config.messageId = createAssistantMessageEventId(presentationMessageId);
   delete config.assistantMessageId;
   if (!text(config.thinkingStartedAt)) {
     config.thinkingStartedAt = String(dependencies.now()).trim();
@@ -375,7 +375,7 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
     causationId: `${lifecycle.commandId}:accepted`,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
-    action: "send",
+    action: TURN_ACTION.SEND,
     executionState: "accepted",
     startedAt,
     createSessionIfAbsent: true,
@@ -470,7 +470,7 @@ async function commitDetachedStop(dependencies, lifecycle) {
     causationId: `${lifecycle.commandId}:stop-accepted`,
     eventType: TURN_EVENT.STOP_ACCEPTED,
     phase: TURN_PHASE.ACTION,
-    action: "stop",
+    action: TURN_ACTION.STOP,
   });
   await lifecycle.commit({
     commandId: `${lifecycle.commandId}:stop-processing-completed`,

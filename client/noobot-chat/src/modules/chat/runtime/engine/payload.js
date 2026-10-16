@@ -106,17 +106,15 @@ export function buildChatPayload({
   continueFromStopped = false,
   resumeDialogProcessId = "",
   resumeTurnScopeId = "",
-  expectedAggregateVersion = 0,
-  commandId = "",
+  expectedAggregateVersion,
 } = {}) {
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
   const commandType = resolveCommandType({ continueFromStopped, reuseExistingUserTurn });
   return createTurnRunCommand({
     commandType,
-    commandId: normalizeTrimmedString(commandId) || normalizedTurnScopeId,
     identity: buildIdentity({
       activeSession,
-      dialogProcessId,
+      dialogProcessId: commandType === AGENT_COMMAND.RESEND ? dialogProcessId : "",
       turnScopeId: normalizedTurnScopeId,
     }),
     input: { message: message || uploadHint, attachments },

@@ -79,6 +79,21 @@ function createIdentity(input = {}) {
   });
 }
 
+const DERIVED_COMMAND_ID_SOURCES = Object.freeze({
+  [AGENT_COMMAND.SEND]: (command) => clean(command.identity?.turnScopeId),
+  [AGENT_COMMAND.RESEND]: (command) => clean(command.identity?.turnScopeId),
+  [AGENT_COMMAND.CONTINUE]: (command) => clean(command.identity?.turnScopeId),
+  [AGENT_COMMAND.STOP]: (command) => `stop:${clean(command.identity?.turnScopeId)}`,
+  [AGENT_COMMAND.INTERACTION_RESPONSE]: (command) =>
+    `interaction:${clean(command.interaction?.requestId)}`,
+});
+
+export function deriveAgentCommandId(command) {
+  const derive = DERIVED_COMMAND_ID_SOURCES[clean(command?.commandType).toLowerCase()];
+  if (!derive) throw new TypeError("command_id_not_derivable");
+  return derive(command);
+}
+
 function createEnvelope(commandType, input = {}) {
   return {
     protocolVersion: AGENT_TRANSPORT_PROTOCOL_VERSION,
@@ -88,10 +103,17 @@ function createEnvelope(commandType, input = {}) {
   };
 }
 
+function withDerivedCommandId(input, command) {
+  if (Object.prototype.hasOwnProperty.call(input, "commandId")) {
+    throw new TypeError("command_id_is_protocol_derived");
+  }
+  return { ...command, commandId: deriveAgentCommandId(command) };
+}
+
 export function createTurnRunCommand(input = {}) {
   const commandType = clean(input.commandType).toLowerCase();
   if (!RUN_COMMAND_SET.has(commandType)) throw new TypeError("invalid_run_command_type");
-  return {
+  return withDerivedCommandId(input, {
     ...createEnvelope(commandType, input),
     input: {
       message: String(input.input?.message ?? ""),
@@ -103,8 +125,8 @@ export function createTurnRunCommand(input = {}) {
       assistantMessageId: clean(input.presentation?.assistantMessageId),
     }),
     concurrency: compactObject({
-      expectedTurnRevision: input.concurrency?.expectedTurnRevision ?? 0,
-      expectedAggregateVersion: input.concurrency?.expectedAggregateVersion ?? 0,
+      expectedTurnRevision: input.concurrency?.expectedTurnRevision,
+      expectedAggregateVersion: input.concurrency?.expectedAggregateVersion,
     }),
     session: {
       createIfAbsent: input.session?.createIfAbsent === true,
@@ -120,7 +142,7 @@ export function createTurnRunCommand(input = {}) {
           },
         }
       : {}),
-  };
+  });
 }
 
 export function createTurnStopCommand(input = {}) {
@@ -128,7 +150,7 @@ export function createTurnStopCommand(input = {}) {
   if (!Number.isInteger(expectedTurnRevision) || expectedTurnRevision < 1) {
     throw new TypeError("invalid_expected_turn_revision");
   }
-  return {
+  return withDerivedCommandId(input, {
     ...createEnvelope(AGENT_COMMAND.STOP, input),
     concurrency: { expectedTurnRevision },
     stop: compactObject({
@@ -137,7 +159,7 @@ export function createTurnStopCommand(input = {}) {
         ? { ...input.stop.partialAssistant }
         : undefined,
     }),
-  };
+  });
 }
 
 export function createTurnInterjectionCommand(input = {}) {
@@ -150,13 +172,13 @@ export function createTurnInterjectionCommand(input = {}) {
 }
 
 export function createInteractionResponseCommand(input = {}) {
-  return {
+  return withDerivedCommandId(input, {
     ...createEnvelope(AGENT_COMMAND.INTERACTION_RESPONSE, input),
     interaction: {
       requestId: clean(input.interaction?.requestId),
       response: input.interaction?.response ?? {},
     },
-  };
+  });
 }
 
 export function createExecutionQueryCommand(input = {}) {
@@ -285,6 +307,14 @@ function validateRunConcurrency(command, errors) {
   }
 }
 
+function validateRunPresentation(command, errors) {
+  if (!validateNestedObject(command.presentation, PRESENTATION_KEYS, "presentation", errors)) {
+    return;
+  }
+  if (!clean(command.presentation.userMessageId)) errors.push("missing_user_message_id");
+  if (!clean(command.presentation.assistantMessageId)) errors.push("missing_assistant_message_id");
+}
+
 function validateRunSession(command, commandType, errors) {
   if (!validateNestedObject(command.session, SESSION_KEYS, "session", errors)) return;
   const { selectedConnectorIds, createIfAbsent } = command.session;
@@ -312,10 +342,12 @@ function validateRunCommand(command, commandType, errors) {
   requireIdentityField(command, "turnScopeId", "missing_turn_scope_id", errors);
   if (commandType === AGENT_COMMAND.RESEND) {
     requireIdentityField(command, "dialogProcessId", "missing_resend_dialog_process_id", errors);
+  } else if (clean(command.identity?.dialogProcessId)) {
+    errors.push("unexpected_dialog_process_id");
   }
   validateRunInput(command, errors);
   errors.push(...validateRunPreferences(command.preferences).errors);
-  validateNestedObject(command.presentation, PRESENTATION_KEYS, "presentation", errors);
+  validateRunPresentation(command, errors);
   validateRunConcurrency(command, errors);
   validateRunSession(command, commandType, errors);
   if (commandType === AGENT_COMMAND.CONTINUE) validateContinuation(command, errors);
@@ -384,7 +416,15 @@ export function validateAgentCommand(command) {
   validateTopLevelFields(command, commandType, errors);
   validateIdentity(command, errors);
   validateCommandBody(command, commandType, errors);
+  validateDerivedCommandId(command, commandType, errors);
   return { valid: errors.length === 0, errors };
+}
+
+function validateDerivedCommandId(command, commandType, errors) {
+  if (!DERIVED_COMMAND_ID_SOURCES[commandType] || !clean(command.commandId)) return;
+  if (clean(command.commandId) !== deriveAgentCommandId(command)) {
+    errors.push("command_id_not_derived");
+  }
 }
 
 function validateAgentCommandEnvelope(command) {

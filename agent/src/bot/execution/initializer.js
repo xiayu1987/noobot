@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { v4 as uuidv4 } from "uuid";
 import { createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { text } from "@noobot/shared/value";
@@ -31,7 +30,10 @@ export class SessionExecutionInitializer {
     const upstreamListener = eventListener;
     const basePath = await this.workspaceService.ensureUserWorkspace(userId);
 
-    const resolvedDialogProcessId = text(dialogProcessId) || uuidv4();
+    const resolvedDialogProcessId = text(dialogProcessId);
+    if (!resolvedDialogProcessId) {
+      throw new TypeError("accepted Turn dialogProcessId is required before Session run");
+    }
     const sessionBundle = await this.session.getSessionBundle({
       userId,
       sessionId: usedSessionId,

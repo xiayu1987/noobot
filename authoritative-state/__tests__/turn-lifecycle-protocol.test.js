@@ -567,6 +567,36 @@ test("execution identity is immutable after the first Turn revision", () => {
   assert.equal(conflict.lifecycle.turns["identity-turn"].revision, 1);
 });
 
+test("dialogProcessId is immutable after acceptance", () => {
+  const accepted = transitionTurnLifecycle(
+    {},
+    {
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "dialog-r1",
+      causationId: "dialog-r1",
+      turnScopeId: "dialog-turn",
+      dialogProcessId: "dialog-accepted",
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      messageId: "dialog-message",
+      presentationMessageId: "dialog-presentation",
+    },
+  );
+  assert.equal(accepted.applied, true);
+  const conflict = transitionTurnLifecycle(accepted.lifecycle, {
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    commandId: "dialog-r2",
+    causationId: "dialog-r2",
+    turnScopeId: "dialog-turn",
+    dialogProcessId: "dialog-other",
+    phase: TURN_PHASE.PROCESSING,
+  });
+  assert.equal(conflict.applied, false);
+  assert.equal(conflict.reason, "turn_dialog_process_identity_conflict");
+  assert.equal(conflict.lifecycle.turns["dialog-turn"].dialogProcessId, "dialog-accepted");
+  assert.equal(conflict.lifecycle.turns["dialog-turn"].revision, 1);
+});
+
 test("failed transition requires failure code and message", () => {
   const accepted = transitionTurnLifecycle(
     {},

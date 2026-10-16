@@ -28,7 +28,13 @@ test("socket close detaches an accepted turn which still completes and releases 
   const authoritative = createAuthoritativeBot();
   let aborted = false;
   let releaseRun = null;
-  authoritative.bot.runSession = async ({ sessionId, runConfig, abortSignal, eventListener }) => {
+  authoritative.bot.runSession = async ({
+    sessionId,
+    turnScopeId,
+    runConfig,
+    abortSignal,
+    eventListener,
+  }) => {
     abortSignal.addEventListener(
       "abort",
       () => {
@@ -41,7 +47,7 @@ test("socket close detaches an accepted turn which still completes and releases 
       data: {
         state: "running",
         sessionId,
-        turnScopeId: runConfig.turnScopeId,
+        turnScopeId,
         dialogProcessId: "dp-socket-close",
       },
     });
@@ -62,8 +68,6 @@ test("socket close detaches an accepted turn which still completes and releases 
       ...payload,
       sessionId: "s-socket-close",
       turnScopeId: "turn-socket-close",
-      commandId: "command-socket-close",
-      config: { turnScopeId: "turn-socket-close" },
     };
     await new Promise((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/chat/ws`, {
@@ -146,8 +150,6 @@ test("a new action recovers a stale persisted turn lost after service restart", 
         ...payload,
         sessionId: "s-after-restart",
         turnScopeId: "turn-after-restart",
-        commandId: "command-after-restart",
-        config: { turnScopeId: "turn-after-restart" },
       },
     });
 

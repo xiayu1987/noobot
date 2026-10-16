@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import { emitEvent } from "../../../events/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { runBotRuntimeHook, withBotHookRuntimeMeta } from "../../hook/index.js";
@@ -11,24 +10,30 @@ import {
   createAgentLifecycleMachine,
   resolveInitialLifecycleState,
 } from "../../../runtime/lifecycle/state-machine.js";
-import { resolveRunTurnScopeId } from "../turn-command.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
-function applyCanonicalRunMessageIdentity(runConfig = {}) {
-  const turnScopeId = text(runConfig?.turnScopeId);
-  const presentationMessageId = text(runConfig?.presentationMessageId) || `msg_${turnScopeId}`;
-  const messageId = text(runConfig?.messageId) || `msg_event_${presentationMessageId}`;
-  const executionId = deriveAgentExecutionId({
-    executionId: runConfig?.executionId,
-    turnScopeId,
-  });
-  runConfig.presentationMessageId = presentationMessageId;
-  runConfig.messageId = messageId;
-  runConfig.executionId = executionId;
-  runConfig.rootExecutionId = text(runConfig?.rootExecutionId) || executionId;
-  runConfig.commandId = text(runConfig?.commandId) || turnScopeId;
-  return { turnScopeId, presentationMessageId, messageId, executionId };
+const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
+  "presentationMessageId",
+  "messageId",
+  "executionId",
+  "rootExecutionId",
+  "commandId",
+]);
+
+function requireAcceptedRunIdentity(runConfig = {}) {
+  const missing = REQUIRED_RUN_IDENTITY_FIELDS.filter((field) => !text(runConfig?.[field]));
+  if (missing.length > 0) {
+    const error = new Error(`session run requires accepted identity: ${missing.join(",")}`);
+    error.statusCode = 400;
+    error.code = "MISSING_ACCEPTED_RUN_IDENTITY";
+    throw error;
+  }
+  return {
+    turnScopeId: text(runConfig.turnScopeId),
+    presentationMessageId: text(runConfig.presentationMessageId),
+    messageId: text(runConfig.messageId),
+  };
 }
 
 export async function initializeSessionRun({
@@ -56,6 +61,13 @@ export async function initializeSessionRun({
 }) {
   const normalizedMessage = normalizeRunMessage(message);
   validateRunInput({ userId, sessionId, caller, parentSessionId });
+  const normalizedRequestTurnScopeId = text(requestedTurnScopeId);
+  if (!normalizedRequestTurnScopeId) {
+    const error = new Error("session run requires turnScopeId");
+    error.statusCode = 400;
+    error.code = "MISSING_TURN_SCOPE_ID";
+    throw error;
+  }
   if (runConfig?.reuseExistingUserTurn === true && !text(requestedDialogProcessId)) {
     const error = new Error("reused Turn requires its precommitted dialogProcessId");
     error.statusCode = 400;
@@ -70,15 +82,11 @@ export async function initializeSessionRun({
       userId,
       sessionId,
       parentSessionId,
-      turnScopeId: text(requestedTurnScopeId || runConfig?.turnScopeId),
+      turnScopeId: normalizedRequestTurnScopeId,
       dialogProcessId: text(requestedDialogProcessId),
       ...(persistenceContext ? { persistenceContext } : {}),
     });
   }
-  const normalizedRequestTurnScopeId = resolveRunTurnScopeId({
-    caller,
-    turnScopeId: requestedTurnScopeId || runConfig?.turnScopeId,
-  });
   const resolvedParentAsyncResultContainer = ensureParentAsyncResultContainer({
     parentAsyncResultContainer,
     caller,
@@ -107,7 +115,7 @@ export async function initializeSessionRun({
   } = initialized;
   const requestRunConfig = {
     ...(isPlainObject(runConfig) ? runConfig : {}),
-    ...(normalizedRequestTurnScopeId ? { turnScopeId: normalizedRequestTurnScopeId } : {}),
+    turnScopeId: normalizedRequestTurnScopeId,
     sessionId: usedSessionId,
     dialogProcessId,
   };
@@ -117,7 +125,7 @@ export async function initializeSessionRun({
       ? prepareRunConfig({ userId, runConfig: scenarioResolvedRunConfig, userConfig })
       : scenarioResolvedRunConfig;
   const { turnScopeId, presentationMessageId, messageId } =
-    applyCanonicalRunMessageIdentity(resolvedRunConfig);
+    requireAcceptedRunIdentity(resolvedRunConfig);
   const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
   const lifecycle = createAgentLifecycleMachine({
     eventListener: runtimeEventListener,

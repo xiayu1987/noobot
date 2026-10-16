@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
-import { harness } from "./session-version-hardening.test-helpers.js";
+import { acceptTurn, harness } from "./session-version-hardening.test-helpers.js";
 
 test("turn summary checkpoint receipts reject stale revisions and are pruned with removed turns", async () => {
   const h = harness({
@@ -81,13 +81,7 @@ test("attachment binding rejects placeholders and cross-session injection after 
   for (const [index, attachment] of invalid.entries()) {
     await t.test(String(index), async () => {
       const h = harness();
-      const committed = await h.service.commitTurn({
-        userId: "u1",
-        sessionId: "s1",
-        content: "x",
-        turnScopeId: `t${index}`,
-        commandId: `i${index}`,
-      });
+      const committed = await acceptTurn(h.service, { turnScopeId: `t${index}` });
       await assert.rejects(
         h.service.bindTurnAttachments({
           userId: "u1",
@@ -122,14 +116,7 @@ test("deleteFromMessage replays a committed receipt without deleting again", asy
     commandId: "delete-once",
   };
   const committed = await h.service.deleteFromMessage(input);
-  await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "later",
-    turnScopeId: "later",
-    commandId: "later",
-    expectedAggregateVersion: 3,
-  });
+  await acceptTurn(h.service, { turnScopeId: "later", expectedAggregateVersion: 3 });
   const replay = await h.service.deleteFromMessage(input);
   assert.equal(committed.aggregateVersion, 3);
   assert.equal(replay.aggregateVersion, 4);
@@ -171,26 +158,7 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
   );
 });
 
-test("idempotency keys reject reuse with a different request", async () => {
-  const send = harness();
-  await send.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "one",
-    turnScopeId: "t1",
-    commandId: "same",
-  });
-  await assert.rejects(
-    send.service.commitTurn({
-      userId: "u1",
-      sessionId: "s1",
-      content: "different",
-      turnScopeId: "t2",
-      commandId: "same",
-    }),
-    (error) => error.code === "SESSION_IDEMPOTENCY_KEY_REUSED",
-  );
-
+test("replaceTurn idempotency keys reject reuse with a different request", async () => {
   const replace = harness({
     messages: [{ role: "user", content: "old", turnScopeId: "old" }],
   });

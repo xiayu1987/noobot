@@ -9,7 +9,7 @@ import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createExecutionEventListener } from "../../src/events/execution-listener.js";
 import { createRunner } from "./session-execution-runner-agent-done-order.fixtures.js";
 
-const input = { userId: "u1", sessionId: "s1", message: "hello" };
+const input = { userId: "u1", sessionId: "s1", message: "hello", turnScopeId: "turn-default" };
 
 test("runSession waits for post-run hook events before completing and publishing parent success", async () => {
   const writeStarted = Promise.withResolvers();
@@ -44,7 +44,7 @@ test("runSession waits for post-run hook events before completing and publishing
   });
   runner.upsertParentAsyncTask = ({ patch }) => parentUpdates.push(patch);
   let returned = false;
-  const completion = runner.runSession(input).then((result) => {
+  const completion = runner.runAcceptedSession(input).then((result) => {
     returned = true;
     return result;
   });
@@ -91,7 +91,7 @@ test("post-run hook failure never publishes completed and drains the failed life
     finalizeRunSession: async () => ({ answer: "done" }),
   });
   runner.upsertParentAsyncTask = ({ patch }) => parentUpdates.push(patch);
-  await assert.rejects(runner.runSession(input), { message: hookError.message });
+  await assert.rejects(runner.runAcceptedSession(input), { message: hookError.message });
   const states = records
     .filter((record) => record.event === "agent_lifecycle_state_changed")
     .map((record) => record.data.state);
@@ -123,7 +123,7 @@ test("completion event persistence failure rejects the run without parent succes
     finalizeRunSession: async () => ({ answer: "done" }),
   });
   runner.upsertParentAsyncTask = ({ patch }) => parentUpdates.push(patch);
-  await assert.rejects(runner.runSession(input), /completion write failed/);
+  await assert.rejects(runner.runAcceptedSession(input), /completion write failed/);
   assert.deepEqual(
     parentUpdates.map((patch) => patch.status),
     ["failed"],
@@ -166,7 +166,7 @@ test("failed runs drain error-hook events before disposing the plugin activation
   });
   let rejected = false;
   const failure = assert
-    .rejects(runner.runSession(input), { message: executionError.message })
+    .rejects(runner.runAcceptedSession(input), { message: executionError.message })
     .then(() => {
       rejected = true;
     });
@@ -188,7 +188,10 @@ test("parent task stores the completed result without storing its own container"
   runner.upsertParentAsyncTask = ({ parentAsyncResultContainer, patch }) => {
     parentAsyncResultContainer.task = patch;
   };
-  const result = await runner.runSession({ ...input, parentAsyncResultContainer: container });
+  const result = await runner.runAcceptedSession({
+    ...input,
+    parentAsyncResultContainer: container,
+  });
   assert.equal(result.parentAsyncResultContainer, container);
   assert.equal(container.task.result.parentAsyncResultContainer, undefined);
   assert.equal(container.task.result.lifecycle.state, "completed");

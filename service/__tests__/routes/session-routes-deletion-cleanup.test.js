@@ -61,7 +61,6 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
   registerSessionRoutes(app, {
     bot,
     pluginHost,
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => key,
   });
 
@@ -97,7 +96,6 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
         };
       },
     }),
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => key,
   });
 
@@ -163,7 +161,6 @@ test("session-routes: plugin related session identities share the authoritative 
         };
       },
     },
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => key,
   });
 
@@ -199,7 +196,6 @@ test("session-routes: orphan attachment cleanup reads ids without loading Sessio
         return { deletedCount: 0, deletedSessionIds: [] };
       },
     }),
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => key,
   });
 

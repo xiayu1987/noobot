@@ -6,7 +6,7 @@
 import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
-import { publishRunEvent, registerActiveRun } from "../run-registry.js";
+import { publishRunEvent } from "../run-registry.js";
 import { createRunEventListener } from "../run-event-listener.js";
 import { isSessionLogDebugTypeEnabled } from "@noobot/runtime-events/session-log-protocol";
 import { recordServiceWebSocketLifecycle } from "../runtime-events.js";
@@ -63,7 +63,7 @@ function recordDispatchFailure(
     event: "service.authorityOutbox.dispatchFailed",
     userId: run.userId,
     sessionId: run.sessionId,
-    dialogProcessId: context.state.currentRunMeta?.dialogProcessId || "",
+    dialogProcessId: run.dialogProcessId,
     turnScopeId: identity.turnScopeId || "",
     data: {
       childSessionId: identity.sessionId || "",
@@ -132,10 +132,7 @@ function startProcessing(context, run, accepted, lifecycleData) {
       sessionId: run.sessionId,
       parentSessionId: run.parentSessionId,
       turnScopeId: context.state.currentTurnScopeId,
-      dialogProcessId:
-        lifecycleData?.dialogProcessId ||
-        context.state.currentRunMeta?.dialogProcessId ||
-        run.dialogProcessId,
+      dialogProcessId: run.dialogProcessId,
       commandId: createTurnLifecycleCommandId({
         commandId: accepted.commandId,
         eventType: TURN_EVENT.PROCESSING_STARTED,
@@ -173,7 +170,7 @@ function createRootRunningHandler(context, run, accepted, lifecycle) {
         event: "service.websocket.processingStart.persistenceFailed",
         userId: run.userId,
         sessionId: run.sessionId,
-        dialogProcessId: lifecycleData?.dialogProcessId || "",
+        dialogProcessId: run.dialogProcessId,
         turnScopeId: context.state.currentTurnScopeId,
         data: { errorType: error?.name || "Error", errorCode: text(error?.code) },
       });
@@ -203,9 +200,7 @@ export function createMessageRunEventListener(context, run, accepted, active) {
   const eventListener = createRunEventListener({
     sendEvent: (...args) => publishRunEvent(active.runHandle, ...args),
     sessionId: run.sessionId,
-    registerActiveRun,
     getCurrentRunMeta: () => active.runMeta,
-    getCurrentRunHandle: () => active.runHandle,
     getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
     onEventReceived: (audit) => onEventReceived(context, run, audit),
     onDeliveryTiming: isSessionLogDebugTypeEnabled(DELIVERY_TIMING_DEBUG_TYPE)

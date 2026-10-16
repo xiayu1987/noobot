@@ -32,13 +32,13 @@ test("processing-start persistence rejection is observed while Agent execution i
     }
     return applyLifecycle(input);
   };
-  authoritative.bot.runSession = async ({ sessionId, runConfig, eventListener }) => {
+  authoritative.bot.runSession = async ({ sessionId, turnScopeId, runConfig, eventListener }) => {
     eventListener.onEvent({
       event: "agent_lifecycle_state_changed",
       data: {
         state: "running",
         sessionId,
-        turnScopeId: runConfig.turnScopeId,
+        turnScopeId,
         dialogProcessId: "dp-processing-rejected",
       },
     });
@@ -53,8 +53,6 @@ test("processing-start persistence rejection is observed while Agent execution i
         ...payload,
         sessionId: "s-processing-rejected",
         turnScopeId: "turn-processing-rejected",
-        commandId: "command-processing-rejected",
-        config: { turnScopeId: "turn-processing-rejected" },
       },
     });
     const receipt = events.find(
@@ -90,8 +88,6 @@ test("message listener boundary contains failures raised by terminal error persi
         ...payload,
         sessionId: "s-terminal-boundary",
         turnScopeId: "turn-terminal-boundary",
-        commandId: "command-terminal-boundary",
-        config: { turnScopeId: "turn-terminal-boundary" },
       },
     });
     const receipt = events.find(
@@ -103,7 +99,7 @@ test("message listener boundary contains failures raised by terminal error persi
     assert.equal(committedUserMessage?.userMessage?.content, payload.message);
     assert.equal(committedUserMessage?.turnScopeId, "turn-terminal-boundary");
     assert.deepEqual(authoritative.lastTurnAcceptance(), {
-      commandId: "command-terminal-boundary",
+      commandId: "turn-terminal-boundary",
       sessionId: "s-terminal-boundary",
       turnScopeId: "turn-terminal-boundary",
       dialogProcessId: "dialog:turn-terminal-boundary",
@@ -127,8 +123,6 @@ test("summary persistence failure never commits authoritative completed", async 
         ...payload,
         sessionId: "s-summary-failure",
         turnScopeId: "turn-summary-failure",
-        commandId: "command-summary-failure",
-        config: { turnScopeId: "turn-summary-failure" },
       },
     });
     assert.deepEqual(authoritative.committed(), [
@@ -162,7 +156,6 @@ for (const [failureAt, expectedPhase] of [
       ...payload,
       sessionId: `s-${failureAt}-failure`,
       turnScopeId: `turn-${failureAt}-failure`,
-      commandId: `command-${failureAt}-failure`,
       config: { turnScopeId: `turn-${failureAt}-failure` },
     };
     const server = await startServerWithWs({ bot: authoritative.bot });

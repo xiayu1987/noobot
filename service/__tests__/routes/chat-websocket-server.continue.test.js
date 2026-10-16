@@ -71,7 +71,7 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
       },
     });
 
-    assert.equal(capturedPayload?.runConfig?.turnScopeId, "client-turn:resend");
+    assert.equal(capturedPayload?.turnScopeId, "client-turn:resend");
     assert.equal(capturedPayload?.runConfig?.reuseExistingUserTurn, true);
     assert.equal(capturedPayload?.dialogProcessId, "dp-resend");
   } finally {
@@ -87,7 +87,6 @@ test("chat-websocket-server: continue action passes stopped snapshot identity th
       capturedPayload = payload;
       return {
         sessionId: "s1",
-        dialogProcessId: "dp-new",
         answer: "continued",
         messages: [],
         traces: [],
@@ -116,7 +115,7 @@ test("chat-websocket-server: continue action passes stopped snapshot identity th
     assert.equal(capturedPayload?.runConfig?.resumeFromStoppedSnapshot, true);
     assert.equal(capturedPayload?.runConfig?.resumeDialogProcessId, "dp-stopped");
     assert.equal(capturedPayload?.runConfig?.resumeTurnScopeId, "turn-stopped");
-    assert.equal(capturedPayload?.runConfig?.turnScopeId, "turn-new");
+    assert.equal(capturedPayload?.turnScopeId, "turn-new");
     const acceptedEvent = events.find(
       (item) =>
         item?.event === "turn_lifecycle" &&
@@ -146,7 +145,6 @@ test("chat-websocket-server: a consumed stopped source is rejected before a seco
       runSessionCalls += 1;
       return {
         sessionId: "s1",
-        dialogProcessId: "dp-new",
         answer: "continued",
         messages: [],
         traces: [],
@@ -315,7 +313,6 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
         dialogProcessId: "dp-stopped",
         partialAssistant: {
           content: "partial",
-          dialogProcessId: "dp-new",
           turnScopeId: "turn-new",
         },
       },
@@ -341,7 +338,7 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-continue-stop");
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-new");
-    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-new");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dialog:turn-new");
     assert.equal(stoppedEvent?.data?.payload?.phase, "stop");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
@@ -351,7 +348,7 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
     );
     assert.equal(
       capturedStopPayload?.event?.terminalStatus?.assistantMessage?.dialogProcessId,
-      "dp-new",
+      "dialog:turn-new",
     );
   } finally {
     await closeServer(server);

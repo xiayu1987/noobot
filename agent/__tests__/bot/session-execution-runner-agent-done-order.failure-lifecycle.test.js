@@ -41,7 +41,13 @@ test("runSession does not persist stopped snapshot for non-abort errors", async 
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" }),
+    () =>
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+      }),
     /model failed/,
   );
 
@@ -73,7 +79,13 @@ test("runSession emits failed branch lifecycle state for non-abort errors", asyn
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" }),
+    () =>
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+      }),
     /model failed/,
   );
 

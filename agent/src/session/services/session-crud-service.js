@@ -256,7 +256,7 @@ export class SessionCrudService {
     userId,
     sessionId,
     turnScopeId,
-    commandId = "",
+    commandId,
     parentSessionId = "",
     persistenceScope = null,
     persistenceContext = null,
@@ -264,13 +264,8 @@ export class SessionCrudService {
     const normalizedSessionId = text(sessionId);
     const normalizedTurnScopeId = text(turnScopeId);
     const normalizedCommandId = text(commandId);
-    if (!userId || !normalizedSessionId || !normalizedTurnScopeId || !normalizedCommandId) {
-      return createTurnTerminalResolution({
-        commandId: normalizedCommandId || "invalid",
-        sessionId: normalizedSessionId,
-        turnScopeId: normalizedTurnScopeId,
-        reason: "invalid_terminal_resolution_request",
-      });
+    if (!userId || !normalizedSessionId) {
+      throw new TypeError("terminal resolution requires userId and sessionId");
     }
     const bundle = await this.getSessionBundle({
       userId,

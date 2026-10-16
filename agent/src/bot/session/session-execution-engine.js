@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { runAgentTurn, AgentContextFactory, AgentRuntimeFacade } from "../../runtime/index.js";
-import { recoverableToolError } from "../../shared/errors/index.js";
-import { tSystem } from "noobot-i18n/agent/system-text";
 import { SessionExecutionInitializer } from "../execution/initializer.js";
 import { SessionExecutionFinalizer } from "../execution/finalizer.js";
 import { SessionTurnPersister } from "../execution/turn-persister.js";
@@ -15,7 +13,6 @@ import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.j
 import { mergeRunConfigPluginPolicy, RunConfigResolver } from "@noobot/agent-config-protocol";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { CALLER_ROLE } from "../config/constants.js";
-import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
 import { ScopedArtifactPersistenceHelpers } from "./scoped-artifact-persistence-helpers.js";
@@ -183,10 +180,6 @@ export class SessionExecutionEngine {
               this.session.assertPersistenceContextIdentity(context, identity)
           : null,
       appendAgentMessages: (payload = {}) => this._appendAgentMessages(payload),
-      commitSessionTurn:
-        typeof this.session?.commitTurn === "function"
-          ? (payload = {}) => this.session.commitTurn(payload)
-          : null,
       bindSessionTurnAttachments:
         typeof this.session?.bindTurnAttachments === "function"
           ? (payload = {}) => this.session.bindTurnAttachments(payload)
@@ -624,23 +617,6 @@ export class SessionExecutionEngine {
       parentAsyncResultContainer,
       persistenceContext,
       persistenceScope,
-    });
-  }
-
-  async runSessionAsUser({ userId, sessionId, message, attachments = [], eventListener = null }) {
-    if (!sessionId) {
-      throw recoverableToolError(tSystem("common.sessionIdRequired"), {
-        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-      });
-    }
-    return this.runSession({
-      userId,
-      sessionId,
-      message,
-      attachments,
-      eventListener,
-      caller: CALLER_ROLE.USER,
-      parentSessionId: "",
     });
   }
 }

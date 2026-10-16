@@ -136,15 +136,12 @@ export async function getSessionDetailApi({ userId = "", sessionId = "" }, { fet
 }
 
 export async function resolveTurnTerminalStateApi(
-  { userId = "", sessionId = "", turnScopeId = "", commandId = "" },
+  { userId, sessionId, turnScopeId, commandId },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
-  const queryParams = [];
-  if (commandId) queryParams.push(`commandId=${encodeURIComponent(commandId)}`);
-  const query = queryParams.length ? `?${queryParams.join("&")}` : "";
   const response = await runFetch(
-    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnScopeId)}/terminal${query}`,
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnScopeId)}/terminal?commandId=${encodeURIComponent(commandId)}`,
   );
   const payload = await decodeJsonResponse(response, "terminal_resolution");
   return payload && typeof payload === "object" ? payload : {};

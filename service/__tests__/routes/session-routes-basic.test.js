@@ -24,7 +24,6 @@ test("session-routes: streams an attachment opened by the canonical attachment s
         stream: Readable.from(["canonical attachment"]),
       }),
     },
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => key,
   });
 
@@ -50,7 +49,6 @@ test("session-routes: 附件不存在返回 404 + 标准错误体", async () => 
       },
       openAttachmentStream: async () => null,
     },
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => (key === "common.attachmentNotFound" ? "attachment-not-found" : key),
   });
 
@@ -83,7 +81,6 @@ for (const [label, query] of [
           return { absolutePath: "/tmp/should-not-be-read" };
         },
       },
-      handleChat: (_req, res) => res.json({ ok: true }),
       translateText: (key) => (key === "common.attachmentNotFound" ? "attachment-not-found" : key),
     });
 
@@ -111,7 +108,6 @@ test("session-routes: 会话查询异常返回 400 + 标准错误体", async () 
       },
       getAttachmentById: async () => null,
     },
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: () => "",
   });
 
@@ -135,7 +131,6 @@ test("session-routes: 插件诊断接口返回发现/加载/错误信息", async
       },
       getAttachmentById: async () => null,
     },
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: () => "",
   });
 
@@ -178,7 +173,6 @@ test("session-routes: terminal resolution uses only canonical Session identity",
       },
       getAttachmentById: async () => null,
     },
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: () => "",
   });
   await withTestServer(app, async (baseUrl) => {
@@ -216,7 +210,6 @@ test("session-routes: terminal resolution rejects storage locator query fields",
       },
       getAttachmentById: async () => null,
     },
-    handleChat: (_req, res) => res.json({ ok: true }),
     translateText: () => "",
   });
 
@@ -227,6 +220,31 @@ test("session-routes: terminal resolution rejects storage locator query fields",
     const payload = await response.json();
     assert.equal(response.status, 400);
     assert.equal(payload.ok, false);
+  });
+  assert.equal(called, false);
+});
+
+test("session-routes: terminal resolution requires a commandId", async () => {
+  let called = false;
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        resolveTurnTerminalState: async () => {
+          called = true;
+          return { resolved: false };
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/internal/session/user-a/child-session/turns/turn-a/terminal`,
+    );
+    assert.equal(response.status, 400);
   });
   assert.equal(called, false);
 });

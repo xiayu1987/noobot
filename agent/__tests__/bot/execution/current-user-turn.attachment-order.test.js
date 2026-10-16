@@ -72,9 +72,6 @@ test("attachment preprocessing failure consumes the already accepted user messag
           calls.push("assert");
           return { session: { sessionId: "s1" }, aggregateVersion: 1, userMessage };
         },
-        commitSessionTurn: async () => {
-          throw new Error("Runner must not commit an accepted user Turn");
-        },
         prepareTurnInput: async () => {
           calls.push("prepare");
           throw new Error("attachment ingestion failed");
@@ -117,9 +114,6 @@ test("accepted user message binds canonical attachments before Context construct
       assertReusedUserTurnIdentity: async () => {
         calls.push("assert");
         return { session: { sessionId: "s1" }, aggregateVersion: 1, userMessage: committed };
-      },
-      commitSessionTurn: async () => {
-        throw new Error("Runner must not commit an accepted user Turn");
       },
       prepareTurnInput: async () => {
         calls.push("prepare");

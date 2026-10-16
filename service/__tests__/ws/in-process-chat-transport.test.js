@@ -75,13 +75,19 @@ test("client close resolves once and is idempotent", async () => {
 test("in-process close aborts the running turn and releases the session", async () => {
   const authoritative = createAuthoritativeBot();
   let aborted = false;
-  authoritative.bot.runSession = async ({ sessionId, runConfig, abortSignal, eventListener }) => {
+  authoritative.bot.runSession = async ({
+    sessionId,
+    turnScopeId,
+    runConfig,
+    abortSignal,
+    eventListener,
+  }) => {
     eventListener.onEvent({
       event: "agent_lifecycle_state_changed",
       data: {
         state: "running",
         sessionId,
-        turnScopeId: runConfig.turnScopeId,
+        turnScopeId,
         dialogProcessId: "dp-in-process-abort",
       },
     });
@@ -117,8 +123,6 @@ test("in-process close aborts the running turn and releases the session", async 
     ...payload,
     sessionId: "s-in-process-abort",
     turnScopeId: "turn-in-process-abort",
-    commandId: "command-in-process-abort",
-    config: { turnScopeId: "turn-in-process-abort" },
   };
   let resolveStarted = null;
   const started = new Promise((resolve) => {

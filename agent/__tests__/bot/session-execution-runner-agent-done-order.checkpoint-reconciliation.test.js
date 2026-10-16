@@ -42,7 +42,7 @@ test("runSession restores only the checkpoint-persisted agent prefix at finaliza
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -96,7 +96,7 @@ test("runSession compares the complete durable turn without treating it as a che
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -165,7 +165,7 @@ test("runSession upserts summarized messages created after a checkpoint", async 
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -245,7 +245,7 @@ test("runSession restores checkpoint messages by exact persistent UID when avail
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -306,7 +306,7 @@ test("runSession recovers checkpoint UIDs and active prefix from the durable rec
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "hello",

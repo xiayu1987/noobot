@@ -21,7 +21,6 @@ import {
 } from "@noobot/session-protocol";
 
 function stopCommand({
-  commandId = "stop:main-turn",
   sessionId = "s-1",
   dialogProcessId = "main-dp",
   turnScopeId = "main-turn",
@@ -29,7 +28,6 @@ function stopCommand({
   partialAssistant,
 } = {}) {
   return createTurnStopCommand({
-    commandId,
     identity: { sessionId, dialogProcessId, turnScopeId },
     concurrency: { expectedTurnRevision },
     stop: { partialAssistant },
@@ -89,9 +87,7 @@ describe("chatWebSocketClient stop transport", () => {
   it("rejects when no open transport can send the command", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
 
-    await expect(
-      client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" })),
-    ).rejects.toThrow();
+    await expect(client.requestStop(stopCommand({ turnScopeId: "turn-1" }))).rejects.toThrow();
     expect(client.isStopRequested).toBeUndefined();
     expect(client.getStopRequestedTurnScopeId).toBeUndefined();
     expect(client.clearStopRequested).toBeUndefined();
@@ -103,9 +99,7 @@ describe("chatWebSocketClient stop transport", () => {
     client.connect();
     const socket = MockWebSocket.instances[0];
 
-    await expect(
-      client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" })),
-    ).rejects.toThrow();
+    await expect(client.requestStop(stopCommand({ turnScopeId: "turn-1" }))).rejects.toThrow();
     expect(socket.readyState).toBe(MockWebSocket.CONNECTING);
   });
 
@@ -114,7 +108,7 @@ describe("chatWebSocketClient stop transport", () => {
     client.connect();
     const socket = MockWebSocket.instances[0];
 
-    const firstCommand = stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" });
+    const firstCommand = stopCommand({ turnScopeId: "turn-1" });
     const first = client.requestStop(firstCommand);
     await expect(
       client.requestStop(

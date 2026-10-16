@@ -80,15 +80,15 @@ export function resolveAuthoritativeTurnTerminal({
   const normalizedCommandId = clean(commandId);
   const normalizedSessionId = clean(sessionId);
   const normalizedTurnScopeId = clean(turnScopeId);
+  if (!normalizedCommandId || !normalizedSessionId || !normalizedTurnScopeId) {
+    throw new TypeError("terminal resolution requires commandId, sessionId and turnScopeId");
+  }
   const base = {
-    commandId: normalizedCommandId || "invalid",
+    commandId: normalizedCommandId,
     sessionId: normalizedSessionId,
     turnScopeId: normalizedTurnScopeId,
     aggregateVersion,
   };
-  if (!normalizedCommandId || !normalizedSessionId || !normalizedTurnScopeId) {
-    return createTurnTerminalResolution({ ...base, reason: "invalid_terminal_resolution_request" });
-  }
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
   const lifecycleTurn = lifecycle.turns[normalizedTurnScopeId] || null;
   const turn = lifecycleTurn

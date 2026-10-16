@@ -6,19 +6,43 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
-import { canonical, harness } from "./session-version-hardening.test-helpers.js";
+import { acceptTurn, canonical, harness } from "./session-version-hardening.test-helpers.js";
 
-test("commitTurn and bindTurnAttachments increment one aggregate version per command", async () => {
-  const h = harness();
-  const first = await h.service.commitTurn({
+async function completeTurn(service, turnScopeId) {
+  const base = {
     userId: "u1",
     sessionId: "s1",
-    content: "one",
-    turnScopeId: "t1",
-    commandId: "i1",
-    expectedAggregateVersion: 0,
-  });
+    turnScopeId,
+    messageId: `turn-${turnScopeId}`,
+    presentationMessageId: `presentation-${turnScopeId}`,
+  };
+  const steps = [
+    [TURN_EVENT.PROCESSING_STARTED, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }],
+    [TURN_EVENT.PROCESSING_COMPLETED, { phase: TURN_PHASE.COMPLETION }],
+    [
+      TURN_EVENT.COMPLETED,
+      { phase: TURN_PHASE.COMPLETION, summaryVersion: 1, terminalStatus: { command: "completed" } },
+    ],
+  ];
+  for (const [index, [eventType, extra]] of steps.entries()) {
+    const commandId = `${turnScopeId}-${eventType}`;
+    const result = await service.applyTurnLifecycleEvent({
+      ...base,
+      ...extra,
+      eventType,
+      commandId,
+      causationId: commandId,
+      expectedRevision: index + 1,
+    });
+    if (!result.applied) throw new Error(`completeTurn rejected: ${result.reason}`);
+  }
+}
+
+test("accepted user message and bindTurnAttachments increment one aggregate version each", async () => {
+  const h = harness();
+  const first = await acceptTurn(h.service, { turnScopeId: "t1", content: "one" });
   const bound = await h.service.bindTurnAttachments({
     userId: "u1",
     sessionId: "s1",
@@ -28,14 +52,8 @@ test("commitTurn and bindTurnAttachments increment one aggregate version per com
     expectedAggregateVersion: 1,
     attachments: [canonical()],
   });
-  const second = await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "two",
-    turnScopeId: "t2",
-    commandId: "i2",
-    expectedAggregateVersion: 2,
-  });
+  await completeTurn(h.service, "t1");
+  const second = await acceptTurn(h.service, { turnScopeId: "t2", content: "two" });
   assert.equal(first.aggregateVersion, 1);
   assert.equal(bound.aggregateVersion, 2);
   assert.equal(second.aggregateVersion, 3);
@@ -43,55 +61,36 @@ test("commitTurn and bindTurnAttachments increment one aggregate version per com
   assert.deepEqual(bound.attachments, [canonical()]);
 });
 
-test("commitTurn persists the preallocated user message identity", async () => {
+test("accepted user message persists the preallocated user message identity", async () => {
   const h = harness();
-  const result = await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "hello",
-    turnScopeId: "t1",
-    commandId: "i1",
-    messageId: "msg_user-1",
-  });
-
+  const result = await acceptTurn(h.service, { turnScopeId: "t1", messageId: "msg_user-1" });
   assert.equal("id" in result.userMessage, false);
   assert.equal(result.userMessage.messageId, "msg_user-1");
   assert.equal(h.get().messages[0].messageId, "msg_user-1");
 });
 
-test("commitTurn persists internal run origin without frontend user identity", async () => {
+test("accepted user message persists internal run origin without frontend user identity", async () => {
   const h = harness();
-  const result = await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "internal task",
+  const result = await acceptTurn(h.service, {
     turnScopeId: "internal-turn:1",
-    commandId: "internal-turn:1",
-    messageOrigin: "internal",
-    userMetaMaterialized: false,
+    userMessage: {
+      content: "internal task",
+      messageId: "msg_internal-1",
+      messageOrigin: "internal",
+      userMetaMaterialized: false,
+    },
   });
   assert.equal(result.userMessage.messageOrigin, "internal");
   assert.equal(result.userMessage.userMetaMaterialized, false);
 });
 
-test("commitTurn assigns an immutable logical dialog ordinal", async () => {
+test("accepted turns receive allocated dialog identity and an immutable logical dialog ordinal", async () => {
   const h = harness();
-  await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "first",
-    turnScopeId: "t1",
-    dialogProcessId: "d1",
-    commandId: "i1",
-  });
-  await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "second",
-    turnScopeId: "t2",
-    dialogProcessId: "d2",
-    commandId: "i2",
-  });
+  let allocations = 0;
+  h.service.allocateDialogProcessId = () => `d${++allocations}`;
+  await acceptTurn(h.service, { turnScopeId: "t1", content: "first" });
+  await completeTurn(h.service, "t1");
+  await acceptTurn(h.service, { turnScopeId: "t2", content: "second" });
 
   assert.deepEqual(
     h.get().dialogOrder.map(({ dialogProcessId, dialogOrdinal }) => ({
@@ -107,9 +106,11 @@ test("commitTurn assigns an immutable logical dialog ordinal", async () => {
     h.get().dialogOrder.some((entry) => "sequence" in entry),
     false,
   );
-  assert.equal(new Set(h.get().messages.map((message) => message.messageUid)).size, 2);
   assert.equal(
-    h.get().messages.every((message) => /^sm_/.test(message.messageUid)),
+    h
+      .get()
+      .messages.filter((message) => message.role === "user")
+      .every((m) => /^sm_/.test(m.messageUid)),
     true,
   );
 });
@@ -170,175 +171,14 @@ test("messages without a persistent messageUid are rejected", () => {
   );
 });
 
-test("same idempotency identity wins before stale version check", async () => {
+test("bindTurnAttachments binds the exact accepted user message and replays idempotently", async () => {
   const h = harness();
-  const input = {
-    userId: "u1",
-    sessionId: "s1",
-    content: "one",
-    turnScopeId: "t1",
-    commandId: "i1",
-    expectedAggregateVersion: 0,
-  };
-  const committed = await h.service.commitTurn(input);
-  const replay = await h.service.commitTurn({ ...input, expectedAggregateVersion: 0 });
-  assert.equal(replay.deduplicated, true);
-  assert.equal(replay.aggregateVersion, committed.aggregateVersion);
-  assert.equal(h.get().messages.filter((m) => m.role === "user").length, 1);
-  assert.deepEqual(replay.attachments, committed.attachments);
-});
-
-test("different identity with stale version receives canonical conflict", async () => {
-  const h = harness({ aggregateVersion: 3 });
-  await assert.rejects(
-    h.service.commitTurn({
-      userId: "u1",
-      sessionId: "s1",
-      content: "x",
-      turnScopeId: "t",
-      commandId: "i",
-      expectedAggregateVersion: 2,
-    }),
-    (e) =>
-      e.statusCode === 409 &&
-      e.code === "SESSION_AGGREGATE_VERSION_CONFLICT" &&
-      e.currentVersion === 3,
-  );
-});
-
-test("expectedAggregateVersion accepts only missing or non-negative safe integers", async (t) => {
-  for (const value of [-1, 1.2, NaN, Infinity, "nope", "1.2", Number.MAX_SAFE_INTEGER + 1]) {
-    await t.test(String(value), async () => {
-      const h = harness();
-      await assert.rejects(
-        h.service.commitTurn({
-          userId: "u1",
-          sessionId: "s1",
-          content: "x",
-          turnScopeId: `t-${value}`,
-          commandId: `i-${value}`,
-          expectedAggregateVersion: value,
-        }),
-        (e) => e.statusCode === 400 && e.code === "INVALID_SESSION_AGGREGATE_VERSION",
-      );
-    });
-  }
-  const absent = harness();
-  assert.equal(
-    (
-      await absent.service.commitTurn({
-        userId: "u1",
-        sessionId: "s1",
-        content: "x",
-        turnScopeId: "ta",
-        commandId: "ia",
-      })
-    ).aggregateVersion,
-    1,
-  );
-  const stringZero = harness();
-  await assert.rejects(
-    stringZero.service.commitTurn({
-      userId: "u1",
-      sessionId: "s1",
-      content: "x",
-      turnScopeId: "tz",
-      commandId: "iz",
-      expectedAggregateVersion: "0",
-    }),
-    (error) => error.code === "INVALID_SESSION_AGGREGATE_VERSION",
-  );
-});
-
-test("continue identity round-trips only when it matches the authoritative continuation relation", async () => {
-  const h = harness({
-    aggregateVersion: 4,
-    messages: [{ role: "user", content: "old", turnScopeId: "old", dialogProcessId: "dp-old" }],
-    turnLifecycle: {
-      sequence: 6,
-      activeTurnScopeId: "new",
-      turns: {
-        old: {
-          turnScopeId: "old",
-          dialogProcessId: "dp-old",
-          state: "stop_completed",
-          executionState: "user_stopped",
-          continuedByTurnScopeId: "new",
-          revision: 5,
-          sequence: 5,
-        },
-        new: {
-          turnScopeId: "new",
-          dialogProcessId: "dp-new",
-          action: "continue",
-          state: "action_requesting",
-          continuationSource: { turnScopeId: "old", dialogProcessId: "dp-old" },
-          revision: 1,
-          sequence: 6,
-        },
-      },
-    },
-  });
-  const result = await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    action: "continue",
-    content: "continue",
-    turnScopeId: "new",
-    dialogProcessId: "dp-new",
-    commandId: "continue-1",
-    expectedAggregateVersion: 4,
-    resumeTurnScopeId: "old",
-    resumeDialogProcessId: "dp-old",
-  });
-  assert.equal(result.userMessage.turnCommit.resumeTurnScopeId, "old");
-  assert.equal(result.userMessage.turnCommit.resumeDialogProcessId, "dp-old");
-  await assert.rejects(
-    h.service.commitTurn({
-      userId: "u1",
-      sessionId: "s1",
-      action: "continue",
-      content: "again",
-      turnScopeId: "new2",
-      commandId: "continue-2",
-      expectedAggregateVersion: 5,
-      resumeTurnScopeId: "old",
-      resumeDialogProcessId: "dp-old",
-    }),
-    (error) => error.code === "SESSION_CONTINUE_AUTHORITY_MISMATCH",
-  );
-});
-
-test("commitTurn rejects attachment binding outside its command protocol", async () => {
-  const h = harness();
-  await assert.rejects(
-    h.service.commitTurn({
-      userId: "u1",
-      sessionId: "s1",
-      content: "message",
-      turnScopeId: "t1",
-      commandId: "i1",
-      attachments: [],
-    }),
-    /attachments must be bound with session\.turn\.attachments\.bind/,
-  );
-  assert.equal(h.get().messages.length, 0);
-});
-
-test("bindTurnAttachments binds the exact committed user message and replays idempotently", async () => {
-  const h = harness();
-  const committed = await h.service.commitTurn({
-    userId: "u1",
-    sessionId: "s1",
-    content: "message",
-    turnScopeId: "t1",
-    commandId: "i1",
-  });
+  const accepted = await acceptTurn(h.service, { turnScopeId: "t1" });
   const input = {
     userId: "u1",
     sessionId: "s1",
     turnScopeId: "t1",
-    messageUid: committed.userMessage.messageUid,
+    messageUid: accepted.userMessage.messageUid,
     commandId: "i1:attachments.bind",
     expectedAggregateVersion: 1,
     attachments: [canonical()],
@@ -356,13 +196,7 @@ test("bindTurnAttachments binds the exact committed user message and replays ide
 test("bindTurnAttachments enforces command, aggregate, message and single-binding identities", async (t) => {
   const createCommitted = async () => {
     const h = harness();
-    const committed = await h.service.commitTurn({
-      userId: "u1",
-      sessionId: "s1",
-      content: "message",
-      turnScopeId: "t1",
-      commandId: "i1",
-    });
+    const committed = await acceptTurn(h.service, { turnScopeId: "t1" });
     return { h, committed };
   };
 

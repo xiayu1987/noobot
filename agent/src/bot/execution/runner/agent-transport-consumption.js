@@ -86,13 +86,11 @@ function summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatch
   };
 }
 
-function summarizeConcurrency({ resolvedRunConfig, turnCommand, committedTurnResult }) {
+function summarizeConcurrency({ resolvedRunConfig, committedTurnResult }) {
   const expectedAggregateVersion = resolvedRunConfig?.expectedAggregateVersion;
   return {
     commandId: clean(resolvedRunConfig?.commandId),
     expectedAggregateVersion: expectedAggregateVersion ?? null,
-    expectedAggregateVersionConsumed:
-      expectedAggregateVersion === turnCommand?.expectedAggregateVersion,
     committedAggregateVersion: Number(committedTurnResult?.aggregateVersion || 0) || null,
   };
 }
@@ -105,7 +103,6 @@ export function buildAgentTransportConsumption({
   canonicalAttachments = [],
   currentUserMessage = null,
   resolvedRunConfig = {},
-  turnCommand = null,
   committedTurnResult = null,
   dispatchRuntime = null,
 } = {}) {
@@ -123,6 +120,6 @@ export function buildAgentTransportConsumption({
     }),
     preferences: summarizePreferences(resolvedRunConfig),
     presentation: summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatchRuntime }),
-    concurrency: summarizeConcurrency({ resolvedRunConfig, turnCommand, committedTurnResult }),
+    concurrency: summarizeConcurrency({ resolvedRunConfig, committedTurnResult }),
   };
 }

@@ -97,7 +97,7 @@ export async function prepareAgentTurnExecution(
     userId: text(payload?.userId),
     sessionId: text(payload?.sessionId),
     parentSessionId: text(payload?.parentSessionId),
-    turnScopeId: text(payload?.turnScopeId || payload?.runConfig?.turnScopeId),
+    turnScopeId: text(payload?.turnScopeId),
     dialogProcessId: text(payload?.dialogProcessId),
   });
   const enrichedRuntimeAttachments = await engine._enrichUserInputAttachmentsFromIndex({
@@ -142,14 +142,14 @@ function buildStoppedResumeIdentity(payload, runConfig) {
   };
 }
 
-function buildContinuationIdentity(payload, runConfig) {
+function buildContinuationIdentity(payload) {
   return {
     userName: text(payload?.userName || payload?.userId),
     sessionId: text(payload?.sessionId),
     parentSessionId: text(payload?.parentSessionId),
     dialogProcessId: text(payload?.dialogProcessId),
     parentDialogProcessId: text(payload?.parentDialogProcessId),
-    turnScopeId: text(payload?.turnScopeId || runConfig?.turnScopeId),
+    turnScopeId: text(payload?.turnScopeId),
   };
 }
 
@@ -236,7 +236,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
   const userMetaBackwrites = readArrayOr(snapshot?.userMetaBackwrites);
   const continuedIncrementalMessages = projectSnapshotIncrementalToContinuation(
     hydratedMessageBlocks.incremental,
-    buildContinuationIdentity(payload, runConfig),
+    buildContinuationIdentity(payload),
   );
   const agentContext = await contextBuilder.buildAgentContext(
     hydratedMessageBlocks.system,

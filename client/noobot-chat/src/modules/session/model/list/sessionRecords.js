@@ -57,7 +57,7 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
           }
         : null,
     sessionId: item.sessionId,
-    aggregateVersion: Number(item.aggregateVersion || 0),
+    aggregateVersion: item.aggregateVersion,
     currentTaskId: item.currentTaskId || "",
     messageCount,
     lastMessage,

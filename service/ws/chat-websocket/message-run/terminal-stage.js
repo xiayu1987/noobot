@@ -12,7 +12,7 @@ import {
 } from "@noobot/session-protocol";
 import { isUserStopRunAbort } from "../stop-lifecycle.js";
 
-export async function finalizeRunResult(context, run, accepted, active, result) {
+export async function finalizeRunResult(context, run, accepted, active) {
   if (context.state.currentRunTimedOut && context.state.currentAbortSignal?.aborted) {
     const timeoutMessage = resolveExecutionAbortMessage({
       abortSignal: context.state.currentAbortSignal,
@@ -30,18 +30,15 @@ export async function finalizeRunResult(context, run, accepted, active, result) 
       abortSignal: context.state.currentAbortSignal,
     })
   ) {
-    await context.finalizeUserStopped(context.buildRunStateSnapshot(), { result });
+    await context.finalizeUserStopped(context.buildRunStateSnapshot());
     return;
   }
   const processed = await context.commitTurnLifecycle({
     userId: run.userId,
-    sessionId: result?.sessionId || run.sessionId,
+    sessionId: run.sessionId,
     parentSessionId: run.parentSessionId,
     turnScopeId: context.state.currentTurnScopeId,
-    dialogProcessId:
-      result?.dialogProcessId ||
-      context.state.currentRunMeta?.dialogProcessId ||
-      run.dialogProcessId,
+    dialogProcessId: run.dialogProcessId,
     commandId: createTurnLifecycleCommandId({
       commandId: accepted.commandId,
       eventType: TURN_EVENT.PROCESSING_COMPLETED,
@@ -56,7 +53,6 @@ export async function finalizeRunResult(context, run, accepted, active, result) 
   }
   context.state.currentLifecyclePhase = TURN_PHASE.COMPLETION;
   await context.finalizeCompleted(context.buildRunStateSnapshot(), {
-    result,
     commandId: accepted.commandId,
   });
 }

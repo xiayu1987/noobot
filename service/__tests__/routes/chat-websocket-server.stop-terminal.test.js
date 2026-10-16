@@ -85,7 +85,7 @@ test("chat-websocket-server: stop persists and emits authoritative stop completi
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-new");
-    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-new");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dialog:turn-new");
     assert.equal(stoppedEvent?.data?.payload?.phase, "stop");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
@@ -174,7 +174,7 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
       setTimeout(() => reject(new Error("stopping event timeout")), 1000);
     });
     assert.equal(stoppingEvent?.data?.identity?.turnScopeId, "turn-slow");
-    assert.equal(stoppingEvent?.data?.payload?.dialogProcessId, "dp-slow");
+    assert.equal(stoppingEvent?.data?.payload?.dialogProcessId, "dialog:turn-slow");
     assert.equal(stoppingEvent?.data?.payload?.phase, "stop");
     resolveRun();
     ws.close();
@@ -245,7 +245,7 @@ test("chat-websocket-server: stop request emits authoritative stop completion wh
         item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
-    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-normal-after-stop");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dialog:turn-normal-after-stop");
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-normal-after-stop");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
@@ -254,7 +254,7 @@ test("chat-websocket-server: stop request emits authoritative stop completion wh
   }
 });
 
-test("chat-websocket-server: authoritative stop completion and persistence backfill assistant identity from run result", async () => {
+test("chat-websocket-server: authoritative stop completion uses the accepted assistant identity", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
     bot: {
@@ -273,7 +273,6 @@ test("chat-websocket-server: authoritative stop completion and persistence backf
         });
         return {
           sessionId: "s-backfill",
-          dialogProcessId: "dp-result-backfill",
           answer: "ignored-after-stop",
           messages: [],
         };
@@ -305,7 +304,7 @@ test("chat-websocket-server: authoritative stop completion and persistence backf
         item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-backfill");
-    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-result-backfill");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dialog:turn-backfill");
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-backfill");
     assert.equal(
       capturedStopPayload?.event?.terminalStatus?.assistantMessage?.sessionId,
@@ -313,7 +312,7 @@ test("chat-websocket-server: authoritative stop completion and persistence backf
     );
     assert.equal(
       capturedStopPayload?.event?.terminalStatus?.assistantMessage?.dialogProcessId,
-      "dp-result-backfill",
+      "dialog:turn-backfill",
     );
     assert.equal(
       capturedStopPayload?.event?.terminalStatus?.assistantMessage?.turnScopeId,
@@ -369,6 +368,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       eventType: "turn.action_accepted",
       phase: "action",
       action: "send",
+      dialogProcessId: "dp-idle-stop",
       messageId: "msg-event-idle-stop",
       presentationMessageId: "msg-idle-stop",
     },

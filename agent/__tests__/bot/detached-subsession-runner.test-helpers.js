@@ -66,7 +66,11 @@ export function createDeps(overrides = {}) {
           sequence,
           revision: sequence,
         };
-        return { applied: true, envelope: turn, turn };
+        const userMessage =
+          payload.eventType === "turn.action_accepted" && payload.userMessage
+            ? { ...payload.userMessage, messageUid: `sm_${payload.turnScopeId}` }
+            : null;
+        return { applied: true, envelope: turn, turn, userMessage, aggregateVersion: sequence };
       },
       createScopedPersistenceContext(payload = {}) {
         calls.persistencePayloads.push(payload);

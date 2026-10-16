@@ -137,8 +137,7 @@ test("declared workflow execution identity is stable from acceptance through com
         ...payload,
         sessionId: "s-workflow-identity",
         turnScopeId: "turn-workflow-identity",
-        commandId: "command-workflow-identity",
-        config: { ...payload.config, turnScopeId: "turn-workflow-identity" },
+        config: payload.config,
       },
     });
     const envelopes = authoritative.eventOutbox().map((item) => item.envelope);
@@ -171,8 +170,6 @@ test("rejected initial provision does not start Agent execution", async () => {
         ...payload,
         sessionId: "s-provision-rejected",
         turnScopeId: "turn-provision-rejected",
-        commandId: "command-provision-rejected",
-        config: { turnScopeId: "turn-provision-rejected" },
       },
     });
     assert.equal(authoritative.runCount(), 0);
@@ -212,9 +209,8 @@ test("stale aggregate version is rejected before lifecycle state and Agent execu
         ...payload,
         sessionId: "s-stale-aggregate",
         turnScopeId: "turn-stale-aggregate",
-        commandId: "command-stale-aggregate",
         expectedAggregateVersion: 2,
-        config: { ...payload.config, turnScopeId: "turn-stale-aggregate" },
+        config: payload.config,
       },
     });
     assert.equal(lifecycleCalls, 1);

@@ -220,6 +220,22 @@ describe("buildChatPayload model preferences", () => {
     });
   });
 
+  it("leaves dialog identity of send and continue to service acceptance", () => {
+    for (const options of [
+      {},
+      { continueFromStopped: true, resumeDialogProcessId: "dlg-stopped" },
+    ]) {
+      const payload = buildChatPayload({
+        activeSession: { value: { sessionId: "session-1" } },
+        message: "hello",
+        dialogProcessId: "dialog-client",
+        turnScopeId: "turn-new",
+        ...options,
+      });
+      expect(payload.identity).not.toHaveProperty("dialogProcessId");
+    }
+  });
+
   it("builds independent continue payload with new turn and stopped snapshot identity", () => {
     const payload = buildChatPayload({
       userId: "admin",

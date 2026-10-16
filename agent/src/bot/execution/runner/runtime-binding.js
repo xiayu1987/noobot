@@ -77,7 +77,6 @@ export async function bindAgentDispatchRuntime({
   currentUserMessage,
   resolvedRunConfig,
   userInterjectionPort,
-  turnCommand,
   committedTurnResult,
 }) {
   const dispatchRuntime = runtimeAgentContext?.bindings?.runtime;
@@ -165,7 +164,6 @@ export async function bindAgentDispatchRuntime({
       canonicalAttachments,
       currentUserMessage,
       resolvedRunConfig,
-      turnCommand,
       committedTurnResult,
       dispatchRuntime,
     }),

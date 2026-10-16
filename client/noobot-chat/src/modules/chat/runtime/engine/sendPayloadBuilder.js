@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildChatPayload } from "./payload.js";
-import { normalizeTrimmedString } from "./utils.js";
 
 export function createTurnPayloadBuilder({ preferences, request, turn }) {
   const { continueFromUserStopped } = request;
@@ -13,13 +12,12 @@ export function createTurnPayloadBuilder({ preferences, request, turn }) {
       ...preferences,
       activeSession: turn.activeSession,
       message: turn.text,
-      commandId: request.turnScopeId,
-      expectedAggregateVersion: expectedAggregateVersion ?? 0,
+      expectedAggregateVersion,
       attachments: turn.attachments,
       requestedTextStreaming: turn.requestedTextStreaming,
       dialogProcessId: request.dialogProcessId,
       turnScopeId: request.turnScopeId,
-      userMessageId: normalizeTrimmedString(turn.userMessage?.messageId || request.userMessageId),
+      userMessageId: request.userMessageId,
       assistantMessageId: request.assistantMessageId,
       continueFromStopped: continueFromUserStopped,
       resumeDialogProcessId: continueFromUserStopped ? request.resumeDialogProcessId : "",

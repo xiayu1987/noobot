@@ -5,6 +5,7 @@
  */
 import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
 import { TURN_EVENT } from "./turn-event.js";
+import { TURN_ACTION } from "./turn-action.js";
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./turn-state.js";
 import { TURN_EXECUTION_STATE, normalizeTurnExecutionState } from "./turn-execution-state.js";
 import { text } from "@noobot/shared/value";
@@ -35,7 +36,9 @@ export function deriveTurnState(eventType = "", phase = "") {
 export function deriveTurnEventType(state = "", { action = "" } = {}) {
   const normalizedState = text(state);
   if (normalizedState === TURN_STATE.ACTION_REQUESTING) {
-    return text(action) === "stop" ? TURN_EVENT.STOP_ACCEPTED : TURN_EVENT.ACTION_ACCEPTED;
+    return text(action) === TURN_ACTION.STOP
+      ? TURN_EVENT.STOP_ACCEPTED
+      : TURN_EVENT.ACTION_ACCEPTED;
   }
   if (normalizedState === TURN_STATE.PROCESSING) return TURN_EVENT.PROCESSING_STARTED;
   if (normalizedState === TURN_STATE.COMPLETION_REQUESTING) {
@@ -66,13 +69,13 @@ export function decideTurnTransition({ current = null, eventType = "", phase = "
     });
   let allowed = false;
   if (eventType === TURN_EVENT.PROCESSING_STARTED)
-    allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action !== "stop";
+    allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action !== TURN_ACTION.STOP;
   else if (eventType === TURN_EVENT.PROCESSING_COMPLETED)
     allowed = current.state === TURN_STATE.PROCESSING;
   else if (eventType === TURN_EVENT.STOP_ACCEPTED)
     allowed = deriveAuthoritativeTurnCapabilities(current).canStop;
   else if (eventType === TURN_EVENT.STOP_PROCESSING_COMPLETED)
-    allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action === "stop";
+    allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action === TURN_ACTION.STOP;
   else if (eventType === TURN_EVENT.COMPLETED)
     allowed =
       current.state === TURN_STATE.COMPLETION_REQUESTING ||

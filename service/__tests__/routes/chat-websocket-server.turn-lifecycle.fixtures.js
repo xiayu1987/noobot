@@ -213,7 +213,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
       }
       return { acknowledged: true, deduplicated };
     },
-    async runSession({ sessionId, runConfig, turnAcceptance, eventListener }) {
+    async runSession({ sessionId, turnScopeId, runConfig, turnAcceptance, eventListener }) {
       runCount += 1;
       lastRunConfig = structuredClone(runConfig);
       lastTurnAcceptance = structuredClone(turnAcceptance);
@@ -226,7 +226,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         data: {
           state: "running",
           sessionId,
-          turnScopeId: runConfig.turnScopeId,
+          turnScopeId,
           dialogProcessId: "dp-authoritative",
         },
       });
@@ -261,7 +261,6 @@ export const payload = {
   sessionId: "s-authoritative",
   message: "hello",
   turnScopeId: "turn-authoritative",
-  commandId: "command-authoritative",
   createIfAbsent: true,
   config: {
     turnScopeId: "turn-authoritative",

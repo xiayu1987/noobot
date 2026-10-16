@@ -31,19 +31,20 @@ function runCommand({
 } = {}) {
   return createTurnRunCommand({
     commandType,
-    commandId: turnScopeId,
-    identity: { sessionId, dialogProcessId: "dialog-new", turnScopeId },
+    identity: { sessionId, turnScopeId },
     input: { message: "continue", attachments: [] },
     preferences: {},
-    presentation: {},
-    concurrency: {},
+    presentation: {
+      userMessageId: `user:${turnScopeId}`,
+      assistantMessageId: `assistant:${turnScopeId}`,
+    },
+    concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 0 },
     continuation: { dialogProcessId: "dialog-stopped", turnScopeId: "turn-stopped" },
   });
 }
 
 function stopCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
   return createTurnStopCommand({
-    commandId: `stop:${turnScopeId}`,
     identity: { sessionId, dialogProcessId: "dialog-1", turnScopeId },
     concurrency: { expectedTurnRevision: 1 },
     stop: {},

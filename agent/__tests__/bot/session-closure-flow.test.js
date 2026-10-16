@@ -11,6 +11,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
+import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
@@ -21,6 +23,13 @@ const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
 
 test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async () => {
+  const acceptedTurn = {
+    sessionId: randomUUID(),
+    turnScopeId: "turn-closure",
+    dialogProcessId: "dp-closure",
+    parentDialogProcessId: "",
+    content: "请切换模型并输出附件",
+  };
   const persistedTurns = [];
   const appendedExecutionLogs = [];
   const upstreamEvents = [];
@@ -54,23 +63,23 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     async getSessionTurns() {
       return persistedTurns;
     },
-    async commitTurn(payload = {}) {
+    async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;
       const userMessage = {
         messageUid,
-        id: payload.messageId || messageUid,
-        messageId: payload.messageId || messageUid,
+        id: messageUid,
+        messageId: messageUid,
         role: "user",
         type: "message",
-        content: payload.content,
+        content: acceptedTurn.content,
         userName: payload.userId,
         sessionId: payload.sessionId,
         parentSessionId: payload.parentSessionId,
         dialogProcessId: payload.dialogProcessId,
-        parentDialogProcessId: payload.parentDialogProcessId,
+        parentDialogProcessId: acceptedTurn.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        messageOrigin: payload.messageOrigin || "natural",
-        userMetaMaterialized: payload.userMetaMaterialized === true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         attachments: [],
       };
       persistedTurns.push(userMessage);
@@ -291,12 +300,24 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   const bot = Object.create(BotManager.prototype);
   bot.sessionRunner = engine;
 
-  const sessionId = randomUUID();
+  const { sessionId } = acceptedTurn;
   const result = await bot.runSession({
+    dialogProcessId: acceptedTurn.dialogProcessId,
+    runConfig: createAcceptedRunIdentity(acceptedTurn.turnScopeId, {
+      commandId: acceptedTurn.turnScopeId,
+    }),
+    turnAcceptance: createTurnAcceptanceReceipt({
+      commandId: acceptedTurn.turnScopeId,
+      sessionId,
+      turnScopeId: acceptedTurn.turnScopeId,
+      dialogProcessId: acceptedTurn.dialogProcessId,
+      messageUid: `sm_${acceptedTurn.turnScopeId}`,
+      aggregateVersion: 1,
+    }),
     userId: "u1",
     sessionId,
     message: "请切换模型并输出附件",
-    turnScopeId: "turn-closure",
+    turnScopeId: acceptedTurn.turnScopeId,
     attachments: [
       {
         name: "input.png",
@@ -375,6 +396,13 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
 });
 
 test("continue mode closed-loop: should build continue context and persist parent session linkage", async () => {
+  const acceptedTurn = {
+    sessionId: randomUUID(),
+    turnScopeId: "turn-existing-session",
+    dialogProcessId: "dp-existing-session",
+    parentDialogProcessId: "dp-parent-1",
+    content: "continue run",
+  };
   const persistedTurns = [];
   const persistedBatches = [];
   const upstreamEvents = [];
@@ -412,24 +440,24 @@ test("continue mode closed-loop: should build continue context and persist paren
     async getSessionTurns() {
       return persistedTurns;
     },
-    async commitTurn(payload = {}) {
+    async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;
       const userMessage = {
         messageUid,
-        id: payload.messageId || messageUid,
-        messageId: payload.messageId || messageUid,
+        id: messageUid,
+        messageId: messageUid,
         role: "user",
         type: "message",
-        content: payload.content,
+        content: acceptedTurn.content,
         userName: payload.userId,
         sessionId: payload.sessionId,
         parentSessionId: payload.parentSessionId,
         dialogProcessId: payload.dialogProcessId,
-        parentDialogProcessId: payload.parentDialogProcessId,
+        parentDialogProcessId: acceptedTurn.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        messageOrigin: payload.messageOrigin || "natural",
-        userMetaMaterialized: payload.userMetaMaterialized === true,
-        attachments: payload.attachments || [],
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
+        attachments: [],
       };
       persistedTurns.push(userMessage);
       return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };
@@ -523,16 +551,28 @@ test("continue mode closed-loop: should build continue context and persist paren
   const bot = Object.create(BotManager.prototype);
   bot.sessionRunner = engine;
 
-  const sessionId = randomUUID();
+  const { sessionId } = acceptedTurn;
   const parentSessionId = randomUUID();
   const result = await bot.runSession({
+    dialogProcessId: acceptedTurn.dialogProcessId,
+    runConfig: createAcceptedRunIdentity(acceptedTurn.turnScopeId, {
+      commandId: acceptedTurn.turnScopeId,
+    }),
+    turnAcceptance: createTurnAcceptanceReceipt({
+      commandId: acceptedTurn.turnScopeId,
+      sessionId,
+      turnScopeId: acceptedTurn.turnScopeId,
+      dialogProcessId: acceptedTurn.dialogProcessId,
+      messageUid: `sm_${acceptedTurn.turnScopeId}`,
+      aggregateVersion: 1,
+    }),
     userId: "u1",
     sessionId,
     parentSessionId,
     caller: "bot",
-    parentDialogProcessId: "dp-parent-1",
-    message: "continue run",
-    turnScopeId: "turn-existing-session",
+    parentDialogProcessId: acceptedTurn.parentDialogProcessId,
+    message: acceptedTurn.content,
+    turnScopeId: acceptedTurn.turnScopeId,
     attachments: [],
     eventListener: {
       onEvent(evt = {}) {

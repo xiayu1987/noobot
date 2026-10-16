@@ -128,16 +128,17 @@ function createRunTransportDiagnostic(context) {
 
 async function executeAcceptedRun(context, run, accepted, active) {
   const listener = createMessageRunEventListener(context, run, accepted, active);
-  const result = await accepted.agentApplication.run({
+  await accepted.agentApplication.run({
     userId: run.userId,
     sessionId: run.sessionId,
     parentSessionId: run.parentSessionId,
     dialogProcessId: run.dialogProcessId,
     parentDialogProcessId: run.parentDialogProcessId,
+    turnScopeId: run.turnScopeId,
     caller: "user",
     message: run.message,
     attachments: run.attachments,
-    turnAcceptance: run.turnAcceptance || null,
+    turnAcceptance: run.turnAcceptance,
     eventListener: listener.eventListener,
     abortSignal: context.state.currentAbortSignal,
     userInteractionBridge: context.userInteractionBridge,
@@ -148,7 +149,7 @@ async function executeAcceptedRun(context, run, accepted, active) {
     runConfig: run.normalizedRunConfig,
   });
   if (listener.lifecycle.processingStarted) await listener.lifecycle.processingStarted;
-  await finalizeRunResult(context, run, accepted, active, result);
+  await finalizeRunResult(context, run, accepted, active);
 }
 
 function createRunHandler(context) {

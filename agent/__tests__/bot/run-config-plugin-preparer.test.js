@@ -130,7 +130,8 @@ test("derives the single selected execution intent from Manifest", () => {
     activate: activation("workflow"),
   });
   const intent = preparer([workflow]).resolveExecutionIntent({
-    runConfig: { selectedPlugins: ["workflow"], turnScopeId: "turn-1" },
+    runConfig: { selectedPlugins: ["workflow"] },
+    turnScopeId: "turn-1",
   });
   assert.equal(intent.executionId, "workflow:turn-1");
   assert.equal(intent.executionKind, "workflow");
@@ -158,7 +159,8 @@ test("configuration mode cannot select a workflow omitted from the turn protocol
   });
 
   const intent = instance.resolveExecutionIntent({
-    runConfig: { selectedPlugins: [], turnScopeId: "turn-plain" },
+    runConfig: { selectedPlugins: [] },
+    turnScopeId: "turn-plain",
   });
   const prepared = instance.prepareRunConfig({
     runConfig: { selectedPlugins: [], turnScopeId: "turn-plain" },

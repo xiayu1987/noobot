@@ -5,12 +5,13 @@
  */
 import { text } from "@noobot/shared/value";
 import { TURN_EVENT } from "./lifecycle/turn-event.js";
+import { TURN_ACTION } from "./lifecycle/turn-action.js";
 
 export function validateTurnAcceptanceUserMessage(event = {}) {
   if (text(event.eventType) !== TURN_EVENT.ACTION_ACCEPTED) {
     return { valid: true, materialize: false, value: null, errors: [] };
   }
-  if (text(event.action) === "resend") {
+  if (text(event.action) === TURN_ACTION.RESEND) {
     const errors = event.userMessage === undefined ? [] : ["resend_user_message_forbidden"];
     return { valid: errors.length === 0, materialize: false, value: null, errors };
   }

@@ -76,7 +76,6 @@ function buildStopPayload({
   const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
   const createdAtMs = nowMs();
   return createTurnStopCommand({
-    commandId: `stop:${turnScopeId}`,
     identity: {
       sessionId: String(session.sessionId || ""),
       parentSessionId: String(

@@ -30,7 +30,7 @@ import {
   createTurnSnapshotCommand,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
-import { materializeTurnTerminalMessages } from "@noobot/session-protocol";
+import { TURN_EVENT, materializeTurnTerminalMessages } from "@noobot/session-protocol";
 import { createChatRunService } from "../../services/chat-run-service.js";
 import { text } from "@noobot/shared/value";
 
@@ -39,20 +39,25 @@ export function createProtocolTestCommand(payload = {}) {
   const action = text(payload?.action).toLowerCase();
   const commandType = text(payload?.commandType).toLowerCase();
   const config = payload?.config && typeof payload.config === "object" ? payload.config : {};
-  const turnScopeId = String(payload?.turnScopeId || config?.turnScopeId || "test-turn").trim();
+  const turnScopeId = text(payload?.turnScopeId);
   const identity = {
     sessionId: text(payload?.sessionId) || "s1",
     parentSessionId: text(payload?.parentSessionId),
-    dialogProcessId: String(
-      payload?.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "",
-    ).trim(),
+    dialogProcessId: text(payload?.dialogProcessId),
     parentDialogProcessId: text(payload?.parentDialogProcessId),
-    turnScopeId: String(turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim(),
+    turnScopeId,
   };
-  const resolvedCommandId = String(payload?.commandId || turnScopeId).trim();
+  const commandId = text(payload?.commandId);
+  const derivesCommandId =
+    action === "stop" ||
+    action === "interaction_response" ||
+    !commandType ||
+    [AGENT_COMMAND.SEND, AGENT_COMMAND.CONTINUE, AGENT_COMMAND.RESEND].includes(commandType);
+  if (commandId && derivesCommandId) {
+    throw new TypeError("protocol test command id is derived by the protocol");
+  }
   if (action === "stop") {
     return createTurnStopCommand({
-      commandId: resolvedCommandId || `stop:${turnScopeId}`,
       identity,
       concurrency: { expectedTurnRevision: payload?.expectedRevision ?? 1 },
       stop: { executionId: payload?.executionId, partialAssistant: payload?.partialAssistant },
@@ -60,7 +65,6 @@ export function createProtocolTestCommand(payload = {}) {
   }
   if (action === "interaction_response") {
     return createInteractionResponseCommand({
-      commandId: resolvedCommandId || `interaction:${payload?.requestId}`,
       identity,
       interaction: { requestId: payload?.requestId, response: payload?.response },
     });
@@ -68,21 +72,21 @@ export function createProtocolTestCommand(payload = {}) {
   if (EXECUTION_QUERY_COMMAND_TYPES.includes(commandType)) {
     return createExecutionQueryCommand({
       commandType,
-      commandId: resolvedCommandId,
+      commandId,
       identity,
       query: { executionId: payload?.executionId, rootExecutionId: payload?.rootExecutionId },
     });
   }
   if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
     return createTurnSnapshotCommand({
-      commandId: resolvedCommandId,
+      commandId,
       identity,
       options: { knownSequence: payload?.knownSequence, terminalLimit: payload?.terminalLimit },
     });
   }
   if (commandType === AGENT_COMMAND.FINALIZE) {
     return createTurnFinalizeCommand({
-      commandId: resolvedCommandId,
+      commandId,
       identity,
       options: { terminalLimit: payload?.terminalLimit },
     });
@@ -96,10 +100,13 @@ export function createProtocolTestCommand(payload = {}) {
     : action === "continue" || action === "resume"
       ? AGENT_COMMAND.CONTINUE
       : AGENT_COMMAND.SEND;
+  if (!turnScopeId) throw new TypeError("protocol test run command requires turnScopeId");
   return createTurnRunCommand({
     commandType: resolvedRunCommandType,
-    commandId: resolvedCommandId,
-    identity,
+    identity:
+      resolvedRunCommandType === AGENT_COMMAND.RESEND
+        ? identity
+        : { ...identity, dialogProcessId: "" },
     session: { createIfAbsent: payload?.createIfAbsent === true },
     input: { message: payload?.message || "test message", attachments: payload?.attachments || [] },
     preferences: {
@@ -118,8 +125,8 @@ export function createProtocolTestCommand(payload = {}) {
       selectedPlugins: config.selectedPlugins,
     },
     presentation: {
-      userMessageId: payload?.userMessageId || config.userMessageId,
-      assistantMessageId: payload?.presentationMessageId || config.presentationMessageId,
+      userMessageId: payload?.userMessageId ?? `user-message:${turnScopeId}`,
+      assistantMessageId: payload?.presentationMessageId ?? `assistant-message:${turnScopeId}`,
     },
     concurrency: {
       expectedTurnRevision: payload?.expectedTurnRevision ?? 0,
@@ -179,6 +186,11 @@ export async function startServerWithWs({
     applyTurnLifecycleEvent:
       suppliedBot.applyTurnLifecycleEvent ||
       (async (event = {}) => {
+        const acceptsUserMessage =
+          event.eventType === TURN_EVENT.ACTION_ACCEPTED && event.action !== "resend";
+        if (acceptsUserMessage && !text(event.dialogProcessId)) {
+          event.dialogProcessId = `dialog:${event.turnScopeId}`;
+        }
         const result = commitTurnLifecycle({
           lifecycle: turnLifecycle,
           event,
@@ -216,7 +228,28 @@ export async function startServerWithWs({
             authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
           }
         }
-        return result;
+        return {
+          ...result,
+          dialogProcessId: text(result.turn?.dialogProcessId),
+          ...(acceptsUserMessage
+            ? {
+                aggregateVersion: 1,
+                userMessage: {
+                  messageUid: `session-message:${event.turnScopeId}`,
+                  messageId: event.userMessage.messageId,
+                  role: "user",
+                  type: "message",
+                  content: text(event.userMessage?.content),
+                  sessionId: event.sessionId,
+                  dialogProcessId: event.dialogProcessId,
+                  turnScopeId: event.turnScopeId,
+                  messageOrigin: "natural",
+                  userMetaMaterialized: true,
+                  attachments: [],
+                },
+              }
+            : {}),
+        };
       }),
     getPendingAuthorityEvents:
       suppliedBot.getPendingAuthorityEvents ||
@@ -294,10 +327,8 @@ export async function startServerWithWs({
     },
   };
   const { mapAgentRunCommand } = createChatRunService({
-    getBot: () => testBot,
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),
     defaultLocale: "zh-CN",
-    translateText: (key = "") => String(key || ""),
   });
   if (typeof suppliedBot.applyTurnLifecycleEvent !== "function") {
     testBot.runSession = async (payload = {}) => {
@@ -306,7 +337,7 @@ export async function startServerWithWs({
         data: {
           state: "running",
           sessionId: String(payload?.sessionId || ""),
-          turnScopeId: String(payload?.runConfig?.turnScopeId || ""),
+          turnScopeId: payload.turnScopeId,
         },
       });
       return suppliedBot.runSession(payload);

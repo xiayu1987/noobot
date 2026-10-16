@@ -16,6 +16,8 @@ import {
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
+import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
+import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
 
 export const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
 
@@ -55,6 +57,32 @@ export function createCanonicalHandledResult(context = {}, output = "") {
   };
 }
 
+export function persistedUserMessage({
+  userId,
+  sessionId,
+  parentSessionId = "",
+  turnScopeId,
+  dialogProcessId,
+  attachments = [],
+} = {}) {
+  const turnIdentity = text(turnScopeId).replace(/[^a-zA-Z0-9_-]/g, "_");
+  return {
+    messageUid: `sm_test_${turnIdentity}`,
+    messageId: `msg_user_test_${turnIdentity}`,
+    role: "user",
+    type: "message",
+    content: "persisted",
+    userName: userId,
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    messageOrigin: "natural",
+    userMetaMaterialized: true,
+    attachments,
+  };
+}
+
 export function createRunner({
   botHookManager = createTestBotHookManager(),
   agentRunner = async () => ({
@@ -78,13 +106,11 @@ export function createRunner({
   resolveScenarioRunConfig = (runConfig = {}) => runConfig,
   prepareRunConfig = (payload = {}) => ({
     ...(payload?.runConfig || {}),
-    turnScopeId: payload?.runConfig?.turnScopeId || "turn-default",
     botHookManager,
   }),
   prepareTurnInput = null,
   appendAgentMessages = async () => [],
   getSessionTurns = async () => [],
-  commitSessionTurn = async () => ({}),
   bindSessionTurnAttachments = async () => ({}),
   assertReusedUserTurnIdentity = async () => ({}),
   assertPersistenceContextIdentity = null,
@@ -94,7 +120,44 @@ export function createRunner({
   upsertParentAsyncTask = () => {},
 } = {}) {
   let authorityEventSequence = 0;
-  const committedUserMessages = new Map();
+  const acceptedUserMessages = new Map();
+  const acceptRequest = (request = {}, identity = {}) => {
+    const turnScopeId = text(request.turnScopeId);
+    const runConfig = createAcceptedRunIdentity(turnScopeId, request.runConfig);
+    const sessionId = text(identity.sessionId) || "s1";
+    const dialogProcessId = text(identity.dialogProcessId) || "dp1";
+    const turnIdentity = turnScopeId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const userMessage = {
+      messageUid: `sm_test_${turnIdentity}`,
+      messageId: runConfig.userMessageId,
+      role: "user",
+      type: "message",
+      content: request.message,
+      userName: request.userId,
+      sessionId,
+      parentSessionId: request.parentSessionId || "",
+      dialogProcessId,
+      turnScopeId,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+      attachments: [],
+    };
+    acceptedUserMessages.set(turnScopeId, userMessage);
+    return {
+      ...request,
+      turnScopeId,
+      runConfig,
+      turnAcceptance: createTurnAcceptanceReceipt({
+        commandId: runConfig.commandId,
+        sessionId,
+        turnScopeId,
+        dialogProcessId,
+        messageUid: userMessage.messageUid,
+        aggregateVersion: 1,
+        committedEventPublished: identity.committedEventPublished === true,
+      }),
+    };
+  };
   const sessionManager = {
     async commitMessageEvent({
       sessionId,
@@ -199,53 +262,15 @@ export function createRunner({
       turnMessages: store.toArray(),
     };
   };
-  const commitCanonicalUserMessage = async (payload = {}) => {
-    const result = (await commitSessionTurn(payload)) || {};
-    const turnIdentity = String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_");
-    const sourceUserMessage = result.userMessage || {};
-    const messageUid = text(sourceUserMessage.messageUid) || `sm_test_${turnIdentity}`;
-    const messageId = String(
-      sourceUserMessage.messageId ||
-        sourceUserMessage.id ||
-        payload?.runConfig?.userMessageId ||
-        `msg_user_test_${turnIdentity}`,
-    ).trim();
-    const userMessage = {
-      ...sourceUserMessage,
-      messageUid,
-      messageId,
-      role: "user",
-      type: "message",
-      content: sourceUserMessage.content ?? payload.content,
-      userName: sourceUserMessage.userName ?? payload.userId,
-      sessionId: payload.sessionId,
-      parentSessionId: payload.parentSessionId,
-      dialogProcessId: payload.dialogProcessId,
-      parentDialogProcessId: payload.parentDialogProcessId,
-      turnScopeId: payload.turnScopeId,
-      messageOrigin: sourceUserMessage.messageOrigin ?? payload.messageOrigin ?? "natural",
-      userMetaMaterialized:
-        sourceUserMessage.userMetaMaterialized ?? payload.userMetaMaterialized === true,
-      attachments: [],
-    };
-    committedUserMessages.set(messageUid, userMessage);
-    return {
-      ...result,
-      sessionId: payload.sessionId,
-      aggregateVersion: result.aggregateVersion ?? 1,
-      attachments: [],
-      userMessage,
-    };
-  };
   const bindCanonicalUserMessageAttachments = async (payload = {}) => {
     const result = (await bindSessionTurnAttachments(payload)) || {};
-    const committed = committedUserMessages.get(payload.messageUid) || {};
+    const committed = acceptedUserMessages.get(text(payload.turnScopeId)) || {};
     const userMessage = {
       ...committed,
       ...(result.userMessage || {}),
       attachments: result.attachments || payload.attachments || [],
     };
-    committedUserMessages.set(payload.messageUid, userMessage);
+    acceptedUserMessages.set(text(payload.turnScopeId), userMessage);
     return {
       ...result,
       aggregateVersion: result.aggregateVersion ?? 2,
@@ -255,26 +280,10 @@ export function createRunner({
   };
   const assertCanonicalReusedUserMessage = async (payload = {}) => {
     const result = (await assertReusedUserTurnIdentity(payload)) || {};
-    return {
-      ...result,
-      userMessage: result.userMessage || {
-        messageUid: `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`,
-        messageId: `msg_user_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`,
-        role: "user",
-        type: "message",
-        content: "edited",
-        userName: payload.userId,
-        sessionId: payload.sessionId,
-        parentSessionId: payload.parentSessionId,
-        dialogProcessId: payload.dialogProcessId,
-        turnScopeId: payload.turnScopeId,
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-        attachments: payload.attachments || [],
-      },
-    };
+    const accepted = acceptedUserMessages.get(text(payload.turnScopeId));
+    return { ...result, userMessage: result.userMessage || accepted };
   };
-  return new SessionExecutionRunner({
+  const runner = new SessionExecutionRunner({
     agentRunner: runCanonicalAgent,
     errorLogger: { async log() {} },
     normalizeRunMessage: (message = "") => text(message),
@@ -290,7 +299,6 @@ export function createRunner({
     getSessionTurns,
     getTurnSummaryCheckpointState: async () => null,
     assertPersistenceContextIdentity,
-    commitSessionTurn: commitCanonicalUserMessage,
     bindSessionTurnAttachments: bindCanonicalUserMessageAttachments,
     assertReusedUserTurnIdentity: assertCanonicalReusedUserMessage,
     finalizeRunSession,
@@ -299,6 +307,9 @@ export function createRunner({
     upsertParentAsyncTask,
     now: () => new Date().toISOString(),
   });
+  runner.runAcceptedSession = (request = {}, identity = {}) =>
+    runner.runSession(acceptRequest(request, identity));
+  return runner;
 }
 
 export {

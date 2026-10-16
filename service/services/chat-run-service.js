@@ -3,14 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HTTP_STATUS } from "#agent/constants";
-import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
-import {
-  AGENT_COMMAND,
-  RUN_COMMAND_TYPES,
-  parseAgentCommand,
-} from "@noobot/agent-transport-protocol";
-import { recordServiceAgentTransportDebug } from "../runtime-events/agent-transport-debug.js";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -58,13 +51,7 @@ export async function resolveAuthoritativeConnectorSelection({
   };
 }
 
-export function createChatRunService({
-  getBot,
-  normalizeLocale,
-  defaultLocale,
-  translateText,
-  connectorAccessPort,
-} = {}) {
+export function createChatRunService({ normalizeLocale, defaultLocale } = {}) {
   function normalizeStringArray(input = []) {
     return Array.isArray(input) ? input.map((item) => text(item)).filter(Boolean) : [];
   }
@@ -91,7 +78,6 @@ export function createChatRunService({
         : {}),
       ...(preferences.summaryPolicy ? { summaryPolicy: preferences.summaryPolicy } : {}),
       selectedPlugins,
-      turnScopeId: identity.turnScopeId,
       userMessageId: text(command.presentation?.userMessageId),
       presentationMessageId: text(command.presentation?.assistantMessageId),
       commandId: String(command.commandId).trim(),
@@ -129,58 +115,7 @@ export function createChatRunService({
     };
   }
 
-  async function handleChat(req, res) {
-    let acceptedCommand = null;
-    try {
-      const command = parseAgentCommand(req.body);
-      if (!RUN_COMMAND_TYPES.includes(command.commandType)) throw new Error("run_command_required");
-      acceptedCommand = command;
-      void recordServiceAgentTransportDebug({
-        event: "service.agentTransport.httpCommandReceived",
-        command,
-        userId: req.auth?.userId,
-        data: { accepted: true, transport: "http" },
-      });
-      const bot = getBot();
-      const request = await resolveAuthoritativeConnectorSelection({
-        bot,
-        connectorAccessPort,
-        request: mapAgentRunCommand(command, { userId: req.auth?.userId }),
-      });
-      bot?.emitRuntimeEvent?.("debug_resend_http_received", {
-        sessionId: request.sessionId,
-        parentSessionId: request.parentSessionId,
-        turnScopeId: request.turnScopeId,
-        reuseExistingUserTurn: request.runConfig.reuseExistingUserTurn === true,
-        attachments: summarizeDebugAttachments(request.attachments),
-      });
-      const result = await bot.runSession({
-        ...request,
-        caller: "user",
-      });
-      res.json({ ok: true, ...result });
-    } catch (error) {
-      void recordServiceAgentTransportDebug({
-        event: acceptedCommand
-          ? "service.agentTransport.httpCommandProcessingFailed"
-          : "service.agentTransport.httpCommandRejected",
-        command: acceptedCommand || req.body,
-        userId: req.auth?.userId,
-        data: {
-          accepted: Boolean(acceptedCommand),
-          processed: false,
-          transport: "http",
-          errorType: String(error?.name || "Error"),
-          errorCode: String(error?.code || ""),
-          validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
-        },
-      });
-      res.status(HTTP_STATUS.BAD_REQUEST).json({ ok: false, error: error.message });
-    }
-  }
-
   return {
     mapAgentRunCommand,
-    handleChat,
   };
 }

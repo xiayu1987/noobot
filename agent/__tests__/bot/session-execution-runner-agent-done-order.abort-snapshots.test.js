@@ -39,7 +39,13 @@ test("runSession emits interrupted branch lifecycle state for non-user abort err
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" }),
+    () =>
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+      }),
     /aborted/,
   );
 
@@ -78,7 +84,8 @@ test("runSession projects the structured timeout reason into interrupted lifecyc
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
         userId: "u1",
         sessionId: "s1",
         message: "hello",
@@ -132,7 +139,6 @@ test("runSession persists stopped model message snapshot from runtime candidate 
     callOrder,
     eventListener,
     runtime,
-    runConfig: { turnScopeId: "turn-1" },
     agentRunner: async () => {
       throw abortError;
     },
@@ -140,7 +146,13 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" }),
+    () =>
+      runner.runAcceptedSession({
+        turnScopeId: "turn-1",
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+      }),
     /aborted/,
   );
 
@@ -211,7 +223,6 @@ test("runSession persists stopped model message snapshot for plain user_stop err
     callOrder,
     eventListener,
     runtime,
-    runConfig: { turnScopeId: "turn-2" },
     agentRunner: async () => {
       throw { type: "user_stop", message: "second user stop" };
     },
@@ -219,7 +230,13 @@ test("runSession persists stopped model message snapshot for plain user_stop err
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" }),
+    () =>
+      runner.runAcceptedSession({
+        turnScopeId: "turn-2",
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+      }),
     (error) => error?.type === "user_stop" && error?.message === "second user stop",
   );
 
@@ -280,7 +297,6 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
     callOrder,
     eventListener,
     runtime,
-    runConfig: { turnScopeId: "turn-signal" },
     agentRunner: async () => {
       abortController.abort({ type: "user_stop", reason: "user stop action" });
       await new Promise((resolve) => setImmediate(resolve));
@@ -298,7 +314,8 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-signal",
         userId: "u1",
         sessionId: "s1",
         message: "hello",
@@ -380,7 +397,6 @@ test("runSession drains accepted user interjections before sealing the stopped s
     callOrder,
     eventListener: { onEvent: (event) => events.push(event) },
     runtime,
-    runConfig: { turnScopeId: "turn-stop-interjection" },
     agentRunner: async () => {
       throw abortError;
     },
@@ -389,7 +405,8 @@ test("runSession drains accepted user interjections before sealing the stopped s
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-stop-interjection",
         userId: "u1",
         sessionId: "s1",
         message: "hello",
@@ -420,7 +437,9 @@ test("runSession drains accepted user interjections before sealing the stopped s
       ["second interjection", "user-interjection:interjection-command-2", "human"],
     ],
   );
-  assert.ok(callOrder.indexOf("commitSessionTurn") < callOrder.indexOf("consumeUserInterjections"));
+  const acceptedTurnCheck = callOrder.indexOf("assertReusedUserTurnIdentity");
+  assert.ok(acceptedTurnCheck >= 0);
+  assert.ok(acceptedTurnCheck < callOrder.indexOf("consumeUserInterjections"));
 });
 
 test("runSession emits stopped snapshot diagnostic when abort candidate is incomplete", async () => {
@@ -455,7 +474,13 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" }),
+    () =>
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+      }),
     /aborted/,
   );
 

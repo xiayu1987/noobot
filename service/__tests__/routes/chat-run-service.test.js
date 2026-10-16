@@ -23,7 +23,6 @@ function createService() {
 function createCommand(overrides = {}) {
   return createTurnRunCommand({
     commandType: overrides.commandType || AGENT_COMMAND.SEND,
-    commandId: "turn-1",
     identity: {
       sessionId: "session-1",
       ...(overrides.commandType === AGENT_COMMAND.RESEND

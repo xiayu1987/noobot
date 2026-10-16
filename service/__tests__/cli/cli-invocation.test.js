@@ -12,7 +12,6 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { CLI_ACTION, CliUsageError, parseCliArgs } from "../../cli/cli-args.js";
 import { readCliAttachments } from "../../cli/attachments.js";
 import {
-  normalizeAggregateVersion,
   resolveCliAuthInfo,
   resolveSessionTarget,
   splitStartupArgs,
@@ -89,13 +88,6 @@ test("startup-context args are split in both forms", () => {
     startupArgs: ["--startup-context=/a.json"],
     cliArgs: ["x"],
   });
-});
-
-test("aggregate version is normalized to a non-negative integer", () => {
-  assert.equal(normalizeAggregateVersion(undefined), 0);
-  assert.equal(normalizeAggregateVersion(3), 3);
-  assert.equal(normalizeAggregateVersion(-1), 0);
-  assert.equal(normalizeAggregateVersion("x"), 0);
 });
 
 test("auth defaults to configured super admin; --user runs as that user", () => {

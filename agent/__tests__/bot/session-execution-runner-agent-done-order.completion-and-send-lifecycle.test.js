@@ -30,7 +30,8 @@ test("runSession completes only after finalizeRunSession resolves", async () => 
     },
   });
 
-  const result = await runner.runSession({
+  const result = await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
     userId: "u1",
     sessionId: "s1",
     message: "hello",
@@ -62,7 +63,8 @@ test("runSession does not emit agent_done when finalizeRunSession fails", async 
 
   await assert.rejects(
     () =>
-      runner.runSession({
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
         userId: "u1",
         sessionId: "s1",
         message: "hello",
@@ -95,7 +97,12 @@ test("runSession emits direct-send lifecycle sequence", async () => {
     },
   });
 
-  await runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" });
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+  });
 
   assert.deepEqual(collectLifecycleStates(events), [
     AGENT_LIFECYCLE_STATE.INITIALIZING,
@@ -129,7 +136,12 @@ test("runSession emits resume-send lifecycle sequence", async () => {
     },
   });
 
-  await runner.runSession({ userId: "u1", sessionId: "s1", message: "continue" });
+  await runner.runAcceptedSession({
+    turnScopeId: "turn-default",
+    userId: "u1",
+    sessionId: "s1",
+    message: "continue",
+  });
 
   assert.deepEqual(collectLifecycleStates(events), [
     AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING,
@@ -176,11 +188,11 @@ test("runSession keeps resume snapshot identity separate from current run identi
     },
   });
 
-  await runner.runSession({
+  await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
     message: "continue",
-    runConfig: { turnScopeId: "turn-current" },
+    turnScopeId: "turn-current",
   });
 
   assert.equal(captured.buildContextPayload.dialogProcessId, "dialog-1");

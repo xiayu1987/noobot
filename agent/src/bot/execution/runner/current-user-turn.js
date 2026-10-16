@@ -9,7 +9,6 @@ import { emitContextIdentityDebug } from "../../../observability/context-identit
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
 import { assertTurnAttachmentsBoundEventData } from "@noobot/session-protocol/turn-attachment-bind";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
-import { createTurnCommand, toCommitTurnPayload } from "../turn-command.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import { text } from "@noobot/shared/value";
 
@@ -38,14 +37,12 @@ function projectPreparedCurrentUserTurn({
   buildContextPayload,
   canonicalAttachments,
   currentUserMessage,
-  turnCommand,
   committedTurnResult,
 }) {
   return {
     buildContextPayload,
     canonicalAttachments,
     currentUserMessage,
-    turnCommand,
     committedTurnResult,
   };
 }
@@ -86,9 +83,7 @@ function emitCurrentUserIdentityDebug({
 export async function prepareCurrentUserTurn({
   prepareTurnInput,
   assertReusedUserTurnIdentity,
-  commitSessionTurn,
   bindSessionTurnAttachments,
-  normalizedMessage,
   attachments,
   systemMessages,
   eventListener,
@@ -102,7 +97,6 @@ export async function prepareCurrentUserTurn({
   sessionId,
   parentSessionId,
   dialogProcessId,
-  parentDialogProcessId,
   turnScopeId,
   caller,
   userConfig,
@@ -144,7 +138,6 @@ export async function prepareCurrentUserTurn({
   let canonicalAttachments = [];
   let reusedTurnResult = null;
   let committedTurnResult = null;
-  let turnCommand = null;
   const prepareCanonicalAttachments = async () => {
     const preparedTurnInput =
       typeof prepareTurnInput === "function"
@@ -159,6 +152,10 @@ export async function prepareCurrentUserTurn({
     }
   };
   const acceptanceReceipt = turnAcceptance ? createTurnAcceptanceReceipt(turnAcceptance) : null;
+  const reuseExistingUserTurn = resolvedRunConfig?.reuseExistingUserTurn === true;
+  if (!acceptanceReceipt && !reuseExistingUserTurn) {
+    throw new TypeError("accepted Turn receipt is required before Context construction");
+  }
   if (
     acceptanceReceipt &&
     (acceptanceReceipt.sessionId !== sessionId ||
@@ -168,77 +165,44 @@ export async function prepareCurrentUserTurn({
     throw new TypeError("Turn acceptance receipt does not match the current execution identity");
   }
   const precommittedUserTurn = Boolean(acceptanceReceipt);
-  if (resolvedRunConfig?.reuseExistingUserTurn === true || precommittedUserTurn) {
-    if (!precommittedUserTurn) await prepareCanonicalAttachments();
-    reusedTurnResult = await assertReusedUserTurnIdentity?.({
-      userId,
-      sessionId,
-      parentSessionId,
-      turnScopeId,
-      dialogProcessId,
-      ...(!precommittedUserTurn ? { attachments: canonicalAttachments } : {}),
-      ...(persistenceContext ? { persistenceContext } : {}),
-    });
-    currentUserMessage = reusedTurnResult?.userMessage;
-    if (precommittedUserTurn) {
-      if (text(currentUserMessage?.messageUid) !== acceptanceReceipt.messageUid) {
-        throw new TypeError("accepted Turn message identity does not match Session authority");
-      }
-      committedTurnResult = {
-        session: reusedTurnResult?.session,
-        sessionId,
-        userMessage: currentUserMessage,
-        attachments: currentUserMessage?.attachments || [],
-        aggregateVersion: acceptanceReceipt.aggregateVersion,
-        deduplicated: true,
-      };
-      if (acceptanceReceipt.committedEventPublished !== true) {
-        emitEvent(
-          eventListener,
-          AGENT_RUN_EVENT.TURN_COMMITTED,
-          assertTurnCommittedEventData({
-            sessionId,
-            aggregateVersion: committedTurnResult.aggregateVersion,
-            dialogProcessId,
-            turnScopeId,
-            userMessage: currentUserMessage,
-          }),
-        );
-      }
+  if (!precommittedUserTurn) await prepareCanonicalAttachments();
+  reusedTurnResult = await assertReusedUserTurnIdentity?.({
+    userId,
+    sessionId,
+    parentSessionId,
+    turnScopeId,
+    dialogProcessId,
+    ...(!precommittedUserTurn ? { attachments: canonicalAttachments } : {}),
+    ...(persistenceContext ? { persistenceContext } : {}),
+  });
+  currentUserMessage = reusedTurnResult?.userMessage;
+  if (precommittedUserTurn) {
+    if (text(currentUserMessage?.messageUid) !== acceptanceReceipt.messageUid) {
+      throw new TypeError("accepted Turn message identity does not match Session authority");
     }
-  } else {
-    turnCommand = createTurnCommand({
-      userId,
+    committedTurnResult = {
+      session: reusedTurnResult?.session,
       sessionId,
-      parentSessionId,
-      dialogProcessId,
-      parentDialogProcessId,
-      turnScopeId,
-      message: normalizedMessage,
-      runConfig: resolvedRunConfig,
-      caller,
-    });
-    if (typeof commitSessionTurn !== "function") {
-      throw new Error("commitSessionTurn is required before Context construction");
+      userMessage: currentUserMessage,
+      attachments: currentUserMessage?.attachments || [],
+      aggregateVersion: acceptanceReceipt.aggregateVersion,
+      deduplicated: true,
+    };
+    if (acceptanceReceipt.committedEventPublished !== true) {
+      emitEvent(
+        eventListener,
+        AGENT_RUN_EVENT.TURN_COMMITTED,
+        assertTurnCommittedEventData({
+          sessionId,
+          aggregateVersion: committedTurnResult.aggregateVersion,
+          dialogProcessId,
+          turnScopeId,
+          userMessage: currentUserMessage,
+        }),
+      );
     }
-    committedTurnResult = await commitSessionTurn({
-      ...toCommitTurnPayload(turnCommand),
-      persistenceContext,
-    });
-    currentUserMessage = committedTurnResult?.userMessage;
-    emitEvent(
-      eventListener,
-      AGENT_RUN_EVENT.TURN_COMMITTED,
-      assertTurnCommittedEventData({
-        sessionId,
-        aggregateVersion: committedTurnResult?.aggregateVersion,
-        dialogProcessId,
-        turnScopeId,
-        userMessage: currentUserMessage,
-      }),
-    );
   }
-  if (resolvedRunConfig?.reuseExistingUserTurn !== true) {
+  if (!reuseExistingUserTurn) {
     await prepareCanonicalAttachments();
     if (canonicalAttachments.length > 0) {
       if (typeof bindSessionTurnAttachments !== "function") {
@@ -299,7 +263,6 @@ export async function prepareCurrentUserTurn({
     buildContextPayload,
     canonicalAttachments,
     currentUserMessage,
-    turnCommand,
     committedTurnResult,
   });
 }

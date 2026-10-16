@@ -11,8 +11,10 @@ import {
 } from "@noobot/runtime-events";
 import {
   SESSION_ERROR_CODE,
+  TURN_ACTION,
   TURN_EVENT,
   TURN_PHASE,
+  createAssistantMessageEventId,
   createTurnAcceptanceReceipt,
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
@@ -36,7 +38,7 @@ export async function mapRunCommand(context, command) {
     connectorAccessPort: context.connectorAccessPort,
     request: context.mapAgentRunCommand(command, { userId: context.authInfo?.userId }),
   });
-  context.state.currentTurnScopeId = text(mapped.turnScopeId) || context.state.currentTurnScopeId;
+  context.state.currentTurnScopeId = text(mapped.turnScopeId);
   context.state.currentLocale = context.normalizeLocale(
     mapped.runConfig.locale || context.state.currentLocale,
   );
@@ -53,7 +55,7 @@ export function recordReceivedCommand(context, command, run) {
     userId: text(run.userId),
     sessionId: text(run.sessionId),
     parentSessionId: text(run.parentSessionId),
-    turnScopeId: text(context.state.currentTurnScopeId || run.turnScopeId),
+    turnScopeId: text(run.turnScopeId),
     data: {
       commandType: command.commandType,
       reuseExistingUserTurn: run.normalizedRunConfig.reuseExistingUserTurn === true,
@@ -92,27 +94,17 @@ export async function bindExistingRun(context, run, onRunBound) {
     event: "service.websocket.run.transportRebound",
     userId: run.userId,
     sessionId: run.sessionId,
-    dialogProcessId: runningTurn.dialogProcessId || run.dialogProcessId || "",
+    dialogProcessId: runningTurn.dialogProcessId,
     turnScopeId: context.state.currentTurnScopeId,
   });
   return true;
 }
 
-function resolveAction(commandType) {
-  if (commandType === AGENT_COMMAND.RESEND) return "resend";
-  if (commandType === AGENT_COMMAND.CONTINUE) return "continue";
-  return "send";
-}
-
-function assignMessageIdentities(state, run) {
-  run.normalizedRunConfig.presentationMessageId = text(
-    run.normalizedRunConfig.presentationMessageId || `msg_${state.currentTurnScopeId}`,
-  );
-  run.normalizedRunConfig.messageId = text(
-    run.normalizedRunConfig.messageId ||
-      `msg_event_${run.normalizedRunConfig.presentationMessageId || state.currentTurnScopeId}`,
-  );
-}
+const RUN_COMMAND_TURN_ACTION = Object.freeze({
+  [AGENT_COMMAND.SEND]: TURN_ACTION.SEND,
+  [AGENT_COMMAND.RESEND]: TURN_ACTION.RESEND,
+  [AGENT_COMMAND.CONTINUE]: TURN_ACTION.CONTINUE,
+});
 
 function createActionEvent(context, command, run, executionIntent, startedAt) {
   const commandId = text(command.commandId);
@@ -131,12 +123,12 @@ function createActionEvent(context, command, run, executionIntent, startedAt) {
     causationId: commandId,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
-    action: resolveAction(command.commandType),
+    action: RUN_COMMAND_TURN_ACTION[command.commandType],
     messageId: run.normalizedRunConfig.messageId,
     presentationMessageId: run.normalizedRunConfig.presentationMessageId,
     startedAt,
     createSessionIfAbsent: run.createSessionIfAbsent,
-    expectedRevision: run.expectedRevision ?? 0,
+    expectedRevision: run.expectedRevision,
     expectedAggregateVersion: run.normalizedRunConfig.expectedAggregateVersion,
     ...executionIntent,
     ...(![AGENT_COMMAND.RESEND].includes(command.commandType)
@@ -190,7 +182,9 @@ async function commitAction(context, actionEvent, run) {
 export async function acceptRunCommand(context, command, run) {
   const startedAt = new Date().toISOString();
   run.normalizedRunConfig.thinkingStartedAt = startedAt;
-  assignMessageIdentities(context.state, run);
+  run.normalizedRunConfig.messageId = createAssistantMessageEventId(
+    run.normalizedRunConfig.presentationMessageId,
+  );
   const activeBot = context.resolveBot();
   const agentApplication = createAgentApplication({ runtime: activeBot });
   const executionIntent = await agentApplication.resolveExecutionIntent({
@@ -203,8 +197,8 @@ export async function acceptRunCommand(context, command, run) {
   Object.assign(run.normalizedRunConfig, executionIntent);
   const actionEvent = createActionEvent(context, command, run, executionIntent, startedAt);
   const accepted = await commitAction(context, actionEvent, run);
-  if (accepted.dialogProcessId) run.dialogProcessId = text(accepted.dialogProcessId);
-  if (accepted.userMessage) {
+  run.dialogProcessId = text(accepted.dialogProcessId);
+  if (command.commandType !== AGENT_COMMAND.RESEND) {
     const committedEvent = assertTurnCommittedEventData({
       sessionId: run.sessionId,
       aggregateVersion: accepted.aggregateVersion,

@@ -49,7 +49,6 @@ const hasPendingRequest = (replayBatch, requestId) =>
 
 function interactionResponse({ sessionId, requestId, response = { confirmed: true } }) {
   return createInteractionResponseCommand({
-    commandId: `interaction:${requestId}`,
     identity: { sessionId },
     interaction: { requestId, response },
   });

@@ -18,8 +18,7 @@ function numericValue(value) {
 }
 
 function getCurrentSessionAggregateVersion(activeSession) {
-  const session = activeSession?.value || activeSession;
-  return session?.aggregateVersion;
+  return activeSession.value?.aggregateVersion;
 }
 
 function isSessionAggregateVersionConflict(result, payload) {
