@@ -65,7 +65,6 @@ export function useReconnectReplay({
   onConversationState,
   sessionLogWebSocketClient,
   notify = () => {},
-  processStore,
   turnRuntimeRegistry,
   applyTurnLifecycleEnvelope,
   applyExecutionSnapshot,
@@ -330,7 +329,6 @@ export function useReconnectReplay({
       dialogProcessId,
       turnScopeId,
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
-      processStore,
     });
   }
 

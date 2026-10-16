@@ -35,7 +35,6 @@ import {
   TRANSIENT_MESSAGE_EVENT_SEQUENCE,
 } from "@noobot/event-protocol/message-event";
 import { workflowSequenceDomainForEvent } from "@noobot/event-protocol/workflow-runtime-event";
-import { classifyRealtimeLog } from "../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
 import { text } from "@noobot/shared/value";
 
 function createSession(id) {
@@ -196,26 +195,7 @@ export function createWorkflowEnvelope(
   });
 }
 
-export function createFakeProcessStore() {
-  const events = [];
-  return {
-    events,
-    applyEventBatch: vi.fn((nextEvents = []) => {
-      events.push(...nextEvents);
-    }),
-    getCompatView: vi.fn(() => {
-      const logs = events.map((event) => event?.payload?.log).filter(Boolean);
-      return {
-        realtimeLogs: logs,
-        completedToolLogs: logs,
-        executionLogTotal: logs.length,
-        lastSequence: Math.max(0, ...events.map((event) => Number(event?.sequence || 0))),
-      };
-    }),
-  };
-}
-
-export function createFixture({ activeId = "s-1", processStore = null, currentRun = null } = {}) {
+export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   clearExtensionRegistry();
   void activateWorkflowFrontend({
     contributeExtension: (point, contribution) =>
@@ -379,11 +359,9 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     connectorTypeSet: new Set(["email"]),
     upsertConnectedConnectorInPanelState,
     refreshSessionConnectorsAsync,
-    classifyRealtimeLog,
     scrollBottom,
     translate: (key) => key,
     notify,
-    processStore,
     turnRuntimeRegistry,
     applyWorkflowRuntimeEvent,
     reduceSubSessionMessageEvent,

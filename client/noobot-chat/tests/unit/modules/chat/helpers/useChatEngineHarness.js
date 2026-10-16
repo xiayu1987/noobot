@@ -270,7 +270,6 @@ export const createHarness = ({
     safeConfirm: ref(true),
     botScenario: ref(""),
     isImageMime: () => false,
-    classifyRealtimeLog: (d) => d,
     scrollBottom: vi.fn(),
     activeSession,
     activeSessionId,

@@ -49,7 +49,6 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   dialogProcessId,
   turnScopeId = "",
   envelopeCallbacks,
-  processStore,
 } = {}) {
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
@@ -62,6 +61,5 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     dialogProcessId,
     turnScopeId,
     envelopeCallbacks,
-    processStore,
   });
 }

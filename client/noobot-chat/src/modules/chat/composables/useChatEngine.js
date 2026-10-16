@@ -47,7 +47,6 @@ export function useChatEngine({
   summaryPolicy,
   selectedPlugins,
   isImageMime,
-  classifyRealtimeLog,
   navigateToLastMessage,
   activeSession,
   activeSessionId,
@@ -86,7 +85,6 @@ export function useChatEngine({
   removeWorkflowOwnersForReplacedTurns,
   ensureConnected,
   notify = () => {},
-  processStore = null,
   terminalResolutionFetcher,
   monotonicActionStopTimeoutMs = DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS,
   monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
@@ -375,14 +373,12 @@ export function useChatEngine({
     reduceSubSessionMessageEvent,
     applyRunStateEvent,
     applyTurnLifecycleEnvelope: applyAuthoritativeTurnLifecycle,
-    classifyRealtimeLog,
   };
   const senderUiDeps = {
     navigateToLastMessage,
     notify,
     translate,
   };
-  const senderRuntimeDeps = { processStore };
   const send = createChatEngineSender({
     ...senderSessionDeps,
     ...senderConversationDeps,
@@ -391,7 +387,6 @@ export function useChatEngine({
     ...senderModelDeps,
     ...senderTransportDeps,
     ...senderUiDeps,
-    ...senderRuntimeDeps,
     finalizePendingResendOperation: (...args) =>
       monotonicMessageActions?.finalizePendingResendOperation?.(...args),
   });

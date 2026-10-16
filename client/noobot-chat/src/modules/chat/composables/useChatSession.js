@@ -34,7 +34,6 @@ import { useChatList } from "./useChatList.js";
 import { useChatEngine } from "./useChatEngine.js";
 import { useReconnectReplay } from "./useReconnectReplay.js";
 import { useChatStore } from "../stores/useChatStore.js";
-import { useProcessStore } from "../stores/useProcessStore.js";
 import { hydrateSessionDetailExtensions } from "../../../extensions/session-detail-hydrator.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 
@@ -96,14 +95,12 @@ export function useChatSession({
   authFetch,
   refreshAuthentication = null,
   isImageMime,
-  classifyRealtimeLog,
   navigateToLastMessage,
   notify = () => {},
   clearUploadSelection = () => {},
 }) {
   const { translate } = useLocale();
   const chatStore = useChatStore();
-  const processStore = useProcessStore();
   const {
     turnRuntimeRegistry,
     workflowNodeStateRegistry,
@@ -477,7 +474,6 @@ export function useChatSession({
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     clearUploads,
     notify,
-    processStore,
     onSessionDetailApplied: hydrateStoppedRunStateFromSessionDetail,
   });
 
@@ -496,7 +492,6 @@ export function useChatSession({
     summaryPolicy,
     selectedPlugins,
     isImageMime,
-    classifyRealtimeLog,
     navigateToLastMessage,
     activeSession,
     activeSessionId,
@@ -571,7 +566,6 @@ export function useChatSession({
     onConversationState: trackConversationState,
     sessionLogWebSocketClient,
     notify,
-    processStore,
     applyTurnLifecycleEnvelope: chatEngine.applyTurnLifecycleEnvelope,
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),

@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  classifyRealtimeLog,
   formatFileSize,
   formatTime,
   hasActiveSessionForReconnect,
@@ -13,73 +12,6 @@ import {
 } from "../../../src/app/state/sessionMessageState.js";
 
 describe("sessionMessageState", () => {
-  it("classifies realtime tool logs while normalizing event, text, ids, and timestamps", () => {
-    const item = classifyRealtimeLog({
-      event: "tool_result",
-      text: "\u001b[31m[tool] done\u001b[0m",
-      dialogProcessId: 123,
-    });
-
-    expect(item.event).toBe("tool_result");
-    expect(item.type).toBe("tool_result");
-    expect(item.category).toBe("tool");
-    expect(item.text).toContain("[tool] done");
-    expect(item.dialogProcessId).toBe("123");
-    expect(item.ts).toEqual(expect.any(String));
-  });
-
-  it("uses authoritative tool lifecycle types for realtime call and result records", () => {
-    const common = {
-      event: "thinking",
-      type: "tool_call",
-      tool: "read_file",
-      toolCallId: "call-1",
-    };
-    const call = classifyRealtimeLog({
-      ...common,
-      eventType: "tool_call_start",
-      args: { filePath: "a.txt" },
-    });
-    const result = classifyRealtimeLog({
-      ...common,
-      eventType: "tool_call_end",
-      result: { ok: true },
-    });
-
-    expect(call).toMatchObject({ event: "tool_call", type: "tool_call" });
-    expect(result).toMatchObject({ event: "tool_result", type: "tool_result" });
-    expect(call.text).toContain("[tool] read_file call");
-    expect(call.text).toContain('"filePath":"a.txt"');
-    expect(result.text).toContain("[tool] read_file result");
-    expect(result.text).toContain('"ok":true');
-  });
-
-  it("classifies regular realtime logs as system defaults", () => {
-    const item = classifyRealtimeLog({ text: "hello" });
-
-    expect(item.event).toBe("system");
-    expect(item.type).toBe("system");
-    expect(item.category).toBe("system");
-  });
-
-  it("preserves plugin analysis text from output fallback fields", () => {
-    const topLevelOutput = classifyRealtimeLog({
-      event: "guidance_analysis_response",
-      type: "guidance_analysis",
-      purpose: "guidance",
-      pluginFlow: "analysis",
-      chain: "auxiliary",
-      output: "desktop analysis output",
-    });
-    const nestedOutput = classifyRealtimeLog({
-      event: "guidance_analysis_response",
-      data: { output: "nested desktop analysis output" },
-    });
-
-    expect(topLevelOutput.text).toBe("desktop analysis output");
-    expect(nestedOutput.text).toBe("nested desktop analysis output");
-  });
-
   it("formats message attachment and time helpers", () => {
     expect(isImageMime("image/png")).toBe(true);
     expect(isImageMime("text/plain")).toBe(false);

@@ -33,7 +33,6 @@ function contextFor(messages, logSessionEvent = vi.fn()) {
     channelSessionId: "session-1",
     sessionId: "session-1",
     turnScopeId: "turn-1",
-    classifyRealtimeLog: vi.fn(),
     findCanonicalMessageById(sessionId, messageId) {
       return (
         messages.find(

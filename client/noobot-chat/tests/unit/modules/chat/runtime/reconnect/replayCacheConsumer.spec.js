@@ -54,7 +54,6 @@ function createActiveReplayFixture(overrides = {}) {
     activeSessionId: { value: "s-1" },
     chatList: { value: [] },
     appliedReconnectSequenceByTurnKey: {},
-    classifyRealtimeLog: vi.fn((logItem) => logItem),
     getReplayHydrationPromise: vi.fn(() => null),
     setReplayHydrationPromise: vi.fn(),
     envelopeCallbacks: {},
@@ -75,25 +74,6 @@ function createActiveReplayFixture(overrides = {}) {
       );
     });
   return fixture;
-}
-
-function createFakeProcessStore() {
-  const events = [];
-  return {
-    events,
-    applyEventBatch: vi.fn((nextEvents = []) => {
-      events.push(...nextEvents);
-    }),
-    getCompatView: vi.fn(() => {
-      const logs = events.map((event) => event?.payload?.log).filter(Boolean);
-      return {
-        realtimeLogs: logs,
-        completedToolLogs: logs,
-        executionLogTotal: logs.length,
-        lastSequence: Math.max(0, ...events.map((event) => Number(event?.sequence || 0))),
-      };
-    }),
-  };
 }
 
 describe("replayCacheConsumer", () => {
@@ -200,14 +180,12 @@ describe("replayCacheConsumer", () => {
   });
 
   it("projects authoritative reconnect thinking without mutating process display mirrors", async () => {
-    const processStore = createFakeProcessStore();
     const hydratedCompletedLogs = Array.from({ length: 12 }, (_, index) => ({
       event: "tool_call",
       text: `old step ${index + 1}`,
       sequence: index + 1,
     }));
     const fixture = createActiveReplayFixture({
-      processStore,
       activeSession: {
         value: {
           id: "s-1",
@@ -238,14 +216,12 @@ describe("replayCacheConsumer", () => {
     });
 
     const targetMessage = fixture.activeSession.value.messages[0];
-    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
     expect(selectActivityTimelineLogs(targetMessage)).toHaveLength(1);
     expect(selectActivityTimelineLogs(targetMessage)[0].text).toContain("next step");
   });
 
   it("keeps legacy reconnect errors out of canonical messages and process display mirrors", async () => {
-    const processStore = createFakeProcessStore();
-    const fixture = createActiveReplayFixture({ processStore });
+    const fixture = createActiveReplayFixture();
 
     await applyReconnectMessagesToActiveSessionReplay({
       ...fixture,
@@ -274,15 +250,13 @@ describe("replayCacheConsumer", () => {
 
     const targetMessage = fixture.activeSession.value.messages[0];
     expect(targetMessage.error).toBeUndefined();
-    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
     expect(targetMessage.processExecutionLogTotal).toBeUndefined();
     expect(targetMessage.processRealtimeLogs).toBeUndefined();
     expect(targetMessage.processCompletedToolLogs).toBeUndefined();
   });
 
   it("does not let legacy reconnect thinking mutate canonical timelines", async () => {
-    const processStore = createFakeProcessStore();
-    const fixture = createActiveReplayFixture({ processStore });
+    const fixture = createActiveReplayFixture();
 
     await applyReconnectMessagesToActiveSessionReplay({
       ...fixture,
@@ -297,7 +271,6 @@ describe("replayCacheConsumer", () => {
     });
 
     const targetMessage = fixture.activeSession.value.messages[0];
-    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
     expect(selectToolTimelineLogs(targetMessage)).toEqual([]);
     expect(selectActivityTimelineLogs(targetMessage)).toEqual([]);
     expect(targetMessage.processExecutionLogTotal).toBeUndefined();

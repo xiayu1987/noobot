@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createCanonicalAssistant,
-  createFixture,
-  createFakeProcessStore,
-} from "../helpers/useReconnectReplayHelper.js";
+import { createCanonicalAssistant, createFixture } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 afterEach(() => {
@@ -122,7 +118,7 @@ describe("useReconnectReplay", () => {
   });
 
   it("SQ-05: a replayed durable event is consumed once while transient deltas stay unsequenced", async () => {
-    const { api, refs } = createFixture({ processStore: createFakeProcessStore() });
+    const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q", turnScopeId: "turn-boundary" },
       {

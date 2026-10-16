@@ -207,33 +207,31 @@ describe("selectTurnPresentations", () => {
       toolTimeline: [{ key: "tool-a" }],
       activityTimeline: [{ eventId: "activity-a" }],
     };
-    const terminalPresentation = {
-      messageId: "turn-status-placeholder:turn-a",
-      sessionId: "session-a",
-      role: "assistant",
-      turnScopeId: "turn-a",
-      dialogProcessId: "dialog-a",
-      content: "本轮已由用户停止\n原因：user_stop",
-      status: "user_stopped",
-      turnStatusPlaceholder: true,
-    };
     const result = selectTurnPresentations({
-      activeSession: {
-        sessionId: "session-a",
-        messages: [terminalPresentation, canonicalAssistant],
+      activeSession: { sessionId: "session-a", messages: [canonicalAssistant] },
+      turnRuntimeRegistry: {
+        sessions: {
+          "session-a": {
+            turns: {
+              "turn-a": {
+                turnScopeId: "turn-a",
+                dialogProcessId: "dialog-a",
+                terminal: "user_stopped",
+                finishedAt: "2026-07-31T10:00:00.000Z",
+              },
+            },
+          },
+        },
       },
     });
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       messageId: "assistant-canonical-a",
-      content: "本轮已由用户停止\n原因：user_stop",
       status: "user_stopped",
       turnStatusPlaceholder: true,
       toolTimeline: [{ key: "tool-a" }],
       activityTimeline: [{ eventId: "activity-a" }],
-      __turnStatusPresentation: true,
-      __turnStatusPlaceholderId: "turn-status-placeholder:turn-a",
     });
   });
 
@@ -319,28 +317,30 @@ describe("selectTurnPresentations", () => {
       turnScopeId: "turn-a",
       content: "partial answer",
     };
-    const terminalPresentation = {
-      messageId: "turn-status-placeholder:turn-a",
-      sessionId: "session-a",
-      role: "assistant",
-      turnScopeId: "turn-a",
-      content: "本轮异常停止\n原因：model_failed",
-      status: "error",
-      turnStatusPlaceholder: true,
-    };
     const result = selectTurnPresentations({
-      activeSession: {
-        sessionId: "session-a",
-        messages: [canonicalAssistant, terminalPresentation],
+      activeSession: { sessionId: "session-a", messages: [canonicalAssistant] },
+      turnRuntimeRegistry: {
+        sessions: {
+          "session-a": {
+            turns: {
+              "turn-a": {
+                turnScopeId: "turn-a",
+                dialogProcessId: "dialog-a",
+                terminal: "error",
+                failure: { message: "model_failed" },
+                finishedAt: "2026-07-31T10:00:00.000Z",
+              },
+            },
+          },
+        },
       },
     });
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       messageId: "assistant-partial-a",
-      content: "partial answer\n\n本轮异常停止\n原因：model_failed",
+      content: expect.stringMatching(/^partial answer\n\n.+model_failed/s),
       status: "error",
-      __turnStatusPresentation: true,
     });
   });
 

@@ -36,7 +36,6 @@ export function useChatList({
   refreshSessionConnectorsAsync,
   clearUploads,
   notify = () => {},
-  processStore = null,
   onSessionDetailApplied = null,
 } = {}) {
   const { translate } = useLocale();
@@ -67,7 +66,6 @@ export function useChatList({
     sessionTitleFromMessages,
     navigateToLastMessage,
     isSameSessionIdentity,
-    processStore,
     onSessionDetailApplied,
   });
 

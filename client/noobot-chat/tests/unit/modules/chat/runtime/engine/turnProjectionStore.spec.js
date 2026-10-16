@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classifyRealtimeLog } from "../../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
 import {
   dispatchTurnEnvelope,
   hydrateTurnSnapshot,
@@ -54,7 +53,6 @@ function replay(targetMessage, replayEvents, source) {
       dispatchTurnEnvelope({
         targetMessage,
         envelope: event,
-        classifyRealtimeLog,
         source,
       }).applied,
     ).toBe(true);
@@ -113,7 +111,6 @@ describe("turnProjectionStore convergence", () => {
       dispatchTurnEnvelope({
         targetMessage: message(),
         envelope: event,
-        classifyRealtimeLog,
         source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
       }).applied,
     ).toBe(true);
@@ -147,7 +144,6 @@ describe("turnProjectionStore convergence", () => {
     const result = dispatchTurnEnvelope({
       targetMessage: target,
       envelope: events[0],
-      classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
     });
     expect(result).toMatchObject({
@@ -175,7 +171,6 @@ describe("turnProjectionStore convergence", () => {
         sequence: 3,
         text: "must not buffer",
       }),
-      classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
     });
     expect(result).toMatchObject({
@@ -209,7 +204,6 @@ describe("turnProjectionStore convergence", () => {
       dispatchTurnEnvelope({
         targetMessage: target,
         envelope: events[2],
-        classifyRealtimeLog,
         source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
       }),
     ).toMatchObject({
@@ -312,7 +306,6 @@ describe("turnProjectionStore convergence", () => {
       dispatchTurnEnvelope({
         targetMessage: target,
         envelope: eventItem,
-        classifyRealtimeLog,
         source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
       }),
     );
@@ -335,7 +328,6 @@ describe("turnProjectionStore convergence", () => {
       dispatchTurnEnvelope({
         targetMessage: target,
         envelope: events[2],
-        classifyRealtimeLog,
         source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
       }).reason,
     ).toBe("sequence_gap");

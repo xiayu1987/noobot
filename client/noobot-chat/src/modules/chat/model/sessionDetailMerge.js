@@ -45,16 +45,12 @@ function entityKey(item = {}, index = 0, kind = "entity") {
       const presentationMessageId = text(item?.presentationMessageId);
       if (presentationMessageId) return `assistant-presentation:${presentationMessageId}`;
     }
-    const messageIdentity =
-      role === "tool"
-        ? text(item?.messageUid || item?.messageId || item?.toolCallId)
-        : text(item?.messageUid || item?.messageId);
+    const messageIdentity = text(item?.messageUid || item?.messageId);
     return messageIdentity ? `message:${messageIdentity}` : "";
   }
   const stableId = text(item?.messageId || item?.toolCallId);
   if (stableId) return `id:${stableId}`;
 
-  if (kind === "message") return "";
   const turnScopeId = text(item?.turnScopeId);
   if (turnScopeId) return `turn:${turnScopeId}:${kind}`;
   const dialogProcessId = text(item?.dialogProcessId);

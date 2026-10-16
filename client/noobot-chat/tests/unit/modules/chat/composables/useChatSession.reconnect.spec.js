@@ -14,7 +14,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { ref } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
-import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessageState.js";
 import {
   logResendDebug,
   setResendDebugLogSink,
@@ -123,7 +122,7 @@ describe("useChatSession reconnect replay", () => {
       });
     });
 
-    const session = createChatSession({ classifyRealtimeLog });
+    const session = createChatSession();
     await session.handleReconnect();
 
     expect(store.sessions[0].messages).toEqual([]);
@@ -180,7 +179,7 @@ describe("useChatSession reconnect replay", () => {
       onReconnectData(envelope("tool_call_end", 2, { result: { ok: true }, success: true }));
     });
 
-    const session = createChatSession({ classifyRealtimeLog });
+    const session = createChatSession();
     await session.handleReconnect();
 
     expect(sessionLogClientMock.log).not.toHaveBeenCalledWith(
@@ -223,7 +222,7 @@ describe("useChatSession reconnect replay", () => {
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       deliverLiveEvent = onReconnectData;
     });
-    const session = createChatSession({ classifyRealtimeLog });
+    const session = createChatSession();
 
     await session.handleReconnect();
     deliverLiveEvent(
@@ -306,7 +305,7 @@ describe("useChatSession reconnect replay", () => {
       );
     });
 
-    const session = createChatSession({ classifyRealtimeLog });
+    const session = createChatSession();
     await session.handleReconnect();
 
     expect(stoppedAssistant.realtimeLogs).toEqual([{ type: "thinking", text: "old thinking" }]);
@@ -486,7 +485,6 @@ describe("useChatSession reconnect replay", () => {
       ensureConnected: vi.fn(() => true),
       authFetch,
       isImageMime: () => false,
-      classifyRealtimeLog: (item) => item,
       scrollBottom: vi.fn(),
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
@@ -548,7 +546,6 @@ describe("useChatSession reconnect replay", () => {
       ensureConnected: vi.fn(() => true),
       authFetch: null,
       isImageMime: () => false,
-      classifyRealtimeLog: (item) => item,
       scrollBottom: vi.fn(),
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
@@ -725,7 +722,6 @@ describe("useChatSession reconnect replay", () => {
         ensureConnected: vi.fn(() => true),
         authFetch,
         isImageMime: () => false,
-        classifyRealtimeLog: (item) => item,
         scrollBottom: vi.fn(),
         notify,
         clearUploadSelection: vi.fn(),

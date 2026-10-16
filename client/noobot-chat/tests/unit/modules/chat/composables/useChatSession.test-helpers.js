@@ -58,7 +58,6 @@ export function createChatSession(options = {}) {
     ensureConnected: vi.fn(() => true),
     authFetch: null,
     isImageMime: () => false,
-    classifyRealtimeLog: (item) => item,
     scrollBottom: vi.fn(),
     notify: vi.fn(),
     clearUploadSelection: vi.fn(),

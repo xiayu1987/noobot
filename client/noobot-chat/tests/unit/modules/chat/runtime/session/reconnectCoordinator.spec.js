@@ -89,7 +89,6 @@ describe("createReconnectCoordinator", () => {
       chatWebSocketClient,
       reconnectReplay,
       chatList: {},
-      classifyRealtimeLog: (entry) => entry,
       resolveActiveSessionIdentity: () => "s-1",
       resolveActiveTurnScopeIdentity: () => "",
       logSessionSystemEvent,

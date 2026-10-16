@@ -5,7 +5,6 @@
  */
 import { formatLocalTime } from "../../modules/chat/model/timeFields.js";
 import { text } from "@noobot/shared/value";
-export { classifyRealtimeLog } from "../../modules/chat/runtime/engine/realtimeLogClassifier.js";
 
 export function isImageMime(type = "") {
   return type.startsWith("image/");

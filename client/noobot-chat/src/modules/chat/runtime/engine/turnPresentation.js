@@ -76,17 +76,13 @@ function isEmptyAssistantPlaceholder(message = {}) {
   );
 }
 
-function isTurnStatusPresentation(message = {}) {
-  return getMessageRole(message) === "assistant" && message?.turnStatusPlaceholder === true;
-}
-
 function normalizeTerminalStatus(status = {}) {
   const state = text(status?.status).toLowerCase();
   return isTurnTerminalNotice(state) ? { ...status, status: state } : null;
 }
 
-function terminalStatusKey(status = {}, fallbackSessionId = "") {
-  return turnKey(text(fallbackSessionId || status?.sessionId), status?.turnScopeId);
+function terminalStatusKey(status = {}, sessionId = "") {
+  return turnKey(sessionId, status?.turnScopeId);
 }
 
 function terminalStatusesFromRuntime(turnRuntimeRegistry = {}, sessionId = "") {
@@ -122,13 +118,13 @@ function formatTerminalStatusContent(status = {}) {
     : label;
 }
 
-function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
+function buildTerminalPresentation(status = {}, sessionId = "") {
   const turnScopeId = text(status?.turnScopeId);
   const dialogProcessId = text(status?.dialogProcessId);
-  const timestamp = text(status?.updatedAt || status?.createdAt);
+  const timestamp = text(status?.updatedAt);
   return {
     messageId: `turn-status-placeholder:${turnScopeId}`,
-    sessionId: text(fallbackSessionId || status?.sessionId),
+    sessionId: text(sessionId),
     role: "assistant",
     content: formatTerminalStatusContent(status),
     pending: false,
@@ -227,12 +223,10 @@ function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(terminalPresentation),
     dialogProcessId: shell?.dialogProcessId || terminalPresentation?.dialogProcessId || "",
     content,
-    toolTimeline: shell?.toolTimeline || terminalPresentation?.toolTimeline || [],
-    activityTimeline: shell?.activityTimeline || terminalPresentation?.activityTimeline || [],
-    attachments: shell?.attachments || terminalPresentation?.attachments || [],
+    toolTimeline: shell?.toolTimeline || [],
+    activityTimeline: shell?.activityTimeline || [],
+    attachments: shell?.attachments || [],
     ts: shell?.ts || terminalPresentation?.ts,
-    __turnStatusPresentation: true,
-    __turnStatusPlaceholderId: text(terminalPresentation?.messageId),
   };
 }
 
@@ -252,14 +246,6 @@ function coalescePersistedAssistantPresentations(messages = [], activeSessionId 
       continue;
     }
     const existing = output[existingIndex];
-    const existingTurnStatus = isTurnStatusPresentation(existing);
-    const incomingTurnStatus = isTurnStatusPresentation(message);
-    if (existingTurnStatus !== incomingTurnStatus) {
-      output[existingIndex] = existingTurnStatus
-        ? mergeTurnStatusIntoAssistant(message, existing)
-        : mergeTurnStatusIntoAssistant(existing, message);
-      continue;
-    }
     const existingWorkflow = isWorkflowPresentationMessage(existing);
     const incomingWorkflow = isWorkflowPresentationMessage(message);
     if (incomingWorkflow && (existingWorkflow || isEmptyAssistantPlaceholder(existing))) {

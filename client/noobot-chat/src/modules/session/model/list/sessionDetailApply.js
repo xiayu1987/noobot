@@ -26,7 +26,6 @@ import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import { logTurnRuntimeDiagnostics } from "../../../debug/loggers/turnRuntimeDiagnosticsLogger.js";
 import { applyLatestSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
 import {
   confirmTurnRuntimeDeletion,
@@ -169,18 +168,6 @@ export function createSessionDetailApplicator({
       sessionDocs,
       makeViewMessage,
     });
-    logTurnRuntimeDiagnostics("frontend.sessionDetailProjection.terminalPresentation", () => ({
-      sessionId: detailSessionId,
-      applyMode,
-      projectedTerminalPresentations: detailProjection.messages
-        .filter((messageItem) => messageItem?.turnStatusPlaceholder === true)
-        .map((messageItem) => ({
-          messageId: text(messageItem?.messageId),
-          turnScopeId: text(messageItem?.turnScopeId),
-          status: text(messageItem?.status || messageItem?.turnStatus?.status),
-          contentLength: typeof messageItem?.content === "string" ? messageItem.content.length : 0,
-        })),
-    }));
     chatStore?.applyTurnTimingSnapshot?.({
       sessionId: detailSessionId,
       turnTimings,

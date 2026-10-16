@@ -39,7 +39,6 @@ import { executionReportService } from "../../infrastructure/api/thinking/execut
 import { fileMutationPreviewService } from "../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
 import { authenticatedHttpService } from "../../infrastructure/http/authenticatedHttpService.js";
 import {
-  classifyRealtimeLog,
   formatFileSize,
   formatTime,
   hasActiveSessionForReconnect as hasActiveSessionForReconnectState,
@@ -225,7 +224,6 @@ const {
   authFetch,
   refreshAuthentication,
   isImageMime,
-  classifyRealtimeLog,
   navigateToLastMessage,
   notify: notifyUi,
   clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
