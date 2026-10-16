@@ -91,3 +91,20 @@ test("agent plugin stage stores detail as an attachment reference and final mess
   );
   assert.equal("path" in staged.transferEnvelopes[0], false);
 });
+
+test("agent plugin summary injection ignores the removed summaryInjectMode alias", async () => {
+  const inject = (options) =>
+    transferSemanticContent({
+      scenario: "harness",
+      strategy: "harness_summary",
+      identity: identity(),
+      runtime: {},
+      fullText: "full text",
+      summaryText: "summary text",
+      ...options,
+    });
+  const aliased = await inject({ summaryInjectMode: "summary" });
+  assert.equal(aliased.transferEnvelopes[0].payload.content, "full text");
+  const canonical = await inject({ injectMode: "summary" });
+  assert.equal(canonical.transferEnvelopes[0].payload.content, "summary text");
+});

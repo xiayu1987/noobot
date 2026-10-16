@@ -5,7 +5,9 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { ref } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
+import { createSubSessionStore } from "../../../../../src/modules/chat/stores/chatStoreSubSessions.js";
 import { createTurnLifecycleEnvelope, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { canonicalMessageEvent } from "../helpers/messageEventFixture.js";
 import {
@@ -78,6 +80,19 @@ function commitPresentation(store, identity = {}) {
 describe("sub-session realtime message projection", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+  });
+
+  it("ignores the removed subSessionId alias when ensuring a message container", () => {
+    const { ensureSubSessionMessageContainer } = createSubSessionStore({
+      subSessionMessageRegistry: ref(null),
+      subSessionMessageRegistryVersion: ref(0),
+      turnRuntimeRegistry: ref(null),
+    });
+    expect(ensureSubSessionMessageContainer({ subSessionId: "child-session" })).toEqual({
+      applied: false,
+      reason: "missing_session",
+    });
+    expect(ensureSubSessionMessageContainer({ sessionId: "child-session" }).applied).toBe(true);
   });
 
   it("keeps assistant thinking when a tool result arrives", () => {

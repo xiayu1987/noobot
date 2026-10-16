@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   isMonotonicMessage,
+  isUserMessage,
   resolveMonotonicMessageActionProps,
 } from "../../../../src/modules/chat/model/message-actions/monotonicMessageActionRules.js";
 
@@ -31,6 +32,12 @@ describe("noobot-chat monotonic message action rules", () => {
         .visible,
     ).toBe(false);
   }
+
+  it("ignores removed authorRole/senderRole aliases when detecting user messages", () => {
+    expect(isUserMessage({ authorRole: "user" })).toBe(false);
+    expect(isUserMessage({ senderRole: "user" })).toBe(false);
+    expect(isUserMessage({ role: "user" })).toBe(true);
+  });
 
   it("matches frontend stopped markers and backend completed session messages", () => {
     const action = getMonotonicAction();

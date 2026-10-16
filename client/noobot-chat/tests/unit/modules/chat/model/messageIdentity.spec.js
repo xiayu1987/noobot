@@ -51,6 +51,11 @@ describe("messageIdentity", () => {
     ).toBe("user");
   });
 
+  it("ignores removed authorRole/senderRole aliases", () => {
+    expect(getMessageRole({ authorRole: "user" })).toBe("");
+    expect(getMessageRole({ senderRole: "assistant" })).toBe("");
+  });
+
   it("normalizes workflow-node turn scope keys for persisted/runtime matching", () => {
     expect(normalizeTurnScopeIdKey("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1")).toBe(
       "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
