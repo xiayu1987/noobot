@@ -7,10 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildAcceptanceReport } from "../../src/capabilities/handlers/acceptance/report-builder.js";
-import {
-  buildPlanChecklistSystemContent,
-  resolveCompletePlanChecklistText,
-} from "../../src/capabilities/handlers/shared/plan/checklist-context.js";
+import { buildPlanChecklistSystemContent } from "../../src/capabilities/handlers/shared/plan/checklist-context.js";
 import {
   applyPhaseAcceptanceReportToPlanStatus,
   resolvePlanAcceptanceForChecklistItem,
@@ -65,23 +62,6 @@ test("plan checklist context includes planning-model current task goal from buck
   assert.match(String(content), /^1\.1 梳理约束/m);
 });
 
-test("complete plan resolver prefers bucket.planDocument over planText", () => {
-  const text = resolveCompletePlanChecklistText({
-    planText: "1. 旧主计划\n1.1 旧子计划",
-    bucket: {
-      planDocument: {
-        mainPlans: [{ id: 1, content: "新主计划" }],
-        subPlansByMainId: {
-          1: [{ id: "1.1", mainId: 1, subIndex: 1, content: "新子计划" }],
-        },
-      },
-    },
-  });
-  assert.match(String(text), /^1\. 新主计划/m);
-  assert.match(String(text), /^1\.1 新子计划/m);
-  assert.doesNotMatch(String(text), /旧主计划/);
-});
-
 test("phase acceptance status is written back to complete plan checklist context", () => {
   const bucket = {
     planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二"].join("\n"),
@@ -96,7 +76,11 @@ test("phase acceptance status is written back to complete plan checklist context
   const applied = applyPhaseAcceptanceReportToPlanStatus(bucket, reportEntry);
   assert.equal(applied.applied, true);
 
-  const content = buildPlanChecklistSystemContent({ locale: "zh-CN", bucket });
+  const content = buildPlanChecklistSystemContent({
+    locale: "zh-CN",
+    planText: bucket.planText,
+    bucket,
+  });
   assert.match(String(content), /^1\. 主计划一 \[acceptance:completed, source:phase_acceptance\]/m);
 
   const report = buildAcceptanceReport({ bucket, state: { locale: "zh-CN", signals: {} } });

@@ -209,7 +209,7 @@ This order is the same in both `separate_model` and `inject` modes.
 - **Main plan**: authoritative checklist for top-level steps.
 - **Refinement plan**: step-level refinements tied to specific main steps.
 
-Revision writes main plan; refinement does **not** overwrite main plan.
+Revision writes main plan; refinement does **not** overwrite main plan. Each stage executes only its own `ADD`/`UPDATE`/`DELETE` commands: revision rejects sub-plan commands, refinement ignores main-plan commands, and text outside the patch protocol is rejected instead of being appended to `planText`.
 
 ### Refinement targeting and convergence
 

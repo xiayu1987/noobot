@@ -20,8 +20,6 @@ const PLAN_MUTATION_REASON_LABELS = Object.freeze({
     synthetic_main_placeholder_collapse:
       "\u8ba1\u5212\u6536\u655b\u5230\u5360\u4f4d\u4e3b\u8ba1\u5212\uff0c\u88ab\u7b56\u7565\u62e6\u622a",
     revision_not_applied: "\u672a\u5e94\u7528\u5230\u4efb\u4f55\u8ba1\u5212\u4fee\u8ba2",
-    revision_contains_sub_plan_patch:
-      "\u4fee\u8ba2\u9636\u6bb5\u5305\u542b\u5b50\u8ba1\u5212 patch\uff0c\u5df2\u81ea\u52a8\u77eb\u6b63\u4e3a\u7ec6\u5316\u6d41\u7a0b",
   }),
   [LOCALE.EN_US]: Object.freeze({
     empty_mutation_text: "Mutation text is empty",
@@ -32,8 +30,6 @@ const PLAN_MUTATION_REASON_LABELS = Object.freeze({
     synthetic_main_placeholder_collapse:
       "Mutation collapsed plan to a synthetic placeholder and was blocked by policy",
     revision_not_applied: "No revision mutation was applied",
-    revision_contains_sub_plan_patch:
-      "Revision payload includes sub-plan patch and is auto-coerced to refinement flow",
   }),
 });
 
@@ -78,14 +74,13 @@ export function emitPlanMutationApplied({
   stage = "",
   source = "",
   mutationResult = {},
-  mode = "",
 } = {}) {
   appendCapabilityLog?.(ctx, {
     domain,
     event: PLAN_MUTATION_EVENTS.planMutationApplied,
     detail: {
       ...buildBaseDetail({ stage, source, mutationResult }),
-      mode: text(mode || mutationResult?.mode),
+      mode: text(mutationResult?.mode),
     },
   });
 }
@@ -109,27 +104,6 @@ export function emitPlanMutationRejected({
       ...buildBaseDetail({ stage, source, mutationResult }),
       rejectedReason: reason,
       rejectedReasonLabel: resolveReasonLabel(reason, locale),
-    },
-  });
-}
-
-export function emitPlanMutationStageMismatchAutocoerced({
-  appendCapabilityLog,
-  ctx = {},
-  domain,
-  stage = "",
-  source = "",
-  reason = "revision_contains_sub_plan_patch",
-} = {}) {
-  const locale = resolveMutationLocale(ctx);
-  appendCapabilityLog?.(ctx, {
-    domain,
-    event: PLAN_MUTATION_EVENTS.planMutationStageMismatchAutocoerced,
-    detail: {
-      stage: text(stage),
-      source: text(source),
-      reason: text(reason),
-      reasonLabel: resolveReasonLabel(reason, locale),
     },
   });
 }

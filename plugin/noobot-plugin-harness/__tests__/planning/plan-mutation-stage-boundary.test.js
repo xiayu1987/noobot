@@ -1,0 +1,91 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { createPlanRevisionHelpers } from "../../src/capabilities/handlers/shared/plan/revision-helpers.js";
+import { buildPlanChecklistSystemContent } from "../../src/capabilities/handlers/shared/plan/checklist-context.js";
+
+const ORIGINAL_PLAN_TEXT = ["1. 主计划一", "1.1 子计划一", "2. 主计划二", "2.1 子计划二"].join(
+  "\n",
+);
+
+function createFixture() {
+  const logs = [];
+  const ctx = {
+    bucket: {
+      planText: ORIGINAL_PLAN_TEXT,
+      globalRevisionCount: 0,
+      lastRevisionChangedMainStepIndexes: [],
+      planRevisions: [],
+    },
+    state: { flags: {} },
+  };
+  const helpers = createPlanRevisionHelpers({
+    CAPABILITY_DOMAIN: { PLANNING: "planning" },
+    LOCALE: { ZH_CN: "zh-CN" },
+    appendCapabilityLog: (_ctx, payload) => logs.push(payload),
+    ensureHarnessBucket: (inputCtx = {}) => ({
+      bucket: inputCtx.bucket,
+      state: inputCtx.state,
+    }),
+  });
+  return { ctx, helpers, logs };
+}
+
+test("revision rejects free text outside the patch protocol instead of appending it", () => {
+  const { ctx, helpers } = createFixture();
+  const applied = helpers.applyRevisedPlanFromText(ctx, "计划需要调整，但没有给出命令", {
+    source: "planning_revision",
+    stage: "revision",
+  });
+  assert.equal(applied, false);
+  assert.equal(ctx.bucket.planText, ORIGINAL_PLAN_TEXT);
+  assert.equal(ctx.bucket.globalRevisionCount, 0);
+});
+
+test("revision rejects sub-plan commands because revision only operates on main plan ids", () => {
+  const { ctx, helpers } = createFixture();
+  const applied = helpers.applyRevisedPlanFromText(ctx, "UPDATE [2.8] 标记完成", {
+    source: "planning_revision",
+    stage: "revision",
+  });
+  assert.equal(applied, false);
+  assert.equal(ctx.bucket.planText, ORIGINAL_PLAN_TEXT);
+});
+
+test("refinement applies only sub-plan commands and leaves main plans untouched", () => {
+  const { ctx, helpers } = createFixture();
+  const applied = helpers.applyRevisedPlanFromText(
+    ctx,
+    ["UPDATE [2] 主计划二（越界修改）", "UPDATE [2.2] 子计划二-新增细化"].join("\n"),
+    { source: "planning_refinement", stage: "refinement", targetMainStepIndexes: [2] },
+  );
+  assert.equal(applied, true);
+  assert.match(ctx.bucket.planText, /^2\. 主计划二$/m);
+  assert.doesNotMatch(ctx.bucket.planText, /越界修改/);
+  assert.match(ctx.bucket.planText, /^2\.2 子计划二-新增细化$/m);
+});
+
+test("plan mutations keep planText as the only persisted plan fact", () => {
+  const { ctx, helpers } = createFixture();
+  const applied = helpers.applyRevisedPlanFromText(ctx, "UPDATE [1] 主计划一（已修正）", {
+    source: "planning_revision",
+    stage: "revision",
+  });
+  assert.equal(applied, true);
+  assert.equal("planDocument" in ctx.bucket, false);
+});
+
+test("plan checklist context renders explicit planText and ignores a stale planDocument", () => {
+  const content = buildPlanChecklistSystemContent({
+    locale: "zh-CN",
+    planText: "1. 当前主计划",
+    bucket: { planDocument: { mainPlans: [{ id: 1, content: "过期主计划" }] } },
+  });
+  assert.match(String(content), /^1\. 当前主计划$/m);
+  assert.doesNotMatch(String(content), /过期主计划/);
+});

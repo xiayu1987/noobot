@@ -6,7 +6,7 @@
 
 import { text } from "@noobot/shared/value";
 
-function normalizeStage(stage = "") {
+export function normalizePlanMutationStage(stage = "") {
   const value = text(stage).toLowerCase();
   if (value === "planning_capture" || value === "capture" || value === "planning") {
     return "planning_capture";
@@ -19,18 +19,4 @@ export function isSyntheticMainPlanPlaceholder(content = "") {
   const normalizedText = text(content);
   if (!normalizedText) return false;
   return /^(\u4e3b\u8ba1\u5212|main plan)\s+\d+$/i.test(normalizedText);
-}
-
-export function resolvePlanMutationPolicy(stage = "", overrides = {}) {
-  const normalizedStage = normalizeStage(stage);
-  const base = {
-    stage: normalizedStage,
-    allowRevisionSubPatchCompatibility: true,
-    allowRawAppendFallback: normalizedStage !== "planning_capture",
-    rejectSyntheticMainPlaceholderCollapse: true,
-  };
-  return {
-    ...base,
-    ...(overrides && typeof overrides === "object" ? overrides : {}),
-  };
 }

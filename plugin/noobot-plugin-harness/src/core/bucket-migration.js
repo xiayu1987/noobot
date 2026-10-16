@@ -129,11 +129,16 @@ function removeChecklistItemDeadFields(bucket = {}) {
   }
 }
 
+function removePlanDocumentCache(bucket = {}) {
+  delete bucket.planDocument;
+}
+
 const MIGRATION_STEPS = Object.freeze([
   { toVersion: 4, migrate: (bucket, state) => migratePlanUpdateState(state) },
   { toVersion: 5, migrate: (bucket) => removeTaskChecklistFields(bucket) },
   { toVersion: 6, migrate: (bucket) => removeAcceptanceReportDuplicateFields(bucket) },
   { toVersion: 7, migrate: (bucket) => removeChecklistItemDeadFields(bucket) },
+  { toVersion: 8, migrate: (bucket) => removePlanDocumentCache(bucket) },
 ]);
 
 export function migrateHarnessBucket(ctx = {}) {

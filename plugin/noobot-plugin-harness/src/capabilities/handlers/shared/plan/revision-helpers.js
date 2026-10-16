@@ -10,7 +10,7 @@ import {
   renderPlanDocument,
 } from "./text-protocol.js";
 import { executePlanMutation } from "./mutation-facade.js";
-import { emitPlanMutationApplied, emitPlanMutationRejected } from "./mutation-observability.js";
+import { normalizePlanMutationStage } from "./mutation-policy.js";
 import {
   buildPlanningRefinementPromptText,
   getPlanningRefinementMarker,
@@ -87,9 +87,6 @@ export function createPlanRevisionHelpers({
     if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
     if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes))
       bucket.lastRevisionChangedMainStepIndexes = [];
-    if (!bucket.planDocument || typeof bucket.planDocument !== "object") {
-      bucket.planDocument = parsePlanDocumentFromText(bucket.planText);
-    }
     return bucket;
   }
 
@@ -125,16 +122,6 @@ export function createPlanRevisionHelpers({
     return [toRefinementTarget(mainPlans[0])];
   }
 
-  function appendRawPatchText(bucket = {}, patchText = "", source = "") {
-    const normalizedText = text(patchText);
-    if (!normalizedText) return false;
-    const header = source ? `# ${source}` : "# plan_patch";
-    const existing = text(bucket.planText);
-    bucket.planText = [existing, header, normalizedText].filter(Boolean).join("\n");
-    bucket.planDocument = parsePlanDocumentFromText(bucket.planText);
-    return true;
-  }
-
   function applyRevisedPlanFromText(
     ctx = {},
     sourceText = "",
@@ -152,13 +139,8 @@ export function createPlanRevisionHelpers({
     const payloadText = text(sourceText);
     if (!payloadText) return false;
 
-    const normalizedStage = String(stage || source || "revision")
-      .toLowerCase()
-      .includes("refinement")
-      ? "refinement"
-      : "revision";
+    const normalizedStage = normalizePlanMutationStage(stage);
     const normalizedTargetMainStepIndexes = normalizeMainStepIndexes(targetMainStepIndexes);
-    let applied = false;
     const previousDocument = parsePlanDocumentFromText(bucket.planText);
 
     const mutationResult = executePlanMutation({
@@ -169,39 +151,9 @@ export function createPlanRevisionHelpers({
       source,
       currentPlanText: bucket.planText,
       mutationText: payloadText,
-      policy: {
-        allowRevisionSubPatchCompatibility: true,
-        allowRawAppendFallback: normalizedStage !== "planning_capture",
-      },
-      emitRejectedWhenNotApplied: false,
     });
-    if (mutationResult.applied) {
-      bucket.planDocument = mutationResult.nextDocument;
-      bucket.planText = mutationResult.nextPlanText;
-      applied = true;
-    } else if (mutationResult.shouldRawAppendFallback) {
-      applied = appendRawPatchText(bucket, payloadText, source);
-      if (applied) {
-        emitPlanMutationApplied({
-          appendCapabilityLog,
-          ctx,
-          domain: CAPABILITY_DOMAIN?.PLANNING,
-          stage: normalizedStage,
-          source,
-          mutationResult,
-          mode: "raw_append_fallback",
-        });
-      }
-    } else {
-      emitPlanMutationRejected({
-        appendCapabilityLog,
-        ctx,
-        domain: CAPABILITY_DOMAIN?.PLANNING,
-        stage: normalizedStage,
-        source,
-        mutationResult,
-      });
-    }
+    const applied = mutationResult.applied === true;
+    if (applied) bucket.planText = mutationResult.nextPlanText;
 
     if (normalizedStage === "revision") {
       if (applied) bucket.globalRevisionCount = Number(bucket.globalRevisionCount || 0) + 1;
@@ -323,8 +275,7 @@ export function createPlanRevisionHelpers({
   }
 
   function buildNextPhaseRelayContent(bucket = {}, locale = LOCALE?.ZH_CN, stage = "revision") {
-    const normalizedStage =
-      (text(stage) || "revision").toLowerCase() === "refinement" ? "refinement" : "revision";
+    const normalizedStage = normalizePlanMutationStage(stage);
     const title =
       normalizedStage === "refinement"
         ? locale === LOCALE?.EN_US

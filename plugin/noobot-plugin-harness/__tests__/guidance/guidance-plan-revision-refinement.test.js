@@ -119,20 +119,7 @@ test("planning revision followup uses dynamic programming scenario over initial 
     agentContext,
     messages: [{ role: "user", content: "继续修代码" }],
   });
-  const revisedPlan = JSON.stringify({
-    totalGoal: "修复代码",
-    taskOwner: "primary_task_owner",
-    taskChecklist: [
-      {
-        index: 1,
-        task: "修改代码并验证",
-        owner: "primary_task_owner",
-        input: "当前仓库",
-        output: "通过测试的代码修改",
-        files: { create: [], modify: ["plugin/noobot-plugin-harness/src/index.js"], delete: [] },
-      },
-    ],
-  });
+  const revisedPlan = "UPDATE [1] 修改代码并验证";
   const meta = {
     harness: {
       resolveModelMessages,

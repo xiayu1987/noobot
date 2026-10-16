@@ -227,9 +227,8 @@ export function buildPlanningMessagePlan(
       : {};
   const planChecklistContent = buildPlanChecklistSystemContent({
     locale,
-    planText: bucket?.planText || "",
+    planText: bucket?.planText,
     bucket,
-    ctx,
   });
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
     ctx,

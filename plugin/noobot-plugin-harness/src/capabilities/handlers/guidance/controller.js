@@ -184,8 +184,7 @@ function isPlanningCapabilityEnabled(meta = {}) {
 function isMainPlanReadyForGuidanceAnalysis(bucket = {}, state = {}, meta = {}) {
   if (!isPlanningCapabilityEnabled(meta)) return true;
   if (state?.flags?.planningCaptured !== true) return false;
-  if (text(bucket?.planText)) return true;
-  return Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0;
+  return Boolean(text(bucket?.planText));
 }
 
 function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {

@@ -120,9 +120,8 @@ export async function runPlanningRefinementBySeparateModel(
       });
   const refinementContextMessages = buildPlanChecklistContextMessages({
     locale,
-    planText: bucket?.planText || "",
+    planText: bucket?.planText,
     bucket,
-    ctx,
   })
     .map((item = {}) => text(item?.content))
     .filter(Boolean);

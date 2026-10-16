@@ -66,9 +66,8 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
     captureGuidanceSummaryCheckpoint(ctx, state);
     const checklistContent = buildPlanChecklistSystemContent({
       locale,
-      planText: bucket?.planText || "",
+      planText: bucket?.planText,
       bucket,
-      ctx,
     });
     if (checklistContent) {
       injectMessageWithPolicy(ctx, {

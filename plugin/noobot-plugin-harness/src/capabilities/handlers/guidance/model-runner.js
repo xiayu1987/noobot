@@ -119,9 +119,8 @@ function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, state, mode
   );
   const revisionContextMessages = buildPlanChecklistContextMessages({
     locale,
-    planText: bucket?.planText || "",
+    planText: bucket?.planText,
     bucket,
-    ctx,
   })
     .map((item = {}) => text(item?.content))
     .filter(Boolean);
@@ -353,9 +352,8 @@ function selectGuidanceRequest({ ctx, state, action, policy }) {
 function buildGuidanceWorkflowContextContents({ ctx, bucket, locale, purpose }) {
   const planChecklistContextMessages = buildPlanChecklistContextMessages({
     locale,
-    planText: bucket?.planText || "",
+    planText: bucket?.planText,
     bucket,
-    ctx,
   });
   const workflowContextMessages =
     purpose === "summary"

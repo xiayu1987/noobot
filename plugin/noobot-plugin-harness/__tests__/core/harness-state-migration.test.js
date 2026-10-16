@@ -206,6 +206,35 @@ test("v6 to v7 migration removes dead checklist item fields and keeps index unto
   }
 });
 
+test("v7 to v8 migration removes the derived planDocument cache and keeps planText", () => {
+  const planText = "1. 主计划一\n1.1 子计划一";
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          __harnessBucketVersion: 7,
+          state: { flags: {}, counters: {}, signals: {}, pending: {} },
+          planText,
+          planDocument: { mainPlans: [{ id: 1, content: "过期主计划" }], subPlansByMainId: {} },
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  ensureTestAgentExecutionScope(ctx);
+
+  assert.throws(() => ensureHarnessBucket(ctx), /harness_bucket_migration_required:7/);
+  assert.deepEqual(migrateHarnessBucket(ctx), {
+    migrated: true,
+    fromVersion: 7,
+    toVersion: HARNESS_BUCKET_VERSION,
+  });
+  const bucket = ctx.agentContext.payload.harness;
+  assert.equal("planDocument" in bucket, false);
+  assert.equal(bucket.planText, planText);
+});
+
 test("ensureHarnessBucket keeps state version as alias of bucket version", () => {
   const ctx = {
     agentContext: {

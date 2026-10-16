@@ -8,9 +8,7 @@ import {
   emitPlanMutationApplied,
   emitPlanMutationParsed,
   emitPlanMutationRejected,
-  emitPlanMutationStageMismatchAutocoerced,
 } from "./mutation-observability.js";
-import { text } from "@noobot/shared/value";
 
 export function executePlanMutation({
   appendCapabilityLog,
@@ -20,56 +18,15 @@ export function executePlanMutation({
   source = "",
   currentPlanText = "",
   mutationText = "",
-  policy = {},
-  emitRejectedWhenNotApplied = true,
 } = {}) {
   const mutationResult = runPlanMutationEngine({
     stage,
     currentPlanText,
     mutationText,
-    policy,
   });
-
-  emitPlanMutationParsed({
-    appendCapabilityLog,
-    ctx,
-    domain,
-    stage,
-    source,
-    mutationResult,
-  });
-
-  if (mutationResult.applied) {
-    emitPlanMutationApplied({
-      appendCapabilityLog,
-      ctx,
-      domain,
-      stage,
-      source,
-      mutationResult,
-    });
-    if (
-      text(stage).toLowerCase() === "revision" &&
-      mutationResult?.refinementPatchApplied?.changed === true
-    ) {
-      emitPlanMutationStageMismatchAutocoerced({
-        appendCapabilityLog,
-        ctx,
-        domain,
-        stage,
-        source,
-      });
-    }
-  } else if (emitRejectedWhenNotApplied) {
-    emitPlanMutationRejected({
-      appendCapabilityLog,
-      ctx,
-      domain,
-      stage,
-      source,
-      mutationResult,
-    });
-  }
-
+  const logInput = { appendCapabilityLog, ctx, domain, stage, source, mutationResult };
+  emitPlanMutationParsed(logInput);
+  if (mutationResult.applied) emitPlanMutationApplied(logInput);
+  else emitPlanMutationRejected(logInput);
   return mutationResult;
 }

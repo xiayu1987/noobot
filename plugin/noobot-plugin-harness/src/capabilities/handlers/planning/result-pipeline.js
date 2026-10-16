@@ -141,12 +141,10 @@ function applyPlanText(
     source,
     currentPlanText: bucket.planText,
     mutationText: normalized,
-    policy: { allowRawAppendFallback: false },
   });
   if (!appliedMutation.applied) {
     return false;
   }
-  bucket.planDocument = appliedMutation.nextDocument;
   bucket.planText = appliedMutation.nextPlanText;
   if (parsedProtocol.currentTaskGoal) {
     bucket.currentTaskGoal = parsedProtocol.currentTaskGoal;
@@ -164,7 +162,7 @@ function applyPlanText(
   bucket.operationDirectory = resolveOperationDirectoryContext(ctx);
   bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(
     previousDocument,
-    bucket.planDocument,
+    appliedMutation.nextDocument,
   );
   bucket.taskOwner = bucket.taskOwner || getDefaultTaskOwner(state?.locale || LOCALE.ZH_CN);
   bucket.globalRevisionCount = Number.isFinite(Number(bucket.globalRevisionCount))

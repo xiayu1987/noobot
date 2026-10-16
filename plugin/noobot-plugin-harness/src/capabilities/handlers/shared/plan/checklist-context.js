@@ -32,12 +32,6 @@ function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
     .trim();
 }
 
-function hasRenderablePlanDocument(planDocument = null) {
-  const doc = planDocument && typeof planDocument === "object" ? planDocument : null;
-  if (!doc) return false;
-  return Array.isArray(doc?.mainPlans) && doc.mainPlans.length > 0;
-}
-
 export function resolveCurrentTaskGoalText({ bucket = {}, currentTaskGoal = "" } = {}) {
   const explicit = text(currentTaskGoal);
   if (explicit) return explicit;
@@ -66,12 +60,6 @@ function prependCurrentTaskGoalToPlanText({
     .trim();
 }
 
-function renderBucketPlanDocument(bucket = {}) {
-  return hasRenderablePlanDocument(bucket?.planDocument)
-    ? text(renderPlanDocument(bucket.planDocument))
-    : "";
-}
-
 function renderNumberedPlanText(normalizedPlanText = "") {
   const parsed = parsePlanDocumentFromText(normalizedPlanText);
   const hasNumberedPlans = Array.isArray(parsed?.mainPlans) && parsed.mainPlans.length > 0;
@@ -79,10 +67,8 @@ function renderNumberedPlanText(normalizedPlanText = "") {
   return rendered || normalizedPlanText;
 }
 
-function resolveChecklistPlanText(planText = "", bucket = {}) {
-  const renderedDocument = renderBucketPlanDocument(bucket);
-  if (renderedDocument) return renderedDocument;
-  const normalizedPlanText = text(planText || bucket?.planText);
+function resolveChecklistPlanText(planText = "") {
+  const normalizedPlanText = text(planText);
   return normalizedPlanText ? renderNumberedPlanText(normalizedPlanText) : "";
 }
 
@@ -95,7 +81,7 @@ export function resolveCompletePlanChecklistText({
   const taskGoal = resolveCurrentTaskGoalText({ bucket, currentTaskGoal });
   return prependCurrentTaskGoalToPlanText({
     locale,
-    planText: resolveChecklistPlanText(planText, bucket),
+    planText: resolveChecklistPlanText(planText),
     currentTaskGoal: taskGoal,
   });
 }

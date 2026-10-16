@@ -115,7 +115,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
         planMutationApplied: "planning_plan_mutation_applied",
         planMutationRejected: "planning_plan_mutation_rejected",
         planMutationInvariantBlocked: "planning_plan_mutation_invariant_blocked",
-        planMutationStageMismatchAutocoerced: "planning_plan_mutation_stage_mismatch_autocoerced",
       },
       guidance: {
         summaryPromptInjected: "summary_prompt_injected",
