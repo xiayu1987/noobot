@@ -21,6 +21,7 @@ import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import {
   canAttemptPlanUpdate,
   clearPlanUpdateCaptureContext,
+  normalizePlanUpdateStage,
   readPlanUpdateCaptureContext,
   setPendingPlanUpdate,
   writePlanUpdateCaptureContext,
@@ -55,8 +56,7 @@ export function schedulePlanUpdateByInject(
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const normalizedStage =
-    (text(stage) || "revision").toLowerCase() === "revision" ? "revision" : "refinement";
+  const normalizedStage = normalizePlanUpdateStage(stage);
   const normalizedPreferredTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes
         .map((item) => Number(item))
@@ -119,6 +119,19 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
+  const isRevision = pendingData.stage === "revision";
+  const targetMainStepIndexes = isRevision
+    ? []
+    : resolveRefinementTargetMainSteps(bucket, state).map((item = {}) => Number(item?.index));
+  if (!isRevision && !targetMainStepIndexes.length) {
+    setPendingStateWithMeta(state, "planRefinement", false);
+    setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: GUIDANCE_EVENTS.refinementConvergedNoTargetMainStep,
+    });
+    return false;
+  }
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
     ctx,
     meta,
@@ -138,10 +151,9 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
       avoidBreakToolCallContinuity: true,
     });
   }
-  const promptContent =
-    pendingData.stage === "revision"
-      ? buildPlanningRevisionPrompt(locale, bucket, state)
-      : buildPlanningRefinementPrompt(locale, bucket, state, "");
+  const promptContent = isRevision
+    ? buildPlanningRevisionPrompt(locale, bucket, state)
+    : buildPlanningRefinementPrompt(locale, bucket, state, { targetMainStepIndexes });
   const userInjection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: text(promptContent),
@@ -154,11 +166,12 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   if (!userInjection.injected) return false;
   injectMessageWithPolicy(ctx, {
     role: "user",
-    content: buildWorkflowResponsibilityConstraintUserPrompt(
-      locale,
-      pendingData.stage === "revision" ? "revision" : "refinement",
-      { programmingMode, textMode, dynamicPolicyPrompt, includeWorkflowPolicy: false },
-    ),
+    content: buildWorkflowResponsibilityConstraintUserPrompt(locale, pendingData.stage, {
+      programmingMode,
+      textMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
+    }),
     injectedMessageType:
       pendingData.stage === "revision"
         ? "planning_revision_responsibility_constraint"
@@ -174,7 +187,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   );
   setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
   setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", true);
-  writePlanUpdateCaptureContext(state, pendingData);
+  writePlanUpdateCaptureContext(state, { stage: pendingData.stage, targetMainStepIndexes });
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: GUIDANCE_EVENTS.planUpdatePromptInjected,
@@ -195,7 +208,7 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
       return { stage, targetMainStepIndexes };
     },
     applyCaptureResult: ({ responseText, ctx: currentCtx, state, bucket, captureMeta }) => {
-      const stage = captureMeta?.stage === "revision" ? "revision" : "refinement";
+      const { stage } = captureMeta;
       if (!canAttemptPlanUpdate(currentCtx, state, { increment: true, stage })) {
         return { applied: false, detail: { stage, reason: "max_revision_attempts" } };
       }

@@ -109,7 +109,7 @@ test("separate_model simultaneous plan update follows up with summary before ana
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
         if (payload.purpose === "planning_revision") {
-          return createTestModelResponse("1. 主任务\n2. 补充执行");
+          return createTestModelResponse("ADD [2] 补充执行");
         }
         if (payload.pluginFlow === "analysis") {
           return createTestModelResponse("疑点：计划更新后还有待确认项。");

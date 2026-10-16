@@ -18,11 +18,13 @@ export function executePlanMutation({
   source = "",
   currentPlanText = "",
   mutationText = "",
+  targetMainStepIndexes = [],
 } = {}) {
   const mutationResult = runPlanMutationEngine({
     stage,
     currentPlanText,
     mutationText,
+    targetMainStepIndexes,
   });
   const logInput = { appendCapabilityLog, ctx, domain, stage, source, mutationResult };
   emitPlanMutationParsed(logInput);

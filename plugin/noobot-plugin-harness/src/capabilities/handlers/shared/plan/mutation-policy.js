@@ -14,9 +14,3 @@ export function normalizePlanMutationStage(stage = "") {
   if (value === "refinement") return "refinement";
   return "revision";
 }
-
-export function isSyntheticMainPlanPlaceholder(content = "") {
-  const normalizedText = text(content);
-  if (!normalizedText) return false;
-  return /^(\u4e3b\u8ba1\u5212|main plan)\s+\d+$/i.test(normalizedText);
-}

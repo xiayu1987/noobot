@@ -118,8 +118,7 @@ export function createPlanRevisionHelpers({
         return !Array.isArray(subPlans) || subPlans.length === 0;
       })
       .map(toRefinementTarget);
-    if (targetsWithoutSubPlans.length) return targetsWithoutSubPlans;
-    return [toRefinementTarget(mainPlans[0])];
+    return targetsWithoutSubPlans;
   }
 
   function applyRevisedPlanFromText(
@@ -151,6 +150,7 @@ export function createPlanRevisionHelpers({
       source,
       currentPlanText: bucket.planText,
       mutationText: payloadText,
+      targetMainStepIndexes: normalizedTargetMainStepIndexes,
     });
     const applied = mutationResult.applied === true;
     if (applied) bucket.planText = mutationResult.nextPlanText;

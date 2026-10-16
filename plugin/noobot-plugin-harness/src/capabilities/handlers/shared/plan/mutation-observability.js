@@ -16,9 +16,6 @@ const PLAN_MUTATION_REASON_LABELS = Object.freeze({
     invalid_mutation_type: "\u53d8\u66f4\u7c7b\u578b\u65e0\u6548",
     empty_rendered_plan: "\u6e32\u67d3\u540e\u7684\u8ba1\u5212\u4e3a\u7a7a",
     refinement_patch_not_applied: "\u672a\u5e94\u7528\u5230\u4efb\u4f55\u7ec6\u5316\u8865\u4e01",
-    invariant_blocked: "\u8ba1\u5212\u4e0d\u53d8\u91cf\u6821\u9a8c\u672a\u901a\u8fc7",
-    synthetic_main_placeholder_collapse:
-      "\u8ba1\u5212\u6536\u655b\u5230\u5360\u4f4d\u4e3b\u8ba1\u5212\uff0c\u88ab\u7b56\u7565\u62e6\u622a",
     revision_not_applied: "\u672a\u5e94\u7528\u5230\u4efb\u4f55\u8ba1\u5212\u4fee\u8ba2",
   }),
   [LOCALE.EN_US]: Object.freeze({
@@ -26,9 +23,6 @@ const PLAN_MUTATION_REASON_LABELS = Object.freeze({
     invalid_mutation_type: "Invalid mutation type",
     empty_rendered_plan: "Rendered plan text is empty",
     refinement_patch_not_applied: "No refinement patch was applied",
-    invariant_blocked: "Plan invariant validation blocked this mutation",
-    synthetic_main_placeholder_collapse:
-      "Mutation collapsed plan to a synthetic placeholder and was blocked by policy",
     revision_not_applied: "No revision mutation was applied",
   }),
 });
@@ -97,9 +91,7 @@ export function emitPlanMutationRejected({
   const reason = text(mutationResult?.rejectedReason);
   appendCapabilityLog?.(ctx, {
     domain,
-    event: reason.includes("invariant")
-      ? PLAN_MUTATION_EVENTS.planMutationInvariantBlocked
-      : PLAN_MUTATION_EVENTS.planMutationRejected,
+    event: PLAN_MUTATION_EVENTS.planMutationRejected,
     detail: {
       ...buildBaseDetail({ stage, source, mutationResult }),
       rejectedReason: reason,

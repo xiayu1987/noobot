@@ -120,19 +120,7 @@ function deleteMainPlan(doc = {}, mainId = 0) {
   return current.mainPlans.length !== beforeLength;
 }
 
-function ensureMainPlanPlaceholder(doc = {}, mainId = 0) {
-  if (!Number.isFinite(mainId) || mainId <= 0) return false;
-  if (doc.mainPlans.some((item = {}) => Number(item.id) === Number(mainId))) return true;
-  return upsertMainPlan(doc, mainId, `main plan ${mainId}`);
-}
-
-function upsertSubPlan(
-  doc = {},
-  mainId = 0,
-  subIndex = 0,
-  content = "",
-  { ensureMainPlaceholder = true } = {},
-) {
+function upsertSubPlan(doc = {}, mainId = 0, subIndex = 0, content = "") {
   const normalizedContent = text(content);
   if (
     !Number.isFinite(mainId) ||
@@ -144,9 +132,6 @@ function upsertSubPlan(
     return false;
   }
   const current = ensurePlanDocumentShape(doc);
-  if (ensureMainPlaceholder) {
-    ensureMainPlanPlaceholder(current, mainId);
-  }
   const key = String(mainId);
   const currentList = Array.isArray(current.subPlansByMainId[key])
     ? current.subPlansByMainId[key]
@@ -177,34 +162,6 @@ function deleteSubPlan(doc = {}, mainId = 0, subIndex = 0) {
   return next.length !== currentList.length;
 }
 
-function hasSubPlan(doc = {}, mainId = 0, subIndex = 0) {
-  if (!Number.isFinite(mainId) || !Number.isFinite(subIndex) || mainId <= 0 || subIndex <= 0)
-    return false;
-  const current = ensurePlanDocumentShape(doc);
-  const key = String(mainId);
-  const currentList = Array.isArray(current.subPlansByMainId[key])
-    ? current.subPlansByMainId[key]
-    : [];
-  return currentList.some((item = {}) => Number(item.subIndex) === Number(subIndex));
-}
-
-function allocateNextSubPlanIndex(doc = {}, mainId = 0) {
-  if (!Number.isFinite(mainId) || mainId <= 0) return 1;
-  const current = ensurePlanDocumentShape(doc);
-  const key = String(mainId);
-  const currentList = Array.isArray(current.subPlansByMainId[key])
-    ? current.subPlansByMainId[key]
-    : [];
-  const used = new Set(
-    currentList
-      .map((item = {}) => Number(item.subIndex))
-      .filter((item) => Number.isFinite(item) && item > 0),
-  );
-  let candidate = 1;
-  while (used.has(candidate)) candidate += 1;
-  return candidate;
-}
-
 export function parsePlanDocumentFromText(inputText = "") {
   const doc = ensurePlanDocumentShape({});
   for (const line of splitLines(inputText)) {
@@ -216,9 +173,7 @@ export function parsePlanDocumentFromText(inputText = "") {
       if (!target || !content) continue;
       if (target.isSub) {
         if (action === "ADD" || action === "UPDATE") {
-          upsertSubPlan(doc, Number(target.mainId), Number(target.subIndex), content, {
-            ensureMainPlaceholder: false,
-          });
+          upsertSubPlan(doc, Number(target.mainId), Number(target.subIndex), content);
         }
       } else if (action === "ADD" || action === "UPDATE") {
         upsertMainPlan(doc, Number(target.mainId), content);
@@ -236,9 +191,7 @@ export function parsePlanDocumentFromText(inputText = "") {
     const subMatch = line.match(SUB_PLAN_LINE);
     if (subMatch) {
       const [, mainRaw, subRaw, contentRaw] = subMatch;
-      upsertSubPlan(doc, Number(mainRaw), Number(subRaw), contentRaw, {
-        ensureMainPlaceholder: false,
-      });
+      upsertSubPlan(doc, Number(mainRaw), Number(subRaw), contentRaw);
       continue;
     }
     const mainMatch = line.match(MAIN_PLAN_LINE);
@@ -296,48 +249,41 @@ export function parsePatchCommands(rawText = "") {
   return commands;
 }
 
+function isCommandInStageScope(doc = {}, target = {}, { isRefinement, targetMainIds }) {
+  if (!isRefinement) return target.isSub !== true;
+  return (
+    target.isSub === true &&
+    target.depth === 2 &&
+    targetMainIds.has(target.mainId) &&
+    doc.mainPlans.some((item = {}) => item.id === target.mainId)
+  );
+}
+
 export function applyPatchCommandsToPlanDocument(
   planDocument = null,
   patchText = "",
-  { stage = "revision" } = {},
+  { stage = "revision", targetMainStepIndexes = [] } = {},
 ) {
-  const doc = ensurePlanDocumentShape(
-    planDocument && typeof planDocument === "object" ? planDocument : {},
-  );
+  const doc = ensurePlanDocumentShape(planDocument);
   const commands = parsePatchCommands(patchText);
-  if (!commands.length) return { changed: false, commands: [] };
-
+  const scope = {
+    isRefinement: stage === "refinement",
+    targetMainIds: new Set(targetMainStepIndexes.map(Number)),
+  };
   let changed = false;
-  const isRefinement = text(stage).toLowerCase() === "refinement";
-  for (const command of commands) {
-    const action = text(command.action).toUpperCase();
-    const target = command.target || {};
-    const targetDepth = Number(target.depth || (target.isSub ? 2 : 1));
-    const isDeepSubPlan = target.isSub === true && targetDepth > 2;
-    if (isRefinement && target.isSub !== true) continue;
-    if (!isRefinement && target.isSub === true) continue;
-    if (action === "ADD" || action === "UPDATE") {
-      if (target.isSub) {
-        const isAdd = action === "ADD";
-        const resolvedSubIndex =
-          isRefinement &&
-          ((isAdd && hasSubPlan(doc, target.mainId, target.subIndex)) || isDeepSubPlan)
-            ? allocateNextSubPlanIndex(doc, target.mainId)
-            : target.subIndex;
-        changed = upsertSubPlan(doc, target.mainId, resolvedSubIndex, command.content) || changed;
-      } else {
-        changed = upsertMainPlan(doc, target.mainId, command.content) || changed;
-      }
+  for (const { action, target, content } of commands) {
+    if (!isCommandInStageScope(doc, target, scope)) continue;
+    if (action === "DELETE") {
+      changed =
+        (target.isSub
+          ? deleteSubPlan(doc, target.mainId, target.subIndex)
+          : deleteMainPlan(doc, target.mainId)) || changed;
       continue;
     }
-    if (action === "DELETE") {
-      if (target.isSub) {
-        if (isRefinement && isDeepSubPlan) continue;
-        changed = deleteSubPlan(doc, target.mainId, target.subIndex) || changed;
-      } else {
-        changed = deleteMainPlan(doc, target.mainId) || changed;
-      }
-    }
+    changed =
+      (target.isSub
+        ? upsertSubPlan(doc, target.mainId, target.subIndex, content)
+        : upsertMainPlan(doc, target.mainId, content)) || changed;
   }
   return { changed, commands };
 }

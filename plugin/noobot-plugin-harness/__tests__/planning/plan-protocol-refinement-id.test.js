@@ -31,34 +31,71 @@ test("refinement patch parser accepts canonical bracketed ids from prompt exampl
   assert.equal(String(commands[2]?.target?.raw || ""), "1.3");
 });
 
-test("refinement apply patch flattens deep sub-plan ids into one-level sub-plans", () => {
+test("refinement apply patch rejects deep sub-plan ids instead of renumbering them", () => {
   const doc = {
     mainPlans: [{ id: 1, content: "主步骤一" }],
     subPlansByMainId: {},
   };
   const patchText = ["ADD 1.1.1 非法二级子计划", "ADD 1.1 合法一级子计划"].join("\n");
-  const result = applyPatchCommandsToPlanDocument(doc, patchText, { stage: "refinement" });
+  const result = applyPatchCommandsToPlanDocument(doc, patchText, {
+    stage: "refinement",
+    targetMainStepIndexes: [1],
+  });
   assert.equal(result.changed, true);
-  assert.equal(Array.isArray(doc.subPlansByMainId["1"]), true);
-  assert.equal(doc.subPlansByMainId["1"].length, 2);
-  assert.equal(String(doc.subPlansByMainId["1"][0]?.id || ""), "1.1");
-  assert.equal(String(doc.subPlansByMainId["1"][1]?.id || ""), "1.2");
+  assert.deepEqual(
+    doc.subPlansByMainId["1"].map((item) => [item.id, item.content]),
+    [["1.1", "合法一级子计划"]],
+  );
 });
 
-test("refinement ADD with duplicated sub-plan id auto-allocates next available id", () => {
+test("refinement ADD with an existing sub-plan id upserts in place like main-plan ADD", () => {
   const doc = {
     mainPlans: [{ id: 1, content: "主步骤一" }],
     subPlansByMainId: {
       1: [{ id: "1.1", mainId: 1, subIndex: 1, content: "已存在子计划" }],
     },
   };
-  const patchText = "ADD 1.1 新增子计划（模型误用重复ID）";
-  const result = applyPatchCommandsToPlanDocument(doc, patchText, { stage: "refinement" });
+  const result = applyPatchCommandsToPlanDocument(doc, "ADD 1.1 覆盖后的子计划", {
+    stage: "refinement",
+    targetMainStepIndexes: [1],
+  });
   assert.equal(result.changed, true);
-  assert.equal(Array.isArray(doc.subPlansByMainId["1"]), true);
-  assert.equal(doc.subPlansByMainId["1"].length, 2);
-  assert.equal(String(doc.subPlansByMainId["1"][0]?.id || ""), "1.1");
-  assert.equal(String(doc.subPlansByMainId["1"][1]?.id || ""), "1.2");
+  assert.deepEqual(
+    doc.subPlansByMainId["1"].map((item) => [item.id, item.content]),
+    [["1.1", "覆盖后的子计划"]],
+  );
+});
+
+test("refinement ignores sub-plans whose main plan does not exist instead of inventing a placeholder", () => {
+  const doc = { mainPlans: [{ id: 1, content: "主步骤一" }], subPlansByMainId: {} };
+  const result = applyPatchCommandsToPlanDocument(doc, "ADD 3.1 无主计划的子计划", {
+    stage: "refinement",
+    targetMainStepIndexes: [1, 3],
+  });
+  assert.equal(result.changed, false);
+  assert.deepEqual(doc.mainPlans, [{ id: 1, content: "主步骤一" }]);
+  assert.equal(doc.subPlansByMainId["3"], undefined);
+});
+
+test("refinement only applies sub-plans under the target main plan ids", () => {
+  const doc = {
+    mainPlans: [
+      { id: 1, content: "主步骤一" },
+      { id: 2, content: "主步骤二" },
+    ],
+    subPlansByMainId: {},
+  };
+  const patchText = ["ADD 1.1 越界细化", "ADD 2.1 目标细化"].join("\n");
+  const result = applyPatchCommandsToPlanDocument(doc, patchText, {
+    stage: "refinement",
+    targetMainStepIndexes: [2],
+  });
+  assert.equal(result.changed, true);
+  assert.equal(doc.subPlansByMainId["1"], undefined);
+  assert.deepEqual(
+    doc.subPlansByMainId["2"].map((item) => item.id),
+    ["2.1"],
+  );
 });
 
 test("refinement prompt explicitly forbids two-level sub-plan ids", () => {

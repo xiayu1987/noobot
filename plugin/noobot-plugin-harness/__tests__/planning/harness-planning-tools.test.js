@@ -86,7 +86,11 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "planning_refinement") {
-          return createTestModelResponse("ADD 1.1 细化步骤一");
+          return createTestModelResponse(
+            invocations.filter((item = {}) => item.purpose === "planning_refinement").length === 1
+              ? "ADD 1.1 细化步骤一"
+              : "ADD 2.1 细化步骤二",
+          );
         }
         return createTestModelResponse("1. 解析附件\n2. 执行核心任务");
       },
@@ -281,7 +285,11 @@ test("harness request_plan_refinement falls back to closure meta when configurab
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "planning_refinement") {
-          return createTestModelResponse("ADD 1.1 细化步骤一");
+          return createTestModelResponse(
+            invocations.filter((item = {}) => item.purpose === "planning_refinement").length === 1
+              ? "ADD 1.1 细化步骤一"
+              : "ADD 2.1 细化步骤二",
+          );
         }
         return createTestModelResponse("1. 解析附件\n2. 执行核心任务");
       },

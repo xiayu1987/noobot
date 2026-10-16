@@ -209,23 +209,19 @@ This order is the same in both `separate_model` and `inject` modes.
 - **Main plan**: authoritative checklist for top-level steps.
 - **Refinement plan**: step-level refinements tied to specific main steps.
 
-Revision writes main plan; refinement does **not** overwrite main plan. Each stage executes only its own `ADD`/`UPDATE`/`DELETE` commands: revision rejects sub-plan commands, refinement ignores main-plan commands, and text outside the patch protocol is rejected instead of being appended to `planText`.
+Revision writes main plan; refinement does **not** overwrite main plan. Each stage executes only its own `ADD`/`UPDATE`/`DELETE` commands: revision rejects sub-plan commands and numbered-list replacements, refinement ignores main-plan commands, and text outside the patch protocol is rejected instead of being appended to `planText`.
+
+Refinement only applies first-level sub-plan commands (`N.M`) whose main step exists and belongs to the target main step set passed to the mutation engine. Commands for missing main steps never create placeholder main steps, deeper IDs are rejected, and `ADD` on an existing ID updates it in place instead of being renumbered.
 
 ### Refinement targeting and convergence
 
-- Harness computes `targetMainSteps` from unrefined main steps (prefers `nextPhase.checklistIndexes`).
-- One main step can be refined at most once until a later revision changes/removes/adds that step.
+- Harness resolves `targetMainSteps` from the first non-empty known list in this order: explicit target indexes, `pending.planRefinementContext.targetMainStepIndexes`, `nextPhase.checklistIndexes`, then main steps without sub plans.
+- A main step that already has sub plans is not a default target, so once every main step has sub plans the target set is empty.
 - If no target main step exists, refinement is skipped as converged (`planning_refinement_converged_no_target_main_step`).
 
 ### Hard validation for refinement output
 
-Refinement output is accepted only when items:
-
-- have `mainStepIndex`
-- belong to current `targetMainSteps`
-- are not main steps themselves (`isMainStep !== true`)
-
-Otherwise refinement is rejected (`planning_refinement_rejected_invalid_target_main_step`).
+The mutation engine receives the resolved target main step indexes and applies a refinement command only when it is a first-level sub-plan command (`N.M`), `N` belongs to the target set, and main step `N` exists. If no command applies, the mutation is rejected as `refinement_patch_not_applied`.
 
 ### Retry/limits
 

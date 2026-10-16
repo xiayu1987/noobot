@@ -113,10 +113,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planningRevisionStatusHeader: "【当前状态】",
     planningRevisionCountLine: "已修正次数：{revisionCount}/{maxAttempts}",
     planningRevisionCurrentPlanLabel: "当前主计划：",
-    planningRevisionConstraint: "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
-    planningRevisionExampleHeader: "【输出示例】",
-    planningRevisionExampleUpdate: "UPDATE [主计划ID] [修改后的主计划内容]",
-    planningRevisionExampleAdd: "ADD [主计划ID] [新增主计划内容]",
     planningRefinementPromptGoal:
       "目标：基于修正后的主计划，仅细化指定主计划ID，生成具体可执行的子步骤。",
     planningRefinementTargetsHeader: "【修正后的主计划（目标项）】",
@@ -124,9 +120,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planningRefinementTargetOnlyConstraint:
       "仅允许细化上述目标ID，禁止输出其他主计划ID下的子计划。",
     planningRefinementExistingSubstepsLabel: "已有子步骤：",
-    planningRefinementExampleHeader: "【输出示例】",
-    planningRefinementExampleAdd: "ADD [主序号.子序号] [抽象子步骤内容A]",
-    planningRefinementExampleUpdate: "UPDATE [主序号.子序号] [抽象子步骤内容B]",
     guidanceSummaryPromptGoal: "请先对已完成内容进行小结（注意是小结，不是总结）。",
     guidanceSummaryProtocolHint: "请优先使用纯文本 summary_text_v2 协议：",
     guidanceSummarySampleRiskHigh: "2. [plan=8][status=todo][risk=高][evidence=...] ...",
@@ -344,10 +337,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planningRevisionStatusHeader: "[Current Status]",
     planningRevisionCountLine: "Revision count: {revisionCount}/{maxAttempts}",
     planningRevisionCurrentPlanLabel: "Current main plan:",
-    planningRevisionConstraint: "",
-    planningRevisionExampleHeader: "",
-    planningRevisionExampleUpdate: "",
-    planningRevisionExampleAdd: "",
     planningRefinementPromptGoal:
       "Goal: Decompose and refine specific target main plans into executable sub-steps.",
     planningRefinementTargetsHeader: "[Revised Main Plan Targets]",
@@ -355,9 +344,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planningRefinementTargetOnlyConstraint:
       "Only refine the target IDs listed above. Do not refine any other main-plan ID.",
     planningRefinementExistingSubstepsLabel: "Existing sub-steps:",
-    planningRefinementExampleHeader: "",
-    planningRefinementExampleAdd: "",
-    planningRefinementExampleUpdate: "",
     guidanceSummaryPromptGoal: "Provide a guidance summary of completed items and risks.",
     guidanceSummaryProtocolHint: "Use plain-text summary_text_v2 blocks:",
     guidanceSummarySampleRiskHigh: "2. [plan=8][status=todo][risk=high][evidence=...] ...",

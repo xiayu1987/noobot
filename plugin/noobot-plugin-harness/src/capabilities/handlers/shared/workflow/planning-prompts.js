@@ -116,18 +116,6 @@ export function buildPlanningRevisionPromptText(options = {}) {
     buildPlanningRevisionPatchProtocolCoreText(locale),
     "",
     buildDynamicPolicyPromptProtocolInstruction(locale),
-    "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_CONSTRAINT),
-    "",
-    translateI18nText(
-      locale,
-      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_HEADER,
-    ),
-    translateI18nText(
-      locale,
-      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_UPDATE,
-    ),
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_ADD),
   ]
     .filter(Boolean)
     .join("\n");
@@ -183,16 +171,6 @@ export function buildPlanningRefinementPromptText(options = {}) {
     subPlans,
     "",
     buildPlanningRefinementPatchProtocolCoreText(locale),
-    "",
-    translateI18nText(
-      locale,
-      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_HEADER,
-    ),
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_ADD),
-    translateI18nText(
-      locale,
-      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_UPDATE,
-    ),
   ]
     .filter(Boolean)
     .join("\n");
