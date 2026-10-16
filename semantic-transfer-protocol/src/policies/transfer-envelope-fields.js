@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
+
 export const TRANSFER_ENVELOPE_FIELD = Object.freeze({
   TRANSFER: "transferEnvelopes",
   NODE_RESULT: "nodeResultTransferEnvelopes",
@@ -28,16 +30,12 @@ export function isTransferEnvelopeField(key = "") {
   return TRANSFER_ENVELOPE_FIELDS.includes(String(key));
 }
 
-function isRecord(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
 export function pickTransferEnvelopeList(
   source = null,
   fields = NODE_RESULT_FIRST_FIELDS,
   { skipEmpty = true } = {},
 ) {
-  if (!isRecord(source)) return [];
+  if (!isPlainObject(source)) return [];
   for (const field of Array.isArray(fields) ? fields : [fields]) {
     const value = source[field];
     if (!Array.isArray(value)) continue;
@@ -60,7 +58,7 @@ export function collectTransferEnvelopeLists(
 export function collectAllTransferEnvelopeLists(sources = [], fields = TRANSFER_ENVELOPE_FIELDS) {
   const fieldList = Array.isArray(fields) ? fields : [fields];
   return (Array.isArray(sources) ? sources : [sources]).flatMap((source) => {
-    if (!isRecord(source)) return [];
+    if (!isPlainObject(source)) return [];
     return fieldList.flatMap((field) => (Array.isArray(source[field]) ? source[field] : []));
   });
 }

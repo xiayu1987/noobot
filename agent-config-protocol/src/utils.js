@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
-export function isPlainObject(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
+export { isPlainObject };
 
 export function normalizeStringList(input = [], { dedupe = false } = {}) {
   const values = (Array.isArray(input) ? input : []).map((item) => text(item)).filter(Boolean);

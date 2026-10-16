@@ -412,21 +412,8 @@
     "workspace-protocol/src/session-tree.js": 1
   },
   "typeCheck": {
-    "agent-config-protocol/src/utils.js": 2,
-    "agent/src/runtime/tool-execution/tool-runner.js": 1,
     "attachment-protocol/src/protocol-utils.js": 1,
-    "client/noobot-chat/src/app/storage/uiPreferencesStorage.js": 1,
-    "client/noobot-chat/src/modules/chat/composables/connectivity/useApiConnection.js": 2,
-    "client/noobot-chat/src/modules/chat/stores/workflowNodeStateProjection.js": 1,
-    "client/noobot-chat/tests/e2e/protocol/helpers/harness-assertions.js": 1,
-    "client/noobot-chat/tests/e2e/protocol/helpers/snapshot-assertions.js": 1,
-    "client/shared/electron/runtime/config.js": 2,
-    "event-protocol/src/interaction.js": 1,
-    "event-protocol/src/normalize.js": 2,
-    "plugin/noobot-plugin-character/src/asset-metadata-migration.js": 1,
-    "plugin/noobot-plugin-workflow/frontend/runtime/workflowNodeSessionDetail.js": 2,
-    "semantic-transfer-protocol/src/index.js": 1,
-    "semantic-transfer-protocol/src/policies/transfer-envelope-fields.js": 2
+    "client/noobot-chat/tests/e2e/protocol/helpers/snapshot-assertions.js": 1
   },
   "textShadow": {}
 }

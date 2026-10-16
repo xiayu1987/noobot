@@ -100,9 +100,7 @@ export function validateInteractionRequestPayload(data = {}) {
     typeof data.content === "string" ||
     Array.isArray(data.fields) ||
     Boolean(text(data.interactionType)) ||
-    (data.interactionData &&
-      typeof data.interactionData === "object" &&
-      !Array.isArray(data.interactionData));
+    isPlainObject(data.interactionData);
   if (missing.length) return { valid: false, reason: "missing_identity", missing };
   if (!hasPayload) return { valid: false, reason: "missing_payload", missing: [] };
   if (data.timeoutMs !== undefined && (!Number.isInteger(data.timeoutMs) || data.timeoutMs <= 0)) {

@@ -8,7 +8,7 @@ import {
   isWorkflowNodeTerminalStatus,
   WORKFLOW_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const field = (source, key) => text(source?.[key]);
 const textOr = (value, fallback) => text(value) || fallback;
@@ -133,6 +133,5 @@ export function buildPlannedNodeStateEvent({
 
 export function resolvePlanningPayload(eventData = {}) {
   const candidate = eventData?.workflowPayload;
-  const valid = candidate && typeof candidate === "object" && !Array.isArray(candidate);
-  return valid ? candidate : null;
+  return isPlainObject(candidate) ? candidate : null;
 }

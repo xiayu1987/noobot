@@ -323,12 +323,7 @@ async function completeMissingTool(state) {
 }
 
 function hasDeclaredToolInputOverflow(meta = {}) {
-  return (
-    meta.exceeded === true &&
-    meta.toolInputOverflow &&
-    typeof meta.toolInputOverflow === "object" &&
-    !Array.isArray(meta.toolInputOverflow)
-  );
+  return meta.exceeded === true && isPlainObject(meta.toolInputOverflow);
 }
 
 async function completeToolInputOverflow(state, meta) {

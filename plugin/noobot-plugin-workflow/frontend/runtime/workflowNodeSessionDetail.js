@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function requireSessionMethod(props, method) {
   const service = props?.workflowSessionService;
@@ -18,10 +18,6 @@ function sessionSummaryWithoutMutableRuntime(summary = {}) {
   const { turnRuntime: _turnRuntime, ...content } =
     summary && typeof summary === "object" ? summary : {};
   return content;
-}
-
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function createExecutionDetailContext({
@@ -101,11 +97,11 @@ async function requireAcceptedExecutionResponse(context, response) {
 }
 
 function executionDetailPayloadDiagnostics(payload = {}) {
-  const workflowSession = isRecord(payload.workflowSession) ? payload.workflowSession : {};
-  const sessionSummary = isRecord(workflowSession.sessionSummary)
+  const workflowSession = isPlainObject(payload.workflowSession) ? payload.workflowSession : {};
+  const sessionSummary = isPlainObject(workflowSession.sessionSummary)
     ? workflowSession.sessionSummary
     : {};
-  const session = isRecord(workflowSession.session) ? workflowSession.session : {};
+  const session = isPlainObject(workflowSession.session) ? workflowSession.session : {};
   return {
     payloadOk: payload.ok === true,
     responseSessionId: String(sessionSummary.sessionId || session.sessionId || ""),
@@ -126,7 +122,7 @@ async function parseExecutionDetailPayload(context, response) {
 
 function requireWorkflowSession(payload) {
   const workflowSession = payload?.workflowSession;
-  if (!isRecord(workflowSession)) {
+  if (!isPlainObject(workflowSession)) {
     throw new TypeError("workflowSession must be an object");
   }
   const aggregateVersion = Number(workflowSession.aggregateVersion || 0);
@@ -136,11 +132,13 @@ function requireWorkflowSession(payload) {
   return {
     workflowSession,
     aggregateVersion,
-    snapshotEnvelope: isRecord(workflowSession.snapshotEnvelope)
+    snapshotEnvelope: isPlainObject(workflowSession.snapshotEnvelope)
       ? workflowSession.snapshotEnvelope
       : null,
-    session: isRecord(workflowSession.session) ? workflowSession.session : {},
-    sessionSummary: isRecord(workflowSession.sessionSummary) ? workflowSession.sessionSummary : {},
+    session: isPlainObject(workflowSession.session) ? workflowSession.session : {},
+    sessionSummary: isPlainObject(workflowSession.sessionSummary)
+      ? workflowSession.sessionSummary
+      : {},
   };
 }
 

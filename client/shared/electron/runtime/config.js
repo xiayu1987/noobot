@@ -17,17 +17,13 @@ import {
   synchronizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions } from "@noobot/model-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function createDesktopConfigManager({
   repoRoot,
   packagedBackendRoot,
   appendDesktopLog = () => {},
 } = {}) {
-  function isPlainObject(input) {
-    return input !== null && typeof input === "object" && !Array.isArray(input);
-  }
-
   function readJsonFile(filePath, fallback = null) {
     try {
       return JSON.parse(fs.readFileSync(filePath, "utf8"));

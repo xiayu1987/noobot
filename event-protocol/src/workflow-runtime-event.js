@@ -3,11 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { canonicalizeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createEventEnvelope } from "./envelope.js";
-import { isRecord } from "./normalize.js";
 
 export const WORKFLOW_RUNTIME_FAMILY = "workflow.runtime";
 
@@ -131,7 +130,7 @@ function validatePlanningFields(envelope, payload, envelopeTurnScopeId, errors) 
   if (!envelopeTurnScopeId) errors.push("missing_planning_turn_scope");
   if (!text(envelope?.identity?.messageId)) errors.push("missing_planning_message_identity");
   if (!text(payload?.presentationMessageId)) errors.push("missing_planning_presentation");
-  if (!isRecord(payload?.workflowPayload)) errors.push("missing_planning_workflow_payload");
+  if (!isPlainObject(payload?.workflowPayload)) errors.push("missing_planning_workflow_payload");
   if (!Array.isArray(payload?.nodeSessions) || !payload.nodeSessions.length)
     errors.push("missing_planning_nodes");
 }
@@ -171,7 +170,7 @@ export function validateWorkflowRuntimeEnvelope(envelope = {}) {
   const errors = [];
   const eventType = text(envelope?.identity?.eventType);
   const payload = envelope?.payload;
-  if (!isRecord(payload)) {
+  if (!isPlainObject(payload)) {
     return Object.freeze({ valid: false, errors: Object.freeze(["payload_not_object"]) });
   }
   const envelopeTurnScopeId = validateEnvelopeIdentity(envelope, eventType, payload, errors);

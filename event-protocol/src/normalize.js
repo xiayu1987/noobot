@@ -13,9 +13,6 @@ export const collapsedText = (value) =>
     .replaceAll(/\s+/g, " ")
     .trim();
 
-export const isRecord = (value) =>
-  Boolean(value && typeof value === "object" && !Array.isArray(value));
-
 export const selectFields = (source, keys) =>
   Object.freeze(
     Object.fromEntries(

@@ -7,7 +7,7 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   userId: "noobot_user_id",
@@ -145,12 +145,8 @@ export function normalizePluginModelConfig(value = {}) {
   return normalizeNode(value) || {};
 }
 
-function isPlainPreferenceObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function mergePreferenceNode(defaults, value) {
-  if (!isPlainPreferenceObject(defaults) || !isPlainPreferenceObject(value)) {
+  if (!isPlainObject(defaults) || !isPlainObject(value)) {
     return typeof value === "undefined" ? defaults : value;
   }
   const merged = { ...defaults };
@@ -331,7 +327,7 @@ function writePluginPreferences(preferences) {
 
 export function loadPluginPreferences() {
   const stored = readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginPreferences, null);
-  if (stored?.version === PLUGIN_PREFERENCES_VERSION && isPlainPreferenceObject(stored.scenarios)) {
+  if (stored?.version === PLUGIN_PREFERENCES_VERSION && isPlainObject(stored.scenarios)) {
     return {
       version: PLUGIN_PREFERENCES_VERSION,
       scenarios: normalizePluginModelConfigByScenarioPreference(stored.scenarios),

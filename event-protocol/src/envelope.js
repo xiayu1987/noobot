@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
-import { isRecord, selectFields } from "./normalize.js";
+import { isPlainObject, text } from "@noobot/shared/value";
+import { selectFields } from "./normalize.js";
 
 export const EVENT_PROTOCOL_NAME = "@noobot/event-protocol";
 export const EVENT_PROTOCOL_VERSION = 3;
@@ -15,7 +15,7 @@ export function createEventId() {
 }
 
 export function isEventProtocolEnvelope(value = {}) {
-  return isRecord(value) && value?.protocol?.name === EVENT_PROTOCOL_NAME;
+  return isPlainObject(value) && value?.protocol?.name === EVENT_PROTOCOL_NAME;
 }
 
 export function asEventProtocolEnvelope(value = {}) {
@@ -24,7 +24,8 @@ export function asEventProtocolEnvelope(value = {}) {
 
 export function validateEventEnvelope(value = {}) {
   const errors = [];
-  if (!isRecord(value)) return Object.freeze({ valid: false, errors: ["envelope_not_object"] });
+  if (!isPlainObject(value))
+    return Object.freeze({ valid: false, errors: ["envelope_not_object"] });
   if (value?.protocol?.name !== EVENT_PROTOCOL_NAME) errors.push("invalid_protocol_name");
   if (Number(value?.protocol?.version) !== EVENT_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
@@ -34,22 +35,22 @@ export function validateEventEnvelope(value = {}) {
     Number(value.protocol.schemaVersion) < 1
   )
     errors.push("invalid_schema_version");
-  if (!isRecord(value.identity)) errors.push("invalid_identity");
+  if (!isPlainObject(value.identity)) errors.push("invalid_identity");
   if (!text(value?.identity?.eventId)) errors.push("missing_event_id");
   if (!text(value?.identity?.eventType)) errors.push("missing_event_type");
   if (!text(value?.identity?.sessionId)) errors.push("missing_session_id");
-  if (!isRecord(value.causality)) errors.push("invalid_causality");
-  if (!isRecord(value.ordering)) errors.push("invalid_ordering");
+  if (!isPlainObject(value.causality)) errors.push("invalid_causality");
+  if (!isPlainObject(value.ordering)) errors.push("invalid_ordering");
   if (!text(value?.ordering?.domain)) errors.push("missing_ordering_domain");
   if (!text(value?.ordering?.scopeId)) errors.push("missing_ordering_scope");
 
   if (!Number.isInteger(Number(value?.ordering?.sequence)) || Number(value.ordering.sequence) < 0)
     errors.push("invalid_sequence");
-  if (!isRecord(value.producer)) errors.push("invalid_producer");
+  if (!isPlainObject(value.producer)) errors.push("invalid_producer");
   if (!text(value?.producer?.type)) errors.push("missing_producer_type");
   if (!text(value?.producer?.id)) errors.push("missing_producer_id");
   if (!text(value.occurredAt)) errors.push("missing_occurred_at");
-  if (!isRecord(value.payload)) errors.push("invalid_payload");
+  if (!isPlainObject(value.payload)) errors.push("invalid_payload");
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 

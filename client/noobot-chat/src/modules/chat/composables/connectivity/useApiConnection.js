@@ -9,7 +9,7 @@ import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const CONNECTION_PROFILE_STORAGE_KEY = "noobot_connection_profile";
 const ADMISSION_MAX_RETRIES = TURN_THRESHOLDS.client.admissionMaxRetries;
@@ -142,10 +142,6 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
   removeLegacyCredentials();
   if (restoredConnectionProfile && restoredConnectionProfile.userId !== initialUserId) {
     clearConnectionProfile();
-  }
-
-  function isPlainObject(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value);
   }
 
   function normalizeScenarioConfig(input = {}) {

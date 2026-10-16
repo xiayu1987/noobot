@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
+
 const IDENTITY_ROTATION = [0, 0, 0, 1];
 const CANONICAL_AXES = Object.freeze({ handedness: "right", up: "Y", forward: "-Z" });
 
 function isLegacyAssetDescriptor(value = {}) {
   return (
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
+    isPlainObject(value) &&
     !Object.hasOwn(value, "sourceUnit") &&
     !Object.hasOwn(value, "canonicalUnit") &&
     !Object.hasOwn(value, "anchor") &&
