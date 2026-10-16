@@ -41,11 +41,6 @@ export function createStateCommitter({
   runtime = {},
   agentContext = null,
 } = {}) {
-  const resolveCallId = (call = {}) =>
-    text(call?.id ?? call?.tool_call_id ?? call?.toolCallId ?? call?.call_id);
-
-  const resolveCallName = (call = {}) => text(call?.name ?? call?.tool_name ?? call?.toolName);
-
   const ownership = resolveTurnOwnership(runtime, dialogProcessId);
 
   return {
@@ -151,8 +146,8 @@ export function createStateCommitter({
       });
     },
     async pushToolResult({ call = {}, toolResultText = "", transferEnvelopes = [] } = {}) {
-      const resolvedCallId = resolveCallId(call);
-      const resolvedCallName = resolveCallName(call);
+      const resolvedCallId = text(call.id);
+      const resolvedCallName = text(call.name);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
       const messageUid = createSessionMessageUid();
       const contextPolicy = resolveToolContextPolicy(call);

@@ -138,7 +138,7 @@ export async function normalizeToolResultOverflow({
     meta: {
       overflowContentKind: "tool_result",
       toolName: text(call?.name),
-      toolCallId: text(call?.id || call?.tool_call_id || call?.toolCallId),
+      toolCallId: text(call?.id),
     },
   });
   const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)

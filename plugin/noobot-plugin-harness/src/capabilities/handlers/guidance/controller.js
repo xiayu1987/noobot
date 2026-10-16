@@ -11,7 +11,6 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   CAPABILITY_DOMAIN,
-  LOCALE,
   saveCapabilityOutputAsTransferArtifacts,
   ensureHarnessBucket,
   extractRawTextContent,
@@ -320,130 +319,136 @@ async function executeGuidanceWorkflowAction({
   };
 }
 
-export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
-  return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
-    let changed = false;
-    if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
-      const current = ensureHarnessBucket(ctx);
-      if (current?.state?.flags?.acceptanceReviewing === true) {
-        return { capability, point, status: "active", changed: false };
-      }
-      const invariantChanged =
-        enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
-      const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx, meta) === true;
-      const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;
-      const holder = ensureHarnessBucket(ctx);
-      const nextAction = resolveNextGuidanceAction(holder?.state || {});
-      const decision = resolveGuidancePriorityDecision(holder?.state || {});
-      const mode = resolveWorkflowMode(meta);
-      const lifecycle = await runWorkflowLifecycle(ctx, {
-        domain: CAPABILITY_DOMAIN.GUIDANCE,
-        point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-        mode,
-        resolveDecision: () => ({
-          chosenAction: decision.chosenAction,
-          chosenReason: decision.chosenReason,
-          chosenReasonLabel: decision.chosenReasonLabel,
-          chosenStage: decision.chosenStage,
-          candidateActions: decision.candidateActions,
-          deferredActions: decision.deferredActions,
-          blockedActions: decision.blockedActions,
-          blockedReasons: decision.blockedReasons,
-          blockedReasonLabels: decision.blockedReasonLabels,
-          pending: decision.pendingSnapshot,
-        }),
-        execute: async () => {
-          const execution = await executeGuidanceWorkflowAction({
-            nextAction,
-            ctx,
-            meta,
-          });
-          return {
-            requestedAction: execution.actionName,
-            executedPrimary: execution.executedPrimary,
-            executedFollowup: execution.executedFollowup,
-            changed:
-              execution.changed || invariantChanged || summaryScheduleChanged || scheduleChanged,
-          };
-        },
+async function relayGuidanceSummary(ctx, { meta, locale, rawSummaryText }) {
+  const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
+  if (persistSummaryAttachment && rawSummaryText) {
+    const transferPayload = await saveCapabilityOutputAsTransferArtifacts(ctx, {
+      purpose: "summary",
+      content: rawSummaryText,
+      generationSource: "harness_summary",
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+    });
+    recordSummaryTransferEnvelopes(ctx, transferPayload);
+    if (transferPayload.transferEnvelopes.length) {
+      relaySeparateModelOutputAsUserMessage(ctx, {
+        locale,
+        purpose: "summary",
+        content: rawSummaryText,
+        dedupe: true,
+        transferPayload,
       });
-      changed = lifecycle.execution.changed || changed;
     }
-    if (point === HOOK_POINT.AGENT.AFTER_TOOL_CALL && shouldProcessPrimaryToolHooks(ctx)) {
-      changed = markToolSignals(ctx) || changed;
-      const failed = ctx?.success === false;
-      changed = updateFailureCounters(ctx, failed) || changed;
-    }
-    if (point === HOOK_POINT.AGENT.TOOL_CALL_ERROR && shouldProcessPrimaryToolHooks(ctx)) {
-      changed = updateFailureCounters(ctx, true) || changed;
-    }
-    if (point === HOOK_POINT.AGENT.AFTER_TOOL_CALLS && shouldProcessPrimaryToolHooks(ctx)) {
-      changed = maybeScheduleSummaryByToolBurst(ctx, meta) || changed;
-    }
-    if (point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
-      const holder = ensureHarnessBucket(ctx);
-      if (holder?.state?.flags?.guidanceSummaryMarkPending === true) {
-        holder.state.flags.guidanceSummaryMarkPending = false;
-        const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
-        appendCapabilityLog(ctx, {
-          domain: CAPABILITY_DOMAIN.GUIDANCE,
-          event: GUIDANCE_EVENTS.summaryMessagesMarked,
-          detail: { markedCount },
-        });
-        const rawSummaryText =
-          extractRawTextContent(ctx?.ai?.content) ||
-          extractRawTextContent(ctx?.modelResponse?.content) ||
-          "";
-        const locale = holder.state?.locale || LOCALE.ZH_CN;
-        const parsedSummary = parseSummaryOverviewAndDetailFromText(rawSummaryText);
-        const summaryOverviewText = text(parsedSummary?.overviewText) || rawSummaryText;
-        const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
-        const summaryTransferPayload =
-          persistSummaryAttachment && rawSummaryText
-            ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
-                purpose: "summary",
-                content: rawSummaryText,
-                generationSource: "harness_summary",
-                domain: CAPABILITY_DOMAIN.GUIDANCE,
-              })
-            : { transferEnvelopes: [] };
-        recordSummaryTransferEnvelopes(ctx, summaryTransferPayload);
-        if (summaryTransferPayload.transferEnvelopes.length) {
-          relaySeparateModelOutputAsUserMessage(ctx, {
-            locale,
-            purpose: "summary",
-            content: rawSummaryText,
-            dedupe: true,
-            transferPayload: summaryTransferPayload,
-          });
-        }
-        if (!persistSummaryAttachment && rawSummaryText) {
-          const summaryInjectionContent = await transferSummaryInjectionMessage(ctx, {
-            fullText: rawSummaryText,
-            summaryText: rawSummaryText,
-            detailText: rawSummaryText,
-            injectMode: "full",
-            meta,
-          });
-          relaySeparateModelOutputAsUserMessage(ctx, {
-            locale,
-            purpose: "summary",
-            content: summaryInjectionContent || rawSummaryText,
-            dedupe: true,
-          });
-        }
-        recordLatestSummaryFullText(ctx, rawSummaryText);
-        const summaryText = applySummaryText(ctx, summaryOverviewText);
-        if (!isSummaryCompletionMarked(summaryText, locale)) {
-          appendCapabilityLog(ctx, {
-            domain: CAPABILITY_DOMAIN.GUIDANCE,
-            event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,
-          });
-        }
-        changed = markedCount > 0 || changed;
-      }
-      changed = (await maybeCapturePlanUpdateByInject(ctx)) || changed;
-    }
+    return;
+  }
+  recordSummaryTransferEnvelopes(ctx, { transferEnvelopes: [] });
+  if (!rawSummaryText) return;
+  const summaryInjectionContent = await transferSummaryInjectionMessage(ctx, {
+    fullText: rawSummaryText,
+    summaryText: rawSummaryText,
+    detailText: rawSummaryText,
+    injectMode: "full",
+    meta,
+  });
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "summary",
+    content: summaryInjectionContent || rawSummaryText,
+    dedupe: true,
+  });
+}
+
+async function applyPendingGuidanceSummary(ctx, meta, holder) {
+  holder.state.flags.guidanceSummaryMarkPending = false;
+  const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.GUIDANCE,
+    event: GUIDANCE_EVENTS.summaryMessagesMarked,
+    detail: { markedCount },
+  });
+  const rawSummaryText =
+    extractRawTextContent(ctx.ai?.content) || extractRawTextContent(ctx.modelResponse?.content);
+  const { locale } = holder.state;
+  await relayGuidanceSummary(ctx, { meta, locale, rawSummaryText });
+  recordLatestSummaryFullText(ctx, rawSummaryText);
+  const { overviewText } = parseSummaryOverviewAndDetailFromText(rawSummaryText);
+  const summaryText = applySummaryText(ctx, overviewText || rawSummaryText);
+  if (!isSummaryCompletionMarked(summaryText, locale)) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,
+    });
+  }
+  return markedCount > 0;
+}
+
+async function handleAfterLlmCall(ctx, meta) {
+  const holder = ensureHarnessBucket(ctx);
+  let changed = false;
+  if (holder?.state?.flags?.guidanceSummaryMarkPending === true) {
+    changed = await applyPendingGuidanceSummary(ctx, meta, holder);
+  }
+  return (await maybeCapturePlanUpdateByInject(ctx)) || changed;
+}
+
+async function handleBeforeLlmCall(ctx, meta) {
+  const holder = ensureHarnessBucket(ctx);
+  if (holder?.state?.flags?.acceptanceReviewing === true) return false;
+  const invariantChanged =
+    enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
+  const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx, meta) === true;
+  const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;
+  const state = holder?.state || {};
+  const nextAction = resolveNextGuidanceAction(state);
+  const decision = resolveGuidancePriorityDecision(state);
+  const lifecycle = await runWorkflowLifecycle(ctx, {
+    domain: CAPABILITY_DOMAIN.GUIDANCE,
+    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    mode: resolveWorkflowMode(meta),
+    resolveDecision: () => ({
+      chosenAction: decision.chosenAction,
+      chosenReason: decision.chosenReason,
+      chosenReasonLabel: decision.chosenReasonLabel,
+      chosenStage: decision.chosenStage,
+      candidateActions: decision.candidateActions,
+      deferredActions: decision.deferredActions,
+      blockedActions: decision.blockedActions,
+      blockedReasons: decision.blockedReasons,
+      blockedReasonLabels: decision.blockedReasonLabels,
+      pending: decision.pendingSnapshot,
+    }),
+    execute: async () => {
+      const execution = await executeGuidanceWorkflowAction({ nextAction, ctx, meta });
+      return {
+        requestedAction: execution.actionName,
+        executedPrimary: execution.executedPrimary,
+        executedFollowup: execution.executedFollowup,
+        changed: execution.changed || invariantChanged || summaryScheduleChanged || scheduleChanged,
+      };
+    },
+  });
+  return lifecycle.execution.changed;
+}
+
+function createGuidancePointHandlers(shouldProcessPrimaryToolHooks) {
+  const primaryToolHook = (handler) => (ctx, meta) =>
+    shouldProcessPrimaryToolHooks(ctx) ? handler(ctx, meta) : false;
+  return {
+    [HOOK_POINT.AGENT.BEFORE_LLM_CALL]: handleBeforeLlmCall,
+    [HOOK_POINT.AGENT.AFTER_TOOL_CALL]: primaryToolHook((ctx) => {
+      const signalChanged = markToolSignals(ctx);
+      return updateFailureCounters(ctx, ctx.success === false) || signalChanged;
+    }),
+    [HOOK_POINT.AGENT.TOOL_CALL_ERROR]: primaryToolHook((ctx) => updateFailureCounters(ctx, true)),
+    [HOOK_POINT.AGENT.AFTER_TOOL_CALLS]: primaryToolHook(maybeScheduleSummaryByToolBurst),
+    [HOOK_POINT.AGENT.AFTER_LLM_CALL]: handleAfterLlmCall,
+  };
+}
+
+export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
+  const pointHandlers = createGuidancePointHandlers(shouldProcessPrimaryToolHooks);
+  return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
+    const handlePoint = pointHandlers[point];
+    const changed = handlePoint ? Boolean(await handlePoint(ctx, meta)) : false;
     return { capability, point, status: "active", changed };
   };
 }

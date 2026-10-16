@@ -73,31 +73,8 @@ export function normalizePersistedAttachments(persistedOutput) {
   return Array.isArray(persistedOutput?.attachments) ? persistedOutput.attachments : [];
 }
 
-export async function backwriteParsedAttachment({
-  runtime,
-  sourceAttachmentMeta,
-  parsedAttachment,
-}) {
-  if (text(sourceAttachmentMeta?.attachmentSource) !== ATTACHMENT_SOURCE.USER) return null;
-  const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
-  const targetAttachment = parsedAttachment?.identity
-    ? { ...parsedAttachment, ...parsedAttachment.identity }
-    : parsedAttachment;
-  const attachmentService = runtime?.attachmentService || null;
-  const userId = text(runtime?.systemRuntime?.userId);
-  if (!targetAttachment || !attachmentService || !userId) return null;
-  const updated = await attachmentService.linkParsedResultToAttachment({
-    userId,
-    sourceIdentity,
-    targetAttachment,
-    producerId: TOOL_NAME.MULTIMODAL_PARSE,
-  });
-  updateRuntimeUserMessageAttachment(runtime, sourceIdentity.attachmentId, updated);
-  const identity = projectAttachmentIdentity(updated);
-  const relation = findAttachmentRelation(updated.relations, {
-    relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
-    sourceIdentity: identity,
-  });
+async function commitParsedLifecycleEvent(runtime, identity, relation) {
+  const system = runtime.systemRuntime;
   const event = createAttachmentLifecycleEvent({
     eventType: ATTACHMENT_EVENT_TYPE.PARSED,
     eventVersion: 1,
@@ -105,16 +82,18 @@ export async function backwriteParsedAttachment({
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: new Date().toISOString(),
-    turnScopeId: text(runtime?.systemRuntime?.turnScopeId) || undefined,
-    runId: text(runtime?.systemRuntime?.runId) || undefined,
+    turnScopeId: text(system.turnScopeId) || undefined,
+    runId: text(system.runId) || undefined,
     relation,
   });
-  const sessionId = text(runtime?.systemRuntime?.sessionId || runtime?.runConfig?.sessionId);
-  const parentSessionId = normalizeParentSessionId(runtime?.systemRuntime?.parentSessionId);
-  const committed = await runtime?.sessionManager?.commitAuthorityEvent?.({
-    userId,
-    sessionId,
-    parentSessionId,
+  if (typeof runtime.sessionManager?.commitAuthorityEvent !== "function") {
+    throw new Error("attachment authority event commit port is unavailable");
+  }
+  const persistenceScope = system.persistenceScope || null;
+  const committed = await runtime.sessionManager.commitAuthorityEvent({
+    userId: text(system.userId),
+    sessionId: text(system.sessionId),
+    parentSessionId: normalizeParentSessionId(system.parentSessionId),
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
     identity: {
       eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
@@ -128,26 +107,51 @@ export async function backwriteParsedAttachment({
     },
     producer: { type: "tool", id: TOOL_NAME.MULTIMODAL_PARSE },
     payload: event,
-    persistenceScope: runtime?.systemRuntime?.persistenceScope || null,
+    persistenceScope,
   });
-  if (!committed?.committed || !committed?.envelope) {
+  if (!committed?.committed || !committed.envelope) {
     throw new Error(`attachment authority event commit failed: ${committed?.reason || "unknown"}`);
   }
-  await emitEvent(runtime?.eventListener || null, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
+  await emitEvent(runtime.eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope: committed.envelope,
-    persistenceScope: runtime?.systemRuntime?.persistenceScope || null,
+    persistenceScope,
   });
+}
+
+function queueParsedResultBackwrite(runtime, sourceIdentity, relation) {
+  const sourceAttachmentRef = formatAttachmentIdentityRef(sourceIdentity);
   queueUserMetaBackwrite(runtime, {
-    attachmentRef: formatAttachmentIdentityRef(sourceIdentity),
+    attachmentRef: sourceAttachmentRef,
     result: {
-      sourceAttachmentRef: formatAttachmentIdentityRef(sourceIdentity),
-      parsedAttachmentRef: formatAttachmentIdentityRef(
-        relation?.targetIdentity || projectAttachmentIdentity(parsedAttachment),
-      ),
-      ...(relation?.name ? { name: relation.name } : {}),
-      ...(relation?.mimeType ? { mimeType: relation.mimeType } : {}),
-      ...(Number.isSafeInteger(Number(relation?.size)) ? { size: Number(relation.size) } : {}),
+      sourceAttachmentRef,
+      parsedAttachmentRef: formatAttachmentIdentityRef(relation.targetIdentity),
+      name: relation.name,
+      mimeType: relation.mimeType,
+      ...(relation.size === undefined ? {} : { size: relation.size }),
     },
   });
+}
+
+export async function backwriteParsedAttachment({
+  runtime,
+  sourceAttachmentMeta,
+  parsedAttachment,
+}) {
+  const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
+  const { identity, name, mimeType, size } = parsedAttachment;
+  const updated = await runtime.attachmentService.linkParsedResultToAttachment({
+    userId: text(runtime.systemRuntime.userId),
+    sourceIdentity,
+    targetDescriptor: { identity, name, mimeType, ...(size === undefined ? {} : { size }) },
+    producerId: TOOL_NAME.MULTIMODAL_PARSE,
+  });
+  updateRuntimeUserMessageAttachment(runtime, sourceIdentity.attachmentId, updated);
+  const updatedIdentity = projectAttachmentIdentity(updated);
+  const relation = findAttachmentRelation(updated.relations, {
+    relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+    sourceIdentity: updatedIdentity,
+  });
+  await commitParsedLifecycleEvent(runtime, updatedIdentity, relation);
+  queueParsedResultBackwrite(runtime, sourceIdentity, relation);
   return updated;
 }

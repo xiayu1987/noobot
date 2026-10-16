@@ -59,7 +59,12 @@ export function isContextSystemMessage(message = {}) {
 }
 
 export function resolveContextMessageId(message = {}) {
-  return text(message?.messageUid || readContextMessageField(message, "noobotMessageId"));
+  const canonicalMessageId = readContextMessageField(message, "noobotMessageId");
+  const persistedMessageUid = text(message?.messageUid);
+  if (canonicalMessageId && persistedMessageUid && canonicalMessageId !== persistedMessageUid) {
+    throw new Error("persisted messageUid conflicts with canonical noobotMessageId");
+  }
+  return canonicalMessageId || persistedMessageUid;
 }
 
 export function deriveContextMessageProjectionId(sourceMessageId = "", projectionType = "") {
@@ -112,16 +117,12 @@ export function resolveContextToolCalls(message = {}) {
   return [];
 }
 
-export function resolveContextToolCallId(value = {}) {
-  return text(
-    value?.tool_call_id ??
-      value?.toolCallId ??
-      value?.call_id ??
-      value?.lc_kwargs?.tool_call_id ??
-      value?.lc_kwargs?.toolCallId ??
-      value?.id ??
-      "",
-  );
+export function resolveContextToolCallDeclarationId(call = {}) {
+  return text(call?.id);
+}
+
+export function resolveContextToolResultCallId(message = {}) {
+  return text(message?.tool_call_id);
 }
 
 export function resolveContextMessageSummarized(message = {}) {

@@ -12,22 +12,13 @@ import {
   resolveContextMessageFlags,
   resolveContextMessageRole,
   resolveContextMessageSummarized,
-  resolveContextToolCallId,
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
 import { recoverContextTaskSummaryToolResult } from "../task/summary-context.js";
 import { text } from "@noobot/shared/value";
-
-export {
-  readContextMessageField as readMessageField,
-  resolveContextMessageDialogProcessId as resolveMessageDialogProcessId,
-  resolveContextMessageId as resolveMessageId,
-  resolveContextMessageRole as resolveMessageRole,
-  resolveContextMessageSummarized as isMessageSummarized,
-  resolveContextToolCallId as resolveToolCallId,
-  resolveContextToolCalls as getMessageToolCalls,
-} from "../message/codec.js";
 
 export function isSystemLikeMessageRole(role = "") {
   return normalizeContextMessageRole(role) === CONTEXT_MESSAGE_ROLE.SYSTEM;
@@ -51,10 +42,7 @@ export function isInjectedOrPluginMessage(message = {}) {
 
 export function resolveInjectedMessageType(message = {}) {
   if (!isInjectedMessage(message)) return "";
-  const explicit =
-    readContextMessageField(message, "injectedMessageType") ||
-    readContextMessageField(message, "injected_message_type") ||
-    readContextMessageField(message, "noobotInternalMessageType");
+  const explicit = readContextMessageField(message, "injectedMessageType");
   if (explicit) return explicit;
   const generic = text(message?.type || message?.lc_kwargs?.type);
   if (generic && generic !== "message") return generic;
@@ -93,11 +81,11 @@ export function filterForModelContext(
     const role = resolveContextMessageRole(message);
     if (role === "assistant")
       resolveContextToolCalls(message)
-        .map(resolveContextToolCallId)
+        .map(resolveContextToolCallDeclarationId)
         .filter(Boolean)
         .forEach((id) => assistantIds.add(id));
     if (role === "tool") {
-      const id = resolveContextToolCallId(message);
+      const id = resolveContextToolResultCallId(message);
       if (id) resultIds.add(id);
     }
   }
@@ -106,7 +94,7 @@ export function filterForModelContext(
   for (const message of source) {
     const role = resolveContextMessageRole(message);
     if (role === "tool") {
-      const id = resolveContextToolCallId(message);
+      const id = resolveContextToolResultCallId(message);
       if (id && validIds.has(id)) result.push(message);
       else if (typeof recoverUnpairedToolResult === "function") {
         const recovered = recoverUnpairedToolResult(message);
@@ -123,7 +111,7 @@ export function filterForModelContext(
       result.push(message);
       continue;
     }
-    const ids = calls.map(resolveContextToolCallId).filter(Boolean);
+    const ids = calls.map(resolveContextToolCallDeclarationId).filter(Boolean);
     if (ids.length && ids.every((id) => validIds.has(id))) result.push(message);
   }
   return result;

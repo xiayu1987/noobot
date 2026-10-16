@@ -54,49 +54,29 @@ export function isDurableActivityMessageEvent(envelope = {}) {
 
 export function projectCanonicalActivityTimelineEvent(envelope = {}, { position = 1 } = {}) {
   if (!isCanonicalActivityMessageEvent(envelope)) return null;
-  const eventId = text(envelope?.identity?.eventId);
+  const { identity, ordering, payload } = envelope;
   const isDelta = isTransientMessageEvent(envelope);
-  const eventType = text(
-    isDelta ? envelope?.payload?.activityEventType : envelope?.payload?.eventType,
-  );
-  const sequence = isDelta
-    ? Math.max(1, Number(position) || 1)
-    : Number(envelope?.ordering?.sequence || 0);
-  const sequenceScopeId = text(envelope?.ordering?.scopeId);
-  const sequenceDomain = text(envelope?.ordering?.domain);
-  const content = envelope?.payload?.text;
-  if (
-    !eventId ||
-    !eventType ||
-    !Number.isInteger(sequence) ||
-    sequence < 1 ||
-    !sequenceScopeId ||
-    !sequenceDomain ||
-    typeof content !== "string"
-  ) {
-    return null;
-  }
   const fact = {
-    eventId,
-    eventType,
-    text: content,
-    activityKind: text(envelope?.payload?.activityKind),
-    purpose: text(envelope?.payload?.purpose),
-    pluginFlow: text(envelope?.payload?.pluginFlow),
-    chain: text(envelope?.payload?.chain),
-    relayCorrelationId: text(envelope?.payload?.relayCorrelationId),
-    sequence,
-    sequenceScopeId,
-    sequenceDomain,
+    eventId: text(identity.eventId),
+    eventType: text(isDelta ? payload.activityEventType : payload.eventType),
+    text: payload.text,
+    activityKind: text(payload.activityKind),
+    purpose: text(payload.purpose),
+    pluginFlow: text(payload.pluginFlow),
+    chain: text(payload.chain),
+    relayCorrelationId: text(payload.relayCorrelationId),
+    sequence: isDelta ? Math.max(1, position) : Number(ordering.sequence),
+    sequenceScopeId: text(ordering.scopeId),
+    sequenceDomain: text(ordering.domain),
     authority: "authoritative",
-    timestamp: text(envelope?.occurredAt),
-    sessionId: text(envelope?.identity?.sessionId),
-    dialogProcessId: text(envelope?.payload?.dialogProcessId),
-    turnScopeId: text(envelope?.identity?.turnScopeId),
-    messageId: text(envelope?.identity?.messageId),
-    presentationMessageId: text(envelope?.payload?.presentationMessageId),
+    timestamp: text(envelope.occurredAt),
+    sessionId: text(identity.sessionId),
+    dialogProcessId: text(payload.dialogProcessId),
+    turnScopeId: text(identity.turnScopeId),
+    messageId: text(identity.messageId),
+    presentationMessageId: text(payload.presentationMessageId),
   };
-  const activityId = text(envelope?.payload?.activityId);
+  const activityId = text(payload.activityId);
   if (activityId) fact.activityId = activityId;
   return Object.freeze(fact);
 }

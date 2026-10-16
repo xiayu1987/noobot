@@ -9,7 +9,7 @@ import {
   markCurrentTurnStoreSummarized,
   mirrorSummarizedMessagesById,
 } from "./summary.js";
-import { resolveMessageId } from "./message.js";
+import { resolveContextMessageId } from "../message/codec.js";
 
 export function applyTurnCompletionPolicy({
   modelMessages = [],
@@ -24,7 +24,7 @@ export function applyTurnCompletionPolicy({
   const markedCount = markCurrentTurnStoreSummarized(turnMessageStore, {
     policyOptions,
     onMarked: (message) => {
-      const id = resolveMessageId(message);
+      const id = resolveContextMessageId(message);
       if (id) markedMessageIds.add(id);
     },
   });

@@ -12,6 +12,10 @@ import {
   hydrateModelContextSnapshot,
   normalizeSnapshotIdentity,
 } from "@noobot/context-protocol/policy/snapshot";
+import {
+  readContextMessageField,
+  resolveContextMessageId,
+} from "@noobot/context-protocol/message/codec";
 import { text } from "@noobot/shared/value";
 
 const SNAPSHOT_DIR_NAME = "model-message-snapshots";
@@ -58,20 +62,6 @@ function countSnapshotMessages(candidate = {}) {
   };
 }
 
-function readMessageField(message = {}, field = "") {
-  return text(
-    message?.[field] ||
-      message?.additional_kwargs?.[field] ||
-      message?.lc_kwargs?.additional_kwargs?.[field],
-  );
-}
-
-function snapshotMessageId(message = {}) {
-  return (
-    readMessageField(message, "noobotMessageId") || text(message?.messageUid || message?.messageId)
-  );
-}
-
 function summarizeSnapshotRoundIdentity(candidate = {}) {
   const blocks =
     candidate?.messageBlocks && typeof candidate.messageBlocks === "object"
@@ -84,16 +74,16 @@ function summarizeSnapshotRoundIdentity(candidate = {}) {
     const blockSummary = { total: 0, complete: 0, missing: 0, partial: 0 };
     for (const message of Array.isArray(blocks?.[blockName]) ? blocks[blockName] : []) {
       blockSummary.total += 1;
-      const dialogProcessId = readMessageField(message, "dialogProcessId");
-      const turnScopeId = readMessageField(message, "turnScopeId");
+      const dialogProcessId = readContextMessageField(message, "dialogProcessId");
+      const turnScopeId = readContextMessageField(message, "turnScopeId");
       const presentCount = Number(Boolean(dialogProcessId)) + Number(Boolean(turnScopeId));
       if (presentCount === 2) blockSummary.complete += 1;
       else if (presentCount === 1) {
         blockSummary.partial += 1;
-        partialMessageIds.push(snapshotMessageId(message));
+        partialMessageIds.push(resolveContextMessageId(message));
       } else {
         blockSummary.missing += 1;
-        if (blockName !== "system") missingScopedMessageIds.push(snapshotMessageId(message));
+        if (blockName !== "system") missingScopedMessageIds.push(resolveContextMessageId(message));
       }
     }
     summary[blockName] = blockSummary;

@@ -7,7 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
-import { BUILTIN_THRESHOLDS, hasOwnConfigKey, normalizeBoolean } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, hasOwnConfigKey } from "../../config/index.js";
 import {
   getSessionIdsFromAgentContext,
   getRuntimeFromAgentContext,
@@ -19,8 +19,6 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { appendMcpErrorLog } from "../../observability/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
-import { resolveExecutionCancellationScope } from "@noobot/session-protocol/execution-cancellation-scope";
-import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
@@ -32,33 +30,112 @@ import {
 import { text } from "@noobot/shared/value";
 
 function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset }) {
-  const subResult = detachedRun?.result || {};
-  const subAnswer = text(subResult?.answer);
-  const subTraces = Array.isArray(subResult?.traces) ? subResult.traces : [];
-  const subMessages = Array.isArray(subResult?.messages) ? subResult.messages : [];
-  const traceToolNames = Array.from(
-    new Set(subTraces.map((item) => text(item?.tool)).filter(Boolean)),
-  );
+  const { answer, traces, messages } = detachedRun.result;
+  const usedTools = Array.from(new Set(traces.map((item) => text(item.tool)).filter(Boolean)));
   return toToolJsonResult(
     TOOL_NAME.CALL_MCP_TASK,
     {
       ok: true,
       mcpName,
       status: TOOL_RESULT_STATUS.COMPLETED,
-      sessionId: text(detachedRun?.sessionId),
+      sessionId: detachedRun.sessionId,
       parentSessionId,
-      tools: mcpToolset.toolNames || [],
-      answer: subAnswer,
+      tools: mcpToolset.toolNames,
+      answer,
       summary: {
-        answerLength: subAnswer.length,
-        traceCount: subTraces.length,
-        messageCount: subMessages.length,
-        usedTools: traceToolNames,
-        dialogProcessId: resolveContextMessageDialogProcessId(subResult),
+        answerLength: answer.length,
+        traceCount: traces.length,
+        messageCount: messages.length,
+        usedTools,
+        dialogProcessId: resolveContextMessageDialogProcessId(detachedRun.result),
       },
       error: "",
     },
     true,
+  );
+}
+
+function requireTaskInput(runtime, { mcpName, task }) {
+  const input = { mcpName: text(mcpName), task: text(task) };
+  if (!input.mcpName) {
+    throw recoverableToolError(tTool(runtime, "tools.mcp.errorMcpNameRequired"), {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+    });
+  }
+  if (!input.task) {
+    throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+    });
+  }
+  return input;
+}
+
+function requireRunContext(runtime, identity) {
+  if (typeof runtime.botManager?.runDetachedSubSession !== "function") {
+    throw runContextMissing(runtime);
+  }
+  if (!identity.userId || !identity.sessionId) throw runContextMissing(runtime);
+}
+
+function runContextMissing(runtime) {
+  return recoverableToolError(tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"), {
+    code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
+  });
+}
+
+function buildSubSessionRunConfigPatch(runtime, mcpToolset) {
+  const { config } = runtime.systemRuntime;
+  return {
+    pluginPolicy: { mode: "none" },
+    allowUserInteraction: config.allowUserInteraction,
+    ...(hasOwnConfigKey(config, "streaming") ? { streaming: config.streaming } : {}),
+    selectedConnectorIds: config.selectedConnectorIds,
+    toolPolicy: { mode: TOOL_POLICY_MODE.CUSTOM_ONLY, customTools: mcpToolset.tools },
+    maxToolLoopTurns: BUILTIN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns,
+    sharedTools: runtime.sharedTools,
+  };
+}
+
+async function runMcpTask({ agentContext, runtime, input, identity, parentSessionId, mcpToolset }) {
+  if (!mcpToolset.tools.length) {
+    throw recoverableToolError(tTool(runtime, "mcp.noToolsAvailable"), {
+      code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
+    });
+  }
+  const detachedRun = await runtime.botManager.runDetachedSubSession({
+    parentExecutionScope: agentContext,
+    message: `${tTool(runtime, "bot.taskPrefix")}: ${input.task}`,
+    eventListener: runtime.eventListener,
+    abortSignal: runtime.abortSignal,
+    strategy: createAgentDetachedSubSessionStrategy({
+      userId: identity.userId,
+      parentSessionId,
+      parentDialogProcessId: identity.dialogProcessId,
+    }),
+    metadata: { scope: TOOL_NAME.CALL_MCP_TASK },
+    runConfigPatch: buildSubSessionRunConfigPatch(runtime, mcpToolset),
+  });
+  return buildMcpTaskResult({ detachedRun, mcpName: input.mcpName, parentSessionId, mcpToolset });
+}
+
+function logMcpTaskFailure({ runtime, identity, parentSessionId, input, error }) {
+  return runBestEffort(
+    () =>
+      appendMcpErrorLog({
+        basePath: runtime.basePath,
+        workspaceRoot: text(runtime.globalConfig.workspaceRoot),
+        userId: identity.userId,
+        sessionId: identity.sessionId,
+        parentSessionId,
+        mcpName: input.mcpName,
+        task: input.task,
+        source: TOOL_NAME.CALL_MCP_TASK,
+        event: TOOL_EVENT_NAME.CALL_MCP_TASK_FAILED,
+        message: error.message,
+        stack: error.stack,
+        details: error.details,
+      }),
+    { operationName: "mcpTool.appendFailureLog", context: { mcpName: input.mcpName } },
   );
 }
 
@@ -71,142 +148,41 @@ export function createMcpTool({ agentContext }) {
       mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
       task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
     }),
-    func: async ({ mcpName, task }) => {
-      const normalizedMcpName = text(mcpName);
-      const normalizedTask = text(task);
-      if (!normalizedMcpName) {
-        throw recoverableToolError(tTool(runtime, "tools.mcp.errorMcpNameRequired"), {
-          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        });
-      }
-      if (!normalizedTask) {
-        throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
-          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        });
-      }
-
-      const globalConfig = runtime?.globalConfig || {};
-      const userConfig = runtime?.userConfig || {};
-
-      const systemRuntime = runtime?.systemRuntime || {};
-      const botManager = runtime?.botManager || null;
-      const eventListener = runtime?.eventListener || null;
-      const signal = runtime?.abortSignal || null;
-      const basePath = text(runtime.basePath);
-      const workspaceRoot = text(globalConfig?.workspaceRoot);
-      const contextIdentity = getSessionIdsFromAgentContext(agentContext);
-      const userId = contextIdentity.userId;
-      const sessionId = contextIdentity.sessionId;
+    func: async (rawInput) => {
+      const input = requireTaskInput(runtime, rawInput);
+      const identity = getSessionIdsFromAgentContext(agentContext);
       const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
-      const parentDialogProcessId = contextIdentity.dialogProcessId;
-      const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
-      const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
-      const maxToolLoopTurns = BUILTIN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns;
       let mcpToolset = null;
       let releaseMcpToolset = null;
       try {
-        if (typeof botManager?.runDetachedSubSession !== "function" || !userId || !sessionId) {
-          throw recoverableToolError(
-            tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
-            {
-              code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
-            },
-          );
-        }
+        requireRunContext(runtime, identity);
         mcpToolset = await createMcpAgentTools({
-          globalConfig,
-          userConfig,
-          mcpName: normalizedMcpName,
-          signal,
-          fetchImpl:
-            typeof runtime?.sharedTools?.fetch === "function" ? runtime.sharedTools.fetch : null,
+          globalConfig: runtime.globalConfig,
+          userConfig: runtime.userConfig,
+          mcpName: input.mcpName,
+          signal: runtime.abortSignal,
+          fetchImpl: runtime.sharedTools.fetch,
         });
-        releaseMcpToolset = resolveExecutionCancellationScope(runtime?.cancellationScope).register(
-          () => mcpToolset?.close(),
-        );
-        if (!Array.isArray(mcpToolset?.tools) || !mcpToolset.tools.length) {
-          throw recoverableToolError(tTool(runtime, "mcp.noToolsAvailable"), {
-            code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
-          });
-        }
-        const subTaskMessage = [`${tTool(runtime, "bot.taskPrefix")}: ${normalizedTask}`].join(
-          "\n",
-        );
-        const detachedRun = await botManager.runDetachedSubSession({
-          parentExecutionScope: agentContext,
-          message: subTaskMessage,
-          eventListener,
-          abortSignal: signal,
-          strategy: createAgentDetachedSubSessionStrategy({
-            userId,
-            parentSessionId,
-            parentDialogProcessId,
-          }),
-          metadata: {
-            scope: TOOL_NAME.CALL_MCP_TASK,
-          },
-          runConfigPatch: {
-            pluginPolicy: { mode: "none" },
-            allowUserInteraction,
-            ...(hasParentStreamingConfig
-              ? { streaming: normalizeBoolean(systemRuntime?.config?.streaming, false) }
-              : {}),
-            selectedConnectorIds: normalizeSelectedConnectorIds(
-              runtime?.systemRuntime?.config?.selectedConnectorIds,
-            ),
-            toolPolicy: {
-              mode: TOOL_POLICY_MODE.CUSTOM_ONLY,
-              customTools: mcpToolset.tools,
-            },
-            maxToolLoopTurns:
-              Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
-                ? Math.floor(maxToolLoopTurns)
-                : 6,
-            sharedTools:
-              runtime?.sharedTools && typeof runtime.sharedTools === "object"
-                ? runtime.sharedTools
-                : {},
-          },
-        });
-        return buildMcpTaskResult({
-          detachedRun,
-          mcpName: normalizedMcpName,
+        releaseMcpToolset = runtime.cancellationScope.register(() => mcpToolset.close());
+        return await runMcpTask({
+          agentContext,
+          runtime,
+          input,
+          identity,
           parentSessionId,
           mcpToolset,
         });
       } catch (error) {
         if (isAbortError(error)) throw error;
-        if (basePath) {
-          await runBestEffort(
-            () =>
-              appendMcpErrorLog({
-                basePath,
-                workspaceRoot,
-                userId,
-                sessionId,
-                parentSessionId,
-                mcpName: normalizedMcpName,
-                task: normalizedTask,
-                source: TOOL_NAME.CALL_MCP_TASK,
-                event: TOOL_EVENT_NAME.CALL_MCP_TASK_FAILED,
-                message: error?.message || String(error),
-                stack: error?.stack || "",
-                details: error?.details && typeof error.details === "object" ? error.details : {},
-              }),
-            {
-              operationName: "mcpTool.appendFailureLog",
-              context: { mcpName: normalizedMcpName },
-            },
-          );
-        }
-        throw recoverableToolError(error?.message || String(error), {
-          code: String(error?.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),
+        await logMcpTaskFailure({ runtime, identity, parentSessionId, input, error });
+        throw recoverableToolError(error.message, {
+          code: String(error.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),
         });
       } finally {
-        if (releaseMcpToolset) releaseMcpToolset();
+        releaseMcpToolset?.();
         await runBestEffort(() => mcpToolset?.close(), {
           operationName: "mcpTool.closeToolset",
-          context: { mcpName: normalizedMcpName },
+          context: { mcpName: input.mcpName },
         });
       }
     },

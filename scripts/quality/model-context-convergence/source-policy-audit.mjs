@@ -243,8 +243,29 @@ function auditSummaryOwnership({ files, relativePath, lineOf, fail, pass }) {
   }
 }
 
+const MESSAGE_ID_FALLBACK_OWNERS = new Set(["agent/src/session/entities/message-entity.js"]);
+const MESSAGE_ID_FALLBACK =
+  /\bmessageId\b[^;\n]{0,160}?(?:\|\||\?\?)[^;\n]{0,160}?\bmessageUid\b|\bmessageUid\b[^;\n]{0,160}?(?:\|\||\?\?)[^;\n]{0,160}?\bmessageId\b|\bfunction\s+canonicalMessageId\b/g;
+
+function auditMessageIdentityOwnership({ files, relativePath, lineOf, fail, pass }) {
+  reportOwnership({
+    title: "messageId/messageUid identity fallback outside session message entity",
+    success: "messageId/messageUid identity fallback is owned by session message entity",
+    hits: collectHits({
+      files,
+      relativePath,
+      pattern: MESSAGE_ID_FALLBACK,
+      excluded: MESSAGE_ID_FALLBACK_OWNERS,
+    }),
+    lineOf,
+    fail,
+    pass,
+  });
+}
+
 export function auditSourcePolicies(context) {
   auditLegacyWindows(context);
   auditForbiddenPatterns({ ...context, files: context.sourceFiles });
   auditSummaryOwnership({ ...context, files: context.sourceFiles });
+  auditMessageIdentityOwnership({ ...context, files: context.sourceFiles });
 }

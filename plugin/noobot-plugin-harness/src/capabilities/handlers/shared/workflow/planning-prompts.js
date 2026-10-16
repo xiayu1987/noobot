@@ -39,9 +39,8 @@ export function buildPlanningMainPrompt(options = {}) {
   const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
     normalizePromptOptions(options);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
-  const userGoal = text(data.userGoal || options?.userGoal);
   const goal =
-    text(userGoal) ||
+    text(data.userGoal) ||
     translateI18nText(
       locale,
       HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK,
@@ -83,10 +82,9 @@ export function buildPlanningMainPrompt(options = {}) {
 
 export function buildPlanningRevisionPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const globalRevisionCount = data.globalRevisionCount ?? options?.globalRevisionCount ?? 0;
-  const currentMainPlansText = data.currentMainPlansText ?? options?.currentMainPlansText ?? "";
-  const includeCurrentMainPlans =
-    data.includeCurrentMainPlans ?? options?.includeCurrentMainPlans ?? true;
+  const globalRevisionCount = data.globalRevisionCount ?? 0;
+  const currentMainPlansText = data.currentMainPlansText ?? "";
+  const includeCurrentMainPlans = data.includeCurrentMainPlans ?? true;
   const mainPlansText =
     text(currentMainPlansText) ||
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
@@ -123,22 +121,15 @@ export function buildPlanningRevisionPromptText(options = {}) {
 
 export function buildPlanningRefinementPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const targetIdsRaw = Array.isArray(data.targetIds)
-    ? data.targetIds
-    : Array.isArray(options?.targetIds)
-      ? options.targetIds
-      : [];
+  const targetIdsRaw = Array.isArray(data.targetIds) ? data.targetIds : [];
   const targetIds = targetIdsRaw
     .map((item) => Number(item))
     .filter((item) => Number.isFinite(item) && item > 0);
-  const targetPlansText = data.targetPlansText ?? options?.targetPlansText ?? "";
-  const targetId = data.targetId ?? options?.targetId ?? targetIds[0] ?? 1;
-  const targetContent = data.targetContent ?? options?.targetContent ?? "";
-  const existingSubPlansText = data.existingSubPlansText ?? options?.existingSubPlansText ?? "";
-  const id = Number.isFinite(Number(targetId)) ? Number(targetId) : 1;
-  const content = text(targetContent);
-  const targetIdListText = targetIds.length ? `[${targetIds.join(",")}]` : `[${id}]`;
-  const targetPlans = text(targetPlansText) || `${id}. ${content}`.trim();
+  const targetPlansText = data.targetPlansText ?? "";
+  const existingSubPlansText = data.existingSubPlansText ?? "";
+  const firstTargetId = targetIds[0] ?? 1;
+  const targetIdListText = targetIds.length ? `[${targetIds.join(",")}]` : `[${firstTargetId}]`;
+  const targetPlans = text(targetPlansText) || `${firstTargetId}.`;
   const subPlans =
     text(existingSubPlansText) ||
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);

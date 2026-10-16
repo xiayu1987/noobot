@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { isMessageInjected } from "./shared.js";
-import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
+import {
+  isContextSystemMessage,
+  readContextMessageField,
+} from "@noobot/context-protocol/message/codec";
 import {
   HARNESS_INJECTED_MESSAGE_BY_FIELD,
   HARNESS_INJECTED_MESSAGE_BY_VALUE,
@@ -19,15 +22,6 @@ import {
   writeMessageBlocks,
 } from "../../core/message-store.js";
 import { text } from "@noobot/shared/value";
-
-function resolveInternalMessageType(message = {}) {
-  return text(
-    message?.additional_kwargs?.noobotInternalMessageType ||
-      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      message?.metadata?.noobotInternalMessageType ||
-      message?.lc_kwargs?.metadata?.noobotInternalMessageType,
-  );
-}
 
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
@@ -50,7 +44,7 @@ function filterInternalForcedMessages(messages = [], directive = {}) {
     : new Set();
   if (!removeAll && !removeTypes.size) return { messages: [...messages], removed: 0 };
   const retained = messages.filter((message) => {
-    const marker = resolveInternalMessageType(message);
+    const marker = readContextMessageField(message, "noobotInternalMessageType");
     return !marker || (!removeAll && !removeTypes.has(marker));
   });
   return { messages: retained, removed: messages.length - retained.length };

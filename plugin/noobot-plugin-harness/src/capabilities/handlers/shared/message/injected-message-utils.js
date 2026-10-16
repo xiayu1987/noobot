@@ -18,15 +18,15 @@ import {
 } from "../constants.js";
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
 import { createMessageUid } from "@noobot/context-protocol/message/identity";
-import { readMessageField } from "@noobot/context-protocol/policy/message";
+import { readContextMessageField } from "@noobot/context-protocol/message/codec";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 const HARNESS_PROMPT_INJECTED_TYPE_PREFIX = "harness_prompt:";
 
 export function resolvePromptInjectionId(message = {}) {
-  const direct = readMessageField(message, HARNESS_PROMPT_INJECTION_ID_FIELD);
+  const direct = readContextMessageField(message, HARNESS_PROMPT_INJECTION_ID_FIELD);
   if (direct) return direct;
-  const injectedMessageType = readMessageField(message, HARNESS_INJECTED_MESSAGE_TYPE_FIELD);
+  const injectedMessageType = readContextMessageField(message, HARNESS_INJECTED_MESSAGE_TYPE_FIELD);
   return injectedMessageType.startsWith(HARNESS_PROMPT_INJECTED_TYPE_PREFIX)
     ? injectedMessageType.slice(HARNESS_PROMPT_INJECTED_TYPE_PREFIX.length).trim()
     : "";

@@ -22,35 +22,42 @@ export function asEventProtocolEnvelope(value = {}) {
   return isEventProtocolEnvelope(value) ? value : null;
 }
 
+const isIntegerAtLeast = (minimum) => (value) =>
+  Number.isInteger(Number(value)) && Number(value) >= minimum;
+
+const ENVELOPE_RULES = Object.freeze([
+  ["protocol", "name", (value) => value === EVENT_PROTOCOL_NAME, "invalid_protocol_name"],
+  [
+    "protocol",
+    "version",
+    (value) => Number(value) === EVENT_PROTOCOL_VERSION,
+    "unsupported_protocol_version",
+  ],
+  ["protocol", "family", text, "missing_event_family"],
+  ["protocol", "schemaVersion", isIntegerAtLeast(1), "invalid_schema_version"],
+  [null, "identity", isPlainObject, "invalid_identity"],
+  ["identity", "eventId", text, "missing_event_id"],
+  ["identity", "eventType", text, "missing_event_type"],
+  ["identity", "sessionId", text, "missing_session_id"],
+  [null, "causality", isPlainObject, "invalid_causality"],
+  [null, "ordering", isPlainObject, "invalid_ordering"],
+  ["ordering", "domain", text, "missing_ordering_domain"],
+  ["ordering", "scopeId", text, "missing_ordering_scope"],
+  ["ordering", "sequence", isIntegerAtLeast(0), "invalid_sequence"],
+  [null, "producer", isPlainObject, "invalid_producer"],
+  ["producer", "type", text, "missing_producer_type"],
+  ["producer", "id", text, "missing_producer_id"],
+  [null, "occurredAt", text, "missing_occurred_at"],
+  [null, "payload", isPlainObject, "invalid_payload"],
+]);
+
 export function validateEventEnvelope(value = {}) {
-  const errors = [];
   if (!isPlainObject(value))
     return Object.freeze({ valid: false, errors: ["envelope_not_object"] });
-  if (value?.protocol?.name !== EVENT_PROTOCOL_NAME) errors.push("invalid_protocol_name");
-  if (Number(value?.protocol?.version) !== EVENT_PROTOCOL_VERSION)
-    errors.push("unsupported_protocol_version");
-  if (!text(value?.protocol?.family)) errors.push("missing_event_family");
-  if (
-    !Number.isInteger(Number(value?.protocol?.schemaVersion)) ||
-    Number(value.protocol.schemaVersion) < 1
-  )
-    errors.push("invalid_schema_version");
-  if (!isPlainObject(value.identity)) errors.push("invalid_identity");
-  if (!text(value?.identity?.eventId)) errors.push("missing_event_id");
-  if (!text(value?.identity?.eventType)) errors.push("missing_event_type");
-  if (!text(value?.identity?.sessionId)) errors.push("missing_session_id");
-  if (!isPlainObject(value.causality)) errors.push("invalid_causality");
-  if (!isPlainObject(value.ordering)) errors.push("invalid_ordering");
-  if (!text(value?.ordering?.domain)) errors.push("missing_ordering_domain");
-  if (!text(value?.ordering?.scopeId)) errors.push("missing_ordering_scope");
-
-  if (!Number.isInteger(Number(value?.ordering?.sequence)) || Number(value.ordering.sequence) < 0)
-    errors.push("invalid_sequence");
-  if (!isPlainObject(value.producer)) errors.push("invalid_producer");
-  if (!text(value?.producer?.type)) errors.push("missing_producer_type");
-  if (!text(value?.producer?.id)) errors.push("missing_producer_id");
-  if (!text(value.occurredAt)) errors.push("missing_occurred_at");
-  if (!isPlainObject(value.payload)) errors.push("invalid_payload");
+  const errors = ENVELOPE_RULES.filter(([section, field, predicate]) => {
+    const owner = section ? value[section] : value;
+    return !predicate(owner?.[field]);
+  }).map(([, , , error]) => error);
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 

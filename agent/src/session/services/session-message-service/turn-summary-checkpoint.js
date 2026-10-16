@@ -6,7 +6,8 @@
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import {
   resolveContextMessageDialogProcessId,
-  resolveContextToolCallId,
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { createHash } from "node:crypto";
@@ -65,10 +66,10 @@ function assertSummarizedToolPairClosure(messages = [], summarizedMessageUids = 
     const messageUid = text(message?.messageUid);
     if (!messageUid) continue;
     for (const call of resolveContextToolCalls(message)) {
-      const callId = resolveContextToolCallId(call);
+      const callId = resolveContextToolCallDeclarationId(call);
       if (callId) callOwnerById.set(toolPairKey(message, callId), messageUid);
     }
-    const resultCallId = resolveContextToolCallId(message);
+    const resultCallId = resolveContextToolResultCallId(message);
     if (!resultCallId) continue;
     const pairKey = toolPairKey(message, resultCallId);
     const resultUids = resultUidsByCallId.get(pairKey) || [];

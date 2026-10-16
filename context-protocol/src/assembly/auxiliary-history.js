@@ -7,7 +7,8 @@
 import {
   resolveContextMessageRole,
   resolveContextMessageOrigin,
-  resolveContextToolCallId,
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
 import { text } from "@noobot/shared/value";
@@ -52,7 +53,7 @@ function normalizeMessage(message = {}) {
     return normalized;
   }
   if (role === "tool") {
-    const toolCallId = resolveContextToolCallId(message);
+    const toolCallId = resolveContextToolResultCallId(message);
     if (!toolCallId) throw new TypeError("auxiliary tool result requires tool_call_id");
     return { role, content, tool_call_id: toolCallId };
   }
@@ -68,7 +69,7 @@ function assertToolEvidenceAlignment(messages = []) {
   for (const message of messages) {
     if (message.role === "assistant") {
       for (const call of message.tool_calls || []) {
-        const id = resolveContextToolCallId(call);
+        const id = resolveContextToolCallDeclarationId(call);
         if (!id) throw new TypeError("auxiliary assistant tool call requires id");
         if (declared.has(id)) throw new Error(`duplicate auxiliary tool call id: ${id}`);
         declared.add(id);
@@ -92,7 +93,7 @@ function formatToolCallForObserver(toolCalls = []) {
         typeof fn.arguments === "string"
           ? fn.arguments
           : JSON.stringify(fn.arguments ?? call.args ?? {});
-      return `Tool call [${resolveContextToolCallId(call)}]: ${name}(${args})`;
+      return `Tool call [${resolveContextToolCallDeclarationId(call)}]: ${name}(${args})`;
     })
     .join("\n");
 }

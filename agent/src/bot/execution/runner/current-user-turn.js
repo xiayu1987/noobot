@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { AGENT_RUN_EVENT, emitEvent } from "../../../events/index.js";
-import {
-  canonicalMessageId,
-  emitContextIdentityDebug,
-} from "../../../observability/context-identity-debug.js";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
 import { assertTurnAttachmentsBoundEventData } from "@noobot/session-protocol/turn-attachment-bind";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
@@ -71,7 +69,7 @@ function emitCurrentUserIdentityDebug({
     {
       messageUid: persistedMessageUid,
       persistedMessageId: text(currentUserMessage?.messageId),
-      canonicalMessageId: canonicalMessageId(currentUserMessage),
+      canonicalMessageId: resolveContextMessageId(currentUserMessage),
       role: text(currentUserMessage?.role),
       messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),
       userMetaMaterialized: currentUserMessage?.userMetaMaterialized === true,

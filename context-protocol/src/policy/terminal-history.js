@@ -4,15 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  isInjectedMessage,
-  readMessageField,
-  resolveInjectedMessageType,
-  resolveMessageDialogProcessId,
-  resolveMessageRole,
-} from "./message.js";
+import { isInjectedMessage, resolveInjectedMessageType } from "./message.js";
 import { isContextControlMessage } from "./injected-message.js";
-import { resolveContextMessageOrigin } from "../message/codec.js";
+import {
+  readContextMessageField,
+  resolveContextMessageDialogProcessId,
+  resolveContextMessageOrigin,
+  resolveContextMessageRole,
+} from "../message/codec.js";
 import { text } from "@noobot/shared/value";
 
 const TERMINAL_HISTORY_STATUS = Object.freeze({
@@ -24,12 +23,12 @@ const TERMINAL_HISTORY_STATUS = Object.freeze({
 const TERMINAL_HISTORY_STATUSES = new Set(Object.values(TERMINAL_HISTORY_STATUS));
 
 function resolveTurnScopeId(value = {}) {
-  return readMessageField(value, "turnScopeId");
+  return readContextMessageField(value, "turnScopeId");
 }
 
 function terminalIdentityKey(value = {}) {
   const turnScopeId = resolveTurnScopeId(value);
-  const dialogProcessId = resolveMessageDialogProcessId(value);
+  const dialogProcessId = resolveContextMessageDialogProcessId(value);
   if (!turnScopeId || !dialogProcessId) return "";
   return `${turnScopeId}\u0000${dialogProcessId}`;
 }
@@ -38,7 +37,7 @@ function normalizeTerminalStatus(status = {}) {
   const normalizedStatus = text(status?.status).toLowerCase();
   if (!TERMINAL_HISTORY_STATUSES.has(normalizedStatus)) return null;
   const turnScopeId = resolveTurnScopeId(status);
-  const dialogProcessId = resolveMessageDialogProcessId(status);
+  const dialogProcessId = resolveContextMessageDialogProcessId(status);
   if (!turnScopeId || !dialogProcessId) {
     throw new Error("terminal history status requires dialogProcessId and turnScopeId");
   }
@@ -52,13 +51,13 @@ function normalizeTerminalStatus(status = {}) {
     description,
     turnScopeId,
     dialogProcessId,
-    parentDialogProcessId: readMessageField(status, "parentDialogProcessId"),
+    parentDialogProcessId: readContextMessageField(status, "parentDialogProcessId"),
   };
 }
 
 function isOriginalUserMessage(message = {}) {
   return (
-    resolveMessageRole(message) === "user" &&
+    resolveContextMessageRole(message) === "user" &&
     resolveContextMessageOrigin(message) === "natural" &&
     !isInjectedMessage(message)
   );
@@ -70,7 +69,7 @@ function latestInjectedMessages(messages = []) {
     if (!isInjectedMessage(message) || isContextControlMessage(message)) return;
     const type = resolveInjectedMessageType(message);
     if (!type) return;
-    const owner = readMessageField(message, "injectedBy") || "injected";
+    const owner = readContextMessageField(message, "injectedBy") || "injected";
     latestByType.set(`${owner}:${type}`, { message, index });
   });
   return [...latestByType.values()]

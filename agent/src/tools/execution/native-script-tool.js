@@ -328,6 +328,138 @@ function createNativeScriptIpcHandlers({
   };
 }
 
+async function stageNativeInputs({ inputs, agentContext, inputRoot }) {
+  const inputMap = {};
+  const inputResources = [];
+  let totalInputBytes = 0;
+  for (const [index, value] of inputs.entries()) {
+    const resolvedInput = await resolveFileInput({
+      ...value,
+      agentContext,
+      fieldName: "inputs",
+      capability: PATH_CAPABILITIES.NATIVE_INPUT,
+    });
+    const source = resolvedInput.executionPath;
+    if (resolvedInput.resourceRef) inputResources.push(resolvedInput.resourceRef);
+    const sourceStat = await stat(source);
+    if (!sourceStat.isFile()) throw new Error("native script inputs must be files");
+    totalInputBytes += Number(sourceStat.size || 0);
+    if (totalInputBytes > LENGTH_THRESHOLDS.nativeScript.inputTotalBytes)
+      throw new Error("native script inputs exceed 200 MB");
+    const internalName = `${index}${path.extname(source).toLowerCase()}`;
+    await cp(source, path.join(inputRoot, internalName), { dereference: true, force: false });
+    inputMap[String(index)] = internalName;
+  }
+  return { inputMap, inputResources };
+}
+
+function buildNativeTaskScript({
+  body,
+  scriptArguments,
+  inputMap,
+  roots: { inputRoot, outputRoot, tempRoot },
+  libreOfficeExecutable,
+  browserExecutablePath,
+}) {
+  return `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nimport { publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)}, browserExecutablePath: ${JSON.stringify(browserExecutablePath)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
+}
+
+async function measureNativeOutputs(outputRoot, succeeded) {
+  const outputFiles = succeeded ? await collectOutputFiles(outputRoot) : [];
+  const outputStats = await Promise.all(
+    outputFiles.map((relative) => stat(path.join(outputRoot, relative))),
+  );
+  const outputBytes = outputStats.reduce((sum, info) => sum + Number(info.size || 0), 0);
+  if (outputBytes > LENGTH_THRESHOLDS.nativeScript.artifactTotalBytes)
+    throw new Error("native script output exceeds 200 MB");
+  return { outputFiles, outputBytes };
+}
+
+async function persistNativeOutputs({ runtime, agentContext, identity, outputRoot, outputFiles }) {
+  if (!outputFiles.length) return { transferEnvelopes: [], resources: [] };
+  const artifacts = await Promise.all(
+    outputFiles.map(async (relative) => ({
+      name: relative.split(path.sep).join("__"),
+      mimeType: resolveMimeTypeFromFileName(relative),
+      contentBase64: (await readFile(path.join(outputRoot, relative))).toString("base64"),
+      meta: { virtualPath: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative }) },
+    })),
+  );
+  const { transferEnvelopes } = await persistTransferArtifacts({
+    runtime,
+    agentContext,
+    userId: text(runtime?.systemRuntime?.userId),
+    artifacts,
+    attachmentSource: ATTACHMENT_SOURCE.MODEL,
+    generationSource: "execute_native_script",
+    source: "tool",
+    reason: TRANSFER_REASON.EXECUTE_NATIVE_SCRIPT_OUTPUT,
+    identity,
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.EXECUTE_NATIVE_SCRIPT_OUTPUT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
+  });
+  return {
+    transferEnvelopes,
+    resources: registerTransferAttachmentResources({ agentContext, transferEnvelopes }),
+  };
+}
+
+function projectNativeSuccess({
+  result,
+  execution,
+  roots,
+  outputFiles,
+  outputBytes,
+  persisted,
+  inputResources,
+}) {
+  const succeeded = result.code === 0;
+  return {
+    ok: succeeded,
+    status: succeeded ? "completed" : "failed",
+    execution,
+    code: result.code,
+    stdout: projectNativeOutput(result.stdout, roots),
+    stderr: projectNativeOutput(result.stderr, roots),
+    ...(result.scriptResult?.present
+      ? { [NATIVE_SCRIPT_RESULT_FIELD]: projectNativeResult(result.scriptResult.value, roots) }
+      : {}),
+    output_file_count: outputFiles.length,
+    output_bytes: outputBytes,
+    transferEnvelopes: persisted.transferEnvelopes,
+    resources: persisted.resources,
+    input_resources: inputResources,
+  };
+}
+
+function projectNativeFailure({ error, execution, roots }) {
+  return {
+    ok: false,
+    status: "failed",
+    execution,
+    code: Number(error?.code || 1) || 1,
+    stdout: projectNativeOutput(error?.stdout || "", roots),
+    stderr: projectNativeOutput(error?.message || String(error || "native script failed"), roots),
+    output_file_count: 0,
+    output_bytes: 0,
+    transferEnvelopes: [],
+    resources: [],
+    input_resources: [],
+  };
+}
+
+async function cleanupNativeTask(directories) {
+  const cleanupResults = await Promise.allSettled(directories.map(cleanupNativeTaskDirectory));
+  const codes = cleanupResults
+    .filter((item) => item.status === "rejected")
+    .map((item) => String(item.reason?.code || "cleanup_failed"));
+  return codes.length ? { status: "failed", codes: [...new Set(codes)] } : null;
+}
+
 export function createNativeScriptTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const executionPolicy = resolveToolExecutionPolicy({
@@ -364,7 +496,7 @@ export function createNativeScriptTool({ agentContext }) {
       ),
     }),
     func: async (
-      { script_body, inputs = [], arguments: scriptArguments = {}, riskLevel },
+      { script_body, inputs, arguments: scriptArguments, riskLevel },
       _runManager,
       toolConfig = {},
     ) => {
@@ -388,49 +520,41 @@ export function createNativeScriptTool({ agentContext }) {
         reason: "The script can invoke browser, LibreOffice, and FFmpeg capabilities.",
       });
       const taskRoot = path.join(runtime.basePath, WORKSPACE_LAYOUT.NATIVE_TASKS_DIR, randomUUID());
-      const inputRoot = path.join(taskRoot, "input");
-      const outputRoot = path.join(taskRoot, "output");
-      const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-native-"));
+      const roots = {
+        inputRoot: path.join(taskRoot, "input"),
+        outputRoot: path.join(taskRoot, "output"),
+        tempRoot: await mkdtemp(path.join(os.tmpdir(), "noobot-native-")),
+      };
       await Promise.all([
-        mkdir(inputRoot, { recursive: true }),
-        mkdir(outputRoot, { recursive: true }),
+        mkdir(roots.inputRoot, { recursive: true }),
+        mkdir(roots.outputRoot, { recursive: true }),
       ]);
       let resultPayload;
-      let cleanupFailures = [];
+      let cleanup = null;
       try {
-        const inputMap = {};
-        const inputResources = [];
-        let totalInputBytes = 0;
-        for (const [index, value] of (Array.isArray(inputs) ? inputs : []).entries()) {
-          const resolvedInput = await resolveFileInput({
-            ...value,
-            agentContext,
-            fieldName: "inputs",
-            capability: PATH_CAPABILITIES.NATIVE_INPUT,
-          });
-          const source = resolvedInput.executionPath;
-          if (resolvedInput.resourceRef) inputResources.push(resolvedInput.resourceRef);
-          const sourceStat = await stat(source);
-          if (!sourceStat.isFile()) throw new Error("native script inputs must be files");
-          totalInputBytes += Number(sourceStat.size || 0);
-          if (totalInputBytes > LENGTH_THRESHOLDS.nativeScript.inputTotalBytes)
-            throw new Error("native script inputs exceed 200 MB");
-          const internalName = `${index}${path.extname(source).toLowerCase()}`;
-          await cp(source, path.join(inputRoot, internalName), { dereference: true, force: false });
-          inputMap[String(index)] = internalName;
-        }
+        const { inputMap, inputResources } = await stageNativeInputs({
+          inputs,
+          agentContext,
+          inputRoot: roots.inputRoot,
+        });
         const scriptPath = path.join(taskRoot, "task.mjs");
-        const libreOfficeExecutable = resolveLibreOfficeExecutable();
         const playwright = await import("playwright");
         const browserExecutablePath = resolveBrowserExecutable({
           playwrightExecutable: playwright.chromium.executablePath(),
         });
-        const generated = `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nimport { publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)}, browserExecutablePath: ${JSON.stringify(browserExecutablePath)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
+        const generated = buildNativeTaskScript({
+          body,
+          scriptArguments,
+          inputMap,
+          roots,
+          libreOfficeExecutable: resolveLibreOfficeExecutable(),
+          browserExecutablePath,
+        });
         await writeFile(scriptPath, generated, "utf8");
         const result = await runGeneratedScript({
           scriptPath,
           cwd: taskRoot,
-          env: buildRestrictedProcessEnv({ home: taskRoot, temp: tempRoot }),
+          env: buildRestrictedProcessEnv({ home: taskRoot, temp: roots.tempRoot }),
           timeoutMs: BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs,
           abortSignal: toolConfig?.signal || null,
           ipcHandlers: createNativeScriptIpcHandlers({
@@ -440,109 +564,35 @@ export function createNativeScriptTool({ agentContext }) {
             browserProfileRoot:
               resolveBrowserProfileRoot() ||
               path.join(runtime.basePath, WORKSPACE_LAYOUT.BROWSER_PROFILES_DIR),
-            interactionId: text(
-              toolConfig?.configurable?.noobotHookContext?.call?.id ||
-                toolConfig?.configurable?.noobotHookContext?.call?.tool_call_id ||
-                toolConfig?.configurable?.noobotHookContext?.call?.toolCallId,
-            ),
+            interactionId: text(toolConfig?.configurable?.noobotHookContext?.call?.id),
           }),
         });
-        const outputFiles = result.code === 0 ? await collectOutputFiles(outputRoot) : [];
-        const outputStats = await Promise.all(
-          outputFiles.map((relative) => stat(path.join(outputRoot, relative))),
+        const { outputFiles, outputBytes } = await measureNativeOutputs(
+          roots.outputRoot,
+          result.code === 0,
         );
-        const outputBytes = outputStats.reduce((sum, info) => sum + Number(info.size || 0), 0);
-        if (outputBytes > LENGTH_THRESHOLDS.nativeScript.artifactTotalBytes)
-          throw new Error("native script output exceeds 200 MB");
-        let transferEnvelopes = [];
-        let resources = [];
-        if (outputFiles.length) {
-          const artifacts = await Promise.all(
-            outputFiles.map(async (relative) => ({
-              name: relative.split(path.sep).join("__"),
-              mimeType: resolveMimeTypeFromFileName(relative),
-              contentBase64: (await readFile(path.join(outputRoot, relative))).toString("base64"),
-              meta: { virtualPath: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative }) },
-            })),
-          );
-          const persisted = await persistTransferArtifacts({
-            runtime,
-            agentContext,
-            userId: text(runtime?.systemRuntime?.userId),
-            artifacts,
-            attachmentSource: ATTACHMENT_SOURCE.MODEL,
-            generationSource: "execute_native_script",
-            source: "tool",
-            reason: TRANSFER_REASON.EXECUTE_NATIVE_SCRIPT_OUTPUT,
-            identity,
-            intent: {
-              source: "tool",
-              reason: TRANSFER_REASON.EXECUTE_NATIVE_SCRIPT_OUTPUT,
-              scenario: "tool",
-              strategy: "tool_output",
-            },
-          });
-          transferEnvelopes = persisted.transferEnvelopes;
-          resources = registerTransferAttachmentResources({
-            agentContext,
-            transferEnvelopes,
-          });
-        }
-        resultPayload = {
-          ok: result.code === 0,
-          status: result.code === 0 ? "completed" : "failed",
+        const persisted = await persistNativeOutputs({
+          runtime,
+          agentContext,
+          identity,
+          outputRoot: roots.outputRoot,
+          outputFiles,
+        });
+        resultPayload = projectNativeSuccess({
+          result,
           execution,
-          code: result.code,
-          stdout: projectNativeOutput(result.stdout, { inputRoot, outputRoot, tempRoot }),
-          stderr: projectNativeOutput(result.stderr, { inputRoot, outputRoot, tempRoot }),
-          ...(result.scriptResult?.present
-            ? {
-                [NATIVE_SCRIPT_RESULT_FIELD]: projectNativeResult(result.scriptResult.value, {
-                  inputRoot,
-                  outputRoot,
-                  tempRoot,
-                }),
-              }
-            : {}),
-          output_file_count: outputFiles.length,
-          output_bytes: outputBytes,
-          transferEnvelopes,
-          resources,
-          input_resources: inputResources,
-        };
+          roots,
+          outputFiles,
+          outputBytes,
+          persisted,
+          inputResources,
+        });
       } catch (error) {
-        resultPayload = {
-          ok: false,
-          status: "failed",
-          execution,
-          code: Number(error?.code || 1) || 1,
-          stdout: projectNativeOutput(error?.stdout || "", { inputRoot, outputRoot, tempRoot }),
-          stderr: projectNativeOutput(error?.message || String(error || "native script failed"), {
-            inputRoot,
-            outputRoot,
-            tempRoot,
-          }),
-          output_file_count: 0,
-          output_bytes: 0,
-          transferEnvelopes: [],
-          resources: [],
-          input_resources: [],
-        };
+        resultPayload = projectNativeFailure({ error, execution, roots });
       } finally {
-        const cleanupResults = await Promise.allSettled([
-          cleanupNativeTaskDirectory(taskRoot),
-          cleanupNativeTaskDirectory(tempRoot),
-        ]);
-        cleanupFailures = cleanupResults
-          .filter((item) => item.status === "rejected")
-          .map((item) => String(item.reason?.code || "cleanup_failed"));
+        cleanup = await cleanupNativeTask([taskRoot, roots.tempRoot]);
       }
-      if (cleanupFailures.length) {
-        resultPayload.cleanup = {
-          status: "failed",
-          codes: [...new Set(cleanupFailures)],
-        };
-      }
+      if (cleanup) resultPayload.cleanup = cleanup;
       return toToolJsonResult(TOOL_NAME.EXECUTE_NATIVE_SCRIPT, resultPayload);
     },
   });

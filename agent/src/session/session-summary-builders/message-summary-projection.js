@@ -181,7 +181,7 @@ function resolveDisplayPresentation(message) {
 function applyDisplayIdentity(summary, message, presentationMessageId) {
   const messageUid = text(message.messageUid);
   const sourceMessageId = text(message.messageId);
-  const messageId = presentationMessageId || sourceMessageId || messageUid;
+  const messageId = presentationMessageId || sourceMessageId;
   if (messageId) summary.messageId = messageId;
   if (!presentationMessageId) {
     if (messageUid) summary.messageUid = messageUid;

@@ -7,7 +7,7 @@
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
 import {
   isInjectedMessage,
-  readMessageField,
+  readContextMessageField,
   resolveInjectedMessageType,
 } from "@noobot/context-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -42,15 +42,15 @@ export function applyNormalizedMessageFlags(normalized = {}, messageItem = {}) {
   if (isInjectedMessage(messageItem)) {
     normalized.injectedMessage = true;
   }
-  const injectedBy = readMessageField(messageItem, "injectedBy");
+  const injectedBy = readContextMessageField(messageItem, "injectedBy");
   if (injectedBy) normalized.injectedBy = injectedBy;
   const injectedMessageType = resolveInjectedMessageType(messageItem);
   if (injectedMessageType) normalized.injectedMessageType = injectedMessageType;
-  if (readMessageField(messageItem, "messageOrigin").toLowerCase() === "natural") {
+  if (readContextMessageField(messageItem, "messageOrigin").toLowerCase() === "natural") {
     normalized.messageOrigin = "natural";
     normalized.userMetaMaterialized =
       messageItem?.userMetaMaterialized === true ||
-      readMessageField(messageItem, "userMetaMaterialized").toLowerCase() === "true";
+      readContextMessageField(messageItem, "userMetaMaterialized").toLowerCase() === "true";
   }
   return normalized;
 }

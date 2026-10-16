@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { readMessageField } from "./message.js";
+import { readContextMessageField } from "../message/codec.js";
 import { CONTEXT_CONTROL_MESSAGE_TYPES } from "../message/injected-types.js";
 import { text } from "@noobot/shared/value";
 
@@ -17,7 +17,7 @@ export {
 const contextControlTypes = new Set(CONTEXT_CONTROL_MESSAGE_TYPES);
 
 export function resolveContextInternalMessageType(message = {}) {
-  return text(readMessageField(message, "noobotInternalMessageType"));
+  return text(readContextMessageField(message, "noobotInternalMessageType"));
 }
 
 export function isContextControlMessage(message = {}) {

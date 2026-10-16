@@ -11,7 +11,7 @@ import {
   resolveContextMessageId,
   resolveContextMessageRole,
   resolveContextMessageTurnScopeId,
-  resolveContextToolCallId,
+  resolveContextToolResultCallId,
   readContextMessageField,
 } from "../message/codec.js";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
@@ -37,7 +37,7 @@ export function recoverContextTaskSummaryToolResult(message = {}) {
   const summary = extractContextTaskSummary(message);
   if (!summary) return null;
   const sourceMessageId = resolveContextMessageId(message);
-  const toolCallId = resolveContextToolCallId(message);
+  const toolCallId = resolveContextToolResultCallId(message);
   const dialogProcessId = resolveContextMessageDialogProcessId(message);
   const parentDialogProcessId = readContextMessageField(message, "parentDialogProcessId");
   const turnScopeId = resolveContextMessageTurnScopeId(message);

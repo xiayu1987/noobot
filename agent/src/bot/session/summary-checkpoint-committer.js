@@ -15,19 +15,11 @@ import {
   hasCheckpointBoundaryToolCall,
 } from "@noobot/context-protocol/policy/summary";
 import { applyPendingUserMetaBackwrites } from "../../context/assembly/message-builder/user-meta-backwrite.js";
+import {
+  resolveContextMessageId,
+  resolveContextMessageSummarized,
+} from "@noobot/context-protocol/message/codec";
 import { text } from "@noobot/shared/value";
-
-function isSummarized(message = {}) {
-  return message?.summarized === true || message?.lc_kwargs?.summarized === true;
-}
-
-function resolveMessageId(message = {}) {
-  return text(
-    message?.messageUid ||
-      message?.additional_kwargs?.noobotMessageId ||
-      message?.lc_kwargs?.additional_kwargs?.noobotMessageId,
-  );
-}
 
 function createSummaryCompletionMarker(summaryCompletion = null) {
   if (!summaryCompletion || typeof summaryCompletion !== "object") return null;
@@ -35,7 +27,7 @@ function createSummaryCompletionMarker(summaryCompletion = null) {
   const summarizedMessageIds = new Set(
     summaryCompletion.summarizedMessageIds.map((id) => text(id)).filter(Boolean),
   );
-  return () => (message) => summarizedMessageIds.has(resolveMessageId(message));
+  return () => (message) => summarizedMessageIds.has(resolveContextMessageId(message));
 }
 
 function compactPromotionSource(message = {}) {
@@ -169,7 +161,11 @@ function resolvePersistedMessageUids({
 }
 
 function resolveSummarizedMessageUids({ hasMarker, completion, turnMessages = [] } = {}) {
-  if (!hasMarker) return turnMessages.filter(isSummarized).map(resolveMessageUid).filter(Boolean);
+  if (!hasMarker)
+    return turnMessages
+      .filter(resolveContextMessageSummarized)
+      .map(resolveMessageUid)
+      .filter(Boolean);
   return [
     ...new Set(
       completion.summarizedMessageIds.map((messageUid) => text(messageUid)).filter(Boolean),
@@ -259,15 +255,17 @@ function applyCheckpointMarks({ runtime, createSummaryMarker, summarizedMessageU
   const currentTurnMarker = createSummaryMarker();
   currentTurnMessages.updateWhere(
     { summarized: true },
-    (message) => !isSummarized(message) && currentTurnMarker(message),
+    (message) => !resolveContextMessageSummarized(message) && currentTurnMarker(message),
   );
   if (hasActiveContext(runtime)) {
     markMessagesSummarizedByIds(runtime.activeMessageContext, summarizedMessageUids);
   }
   const markedTurnMessages = currentTurnMessages.toArray();
-  const retainedMessages = markedTurnMessages.filter((message) => !isSummarized(message));
+  const retainedMessages = markedTurnMessages.filter(
+    (message) => !resolveContextMessageSummarized(message),
+  );
   const promotionSources = markedTurnMessages
-    .filter(isSummarized)
+    .filter(resolveContextMessageSummarized)
     .map(compactPromotionSource)
     .filter(Boolean);
   if (promotionSources.length) {

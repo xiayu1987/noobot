@@ -14,7 +14,6 @@ import {
 } from "@noobot/agent-transport-protocol/bot-dispatch";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import {
-  canonicalMessageId,
   canonicalMessageIdentityDebugData,
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
@@ -29,7 +28,7 @@ function messageIdentity(message = {}) {
 function summarizedMessageIds(messages = []) {
   return (Array.isArray(messages) ? messages : [])
     .filter((message = {}) => message?.summarized === true)
-    .map((message = {}) => canonicalMessageId(message))
+    .map((message = {}) => resolveContextMessageId(message))
     .filter(Boolean);
 }
 
@@ -342,3 +341,4 @@ export async function dispatchAgentTurn({
   });
   return agentResult;
 }
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";

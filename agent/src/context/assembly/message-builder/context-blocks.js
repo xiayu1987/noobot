@@ -13,10 +13,8 @@ import {
   getRuntimeFromAgentContext,
 } from "../../agent-context-accessor.js";
 import { buildHistoryMessages } from "./history.js";
-import {
-  canonicalMessageId,
-  emitContextIdentityDebug,
-} from "../../../observability/context-identity-debug.js";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
 import { text } from "@noobot/shared/value";
 
 export function buildContextMessageBlocks(agentContext, { currentUserMessage = null } = {}) {
@@ -45,7 +43,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   const historyMessages = rawHistoryMessages;
   const resolvedDialogProcessId = context.identity.dialogProcessId;
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
-  const currentCanonicalId = canonicalMessageId(currentUserMessage);
+  const currentCanonicalId = resolveContextMessageId(currentUserMessage);
   emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", {
     messageUid: text(currentUserMessage?.messageUid),
     currentCanonicalId,
@@ -67,7 +65,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     currentCanonicalId,
     currentMessagePresent: Boolean(currentCanonicalId),
     currentAlreadyInIncremental: restoredIncrementalMessages.some(
-      (message) => canonicalMessageId(message) === currentCanonicalId,
+      (message) => resolveContextMessageId(message) === currentCanonicalId,
     ),
     systemCount: resolvedMainBlocks.system.length,
     historyCount: resolvedMainBlocks.history.length,
@@ -96,7 +94,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     fallbackUserMeta,
     allowMessageAttachments: true,
   });
-  const projectedIds = incremental.map(canonicalMessageId).filter(Boolean);
+  const projectedIds = incremental.map(resolveContextMessageId).filter(Boolean);
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {
     sourceMessageUid: text(currentUserMessage?.messageUid),
     contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",

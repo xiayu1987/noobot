@@ -173,10 +173,7 @@ function messageEvidenceItem(message = {}, index = 0, block = "") {
     type: String(message?.type || message?.lc_kwargs?.type || "").trim() || undefined,
     dialogProcessId: readField(message, "dialogProcessId") || undefined,
     turnScopeId: readField(message, "turnScopeId") || undefined,
-    injectedMessageType:
-      readField(message, "injectedMessageType") ||
-      readField(message, "injected_message_type") ||
-      undefined,
+    injectedMessageType: readField(message, "injectedMessageType") || undefined,
     internalType: readField(message, "noobotInternalMessageType") || undefined,
     summarized:
       message?.summarized === true ||

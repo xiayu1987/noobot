@@ -103,8 +103,8 @@ test("refinement prompt explicitly forbids two-level sub-plan ids", () => {
     locale: "zh-CN",
     marker: "<!-- harness-planning-refinement -->",
     data: {
-      targetId: 1,
-      targetContent: "主步骤一",
+      targetIds: [1],
+      targetPlansText: "1. 主步骤一",
       existingSubPlansText: "",
       feedback: "",
     },

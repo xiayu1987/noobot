@@ -182,7 +182,9 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
             {
               relationType: "parsed_result",
               sourceIdentity: request.sourceIdentity,
-              targetIdentity: request.targetAttachment.identity,
+              targetIdentity: request.targetDescriptor.identity,
+              name: request.targetDescriptor.name,
+              mimeType: request.targetDescriptor.mimeType,
               producer: { type: "tool", id: request.producerId },
               createdAt: "2026-08-16T00:00:00.000Z",
             },

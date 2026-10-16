@@ -13,6 +13,7 @@ import {
   resolveContextMessageFlags,
   resolveContextMessageId,
   resolveContextMessageRole,
+  resolveContextToolResultCallId,
 } from "../message/codec.js";
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 import { text } from "@noobot/shared/value";
@@ -111,11 +112,7 @@ export function serializeContextMessage(message = {}) {
     }
   }
   if (normalizedType === "tool") {
-    serialized.tool_call_id =
-      message?.tool_call_id ||
-      message?.lc_kwargs?.tool_call_id ||
-      additionalKwargs?.tool_call_id ||
-      "";
+    serialized.tool_call_id = resolveContextToolResultCallId(message);
     if (message?.name) serialized.name = message.name;
     if (message?.status) serialized.status = message.status;
     if (message?.artifact !== undefined) serialized.artifact = cloneJson(message.artifact);

@@ -457,7 +457,16 @@ test("AttachmentService links parsed results to one attachment identity only", a
         sessionId: "s1",
         attachmentSource: "user",
       },
-      targetAttachment: parsed,
+      targetDescriptor: {
+        identity: {
+          attachmentId: parsed.attachmentId,
+          sessionId: parsed.sessionId,
+          attachmentSource: parsed.attachmentSource,
+        },
+        name: parsed.name,
+        mimeType: parsed.mimeType,
+        size: parsed.size,
+      },
       producerId: "multimodal_parse",
     });
 
@@ -663,7 +672,16 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
         sessionId: rootSessionId,
         attachmentSource: "user",
       },
-      targetAttachment: parsedAttachment,
+      targetDescriptor: {
+        identity: {
+          attachmentId: parsedAttachment.attachmentId,
+          sessionId: parsedAttachment.sessionId,
+          attachmentSource: parsedAttachment.attachmentSource,
+        },
+        name: parsedAttachment.name,
+        mimeType: parsedAttachment.mimeType,
+        size: parsedAttachment.size,
+      },
       producerId: "multimodal_parse",
     });
 

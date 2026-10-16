@@ -11,6 +11,10 @@ import {
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
 import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
 import {
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
+} from "@noobot/context-protocol/message/codec";
+import {
   appendMessage,
   replaceMessages,
   resolveModelMessageBlocks,
@@ -26,17 +30,13 @@ function hasPendingToolCallPair(messages = []) {
     if (role !== "assistant") continue;
     const calls = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
     if (!calls.length) return false;
-    const callIds = new Set(
-      calls
-        .map((call = {}) => text(call?.id || call?.tool_call_id || call?.toolCallId))
-        .filter(Boolean),
-    );
+    const callIds = new Set(calls.map(resolveContextToolCallDeclarationId).filter(Boolean));
     if (!callIds.size) return false;
     const matchedToolIds = new Set();
     for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
       const next = messages[cursor] || {};
       if (text(next?.role).toLowerCase() !== "tool") continue;
-      const toolCallId = text(next?.tool_call_id);
+      const toolCallId = resolveContextToolResultCallId(next);
       if (toolCallId && callIds.has(toolCallId)) matchedToolIds.add(toolCallId);
     }
     return matchedToolIds.size < callIds.size;

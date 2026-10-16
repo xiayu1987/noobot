@@ -5,17 +5,21 @@
  */
 
 import {
-  getMessageToolCalls,
   isInjectedMessage,
-  readMessageField,
   resolveInjectedMessageType,
-  resolveMessageDialogProcessId,
-  resolveMessageRole,
-  resolveMessageId,
-  resolveToolCallId,
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message.js";
-import { markContextMessageSummarized, resolveContextMessageSummarized } from "../message/codec.js";
+import {
+  markContextMessageSummarized,
+  readContextMessageField,
+  resolveContextMessageDialogProcessId,
+  resolveContextMessageId,
+  resolveContextMessageRole,
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
+  resolveContextToolCalls,
+  resolveContextMessageSummarized,
+} from "../message/codec.js";
 import { SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES } from "../message/injected-types.js";
 import { isContextControlMessage } from "./injected-message.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
@@ -34,7 +38,7 @@ function collectRetainedInjectedMessageIndexes(messages = []) {
       retained.add(index);
       return;
     }
-    const owner = readMessageField(message, "injectedBy") || "injected";
+    const owner = readContextMessageField(message, "injectedBy") || "injected";
     latest.set(`${owner}:${type}`, index);
   });
   for (const index of latest.values()) retained.add(index);
@@ -46,11 +50,11 @@ function resolveToolCallName(call = {}) {
 }
 
 function hasToolCallWithFlowControlRole(message = {}, role = "") {
-  return getMessageToolCalls(message).some((call) => hasFlowControlRole(call, role));
+  return resolveContextToolCalls(message).some((call) => hasFlowControlRole(call, role));
 }
 
 function isToolResultWithFlowControlRole(message = {}, role = "") {
-  return resolveMessageRole(message) === "tool" && hasFlowControlRole(message, role);
+  return resolveContextMessageRole(message) === "tool" && hasFlowControlRole(message, role);
 }
 
 export function hasCheckpointBoundaryToolCall(message = {}) {
@@ -71,8 +75,8 @@ function createToolCallBatchIndex(messages = []) {
   const source = Array.isArray(messages) ? messages : [];
   const toolResultIndexesByCallId = new Map();
   for (const [index, message] of source.entries()) {
-    if (resolveMessageRole(message) !== "tool") continue;
-    const callId = resolveToolCallId(message);
+    if (resolveContextMessageRole(message) !== "tool") continue;
+    const callId = resolveContextToolResultCallId(message);
     if (!callId) continue;
     const resultIndexes = toolResultIndexesByCallId.get(callId) || [];
     resultIndexes.push(index);
@@ -81,10 +85,10 @@ function createToolCallBatchIndex(messages = []) {
 
   const assistantBatches = [];
   for (const [index, message] of source.entries()) {
-    if (resolveMessageRole(message) !== "assistant") continue;
-    const calls = getMessageToolCalls(message);
+    if (resolveContextMessageRole(message) !== "assistant") continue;
+    const calls = resolveContextToolCalls(message);
     if (!calls.length) continue;
-    const callIds = calls.map(resolveToolCallId).filter(Boolean);
+    const callIds = calls.map(resolveContextToolCallDeclarationId).filter(Boolean);
     const resultIndexes = [
       ...new Set(callIds.flatMap((callId) => toolResultIndexesByCallId.get(callId) || [])),
     ].sort((left, right) => left - right);
@@ -223,7 +227,7 @@ function collectPreservedMessages(messages = [], indexes = new Set()) {
     const message = source[index];
     if (!message || typeof message !== "object") continue;
     objects.add(message);
-    const id = resolveMessageId(message);
+    const id = resolveContextMessageId(message);
     if (id) ids.add(id);
   }
   return { objects, ids };
@@ -232,7 +236,7 @@ function collectPreservedMessages(messages = [], indexes = new Set()) {
 function isPreservedMessage(message = {}, preserved = null) {
   if (!preserved) return false;
   if (preserved.objects instanceof Set && preserved.objects.has(message)) return true;
-  const id = resolveMessageId(message);
+  const id = resolveContextMessageId(message);
   return Boolean(id && preserved.ids instanceof Set && preserved.ids.has(id));
 }
 
@@ -246,27 +250,30 @@ function enforceToolCallBatchClosure(
   const sourceMessages = Array.isArray(source) ? source : [];
   const retainedMessages = Array.isArray(retentionSource) ? retentionSource : sourceMessages;
   const selectedObjects = new Set(selected);
-  const selectedIds = new Set(selected.map((message) => resolveMessageId(message)).filter(Boolean));
+  const selectedIds = new Set(
+    selected.map((message) => resolveContextMessageId(message)).filter(Boolean),
+  );
   const sourceObjects = new Set(sourceMessages);
   const sourceIds = new Set(
-    sourceMessages.map((message) => resolveMessageId(message)).filter(Boolean),
+    sourceMessages.map((message) => resolveContextMessageId(message)).filter(Boolean),
   );
   const blockedObjects = new Set();
   const blockedIds = new Set();
   const has = (objects, ids, message) =>
     objects.has(message) ||
-    Boolean(resolveMessageId(message) && ids.has(resolveMessageId(message)));
+    Boolean(resolveContextMessageId(message) && ids.has(resolveContextMessageId(message)));
   const block = (message) => {
     if (!has(sourceObjects, sourceIds, message)) return;
     blockedObjects.add(message);
-    const id = resolveMessageId(message);
+    const id = resolveContextMessageId(message);
     if (id) blockedIds.add(id);
   };
 
   const claimedToolResultIds = new Set();
   const assistantBatches = toolBatchIndex.assistantBatches.map((batch) => {
     const resultMembers = batch.resultIndexes.map((index) => retainedMessages[index]);
-    for (const result of resultMembers) claimedToolResultIds.add(resolveToolCallId(result));
+    for (const result of resultMembers)
+      claimedToolResultIds.add(resolveContextToolResultCallId(result));
     return {
       members: [retainedMessages[batch.assistantIndex], ...resultMembers],
       complete: batch.complete,
@@ -282,14 +289,14 @@ function enforceToolCallBatchClosure(
     for (const member of batch.members) block(member);
   }
   for (const message of retainedMessages) {
-    if (resolveMessageRole(message) !== "tool") continue;
-    const toolCallId = resolveToolCallId(message);
+    if (resolveContextMessageRole(message) !== "tool") continue;
+    const toolCallId = resolveContextToolResultCallId(message);
     if (toolCallId && !claimedToolResultIds.has(toolCallId)) block(message);
   }
   return selected.filter(
     (message) =>
       !blockedObjects.has(message) &&
-      !(resolveMessageId(message) && blockedIds.has(resolveMessageId(message))),
+      !(resolveContextMessageId(message) && blockedIds.has(resolveContextMessageId(message))),
   );
 }
 
@@ -319,7 +326,7 @@ export function resolveSummaryScope(
     ? new Set(messageIds.map((id) => text(id)).filter(Boolean))
     : null;
   const selectedCheckpointMessages = wantedIds
-    ? checkpointMessages.filter((message) => wantedIds.has(resolveMessageId(message)))
+    ? checkpointMessages.filter((message) => wantedIds.has(resolveContextMessageId(message)))
     : checkpointMessages;
   const summaryMessages = collectDialogScopedMessagesToSummarize(selectedCheckpointMessages, {
     maxMessages: selectedCheckpointMessages.length,
@@ -358,7 +365,7 @@ export function markCurrentTurnStoreSummarized(
 export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set()) {
   const ids = messageIds instanceof Set ? messageIds : new Set(messageIds);
   for (const message of Array.isArray(messages) ? messages : []) {
-    if (!ids.has(resolveMessageId(message))) continue;
+    if (!ids.has(resolveContextMessageId(message))) continue;
     markContextMessageSummarized(message);
   }
 }
@@ -466,7 +473,7 @@ export function collectDialogScopedMessagesToSummarize(
 ) {
   const sourceGroups = new Map();
   for (const message of Array.isArray(messages) ? messages : []) {
-    const dialogProcessId = resolveMessageDialogProcessId(message);
+    const dialogProcessId = resolveContextMessageDialogProcessId(message);
     if (!dialogProcessId) {
       throw new Error("summary checkpoint message requires dialogProcessId");
     }
@@ -476,7 +483,7 @@ export function collectDialogScopedMessagesToSummarize(
   }
   const retentionGroups = new Map();
   for (const message of Array.isArray(retentionMessages) ? retentionMessages : []) {
-    const dialogProcessId = resolveMessageDialogProcessId(message);
+    const dialogProcessId = resolveContextMessageDialogProcessId(message);
     if (!dialogProcessId) {
       throw new Error("summary retention message requires dialogProcessId");
     }

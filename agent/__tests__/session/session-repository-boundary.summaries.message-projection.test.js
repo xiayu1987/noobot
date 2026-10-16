@@ -10,13 +10,14 @@ import assert from "node:assert/strict";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
 
-test("session display summary projects persisted messageUid as canonical message identity", () => {
+test("session display summary projects persisted messageId and messageUid without identity fallback", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "identity-session",
     messages: [
       {
         role: "user",
         content: "persisted user",
+        messageId: "msg-persisted-user",
         messageUid: "sm-persisted-user",
         messageOrigin: "natural",
         userMetaMaterialized: true,
@@ -28,7 +29,7 @@ test("session display summary projects persisted messageUid as canonical message
   assert.deepEqual(
     (({ messageId, messageUid, role }) => ({ messageId, messageUid, role }))(summary.messages[0]),
     {
-      messageId: "sm-persisted-user",
+      messageId: "msg-persisted-user",
       messageUid: "sm-persisted-user",
       role: "user",
     },
@@ -43,6 +44,7 @@ test("session display summary preserves the canonical internal control message t
         role: "user",
         type: "context_control",
         content: "task check prompt",
+        messageId: "sm-task-check-prompt",
         messageUid: "sm-task-check-prompt",
         turnScopeId: "turn-task-check",
         dialogProcessId: "dialog-task-check",

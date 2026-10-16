@@ -140,28 +140,29 @@ assertFileContains("context-protocol/src/policy/window.js", [
 ]);
 const messagePolicyText = assertFileContains("context-protocol/src/policy/message.js", [
   {
-    name: "message policy delegates canonical identity to codec",
-    pattern: /resolveContextMessageId\s+as\s+resolveMessageId/,
-  },
-  {
     name: "injected marker delegates to canonical flags",
     pattern: /return\s+resolveContextMessageFlags\(message\)\.injected/,
   },
 ]);
-const policyResolveIdMatch = messagePolicyText.match(
-  /export\s+function\s+resolveMessageId[\s\S]*?\n}/,
-);
 if (
-  policyResolveIdMatch &&
-  /readMessageField\(message,\s*["'](?:id|messageId)["']\)/.test(policyResolveIdMatch[0])
+  /\bexport\s*\{[^}]*\bas\b[^}]*\}\s*from\s*["']\.\.\/message\/codec\.js["']/.test(
+    messagePolicyText,
+  )
 ) {
   fail(
-    "message policy accepts a non-canonical identity",
-    "Cross-block identity must come only from noobotMessageId.",
+    "message policy re-exports codec accessors under aliases",
+    "Import message accessors from @noobot/context-protocol/message/codec directly.",
   );
 } else {
-  pass("message policy uses only noobotMessageId as canonical id");
+  pass("message policy has no codec alias re-exports");
 }
+assertFileContains("agent/src/session/entities/message-entity.js", [
+  {
+    name: "session message entity owns messageUid default identity",
+    pattern:
+      /function resolveRuntimeMessageId\([^)]*\)\s*\{\s*return firstText\(\s*message\?\.messageId,\s*readContextMessageField\(message, "noobotMessageId"\),\s*messageUid,?\s*\);/,
+  },
+]);
 assertFileContains("agent/src/context/assembly/message-builder/history.js", [
   {
     name: "history assembly delegates canonical identity metadata",
@@ -207,11 +208,26 @@ assertFileContains("context-protocol/src/tool/context-policy.js", [
       /CHECKPOINT_BOUNDARY:\s*"checkpoint_boundary"[\s\S]*?CHECKPOINT_EVIDENCE:\s*"checkpoint_evidence"/,
   },
 ]);
-assertFileContains("context-protocol/src/message/codec.js", [
+const codecText = assertFileContains("context-protocol/src/message/codec.js", [
   {
-    name: "owns canonical tool-call identity precedence",
+    name: "persisted message uid owns canonical entity identity",
     pattern:
-      /export\s+function\s+resolveContextToolCallId[\s\S]*?value\?\.tool_call_id[\s\S]*?value\?\.id/,
+      /export\s+function\s+resolveContextMessageId[\s\S]*?const\s+persistedMessageUid\s*=\s*text\(message\?\.messageUid\)[\s\S]*?return\s+canonicalMessageId\s*\|\|\s*persistedMessageUid/,
+  },
+  {
+    name: "persisted and context identities cannot diverge",
+    pattern:
+      /canonicalMessageId\s*&&\s*persistedMessageUid\s*&&\s*canonicalMessageId\s*!==\s*persistedMessageUid[\s\S]*?persisted messageUid conflicts with canonical noobotMessageId/,
+  },
+  {
+    name: "owns tool-call declaration identity",
+    pattern:
+      /export\s+function\s+resolveContextToolCallDeclarationId\(call = \{\}\) \{\s*return text\(call\?\.id\);\s*\}/,
+  },
+  {
+    name: "owns tool-result call identity",
+    pattern:
+      /export\s+function\s+resolveContextToolResultCallId\(message = \{\}\) \{\s*return text\(message\?\.tool_call_id\);\s*\}/,
   },
 ]);
 assertFileContains("context-protocol/src/policy/terminal-history.js", [
@@ -243,7 +259,7 @@ const summaryCheckpointText = assertFileContains(
   [
     {
       name: "summary checkpoint matches canonical ids",
-      pattern: /summarizedMessageIds\.has\(resolveMessageId\(message\)\)/,
+      pattern: /summarizedMessageIds\.has\(resolveContextMessageId\(message\)\)/,
     },
   ],
 );
@@ -638,16 +654,6 @@ assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.
 
 const messageStoreText = assertFileContains("context-protocol/src/message/store.js", [
   {
-    name: "persisted message uid owns canonical entity identity",
-    pattern:
-      /function\s+resolveMessageId[\s\S]*?const\s+persistedMessageUid\s*=\s*text\(message\?\.messageUid\)[\s\S]*?return\s+canonicalMessageId\s*\|\|\s*persistedMessageUid/,
-  },
-  {
-    name: "persisted and context identities cannot diverge",
-    pattern:
-      /canonicalMessageId\s*&&\s*persistedMessageUid\s*&&\s*canonicalMessageId\s*!==\s*persistedMessageUid[\s\S]*?persisted messageUid conflicts with canonical noobotMessageId/,
-  },
-  {
     name: "message-store bumps next id for hydrated ids",
     pattern:
       /function\s+bumpNextMessageId[\s\S]*?match\(\s*\/\^am_\(\[0-9a-z\]\+\)\$\/i\s*\)[\s\S]*?store\.nextId\s*=\s*numeric\s*\+\s*1/,
@@ -672,17 +678,27 @@ if (messageStoreText) {
   } else {
     pass("context protocol never infers message identity from content");
   }
-  const resolveIdMatch = messageStoreText.match(/function\s+resolveMessageId[\s\S]*?\n}/);
+  if (/function\s+resolveMessageId\b/.test(messageStoreText)) {
+    fail(
+      "message-store reimplements message identity",
+      "Message identity must be resolved only by codec resolveContextMessageId.",
+    );
+  } else {
+    pass("message-store delegates message identity to codec");
+  }
+  const resolveIdMatch = codecText.match(/export\s+function\s+resolveContextMessageId[\s\S]*?\n}/);
   if (
-    resolveIdMatch &&
-    /readField\(message,\s*["'](?:id|messageId)["']\)/.test(resolveIdMatch[0])
+    !resolveIdMatch ||
+    /readContextMessageField\(message,\s*["'](?:id|messageId)["']\)|message\?\.messageId\b/.test(
+      resolveIdMatch[0],
+    )
   ) {
     fail(
-      "message-store accepts a provider or presentation id as canonical identity",
+      "codec accepts a provider or presentation id as canonical identity",
       "Only persisted messageUid and its equal noobotMessageId projection may own Context identity.",
     );
   } else {
-    pass("message-store uses only persisted messageUid and its equal Context projection id");
+    pass("codec uses only persisted messageUid and its equal Context projection id");
   }
   const replaceMatch = messageStoreText.match(/export\s+function\s+replaceMessages[\s\S]*?\n}/);
   if (

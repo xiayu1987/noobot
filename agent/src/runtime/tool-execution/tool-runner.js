@@ -54,7 +54,7 @@ function shouldTransferToolInput(call = {}) {
 }
 
 function toolProducer(call = {}) {
-  const id = text(call?.id || call?.tool_call_id || call?.toolCallId);
+  const id = text(call?.id);
   if (!id) throw new Error("semantic_transfer_tool_call_id_required");
   return { type: "tool", id };
 }
@@ -452,14 +452,10 @@ function logRecoverableToolError(state, error) {
       dialogProcessId: state.dialogProcessId,
       turnScopeId: state.turnScopeId,
       executionId: state.executionId,
-      toolCallId: resolveToolCallId(state.call),
+      toolCallId: text(state.call?.id),
       ...(normalizedCause ? { cause: normalizedCause } : {}),
     },
   });
-}
-
-function resolveToolCallId(call = {}) {
-  return [call?.id, call?.tool_call_id, call?.toolCallId].find(Boolean) || "";
 }
 
 function reportToolInvocationError(state, error) {
@@ -472,7 +468,7 @@ function reportToolInvocationError(state, error) {
       source: "tool-runner",
       turn: state.turn,
       tool: text(state.call?.name),
-      toolCallId: resolveToolCallId(state.call),
+      toolCallId: text(state.call?.id),
       sessionId: text(state.sessionId),
       parentSessionId: normalizeParentSessionId(state.parentSessionId),
     },
@@ -625,7 +621,7 @@ function createTurnToolExecutionContext(options = {}) {
     runtime,
     eventListener: options.eventListener || null,
     turn: Number(options.turn || 1),
-    toolCallId: resolveToolCallId(call),
+    toolCallId: text(call.id),
     abortSignal: toolAbortSignal({ runtime }),
   };
 }

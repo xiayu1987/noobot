@@ -6,12 +6,7 @@
 
 import { emitEvent } from "../events/index.js";
 import { text } from "@noobot/shared/value";
-
-export function canonicalMessageId(message = {}) {
-  return text(
-    message?.messageUid || message?.messageId || message?.additional_kwargs?.noobotMessageId,
-  );
-}
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 
 function messageField(message = {}, field = "") {
   return text(
@@ -30,7 +25,7 @@ export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
       ? message.lc_kwargs.tool_calls
       : [];
   return {
-    messageId: canonicalMessageId(message),
+    messageId: resolveContextMessageId(message),
     role,
     operation: text(meta?.operation),
     block: text(meta?.block),

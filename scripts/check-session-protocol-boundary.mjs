@@ -16,6 +16,11 @@ const productionRoots = [
   "service",
   "client/noobot-chat/src",
   "authoritative-state/src",
+  "context-protocol/src",
+  "shared",
+  "plugin/noobot-plugin-harness/src",
+  "plugin/noobot-plugin-workflow/src",
+  "plugin/noobot-plugin-character/src",
 ];
 const collectProductionSources = createRelativeSourceCollector({
   root,

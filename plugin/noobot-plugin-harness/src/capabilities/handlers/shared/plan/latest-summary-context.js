@@ -6,6 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { resolveModelMessageBlocks, resolveModelMessages } from "../../../../core/message-store.js";
+import { readContextMessageField } from "@noobot/context-protocol/message/codec";
 import { text } from "@noobot/shared/value";
 
 function escapeRegExp(value = "") {
@@ -31,12 +32,7 @@ function stripSummaryRelayPrefix(content = "") {
 }
 
 function isSummaryRelayMessage(message = {}) {
-  const injectedType = text(
-    message?.injectedMessageType ||
-      message?.injected_message_type ||
-      message?.lc_kwargs?.injectedMessageType ||
-      message?.lc_kwargs?.injected_message_type,
-  );
+  const injectedType = readContextMessageField(message, "injectedMessageType");
   if (injectedType === "separate_model_relay:summary") return true;
   const content = text(message?.content ?? message?.lc_kwargs?.content);
   return new RegExp(`^${resolveSummaryRelayPrefixPattern()}`, "i").test(content);

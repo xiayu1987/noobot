@@ -253,7 +253,7 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
           },
           {
             role: "tool",
-            toolCallId: "call_resume_1",
+            tool_call_id: "call_resume_1",
             content: "tool result text",
             dialogProcessId: "dlg-stopped",
           },

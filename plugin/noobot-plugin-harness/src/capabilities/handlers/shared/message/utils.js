@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  readContextMessageField,
   resolveContextMessageContent,
   resolveContextMessageRole,
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
-import { isInjectedMessage, readMessageField } from "@noobot/context-protocol/policy/message";
+import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
 import { text } from "@noobot/shared/value";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
@@ -16,7 +17,7 @@ export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } 
   const expectedType = text(type);
   return (
     isInjectedMessage(message) &&
-    readMessageField(message, "injectedBy") === "harness-plugin" &&
+    readContextMessageField(message, "injectedBy") === "harness-plugin" &&
     (!expectedRole || text(message?.role) === expectedRole) &&
     (!expectedType || text(message?.injectedMessageType) === expectedType)
   );

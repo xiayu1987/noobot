@@ -9,7 +9,7 @@ import {
   deriveContextMessageProjectionId,
   projectContextMessageIdentityMetadata,
   resolveContextMessageRole,
-  resolveContextToolCallId,
+  resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
@@ -112,7 +112,7 @@ export function buildHistoryMessages({
       continue;
     }
     if (role === MESSAGE_ROLE.TOOL) {
-      const toolCallId = resolveContextToolCallId(msg);
+      const toolCallId = resolveContextToolResultCallId(msg);
       if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
         if (isCheckpointBoundaryToolResultMessage(msg)) {
           const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg, {

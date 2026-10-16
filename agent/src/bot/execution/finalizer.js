@@ -13,17 +13,15 @@ import {
   buildExecutionReport,
   EXECUTION_REPORT_STATUS,
 } from "@noobot/session-protocol/execution-report";
-import {
-  canonicalMessageId,
-  emitContextIdentityDebug,
-} from "../../observability/context-identity-debug.js";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { emitContextIdentityDebug } from "../../observability/context-identity-debug.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "../../runtime/turn/final-assistant-artifact-projection.js";
 import { text } from "@noobot/shared/value";
 
 function summarizedMessageIds(messages = []) {
   return (Array.isArray(messages) ? messages : [])
     .filter((message = {}) => message?.summarized === true)
-    .map((message = {}) => canonicalMessageId(message))
+    .map((message = {}) => resolveContextMessageId(message))
     .filter(Boolean);
 }
 

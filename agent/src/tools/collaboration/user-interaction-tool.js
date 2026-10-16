@@ -249,11 +249,7 @@ export function createUserInteractionTool({ agentContext }) {
 
       const result = await bridge.requestUserInteraction({
         authority: interactionAuthority,
-        interactionId: text(
-          config?.configurable?.noobotHookContext?.call?.id ||
-            config?.configurable?.noobotHookContext?.call?.tool_call_id ||
-            config?.configurable?.noobotHookContext?.call?.toolCallId,
-        ),
+        interactionId: text(config?.configurable?.noobotHookContext?.call?.id),
         content: interactionContent,
         fields: normalizedFieldsPayload.fields || [],
         requireEncryption: false,

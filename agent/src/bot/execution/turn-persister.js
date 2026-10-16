@@ -51,16 +51,7 @@ function resolveMessageBooleanField(message = {}, field = "") {
 }
 
 function resolveAuthoritativeMessageId(message = {}) {
-  const candidates = [
-    message?.messageId,
-    message?.additional_kwargs?.noobotMessageId,
-    message?.additional_kwargs?.messageId,
-    message?.lc_kwargs?.noobotMessageId,
-    message?.lc_kwargs?.messageId,
-    message?.lc_kwargs?.additional_kwargs?.noobotMessageId,
-    message?.lc_kwargs?.additional_kwargs?.messageId,
-  ];
-  return text(candidates.find(Boolean));
+  return text(message?.messageId) || readContextMessageField(message, "noobotMessageId");
 }
 
 function valueOrDefault(value, defaultValue) {

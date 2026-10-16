@@ -5,12 +5,13 @@
  */
 
 import {
-  getMessageToolCalls,
-  resolveMessageDialogProcessId,
-  resolveMessageRole,
-  resolveToolCallId,
-  readMessageField,
-} from "./message.js";
+  readContextMessageField,
+  resolveContextMessageDialogProcessId,
+  resolveContextMessageRole,
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
+  resolveContextToolCalls,
+} from "../message/codec.js";
 import { isCheckpointBoundaryToolMessage } from "./summary.js";
 import { resolveModelFinalMessages } from "./window.js";
 import {
@@ -20,7 +21,7 @@ import {
 import { text } from "@noobot/shared/value";
 
 function messageTurnScopeId(message = {}) {
-  return readMessageField(message, "turnScopeId");
+  return readContextMessageField(message, "turnScopeId");
 }
 
 export function extractTaskSummaryText(message = {}) {
@@ -32,27 +33,28 @@ export function createHistoryRoundIdentityResolver(messages = []) {
   const identityByMessage = new WeakMap();
   for (const message of Array.isArray(messages) ? messages : []) {
     if (!message || typeof message !== "object") continue;
-    const explicitDialogProcessId = resolveMessageDialogProcessId(message);
+    const explicitDialogProcessId = resolveContextMessageDialogProcessId(message);
     if (explicitDialogProcessId) activeDialogProcessId = explicitDialogProcessId;
     identityByMessage.set(message, explicitDialogProcessId || activeDialogProcessId);
   }
-  return (message) => identityByMessage.get(message) || resolveMessageDialogProcessId(message);
+  return (message) =>
+    identityByMessage.get(message) || resolveContextMessageDialogProcessId(message);
 }
 
 export function normalizeUnpairedTaskSummaryToolResults(messages = []) {
   const source = Array.isArray(messages) ? messages : [];
   const knownToolCallIds = new Set();
   for (const message of source) {
-    if (resolveMessageRole(message) !== "assistant") continue;
-    getMessageToolCalls(message)
-      .map(resolveToolCallId)
+    if (resolveContextMessageRole(message) !== "assistant") continue;
+    resolveContextToolCalls(message)
+      .map(resolveContextToolCallDeclarationId)
       .filter(Boolean)
       .forEach((id) => knownToolCallIds.add(id));
   }
   return source.map((message) => {
-    if (resolveMessageRole(message) !== "tool" || !isCheckpointBoundaryToolMessage(message))
+    if (resolveContextMessageRole(message) !== "tool" || !isCheckpointBoundaryToolMessage(message))
       return message;
-    const toolCallId = resolveToolCallId(message);
+    const toolCallId = resolveContextToolResultCallId(message);
     if (toolCallId && knownToolCallIds.has(toolCallId)) return message;
     return recoverContextTaskSummaryToolResult(message) || message;
   });
@@ -69,9 +71,9 @@ export function filterCurrentTurnMessagesFromHistory(
   const blockedTurns = new Set();
   const blockedDialogs = new Set();
   for (const message of source) {
-    if (resolveMessageRole(message) !== "user") continue;
+    if (resolveContextMessageRole(message) !== "user") continue;
     const messageTurn = messageTurnScopeId(message);
-    const messageDialog = resolveMessageDialogProcessId(message);
+    const messageDialog = resolveContextMessageDialogProcessId(message);
     if (
       !(turnScopeId && messageTurn === turnScopeId) &&
       !(dialogProcessId && messageDialog === dialogProcessId)
@@ -85,8 +87,8 @@ export function filterCurrentTurnMessagesFromHistory(
     (message) =>
       !(messageTurnScopeId(message) && blockedTurns.has(messageTurnScopeId(message))) &&
       !(
-        resolveMessageDialogProcessId(message) &&
-        blockedDialogs.has(resolveMessageDialogProcessId(message))
+        resolveContextMessageDialogProcessId(message) &&
+        blockedDialogs.has(resolveContextMessageDialogProcessId(message))
       ),
   );
 }
@@ -116,12 +118,14 @@ export function buildCanonicalMessageBlocks({
     throw new Error("currentUserMessage requires persisted content and messageUid");
   }
   const identity = {
-    dialogProcessId: resolveMessageDialogProcessId(current || {}),
+    dialogProcessId: resolveContextMessageDialogProcessId(current || {}),
     turnScopeId: messageTurnScopeId(current || {}),
   };
   if (
     current &&
-    (resolveMessageRole(current) !== "user" || !identity.dialogProcessId || !identity.turnScopeId)
+    (resolveContextMessageRole(current) !== "user" ||
+      !identity.dialogProcessId ||
+      !identity.turnScopeId)
   ) {
     throw new Error("currentUserMessage requires canonical user round identity");
   }
@@ -139,7 +143,7 @@ export function buildCanonicalMessageBlocks({
   const incremental = [...(Array.isArray(incrementalMessages) ? incrementalMessages : [])];
   const currentExists = incremental.some(
     (message) =>
-      resolveMessageRole(message) === "user" &&
+      resolveContextMessageRole(message) === "user" &&
       text(
         message?.messageUid ||
           message?.noobotMessageId ||

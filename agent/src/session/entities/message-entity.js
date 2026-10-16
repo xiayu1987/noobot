@@ -61,12 +61,7 @@ function normalizeAttachmentOwner(owner = null) {
 function resolveRuntimeMessageId(message = {}, messageUid = "") {
   return firstText(
     message?.messageId,
-    message?.additional_kwargs?.noobotMessageId,
-    message?.additional_kwargs?.messageId,
-    message?.lc_kwargs?.noobotMessageId,
-    message?.lc_kwargs?.messageId,
-    message?.lc_kwargs?.additional_kwargs?.noobotMessageId,
-    message?.lc_kwargs?.additional_kwargs?.messageId,
+    readContextMessageField(message, "noobotMessageId"),
     messageUid,
   );
 }

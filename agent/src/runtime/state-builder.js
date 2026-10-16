@@ -33,7 +33,6 @@ import {
   summarizeDiagnosticMessages,
 } from "@noobot/context-protocol/assembly/diagnostics";
 import {
-  canonicalMessageId,
   canonicalMessageIdentityDebugData,
   emitContextIdentityDebug,
 } from "../observability/context-identity-debug.js";
@@ -240,7 +239,7 @@ function emitAgentStateDiagnostics({
 }) {
   const sourceMessageUid = trimmedText(currentUserMessage?.messageUid);
   const userMetaId = `${sourceMessageUid}::user_meta`;
-  const modelMessageIds = modelContext.messages.map(canonicalMessageId).filter(Boolean);
+  const modelMessageIds = modelContext.messages.map(resolveContextMessageId).filter(Boolean);
   emitContextIdentityDebug(eventListener, "modelContextCreated", {
     sourceMessageUid,
     contentProjectionFound: modelMessageIds.includes(sourceMessageUid),
@@ -366,3 +365,4 @@ export function createStateBuilder({
 }
 
 export const buildAgentState = createStateBuilder();
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";

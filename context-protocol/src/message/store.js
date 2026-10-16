@@ -12,9 +12,11 @@ import {
   isContextSystemMessage,
   markContextMessageSummarized,
   readContextMessageField,
+  resolveContextMessageId,
   resolveContextMessageRole,
   resolveContextMessageSummarized,
-  resolveContextToolCallId,
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "./codec.js";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -58,15 +60,6 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
     }
   }
   return { ...message, ...active };
-}
-
-function resolveMessageId(message = {}) {
-  const canonicalMessageId = readContextMessageField(message, "noobotMessageId");
-  const persistedMessageUid = text(message?.messageUid);
-  if (canonicalMessageId && persistedMessageUid && canonicalMessageId !== persistedMessageUid) {
-    throw new Error("persisted messageUid conflicts with canonical noobotMessageId");
-  }
-  return canonicalMessageId || persistedMessageUid;
 }
 
 export function deriveMessageProjectionId(sourceMessageId = "", projectionType = "") {
@@ -113,14 +106,14 @@ function resolveMessageContent(message = {}) {
 }
 
 function resolveToolCallIds(message = {}) {
-  return resolveContextToolCalls(message).map(resolveContextToolCallId);
+  return resolveContextToolCalls(message).map(resolveContextToolCallDeclarationId);
 }
 
 function canonicalEntityShape(message = {}) {
   return JSON.stringify({
     role: resolveContextMessageRole(message),
     content: resolveMessageContent(message),
-    toolCallId: resolveContextToolCallId(message),
+    toolCallId: resolveContextToolResultCallId(message),
     toolCallIds: resolveToolCallIds(message),
     internalType: readContextMessageField(message, "noobotInternalMessageType"),
   });
@@ -165,18 +158,18 @@ function reserveExplicitMessageIds(store = null, messageLists = []) {
     for (const id of store.byId.keys()) bumpNextMessageId(store, id);
   }
   for (const message of normalizeList(store.messages)) {
-    bumpNextMessageId(store, resolveMessageId(message));
+    bumpNextMessageId(store, resolveContextMessageId(message));
   }
   for (const messages of normalizeList(messageLists)) {
     for (const message of normalizeList(messages)) {
-      bumpNextMessageId(store, resolveMessageId(message));
+      bumpNextMessageId(store, resolveContextMessageId(message));
     }
   }
 }
 
 function canonicalizeMessage(store = null, message = null) {
   if (!store || !message || typeof message !== "object") return message;
-  const existingId = resolveMessageId(message);
+  const existingId = resolveContextMessageId(message);
   if (existingId && store.byId.has(existingId)) {
     const existingById = store.byId.get(existingId);
     if (canonicalEntityShape(existingById) !== canonicalEntityShape(message)) {
@@ -201,7 +194,7 @@ function canonicalizeList(store = null, messages = []) {
 function isKnownCanonicalEntity(store = null, message = {}) {
   if (!store || !message || typeof message !== "object") return false;
   if (normalizeList(store.messages).includes(message)) return true;
-  const id = resolveMessageId(message);
+  const id = resolveContextMessageId(message);
   return Boolean(id && store.byId instanceof Map && store.byId.has(id));
 }
 
@@ -262,7 +255,7 @@ export function canonicalizeMessageStore(holder = {}) {
 }
 
 export function getMessageId(message = {}) {
-  return resolveMessageId(message);
+  return resolveContextMessageId(message);
 }
 
 export function removeMessagesByIds(holder = {}, messageIds = []) {
@@ -287,7 +280,7 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
   for (const blockName of ["system", "history", "incremental"]) {
     const source = normalizeList(blocks[blockName]);
     nextBlocks[blockName] = source.filter((message) => {
-      if (!normalizedIds.has(resolveMessageId(message))) return true;
+      if (!normalizedIds.has(resolveContextMessageId(message))) return true;
       removedMessages.push(message);
       return false;
     });
@@ -299,7 +292,7 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
   writeMessageBlocks(holder, nextBlocks);
   return {
     removedCount: removedMessages.length,
-    removedMessageIds: [...new Set(removedMessages.map(resolveMessageId).filter(Boolean))],
+    removedMessageIds: [...new Set(removedMessages.map(resolveContextMessageId).filter(Boolean))],
   };
 }
 

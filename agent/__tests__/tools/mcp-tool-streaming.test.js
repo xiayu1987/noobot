@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createMcpTool } from "../../src/tools/execution/mcp-tool.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import { AGENT_DETACHED_SESSION_ROOT } from "../../src/bot/session/detached-subsession-strategy.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
@@ -67,8 +68,7 @@ function createMcpFetch() {
 
 test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session", async () => {
   const runCalls = [];
-  const runtime = {
-    userId: "primary-user",
+  const runtime = createRuntimeContext({
     botManager: {
       async runDetachedSubSession(payload = {}) {
         runCalls.push(payload);
@@ -98,7 +98,7 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     },
     userConfig: {},
     sharedTools: { fetch: createMcpFetch() },
-  };
+  });
   const [tool] = createMcpTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const raw = await tool.invoke({ mcpName: "fake", task: "do something" });
   const payload = JSON.parse(String(raw || "{}"));
@@ -125,4 +125,27 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     runCalls[0]?.strategy?.relativeDir,
     `${AGENT_DETACHED_SESSION_ROOT}/${runCalls[0].strategy.sessionId}`,
   );
+});
+
+test("call_mcp_task: 未配置的 mcp 服务以可恢复错误失败且不启动子 session", async () => {
+  const runCalls = [];
+  const runtime = createRuntimeContext({
+    botManager: {
+      async runDetachedSubSession(payload = {}) {
+        runCalls.push(payload);
+      },
+    },
+    systemRuntime: {
+      sessionId: "parent-session",
+      dialogProcessId: "dp_parent",
+      config: { allowUserInteraction: true, selectedConnectorIds: [] },
+    },
+    globalConfig: { mcpServers: {} },
+  });
+  const [tool] = createMcpTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  await assert.rejects(tool.invoke({ mcpName: "missing", task: "do something" }), (error) => {
+    assert.match(String(error.message), /missing/);
+    return true;
+  });
+  assert.equal(runCalls.length, 0);
 });
