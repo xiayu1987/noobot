@@ -221,7 +221,7 @@ export function createPlanRevisionHelpers({
     return true;
   }
 
-  function resolveRefinementTargetMainStepIndexesAfterRevision(bucket = {}, state = {}) {
+  function resolveRefinementTargetMainStepIndexesAfterRevision(bucket = {}) {
     const normalizedBucket = ensurePlanTextBucket(bucket);
     const changedTargetMainStepIndexes = normalizeMainStepIndexes(
       normalizedBucket.lastRevisionChangedMainStepIndexes,
@@ -232,7 +232,6 @@ export function createPlanRevisionHelpers({
         .map((item = {}) => Number(item?.id))
         .filter((item) => Number.isFinite(item) && item > 0),
     );
-    void state;
     return changedTargetMainStepIndexes.filter((item) => existingMainPlanIds.has(Number(item)));
   }
 

@@ -65,48 +65,6 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
     violations.push("pending.planRefinementContext_cleared_without_pending");
   }
 
-  if ("planUpdate" in state.pending) {
-    delete state.pending.planUpdate;
-    changed = true;
-    violations.push("pending.planUpdate_removed");
-  }
-  if ("planUpdateStage" in state.pending) {
-    delete state.pending.planUpdateStage;
-    changed = true;
-    violations.push("pending.planUpdateStage_removed");
-  }
-  if ("planUpdateContext" in state.pending) {
-    delete state.pending.planUpdateContext;
-    changed = true;
-    violations.push("pending.planUpdateContext_removed");
-  }
-
-  if ("planRevisionStage" in state.pending) {
-    delete state.pending.planRevisionStage;
-    changed = true;
-    violations.push("pending.planRevisionStage_removed");
-  }
-  if ("planRevisionTargetMainStepIndexes" in state.pending) {
-    delete state.pending.planRevisionTargetMainStepIndexes;
-    changed = true;
-    violations.push("pending.planRevisionTargetMainStepIndexes_removed");
-  }
-  if ("planRevisionCapturePending" in state.flags) {
-    delete state.flags.planRevisionCapturePending;
-    changed = true;
-    violations.push("flags.planRevisionCapturePending_removed");
-  }
-  if ("planRevisionCaptureStage" in state.flags) {
-    delete state.flags.planRevisionCaptureStage;
-    changed = true;
-    violations.push("flags.planRevisionCaptureStage_removed");
-  }
-  if ("planRevisionCaptureTargetMainStepIndexes" in state.flags) {
-    delete state.flags.planRevisionCaptureTargetMainStepIndexes;
-    changed = true;
-    violations.push("flags.planRevisionCaptureTargetMainStepIndexes_removed");
-  }
-
   if (!changed) return false;
   appendCapabilityLog(ctx, {
     domain: text(domain) || "guidance",

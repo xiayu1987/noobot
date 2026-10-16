@@ -20,7 +20,6 @@ import { parseMainPlansFromPlanText } from "../shared/plan/text-protocol.js";
 import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import {
   canAttemptPlanUpdate,
-  clearPlanUpdateCaptureContext,
   normalizePlanUpdateStage,
   readPlanUpdateCaptureContext,
   setPendingPlanUpdate,
@@ -204,7 +203,6 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
     consumeCaptureMeta: ({ state }) => {
       const { stage, targetMainStepIndexes } = readPlanUpdateCaptureContext(state);
       setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", false);
-      clearPlanUpdateCaptureContext(state);
       return { stage, targetMainStepIndexes };
     },
     applyCaptureResult: ({ responseText, ctx: currentCtx, state, bucket, captureMeta }) => {
@@ -249,10 +247,8 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
         });
       }
       if (stage === "revision") {
-        const refinementTargetMainStepIndexes = resolveRefinementTargetMainStepIndexesAfterRevision(
-          bucket,
-          state,
-        );
+        const refinementTargetMainStepIndexes =
+          resolveRefinementTargetMainStepIndexesAfterRevision(bucket);
         const scheduled = applied
           ? schedulePlanUpdateByInject(currentCtx, "refinement", {
               targetMainStepIndexes: refinementTargetMainStepIndexes,

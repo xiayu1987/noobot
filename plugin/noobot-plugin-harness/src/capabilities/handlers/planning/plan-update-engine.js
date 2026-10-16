@@ -106,9 +106,6 @@ export function setPendingPlanUpdate(
       pending.planRefinement = false;
       pending.planRefinementContext = null;
     }
-    delete pending.planUpdate;
-    delete pending.planUpdateStage;
-    delete pending.planUpdateContext;
     return true;
   }
   const normalizedStage = normalizePlanUpdateStage(stage);
@@ -129,9 +126,6 @@ export function setPendingPlanUpdate(
     pending.planRevision = false;
     pending.planRevisionContext = null;
   }
-  delete pending.planUpdate;
-  delete pending.planUpdateStage;
-  delete pending.planUpdateContext;
   return true;
 }
 
@@ -152,16 +146,9 @@ export function writePlanUpdateCaptureContext(
 
 export function readPlanUpdateCaptureContext(state = {}) {
   const flags = state?.flags && typeof state.flags === "object" ? state.flags : {};
-  const stage = normalizePlanUpdateStage(flags.planUpdateCaptureStage || "refinement");
+  const stage = normalizePlanUpdateStage(flags.planUpdateCaptureStage);
   const targetMainStepIndexes = Array.isArray(flags.planUpdateCaptureTargetMainStepIndexes)
     ? flags.planUpdateCaptureTargetMainStepIndexes
     : [];
   return { stage, targetMainStepIndexes };
-}
-
-export function clearPlanUpdateCaptureContext(state = {}) {
-  if (!state?.flags || typeof state.flags !== "object") return false;
-  delete state.flags.planUpdateCaptureStage;
-  delete state.flags.planUpdateCaptureTargetMainStepIndexes;
-  return true;
 }

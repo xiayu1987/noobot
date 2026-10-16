@@ -123,7 +123,6 @@ export function setCaptureFlagStateWithMeta(state = {}, key = "", active = false
     delete pendingMeta.flags[key];
     if (key === "planUpdateCapturePending") {
       delete state.flags.planUpdateCaptureStage;
-      delete state.flags.planUpdateCaptureSummaryText;
       delete state.flags.planUpdateCaptureTargetMainStepIndexes;
     }
     if (key === "acceptanceSemanticValidationCapturePending") {

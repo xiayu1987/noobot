@@ -8,13 +8,13 @@ import assert from "node:assert/strict";
 
 import {
   canAttemptPlanUpdate,
-  clearPlanUpdateCaptureContext,
   normalizePlanUpdateStage,
   readPlanUpdateCaptureContext,
   resolvePlanUpdateAttempts,
   setPendingPlanUpdate,
   writePlanUpdateCaptureContext,
 } from "../../src/capabilities/handlers/planning/plan-update-engine.js";
+import { setCaptureFlagStateWithMeta } from "../../src/capabilities/pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
 
 const PLAN_UPDATE_POLICY = Object.freeze({
@@ -84,7 +84,7 @@ test("setPendingPlanUpdate manages independent revision/refinement pending field
   assert.equal(state.pending.planRefinementContext, null);
 });
 
-test("plan update capture context helpers support unified + legacy fields", () => {
+test("plan update capture context is cleared when the capture flag is released", () => {
   const state = { flags: {} };
   writePlanUpdateCaptureContext(state, {
     stage: "revision",
@@ -94,7 +94,7 @@ test("plan update capture context helpers support unified + legacy fields", () =
     stage: "revision",
     targetMainStepIndexes: [1, 2],
   });
-  assert.equal(clearPlanUpdateCaptureContext(state), true);
+  assert.equal(setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", false), true);
   assert.equal("planUpdateCaptureStage" in state.flags, false);
-  assert.equal("planRevisionCaptureStage" in state.flags, false);
+  assert.equal("planUpdateCaptureTargetMainStepIndexes" in state.flags, false);
 });

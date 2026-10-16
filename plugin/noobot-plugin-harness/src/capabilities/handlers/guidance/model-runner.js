@@ -128,7 +128,7 @@ function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, state, mode
     locale,
     agentMessages: modelMessages,
     contextMessages: revisionContextMessages,
-    protocolPrompt: buildPlanningRevisionPrompt(locale, bucket, state),
+    protocolPrompt: buildPlanningRevisionPrompt(locale, bucket),
     workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, {
       programmingMode,
       textMode,
@@ -255,10 +255,8 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     dedupe: true,
   });
   changed = true;
-  const refinementTargetMainStepIndexes = resolveRefinementTargetMainStepIndexesAfterRevision(
-    bucket,
-    state,
-  );
+  const refinementTargetMainStepIndexes =
+    resolveRefinementTargetMainStepIndexesAfterRevision(bucket);
   if (!refinementTargetMainStepIndexes.length) {
     return changed;
   }

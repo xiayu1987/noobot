@@ -26,7 +26,6 @@ import {
 } from "./validation-runner.js";
 import { appendMessage } from "../../../core/message-store.js";
 import {
-  maybeAppendAcceptanceReportAtFinalOutput,
   maybeAttachChecklistArtifactsAtFinalOutput,
   maybeForceAcceptanceAtFinalOutput,
   maybeRefreshAcceptanceReportBeforeFinalOutput,
@@ -317,7 +316,6 @@ function applyAcceptanceToolGuardStage({ point, ctx, meta, holder, decision }) {
     decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard
   ) {
     if (holder?.state?.flags) {
-      holder.state.flags.acceptanceReportAppendedToFinalOutput = false;
       holder.state.flags.phaseAcceptanceTriggeredThisTurn = false;
     }
     const registryChanged = disableBlockedToolsInRegistry(ctx);
@@ -436,10 +434,9 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           })) || false;
         const step3 = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || false;
         const step4 = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || false;
-        const step5 = (await maybeAppendAcceptanceReportAtFinalOutput(ctx)) || false;
-        changed = step1 || step2 || step3 || step4 || step5 || changed;
+        changed = step1 || step2 || step3 || step4 || changed;
         executedPrimary = step1 === true || step2 === true || step3 === true;
-        executedFollowup = step4 === true || step5 === true;
+        executedFollowup = step4 === true;
         if (holder?.state?.flags?.overflowForceAcceptancePending === true) {
           holder.state.flags.overflowForceAcceptancePending = false;
           changed = true;

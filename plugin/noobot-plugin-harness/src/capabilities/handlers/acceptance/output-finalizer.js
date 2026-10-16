@@ -225,16 +225,3 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
   await runAcceptanceBySeparateModel(ctx, meta, refreshedReport);
   return true;
 }
-
-export async function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder) return false;
-  const { bucket, state } = holder;
-  const report =
-    bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
-      ? bucket.lastAcceptanceReport
-      : null;
-  if (!report) return false;
-  void state;
-  return false;
-}

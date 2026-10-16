@@ -25,11 +25,10 @@ export const applyRevisedPlanFromText = planRevisionHelpers.applyRevisedPlanFrom
 export const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRefinementPrompt;
 export const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
 
-export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}) {
+export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}) {
   const globalRevisionCount = Number.isFinite(Number(bucket?.globalRevisionCount))
     ? Number(bucket.globalRevisionCount)
     : 0;
-  void state;
   return buildPlanningRevisionPromptText({
     locale,
     marker: getPlanningRevisionMarker(locale),

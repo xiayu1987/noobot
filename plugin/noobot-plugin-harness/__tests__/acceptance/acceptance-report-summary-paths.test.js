@@ -11,7 +11,6 @@ import {
   buildAcceptanceReport,
   renderAcceptanceReportText,
 } from "../../src/capabilities/handlers/acceptance/report-builder.js";
-import { maybeAppendAcceptanceReportAtFinalOutput } from "../../src/capabilities/handlers/acceptance/output-finalizer.js";
 
 test("acceptance report does not project semantic-transfer storage paths", () => {
   const report = buildAcceptanceReport({
@@ -32,53 +31,6 @@ test("renderAcceptanceReportText reads plan text only from report.planText", () 
     "zh-CN",
   );
   assert.doesNotMatch(String(text), /快照计划/);
-});
-
-test("before_final_output keeps last acceptance report off the final output", async () => {
-  const report = buildAcceptanceReport({
-    bucket: {
-      planText: "1. 主计划一",
-    },
-    state: { locale: "zh-CN", signals: {} },
-  });
-  const ctx = {
-    result: {
-      output: "主流程回答",
-      turnMessages: [
-        { role: "user", content: "问题" },
-        { role: "assistant", content: "主流程回答" },
-      ],
-    },
-    agentContext: {
-      payload: {
-        harness: {
-          state: {
-            locale: "zh-CN",
-            flags: { acceptanceReportAppendedToFinalOutput: false },
-            counters: {},
-            signals: {},
-            pending: {},
-          },
-          lastAcceptanceReport: report,
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
-        },
-      },
-    },
-  };
-  const first = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
-  assert.equal(first, false);
-  assert.equal(String(ctx?.result?.output || ""), "主流程回答");
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /\n\n---\n/);
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /NOOBOT_HARNESS_COLLAPSE/);
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /\[Harness-验收\]/);
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /#### 完整计划清单/);
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /1\. \[pending\] 主计划一/);
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /#### 汇总/);
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /小结明细路径|summary detail/i);
-  assert.doesNotMatch(String(ctx?.result?.output || ""), /runtime\/summary\/detail-2\.md/);
-  assert.equal(String(ctx?.result?.turnMessages?.[1]?.content || ""), "主流程回答");
-  const second = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
-  assert.equal(second, false);
 });
 
 test("renderAcceptanceReportText falls back to raw text when recognition fails", () => {
@@ -237,52 +189,4 @@ test("semantic acceptance fallback keeps phase/signal status when semantic text 
   assert.equal(applied, false);
   const checklist = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
   assert.equal(checklist[0]?.status, "completed");
-});
-
-test("before_final_output does not append latest complete summary or acceptance checklist", async () => {
-  const report = buildAcceptanceReport({
-    bucket: {
-      planText: "1. 主计划一",
-    },
-    state: { locale: "zh-CN", signals: {} },
-  });
-  const ctx = {
-    result: {
-      output: "主流程回答",
-      turnMessages: [{ role: "assistant", content: "主流程回答" }],
-    },
-    agentContext: {
-      payload: {
-        harness: {
-          summaryText: "旧小结概览",
-          summaryFullText: "完整小结：这是最后一次完整小结内容。",
-          state: {
-            locale: "zh-CN",
-            flags: { acceptanceReportAppendedToFinalOutput: false },
-            counters: {},
-            signals: {},
-            pending: {},
-          },
-          lastAcceptanceReport: report,
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
-        },
-      },
-    },
-  };
-
-  const appended = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
-  assert.equal(appended, false);
-  const output = String(ctx?.result?.output || "");
-  const summaryIndex = output.indexOf("## 最后一次完整小结");
-  const acceptanceIndex = output.indexOf("[Harness-验收]");
-  const summaryMarkerIndex = output.indexOf('kind="latest_complete_summary"');
-  const acceptanceMarkerIndex = output.indexOf('kind="acceptance"');
-  assert.equal(output, "主流程回答");
-  assert.equal(summaryIndex, -1);
-  assert.equal(acceptanceIndex, -1);
-  assert.equal(summaryMarkerIndex, -1);
-  assert.equal(acceptanceMarkerIndex, -1);
-  assert.doesNotMatch(output, /完整小结：这是最后一次完整小结内容。/);
-  assert.doesNotMatch(output, /#### 完整计划清单[\s\S]*1\. \[pending\] 主计划一[\s\S]*#### 汇总/);
-  assert.equal(ctx.result.turnMessages[0].content, ctx.result.output);
 });

@@ -152,7 +152,7 @@ function resolveBlockReason(action = "", state = {}) {
   return "";
 }
 
-function reasonForAction(action = "", state = {}) {
+function reasonForAction(action = "") {
   if (action === GUIDANCE_DECISION.label.guidance) return GUIDANCE_DECISION.reason.pendingGuidance;
   if (action === GUIDANCE_DECISION.label.planUpdateRevision)
     return GUIDANCE_DECISION.reason.pendingRevision;
@@ -171,7 +171,6 @@ function reasonForAction(action = "", state = {}) {
   if (action === WORKFLOW_PARAMS.planning.decisions.action.planningBootstrap) {
     return WORKFLOW_PARAMS.planning.decisions.reason.idle;
   }
-  void state;
   return GUIDANCE_DECISION.reason.idle;
 }
 
@@ -224,7 +223,7 @@ export function resolveWorkflowActionDecision(state = {}) {
   const chosenReason =
     chosenAction === GUIDANCE_DECISION.label.none
       ? GUIDANCE_DECISION.reason.idle
-      : reasonForAction(chosenAction, state);
+      : reasonForAction(chosenAction);
 
   return {
     chosenAction,

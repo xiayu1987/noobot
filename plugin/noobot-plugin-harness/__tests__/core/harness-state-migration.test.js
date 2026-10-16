@@ -235,6 +235,42 @@ test("v7 to v8 migration removes the derived planDocument cache and keeps planTe
   assert.equal(bucket.planText, planText);
 });
 
+test("v8 to v9 migration removes dead capture and final-output flags", () => {
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          __harnessBucketVersion: 8,
+          state: {
+            flags: {
+              acceptanceReportAppendedToFinalOutput: false,
+              planUpdateCaptureSummaryText: "过期小结",
+              planUpdateCapturePending: false,
+            },
+            counters: {},
+            signals: {},
+            pending: {},
+          },
+          planText: "1. 主计划一",
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  ensureTestAgentExecutionScope(ctx);
+
+  assert.deepEqual(migrateHarnessBucket(ctx), {
+    migrated: true,
+    fromVersion: 8,
+    toVersion: HARNESS_BUCKET_VERSION,
+  });
+  const holder = ensureHarnessBucket(ctx);
+  assert.equal("acceptanceReportAppendedToFinalOutput" in holder.state.flags, false);
+  assert.equal("planUpdateCaptureSummaryText" in holder.state.flags, false);
+  assert.equal(holder.state.flags.planUpdateCapturePending, false);
+});
+
 test("ensureHarnessBucket keeps state version as alias of bucket version", () => {
   const ctx = {
     agentContext: {
