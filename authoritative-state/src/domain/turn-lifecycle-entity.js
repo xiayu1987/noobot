@@ -8,7 +8,9 @@ import {
   isRetryableFinalizeFailure,
   isTerminalTurnState,
   normalizeTurnContinuationSource,
+  normalizeTurnFailure,
   normalizeCommandReceipts,
+  normalizeTurnTerminalStatus,
   projectTurnTiming,
 } from "@noobot/session-protocol";
 import { validateProtocolEvent, EVENT_FAMILY } from "@noobot/event-protocol";
@@ -58,10 +60,8 @@ function normalizeTurn(value, key) {
     sequence: integer(value.sequence),
     summaryVersion: integer(value.summaryVersion),
     completionCommitId: clean(value.completionCommitId),
-    terminalStatus: isPlainObject(value.terminalStatus) ? { ...value.terminalStatus } : null,
-    failure: isPlainObject(value.failure)
-      ? { ...value.failure, phase: clean(value.failure.phase || value.phase) }
-      : null,
+    terminalStatus: normalizeTurnTerminalStatus(value.terminalStatus),
+    failure: normalizeTurnFailure(value.failure),
     finalizeIntent: normalizeFinalizeIntent(value.finalizeIntent),
     continuationSource: normalizeTurnContinuationSource(value.continuationSource),
     continuedByTurnScopeId: clean(value.continuedByTurnScopeId),

@@ -66,7 +66,6 @@ function projectSnapshotCompletion(source, current, revision, sourceIsTerminal) 
       : current.authoritativeCompletionCommit || null,
     terminalResolved:
       preservesResolution || (!sourceIsTerminal && current.terminalResolved === true),
-    terminalMaterialization: current.terminalMaterialization || null,
   };
 }
 
@@ -87,7 +86,7 @@ function projectSnapshotTiming(source, current, sourceIsTerminal) {
 function projectSnapshotLifecycle(source, current, decision) {
   return {
     state: decision.state,
-    phase: text(source.phase || source.failure?.phase),
+    phase: text(source.phase),
     revision: decision.revision,
     lifecycleSeq: Number(source.sequence || 0),
     backendState: text(source.executionState),

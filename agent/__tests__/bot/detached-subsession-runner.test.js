@@ -145,7 +145,11 @@ test("detached sub-session delegates execution and persistence to the main runne
     relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
     allowedRoot: "runtime/plugin-data/workflow/session",
   });
-  assert.equal(completedLifecycle.completionCommitId, "turn-1:turn.completed");
+  const finalizeRequest = calls.lifecyclePayloads.at(-2);
+  assert.equal(finalizeRequest.eventType, "turn.processing_completed");
+  assert.equal(finalizeRequest.completionCommitId, "turn-1:turn.completed");
+  assert.equal(completedLifecycle.commandId, finalizeRequest.completionCommitId);
+  assert.equal(Object.hasOwn(completedLifecycle, "completionCommitId"), false);
   assert.deepEqual(completedLifecycle.terminalStatus, { command: "completed" });
 
   assert.equal(result.sessionId, "sub1");
@@ -652,10 +656,13 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   );
   const stoppedLifecycle = calls.lifecyclePayloads.at(-1);
   assert.match(stoppedLifecycle.turnScopeId, /^internal-turn:/);
+  const stopFinalizeRequest = calls.lifecyclePayloads.at(-2);
   assert.equal(
-    stoppedLifecycle.completionCommitId,
+    stopFinalizeRequest.completionCommitId,
     `${stoppedLifecycle.turnScopeId}:turn.stop_completed`,
   );
+  assert.equal(stoppedLifecycle.commandId, stopFinalizeRequest.completionCommitId);
+  assert.equal(Object.hasOwn(stoppedLifecycle, "completionCommitId"), false);
   assert.deepEqual(stoppedLifecycle.terminalStatus, { command: "user_stopped" });
   assert.equal(Object.hasOwn(abortError, "lifecycle"), false);
   assert.equal(
@@ -699,8 +706,8 @@ test("detached sub-session failure receipt carries the committed turn failure", 
       }),
     (error) => {
       assert.equal(error.lifecycle.state, "processing_failed");
+      assert.equal(error.lifecycle.phase, "processing");
       assert.deepEqual(error.lifecycle.failure, {
-        phase: "processing",
         code: "model_failed",
         message: "model failed",
         retryable: false,

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as clean } from "@noobot/shared/value";
+import { TURN_PHASE } from "./turn-state.js";
 
 export const TURN_COMMAND = Object.freeze({
   SEND: "turn.send",
@@ -38,6 +39,35 @@ const terminalEvents = new Set(TURN_TERMINAL_EVENTS);
 
 export function isTerminalTurnEvent(eventType = "") {
   return terminalEvents.has(clean(eventType));
+}
+
+const finalizePhases = new Set([TURN_PHASE.COMPLETION, TURN_PHASE.STOP]);
+
+export function isRetryableFinalizeFailureEvent(event = {}) {
+  return (
+    clean(event?.eventType) === TURN_EVENT.FAILED &&
+    finalizePhases.has(clean(event?.phase)) &&
+    event?.failure?.retryable === true
+  );
+}
+
+export function isSettlingTurnEvent(event = {}) {
+  return isTerminalTurnEvent(event?.eventType) && !isRetryableFinalizeFailureEvent(event);
+}
+
+const finalizeRequestEvents = new Set([
+  TURN_EVENT.PROCESSING_COMPLETED,
+  TURN_EVENT.STOP_PROCESSING_COMPLETED,
+]);
+
+export function isFinalizeRequestTurnEvent(eventType = "") {
+  return finalizeRequestEvents.has(clean(eventType));
+}
+
+const completionCommitEvents = new Set([TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED]);
+
+export function isCompletionCommitTurnEvent(eventType = "") {
+  return completionCommitEvents.has(clean(eventType));
 }
 
 export function createTurnLifecycleCommandId({ commandId, eventType, phase = "" } = {}) {

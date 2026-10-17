@@ -31,7 +31,7 @@ function stopCompletedLogData(completed) {
     applied: completed?.applied === true,
     deduplicated: completed?.deduplicated === true,
     hasEnvelope: Boolean(envelope),
-    completionCommitId: envelope?.completionCommitId || "",
+    completionCommitId: envelope?.completionCommitId,
     summaryVersion: Number(envelope?.summaryVersion || 0),
     dispatchDelivered: Number(dispatch?.delivered || 0),
     dispatchReason: dispatch?.reason || "",
@@ -116,20 +116,24 @@ export function createMessageStopHandler({
       dialogProcessId: stopPayload.dialogProcessId,
       phase: TURN_PHASE.STOP,
     };
+    const completionCommitId = stopLifecycleCommandId(
+      target.stopCommandId,
+      TURN_EVENT.STOP_COMPLETED,
+    );
     const processed = await commitTurnLifecycle({
       ...lifecycleContext,
       commandId: stopLifecycleCommandId(target.stopCommandId, TURN_EVENT.STOP_PROCESSING_COMPLETED),
       causationId: target.stopCommandId,
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+      completionCommitId,
       finalizePayload: { assistantMessage: stoppedPartialAssistant },
     });
     if (rejectedCommit(command, processed, "stop_processing_completed_failed")) return;
     const completed = await commitTurnLifecycle({
       ...lifecycleContext,
-      commandId: stopLifecycleCommandId(target.stopCommandId, TURN_EVENT.STOP_COMPLETED),
+      commandId: completionCommitId,
       causationId: target.stopCommandId,
       eventType: TURN_EVENT.STOP_COMPLETED,
-      completionCommitId: stopLifecycleCommandId(target.stopCommandId, TURN_EVENT.STOP_COMPLETED),
       terminalStatus: {
         command: "user_stopped",
         assistantMessage: stoppedPartialAssistant,

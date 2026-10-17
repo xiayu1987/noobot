@@ -7,13 +7,11 @@ import {
   createTurnLifecycleEnvelope,
   createTurnTerminalStatus,
   deriveAuthoritativeTurnCapabilities,
+  isSettlingTurnEvent,
   TURN_LIFECYCLE_WIRE_EVENT,
 } from "@noobot/session-protocol";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
-import {
-  isTerminalTurnLifecycleState,
-  transitionTurnLifecycle,
-} from "../domain/turn-lifecycle-entity.js";
+import { transitionTurnLifecycle } from "../domain/turn-lifecycle-entity.js";
 import { text as clean } from "@noobot/shared/value";
 
 export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, eventId = "" } = {}) {
@@ -93,6 +91,11 @@ export function commitTurnLifecycle({
   let terminalMaterialization = null;
   const requestedTerminal =
     event.terminalStatus && typeof event.terminalStatus === "object" ? event.terminalStatus : null;
+  const settling = isSettlingTurnEvent(event);
+  if (settling && !requestedTerminal)
+    return { applied: false, reason: "missing_turn_terminal_status", lifecycle };
+  if (!settling && requestedTerminal)
+    return { applied: false, reason: "unexpected_turn_terminal_status", lifecycle };
 
   if (requestedTerminal) {
     const terminalStatus = createTurnTerminalStatus(requestedTerminal.command, {
@@ -127,7 +130,6 @@ export function commitTurnLifecycle({
     lifecycleEvent = {
       ...event,
       summaryVersion: Number(terminalMaterialization.summaryVersion),
-      completionCommitId: clean(event.completionCommitId || event.commandId),
       terminalStatus,
     };
   }
@@ -144,15 +146,6 @@ export function commitTurnLifecycle({
   }
 
   const turn = transition.turn;
-  if (isTerminalTurnLifecycleState(turn.state)) {
-    turn.terminalStatus = turn.terminalStatus || {
-      turnScopeId: turn.turnScopeId,
-      dialogProcessId: turn.dialogProcessId,
-      status: turn.state,
-      error: turn.failure || null,
-      updatedAt: turn.updatedAt,
-    };
-  }
   const eventId =
     clean(event.eventId) || clean(typeof createEventId === "function" ? createEventId() : "");
   if (!eventId) return { applied: false, reason: "event_id_unavailable", lifecycle };

@@ -369,13 +369,15 @@ it.each([
       state: failureTerminalState,
       revision: 6,
       sequence: 6,
-      failure: { phase: failedPhase, message: "retryable" },
+      phase: failedPhase,
+      failure: { message: "retryable" },
       finalizeIntent: { retryable: true },
     });
     expect(failed.turn).toMatchObject({
       state: failedState,
       terminal: "error",
-      failure: { phase: failedPhase, message: "retryable" },
+      phase: failedPhase,
+      failure: { message: "retryable" },
       finalizeIntent: { retryable: true },
     });
     expect(failed.turn).not.toHaveProperty("error");

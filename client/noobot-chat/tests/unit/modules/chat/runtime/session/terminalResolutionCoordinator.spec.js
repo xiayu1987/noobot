@@ -18,6 +18,7 @@ import {
   createTurnRuntimeRegistryState,
   selectSessionTurnRuntime,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { terminalStatusFixture } from "../../helpers/terminalStatusFixture.js";
 
 function response({
   resolved = true,
@@ -38,21 +39,23 @@ function response({
     reason: resolved ? "" : "terminal_materialization_not_ready",
     retryAfterMs: 0,
     aggregateVersion: 1,
-    revision,
-    sequence,
-    completionCommitId,
-    summaryVersion,
-    turn: { revision, sequence },
+    turn: { revision, sequence, completionCommitId, summaryVersion },
   };
 }
 
 describe("terminalResolutionCoordinator", () => {
-  it("traces fetch and apply decisions without exposing the terminal materialization", async () => {
+  it("traces fetch and apply decisions without exposing the terminal turn payload", async () => {
     const traces = [];
     const fetcher = vi.fn(async () => ({
       ...response(),
-      turn: { revision: 2, sequence: 3, state: "completed" },
-      materialization: { messages: [{ content: "private terminal body" }] },
+      turn: {
+        ...response().turn,
+        state: "completed",
+        terminalStatus: {
+          ...terminalStatusFixture("completed", "t-1"),
+          description: "private terminal body",
+        },
+      },
     }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
@@ -358,14 +361,7 @@ describe("terminalResolutionCoordinator", () => {
         completionCommitId: "commit-2",
         summaryVersion: 2,
         capabilities: { actionLocked: false, canStop: false },
-      },
-      materialization: {
-        completionCommitId: "commit-2",
-        summaryVersion: 2,
-        revision: 2,
-        sequence: 3,
-        terminalStatus: { status: "completed" },
-        messages: [],
+        terminalStatus: terminalStatusFixture("completed", "t-1"),
       },
     });
     const fetcher = vi.fn(async () => authoritativeResponse);

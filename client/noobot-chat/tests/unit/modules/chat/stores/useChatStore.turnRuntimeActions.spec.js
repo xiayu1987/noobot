@@ -13,6 +13,7 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
   const revision = 100;
@@ -36,14 +37,7 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
         summaryVersion: revision,
         updatedAt,
         capabilities: { actionLocked: false, canStop: false },
-      },
-      materialization: {
-        completionCommitId,
-        summaryVersion: revision,
-        revision,
-        sequence: revision,
-        terminalStatus: { status: "completed" },
-        messages: [],
+        terminalStatus: terminalStatusFixture("completed", turnScopeId),
       },
     }),
   );

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { normalizeTurnTerminalStatus } from "@noobot/session-protocol";
 import { text as clean } from "@noobot/shared/value";
 
 function resolveTurnScopeId(value = {}) {
@@ -23,7 +24,7 @@ export function repairOrphanedTerminalTurns({ messages = [], turnLifecycle = {} 
   );
   const orphanedTurnScopeIds = turnScopeIds.filter((turnScopeId) => {
     const turn = turns[turnScopeId] || {};
-    if (!turn.terminalStatus) return false;
+    if (!normalizeTurnTerminalStatus(turn.terminalStatus)) return false;
     return !scopesWithMessages.has(clean(turn.turnScopeId) || clean(turnScopeId));
   });
   if (!orphanedTurnScopeIds.length) {

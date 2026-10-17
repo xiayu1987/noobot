@@ -10,6 +10,15 @@ export const TURN_RECOVERY_ACTION = Object.freeze({
   ORPHAN: "orphan",
 });
 
+export const TURN_ORPHAN_RECOVERY = Object.freeze({
+  failure: Object.freeze({
+    code: "service_restart_orphaned_turn",
+    message: "active turn execution was lost after service restart",
+    retryable: false,
+  }),
+  terminalCommand: "error",
+});
+
 const RECOVERY_ACTIONS = new Set(Object.values(TURN_RECOVERY_ACTION));
 
 export function isTurnRecoveryAction(value) {

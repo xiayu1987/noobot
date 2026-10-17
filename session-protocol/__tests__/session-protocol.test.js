@@ -29,7 +29,7 @@ import {
 } from "../src/index.js";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 9);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 10);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",

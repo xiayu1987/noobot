@@ -238,7 +238,7 @@ describe("sub-session realtime message projection", () => {
     expect(session.messages[1].pending).toBe(true);
   });
 
-  it("clears child message runtime at the authoritative terminal event and enriches it with materialization", () => {
+  it("clears child message runtime at the authoritative terminal event and applies the terminal resolution", () => {
     const store = useChatStore();
     const identity = {
       sessionId: "child-session",
@@ -315,9 +315,6 @@ describe("sub-session realtime message projection", () => {
         completionCommitId: "child-run:completed",
         summaryVersion: 1,
         finishedAt: "2026-01-01T00:00:05.000Z",
-        terminalStatus: { command: "completed", description: "done" },
-      },
-      materialization: {
         terminalStatus: { command: "completed", description: "done" },
       },
     });

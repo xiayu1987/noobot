@@ -69,11 +69,11 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 740 处 / 301 个文件；内联 trim 兜底 117 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 720 处 / 296 个文件；内联 trim 兜底 117 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ------------ | ----------- |
-| `client/noobot-chat`             | 283    | 32             | 1            | 0           |
+| `client/noobot-chat`             | 270    | 32             | 1            | 0           |
 | `agent`                          | 124    | 30             | 0            | 0           |
 | `plugin/noobot-plugin-workflow`  | 112    | 11             | 0            | 0           |
 | `plugin/noobot-plugin-harness`   | 46     | 10             | 0            | 0           |
@@ -82,12 +82,11 @@
 | `agent-proxy`                    | 11     | 2              | 0            | 0           |
 | `path-resolver`                  | 12     | 1              | 0            | 0           |
 | `user-template`                  | 4      | 9              | 0            | 0           |
-| `authoritative-state`            | 11     | 0              | 0            | 0           |
 | `event-protocol`                 | 10     | 0              | 0            | 0           |
 | `model-runtime`                  | 8      | 0              | 0            | 0           |
+| `authoritative-state`            | 7      | 0              | 0            | 0           |
 | `context-protocol`               | 5      | 1              | 0            | 0           |
 | `plugin/noobot-plugin-character` | 5      | 1              | 0            | 0           |
-| `session-protocol`               | 6      | 0              | 0            | 0           |
 | `session-repair`                 | 4      | 2              | 0            | 0           |
 | `shared`                         | 6      | 0              | 0            | 0           |
 | `scripts`                        | 4      | 1              | 0            | 0           |
@@ -98,6 +97,7 @@
 | `workflow`                       | 2      | 2              | 0            | 0           |
 | `agent-config-protocol`          | 3      | 0              | 0            | 0           |
 | `model-protocol`                 | 3      | 0              | 0            | 0           |
+| `session-protocol`               | 3      | 0              | 0            | 0           |
 | `workspace-protocol`             | 0      | 3              | 0            | 0           |
 | `memory-protocol`                | 2      | 0              | 0            | 0           |
 | `runtime-events`                 | 1      | 1              | 0            | 0           |

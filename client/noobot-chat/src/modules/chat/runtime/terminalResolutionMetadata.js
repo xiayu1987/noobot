@@ -12,20 +12,12 @@ function versionNumber(input) {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-export function terminalResolutionMetadata(payload = {}) {
-  const raw = payload?.raw && typeof payload.raw === "object" ? payload.raw : {};
-  const turn =
-    payload?.turn && typeof payload.turn === "object"
-      ? payload.turn
-      : raw?.turn && typeof raw.turn === "object"
-        ? raw.turn
-        : {};
-  const source = { ...raw, ...payload, ...turn };
-  const metadata = { commandId: clean(source.commandId) };
-  const completionCommitId = clean(source.completionCommitId);
-  const summaryVersion = versionNumber(source.summaryVersion);
-  const revision = versionNumber(source.revision);
-  const sequence = versionNumber(source.sequence ?? source.seq);
+export function terminalResolutionMetadata(source = {}) {
+  const metadata = {};
+  const completionCommitId = clean(source?.completionCommitId);
+  const summaryVersion = versionNumber(source?.summaryVersion);
+  const revision = versionNumber(source?.revision);
+  const sequence = versionNumber(source?.sequence);
   if (completionCommitId) metadata.completionCommitId = completionCommitId;
   if (summaryVersion != null) metadata.summaryVersion = summaryVersion;
   if (revision != null) metadata.revision = revision;

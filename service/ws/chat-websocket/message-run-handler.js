@@ -86,7 +86,6 @@ function createFailureCommitter(context) {
       eventType: TURN_EVENT.FAILED,
       phase: failureContext.phase,
       failure: {
-        phase: failureContext.phase,
         code: text(error?.code || "turn_failed"),
         message: String(error?.message || "turn failed"),
         retryable: false,

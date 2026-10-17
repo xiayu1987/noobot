@@ -134,7 +134,7 @@ test("authority owns terminal readiness decisions", () => {
   lifecycle.turns.active = turn({
     state: "completed",
     phase: "completion",
-    terminalStatus: { status: "completed" },
+    terminalStatus: { turnScopeId: "turn-1", status: "completed", reason: "run_completed" },
   });
   const resolved = resolveAuthoritativeTurnTerminal({
     lifecycle,

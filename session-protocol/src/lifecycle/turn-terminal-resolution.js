@@ -27,16 +27,9 @@ export function createTurnTerminalResolution({
   reason = "",
   retryAfterMs = 0,
   turn = null,
-  materialization = null,
   aggregateVersion = null,
   generatedAt = new Date().toISOString(),
 } = {}) {
-  const resolvedTurn = turn
-    ? {
-        ...turn,
-        terminalStatus: turn.terminalStatus || materialization?.terminalStatus || null,
-      }
-    : null;
   return {
     protocolVersion: TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
     eventType: TURN_TERMINAL_RESOLVED_EVENT,
@@ -48,11 +41,7 @@ export function createTurnTerminalResolution({
     reason: clean(reason),
     retryAfterMs: Math.max(0, Number(retryAfterMs || 0)),
     aggregateVersion: aggregateVersion == null ? null : Number(aggregateVersion),
-    turn: resolvedTurn
-      ? { ...snapshotTurn(resolvedTurn), sessionId: clean(resolvedTurn.sessionId || sessionId) }
-      : null,
-    materialization:
-      materialization && typeof materialization === "object" ? materialization : null,
+    turn: turn ? { ...snapshotTurn(turn), sessionId: clean(turn.sessionId || sessionId) } : null,
     generatedAt: clean(generatedAt),
   };
 }
@@ -68,8 +57,7 @@ export function validateTurnTerminalResolution(response = {}) {
   errors.push(...collectRequiredFieldErrors(response.turnScopeId, "missing_turn_scope_id"));
   if (response.resolved === true) {
     const turn = response.turn || {};
-    const materialization = response.materialization || {};
-    const terminalStatus = turn.terminalStatus || materialization.terminalStatus;
+    const terminalStatus = turn.terminalStatus;
     if (clean(turn.sessionId) !== clean(response.sessionId))
       errors.push("terminal_session_identity_mismatch");
     if (clean(turn.turnScopeId) !== clean(response.turnScopeId))

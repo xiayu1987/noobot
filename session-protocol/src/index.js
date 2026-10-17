@@ -66,6 +66,7 @@ export * from "./lifecycle/turn-transition-policy.js";
 export * from "./lifecycle/turn-terminal.js";
 export * from "./lifecycle/turn-capability.js";
 export * from "./lifecycle/turn-continuation.js";
+export * from "./lifecycle/turn-failure.js";
 export * from "./lifecycle/turn-replacement.js";
 export * from "./lifecycle/turn-timing.js";
 export * from "./lifecycle/execution-abort.js";

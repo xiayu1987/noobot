@@ -14,12 +14,14 @@ import {
   collectTurnScopeIdErrors,
 } from "./lifecycle/turn-field-assertions.js";
 import { normalizeTurnContinuationSource } from "./lifecycle/turn-continuation.js";
+import { normalizeTurnFailure } from "./lifecycle/turn-failure.js";
 import {
   isTurnCommitContinuation,
   TURN_COMMIT_ACTION,
   normalizeTurnCommitAction,
 } from "./lifecycle/turn-commit-action.js";
 import {
+  isCompletionCommitTurnEvent,
   isTerminalTurnEvent,
   TURN_COMMAND,
   TURN_EVENT,
@@ -36,6 +38,7 @@ import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.
 import {
   isActionableTurnRecovery,
   isTurnRecoveryAction,
+  TURN_ORPHAN_RECOVERY,
   TURN_RECOVERY_ACTION,
 } from "./lifecycle/turn-recovery.js";
 
@@ -46,6 +49,7 @@ export {
   normalizeTurnContinuationSource,
   TURN_COMMAND,
   TURN_EVENT,
+  TURN_ORPHAN_RECOVERY,
   TURN_PHASE,
   TURN_RECOVERY_ACTION,
   TURN_STATE,
@@ -324,7 +328,7 @@ export function createTurnLifecycleEnvelope({
     finishedAt: clean(finishedAt),
     occurredAt: clean(occurredAt),
     capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
-    failure: failure && typeof failure === "object" ? failure : undefined,
+    failure: normalizeTurnFailure(failure) || undefined,
     payload: payload && typeof payload === "object" ? payload : {},
     continuationSource: normalizeTurnContinuationSource(continuationSource) || undefined,
     continuedByTurnScopeId: canonicalizeTurnScopeId(continuedByTurnScopeId),
@@ -351,7 +355,7 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   errors.push(...collectPositiveIntegerErrors(envelope.revision, "invalid_revision"));
   errors.push(...collectPositiveIntegerErrors(envelope.sequence, "invalid_sequence"));
   const eventType = clean(envelope.eventType);
-  const phase = clean(envelope.phase || envelope.failure?.phase);
+  const phase = clean(envelope.phase);
   const expectedState =
     eventType === TURN_EVENT.FAILED ? FAILED_PHASE_STATE[phase] : EVENT_STATE[eventType];
   const expectedPhase = eventType === TURN_EVENT.FAILED ? phase : EVENT_PHASE[eventType];
@@ -371,7 +375,7 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   ) {
     errors.push("unexpected_continuation_source");
   }
-  if ([TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED].includes(clean(envelope.eventType))) {
+  if (isCompletionCommitTurnEvent(envelope.eventType)) {
     if (!clean(envelope.completionCommitId)) errors.push("missing_completion_commit_id");
     if (!Number.isInteger(Number(envelope.summaryVersion)) || Number(envelope.summaryVersion) < 1)
       errors.push("invalid_completion_summary_version");

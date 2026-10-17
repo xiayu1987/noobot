@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject, text as clean } from "@noobot/shared/value";
-import { isSettledTurn, TURN_STATE } from "./turn-state.js";
+import { isSettledTurn } from "./turn-state.js";
 import { positiveInteger } from "../normalize.js";
 
 const TURN_TERMINAL_COMMAND = Object.freeze({
@@ -66,25 +66,41 @@ function normalizeError(error = null) {
   );
 }
 
-export function createTurnTerminalStatus(command = "", payload = {}) {
-  const contract = commandContract[clean(command).toLowerCase()];
-  if (!contract) return null;
+function buildTurnTerminalStatus(status, reason, payload = {}) {
   const turnScopeId = clean(payload.turnScopeId);
-  const dialogProcessId = clean(payload.dialogProcessId);
   if (!turnScopeId) return null;
-  const status = {
+  const terminalStatus = {
     turnScopeId,
-    status: contract[0],
-    reason: contract[1],
+    status,
+    reason,
     description: clean(payload.description),
     updatedAt: clean(payload.updatedAt),
   };
-  if (dialogProcessId) status.dialogProcessId = dialogProcessId;
+  const dialogProcessId = clean(payload.dialogProcessId);
+  if (dialogProcessId) terminalStatus.dialogProcessId = dialogProcessId;
   const parentDialogProcessId = clean(payload.parentDialogProcessId);
-  if (parentDialogProcessId) status.parentDialogProcessId = parentDialogProcessId;
+  if (parentDialogProcessId) terminalStatus.parentDialogProcessId = parentDialogProcessId;
   const error = normalizeError(payload.error);
-  if (error) status.error = error;
-  return Object.freeze(status);
+  if (error) terminalStatus.error = error;
+  return Object.freeze(terminalStatus);
+}
+
+export function createTurnTerminalStatus(command = "", payload = {}) {
+  const contract = commandContract[clean(command).toLowerCase()];
+  if (!contract) return null;
+  return buildTurnTerminalStatus(contract[0], contract[1], payload);
+}
+
+const contractPairs = new Set(
+  Object.values(commandContract).map(([status, reason]) => `${status}\u0000${reason}`),
+);
+
+export function normalizeTurnTerminalStatus(value = null) {
+  if (!isPlainObject(value)) return null;
+  const status = clean(value.status);
+  const reason = clean(value.reason);
+  if (!contractPairs.has(`${status}\u0000${reason}`)) return null;
+  return buildTurnTerminalStatus(status, reason, value);
 }
 
 export function materializeTurnTerminalMessages({
@@ -93,14 +109,11 @@ export function materializeTurnTerminalMessages({
   assistantMessage = null,
   previousSummaryVersion = 0,
 } = {}) {
-  if (!terminalStatus || typeof terminalStatus !== "object" || Array.isArray(terminalStatus)) {
+  if (normalizeTurnTerminalStatus(terminalStatus) === null) {
     return Object.freeze({ materialized: false, reason: "invalid_turn_terminal_status" });
   }
   const turnScopeId = clean(terminalStatus.turnScopeId);
   const dialogProcessId = clean(terminalStatus.dialogProcessId);
-  if (!turnScopeId) {
-    return Object.freeze({ materialized: false, reason: "turn_identity_incomplete" });
-  }
   const source = Array.isArray(messages) ? messages : [];
   const scopedMessages = source.filter((message) => clean(message?.turnScopeId) === turnScopeId);
   if (
@@ -161,24 +174,9 @@ export function materializeTurnTerminalMessages({
   });
 }
 
-function deriveTerminalStatusFromTurn(turn = {}) {
-  if (!isSettledTurn(turn)) return null;
-  if (turn.terminalStatus && typeof turn.terminalStatus === "object") return turn.terminalStatus;
-  const command =
-    turn.state === TURN_STATE.COMPLETED
-      ? TURN_TERMINAL_COMMAND.COMPLETED
-      : turn.state === TURN_STATE.STOP_COMPLETED
-        ? TURN_TERMINAL_COMMAND.USER_STOPPED
-        : TURN_TERMINAL_COMMAND.ERROR;
-  return createTurnTerminalStatus(command, {
-    ...turn,
-    error: turn.failure,
-    updatedAt: turn.updatedAt,
-  });
-}
-
 export function projectTurnTerminalStatuses(lifecycle = {}) {
   return Object.values(lifecycle?.turns || {})
-    .map(deriveTerminalStatusFromTurn)
+    .filter(isSettledTurn)
+    .map((turn) => normalizeTurnTerminalStatus(turn.terminalStatus))
     .filter(Boolean);
 }

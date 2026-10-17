@@ -65,9 +65,8 @@ const terminalResolved = (state, overrides = {}) => ({
   revision: 100,
   seq: 100,
   ...completionCommit,
-  terminalMaterialization: { terminalStatus: { status: state }, messages: [] },
   ...(state.endsWith("_failed")
-    ? { failure: { phase: state.replace(/_failed$/, ""), message: "failed" } }
+    ? { phase: state.replace(/_failed$/, ""), failure: { message: "failed" } }
     : {}),
   ...overrides,
 });
@@ -282,7 +281,7 @@ describe("turn runtime interaction lifecycle", () => {
       eventType: TURN_EVENT.FAILED,
       phase,
       state: protocolState,
-      failure: { phase, message: "failed" },
+      failure: { message: "failed" },
     });
     expect(notification).toMatchObject({ state: expectedState, terminal: "error" });
     const failed = apply(notification, terminalResolved(protocolState));

@@ -27,6 +27,7 @@ import {
   terminalLifecycleSnapshot,
   terminalResolution,
 } from "./useChatSession.resume-state.test-helpers.js";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 describe("useChatSession summary and reconnect state", () => {
   beforeEach(() => {
@@ -138,8 +139,8 @@ describe("useChatSession summary and reconnect state", () => {
               phase: "action",
               sequence: 2,
               revision: 2,
-              terminalStatus: { status: "error", reason: "attachment_rejected" },
-              failure: { phase: "action", code: "ATTACHMENT_REJECTED" },
+              terminalStatus: terminalStatusFixture("action_failed", turnScopeId),
+              failure: { code: "ATTACHMENT_REJECTED" },
               capabilities: { canStop: false },
             },
           ],

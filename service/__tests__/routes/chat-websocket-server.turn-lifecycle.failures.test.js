@@ -174,7 +174,7 @@ for (const [failureAt, expectedPhase] of [
       );
       const failed = lifecycleEvents.at(-1).payload;
       assert.equal(failed.phase, expectedPhase);
-      assert.equal(failed.failure.phase, expectedPhase);
+      assert.equal(Object.hasOwn(failed.failure, "phase"), false);
       assert.equal(
         authoritative.lifecycle().turns[scopedPayload.turnScopeId].state,
         `${expectedPhase}_failed`,

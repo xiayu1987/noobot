@@ -47,7 +47,11 @@ test("terminal resolution binds terminal state to the committed Session aggregat
       phase: TURN_PHASE.STOP,
       revision: 5,
       sequence: 5,
-      terminalStatus: { status: "user_stopped" },
+      terminalStatus: {
+        turnScopeId: "turn-terminal-version",
+        status: "user_stopped",
+        reason: "user_stop",
+      },
     },
   });
 

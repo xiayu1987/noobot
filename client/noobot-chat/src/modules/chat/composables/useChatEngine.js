@@ -99,8 +99,7 @@ export function useChatEngine({
   const applyAuthoritativeTerminalResolution = (response) => {
     const sessionId = text(response?.sessionId);
     const turnScopeId = text(response?.turnScopeId);
-    const terminalStatus =
-      response?.turn?.terminalStatus || response?.materialization?.terminalStatus;
+    const terminalStatus = response?.turn?.terminalStatus;
     if (!sessionId || !turnScopeId || !terminalStatus || typeof terminalStatus !== "object") {
       logTerminalResolutionDebug("frontend.terminalResolution.rejected", () => ({
         sessionId,
@@ -180,12 +179,8 @@ export function useChatEngine({
         responseResolved: details?.response?.resolved === true,
         responseRetryable: details?.response?.retryable === true,
         responseReason: details?.response?.reason || "",
-        responseRevision: Number(
-          details?.response?.turn?.revision || details?.response?.revision || 0,
-        ),
-        responseSequence: Number(
-          details?.response?.turn?.sequence || details?.response?.sequence || 0,
-        ),
+        responseRevision: Number(details?.response?.turn?.revision || 0),
+        responseSequence: Number(details?.response?.turn?.sequence || 0),
       })),
     onTrace: (event, details = {}) => logStateMachineDebug(event, details),
   });
@@ -193,7 +188,6 @@ export function useChatEngine({
     const event = {
       ...envelope,
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      raw: envelope,
     };
     const lifecycleResult = commitTurnLifecycleEnvelope?.(envelope);
 

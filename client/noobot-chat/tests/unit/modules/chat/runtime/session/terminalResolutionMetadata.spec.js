@@ -7,21 +7,15 @@ import { describe, expect, it } from "vitest";
 import { terminalResolutionMetadata } from "../../../../../../src/modules/chat/runtime/terminalResolutionMetadata.js";
 
 describe("terminalResolutionMetadata", () => {
-  it("normalizes nested raw.turn metadata and the seq alias", () => {
+  it("normalizes top-level version metadata", () => {
     expect(
       terminalResolutionMetadata({
-        raw: {
-          commandId: " command-1 ",
-          turn: {
-            completionCommitId: " commit-1 ",
-            summaryVersion: "4",
-            revision: "5",
-            seq: "6",
-          },
-        },
+        completionCommitId: " commit-1 ",
+        summaryVersion: "4",
+        revision: "5",
+        sequence: "6",
       }),
     ).toEqual({
-      commandId: "command-1",
       completionCommitId: "commit-1",
       summaryVersion: 4,
       revision: 5,
@@ -29,27 +23,24 @@ describe("terminalResolutionMetadata", () => {
     });
   });
 
-  it("gives turn fields precedence and filters invalid version metadata", () => {
+  it("reads only the given object, never nested raw/turn or the seq alias", () => {
     expect(
       terminalResolutionMetadata({
-        commandId: "top-command",
-        completionCommitId: "top-commit",
-        summaryVersion: 1,
-        revision: 2,
-        sequence: 3,
-        raw: { sequence: 4 },
-        turn: {
-          commandId: "turn-command",
-          completionCommitId: "turn-commit",
-          summaryVersion: 7,
-          revision: -1,
-          sequence: "not-a-number",
-        },
+        seq: 3,
+        raw: { turn: { revision: 9, sequence: 9 } },
+        turn: { completionCommitId: "turn-commit", summaryVersion: 7 },
       }),
-    ).toEqual({
-      commandId: "turn-command",
-      completionCommitId: "turn-commit",
-      summaryVersion: 7,
-    });
+    ).toEqual({});
+  });
+
+  it("filters invalid version metadata", () => {
+    expect(
+      terminalResolutionMetadata({
+        completionCommitId: "commit",
+        summaryVersion: 7,
+        revision: -1,
+        sequence: "not-a-number",
+      }),
+    ).toEqual({ completionCommitId: "commit", summaryVersion: 7 });
   });
 });

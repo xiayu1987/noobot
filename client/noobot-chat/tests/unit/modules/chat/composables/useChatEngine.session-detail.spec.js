@@ -21,6 +21,7 @@ import {
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages = [] } = {}) {
   const activeSession = {
@@ -289,14 +290,7 @@ describe("useChatEngine.session-detail", () => {
           sequence: 5,
           completionCommitId: "commit-stopped-detail",
           summaryVersion: 5,
-        },
-        materialization: {
-          completionCommitId: "commit-stopped-detail",
-          summaryVersion: 5,
-          revision: 5,
-          sequence: 5,
-          terminalStatus: { status: "stop_completed" },
-          messages: [],
+          terminalStatus: terminalStatusFixture("stop_completed", freshTurnScopeId),
         },
       }),
     );

@@ -6,7 +6,6 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { migrateLegacyAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
-import { PERSISTED_JSON_READ_ERROR_CODE } from "../../../shared/storage/json-file-reader.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import { isSessionDisplaySummaryCurrent } from "../../session-summary-builders.js";
 import { normalizeSessionDocumentForCurrentProtocol } from "../../session-document-normalization.js";
@@ -264,45 +263,6 @@ class SessionArtifactMethods {
       persistenceContext,
     );
     return readSessionTurn({ sessionDir, turnScopeId, dialogProcessId });
-  }
-
-  async maintainCanonicalSessionArtifacts(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return { migrated: false };
-    const scope = await this.resolveSessionScope(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    if (!(await this.storageService.exists(scope.sessionFile))) return { migrated: false };
-    try {
-      const manifest = await this.storageService.readJson(scope.sessionFile, null);
-      if (Number(manifest?.schemaVersion) !== SESSION_ARTIFACT_SCHEMA_VERSION) {
-        throw Object.assign(new Error("Session artifact protocol version requires repair"), {
-          code: "SESSION_PROTOCOL_VERSION_REPAIR_REQUIRED",
-        });
-      }
-      return { migrated: false, migrations: [], repaired: [] };
-    } catch (error) {
-      if (
-        error?.code !== "SESSION_PROTOCOL_VERSION_REPAIR_REQUIRED" &&
-        error?.code !== PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED
-      ) {
-        throw error;
-      }
-      return this._repairSessionToCurrentProtocol(
-        userId,
-        normalizedSessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-    }
   }
 
   async _repairSessionToCurrentProtocol(

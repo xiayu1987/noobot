@@ -5,6 +5,7 @@
  */
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 export function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
   const revision = 100;
@@ -29,14 +30,7 @@ export function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId,
         summaryVersion: revision,
         capabilities: { actionLocked: false, canStop: false },
         updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-      materialization: {
-        completionCommitId,
-        summaryVersion: revision,
-        revision,
-        sequence,
-        terminalStatus: { status: "stop_completed" },
-        messages,
+        terminalStatus: terminalStatusFixture("stop_completed", turnScopeId),
       },
     }),
   );

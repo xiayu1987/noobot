@@ -111,3 +111,18 @@ test("repair leaves in-flight turns without a terminalStatus in place", () => {
   assert.deepEqual(Object.keys(repair.turnLifecycle.turns), ["running"]);
   assert.equal(repair.turnLifecycle.activeTurnScopeId, "running");
 });
+
+test("repair ignores turns whose terminalStatus is not protocol-shaped", () => {
+  const lifecycle = {
+    turns: {
+      legacy: {
+        turnScopeId: "legacy",
+        state: "completed",
+        terminalStatus: { status: "completed" },
+      },
+    },
+  };
+  const repair = repairOrphanedTerminalTurns({ messages: [], turnLifecycle: lifecycle });
+  assert.equal(repair.repaired, false);
+  assert.deepEqual(repair.orphanedTurnScopeIds, []);
+});

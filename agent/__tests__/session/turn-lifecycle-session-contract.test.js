@@ -101,7 +101,10 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   );
   assert.equal(started.turn.state, TURN_STATE.PROCESSING);
   const processed = await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.PROCESSING_COMPLETED, "c3", 2, { phase: TURN_PHASE.COMPLETION }),
+    event(TURN_EVENT.PROCESSING_COMPLETED, "c3", 2, {
+      phase: TURN_PHASE.COMPLETION,
+      completionCommitId: "c4",
+    }),
   );
   const completed = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.COMPLETED, "c4", 3, {
@@ -156,7 +159,10 @@ test("repository save failure atomically preserves lifecycle, terminal status an
     }),
   );
   await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.PROCESSING_COMPLETED, "atomic-pc", 2, { phase: TURN_PHASE.COMPLETION }),
+    event(TURN_EVENT.PROCESSING_COMPLETED, "atomic-pc", 2, {
+      phase: TURN_PHASE.COMPLETION,
+      completionCommitId: "atomic-c",
+    }),
   );
   const beforeTerminal = structuredClone(h.reload());
   const beforeTerminalOutbox = await h.outbox();
@@ -190,7 +196,10 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
     }),
   );
   await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.PROCESSING_COMPLETED, "materialize-pc", 2, { phase: TURN_PHASE.COMPLETION }),
+    event(TURN_EVENT.PROCESSING_COMPLETED, "materialize-pc", 2, {
+      phase: TURN_PHASE.COMPLETION,
+      completionCommitId: "materialize-c",
+    }),
   );
   const before = structuredClone(h.reload());
   const beforeOutbox = await h.outbox();
@@ -231,7 +240,10 @@ test("terminal resolution reads status from the Turn without returning messages"
     }),
   );
   await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.PROCESSING_COMPLETED, "r3", 2, { phase: TURN_PHASE.COMPLETION }),
+    event(TURN_EVENT.PROCESSING_COMPLETED, "r3", 2, {
+      phase: TURN_PHASE.COMPLETION,
+      completionCommitId: "r4",
+    }),
   );
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.COMPLETED, "r4", 3, {
@@ -265,7 +277,7 @@ test("terminal resolution reads status from the Turn without returning messages"
   assert.equal(response.turn.executionState, "completed");
   assert.equal(response.turn.startedAt, "2026-07-17T23:59:30.000Z");
   assert.equal(response.turn.finishedAt, "2026-07-18T00:00:00.000Z");
-  assert.equal(response.materialization, null);
+  assert.equal(Object.hasOwn(response, "materialization"), false);
   assert.equal(JSON.stringify(response).includes('"messages"'), false);
 });
 
@@ -523,7 +535,7 @@ test("retryable finalize failure keeps the session locked and completes idempote
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_COMPLETED, "pc", 2, {
       phase: TURN_PHASE.COMPLETION,
-      finalizeCommandId: "finalize:t1",
+      completionCommitId: "finalize:t1",
     }),
   );
   const failed = await h.service.applyTurnLifecycleEvent(
@@ -548,6 +560,7 @@ test("retryable finalize failure keeps the session locked and completes idempote
     event(TURN_EVENT.COMPLETED, "finalize:t1", 4, {
       phase: TURN_PHASE.COMPLETION,
       summaryVersion: 8,
+      terminalStatus: { command: "completed" },
     }),
   );
   assert.equal(completed.turn.state, TURN_STATE.COMPLETED);
@@ -557,6 +570,7 @@ test("retryable finalize failure keeps the session locked and completes idempote
     event(TURN_EVENT.COMPLETED, "finalize:t1", 4, {
       phase: TURN_PHASE.COMPLETION,
       summaryVersion: 8,
+      terminalStatus: { command: "completed" },
     }),
   );
   assert.equal(replay.deduplicated, true);
@@ -580,7 +594,7 @@ test("retryable stop finalize failure keeps intent and can recover once", async 
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-stop", 3, {
       phase: TURN_PHASE.STOP,
-      finalizeCommandId: "finalize-stop:t1",
+      completionCommitId: "finalize-stop:t1",
     }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -596,6 +610,7 @@ test("retryable stop finalize failure keeps intent and can recover once", async 
     event(TURN_EVENT.STOP_COMPLETED, "finalize-stop:t1", 5, {
       phase: TURN_PHASE.STOP,
       summaryVersion: 9,
+      terminalStatus: { command: "user_stopped" },
     }),
   );
   assert.equal(completed.turn.state, TURN_STATE.STOP_COMPLETED);
@@ -618,11 +633,13 @@ test("stop completed materializes partial assistant with authoritative identity"
     event(TURN_EVENT.STOP_ACCEPTED, "s-partial", 2, { phase: TURN_PHASE.STOP }),
   );
   await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-partial", 3, { phase: TURN_PHASE.STOP }),
+    event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-partial", 3, {
+      phase: TURN_PHASE.STOP,
+      completionCommitId: "finalize-partial:t1",
+    }),
   );
   const stopCompleted = event(TURN_EVENT.STOP_COMPLETED, "finalize-partial:t1", 4, {
     phase: TURN_PHASE.STOP,
-    completionCommitId: "finalize-partial:t1",
     terminalStatus: {
       command: "user_stopped",
       description: "stopped",

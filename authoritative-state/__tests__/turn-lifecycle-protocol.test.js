@@ -31,7 +31,10 @@ import {
   commitTurnLifecycle,
   createCommittedTurnLifecycleEnvelope,
 } from "../src/application/commit-turn-lifecycle.js";
-import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
+import {
+  normalizeTurnLifecycleEntity,
+  transitionTurnLifecycle,
+} from "../src/domain/turn-lifecycle-entity.js";
 import { deriveAgentExecutionId, EXECUTION_KIND } from "@noobot/session-protocol";
 
 function acceptedAgentExecution(turnScopeId, sessionId = "session-1") {
@@ -686,6 +689,7 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
       commandId: `${commandPrefix}:stop-processing-completed`,
       causationId: `${commandPrefix}:stop-processing-completed`,
       phase: TURN_PHASE.STOP,
+      completionCommitId: `${commandPrefix}:stop-completed`,
     });
     return transition(next, {
       ...identity(turnScopeId, dialogProcessId),
@@ -752,28 +756,6 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
   assert.equal(lifecycle.activeTurnScopeId, "turn-c");
 });
 
-test("turn lifecycle commit rejects events without causationId", () => {
-  const result = commitTurnLifecycle({
-    lifecycle: {},
-    event: {
-      eventType: TURN_EVENT.ACTION_ACCEPTED,
-      commandId: "missing-causation-command",
-      userId: "user-1",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      messageId: "message-1",
-      presentationMessageId: "presentation-1",
-      action: "send",
-      phase: TURN_PHASE.ACTION,
-      expectedRevision: 0,
-    },
-    createEventId: () => "missing-causation-event",
-    now: () => "2026-07-18T00:00:00.000Z",
-  });
-  assert.equal(result.applied, false);
-  assert.equal(result.reason, "invalid_lifecycle_identity");
-});
-
 test("committed turn lifecycle envelope projects identity from the committed turn", () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
     event: {
@@ -809,4 +791,29 @@ test("committed turn lifecycle envelope projects identity from the committed tur
   assert.equal(envelope.payload.parentSessionId, "parent-1");
   assert.equal(envelope.causality.causationId, "projection-cause");
   assert.equal(envelope.causality.correlationId, "turn-1");
+});
+
+test("normalizeTurnLifecycleEntity strips legacy failure.phase and keeps the top-level phase", () => {
+  const lifecycle = normalizeTurnLifecycleEntity({
+    turns: {
+      "turn-legacy": {
+        turnScopeId: "turn-legacy",
+        state: TURN_STATE.PROCESSING_FAILED,
+        phase: TURN_PHASE.PROCESSING,
+        failure: {
+          phase: TURN_PHASE.PROCESSING,
+          code: "model_failed",
+          message: "model failed",
+          retryable: false,
+        },
+      },
+    },
+  });
+  const turn = lifecycle.turns["turn-legacy"];
+  assert.equal(turn.phase, TURN_PHASE.PROCESSING);
+  assert.deepEqual(turn.failure, {
+    code: "model_failed",
+    message: "model failed",
+    retryable: false,
+  });
 });

@@ -24,6 +24,7 @@ import {
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 describe("useChatEngine.resend stopped state", () => {
   it("edit-resends immediately after stop without requiring a session refresh", async () => {
@@ -48,7 +49,7 @@ describe("useChatEngine.resend stopped state", () => {
             sequence: 5,
             completionCommitId: "commit-immediate-stop",
             summaryVersion: 5,
-            terminalStatus: { status: "user_stopped" },
+            terminalStatus: terminalStatusFixture("stop_completed", stoppedTurnScopeId),
             capabilities: { actionLocked: false, canStop: false },
           },
         }),
@@ -376,15 +377,7 @@ describe("useChatEngine.resend stopped state", () => {
               sequence: revision,
               completionCommitId,
               summaryVersion: revision,
-              terminalStatus: { status: "user_stopped" },
-            },
-            materialization: {
-              completionCommitId,
-              summaryVersion: revision,
-              revision,
-              sequence: revision,
-              terminalStatus: { status: "user_stopped" },
-              messages: [],
+              terminalStatus: terminalStatusFixture("stop_completed", turnScopeId),
             },
           }),
       };

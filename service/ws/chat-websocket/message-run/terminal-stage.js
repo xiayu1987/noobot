@@ -42,6 +42,11 @@ export async function finalizeRunResult(context, run, accepted, active) {
     causationId: accepted.commandId,
     eventType: TURN_EVENT.PROCESSING_COMPLETED,
     phase: TURN_PHASE.COMPLETION,
+    completionCommitId: createTurnLifecycleCommandId({
+      commandId: accepted.commandId,
+      eventType: TURN_EVENT.COMPLETED,
+      phase: TURN_PHASE.COMPLETION,
+    }),
   });
   if (!processed?.applied && !processed?.deduplicated) {
     throw new Error(processed?.reason || "processing_completion_failed");

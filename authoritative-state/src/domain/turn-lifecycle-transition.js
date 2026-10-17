@@ -13,8 +13,14 @@ import {
   deriveAuthoritativeTurnCapabilities,
   deriveTurnExecutionState,
   isRetryableFinalizeFailure,
+  isRetryableFinalizeFailureEvent,
+  isCompletionCommitTurnEvent,
+  isFinalizeRequestTurnEvent,
+  isSettlingTurnEvent,
   isTerminalTurnState,
   normalizeTurnContinuationSource,
+  normalizeTurnFailure,
+  normalizeTurnTerminalStatus,
   validateExecutionIdentity,
 } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -133,10 +139,7 @@ function requestHashFor(request) {
     continuationSource: request.continuationSource,
     completionCommitId: text(input.completionCommitId),
     failure: input.failure && typeof input.failure === "object" ? input.failure : null,
-    terminalStatus:
-      input.terminalStatus && typeof input.terminalStatus === "object"
-        ? input.terminalStatus
-        : null,
+    terminalStatus: normalizeTurnTerminalStatus(input.terminalStatus),
     finalizePayload:
       input.finalizePayload && typeof input.finalizePayload === "object"
         ? input.finalizePayload
@@ -177,6 +180,23 @@ function validateCurrentIdentity(request) {
   return "";
 }
 
+function validateFinalizeCommit(request) {
+  const { input, current, eventType, phase, commandId } = request;
+  if (isFinalizeRequestTurnEvent(eventType)) {
+    return text(input.completionCommitId) ? "" : "missing_completion_commit_id";
+  }
+  if (text(input.completionCommitId)) return "unexpected_completion_commit_id";
+  const intentCommandId = text(current?.finalizeIntent?.commandId);
+  if (isRetryableFinalizeFailureEvent({ eventType, phase, failure: input.failure })) {
+    return intentCommandId ? "" : "finalize_intent_missing";
+  }
+  if (isCompletionCommitTurnEvent(eventType)) {
+    if (!intentCommandId) return "finalize_intent_missing";
+    return intentCommandId === commandId ? "" : "completion_commit_id_conflict";
+  }
+  return "";
+}
+
 function validateRequestedAction(request) {
   const { lifecycle, current, eventType, turnScopeId, action, continuationSource } = request;
   if (
@@ -204,6 +224,8 @@ function validateRequestedAction(request) {
   ) {
     return "turn_failure_incomplete";
   }
+  const finalizeFailure = validateFinalizeCommit(request);
+  if (finalizeFailure) return finalizeFailure;
   if (
     eventType === TURN_EVENT.STOP_ACCEPTED &&
     !deriveAuthoritativeTurnCapabilities(current || {}).canStop
@@ -246,10 +268,10 @@ function resolveFinalizeType(eventType, phase) {
     : "completion";
 }
 
-function createPendingFinalizeIntent(input, currentIntent, type, commandId, nowValue) {
+function createPendingFinalizeIntent(input, currentIntent, type, nowValue) {
   return {
     type,
-    commandId: text(input.finalizeCommandId) || `${commandId}:finalize`,
+    commandId: text(input.completionCommitId),
     retryable: true,
     createdAt: text(currentIntent.createdAt) || nowValue,
     updatedAt: nowValue,
@@ -260,34 +282,24 @@ function createPendingFinalizeIntent(input, currentIntent, type, commandId, nowV
   };
 }
 
-function createRetryFinalizeIntent(input, currentIntent, type, commandId, nowValue) {
+function createRetryFinalizeIntent(currentIntent, nowValue) {
   return {
     ...currentIntent,
-    type: text(currentIntent.type) || type,
-    commandId: text(input.finalizeCommandId || currentIntent.commandId) || `${commandId}:retry`,
     retryable: true,
-    createdAt: text(currentIntent.createdAt) || nowValue,
     updatedAt: nowValue,
   };
 }
 
-function createFinalizeIntent({ input, current, eventType, phase, commandId, nowValue }) {
+function createFinalizeIntent({ input, current, eventType, phase, nowValue }) {
   const currentIntent = (current || {}).finalizeIntent || {};
-  const type = resolveFinalizeType(eventType, phase);
-  if (
-    eventType === TURN_EVENT.PROCESSING_COMPLETED ||
-    eventType === TURN_EVENT.STOP_PROCESSING_COMPLETED
-  ) {
-    return createPendingFinalizeIntent(input, currentIntent, type, commandId, nowValue);
+  if (isFinalizeRequestTurnEvent(eventType)) {
+    const type = resolveFinalizeType(eventType, phase);
+    return createPendingFinalizeIntent(input, currentIntent, type, nowValue);
   }
-  if (
-    eventType === TURN_EVENT.FAILED &&
-    (phase === TURN_PHASE.COMPLETION || phase === TURN_PHASE.STOP) &&
-    (input.failure || {}).retryable === true
-  ) {
-    return createRetryFinalizeIntent(input, currentIntent, type, commandId, nowValue);
+  if (isRetryableFinalizeFailureEvent({ eventType, phase, failure: input.failure })) {
+    return createRetryFinalizeIntent(currentIntent, nowValue);
   }
-  if (eventType === TURN_EVENT.COMPLETED || eventType === TURN_EVENT.STOP_COMPLETED) return null;
+  if (isCompletionCommitTurnEvent(eventType)) return null;
   return currentIntent.type ? currentIntent : null;
 }
 
@@ -297,6 +309,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
   const state = transition.nextState;
   const revision = Number(currentValue.revision || 0) + 1;
   const sequence = request.lifecycle.sequence + 1;
+  const settling = isSettlingTurnEvent({ eventType, phase, failure: input.failure });
   const turn = {
     ...(current || {}),
     turnScopeId,
@@ -315,12 +328,14 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     revision,
     sequence,
     summaryVersion: integer(input.summaryVersion, integer(currentValue.summaryVersion)),
-    completionCommitId: text(input.completionCommitId || currentValue.completionCommitId),
-    terminalStatus: isPlainObject(input.terminalStatus)
-      ? { ...input.terminalStatus }
-      : currentValue.terminalStatus || null,
-    failure: eventType === TURN_EVENT.FAILED ? { ...(input.failure || {}), phase } : null,
-    finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, commandId, nowValue }),
+    completionCommitId: isCompletionCommitTurnEvent(eventType)
+      ? commandId
+      : text(currentValue.completionCommitId),
+    terminalStatus: normalizeTurnTerminalStatus(
+      settling ? input.terminalStatus : currentValue.terminalStatus,
+    ),
+    failure: eventType === TURN_EVENT.FAILED ? normalizeTurnFailure(input.failure) : null,
+    finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, nowValue }),
     continuationSource: request.continuationSource,
     continuedByTurnScopeId: text(currentValue.continuedByTurnScopeId),
     startedAt:

@@ -20,6 +20,7 @@ import {
   createTurnLifecycleEnvelope,
   createTurnTerminalResolution,
 } from "@noobot/session-protocol";
+import { terminalStatusFixture } from "../../helpers/terminalStatusFixture.js";
 
 function event(registry, type, sessionId, turnScopeId, dialogProcessId, extra = {}) {
   return applyTurnRuntimeEvent(registry, {
@@ -104,14 +105,7 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
         summaryVersion: revision,
         failure,
         capabilities: { actionLocked: false, canStop: false },
-      },
-      materialization: {
-        completionCommitId,
-        summaryVersion: revision,
-        revision,
-        sequence: revision,
-        terminalStatus: { status: state },
-        messages: [],
+        terminalStatus: terminalStatusFixture(state, turnScopeId),
       },
     }),
   );

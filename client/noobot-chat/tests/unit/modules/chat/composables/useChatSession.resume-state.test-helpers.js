@@ -5,6 +5,7 @@
  */
 import { vi } from "vitest";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 export function detailResponse(options) {
   const payload = detailPayload(options);
@@ -112,15 +113,7 @@ export function terminalResolution({
       finalizeIntent: state === "stop_completed" ? "stop" : "complete",
       failure: successful ? null : { stage: state.replace("_failed", ""), retryable: false },
       ...(startedAt ? { startedAt } : {}),
-    },
-    materialization: {
-      aggregateVersion: 1,
-      terminalStatus: { status: state },
-      messages: [],
-      completionCommitId,
-      summaryVersion,
-      revision,
-      sequence,
+      terminalStatus: terminalStatusFixture(state, turnScopeId),
     },
   };
 }

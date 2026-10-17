@@ -17,6 +17,7 @@ import {
   wsClientMock,
 } from "./useChatSession.test-helpers.js";
 import { lifecycle } from "../runtime/run-state-machine/turnRuntimeRegistryTestFixtures.js";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 function turnMessages({
   dialogProcessId = "dp-1",
@@ -66,14 +67,7 @@ function settleStopped(store, session) {
         summaryVersion: revision,
         capabilities: { actionLocked: false, canStop: false },
         updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-      materialization: {
-        completionCommitId,
-        summaryVersion: revision,
-        revision,
-        sequence: revision,
-        terminalStatus: { status: "stop_completed" },
-        messages: session.messages,
+        terminalStatus: terminalStatusFixture("stop_completed", turnScopeId),
       },
     }),
   );

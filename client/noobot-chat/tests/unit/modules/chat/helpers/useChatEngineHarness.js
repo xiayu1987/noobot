@@ -28,6 +28,7 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { text } from "@noobot/shared/value";
+import { terminalStatusFixture } from "./terminalStatusFixture.js";
 
 const terminalResolutionFromUrl = (
   url,
@@ -65,15 +66,7 @@ const terminalResolutionFromUrl = (
       finalizeIntent: state === "stop_completed" ? "stop" : "complete",
       failure,
       ...turnTiming,
-    },
-    materialization: {
-      aggregateVersion: 1,
-      terminalStatus: { status: state },
-      messages,
-      completionCommitId,
-      summaryVersion: 1,
-      revision,
-      sequence,
+      terminalStatus: terminalStatusFixture(state, turnScopeId),
     },
   };
 };

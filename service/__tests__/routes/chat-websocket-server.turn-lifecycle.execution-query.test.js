@@ -50,7 +50,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     causationId: "processed",
     eventType: TURN_EVENT.PROCESSING_COMPLETED,
     phase: "completion",
-    finalizeCommandId: "stable-finalize",
+    completionCommitId: "stable-finalize",
   });
   const bot = {
     async getTurnLifecycleSnapshot({ commandId }) {
@@ -62,15 +62,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     },
   };
   const commitTurnLifecycle = async (input) =>
-    apply(
-      input.terminalStatus
-        ? {
-            ...input,
-            summaryVersion: 4,
-            completionCommitId: input.completionCommitId || input.commandId,
-          }
-        : input,
-    );
+    apply(input.terminalStatus ? { ...input, summaryVersion: 4 } : input);
   const request = { bot, commitTurnLifecycle, userId: "u1", sessionId: "s1", commandId: "recover" };
   const first = await finalizeTurnSnapshot(request);
   const second = await finalizeTurnSnapshot(request);
@@ -83,6 +75,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
   assert.equal(second.reason, "no_active_turn");
   assert.equal(second.snapshot.recovery, "none");
   assert.equal(lifecycle.turns["turn-recover"].summaryVersion, 4);
+  assert.equal(lifecycle.turns["turn-recover"].completionCommitId, "stable-finalize");
   assert.equal(lifecycle.turns["turn-recover"].state, "completed");
   assert.equal(lifecycle.turns["turn-recover"].revision, 4);
   assert.equal(lifecycle.sequence, 4);

@@ -11,11 +11,11 @@ import {
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
 describe("normalizeSessionRunEvent", () => {
-  it("reads authoritative state from the turn payload for lifecycle events", () => {
+  it("reads authoritative state from the top-level lifecycle envelope", () => {
     const normalized = normalizeSessionRunEvent({
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       seq: 7,
-      raw: { turn: { state: "COMPLETED" } },
+      state: "COMPLETED",
     });
     expect(normalized.state).toBe("completed");
     expect(normalized.lifecycleSeq).toBe(7);
@@ -27,12 +27,23 @@ describe("normalizeSessionRunEvent", () => {
     const normalized = normalizeSessionRunEvent({
       type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
       state: "Failed",
-      raw: { turn: { finalizeIntent: "abort", failure: { phase: "model" } } },
+      finalizeIntent: "abort",
+      failure: { code: "model_failed" },
     });
     expect(normalized.authoritativeTurnState).toBe("failed");
     expect(normalized.authority).toBe(TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED);
     expect(normalized.finalizeIntent).toBe("abort");
-    expect(normalized.failure).toEqual({ phase: "model" });
+    expect(normalized.failure).toEqual({ code: "model_failed" });
+  });
+
+  it("does not read turn payload from a nested raw.turn copy", () => {
+    const normalized = normalizeSessionRunEvent({
+      type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
+      raw: { turn: { state: "failed", finalizeIntent: "abort", failure: { code: "x" } } },
+    });
+    expect(normalized.authoritativeTurnState).toBe("");
+    expect(normalized.finalizeIntent).toBeNull();
+    expect(normalized.failure).toBeNull();
   });
 
   it("treats local_failure as a non-protocol event without failureState derivation", () => {
@@ -123,17 +134,14 @@ describe("normalizeSessionRunEvent", () => {
     expect(normalized.raw).toBe(rawEvent);
   });
 
-  it("keeps materialization only when it is an object", () => {
-    expect(normalizeSessionRunEvent({ materialization: { kind: "full" } }).materialization).toEqual(
-      {
-        kind: "full",
-      },
+  it("does not carry a terminal materialization field", () => {
+    expect(normalizeSessionRunEvent({ materialization: { kind: "full" } })).not.toHaveProperty(
+      "materialization",
     );
-    expect(normalizeSessionRunEvent({ materialization: "full" }).materialization).toBeNull();
   });
 
-  it("derives phase from the failure payload when absent", () => {
-    const normalized = normalizeSessionRunEvent({ failure: { phase: "tool" } });
-    expect(normalized.phase).toBe("tool");
+  it("reads phase only from the top-level protocol field", () => {
+    expect(normalizeSessionRunEvent({ failure: { phase: "tool" } }).phase).toBe("");
+    expect(normalizeSessionRunEvent({ phase: "processing" }).phase).toBe("processing");
   });
 });

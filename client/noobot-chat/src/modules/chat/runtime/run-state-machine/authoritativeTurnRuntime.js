@@ -51,7 +51,6 @@ function commitEnvelopeProjection(registry, envelope, result, fingerprint) {
       parentSessionId: text(envelope.parentSessionId),
       messageId: text(envelope.messageId),
       presentationMessageId: text(envelope.presentationMessageId),
-      phase: text(envelope.phase || envelope.failure?.phase),
       authoritativeEventId: text(envelope.eventId),
       authoritativeEventFingerprint: fingerprint,
     });
@@ -116,8 +115,6 @@ export function applyTurnTerminalResolution(registry, response = {}) {
     summaryVersion: turn.summaryVersion,
     finalizeIntent: turn.finalizeIntent,
     failure: turn.failure,
-    materialization: response.materialization,
-    raw: { turn },
     source: "authoritative_terminal_service",
   });
 }

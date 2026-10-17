@@ -18,7 +18,11 @@ import {
   SESSION_ARTIFACT_AGGREGATE_VERSION_CONTRACT_SCHEMA_VERSION,
   SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_TURN_TERMINAL_STATUS_SCHEMA_VERSION,
+  TURN_ORPHAN_RECOVERY,
   createTurnCommitFingerprint,
+  createTurnTerminalStatus,
+  normalizeTurnTerminalStatus,
   isSessionAggregateVersion,
   createTurnLifecycleCommandId,
   isTurnCommitContinuation,
@@ -405,6 +409,45 @@ function migrateTurnStatuses(context) {
   markMigrated(context, "turn-terminal-single-source-v1");
 }
 
+function isOrphanRecoveryFailure(failure) {
+  const expected = TURN_ORPHAN_RECOVERY.failure;
+  return (
+    text(failure?.code) === expected.code &&
+    text(failure?.message) === expected.message &&
+    failure?.retryable === expected.retryable
+  );
+}
+
+function rebuildOrphanTerminalStatus(turn) {
+  return createTurnTerminalStatus(TURN_ORPHAN_RECOVERY.terminalCommand, {
+    turnScopeId: turn.turnScopeId,
+    dialogProcessId: turn.dialogProcessId,
+    description: TURN_ORPHAN_RECOVERY.failure.message,
+    updatedAt: turn.finishedAt,
+  });
+}
+
+function migrateTurnTerminalStatusShape(context) {
+  if (context.sourceSchemaVersion >= SESSION_ARTIFACT_TURN_TERMINAL_STATUS_SCHEMA_VERSION) return;
+  let migrated = false;
+  for (const turn of Object.values(context.turns)) {
+    if (!isPlainObject(turn) || turn.terminalStatus == null) continue;
+    if (normalizeTurnTerminalStatus(turn.terminalStatus)) continue;
+    const rebuilt = isOrphanRecoveryFailure(turn.failure)
+      ? rebuildOrphanTerminalStatus(turn)
+      : null;
+    if (!rebuilt) {
+      throw migrationError(
+        "Session turn terminalStatus is not a protocol terminal status",
+        "SESSION_TURN_TERMINAL_STATUS_UNMIGRATABLE",
+      );
+    }
+    turn.terminalStatus = { ...rebuilt };
+    migrated = true;
+  }
+  if (migrated) markMigrated(context, "turn-terminal-status-protocol-v1");
+}
+
 function hasCommandReceipt(lifecycle, commandId) {
   return lifecycle.commandReceipts.some((receipt) => text(receipt?.commandId) === commandId);
 }
@@ -686,6 +729,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateAggregateVersionContract,
   migrateLifecycleCommandReceipts,
   migrateTurnStatuses,
+  migrateTurnTerminalStatusShape,
   migrateTurnCommitReceipts,
   migrateMutationReceipts,
   migrateDocumentMessages,

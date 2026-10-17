@@ -8,6 +8,8 @@ import { normalizeExecutionIdentity } from "../execution-lifecycle.js";
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
 import { normalizeTurnContinuationSource } from "./turn-continuation.js";
+import { normalizeTurnFailure } from "./turn-failure.js";
+import { normalizeTurnTerminalStatus } from "./turn-terminal.js";
 
 export function snapshotTurn(turn = {}) {
   const executionIdentity = normalizeExecutionIdentity(turn);
@@ -26,9 +28,8 @@ export function snapshotTurn(turn = {}) {
     sequence: Number(turn.sequence || 0),
     summaryVersion: Number(turn.summaryVersion || 0),
     completionCommitId: clean(turn.completionCommitId),
-    terminalStatus:
-      turn.terminalStatus && typeof turn.terminalStatus === "object" ? turn.terminalStatus : null,
-    failure: turn.failure && typeof turn.failure === "object" ? turn.failure : null,
+    terminalStatus: normalizeTurnTerminalStatus(turn.terminalStatus),
+    failure: normalizeTurnFailure(turn.failure),
     finalizeIntent:
       turn.finalizeIntent && typeof turn.finalizeIntent === "object" ? turn.finalizeIntent : null,
     continuationSource: normalizeTurnContinuationSource(turn.continuationSource),

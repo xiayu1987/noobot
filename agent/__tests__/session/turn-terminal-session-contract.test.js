@@ -120,7 +120,7 @@ test("action failure before message persistence remains terminal after summary h
       turnLifecycle: terminalLifecycle({
         state: "action_failed",
         status: "error",
-        reason: "attachment_rejected",
+        reason: "run_error",
       }),
     },
     { now },
@@ -166,8 +166,11 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
 
   assert.deepEqual(Object.keys(parent.turnLifecycle.turns), ["parent-turn"]);
   assert.deepEqual(Object.keys(child.turnLifecycle.turns), ["child-turn"]);
-  child.turnLifecycle.turns["child-turn"].terminalStatus.description = "mutated child";
-  assert.equal(parent.turnLifecycle.turns["parent-turn"].terminalStatus.description, "completed");
+  const childStatus = child.turnLifecycle.turns["child-turn"].terminalStatus;
+  const parentStatus = parent.turnLifecycle.turns["parent-turn"].terminalStatus;
+  assert.notEqual(childStatus, parentStatus);
+  assert.ok(Object.isFrozen(childStatus));
+  assert.equal(parentStatus.description, "completed");
 });
 
 test("synthetic placeholders cannot enter persistence or summary", () => {

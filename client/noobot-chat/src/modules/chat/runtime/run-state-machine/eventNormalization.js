@@ -56,7 +56,7 @@ function normalizeTimestamp(rawEvent = {}) {
 }
 
 function resolveTurnState(rawEvent = {}) {
-  return trim(rawEvent?.state || rawEvent?.raw?.turn?.state).toLowerCase();
+  return trim(rawEvent?.state).toLowerCase();
 }
 
 function resolveEventState(type, rawEvent, wireState) {
@@ -87,18 +87,13 @@ function resolveSequenceFields(rawEvent, type) {
 }
 
 function resolveTurnPayloadFields(rawEvent, type) {
-  const turn = rawEvent?.raw?.turn;
   return {
     authoritativeTurnState:
       type === SESSION_RUN_EVENT.TERMINAL_RESOLVED ? resolveTurnState(rawEvent) : "",
-    finalizeIntent: rawEvent?.finalizeIntent || turn?.finalizeIntent || null,
-    failure: rawEvent?.failure || turn?.failure || null,
-    continuationSource: rawEvent?.continuationSource || turn?.continuationSource || null,
-    continuedByTurnScopeId: trim(rawEvent?.continuedByTurnScopeId || turn?.continuedByTurnScopeId),
-    materialization:
-      rawEvent?.materialization && typeof rawEvent.materialization === "object"
-        ? rawEvent.materialization
-        : null,
+    finalizeIntent: rawEvent?.finalizeIntent || null,
+    failure: rawEvent?.failure || null,
+    continuationSource: rawEvent?.continuationSource || null,
+    continuedByTurnScopeId: trim(rawEvent?.continuedByTurnScopeId),
   };
 }
 
@@ -130,7 +125,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     completionCommitId: trim(rawEvent?.completionCommitId),
     ...resolveTurnPayloadFields(rawEvent, type),
     eventType: trim(rawEvent?.eventType),
-    phase: trim(rawEvent?.phase || rawEvent?.failure?.phase),
+    phase: trim(rawEvent?.phase),
     ...resolveTimeFields(rawEvent),
     raw: rawEvent,
   };

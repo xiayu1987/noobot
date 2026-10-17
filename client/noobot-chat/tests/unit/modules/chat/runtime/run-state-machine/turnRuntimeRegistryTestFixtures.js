@@ -13,6 +13,7 @@ import {
   createTurnLifecycleEnvelope,
   createTurnTerminalResolution,
 } from "@noobot/session-protocol";
+import { terminalStatusFixture } from "../../helpers/terminalStatusFixture.js";
 
 export function sendStart(registry, { sessionId, turnScopeId, seq = 1 }) {
   return applyTurnRuntimeEvent(registry, {
@@ -91,7 +92,6 @@ export function settleTerminal(
     summaryVersion = 0,
     failure = null,
     finalizeIntent = null,
-    materialization = {},
     startedAt = "",
     finishedAt = "",
   } = {},
@@ -101,7 +101,6 @@ export function settleTerminal(
   const resolvedSummaryVersion = summaryVersion || revision;
   const terminalFailure = state.endsWith("_failed")
     ? failure || {
-        phase: state.replace(/_failed$/, ""),
         message: `${state} terminal failure`,
         retryable: false,
       }
@@ -129,15 +128,7 @@ export function settleTerminal(
         finishedAt,
         capabilities: { actionLocked: false, canStop: false },
         updatedAt: "2026-01-01T00:00:03.000Z",
-      },
-      materialization: {
-        completionCommitId: resolvedCommitId,
-        summaryVersion: resolvedSummaryVersion,
-        revision,
-        sequence,
-        terminalStatus: { status: state },
-        messages: [],
-        ...materialization,
+        terminalStatus: terminalStatusFixture(state, turnScopeId),
       },
     }),
   );

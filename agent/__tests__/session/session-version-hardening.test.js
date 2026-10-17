@@ -20,7 +20,13 @@ async function completeTurn(service, turnScopeId) {
   };
   const steps = [
     [TURN_EVENT.PROCESSING_STARTED, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }],
-    [TURN_EVENT.PROCESSING_COMPLETED, { phase: TURN_PHASE.COMPLETION }],
+    [
+      TURN_EVENT.PROCESSING_COMPLETED,
+      {
+        phase: TURN_PHASE.COMPLETION,
+        completionCommitId: `${turnScopeId}-${TURN_EVENT.COMPLETED}`,
+      },
+    ],
     [
       TURN_EVENT.COMPLETED,
       { phase: TURN_PHASE.COMPLETION, summaryVersion: 1, terminalStatus: { command: "completed" } },

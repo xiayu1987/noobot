@@ -344,9 +344,6 @@ function projectAuthorityFields(currentValue, event) {
   return {
     authority: terminalResolution ? event.authority : currentValue.authority,
     terminalResolved: terminalResolution || currentValue.terminalResolved === true,
-    terminalMaterialization: terminalResolution
-      ? event.materialization
-      : currentValue.terminalMaterialization || null,
   };
 }
 
@@ -379,9 +376,8 @@ function projectNextTurn(current, event, facts, state, sequences) {
     authoritativeCompletionCommit: facts.authoritativeCommit,
     ...projectAuthorityFields(currentValue, event),
     finalizeIntent: event.finalizeIntent || currentValue.finalizeIntent || null,
-    failure: AUTHORITATIVE_EVENT_TYPES.has(event.type)
-      ? event.failure
-      : currentValue.failure || null,
+    phase: authoritative ? event.phase : currentValue.phase || "",
+    failure: authoritative ? event.failure : currentValue.failure || null,
   };
 }
 

@@ -70,7 +70,6 @@ export function createTurnFinalizer({
       eventType: TURN_EVENT.FAILED,
       phase: TURN_PHASE.PROCESSING,
       failure: {
-        phase: TURN_PHASE.PROCESSING,
         code: "run_timeout",
         message: description,
         retryable: false,
@@ -97,6 +96,11 @@ export function createTurnFinalizer({
       fallbackMessage: stoppedMessage,
     });
     const stopCommandId = text(stopPayload.commandId);
+    const completionCommitId = createTurnLifecycleCommandId({
+      commandId: stopCommandId,
+      eventType: TURN_EVENT.STOP_COMPLETED,
+      phase: TURN_PHASE.STOP,
+    });
     const processed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: stoppedPartialAssistant.sessionId,
@@ -111,6 +115,7 @@ export function createTurnFinalizer({
       causationId: stopCommandId,
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
       phase: TURN_PHASE.STOP,
+      completionCommitId,
       finalizePayload: { assistantMessage: stoppedPartialAssistant },
     });
     if (!processed?.applied && !processed?.deduplicated) {
@@ -121,11 +126,6 @@ export function createTurnFinalizer({
       });
       return;
     }
-    const completionCommitId = createTurnLifecycleCommandId({
-      commandId: stopCommandId,
-      eventType: TURN_EVENT.STOP_COMPLETED,
-      phase: TURN_PHASE.STOP,
-    });
     const completed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: stoppedPartialAssistant.sessionId,
@@ -136,7 +136,6 @@ export function createTurnFinalizer({
       causationId: stopCommandId,
       eventType: TURN_EVENT.STOP_COMPLETED,
       phase: TURN_PHASE.STOP,
-      completionCommitId,
       terminalStatus: {
         command: "user_stopped",
         assistantMessage: stoppedPartialAssistant,
@@ -172,7 +171,6 @@ export function createTurnFinalizer({
       causationId: rootCommandId,
       eventType: TURN_EVENT.COMPLETED,
       phase: TURN_PHASE.COMPLETION,
-      completionCommitId,
       terminalStatus: { command: "completed" },
     });
     if (!completed?.applied && !completed?.deduplicated) {
@@ -191,7 +189,6 @@ export function createTurnFinalizer({
         eventType: TURN_EVENT.FAILED,
         phase: TURN_PHASE.COMPLETION,
         failure: {
-          phase: TURN_PHASE.COMPLETION,
           code: completed?.reason || "completion_transaction_failed",
           message: "completion transaction failed",
           retryable: true,

@@ -6,6 +6,7 @@
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   TURN_EVENT,
+  TURN_ORPHAN_RECOVERY,
   TURN_PHASE,
   TURN_RECOVERY_ACTION,
   TURN_STATE,
@@ -71,7 +72,7 @@ export async function inspectTurnRecovery({
 function finalizeCommand(turn, identity) {
   const intent = turn.finalizeIntent;
   const isStop = clean(intent.type) === "stop";
-  const completionCommitId = clean(intent.commandId || `finalize:${turn.turnScopeId}`);
+  const completionCommitId = clean(intent.commandId);
   return {
     ...identity,
     turnScopeId: clean(turn.turnScopeId),
@@ -81,7 +82,6 @@ function finalizeCommand(turn, identity) {
     eventType: isStop ? TURN_EVENT.STOP_COMPLETED : TURN_EVENT.COMPLETED,
     phase: isStop ? TURN_PHASE.STOP : TURN_PHASE.COMPLETION,
     expectedRevision: Number(turn.revision || 0),
-    completionCommitId,
     terminalStatus: {
       command: isStop ? "user_stopped" : "completed",
       ...(isStop && intent.payload?.assistantMessage
@@ -104,11 +104,10 @@ function orphanCommand(turn, identity) {
     eventType: TURN_EVENT.FAILED,
     phase,
     expectedRevision: Number(turn.revision || 0),
-    failure: {
-      phase,
-      code: "service_restart_orphaned_turn",
-      message: "active turn execution was lost after service restart",
-      retryable: false,
+    failure: { ...TURN_ORPHAN_RECOVERY.failure },
+    terminalStatus: {
+      command: TURN_ORPHAN_RECOVERY.terminalCommand,
+      description: TURN_ORPHAN_RECOVERY.failure.message,
     },
   };
 }

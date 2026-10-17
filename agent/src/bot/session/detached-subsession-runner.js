@@ -386,7 +386,7 @@ function lifecycleCommandId(lifecycle, eventType, phase = "") {
 async function commitDetachedStart(lifecycle, startedAt, request, identity, runConfig) {
   const accepted = await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.ACTION_ACCEPTED),
-    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.ACTION_ACCEPTED),
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: TURN_ACTION.SEND,
@@ -404,7 +404,7 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
   });
   await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_STARTED),
-    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_STARTED),
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: TURN_PHASE.PROCESSING,
     executionState: "sending",
@@ -479,44 +479,45 @@ async function commitDetachedError(error, dependencies, request, runtime, identi
 }
 
 async function commitDetachedStop(dependencies, lifecycle) {
+  const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.STOP_COMPLETED);
   await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_ACCEPTED),
-    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_ACCEPTED),
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.STOP_ACCEPTED,
     phase: TURN_PHASE.STOP,
     action: TURN_ACTION.STOP,
   });
   await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_PROCESSING_COMPLETED),
-    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_PROCESSING_COMPLETED),
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
     phase: TURN_PHASE.STOP,
+    completionCommitId,
   });
-  const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.STOP_COMPLETED);
   return lifecycle.commit({
     commandId: completionCommitId,
-    causationId: completionCommitId,
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.STOP_COMPLETED,
     phase: TURN_PHASE.STOP,
     executionState: "user_stopped",
-    completionCommitId,
     terminalStatus: { command: "user_stopped" },
     finishedAt: String(dependencies.now()).trim(),
   });
 }
 
 function commitDetachedFailure(error, lifecycle) {
+  const message = String(error?.message || "detached sub-session failed");
   return lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.FAILED, TURN_PHASE.PROCESSING),
-    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.FAILED, TURN_PHASE.PROCESSING),
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.FAILED,
     phase: TURN_PHASE.PROCESSING,
     failure: {
-      phase: TURN_PHASE.PROCESSING,
       code: text(error?.code) || "detached_sub_session_failed",
-      message: String(error?.message || "detached sub-session failed"),
+      message,
       retryable: false,
     },
+    terminalStatus: { command: "error", description: message, error },
   });
 }
 
@@ -537,20 +538,20 @@ function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, er
 }
 
 async function commitDetachedCompletion(dependencies, lifecycle) {
+  const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.COMPLETED);
   await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_COMPLETED),
-    causationId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_COMPLETED),
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.PROCESSING_COMPLETED,
     phase: TURN_PHASE.COMPLETION,
+    completionCommitId,
   });
-  const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.COMPLETED);
   return lifecycle.commit({
     commandId: completionCommitId,
-    causationId: completionCommitId,
+    causationId: lifecycle.commandId,
     eventType: TURN_EVENT.COMPLETED,
     phase: TURN_PHASE.COMPLETION,
     executionState: "completed",
-    completionCommitId,
     terminalStatus: { command: "completed" },
     finishedAt: String(dependencies.now()).trim(),
   });

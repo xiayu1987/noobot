@@ -27,7 +27,7 @@ import {
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
-  it("commits a child terminal notification even when terminal materialization is unavailable", async () => {
+  it("commits a child terminal notification from the authoritative terminal turn", async () => {
     const sessionId = "workflow-child-session";
     const parentSessionId = "workflow-root-session";
     const turnScopeId = "workflow-node:calculation";
@@ -80,7 +80,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
             ? {
                 completionCommitId: "workflow-child-completion",
                 summaryVersion: 1,
-                terminalStatus: { status: "completed", reason: "run_completed" },
+                terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
               }
             : {}),
         }),
@@ -183,7 +183,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       retryAfterMs: 0,
       aggregateVersion: 7,
       turn: terminalTurn,
-      materialization: null,
     });
     await expect(first).resolves.toMatchObject({ applied: true });
 
@@ -226,7 +225,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
           terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
           capabilities: { actionLocked: false, canStop: false },
         },
-        materialization: null,
       }),
     }));
     const { engine, activeSessionId, sessions, turnRuntimeRegistry } = createHarness({
@@ -282,7 +280,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
           terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
           capabilities: { actionLocked: false, canStop: false },
         },
-        materialization: null,
       }),
     }));
     const harness = createHarness({

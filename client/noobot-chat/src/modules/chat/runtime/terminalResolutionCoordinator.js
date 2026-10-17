@@ -68,7 +68,7 @@ function maxVersion(left = {}, right = {}) {
 function isTerminalNotification(event = {}) {
   return (
     event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
-    isTerminalTurnEvent(clean(event.eventType || event.raw?.eventType).toLowerCase())
+    isTerminalTurnEvent(clean(event.eventType).toLowerCase())
   );
 }
 
@@ -263,7 +263,7 @@ export function createTerminalResolutionCoordinator({
       };
       traceApplyResult(result);
       if (generation !== entry.generation) return result;
-      entry.resolvedVersion = versionOf(response);
+      entry.resolvedVersion = versionOf(response.turn);
       entry.resolvedResult = result;
       entry.resolvedResponse = response;
       entry.exhaustedVersion = null;
@@ -365,7 +365,7 @@ export function createTerminalResolutionCoordinator({
     return resolve(event.sessionId, event.turnScopeId, {
       commandId: event.commandId || "",
       source: "realtime_notification",
-      ...versionOf(event.raw || event),
+      ...versionOf(event),
     });
   };
 
