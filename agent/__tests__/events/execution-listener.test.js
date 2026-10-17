@@ -33,8 +33,8 @@ test("execution listener forwards the authoritative persistence scope and its de
     sessionId: "child-session",
     parentSessionId: "parent-session",
     turnScopeId: "child-turn",
+    dialogProcessId: "child-dialog",
     upstream: {
-      dialogProcessId: "child-dialog",
       onEvent: async (event) => {
         forwarded.push(event);
         return delivered;
@@ -213,8 +213,8 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
     sessionManager: { appendExecutionLog: async () => {} },
     sessionId: "session-a",
     turnScopeId: "turn-a",
+    dialogProcessId: "dialog-a",
     upstream: {
-      dialogProcessId: "dialog-a",
       onEvent: async (event) => {
         forwarded = event;
         return true;
@@ -273,7 +273,8 @@ test("execution listener persists the canonical message fact instead of the priv
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
-    upstream: { dialogProcessId: "dialog-a", onEvent: async () => true },
+    dialogProcessId: "dialog-a",
+    upstream: { onEvent: async () => true },
   });
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
@@ -315,8 +316,8 @@ test("execution listener forwards transient message events without persisting th
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
+    dialogProcessId: "dialog-a",
     upstream: {
-      dialogProcessId: "dialog-a",
       onEvent: async (event) => {
         forwarded.push(event);
         return true;
@@ -379,7 +380,8 @@ test("execution listener classifies context identity diagnostics under one proto
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
-    upstream: { dialogProcessId: "dialog-a", onEvent: async () => true },
+    dialogProcessId: "dialog-a",
+    upstream: { onEvent: async () => true },
   });
 
   await listener.onEvent({
@@ -414,7 +416,8 @@ test("execution listener classifies agent context diagnostics under the dedicate
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
-    upstream: { dialogProcessId: "dialog-a", onEvent: async () => true },
+    dialogProcessId: "dialog-a",
+    upstream: { onEvent: async () => true },
   });
 
   await listener.onEvent({
@@ -606,8 +609,8 @@ test("execution listener reports delivery timing once at flush without writing e
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
+    dialogProcessId: "dialog-a",
     upstream: {
-      dialogProcessId: "dialog-a",
       onEvent: async () => ({ delivered: 1 }),
       onDeliveryTiming: (summary) => timings.push(summary),
     },
@@ -685,13 +688,13 @@ test("execution listener persists runtime events into the scoped persistence con
     sessionId: "child-session",
     parentSessionId: "parent-session",
     persistenceContext,
-    upstream: { dialogProcessId: "child-dialog" },
+    dialogProcessId: "child-dialog",
   });
   const unscoped = createExecutionEventListener({
     sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
     userId: "user-a",
     sessionId: "root-session",
-    upstream: { dialogProcessId: "root-dialog" },
+    dialogProcessId: "root-dialog",
   });
 
   await scoped.onEvent({ event: "llm_call_start", data: {} });
@@ -702,4 +705,16 @@ test("execution listener persists runtime events into the scoped persistence con
   assert.equal(persisted.length, 2);
   assert.equal(persisted[0].persistenceContext, persistenceContext);
   assert.equal("persistenceContext" in persisted[1], false);
+});
+
+test("execution listener rejects an upstream without an onEvent port", () => {
+  assert.throws(
+    () =>
+      createExecutionEventListener({
+        sessionManager: { appendExecutionLog: async () => {} },
+        dialogProcessId: "dialog-a",
+        upstream: {},
+      }),
+    /upstream requires an onEvent port/,
+  );
 });

@@ -145,7 +145,7 @@ async function executeAcceptedRun(context, run, accepted, active) {
 function createRunHandler(context) {
   return async function handleRun(command, { onRunBound = null }) {
     const run = await mapRunCommand(context, command);
-    recordReceivedCommand(context, command, run);
+    recordReceivedCommand(command, run);
     validateRunIdentity(context, run);
     if (await bindExistingRun(context, run, onRunBound)) return { rebound: true };
     reserveRun(context, run, onRunBound);

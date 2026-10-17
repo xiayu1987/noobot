@@ -10,16 +10,13 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { resolveAttachmentPolicy } from "@noobot/agent-config-protocol";
 
 import { fsMkdir, fsWriteFile } from "../../shared/storage/fs-adapter.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 import { readAttachIndex, withAttachIndexLock, writeAttachIndex } from "../index-manager.js";
-import {
-  resolveAttachmentPolicy,
-  isMimeTypeAllowed,
-  isExtensionAllowed,
-} from "../policy/policy-validator.js";
+import { isMimeTypeAllowed, isExtensionAllowed } from "../policy/policy-validator.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveBasePath, resolveAttachmentScope } from "./attachment-scope-resolver.js";
@@ -98,10 +95,10 @@ export async function ingestAttachments(
   if (!attachments?.length) return [];
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
-  const policy = resolveAttachmentPolicy();
+  const policy = resolveAttachmentPolicy(service.globalConfig);
   const entries = requireArtifactEntries(attachments, "attachments");
 
-  if (policy.maxFileCount > 0 && attachments.length > policy.maxFileCount) {
+  if (attachments.length > policy.maxFileCount) {
     throw recoverableToolError(
       `${tSystem("attach.countExceedsLimit")}: ${attachments.length} > ${policy.maxFileCount}`,
       {
@@ -134,7 +131,7 @@ export async function ingestAttachments(
       });
     }
     const bytes = Buffer.from(contentBase64, "base64");
-    if (policy.maxFileSizeBytes > 0 && bytes.length > policy.maxFileSizeBytes) {
+    if (bytes.length > policy.maxFileSizeBytes) {
       throw recoverableToolError(
         `${tSystem("attach.fileTooLarge")}: ${name}, ${bytes.length} > ${policy.maxFileSizeBytes}`,
         {
@@ -151,7 +148,7 @@ export async function ingestAttachments(
     return { item, name, normalizedMime, bytes };
   });
   const totalBytes = prepared.reduce((sum, entry) => sum + entry.bytes.length, 0);
-  if (policy.maxTotalSizeBytes > 0 && totalBytes > policy.maxTotalSizeBytes) {
+  if (totalBytes > policy.maxTotalSizeBytes) {
     throw recoverableToolError(
       `${tSystem("attach.totalSizeExceedsLimit")}: ${totalBytes} > ${policy.maxTotalSizeBytes}`,
       {

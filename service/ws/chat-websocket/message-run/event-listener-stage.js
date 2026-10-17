@@ -19,7 +19,7 @@ const WORKFLOW_DIAGNOSTIC_EVENT_TYPES = new Set([
   WORKFLOW_RUNTIME_EVENT.NODE_STATE,
 ]);
 
-function recordEventAudit(context, run, audit, { debugType, event }) {
+function recordEventAudit(run, audit, { debugType, event }) {
   void recordServiceWebSocketLifecycle({
     category: "debug",
     level: "debug",
@@ -35,28 +35,21 @@ function recordEventAudit(context, run, audit, { debugType, event }) {
 
 function onEventReceived(context, run, audit) {
   if (WORKFLOW_DIAGNOSTIC_EVENT_TYPES.has(audit.eventType)) {
-    recordEventAudit(context, run, audit, {
+    recordEventAudit(run, audit, {
       debugType: "workflow-diagnostics",
       event: "service.workflowTransport.sourceEventReceived",
     });
     return;
   }
   if (TIMELINE_EVENT_TYPES.has(audit.payloadEventType)) {
-    recordEventAudit(context, run, audit, {
+    recordEventAudit(run, audit, {
       debugType: "timeline-pipeline",
       event: "service.websocket.runEvent.timelineReceived",
     });
   }
 }
 
-function recordDispatchFailure(
-  context,
-  run,
-  committedEnvelope,
-  dispatchContext,
-  reason,
-  delivered = 0,
-) {
+function recordDispatchFailure(run, committedEnvelope, dispatchContext, reason, delivered = 0) {
   const identity = committedEnvelope.identity || {};
   const payload = committedEnvelope.payload || {};
   void recordServiceWebSocketLifecycle({
@@ -88,7 +81,6 @@ async function dispatchCommittedTurn(context, run, envelope = {}, dispatchContex
     });
     if (dispatch?.dispatched !== true) {
       recordDispatchFailure(
-        context,
         run,
         envelope,
         dispatchContext,
@@ -99,7 +91,7 @@ async function dispatchCommittedTurn(context, run, envelope = {}, dispatchContex
     return dispatch;
   } catch (error) {
     const reason = error?.message || "authority_dispatch_failed";
-    recordDispatchFailure(context, run, envelope, dispatchContext, reason);
+    recordDispatchFailure(run, envelope, dispatchContext, reason);
     return { dispatched: false, reason, delivered: 0 };
   }
 }
@@ -121,7 +113,7 @@ async function dispatchAuthorityEvent(context, run, active, envelope = {}, dispa
   if (dispatch?.dispatched === true) return dispatch;
   const reason = dispatch?.reason || "authority_event_dispatch_failed";
   if (!REPLAYABLE_DISPATCH_FAILURES.has(reason)) throw new Error(reason);
-  recordDispatchFailure(context, run, envelope, dispatchContext, reason, dispatch?.delivered);
+  recordDispatchFailure(run, envelope, dispatchContext, reason, dispatch?.delivered);
   return { ...dispatch, deliveryDegraded: true };
 }
 
@@ -180,7 +172,7 @@ function createRootRunningHandler(context, run, accepted, lifecycle) {
 
 const DELIVERY_TIMING_DEBUG_TYPE = "delivery-timing";
 
-function recordDeliveryTiming(context, run, summary) {
+function recordDeliveryTiming(run, summary) {
   void recordServiceWebSocketLifecycle({
     category: "debug",
     level: "debug",
@@ -203,7 +195,7 @@ export function createMessageRunEventListener(context, run, accepted, active) {
     getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
     onEventReceived: (audit) => onEventReceived(context, run, audit),
     onDeliveryTiming: isSessionLogDebugTypeEnabled(DELIVERY_TIMING_DEBUG_TYPE)
-      ? (summary) => recordDeliveryTiming(context, run, summary)
+      ? (summary) => recordDeliveryTiming(run, summary)
       : null,
     onCommittedTurnLifecycle: (envelope, dispatchContext) =>
       dispatchCommittedTurn(context, run, envelope, dispatchContext),

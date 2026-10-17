@@ -6,38 +6,11 @@
 
 import { filePath as path } from "@noobot/path-resolver";
 
-import { BUILTIN_ATTACHMENT_POLICY } from "../../config/index.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
-export function resolveAttachmentPolicy() {
-  return {
-    maxFileSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes,
-    maxTotalSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxTotalSizeBytes,
-    maxFileCount: BUILTIN_ATTACHMENT_POLICY.maxFileCount,
-    allowedMimeTypes: normalizeStringArray(BUILTIN_ATTACHMENT_POLICY.allowedMimeTypes),
-    allowedExtensions: normalizeExtensions(BUILTIN_ATTACHMENT_POLICY.allowedExtensions),
-  };
-}
-
-function normalizeStringArray(arr) {
-  if (!Array.isArray(arr)) return [];
-  return arr.map((item) => safeStr(item).toLowerCase()).filter(Boolean);
-}
-
-function normalizeExtensions(arr) {
-  if (!Array.isArray(arr)) return [];
-  return arr
-    .map((item) => {
-      const normalized = safeStr(item).toLowerCase();
-      if (!normalized) return "";
-      return normalized.startsWith(".") ? normalized : `.${normalized}`;
-    })
-    .filter(Boolean);
-}
-
-export function isMimeTypeAllowed(mimeType = "", allowedMimeTypes = []) {
+export function isMimeTypeAllowed(mimeType, allowedMimeTypes) {
   const normalized = safeStr(mimeType).toLowerCase();
-  if (!Array.isArray(allowedMimeTypes) || !allowedMimeTypes.length || !normalized) return true;
+  if (!allowedMimeTypes.length || !normalized) return true;
 
   return allowedMimeTypes.some((allowed) => {
     const norm = safeStr(allowed).toLowerCase();
@@ -49,8 +22,8 @@ export function isMimeTypeAllowed(mimeType = "", allowedMimeTypes = []) {
   });
 }
 
-export function isExtensionAllowed(fileName = "", allowedExtensions = []) {
-  if (!Array.isArray(allowedExtensions) || !allowedExtensions.length) return true;
+export function isExtensionAllowed(fileName, allowedExtensions) {
+  if (!allowedExtensions.length) return true;
 
   const ext = safeStr(path.extname(safeStr(fileName))).toLowerCase();
   if (!ext) return false;

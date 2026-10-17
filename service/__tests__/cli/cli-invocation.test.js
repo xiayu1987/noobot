@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { CLI_ACTION, CliUsageError, parseCliArgs } from "../../cli/cli-args.js";
 import { readCliAttachments } from "../../cli/attachments.js";
 import {
@@ -137,7 +136,7 @@ test("session target: new, -c latest, -r existing", async () => {
   );
 });
 
-test("attachments are serialized and size-checked against shared thresholds", async () => {
+test("attachments are serialized with mime type and missing files rejected", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-cli-att-"));
   try {
     await writeFile(path.join(dir, "a.txt"), "hello");
@@ -151,9 +150,6 @@ test("attachments are serialized and size-checked against shared thresholds", as
     assert.equal(image.mimeType, "image/png");
     assert.equal(blob.mimeType, "application/octet-stream");
     await assert.rejects(readCliAttachments(["nope.txt"], { cwd: dir }), /not found/);
-    const big = path.join(dir, "big.bin");
-    await writeFile(big, Buffer.alloc(LENGTH_THRESHOLDS.attachments.maxFileSizeBytes + 1));
-    await assert.rejects(readCliAttachments([big]), /exceeds/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

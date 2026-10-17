@@ -4,35 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 import { EXECUTION_KIND } from "@noobot/session-protocol";
-import { isFunction } from "@noobot/shared/value";
+import { isFunction, isPlainObject } from "@noobot/shared/value";
 
 export function createDetachedTerminalReceipt(turn) {
-  if (!turn || typeof turn !== "object" || Array.isArray(turn)) {
+  if (!isPlainObject(turn)) {
     throw new TypeError("detached terminal receipt requires the committed turn");
   }
   return { ...turn, executionKind: EXECUTION_KIND.AGENT };
 }
 
-export function createScopedSubSessionEventListener(eventListener = null, identity = {}) {
-  const target = resolveObjectEventListener(eventListener);
-  if (!target) return null;
-  if (!isFunction(target.forwardEvent)) {
+export function createScopedSubSessionEventListener(eventListener, identity) {
+  if (eventListener === null || eventListener === undefined) return null;
+  if (!isFunction(eventListener.forwardEvent)) {
     throw new TypeError(
       "detached sub-session requires an execution event listener forwardEvent port",
     );
   }
   return {
-    onEvent(event = {}) {
-      const source = event && typeof event === "object" ? event : {};
-      return target.forwardEvent({ ...source, route: identity });
+    onEvent(event) {
+      if (!isPlainObject(event)) {
+        throw new TypeError("detached sub-session event must be an object");
+      }
+      return eventListener.forwardEvent({ ...event, route: identity });
     },
   };
-}
-
-function resolveObjectEventListener(eventListener = null) {
-  return eventListener &&
-    typeof eventListener === "object" &&
-    typeof eventListener.onEvent === "function"
-    ? eventListener
-    : null;
 }

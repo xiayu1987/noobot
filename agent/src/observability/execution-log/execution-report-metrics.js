@@ -39,7 +39,7 @@ function createAccumulator() {
   };
 }
 
-function trackToolCall(acc, log, data, phase) {
+function trackToolCall(acc, { log, data }, phase) {
   const toolCallId = text(data.toolCallId);
   if (!toolCallId) return;
   const entry = acc.toolCalls.get(toolCallId) || { tool: resolveToolName(log) };
@@ -57,38 +57,38 @@ function trackToolCall(acc, log, data, phase) {
 }
 
 const EVENT_HANDLERS = {
-  llm_call_start(acc, log, data) {
+  llm_call_start(acc, { data }) {
     acc.llmCalls += 1;
     acc.maxLoopRound = Math.max(acc.maxLoopRound, Number(data.modelLoopRound) || 0);
   },
-  llm_call_end(acc, log, data) {
+  llm_call_end(acc, { data }) {
     if (data.hasToolCalls === true) acc.llmCallsWithTools += 1;
   },
-  "model.invocation.started"(acc, log, data) {
+  "model.invocation.started"(acc, { data }) {
     acc.invocations += 1;
     increment(acc.models, text(data?.model?.alias || data?.model?.model));
   },
-  "model.invocation.completed"(acc, log, data) {
+  "model.invocation.completed"(acc, { data }) {
     acc.retries += Math.max(0, (Number(data.attemptCount) || 1) - 1);
   },
   model_switched(acc) {
     acc.modelSwitches += 1;
   },
-  tool_call_start(acc, log, data) {
-    trackToolCall(acc, log, data, "start");
+  tool_call_start(acc, record) {
+    trackToolCall(acc, record, "start");
   },
-  tool_call_end(acc, log, data) {
-    trackToolCall(acc, log, data, "end");
+  tool_call_end(acc, record) {
+    trackToolCall(acc, record, "end");
   },
-  hook_summary(acc, log, data) {
+  hook_summary(acc, { data }) {
     acc.hookCount += 1;
     acc.hookErrorCount += Number(data.errorCount) || 0;
     acc.hookDurationMs += Number(data.durationMs) || 0;
   },
-  context_building(acc, log) {
+  context_building(acc, { log }) {
     if (acc.contextStartMs == null) acc.contextStartMs = resolveTimestampMs(log);
   },
-  context_ready(acc, log) {
+  context_ready(acc, { log }) {
     acc.contextReadyMs = resolveTimestampMs(log);
   },
 };
@@ -132,7 +132,7 @@ function summarizeToolCalls(toolCalls) {
 export function summarizeExecutionMetrics(scopedLogs = []) {
   const acc = createAccumulator();
   for (const log of Array.isArray(scopedLogs) ? scopedLogs : []) {
-    EVENT_HANDLERS[log.event]?.(acc, log, resolveData(log));
+    EVENT_HANDLERS[log.event]?.(acc, { log, data: resolveData(log) });
   }
   return {
     model: {

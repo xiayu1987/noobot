@@ -25,11 +25,7 @@ export {
   updateRuntimeUserMessageAttachment,
 } from "./runtime-user-message-attachments.js";
 export { readAttachIndex, writeAttachIndex } from "./index-manager.js";
-export {
-  resolveAttachmentPolicy,
-  isMimeTypeAllowed,
-  isExtensionAllowed,
-} from "./policy/policy-validator.js";
+export { isMimeTypeAllowed, isExtensionAllowed } from "./policy/policy-validator.js";
 export {
   DEFAULT_MIME_TYPE,
   MIME_TO_EXTENSION,

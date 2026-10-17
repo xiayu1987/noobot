@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isFunction, isPlainObject } from "@noobot/shared/value";
 import { Buffer } from "node:buffer";
 import {
   createAttachmentReference,
@@ -12,7 +12,6 @@ import {
   directTransfer,
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
-import { AttachmentService } from "../../artifacts/service/attachment-service.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
 function requireIdentity(identity = {}) {
@@ -54,12 +53,12 @@ function encodeContentBase64({
   return contentEncoding === "base64" ? value : Buffer.from(value, "utf8").toString("base64");
 }
 
-function serviceFrom(runtime, attachmentService) {
-  const service = attachmentService || runtime?.attachmentService;
-  if (service && typeof service.ingestGeneratedArtifacts === "function") return service;
-  const config = runtime?.globalConfig;
-  if (config && typeof config === "object") return new AttachmentService(config);
-  throw new Error("semantic_transfer_attachment_service_required");
+function serviceFrom(runtime) {
+  const service = runtime?.attachmentService;
+  if (!isFunction(service?.ingestGeneratedArtifacts)) {
+    throw new Error("semantic_transfer_attachment_service_required");
+  }
+  return service;
 }
 
 function resolveAttachmentUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
@@ -94,7 +93,6 @@ export function createDirectTransferEnvelope({
 export async function persistTransferArtifacts({
   runtime = {},
   agentContext = null,
-  attachmentService = null,
   userId = "",
   artifacts = [],
   attachmentSource = "model",
@@ -110,7 +108,7 @@ export async function persistTransferArtifacts({
   const resolvedUserId = resolveAttachmentUserId({ runtime, agentContext, userId });
   if (!Array.isArray(artifacts) || artifacts.length === 0)
     throw new Error("semantic_transfer_artifacts_required");
-  const service = serviceFrom(runtime, attachmentService);
+  const service = serviceFrom(runtime);
   const records = await service.ingestGeneratedArtifacts({
     userId: resolvedUserId,
     sessionId: ids.identity.sessionId,
@@ -157,7 +155,6 @@ export async function persistTransferArtifacts({
 export async function persistTransferFile({
   runtime = {},
   agentContext = null,
-  attachmentService = null,
   userId = "",
   content = "",
   contentBase64: encodedContent = "",
@@ -179,7 +176,6 @@ export async function persistTransferFile({
   return persistTransferArtifacts({
     runtime,
     agentContext,
-    attachmentService,
     userId,
     identity,
     direction,

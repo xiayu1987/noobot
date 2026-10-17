@@ -91,7 +91,7 @@ describe("sessionDetailRequests thinking detail", () => {
     getSessionThinkingDetailApi.mockResolvedValue(response({}, { ok: false, status: 503 }));
     const { fetchThinkingDetail } = createRequests();
 
-    await expect(fetchThinkingDetail("s1", { turnScopeId: "t1" })).rejects.toThrow(
+    await expect(fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" })).rejects.toThrow(
       'chat.getSessionFailed:{"status":503}',
     );
   });
@@ -100,14 +100,18 @@ describe("sessionDetailRequests thinking detail", () => {
     getSessionThinkingDetailApi.mockResolvedValue(response({ ok: false, error: "denied" }));
     const { fetchThinkingDetail } = createRequests();
 
-    await expect(fetchThinkingDetail("s1", { turnScopeId: "t1" })).rejects.toThrow("denied");
+    await expect(fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" })).rejects.toThrow(
+      "denied",
+    );
   });
 
   it("keeps the missing-detail code with a localized message", async () => {
     getSessionThinkingDetailApi.mockResolvedValue(response({ ok: true, exists: false }));
     const { fetchThinkingDetail } = createRequests();
 
-    const error = await fetchThinkingDetail("s1", { turnScopeId: "t1" }).catch((caught) => caught);
+    const error = await fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" }).catch(
+      (caught) => caught,
+    );
     expect(error.message).toBe("chat.sessionNotFound");
     expect(error.code).toBe("thinking_detail_not_found");
   });
@@ -115,7 +119,7 @@ describe("sessionDetailRequests thinking detail", () => {
   it("requires a dialog process or turn scope identity", async () => {
     const { fetchThinkingDetail } = createRequests();
 
-    await expect(fetchThinkingDetail("s1")).rejects.toThrow(
+    await expect(fetchThinkingDetail({ sessionId: "s1" })).rejects.toThrow(
       "dialogProcessId or turnScopeId is required",
     );
     expect(getSessionThinkingDetailApi).not.toHaveBeenCalled();

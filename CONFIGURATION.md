@@ -102,7 +102,18 @@ Session log WebSocket:
 
 Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProcessId/dialogId` rounds. There is no session history-window configuration.
 
-### 3.3 Multimodal Defaults
+### 3.3 Attachments
+
+Global config only; user config cannot override these keys. Omitted keys use builtin defaults; invalid values are rejected.
+
+| Key                                | Type     | Description                                |
+| ---------------------------------- | -------- | ------------------------------------------ |
+| `attachments.max_file_count`       | integer  | Max files per request (>= 1)               |
+| `attachments.max_file_size_bytes`  | integer  | Max size per file (>= 1)                   |
+| `attachments.max_total_size_bytes` | integer  | Max total upload size (>= 1)               |
+| `attachments.allowed_extensions`   | string[] | Allowed suffix whitelist; empty allows all |
+
+#### Multimodal Defaults
 
 | Key                                          | Type   | Description                                 |
 | -------------------------------------------- | ------ | ------------------------------------------- |

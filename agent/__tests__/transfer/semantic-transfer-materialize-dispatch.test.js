@@ -46,16 +46,18 @@ test("materializeOutputResult does not silently fall back when attachment persis
 
 test("persistTransferFile returns only V2 transfer envelopes", async () => {
   const result = await persistTransferFile({
-    attachmentService: {
-      async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
-        return artifacts.map((artifact) => ({
-          attachmentId: "att-bin-1",
-          sessionId,
-          attachmentSource,
-          name: artifact.name,
-          mimeType: artifact.mimeType,
-          size: 3,
-        }));
+    runtime: {
+      attachmentService: {
+        async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
+          return artifacts.map((artifact) => ({
+            attachmentId: "att-bin-1",
+            sessionId,
+            attachmentSource,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: 3,
+          }));
+        },
       },
     },
     userId: "u1",

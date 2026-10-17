@@ -77,7 +77,7 @@ async function runDetachedSubSession(dependencies, request) {
   const accepted = await commitDetachedStart(
     lifecycle,
     prepared.effectiveRunConfig.thinkingStartedAt,
-    request,
+    prepared.message,
     identity,
     prepared.effectiveRunConfig,
   );
@@ -92,19 +92,12 @@ async function runDetachedSubSession(dependencies, request) {
   });
   let result;
   try {
-    result = await executeDetachedSession(
-      dependencies,
-      request,
-      runtime,
-      identity,
-      prepared,
-      lifecycle,
-    );
+    result = await executeDetachedSession(dependencies, identity, prepared, lifecycle);
   } catch (error) {
-    throw await commitDetachedError(error, dependencies, request, runtime, identity, lifecycle);
+    throw await commitDetachedError(error, dependencies, identity, lifecycle);
   }
   const terminalLifecycle = await commitDetachedCompletion(dependencies, lifecycle);
-  return projectDetachedResult(result, identity, prepared, terminalLifecycle);
+  return projectDetachedResult(result, identity, terminalLifecycle);
 }
 
 function assertDetachedRunnerDependencies({ sessionRunner, session }) {
@@ -131,18 +124,14 @@ function resolveDetachedRuntime(request) {
 }
 
 function resolveDetachedIdentity(request, inheritedRuntime) {
-  const sourceContext =
-    request.parentContext && typeof request.parentContext === "object" ? request.parentContext : {};
   const strategy = request.strategy || {};
   const identity = {
-    userId: text(strategy.userId || sourceContext.userId),
-    parentSessionId: text(strategy.parentSessionId || sourceContext.sessionId),
-    parentDialogProcessId: text(strategy.parentDialogProcessId || sourceContext.dialogProcessId),
+    userId: text(strategy.userId),
+    parentSessionId: text(strategy.parentSessionId),
+    parentDialogProcessId: text(strategy.parentDialogProcessId),
+    abortSignal: request.abortSignal || null,
+    userInteractionBridge: inheritedRuntime.userInteractionBridge || null,
   };
-  identity.abortSignal =
-    request.abortSignal || sourceContext.abortSignal || inheritedRuntime?.abortSignal || null;
-  identity.userInteractionBridge =
-    sourceContext.userInteractionBridge || inheritedRuntime?.userInteractionBridge || null;
   createAbortGuard(identity.abortSignal)();
   if (!identity.userId || !identity.parentSessionId) {
     throw new Error("sub-session runner requires userId and parentSessionId");
@@ -163,7 +152,7 @@ function resolveDetachedStage(request) {
   const stage = text(request.metadata?.scope);
   if (!stage) throw new Error("detached sub-session requires metadata.scope");
   const origin = request.metadata?.origin;
-  return { stage, origin: isObjectRecord(origin) ? { ...origin } : {} };
+  return { stage, origin: isPlainObject(origin) ? { ...origin } : {} };
 }
 
 function resolveChildStrategyIdentity(strategy) {
@@ -181,19 +170,12 @@ function resolveChildStrategyIdentity(strategy) {
 }
 
 async function prepareDetachedExecution(dependencies, request, inheritedRuntime, identity) {
-  const { strategy = {}, runConfigPatch = {}, parentContext = {} } = request;
-  const inheritedRunConfig = clearParentTurnTransactionIdentity({
-    ...(isObjectRecord(parentContext.runConfig)
-      ? parentContext.runConfig
-      : isObjectRecord(inheritedRuntime?.runConfig)
-        ? inheritedRuntime.runConfig
-        : {}),
-  });
+  const { strategy = {}, runConfigPatch = {} } = request;
+  const inheritedRunConfig = clearParentTurnTransactionIdentity({ ...inheritedRuntime.runConfig });
   const mergedRunConfig = createDetachedRunConfig(
     dependencies,
     { strategy, runConfigPatch },
     inheritedRunConfig,
-    inheritedRuntime,
     identity,
   );
   const userConfig = await loadSubSessionUserConfig({
@@ -219,14 +201,19 @@ async function prepareDetachedExecution(dependencies, request, inheritedRuntime,
     request.systemMessageFactory,
     subSessionAttachments,
   );
-  return { mergedRunConfig, effectiveRunConfig, subSessionAttachments, systemMessages };
+  return {
+    message: text(request.message),
+    mergedRunConfig,
+    effectiveRunConfig,
+    subSessionAttachments,
+    systemMessages,
+  };
 }
 
 function createDetachedRunConfig(
   dependencies,
   { strategy, runConfigPatch },
   inheritedRunConfig,
-  inheritedRuntime,
   identity,
 ) {
   if (!isFunction(dependencies.mergeRunConfigPluginPolicy)) {
@@ -240,8 +227,7 @@ function createDetachedRunConfig(
   const runtimeModel =
     text(runConfigPatch.runtimeModel) ||
     text(config.selectedModel) ||
-    text(inheritedRunConfig.runtimeModel) ||
-    text(inheritedRuntime?.runtimeModel);
+    text(inheritedRunConfig.runtimeModel);
   if (runtimeModel) config.runtimeModel = runtimeModel;
   else delete config.runtimeModel;
   config.executionId = identity.executionId;
@@ -263,7 +249,7 @@ function createDetachedRunConfig(
 }
 
 function assertPreparedRunConfig(config) {
-  if (isObjectRecord(config)) return;
+  if (isPlainObject(config)) return;
   throw new Error("detached sub-session prepareRunConfig must return a run config object");
 }
 
@@ -320,7 +306,7 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
       parentSessionId: identity.parentSessionId,
       turnScopeId: identity.turnScopeId,
       persistenceContext,
-      upstream: { dialogProcessId: identity.subDialogProcessId },
+      dialogProcessId: identity.subDialogProcessId,
     }),
     commandId: identity.commandId,
     commit: createLifecycleCommitter(session, lifecycleIdentity, identity.scopedEventListener),
@@ -334,7 +320,7 @@ function createDetachedMetadata(request, identity, runtimePluginState) {
     parentSessionId: identity.parentSessionId,
     parentDialogProcessId: identity.parentDialogProcessId,
     dialogProcessId: identity.subDialogProcessId,
-    ...(isObjectRecord(request.metadata) ? request.metadata : {}),
+    ...request.metadata,
     runtimePluginState,
   };
 }
@@ -365,8 +351,8 @@ function createLifecycleCommitter(session, lifecycleIdentity, scopedEventListene
     if (!committed?.applied && !committed?.deduplicated) {
       throw new Error(committed?.reason || "detached sub-session lifecycle commit failed");
     }
-    if (committed.envelope) {
-      await scopedEventListener?.onEvent?.({
+    if (committed.envelope && scopedEventListener) {
+      await scopedEventListener.onEvent({
         event: AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED,
         data: {
           envelope: committed.envelope,
@@ -382,7 +368,7 @@ function lifecycleCommandId(lifecycle, eventType, phase = "") {
   return createTurnLifecycleCommandId({ commandId: lifecycle.commandId, eventType, phase });
 }
 
-async function commitDetachedStart(lifecycle, startedAt, request, identity, runConfig) {
+async function commitDetachedStart(lifecycle, startedAt, message, identity, runConfig) {
   const accepted = await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.ACTION_ACCEPTED),
     causationId: lifecycle.commandId,
@@ -394,7 +380,7 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
     createSessionIfAbsent: true,
     expectedRevision: 0,
     userMessage: {
-      content: text(request.message),
+      content: message,
       messageId: text(runConfig?.userMessageId),
       parentDialogProcessId: identity.parentDialogProcessId,
       messageOrigin: "internal",
@@ -411,14 +397,7 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
   return accepted;
 }
 
-async function executeDetachedSession(
-  dependencies,
-  request,
-  runtime,
-  identity,
-  prepared,
-  lifecycle,
-) {
+async function executeDetachedSession(dependencies, identity, prepared, lifecycle) {
   const result = await dependencies.sessionRunner.runSession({
     userId: identity.userId,
     sessionId: identity.subSessionId,
@@ -426,7 +405,7 @@ async function executeDetachedSession(
     parentDialogProcessId: identity.parentDialogProcessId,
     dialogProcessId: identity.subDialogProcessId,
     caller: CALLER_ROLE.BOT,
-    message: request.message || "",
+    message: prepared.message,
     attachments: prepared.subSessionAttachments,
     systemMessages: prepared.systemMessages,
     turnAcceptance: prepared.turnAcceptance,
@@ -459,7 +438,7 @@ function assertDetachedDialogIdentity(result, identity, lifecycle) {
   throw error;
 }
 
-async function commitDetachedError(error, dependencies, request, runtime, identity, lifecycle) {
+async function commitDetachedError(error, dependencies, identity, lifecycle) {
   const stopped = isExecutionAbortError({ error, abortSignal: identity.abortSignal });
   const terminalLifecycle = stopped
     ? await commitDetachedStop(dependencies, lifecycle)
@@ -556,7 +535,7 @@ async function commitDetachedCompletion(dependencies, lifecycle) {
   });
 }
 
-function projectDetachedResult(result, identity, prepared, terminalLifecycle) {
+function projectDetachedResult(result, identity, terminalLifecycle) {
   const dialogProcessId = identity.subDialogProcessId;
   const messages = readArray(result?.messages);
   const transferEnvelopes = collectTransferEnvelopes(messages);
@@ -596,10 +575,6 @@ function collectTransferEnvelopes(turnMessages) {
         .filter(([transferId]) => transferId),
     ).values(),
   );
-}
-
-function isObjectRecord(value) {
-  return Boolean(isPlainObject(value));
 }
 
 function clearParentTurnTransactionIdentity(runConfig = {}) {

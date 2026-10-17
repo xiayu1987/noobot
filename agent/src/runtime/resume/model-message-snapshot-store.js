@@ -16,7 +16,8 @@ import {
   readContextMessageField,
   resolveContextMessageId,
 } from "@noobot/context-protocol/message/codec";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
+import { emitEvent } from "../../events/emitter.js";
 
 const SNAPSHOT_DIR_NAME = "model-message-snapshots";
 
@@ -160,16 +161,13 @@ export async function saveStoppedModelMessageSnapshotCandidate({
   eventListener = null,
   source = "",
 } = {}) {
-  if (!candidate || typeof candidate !== "object") {
+  if (!isPlainObject(candidate)) {
     const result = buildSnapshotPersistenceResult({
       status: "skipped",
       source,
       reason: "missing_candidate",
     });
-    eventListener?.onEvent?.({
-      event: "stopped_model_message_snapshot_save_skipped",
-      data: result,
-    });
+    emitEvent(eventListener, "stopped_model_message_snapshot_save_skipped", result);
     return result;
   }
   const identity = {
@@ -191,10 +189,7 @@ export async function saveStoppedModelMessageSnapshotCandidate({
       identity,
       candidate,
     });
-    eventListener?.onEvent?.({
-      event: "stopped_model_message_snapshot_save_skipped",
-      data: result,
-    });
+    emitEvent(eventListener, "stopped_model_message_snapshot_save_skipped", result);
     return result;
   }
   try {
@@ -213,10 +208,7 @@ export async function saveStoppedModelMessageSnapshotCandidate({
         identity,
         candidate,
       });
-      eventListener?.onEvent?.({
-        event: "stopped_model_message_snapshot_save_skipped",
-        data: result,
-      });
+      emitEvent(eventListener, "stopped_model_message_snapshot_save_skipped", result);
       return result;
     }
     const result = buildSnapshotPersistenceResult({
@@ -225,10 +217,7 @@ export async function saveStoppedModelMessageSnapshotCandidate({
       identity,
       candidate,
     });
-    eventListener?.onEvent?.({
-      event: "stopped_model_message_snapshot_saved",
-      data: result,
-    });
+    emitEvent(eventListener, "stopped_model_message_snapshot_saved", result);
     return result;
   } catch (error) {
     const result = buildSnapshotPersistenceResult({
@@ -238,10 +227,7 @@ export async function saveStoppedModelMessageSnapshotCandidate({
       error: String(error?.message || error || ""),
       candidate,
     });
-    eventListener?.onEvent?.({
-      event: "stopped_model_message_snapshot_save_failed",
-      data: result,
-    });
+    emitEvent(eventListener, "stopped_model_message_snapshot_save_failed", result);
     return result;
   }
 }

@@ -183,7 +183,11 @@ export function createSessionDetailRequests({
     }
   }
 
-  async function fetchThinkingDetail(sessionId, { dialogProcessId = "", turnScopeId = "" } = {}) {
+  async function fetchThinkingDetail({
+    sessionId = "",
+    dialogProcessId = "",
+    turnScopeId = "",
+  } = {}) {
     const normalizedSessionId = normalizeSessionId(sessionId);
     const normalizedDialogProcessId = text(dialogProcessId);
     const normalizedTurnScopeId = text(turnScopeId);

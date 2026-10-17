@@ -84,6 +84,7 @@ test("SessionExecutionFinalizer waits for execution event durability before read
       complete: () => order.push("completed"),
     },
     runtimeEventListener: {
+      onEvent() {},
       async flush() {
         order.push("flush");
       },

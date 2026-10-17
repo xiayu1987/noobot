@@ -27,7 +27,6 @@ import {
   DETACHED_REQUEST_METADATA,
   createCompleteStrategy,
   createDeps,
-  createParentContext,
   createParentExecutionScope,
 } from "./detached-subsession-runner.test-helpers.js";
 
@@ -36,8 +35,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   const events = [];
   const runner = createDetachedSubSessionRunner(deps);
   const result = await runner({
-    parentExecutionScope: createParentExecutionScope({ runtimeModel: "gpt_5_4" }),
-    parentContext: createParentContext(),
+    parentExecutionScope: createParentExecutionScope({ runConfig: { runtimeModel: "gpt_5_4" } }),
     message: "hello",
     attachments: [{ name: "a.txt" }],
     systemMessageFactory: () => ["system"],
@@ -47,6 +45,7 @@ test("detached sub-session delegates execution and persistence to the main runne
       forwardEvent: (event) => events.push(event),
     },
     strategy: {
+      userId: "u1",
       sessionId: "sub1",
       parentSessionId: "parent1",
       parentDialogProcessId: "parent-dialog",
@@ -184,7 +183,6 @@ test("detached sub-session projects finalizer messages and their transfer envelo
 
   const result = await runner({
     parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext(),
     message: "hello",
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
@@ -195,13 +193,12 @@ test("detached sub-session projects finalizer messages and their transfer envelo
   assert.deepEqual(result.result.transferEnvelopes, [envelope]);
 });
 
-test("detached sub-session uses the selected parent model over a stale runtime model", async () => {
+test("detached sub-session uses the selected parent model over the parent runtime model", async () => {
   const { calls, deps } = createDeps();
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
-    parentExecutionScope: createParentExecutionScope({ runtimeModel: "stale_model" }),
-    parentContext: createParentContext({
+    parentExecutionScope: createParentExecutionScope({
       runConfig: { selectedModel: "gpt_5_4", runtimeModel: "parent_override" },
     }),
     message: "hello",
@@ -217,8 +214,7 @@ test("detached sub-session explicit model override wins over the selected parent
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
-    parentExecutionScope: createParentExecutionScope({ runtimeModel: "stale_model" }),
-    parentContext: createParentContext({ runConfig: { selectedModel: "gpt_5_4" } }),
+    parentExecutionScope: createParentExecutionScope({ runConfig: { selectedModel: "gpt_5_4" } }),
     message: "hello",
     runConfigPatch: { runtimeModel: "child_model" },
     metadata: DETACHED_REQUEST_METADATA,
@@ -233,8 +229,7 @@ test("detached sub-session empty model override preserves the selected parent mo
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
-    parentExecutionScope: createParentExecutionScope({ runtimeModel: "stale_model" }),
-    parentContext: createParentContext({ runConfig: { selectedModel: "gpt_5_4" } }),
+    parentExecutionScope: createParentExecutionScope({ runConfig: { selectedModel: "gpt_5_4" } }),
     message: "hello",
     runConfigPatch: { runtimeModel: "  " },
     metadata: DETACHED_REQUEST_METADATA,
@@ -294,7 +289,6 @@ test("detached sub-session transfers canonical parent attachments into child own
 
   await runner({
     parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext(),
     message: "read attachment",
     attachments: [
       {
@@ -332,7 +326,6 @@ test("detached sub-session rejects an incomplete persistence and identity strate
   await assert.rejects(
     runner({
       parentExecutionScope: createParentExecutionScope(),
-      parentContext: createParentContext(),
       message: "hello",
       strategy: {
         userId: "u1",
@@ -438,7 +431,6 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
 
   await createDetachedSubSessionRunner({ ...deps, now: fixedNow })({
     parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext(),
     message: "hello",
     runConfigPatch: { turnScopeId: "turn-persisted" },
     metadata: DETACHED_REQUEST_METADATA,
@@ -481,7 +473,6 @@ test("detached sub-session rejects a runner result with a second dialog identity
   await assert.rejects(
     runner({
       parentExecutionScope: createParentExecutionScope(),
-      parentContext: createParentContext(),
       message: "hello",
       metadata: DETACHED_REQUEST_METADATA,
       strategy: createCompleteStrategy({
@@ -528,8 +519,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
-    parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext({
+    parentExecutionScope: createParentExecutionScope({
       runConfig: {
         streaming: true,
         selectedPlugins: ["workflow"],
@@ -592,8 +582,7 @@ test("detached sub-session derives commandId from the strategy turnScopeId and t
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
-    parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext({
+    parentExecutionScope: createParentExecutionScope({
       runConfig: { expectedAggregateVersion: 7, commandId: "root-command" },
     }),
     runConfigPatch: {
@@ -631,7 +620,6 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     () =>
       runner({
         parentExecutionScope: createParentExecutionScope(),
-        parentContext: createParentContext(),
         eventListener: {
           onEvent: (event) => events.push(event),
           forwardEvent: (event) => events.push(event),
@@ -700,7 +688,6 @@ test("detached sub-session failure receipt carries the committed turn failure", 
     () =>
       runner({
         parentExecutionScope: createParentExecutionScope(),
-        parentContext: createParentContext(),
         metadata: DETACHED_REQUEST_METADATA,
         strategy: createCompleteStrategy(),
       }),
@@ -737,9 +724,7 @@ test("createDetachedSubSessionRunner requires userId and parentSessionId", async
     () =>
       runner({
         parentExecutionScope: createParentExecutionScope(),
-        parentContext: {
-          userId: "u1",
-        },
+        strategy: { userId: "u1" },
       }),
     /sub-session runner requires userId and parentSessionId/,
   );
@@ -761,7 +746,6 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
     () =>
       runner({
         parentExecutionScope: createParentExecutionScope(),
-        parentContext: createParentContext(),
         abortSignal: controller.signal,
       }),
     /bot plugin sub-session aborted/,
@@ -782,7 +766,6 @@ test("createDetachedSubSessionRunner propagates user config loading failures", a
     () =>
       runner({
         parentExecutionScope: createParentExecutionScope(),
-        parentContext: createParentContext(),
         metadata: DETACHED_REQUEST_METADATA,
         strategy: createCompleteStrategy(),
       }),
@@ -822,4 +805,12 @@ test("createScopedSubSessionEventListener rejects a persistence-owning listener 
     () => createScopedSubSessionEventListener({ onEvent() {} }, { sessionId: "sub1" }),
     /forwardEvent port/,
   );
+});
+
+test("createScopedSubSessionEventListener rejects non-object events", () => {
+  const listener = createScopedSubSessionEventListener(
+    { onEvent() {}, forwardEvent() {} },
+    { sessionId: "sub1" },
+  );
+  assert.throws(() => listener.onEvent(null), /must be an object/);
 });

@@ -182,12 +182,6 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
   const runner = engine._createDetachedSubSessionRunner();
   await runner({
     parentExecutionScope: createTestAgentExecutionScope({ userInteractionBridge: bridge }),
-    parentContext: {
-      userId: "u1",
-      sessionId: "parent-session",
-      dialogProcessId: "parent-dialog",
-      runConfig: {},
-    },
     message: "node task",
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createAgentDetachedSubSessionStrategy({

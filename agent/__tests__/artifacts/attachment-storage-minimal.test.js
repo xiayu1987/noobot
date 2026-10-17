@@ -11,10 +11,9 @@ import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promise
 
 import { AttachmentService } from "../../src/artifacts/service/attachment-service.js";
 import { resolveCanonicalSourceAttachment } from "../../src/artifacts/source-attachment-resolver.js";
-import { BUILTIN_ATTACHMENT_POLICY } from "../../src/config/index.js";
+import { BUILTIN_ATTACHMENT_POLICY, resolveAttachmentPolicy } from "@noobot/agent-config-protocol";
 import { readAttachIndex, writeAttachIndex } from "../../src/artifacts/index-manager.js";
 import {
-  resolveAttachmentPolicy,
   isMimeTypeAllowed,
   isExtensionAllowed,
 } from "../../src/artifacts/policy/policy-validator.js";
@@ -786,8 +785,8 @@ test("index-manager persists only versioned protocol records and isolates every 
   });
 });
 
-test("attachment policy is resolved from builtin thresholds only", () => {
-  const policy = resolveAttachmentPolicy();
+test("attachment policy defaults to builtin thresholds when global config omits attachments", () => {
+  const policy = resolveAttachmentPolicy({});
 
   assert.equal(policy.maxFileSizeBytes, BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes);
   assert.deepEqual(policy.allowedMimeTypes, BUILTIN_ATTACHMENT_POLICY.allowedMimeTypes);

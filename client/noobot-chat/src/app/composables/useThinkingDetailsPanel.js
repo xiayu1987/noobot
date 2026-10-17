@@ -26,7 +26,7 @@ import { selectActivityTimelineLogs } from "../../modules/chat/runtime/engine/ac
 import { selectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
 import { logThinkingReplayDebug } from "../../modules/debug/loggers/thinkingReplayDebugLogger.js";
 import { logStateMachineDebug } from "../../modules/debug/loggers/stateMachineLogger.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 function hasCanonicalTimeline(messageItem = {}) {
   return (
@@ -130,23 +130,14 @@ export function useThinkingDetailsPanel({
     return text(messageItem?.thinkingDetailRef?.contentHash);
   }
 
-  async function fetchThinkingDetailForMessage(messageItem = {}, fetchDetailOverride = null) {
+  async function fetchThinkingDetailForMessage(messageItem = {}) {
     const dialogProcessId = normalizeDialogProcessId(messageItem);
     const turnScopeId = text(messageItem?.turnScopeId);
     if (!dialogProcessId && !turnScopeId) return null;
-    const runFetchDetail =
-      typeof fetchDetailOverride === "function"
-        ? fetchDetailOverride
-        : typeof currentFetchDetail === "function"
-          ? currentFetchDetail
-          : fetchThinkingDetail;
-    if (typeof runFetchDetail !== "function") return null;
     return loadThinkingDetail({
       sessionId: activeSessionId?.value,
       messageItem,
-      dialogProcessId,
-      turnScopeId,
-      fetchThinkingDetail: runFetchDetail,
+      fetchThinkingDetail: currentFetchDetail,
       expectedRevision: expectedThinkingDetailRevision(messageItem),
     });
   }
@@ -185,9 +176,9 @@ export function useThinkingDetailsPanel({
     const initialMessageItem = activeMessageItem || payloadMessageItem;
     if (isAssistantWithoutTurnScope(initialMessageItem)) return;
     const hasLocalThinkingDetails = hasCanonicalTimeline(initialMessageItem);
-    const requestFetchDetail =
-      typeof payload?.fetchThinkingDetail === "function" ? payload.fetchThinkingDetail : null;
-    currentFetchDetail = requestFetchDetail || fetchThinkingDetail;
+    currentFetchDetail = isFunction(payload?.fetchThinkingDetail)
+      ? payload.fetchThinkingDetail
+      : fetchThinkingDetail;
     const openRequestVersion = ++detailRequestVersion;
     logThinkingPanelState("frontend.thinkingReplay.detailPanelOpenResolved", () => ({
       sessionId: activeSessionId?.value,
@@ -222,10 +213,7 @@ export function useThinkingDetailsPanel({
     let loadedThinkingDetail = null;
     if (needsFullDetail) {
       try {
-        loadedThinkingDetail = await fetchThinkingDetailForMessage(
-          initialMessageItem,
-          requestFetchDetail,
-        );
+        loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem);
         if (openRequestVersion !== detailRequestVersion) return;
         logThinkingPanelState("frontend.thinkingReplay.detailPanelRequestCommitted", () => ({
           sessionId: activeSessionId?.value,

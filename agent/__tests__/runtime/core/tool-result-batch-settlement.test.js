@@ -18,6 +18,7 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
@@ -30,6 +31,7 @@ function createRuntime(abortSignal = null) {
     userId: "admin",
     basePath: workspaceRoot,
     globalConfig: { workspaceRoot },
+    attachmentService: new AttachmentService({ workspaceRoot }),
     runConfig: {
       executionId: "run-tool-batch",
       turnScopeId: "turn-tool-batch",
@@ -102,7 +104,7 @@ test("processToolResults commits every settled parallel result before propagatin
   const modelState = {
     runtime,
     abortSignal: null,
-    eventListener: () => {},
+    eventListener: null,
   };
   modelState.agentContext = createTestAgentExecutionScope(runtime);
 
@@ -147,7 +149,7 @@ test("processToolResults commits result policy from its authoritative batch call
   const modelState = {
     runtime,
     abortSignal: null,
-    eventListener: () => {},
+    eventListener: null,
     agentContext: createTestAgentExecutionScope(runtime),
   };
   await processToolResults({
@@ -182,7 +184,7 @@ test("processToolResults accepts only a successful task_summary result", async (
   const modelState = {
     runtime,
     abortSignal: null,
-    eventListener: () => {},
+    eventListener: null,
     agentContext: createTestAgentExecutionScope(runtime),
   };
   const stateCommitter = {
@@ -259,7 +261,7 @@ test("processToolResults consumes queued user interjections only after the tool 
   await processToolResults({
     modelState: {
       runtime,
-      eventListener: () => {},
+      eventListener: null,
       agentContext: createTestAgentExecutionScope(runtime),
     },
     loopState: { errorLogger: null, toolConsecutiveFailureCount: 0 },
@@ -303,7 +305,7 @@ test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool",
         return { ok: true };
       },
     },
-    eventListener: () => {},
+    eventListener: null,
     turn: 1,
     runtime,
   });

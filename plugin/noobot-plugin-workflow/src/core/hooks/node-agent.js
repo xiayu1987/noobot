@@ -229,7 +229,6 @@ function createWorkflowNodeSubSessionRequest(params) {
   });
   return {
     parentExecutionScope: ctx?.agentContext || null,
-    parentContext: ctx,
     abortSignal: resolveWorkflowAbortSignal(ctx),
     message: params.agentInstruction,
     attachments: params.nodeInputAttachments,
@@ -243,7 +242,7 @@ function createWorkflowNodeSubSessionRequest(params) {
         }),
         params.upstreamAttachmentSystemMessage,
       ].filter(Boolean),
-    eventListener: typeof ctx?.eventListener?.onEvent === "function" ? ctx.eventListener : null,
+    eventListener: ctx.eventListener,
     strategy: buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir),
     metadata: buildWorkflowNodeSubSessionMetadata(params),
   };
@@ -280,6 +279,7 @@ function buildWorkflowNodeRunConfigPatch(ctx, identity) {
 
 function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
   return {
+    userId: text(ctx?.userId),
     sessionId: identity.sessionId,
     parentSessionId: text(ctx?.sessionId),
     parentDialogProcessId: text(ctx?.dialogProcessId),

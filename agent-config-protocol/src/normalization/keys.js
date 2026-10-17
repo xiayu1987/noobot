@@ -39,6 +39,10 @@ export const SNAKE_TO_CANONICAL_KEY_MAP = {
   connect_code: "connectCode",
   default_provider: "defaultProvider",
   default_models: "defaultModels",
+  max_file_count: "maxFileCount",
+  max_file_size_bytes: "maxFileSizeBytes",
+  max_total_size_bytes: "maxTotalSizeBytes",
+  allowed_extensions: "allowedExtensions",
   mcp_servers: "mcpServers",
 };
 

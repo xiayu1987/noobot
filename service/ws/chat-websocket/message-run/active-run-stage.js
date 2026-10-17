@@ -18,7 +18,7 @@ import {
 } from "@noobot/runtime-events";
 import { text } from "@noobot/shared/value";
 
-async function recordPluginDebug(context, command, run) {
+async function recordPluginDebug(command, run) {
   await writeRuntimeEvent({
     scope: "session",
     source: "service",
@@ -102,7 +102,7 @@ export async function activateRun(context, command, run, accepted) {
   context.state.currentRunTransportBinding = attachRunTransport(runHandle, context.sendEvent, {
     onDiagnostic: context.recordRunTransportDiagnostic(runMeta),
   });
-  await recordPluginDebug(context, command, run);
+  await recordPluginDebug(command, run);
   const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
     runConfig: run.normalizedRunConfig,
   });

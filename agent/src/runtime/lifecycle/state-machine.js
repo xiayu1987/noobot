@@ -6,6 +6,7 @@
 
 import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
+import { emitEvent } from "../../events/emitter.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 export const AGENT_LIFECYCLE_STATE = Object.freeze({
@@ -139,9 +140,7 @@ export function createAgentLifecycleMachine({
       sequence,
     };
     latestSnapshot = { ...payload };
-    if (eventListener?.onEvent) {
-      eventListener.onEvent({ event: AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED, data: payload });
-    }
+    emitEvent(eventListener, AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED, payload);
     return payload;
   };
 

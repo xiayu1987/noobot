@@ -10,7 +10,9 @@ import { isFunction, text } from "@noobot/shared/value";
 const RETIRED_CONFIG_PATHS = Object.freeze(
   [
     ["configParams"],
-    ["attachments"],
+    ["attachments", "attachment_models"],
+    ["attachments", "limits"],
+    ["attachments", "storage"],
     ["session", "use_last_running_task_range"],
     ["session", "use_last_completed_task_range"],
     ["session", "executionBundleTimeoutMs"],

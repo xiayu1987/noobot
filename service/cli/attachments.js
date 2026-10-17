@@ -6,13 +6,10 @@
 import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
 import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { CliUsageError } from "./cli-args.js";
 
 export async function readCliAttachments(filePaths = [], { cwd = process.cwd() } = {}) {
-  const { maxFileSizeBytes, maxTotalSizeBytes } = LENGTH_THRESHOLDS.attachments;
   const resolved = [];
-  let totalBytes = 0;
   for (const filePath of filePaths) {
     const absolutePath = path.resolve(cwd, filePath);
     let info;
@@ -22,15 +19,6 @@ export async function readCliAttachments(filePaths = [], { cwd = process.cwd() }
       throw new CliUsageError(`attachment not found: ${filePath}`);
     }
     if (!info.isFile()) throw new CliUsageError(`attachment is not a file: ${filePath}`);
-    if (info.size > maxFileSizeBytes) {
-      throw new CliUsageError(
-        `attachment exceeds ${maxFileSizeBytes} bytes: ${filePath} (${info.size} bytes)`,
-      );
-    }
-    totalBytes += info.size;
-    if (totalBytes > maxTotalSizeBytes) {
-      throw new CliUsageError(`attachments exceed total limit of ${maxTotalSizeBytes} bytes`);
-    }
     resolved.push(absolutePath);
   }
   const attachments = [];

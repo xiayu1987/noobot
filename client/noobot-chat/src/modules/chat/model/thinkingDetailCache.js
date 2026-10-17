@@ -12,8 +12,7 @@ import {
   getMessageSessionId,
   getMessageTurnScopeId,
 } from "./messageIdentity.js";
-import { thinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();
@@ -25,7 +24,8 @@ function wait(delayMs) {
 async function fetchWithMissingDetailRetry(runFetch, identity, { retryLimit, retryDelayMs }) {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const detail = await runFetch(identity.sessionId, {
+      const detail = await runFetch({
+        sessionId: identity.sessionId,
         dialogProcessId: identity.dialogProcessId,
         turnScopeId: identity.turnScopeId,
       });
@@ -68,24 +68,15 @@ export function getCachedThinkingDetail(identity = {}) {
 }
 
 export async function loadThinkingDetail({
-  userId = "",
   sessionId = "",
   messageItem = {},
-  dialogProcessId = "",
-  turnScopeId = "",
-  fetchThinkingDetail = null,
+  fetchThinkingDetail,
   expectedRevision = "",
   retryLimit = QUANTITY_THRESHOLDS.client.thinkingDetailRetryLimit,
   retryDelayMs = TIME_THRESHOLDS.client.thinkingDetailRetryDelayMs,
 } = {}) {
-  const identity = resolveThinkingDetailIdentity(
-    {
-      ...messageItem,
-      dialogProcessId: dialogProcessId || messageItem?.dialogProcessId,
-      turnScopeId: turnScopeId || messageItem?.turnScopeId,
-    },
-    sessionId,
-  );
+  if (!isFunction(fetchThinkingDetail)) throw new TypeError("fetchThinkingDetail is required");
+  const identity = resolveThinkingDetailIdentity(messageItem, sessionId);
   if (!identity.key) return null;
   const cached = cache.entries[identity.key];
   const revision = text(expectedRevision);
@@ -93,17 +84,7 @@ export async function loadThinkingDetail({
   const requestKey = `${identity.key}::${revision || "latest"}`;
   if (inflight.has(requestKey)) return inflight.get(requestKey);
   const request = (async () => {
-    const runFetch =
-      typeof fetchThinkingDetail === "function"
-        ? fetchThinkingDetail
-        : async (sid, params) =>
-            thinkingDetailService.getDetail({
-              userId,
-              sessionId: sid,
-              dialogProcessId: params.dialogProcessId,
-              turnScopeId: params.turnScopeId,
-            });
-    const data = await fetchWithMissingDetailRetry(runFetch, identity, {
+    const data = await fetchWithMissingDetailRetry(fetchThinkingDetail, identity, {
       retryLimit: Math.max(0, Number(retryLimit) || 0),
       retryDelayMs,
     });

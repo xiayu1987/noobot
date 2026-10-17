@@ -209,10 +209,9 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         }),
       );
 
-    detailServiceMock.getDetail = getDetail;
     const detail = await loadThinkingDetail({
-      userId: "user-1",
       sessionId: "session-eventual-detail",
+      fetchThinkingDetail: getDetail,
       messageItem: {
         sessionId: "session-eventual-detail",
         turnScopeId: "client-turn:eventual-detail",

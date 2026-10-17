@@ -76,7 +76,8 @@ export class SessionExecutionInitializer {
       parentSessionId,
       turnScopeId,
       persistenceContext,
-      upstream: { ...upstreamListener, dialogProcessId: resolvedDialogProcessId },
+      dialogProcessId: resolvedDialogProcessId,
+      upstream: upstreamListener,
     });
 
     emitEvent(runtimeEventListener, "session_starting", {

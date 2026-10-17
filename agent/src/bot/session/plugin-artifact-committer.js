@@ -6,6 +6,7 @@
 import { createPluginArtifactCommitRequest } from "@noobot/event-protocol/plugin-artifact-event";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
+import { emitEvent } from "../../events/emitter.js";
 import { text, isFunction } from "@noobot/shared/value";
 
 export async function commitPluginArtifact({
@@ -48,13 +49,9 @@ export async function commitPluginArtifact({
       currentRevision: Math.max(0, Number(committed?.currentRevision) || 0),
     });
   }
-  await runtime?.eventListener?.onEvent?.({
-    event: AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED,
-    data: {
-      envelope: committed.envelope,
-      persistenceScope: system.persistenceScope || null,
-    },
-    ts: new Date().toISOString(),
+  await emitEvent(runtime.eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
+    envelope: committed.envelope,
+    persistenceScope: system.persistenceScope || null,
   });
   return Object.freeze({
     committed: true,

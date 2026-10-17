@@ -15,18 +15,20 @@ import {
 
 test("persistTransferArtifacts maps storage records to canonical attachment references", async () => {
   const result = await persistTransferArtifacts({
-    attachmentService: {
-      async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
-        return artifacts.map((artifact, index) => ({
-          attachmentId: `att-${index + 1}`,
-          sessionId,
-          attachmentSource,
-          name: artifact.name,
-          mimeType: artifact.mimeType,
-          size: 3,
-          path: "/host/must-not-cross-protocol",
-          relativePath: "attachments/must-not-cross-protocol",
-        }));
+    runtime: {
+      attachmentService: {
+        async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
+          return artifacts.map((artifact, index) => ({
+            attachmentId: `att-${index + 1}`,
+            sessionId,
+            attachmentSource,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: 3,
+            path: "/host/must-not-cross-protocol",
+            relativePath: "attachments/must-not-cross-protocol",
+          }));
+        },
       },
     },
     userId: "u1",
@@ -73,18 +75,20 @@ test("persistence rejects any attachment cardinality drift", async () => {
   await assert.rejects(
     () =>
       persistTransferArtifacts({
-        attachmentService: {
-          async ingestGeneratedArtifacts() {
-            return [
-              {
-                attachmentId: "att-only-one",
-                sessionId: "session-test-1",
-                attachmentSource: "model",
-                name: "a.txt",
-                mimeType: "text/plain",
-                size: 1,
-              },
-            ];
+        runtime: {
+          attachmentService: {
+            async ingestGeneratedArtifacts() {
+              return [
+                {
+                  attachmentId: "att-only-one",
+                  sessionId: "session-test-1",
+                  attachmentSource: "model",
+                  name: "a.txt",
+                  mimeType: "text/plain",
+                  size: 1,
+                },
+              ];
+            },
           },
         },
         userId: "u1",

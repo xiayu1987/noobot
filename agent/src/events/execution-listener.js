@@ -14,7 +14,7 @@ import {
 import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 
 function projectExecutionLogRecord(event = "", data = {}) {
   if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
@@ -46,20 +46,24 @@ export function createExecutionEventListener({
   sessionId = "",
   parentSessionId = "",
   turnScopeId = "",
+  dialogProcessId: inputDialogProcessId,
   persistenceContext = null,
   upstream = null,
 }) {
   if (!isFunction(sessionManager?.appendExecutionLog)) {
     throw new TypeError("sessionManager.appendExecutionLog is required");
   }
-  const dialogProcessId = normalizeDialogProcessId(upstream?.dialogProcessId);
+  if (upstream !== null && !isFunction(upstream.onEvent)) {
+    throw new TypeError("execution event upstream requires an onEvent port");
+  }
+  const dialogProcessId = normalizeDialogProcessId(inputDialogProcessId);
   const defaults = { userId, dialogProcessId, sessionId, parentSessionId, turnScopeId };
   let persistenceTail = Promise.resolve();
   let deliveryTail = Promise.resolve();
   const persistenceFailures = [];
   const deliveryFailures = [];
   const deliveryTiming =
-    typeof upstream?.onDeliveryTiming === "function" ? { queueWaitMs: [], runMs: [] } : null;
+    upstream && isFunction(upstream.onDeliveryTiming) ? { queueWaitMs: [], runMs: [] } : null;
 
   const summarizeTiming = (values = []) => {
     if (!values.length) return { n: 0 };
@@ -130,7 +134,8 @@ export function createExecutionEventListener({
       const startedAt = deliveryTiming ? performance.now() : 0;
       deliveryTiming?.queueWaitMs.push(startedAt - enqueuedAt);
       try {
-        const result = await upstream?.onEvent?.({ event, data: transportData, ts });
+        if (!upstream) return undefined;
+        const result = await upstream.onEvent({ event, data: transportData, ts });
         if (result === false) {
           const error = new Error("upstream rejected event delivery");
           error.code = "EVENT_UPSTREAM_DELIVERY_REJECTED";
@@ -159,7 +164,7 @@ export function createExecutionEventListener({
   };
 
   const forwardEvent = (evt = {}) => {
-    if (!evt?.route || typeof evt.route !== "object") {
+    if (!isPlainObject(evt?.route)) {
       throw new TypeError("forwardEvent requires an explicit route identity");
     }
     return forwardUpstream({
@@ -191,11 +196,7 @@ export function createExecutionEventListener({
         };
         deliveryTiming.queueWaitMs = [];
         deliveryTiming.runMs = [];
-        try {
-          upstream.onDeliveryTiming(summary);
-        } catch {
-          void 0;
-        }
+        upstream.onDeliveryTiming(summary);
       }
 
       const errors = [];

@@ -19,6 +19,11 @@ import {
   findTransferEnvelopeByReason,
   getPrimaryTransferAttachment,
 } from "./tool-runner.test-helpers.js";
+import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
+
+function withAttachmentService(runtime) {
+  return { ...runtime, attachmentService: new AttachmentService(runtime.globalConfig) };
+}
 
 test("executeToolCall gives tools an output transfer identity named after the canonical tool", async () => {
   let identity = null;
@@ -567,7 +572,7 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
     tool,
     turn: 1,
     sessionId: "session-overflow-1",
-    runtime: {
+    runtime: withAttachmentService({
       basePath,
       globalConfig: {
         tools: {
@@ -581,7 +586,7 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
         },
       },
       userConfig: {},
-    },
+    }),
     agentContext: {
       environment: {
         workspace: { basePath },
@@ -684,11 +689,11 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
     call: { id: "call_overflow_transfer", name: "multimodal_generate", args: {} },
     tool,
     turn: 1,
-    runtime: {
+    runtime: withAttachmentService({
       basePath,
       globalConfig: { tools: { maxToolResultChars: 120 } },
       userConfig: {},
-    },
+    }),
     agentContext: {
       environment: {
         workspace: { basePath },
@@ -806,7 +811,7 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
     call: { id: "call_overflow_sandbox", name: "demo_tool", args: {} },
     tool,
     turn: 1,
-    runtime: {
+    runtime: withAttachmentService({
       basePath,
       globalConfig: {
         tools: {
@@ -825,7 +830,7 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
           return String(meta?.path || "").replace(basePath, "/injected/primary-user");
         },
       },
-    },
+    }),
     agentContext: {
       environment: {
         workspace: { basePath },

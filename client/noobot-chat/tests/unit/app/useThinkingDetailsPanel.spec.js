@@ -77,11 +77,13 @@ describe("useThinkingDetailsPanel request isolation", () => {
     normalRequest.resolve(detailFor(normalMessage));
     await openingNormal;
     expect(panel.thinkingDetailsMessageItem.value.dialogProcessId).toBe("normal-message");
-    expect(workflowFetcher).toHaveBeenCalledWith("session-1", {
+    expect(workflowFetcher).toHaveBeenCalledWith({
+      sessionId: "session-1",
       dialogProcessId: "workflow-node",
       turnScopeId: "workflow-turn",
     });
-    expect(normalFetcher).toHaveBeenCalledWith("session-1", {
+    expect(normalFetcher).toHaveBeenCalledWith({
+      sessionId: "session-1",
       dialogProcessId: "normal-message",
       turnScopeId: "normal-turn",
     });

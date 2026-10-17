@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { emitEvent } from "./emitter.js";
+export { emitEvent, hasEventListener } from "./emitter.js";
 export { createExecutionEventListener } from "./execution-listener.js";
 export { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 export { createLlmDeltaVisibilityFilter } from "./llm-filter.js";

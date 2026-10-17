@@ -112,16 +112,6 @@ export function createDeps(overrides = {}) {
   return { calls, deps: { ...deps, ...overrides } };
 }
 
-export function createParentContext(extra = {}) {
-  return {
-    userId: "u1",
-    sessionId: "parent1",
-    dialogProcessId: "parent-dialog",
-    runConfig: { base: true },
-    ...extra,
-  };
-}
-
 export function createParentExecutionScope(runtimePatch = {}) {
   return createTestAgentExecutionScope({
     userId: "u1",
@@ -130,6 +120,7 @@ export function createParentExecutionScope(runtimePatch = {}) {
       dialogProcessId: "parent-dialog",
       turnScopeId: "parent-turn",
     },
+    runConfig: { base: true },
     ...runtimePatch,
   });
 }

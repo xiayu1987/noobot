@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { emitEvent } from "../../events/index.js";
+import { emitEvent, hasEventListener } from "../../events/index.js";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { createLlmDeltaVisibilityFilter } from "../../events/llm-filter.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
@@ -60,7 +60,7 @@ export function resolveCurrentModelInfo(modelState = {}) {
 }
 
 export function createStreamingCallbacks(eventListener = null, runtime = {}) {
-  if (!eventListener?.onEvent) return undefined;
+  if (!hasEventListener(eventListener)) return undefined;
   const visibilityFilter = createLlmDeltaVisibilityFilter();
   const emitVisibleDelta = (value = "") => {
     const inputText = String(value || "");
@@ -97,7 +97,7 @@ export function createModelActivity(
     chain,
     relayCorrelationId,
   };
-  if (!eventListener?.onEvent) {
+  if (!hasEventListener(eventListener)) {
     return { callbacks: undefined, complete: async () => null };
   }
   const visibilityFilter = createLlmDeltaVisibilityFilter();

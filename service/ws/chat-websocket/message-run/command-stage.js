@@ -42,7 +42,7 @@ export async function mapRunCommand(context, command) {
   return { ...mapped, normalizedRunConfig: mapped.runConfig };
 }
 
-export function recordReceivedCommand(context, command, run) {
+export function recordReceivedCommand(command, run) {
   void writeRuntimeEvent({
     scope: "session",
     source: "service",
@@ -103,7 +103,7 @@ const RUN_COMMAND_TURN_ACTION = Object.freeze({
   [AGENT_COMMAND.CONTINUE]: TURN_ACTION.CONTINUE,
 });
 
-function createActionEvent(context, command, run, executionIntent, startedAt) {
+function createActionEvent(command, run, executionIntent, startedAt) {
   const commandId = text(command.commandId);
   const isContinue = command.commandType === AGENT_COMMAND.CONTINUE;
   return {
@@ -192,7 +192,7 @@ export async function acceptRunCommand(context, command, run) {
     runConfig: run.normalizedRunConfig,
   });
   Object.assign(run.normalizedRunConfig, executionIntent);
-  const actionEvent = createActionEvent(context, command, run, executionIntent, startedAt);
+  const actionEvent = createActionEvent(command, run, executionIntent, startedAt);
   const accepted = await commitAction(context, actionEvent, run);
   run.dialogProcessId = text(accepted.dialogProcessId);
   if (command.commandType !== AGENT_COMMAND.RESEND) {

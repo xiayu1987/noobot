@@ -48,6 +48,7 @@ import {
   selectThinkingDetailContentTimeline,
 } from "@noobot/event-protocol/thinking-detail-content";
 import { text } from "@noobot/shared/value";
+import { thinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
 
 export function useThinkingTimeline(
   props,
@@ -415,11 +416,10 @@ export function useThinkingTimeline(
           message: summarizeThinkingMessage(messageItem),
         }));
         const detail = await loadThinkingDetail({
-          userId: props.userId,
           sessionId: identity.sessionId,
           messageItem,
-          dialogProcessId: identity.dialogProcessId,
-          turnScopeId: identity.turnScopeId,
+          fetchThinkingDetail: (target) =>
+            thinkingDetailService.getDetail({ userId: props.userId, ...target }),
           expectedRevision: text(cached?.revision),
         });
         if (!detail) {

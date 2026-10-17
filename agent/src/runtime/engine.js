@@ -10,7 +10,7 @@ import { runAgentRuntimeHook } from "../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
-import { emitEvent } from "../events/index.js";
+import { emitEvent, hasEventListener } from "../events/index.js";
 import { emitMessageEvent } from "../events/message-event-stream.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistant-artifact-projection.js";
 import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
@@ -90,7 +90,7 @@ export async function emitAuthoritativeFinalMessageContent({ result = {}, runtim
   const eventListener = runtime?.eventListener || null;
   const finalOutput = String(result?.output || "");
   const messageId = text(result?.assistantMessageId);
-  if (!eventListener?.onEvent || !finalOutput || !messageId) return false;
+  if (!hasEventListener(eventListener) || !finalOutput || !messageId) return false;
   const messages = authoritativeFinalMessages(result, runtime);
   if (messages.length === 0) return false;
   const finalMessage = messages[0];
