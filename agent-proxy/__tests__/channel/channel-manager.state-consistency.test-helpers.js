@@ -14,6 +14,21 @@ import {
   MESSAGE_EVENT_TYPE,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
+import { createReconnectControl } from "@noobot/agent-transport-protocol";
+
+export function reconnectControl({
+  sessionId = "",
+  parentSessionId = "",
+  parentDialogProcessId = "",
+  requestId = "reconnect-test",
+  knownLifecycleSequenceMap = {},
+} = {}) {
+  return createReconnectControl({
+    requestId,
+    identity: { sessionId, parentSessionId, parentDialogProcessId },
+    knownLifecycleSequenceMap,
+  });
+}
 
 export function canonicalMessageEvent({
   sequence = 1,

@@ -247,7 +247,7 @@ describe("buildChatPayload model preferences", () => {
         turnScopeId: "turn-new",
         ...options,
       });
-      expect(payload.identity).not.toHaveProperty("dialogProcessId");
+      expect(payload.identity.dialogProcessId).toBe("");
     }
   });
 

@@ -44,18 +44,15 @@ function isDialogProcessRecoverable(sessionEntry = {}) {
   return hasPendingInteractions(sessionEntry);
 }
 
-function findRecoverableReconnectSessionId(sessionsPayload = [], preferredSessionId = "") {
-  const preferred = text(preferredSessionId);
-  if (preferred) {
-    const preferredEntry = (Array.isArray(sessionsPayload) ? sessionsPayload : []).find(
-      (sessionEntry) => text(sessionEntry?.sessionId) === preferred,
-    );
-
-    if (preferredEntry) return preferred;
+function findRecoverableReconnectSessionId(sessions, preferredSessionId) {
+  if (
+    preferredSessionId &&
+    sessions.some((sessionEntry) => sessionEntry.sessionId === preferredSessionId)
+  ) {
+    return preferredSessionId;
   }
-  for (const sessionEntry of Array.isArray(sessionsPayload) ? sessionsPayload : []) {
-    const sessionId = text(sessionEntry?.sessionId);
-    if (!sessionId) continue;
+  for (const sessionEntry of sessions) {
+    const { sessionId } = sessionEntry;
     if (isSessionEntryRunning(sessionEntry)) return sessionId;
     if (hasPendingInteractions(sessionEntry)) return sessionId;
   }

@@ -26,24 +26,10 @@ export const CLIENT_ROLE = {
   SUPER_ADMIN: "super_admin",
 };
 
-export const WS_ACTION = {
-  STOP: "stop",
-  CONTINUE: "continue",
-  RESUME: "resume",
-  INTERACTION_RESPONSE: "interaction_response",
-  JOIN: "join",
-  RECONNECT: "reconnect",
-  SNAPSHOT_GET: "turn.snapshot.get",
-};
-
 export const CONVERSATION_SOURCE_EVENT = {
   INIT: "init",
   RESTART: "restart",
   CHANNEL_STATUS: "channel_status",
-  STOP: WS_ACTION.STOP,
-  CONTINUE: WS_ACTION.CONTINUE,
-  RESUME: WS_ACTION.RESUME,
-  INTERACTION_RESPONSE: WS_ACTION.INTERACTION_RESPONSE,
 };
 
 export const SESSION_CHANNEL_STATE_KEY = "__session__";
@@ -67,7 +53,6 @@ export const AGENT_PROXY_ERROR = {
   UNSUPPORTED_ACTION: (action = "") => `agentProxy unsupported action: ${text(action)}`,
   CHANNEL_NOT_FOUND_FOR_STOP: "agentProxy channel not found for stop",
   CHANNEL_NOT_FOUND_FOR_INTERACTION: "agentProxy channel not found for interaction",
-  CHANNEL_NOT_FOUND_FOR_JOIN: "agentProxy channel not found for join",
   PERMISSION_DENIED_FOR_ACTION: (action = "") =>
     `agentProxy permission denied for action: ${text(action)}`,
   UPSTREAM_NOT_RUNNING: "agentProxy upstream not running",

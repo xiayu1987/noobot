@@ -483,7 +483,7 @@ async function commitDetachedStop(dependencies, lifecycle) {
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_ACCEPTED),
     causationId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_ACCEPTED),
     eventType: TURN_EVENT.STOP_ACCEPTED,
-    phase: TURN_PHASE.ACTION,
+    phase: TURN_PHASE.STOP,
     action: TURN_ACTION.STOP,
   });
   await lifecycle.commit({

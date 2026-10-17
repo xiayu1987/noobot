@@ -75,13 +75,7 @@ function compactObject(source = {}) {
 }
 
 function createIdentity(input = {}) {
-  return compactObject({
-    sessionId: clean(input.sessionId),
-    parentSessionId: clean(input.parentSessionId),
-    dialogProcessId: clean(input.dialogProcessId),
-    parentDialogProcessId: clean(input.parentDialogProcessId),
-    turnScopeId: clean(input.turnScopeId),
-  });
+  return Object.fromEntries([...IDENTITY_KEYS].map((key) => [key, clean(input[key])]));
 }
 
 const DERIVED_COMMAND_ID_SOURCES = Object.freeze({
@@ -155,15 +149,16 @@ export function createTurnStopCommand(input = {}) {
   if (!Number.isInteger(expectedTurnRevision) || expectedTurnRevision < 1) {
     throw new TypeError("invalid_expected_turn_revision");
   }
+  if (!isPlainObject(input.stop?.partialAssistant)) {
+    throw new TypeError("invalid_partial_assistant");
+  }
   return withDerivedCommandId(input, {
     ...createEnvelope(AGENT_COMMAND.STOP, input),
     concurrency: { expectedTurnRevision },
-    stop: compactObject({
-      executionId: clean(input.stop?.executionId),
-      partialAssistant: isPlainObject(input.stop?.partialAssistant)
-        ? { ...input.stop.partialAssistant }
-        : undefined,
-    }),
+    stop: {
+      ...compactObject({ executionId: clean(input.stop.executionId) }),
+      partialAssistant: { ...input.stop.partialAssistant },
+    },
   });
 }
 
@@ -222,6 +217,12 @@ function validateIdentity(command, errors) {
     return;
   }
   rejectUnknownFields(command.identity, IDENTITY_KEYS, "identity", errors);
+  for (const key of IDENTITY_KEYS) {
+    const value = command.identity[key];
+    if (typeof value !== "string" || value !== value.trim()) {
+      errors.push(`invalid_identity_field:${key}`);
+    }
+  }
   if (!clean(command.identity.sessionId)) errors.push("missing_session_id");
 }
 
@@ -367,14 +368,12 @@ function validateStopCommand(command, errors) {
     }
   }
   if (!validateNestedObject(command.stop, STOP_KEYS, "stop", errors)) return;
-  if (Object.prototype.hasOwnProperty.call(command.stop, "partialAssistant")) {
-    validateNestedObject(
-      command.stop.partialAssistant,
-      PARTIAL_ASSISTANT_KEYS,
-      "partial_assistant",
-      errors,
-    );
-  }
+  validateNestedObject(
+    command.stop.partialAssistant,
+    PARTIAL_ASSISTANT_KEYS,
+    "partial_assistant",
+    errors,
+  );
 }
 
 function validateInterjectCommand(command, errors) {

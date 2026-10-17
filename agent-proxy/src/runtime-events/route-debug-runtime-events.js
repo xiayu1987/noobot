@@ -19,7 +19,7 @@ function firstLowerTrimmed(...candidates) {
 }
 
 function resolvePayloadSessionId(payload) {
-  return firstTrimmed(payload?.identity?.sessionId, payload?.sessionId);
+  return text(payload?.identity?.sessionId);
 }
 
 function summarizeRouteChannel(channel, data) {

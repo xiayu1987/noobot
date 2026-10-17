@@ -154,8 +154,7 @@ function startProcessing(context, run, accepted, lifecycleData) {
         const code = text(started?.reason || "processing_start_failed");
         throw Object.assign(new Error(code), { code });
       }
-      context.lifecycle.latestTurn = started.turn || context.lifecycle.latestTurn;
-      context.state.currentLifecyclePhase = TURN_PHASE.PROCESSING;
+      context.lifecycle.latestTurn = started.turn;
       return started;
     });
 }

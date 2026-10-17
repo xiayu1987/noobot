@@ -3,18 +3,22 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_TRANSPORT_EVENT,
+  createReconnectComplete,
+  createReconnectData,
+} from "@noobot/agent-transport-protocol";
 import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import { writeAgentProxyRouteLifecycleEvent } from "../../../runtime-events/ws-runtime-events.js";
 
-export function publishEmptyReconnect(manager, socket, { currentSessionId, requestId }) {
+export function publishEmptyReconnect(manager, socket, control) {
   manager.sendSocketEvent(socket, {
     event: AGENT_TRANSPORT_EVENT.RECONNECT_DATA,
-    data: { currentSessionId, sessions: [], requestId },
+    data: createReconnectData(control, []),
   });
   manager.sendSocketEvent(socket, {
     event: AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
-    data: { totalSessions: 0, requestId },
+    data: createReconnectComplete(control, []),
   });
   void writeAgentProxyRouteLifecycleEvent({
     event: "agentProxy.route.reconnect.completed",
@@ -40,17 +44,10 @@ function publishBufferedEvents(manager, socket, transaction) {
   }
 }
 
-export function publishReconnectTransaction({
-  manager,
-  socket,
-  transaction,
-  currentSessionId,
-  requestId,
-  sessions,
-}) {
+export function publishReconnectTransaction({ manager, socket, transaction, control, sessions }) {
   manager.sendSocketEvent(socket, {
     event: AGENT_TRANSPORT_EVENT.RECONNECT_DATA,
-    data: { currentSessionId, sessions, requestId },
+    data: createReconnectData(control, sessions),
   });
   for (const envelope of transaction.channelStateBaseline) {
     manager.sendSocketEvent(socket, envelope);
@@ -58,7 +55,7 @@ export function publishReconnectTransaction({
   publishBufferedEvents(manager, socket, transaction);
   manager.sendSocketEvent(socket, {
     event: AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
-    data: { totalSessions: sessions.length, requestId },
+    data: createReconnectComplete(control, sessions),
   });
   void writeAgentProxyRouteLifecycleEvent({
     event: "agentProxy.route.reconnect.completed",

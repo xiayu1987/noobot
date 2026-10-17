@@ -44,28 +44,12 @@ function resolveAuthoritativeActiveTurn(sessionEntry = {}) {
   return null;
 }
 
-const UNSUPPORTED_RECONNECT_CACHE_KEYS = Object.freeze([
-  "cacheExpired",
-  "expiredDialogProcessIds",
-  "suggestion",
-]);
-
-function assertSupportedReconnectData(reconnectData) {
-  const source = reconnectData || {};
-  if (UNSUPPORTED_RECONNECT_CACHE_KEYS.some((key) => key in source)) {
-    throw new Error("unsupported_reconnect_cache_branch");
-  }
-}
-
 function isInvalidReplaySession(sessionEntry) {
-  const batch = sessionEntry?.replayBatch;
-  return (
-    "dialogProcesses" in (sessionEntry || {}) || !batch || validateReplayBatch(batch).valid !== true
-  );
+  return validateReplayBatch(sessionEntry.replayBatch).valid !== true;
 }
 
 function partitionReconnectSessions(reconnectData) {
-  const receivedSessions = Array.isArray(reconnectData?.sessions) ? reconnectData.sessions : [];
+  const receivedSessions = reconnectData.sessions;
   const invalidSessions = receivedSessions.filter(isInvalidReplaySession);
   const reconnectSessions = receivedSessions.filter(
     (sessionEntry) => !invalidSessions.includes(sessionEntry),
@@ -252,7 +236,6 @@ export async function applyReconnectDataReplay({
   applyTurnLifecycleSnapshot,
   applyPendingInteraction,
 } = {}) {
-  assertSupportedReconnectData(reconnectData);
   const partition = partitionReconnectSessions(reconnectData);
   const { invalidSessions, reconnectSessions } = partition;
   logReconnectPlan(partition);
@@ -266,7 +249,7 @@ export async function applyReconnectDataReplay({
   }
   const recoverableSessionId = findRecoverableReconnectSessionId(
     reconnectSessions,
-    reconnectData?.currentSessionId,
+    reconnectData.identity.sessionId,
   );
   await activateRecoverableSession(recoverableSessionId, {
     ensureReconnectSessionActive,

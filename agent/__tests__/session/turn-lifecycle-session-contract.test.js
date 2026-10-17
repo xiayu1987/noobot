@@ -412,7 +412,7 @@ test("stop is accepted only while authoritative execution state is sending", asy
       }),
     );
     const denied = await h.service.applyTurnLifecycleEvent(
-      event(TURN_EVENT.STOP_ACCEPTED, `s-${executionState}`, 2, { phase: TURN_PHASE.ACTION }),
+      event(TURN_EVENT.STOP_ACCEPTED, `s-${executionState}`, 2, { phase: TURN_PHASE.STOP }),
     );
     assert.equal(denied.reason, "stop_not_allowed");
   }
@@ -427,7 +427,7 @@ test("stop is accepted only while authoritative execution state is sending", asy
     }),
   );
   const accepted = await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.STOP_ACCEPTED, "s", 2, { phase: TURN_PHASE.ACTION }),
+    event(TURN_EVENT.STOP_ACCEPTED, "s", 2, { phase: TURN_PHASE.STOP }),
   );
   assert.equal(accepted.turn.action, "stop");
   assert.equal(accepted.turn.state, TURN_STATE.ACTION_REQUESTING);
@@ -572,7 +572,7 @@ test("retryable stop finalize failure keeps intent and can recover once", async 
     }),
   );
   await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.STOP_ACCEPTED, "s-stop", 2, { phase: TURN_PHASE.ACTION }),
+    event(TURN_EVENT.STOP_ACCEPTED, "s-stop", 2, { phase: TURN_PHASE.STOP }),
   );
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-stop", 3, {
@@ -612,7 +612,7 @@ test("stop completed materializes partial assistant with authoritative identity"
     }),
   );
   await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.STOP_ACCEPTED, "s-partial", 2, { phase: TURN_PHASE.ACTION }),
+    event(TURN_EVENT.STOP_ACCEPTED, "s-partial", 2, { phase: TURN_PHASE.STOP }),
   );
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-partial", 3, { phase: TURN_PHASE.STOP }),

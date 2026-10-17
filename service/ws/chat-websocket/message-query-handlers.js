@@ -47,8 +47,8 @@ const trimText = (value) => text(value);
 function resolveTurnCommandIdentity(authInfo, command) {
   const identity = {
     userId: trimText(authInfo?.userId),
-    sessionId: trimText(command.identity?.sessionId),
-    parentSessionId: trimText(command.identity?.parentSessionId),
+    sessionId: command.identity.sessionId,
+    parentSessionId: command.identity.parentSessionId,
   };
   const commandId = trimText(command.commandId);
   const valid = Boolean(identity.userId && identity.sessionId && commandId);

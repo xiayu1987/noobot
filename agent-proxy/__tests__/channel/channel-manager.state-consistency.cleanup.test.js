@@ -58,10 +58,9 @@ test("resolveChannelFromSocketMessage rejects explicit channelKey from another s
   const resolvedChannel = manager.resolveChannelFromSocketMessage(
     createMockSocket({ apiKey: "api-key-1", userId: "user-1" }),
     {
-      action: "continue",
       channelKey: oldKey,
-      sessionId: "session-new",
-      userId: "user-1",
+      commandType: "continue",
+      identity: { sessionId: "session-new" },
     },
   );
 
@@ -82,8 +81,8 @@ test("resolveChannelFromSocketMessage uses socket userId when continue payload o
   });
 
   const resolvedChannel = manager.resolveChannelFromSocketMessage(socket, {
-    action: "continue",
-    sessionId: "session-new",
+    commandType: "continue",
+    identity: { sessionId: "session-new" },
   });
 
   assert.equal(resolvedChannel, channel);

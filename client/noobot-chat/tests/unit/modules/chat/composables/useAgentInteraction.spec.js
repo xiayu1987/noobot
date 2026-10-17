@@ -95,7 +95,13 @@ describe("useAgentInteraction", () => {
       protocolVersion: 2,
       commandType: "interaction.response",
       commandId: "interaction:req-first",
-      identity: { sessionId: "s-1", dialogProcessId: "dp-1" },
+      identity: {
+        sessionId: "s-1",
+        dialogProcessId: "dp-1",
+        turnScopeId: "",
+        parentSessionId: "",
+        parentDialogProcessId: "",
+      },
       interaction: { requestId: "req-first", response: { value: "first" } },
     });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-second");
@@ -139,7 +145,13 @@ describe("useAgentInteraction", () => {
       protocolVersion: 2,
       commandType: "interaction.response",
       commandId: "interaction:req-a",
-      identity: { sessionId: "s-1", dialogProcessId: "dp-1" },
+      identity: {
+        sessionId: "s-1",
+        dialogProcessId: "dp-1",
+        turnScopeId: "",
+        parentSessionId: "",
+        parentDialogProcessId: "",
+      },
       interaction: { requestId: "req-a", response: { approved: true } },
     });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-b");
@@ -201,7 +213,13 @@ describe("useAgentInteraction", () => {
       protocolVersion: 2,
       commandType: "interaction.response",
       commandId: "interaction:req-2",
-      identity: { sessionId: "session-2" },
+      identity: {
+        sessionId: "session-2",
+        dialogProcessId: "",
+        turnScopeId: "",
+        parentSessionId: "",
+        parentDialogProcessId: "",
+      },
       interaction: {
         requestId: "req-2",
         response: {
@@ -265,6 +283,8 @@ describe("useAgentInteraction", () => {
         sessionId: "child-session",
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
+        parentSessionId: "",
+        parentDialogProcessId: "",
       },
       interaction: {
         requestId: "req-child",

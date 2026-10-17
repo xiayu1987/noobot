@@ -93,7 +93,13 @@ test("message handler sends a failed receipt for a rejected command with valid e
       protocolVersion: AGENT_TRANSPORT_PROTOCOL_VERSION,
       commandId: "cmd-envelope-ok",
       commandType: AGENT_COMMAND.STOP,
-      identity: { sessionId: "session-1" },
+      identity: {
+        sessionId: "session-1",
+        parentSessionId: "",
+        dialogProcessId: "",
+        parentDialogProcessId: "",
+        turnScopeId: "",
+      },
       unexpected: true,
     }),
   );

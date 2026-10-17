@@ -20,8 +20,22 @@ import {
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_STATE,
 } from "@noobot/session-protocol";
+import {
+  createReconnectControl,
+  createReconnectData,
+  validateReconnectData,
+} from "@noobot/agent-transport-protocol";
 
 const REPLAY_ORDERING_DOMAIN = "turn-lifecycle";
+const reconnectControl = createReconnectControl({
+  requestId: "reconnect-s-1",
+  identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+  knownLifecycleSequenceMap: {},
+});
+
+function reconnectData(sessions) {
+  return createReconnectData(reconnectControl, sessions);
+}
 
 function snapshot({
   sessionId = "s-1",
@@ -154,9 +168,24 @@ function fixture(overrides = {}) {
 }
 
 describe("applyReconnectDataReplay", () => {
-  it("requires one valid Authority Replay Batch per session", async () => {
+  it("leaves session entry shape to the reconnect data protocol", () => {
+    const data = { ...reconnectData([]), sessions: [{ sessionId: "s-1" }] };
+    expect(validateReconnectData(data).errors).toEqual(["replay_batch_not_object:0"]);
+    const withDialogs = {
+      ...reconnectData([]),
+      sessions: [{ sessionId: "s-1", replayBatch: batch(), dialogProcesses: [] }],
+    };
+    expect(validateReconnectData(withDialogs).errors).toEqual([
+      "unknown_field:sessions.0.dialogProcesses",
+    ]);
+  });
+
+  it("reconciles a session whose Authority Replay Batch is invalid", async () => {
     const f = fixture();
-    await applyReconnectDataReplay({ reconnectData: { sessions: [{ sessionId: "s-1" }] }, ...f });
+    await applyReconnectDataReplay({
+      reconnectData: reconnectData([{ sessionId: "s-1", replayBatch: {} }]),
+      ...f,
+    });
     expect(f.reconcileSessionState).toHaveBeenCalledWith({
       sessionId: "s-1",
       reason: "invalid_replay_batch",
@@ -169,7 +198,7 @@ describe("applyReconnectDataReplay", () => {
     const event = lifecycleEvent(5);
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
+      reconnectData: reconnectData([{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }]),
       ...f,
     });
     expect(f.applyTurnLifecycleSnapshot).toHaveBeenCalledWith(
@@ -187,32 +216,11 @@ describe("applyReconnectDataReplay", () => {
     );
   });
 
-  it("rejects the removed dialog message replay branch", async () => {
-    const f = fixture();
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          {
-            sessionId: "s-1",
-            replayBatch: batch({ sequence: 4 }),
-            dialogProcesses: [],
-          },
-        ],
-      },
-      ...f,
-    });
-    expect(f.reconcileSessionState).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      reason: "invalid_replay_batch",
-    });
-    expect(f.applyTurnLifecycleSnapshot).not.toHaveBeenCalled();
-  });
-
   it("reconciles a sequence gap and never applies the invalid tail", async () => {
     const event = lifecycleEvent(7);
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
+      reconnectData: reconnectData([{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }]),
       ...f,
     });
     expect(f.reconcileSessionState).toHaveBeenCalledWith({
@@ -226,11 +234,9 @@ describe("applyReconnectDataReplay", () => {
     const interaction = pendingInteraction("request-1");
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          { sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) },
-        ],
-      },
+      reconnectData: reconnectData([
+        { sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) },
+      ]),
       ...f,
     });
     expect(f.applyPendingInteraction).toHaveBeenCalledWith(
@@ -258,11 +264,9 @@ describe("applyReconnectDataReplay", () => {
       }),
     });
     await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          { sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) },
-        ],
-      },
+      reconnectData: reconnectData([
+        { sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) },
+      ]),
       ...f,
     });
     expect(order).toEqual(["activate", "hydrate", "interaction"]);

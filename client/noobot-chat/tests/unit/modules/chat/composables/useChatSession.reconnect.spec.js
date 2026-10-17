@@ -558,9 +558,11 @@ describe("useChatSession reconnect replay", () => {
 
     const request = wsClientMock.reconnect.mock.calls.at(-1)[0];
     expect(request).toMatchObject({
-      currentSessionId: "s-reconnect-user",
-      currentParentSessionId: "p-reconnect",
-      currentParentDialogProcessId: "pdp-reconnect",
+      identity: {
+        sessionId: "s-reconnect-user",
+        parentSessionId: "p-reconnect",
+        parentDialogProcessId: "pdp-reconnect",
+      },
     });
     expect("userId" in request).toBe(false);
   });
@@ -660,7 +662,11 @@ describe("useChatSession reconnect replay", () => {
     );
     expect(wsClientMock.reconnect).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentSessionId: "workflow-session",
+        identity: {
+          sessionId: "workflow-session",
+          parentSessionId: "",
+          parentDialogProcessId: "",
+        },
         knownLifecycleSequenceMap: { "workflow-session": 1 },
       }),
     );

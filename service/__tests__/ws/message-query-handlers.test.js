@@ -37,7 +37,13 @@ function command(overrides = {}) {
   return {
     commandId: "cmd-1",
     commandType: "turn.test",
-    identity: { sessionId: " session-q ", parentSessionId: " parent-q ", dialogProcessId: "d" },
+    identity: {
+      sessionId: "session-q",
+      parentSessionId: "parent-q",
+      dialogProcessId: "d",
+      parentDialogProcessId: "",
+      turnScopeId: "",
+    },
     options: { terminalLimit: 3, knownSequence: 7 },
     ...overrides,
   };
@@ -88,7 +94,7 @@ test("handleSnapshotGet reports missing snapshots and rejects invalid annotation
   assert.deepEqual(errorCodes(invalid.events), ["invalid_authoritative_snapshot"]);
 });
 
-test("handleFinalize passes trimmed identity and reports recovery failure", async () => {
+test("handleFinalize passes protocol identity and reports recovery failure", async () => {
   const { handlers, events, finalizes } = createHarness({
     finalize: () => ({ recovered: false, reason: "turn_revision_conflict" }),
   });

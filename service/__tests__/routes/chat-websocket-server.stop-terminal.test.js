@@ -582,6 +582,7 @@ test("chat-websocket-server: stop without an authoritative Turn is rejected", as
               action: "stop",
               sessionId: "s-without-turn",
               turnScopeId: "turn-without-authority",
+              partialAssistant: { content: "" },
             }),
           ),
         ),

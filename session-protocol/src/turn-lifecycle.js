@@ -26,7 +26,11 @@ import {
   TURN_EVENT_VALUES,
   TURN_TERMINAL_EVENTS,
 } from "./lifecycle/turn-event.js";
-import { TURN_EVENT_STATE, TURN_FAILED_PHASE_STATE } from "./lifecycle/turn-transition-policy.js";
+import {
+  TURN_EVENT_PHASE,
+  TURN_EVENT_STATE,
+  TURN_FAILED_PHASE_STATE,
+} from "./lifecycle/turn-transition-policy.js";
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
 import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
 import {
@@ -64,17 +68,7 @@ export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";
 
 const EVENT_VALUES = new Set(TURN_EVENT_VALUES);
 const EVENT_STATE = TURN_EVENT_STATE;
-
-const EVENT_PHASE = Object.freeze({
-  [TURN_EVENT.ACTION_ACCEPTED]: TURN_PHASE.ACTION,
-  [TURN_EVENT.PROCESSING_STARTED]: TURN_PHASE.PROCESSING,
-  [TURN_EVENT.PROCESSING_COMPLETED]: TURN_PHASE.COMPLETION,
-  [TURN_EVENT.STOP_ACCEPTED]: TURN_PHASE.STOP,
-  [TURN_EVENT.STOP_PROCESSING_COMPLETED]: TURN_PHASE.STOP,
-  [TURN_EVENT.COMPLETED]: TURN_PHASE.COMPLETION,
-  [TURN_EVENT.STOP_COMPLETED]: TURN_PHASE.STOP,
-});
-
+const EVENT_PHASE = TURN_EVENT_PHASE;
 const FAILED_PHASE_STATE = TURN_FAILED_PHASE_STATE;
 
 export function createTurnLifecycleReceipt({

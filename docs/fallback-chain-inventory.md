@@ -69,7 +69,7 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 758 处 / 304 个文件；内联 trim 兜底 117 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 748 处 / 303 个文件；内联 trim 兜底 117 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ------------ | ----------- |
@@ -77,9 +77,9 @@
 | `agent`                          | 124    | 30             | 0            | 0           |
 | `plugin/noobot-plugin-workflow`  | 112    | 11             | 0            | 0           |
 | `plugin/noobot-plugin-harness`   | 46     | 10             | 0            | 0           |
-| `service`                        | 40     | 5              | 0            | 0           |
+| `service`                        | 39     | 5              | 0            | 0           |
 | `client/shared`                  | 24     | 0              | 0            | 0           |
-| `agent-proxy`                    | 20     | 2              | 0            | 0           |
+| `agent-proxy`                    | 11     | 2              | 0            | 0           |
 | `path-resolver`                  | 12     | 1              | 0            | 0           |
 | `user-template`                  | 4      | 9              | 0            | 0           |
 | `authoritative-state`            | 12     | 0              | 0            | 0           |

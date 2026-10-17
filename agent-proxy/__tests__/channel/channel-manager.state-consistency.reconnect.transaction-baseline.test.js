@@ -12,6 +12,7 @@ import {
   createMockSocket,
   canonicalMessageEvent,
   getEvent,
+  reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
@@ -36,10 +37,13 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  const reconnectPromise = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    knownLifecycleSequenceMap: { [sessionId]: 1 },
-  });
+  const reconnectPromise = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      knownLifecycleSequenceMap: { [sessionId]: 1 },
+    }),
+  );
 
   assert.equal(forwarded.length, 1);
   assert.equal(forwarded[0].commandType, "turn.snapshot.get");
@@ -87,6 +91,9 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
   await reconnectPromise;
 
   const reconnectData = getEvent(client, "reconnect_data");
+  assert.deepEqual(Object.keys(reconnectData.data).sort(), ["identity", "requestId", "sessions"]);
+  assert.equal(reconnectData.data.identity.sessionId, sessionId);
+  assert.equal(getEvent(client, "reconnect_complete").data.requestId, reconnectData.data.requestId);
   const entry = reconnectData.data.sessions.find((item) => item.sessionId === sessionId);
   assert.equal("replayRequiresSnapshot" in entry, false);
   assert.deepEqual(entry.replayBatch.events, []);
@@ -121,7 +128,7 @@ test("reconnect sends the authoritative baseline before channel state snapshots"
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  manager.handleReconnect(client, { currentSessionId: sessionId });
+  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
 
   const eventNames = client.sentEvents.map((item) => item.event);
   assert.ok(eventNames.indexOf("reconnect_data") >= 0);
@@ -152,10 +159,13 @@ test("reconnect buffers live events until after the authoritative baseline", asy
     sequence: 3,
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  const reconnectPromise = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    knownLifecycleSequenceMap: { [sessionId]: 1 },
-  });
+  const reconnectPromise = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      knownLifecycleSequenceMap: { [sessionId]: 1 },
+    }),
+  );
   manager.broadcastChannelEvent(channel, {
     sequence: 4,
     event: MESSAGE_EVENT_WIRE_EVENT,
@@ -232,10 +242,13 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
     seq: 3,
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  const reconnectPromise = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    knownLifecycleSequenceMap: { [sessionId]: 1 },
-  });
+  const reconnectPromise = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      knownLifecycleSequenceMap: { [sessionId]: 1 },
+    }),
+  );
 
   manager.updateConversationState(channel, {
     sessionId,
@@ -283,10 +296,13 @@ test("reconnect removes a channel whose Session is authoritatively deleted", asy
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  const reconnectPromise = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    knownLifecycleSequenceMap: { [sessionId]: 1 },
-  });
+  const reconnectPromise = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      knownLifecycleSequenceMap: { [sessionId]: 1 },
+    }),
+  );
   const pendingRequest = channel.pendingSnapshotRequests.get(forwarded[0]?.commandId);
   pendingRequest.resolve({ ok: false, reason: "session_not_found" });
   await reconnectPromise;
@@ -325,17 +341,23 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     sequence: 3,
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  const staleReconnect = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    requestId: "reconnect-stale",
-    knownLifecycleSequenceMap: { [sessionId]: 1 },
-  });
+  const staleReconnect = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      requestId: "reconnect-stale",
+      knownLifecycleSequenceMap: { [sessionId]: 1 },
+    }),
+  );
 
-  const currentReconnect = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    requestId: "reconnect-current",
-    knownLifecycleSequenceMap: { [sessionId]: 3 },
-  });
+  const currentReconnect = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      requestId: "reconnect-current",
+      knownLifecycleSequenceMap: { [sessionId]: 3 },
+    }),
+  );
   assert.notEqual(forwarded[0]?.commandId, forwarded[1]?.commandId);
   assert.equal(channel.pendingSnapshotRequests.has(forwarded[0]?.commandId), false);
   const currentCommandId = forwarded[1]?.commandId;
@@ -399,10 +421,13 @@ function setupRecoveryReconnect(sessionId) {
     sequence: 3,
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  const reconnectPromise = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    knownLifecycleSequenceMap: { [sessionId]: 1 },
-  });
+  const reconnectPromise = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      knownLifecycleSequenceMap: { [sessionId]: 1 },
+    }),
+  );
   return { manager, channel, forwarded, client, reconnectPromise };
 }
 
@@ -534,11 +559,14 @@ test("cancelling reconnect during recovery finalize clears both pending command 
   const finalizeCommandId = forwarded[1].commandId;
   assert.equal(channel.pendingSnapshotRequests.has(finalizeCommandId), true);
 
-  const superseding = manager.handleReconnect(client, {
-    currentSessionId: sessionId,
-    requestId: "reconnect-superseding",
-    knownLifecycleSequenceMap: { [sessionId]: 3 },
-  });
+  const superseding = manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: sessionId,
+      requestId: "reconnect-superseding",
+      knownLifecycleSequenceMap: { [sessionId]: 3 },
+    }),
+  );
   assert.equal(channel.pendingSnapshotRequests.has(snapshotCommandId), false);
   assert.equal(channel.pendingSnapshotRequests.has(finalizeCommandId), false);
   await reconnectPromise.catch(() => {});

@@ -32,6 +32,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     commandId: "start",
     causationId: "start",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: "action",
     action: "send",
   });
   apply({

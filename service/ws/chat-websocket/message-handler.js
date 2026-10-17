@@ -15,7 +15,6 @@ import {
 } from "./runtime-events.js";
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
-import { TURN_PHASE } from "@noobot/session-protocol";
 import { resolveExecutionAbortMessage } from "@noobot/session-protocol/execution-abort";
 import {
   AGENT_COMMAND,
@@ -322,14 +321,14 @@ async function settleAbortedRun(context, error) {
   } else if (isUserStopRunAbort(state.currentAbortSignal)) {
     await context.finalizeUserStopped(buildRunStateSnapshot());
   } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {
-    await context.commitCurrentFailure(error, state.currentLifecyclePhase || TURN_PHASE.ACTION);
+    await context.commitCurrentFailure(error);
   } else {
     void recordServiceWebSocketLifecycle({
       event: "service.websocket.run.aborted",
       ...state.currentRunMeta,
       data: { errorType: error?.name || "Error" },
     });
-    const committed = await context.commitCurrentFailure(error, TURN_PHASE.PROCESSING, "aborted");
+    const committed = await context.commitCurrentFailure(error, "aborted");
     await context.finalizeAborted(buildRunStateSnapshot(), { error, committed });
   }
 }

@@ -16,6 +16,7 @@ import {
   getEvent,
   listEvents,
   FakeUpstreamWebSocket,
+  reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import {
   authoritativeLifecycle,
@@ -152,7 +153,7 @@ test("reconnect projects a pending interaction without mutating its strict paylo
   channel.pendingInteractionRequests.set("interaction-strict-1", pendingInteraction);
   const reconnect = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  await manager.handleReconnect(reconnect, { currentSessionId: sessionId });
+  await manager.handleReconnect(reconnect, reconnectControl({ sessionId: sessionId }));
 
   const replay = getEvent(reconnect, "reconnect_data")?.data?.sessions?.[0]?.replayBatch;
   assert.deepEqual(replay?.pendingInteractions, [pendingInteraction]);
@@ -584,7 +585,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
         turnScopeId: "turn-stop",
       },
       concurrency: { expectedTurnRevision: 1 },
-      stop: {},
+      stop: { partialAssistant: { content: "" } },
     }),
   );
   assert.equal(forwarded, true);
@@ -592,7 +593,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   assert.equal(upstreamMessages.length, 1);
   assert.equal(channel.status, "running");
   const reconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(reconnectClient, { currentSessionId: "session-stop" });
+  manager.handleReconnect(reconnectClient, reconnectControl({ sessionId: "session-stop" }));
 
   const reconnectData = getEvent(reconnectClient, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -611,7 +612,10 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   manager.broadcastChannelEvent(channel, stoppedEnvelope);
 
   const completedReconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(completedReconnectClient, { currentSessionId: "session-stop" });
+  manager.handleReconnect(
+    completedReconnectClient,
+    reconnectControl({ sessionId: "session-stop" }),
+  );
   const completedReconnectData = getEvent(completedReconnectClient, "reconnect_data");
   const completedSessionEntry = (completedReconnectData?.data?.sessions || []).find(
     (entry) => String(entry?.sessionId || "") === "session-stop",
@@ -638,7 +642,7 @@ test("forwardToUpstream reports a closed upstream without throwing", () => {
             turnScopeId: "turn-closed-upstream",
           },
           concurrency: { expectedTurnRevision: 1 },
-          stop: {},
+          stop: { partialAssistant: { content: "" } },
         }),
       ),
       false,

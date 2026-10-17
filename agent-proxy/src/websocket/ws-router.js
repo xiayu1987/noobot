@@ -8,7 +8,6 @@ import {
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   UPSTREAM_CLOSE_REASON,
-  WS_ACTION,
 } from "../shared/constants.js";
 import {
   writeAgentProxyInvalidJsonPayloadEvent,
@@ -25,9 +24,11 @@ import {
   AGENT_TRANSPORT_ERROR_CODE,
   AGENT_TRANSPORT_EVENT,
   EXECUTION_QUERY_COMMAND_TYPES,
+  RECONNECT_CONTROL_ACTION,
   RUN_COMMAND_TYPES,
   createAgentCommandReceipt,
   parseAgentCommand,
+  parseReconnectControl,
 } from "@noobot/agent-transport-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -126,7 +127,7 @@ export class WsRouter {
           data: {
             action,
             commandType: text(payload?.commandType).toLowerCase(),
-            hasSessionId: Boolean(text(payload?.identity?.sessionId || payload?.sessionId)),
+            hasSessionId: Boolean(text(payload?.identity?.sessionId)),
             hasChannelKey: Boolean(text(payload?.channelKey)),
           },
         });
@@ -224,53 +225,35 @@ export class WsRouter {
       });
     },
 
-    [WS_ACTION.JOIN](socket, payload) {
-      const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
-      if (!targetChannel) {
-        this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.CHANNEL_NOT_FOUND_FOR_JOIN);
+    [RECONNECT_CONTROL_ACTION](socket, payload) {
+      let control;
+      try {
+        control = parseReconnectControl(payload);
+      } catch (error) {
+        this._rejectReconnect(socket, error, "");
         return;
       }
-      if (
-        !this.channelManager.hasChannelPermission(
-          targetChannel,
-          socket.__agentProxyApiKey,
-          text(socket?.__agentProxyUserId),
-        )
-      ) {
-        this.channelManager.sendSocketError(
-          socket,
-          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(WS_ACTION.JOIN),
-        );
-        return;
-      }
-      this.channelManager.attachSubscriber(targetChannel, socket);
-      const sequenceByChannel = socket.__agentProxyLastSequenceByChannel || {};
-      this.channelManager.replayChannelEvents(
-        targetChannel,
-        socket,
-        Number(sequenceByChannel[targetChannel.key] || 0),
-      );
-      this.channelManager.syncSocketToChannelTail(targetChannel, socket);
-    },
-
-    [WS_ACTION.RECONNECT](socket, payload) {
-      void this.channelManager.handleReconnect(socket, payload).catch((error) => {
-        void writeAgentProxyRouteLifecycleEvent({
-          event: "agentProxy.route.reconnect.failed",
-          socket,
-          data: {
-            errorType: String(error?.name || "Error"),
-            errorCode: String(error?.code || ""),
-            errorMessage: String(error?.message || "reconnect failed").slice(0, 300),
-          },
-        });
-        this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.RECONNECT_FAILED, {
-          code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
-          identity: { sessionId: text(payload?.currentSessionId) },
-        });
+      void this.channelManager.handleReconnect(socket, control).catch((error) => {
+        this._rejectReconnect(socket, error, control.identity.sessionId);
       });
     },
   };
+
+  _rejectReconnect(socket, error, sessionId) {
+    void writeAgentProxyRouteLifecycleEvent({
+      event: "agentProxy.route.reconnect.failed",
+      socket,
+      data: {
+        errorType: String(error?.name || "Error"),
+        errorCode: String(error?.code || ""),
+        errorMessage: String(error?.message || "reconnect failed").slice(0, 300),
+      },
+    });
+    this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.RECONNECT_FAILED, {
+      code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
+      identity: { sessionId },
+    });
+  }
 
   _routeAgentCommand(socket, command, { connectionApiKey, connectionLocale } = {}) {
     const { commandType } = command;

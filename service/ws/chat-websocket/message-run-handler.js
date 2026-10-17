@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import { TURN_EVENT, createTurnLifecycleCommandId } from "@noobot/session-protocol";
 import {
   consumeUserInterjections,
   createExecutionLivenessInspector,
@@ -53,13 +53,10 @@ async function settlePendingLifecycle(context) {
   }
 }
 
-function resolveFailureContext(context, fallbackPhase) {
-  const authorityPhase = Object.values(TURN_PHASE).includes(context.lifecycle.latestTurn?.phase)
-    ? context.lifecycle.latestTurn.phase
-    : "";
+function resolveFailureContext(context) {
   const meta = context.state.currentRunMeta;
   return {
-    phase: authorityPhase || context.state.currentLifecyclePhase || fallbackPhase,
+    phase: context.lifecycle.latestTurn.phase,
     commandBase: meta.commandId,
     userId: meta.userId,
     sessionId: meta.sessionId,
@@ -70,13 +67,9 @@ function resolveFailureContext(context, fallbackPhase) {
 }
 
 function createFailureCommitter(context) {
-  return async function commitCurrentFailure(
-    error,
-    fallbackPhase = TURN_PHASE.ACTION,
-    terminalCommand = "error",
-  ) {
+  return async function commitCurrentFailure(error, terminalCommand = "error") {
     await settlePendingLifecycle(context);
-    const failureContext = resolveFailureContext(context, fallbackPhase);
+    const failureContext = resolveFailureContext(context);
     const commandId = createTurnLifecycleCommandId({
       commandId: failureContext.commandBase,
       eventType: TURN_EVENT.FAILED,
@@ -108,17 +101,17 @@ function createFailureCommitter(context) {
 }
 
 function createRunTransportDiagnostic(context) {
-  return (identity = {}) =>
+  return (identity) =>
     (data = {}) => {
       void recordServiceWebSocketLifecycle({
         category: "debug",
         level: "debug",
         debugType: "workflow-diagnostics",
         event: `service.websocket.runTransport.${String(data.stage || "observed")}`,
-        userId: identity.userId || "",
-        sessionId: identity.sessionId || "",
-        dialogProcessId: identity.dialogProcessId || "",
-        turnScopeId: identity.turnScopeId || "",
+        userId: text(identity.userId),
+        sessionId: text(identity.sessionId),
+        dialogProcessId: text(identity.dialogProcessId),
+        turnScopeId: text(identity.turnScopeId),
         data,
       });
     };

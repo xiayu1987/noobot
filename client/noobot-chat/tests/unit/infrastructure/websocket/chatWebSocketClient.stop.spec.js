@@ -25,7 +25,7 @@ function stopCommand({
   dialogProcessId = "main-dp",
   turnScopeId = "main-turn",
   expectedTurnRevision = 2,
-  partialAssistant,
+  partialAssistant = { content: "" },
 } = {}) {
   return createTurnStopCommand({
     identity: { sessionId, dialogProcessId, turnScopeId },

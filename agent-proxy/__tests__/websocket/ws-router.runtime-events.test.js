@@ -17,6 +17,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   AGENT_TRANSPORT_ERROR_CODE,
   createExecutionQueryCommand,
+  createReconnectControl,
   createTurnInterjectionCommand,
   createTurnRunCommand,
   createTurnStopCommand,
@@ -47,7 +48,7 @@ function stopCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
   return createTurnStopCommand({
     identity: { sessionId, dialogProcessId: "dialog-1", turnScopeId },
     concurrency: { expectedTurnRevision: 1 },
-    stop: {},
+    stop: { partialAssistant: { content: "" } },
   });
 }
 
@@ -249,11 +250,13 @@ test("ws router reports reconnect transaction failure without closing the shared
 
   socket.emit(
     WEBSOCKET_MESSAGE_EVENT,
-    JSON.stringify({
-      action: "reconnect",
-      currentSessionId: "s-reconnect",
-      requestId: "reconnect-1",
-    }),
+    JSON.stringify(
+      createReconnectControl({
+        requestId: "reconnect-1",
+        identity: { sessionId: "s-reconnect", parentSessionId: "", parentDialogProcessId: "" },
+        knownLifecycleSequenceMap: {},
+      }),
+    ),
   );
   await Promise.resolve();
 

@@ -15,7 +15,6 @@ export function createConnectionState({ locale = "" } = {}) {
     currentAbortSignal: null,
     currentRunHandle: null,
     currentRunTransportBinding: null,
-    currentLifecyclePhase: "",
   };
 }
 
@@ -32,5 +31,4 @@ export function resetRunState(state) {
   state.currentRunTransportBinding = null;
   state.currentRunMeta = null;
   state.currentRunTimedOut = false;
-  state.currentLifecyclePhase = "";
 }

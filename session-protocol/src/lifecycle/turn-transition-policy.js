@@ -27,6 +27,22 @@ const FAILED_PHASE_STATE = Object.freeze({
   [TURN_PHASE.STOP]: TURN_STATE.STOP_FAILED,
 });
 
+const EVENT_PHASE = Object.freeze({
+  [TURN_EVENT.ACTION_ACCEPTED]: TURN_PHASE.ACTION,
+  [TURN_EVENT.PROCESSING_STARTED]: TURN_PHASE.PROCESSING,
+  [TURN_EVENT.PROCESSING_COMPLETED]: TURN_PHASE.COMPLETION,
+  [TURN_EVENT.STOP_ACCEPTED]: TURN_PHASE.STOP,
+  [TURN_EVENT.STOP_PROCESSING_COMPLETED]: TURN_PHASE.STOP,
+  [TURN_EVENT.COMPLETED]: TURN_PHASE.COMPLETION,
+  [TURN_EVENT.STOP_COMPLETED]: TURN_PHASE.STOP,
+});
+
+export function isTurnEventPhase(eventType = "", phase = "") {
+  return eventType === TURN_EVENT.FAILED
+    ? Object.hasOwn(FAILED_PHASE_STATE, phase)
+    : Boolean(EVENT_PHASE[eventType]) && EVENT_PHASE[eventType] === phase;
+}
+
 export function deriveTurnState(eventType = "", phase = "") {
   return eventType === TURN_EVENT.FAILED
     ? FAILED_PHASE_STATE[phase] || ""
@@ -59,8 +75,10 @@ export function deriveTurnExecutionState(eventType = "", current = "") {
 }
 
 export function decideTurnTransition({ current = null, eventType = "", phase = "" } = {}) {
+  if (!isTurnEventPhase(eventType, phase)) {
+    return Object.freeze({ allowed: false, reason: "invalid_turn_phase" });
+  }
   const nextState = deriveTurnState(eventType, phase);
-  if (!nextState) return Object.freeze({ allowed: false, reason: "invalid_failure_phase" });
   if (!current)
     return Object.freeze({
       allowed: eventType === TURN_EVENT.ACTION_ACCEPTED,
@@ -91,3 +109,4 @@ export function decideTurnTransition({ current = null, eventType = "", phase = "
 
 export const TURN_EVENT_STATE = EVENT_STATE;
 export const TURN_FAILED_PHASE_STATE = FAILED_PHASE_STATE;
+export const TURN_EVENT_PHASE = EVENT_PHASE;

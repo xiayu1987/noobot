@@ -12,6 +12,7 @@ import {
   createMockSocket,
   getEvent,
   listEvents,
+  reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
@@ -85,12 +86,18 @@ test("interaction_request resolved by one client should be consistent across all
   const clientA = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   const clientB = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
 
-  manager.handleReconnect(clientA, {
-    currentSessionId: "session-1",
-  });
-  manager.handleReconnect(clientB, {
-    currentSessionId: "session-1",
-  });
+  manager.handleReconnect(
+    clientA,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
+  manager.handleReconnect(
+    clientB,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
 
   const beforeResolveA = JSON.stringify(getEvent(clientA, "reconnect_data")?.data || {});
   const beforeResolveB = JSON.stringify(getEvent(clientB, "reconnect_data")?.data || {});
@@ -113,9 +120,12 @@ test("interaction_request resolved by one client should be consistent across all
   assert.equal(forwarded, true, "interaction_response should be forwarded");
 
   const clientBAfterResolve = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
-  manager.handleReconnect(clientBAfterResolve, {
-    currentSessionId: "session-1",
-  });
+  manager.handleReconnect(
+    clientBAfterResolve,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
   const afterResolve = JSON.stringify(getEvent(clientBAfterResolve, "reconnect_data")?.data || {});
   assert.equal(
     afterResolve.includes("__agentProxyPendingInteraction"),
@@ -219,7 +229,7 @@ test("failed interaction lifecycle closes the pending request across proxy and r
   assert.equal(channel.conversationStateByScope.get("turn-timeout")?.state, "sending");
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, { currentSessionId: "session-timeout" });
+  manager.handleReconnect(client, reconnectControl({ sessionId: "session-timeout" }));
   const replay = getEvent(client, "reconnect_data")?.data?.sessions?.[0]?.replayBatch;
   assert.equal(hasPendingRequest(replay, "req-timeout"), false);
 });
@@ -368,10 +378,12 @@ test("workflow child terminal events cannot discard a pending interaction owned 
   assert.equal(channel.pendingInteractionRequests.has("req-child"), true);
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  await manager.handleReconnect(client, {
-    currentSessionId: "root-session",
-    currentTurnScopeId: "root-turn",
-  });
+  await manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: "root-session",
+    }),
+  );
 
   const reconnectData = getEvent(client, "reconnect_data");
   const rootSession = reconnectData?.data?.sessions?.find(

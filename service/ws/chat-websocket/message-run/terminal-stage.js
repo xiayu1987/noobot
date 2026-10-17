@@ -46,7 +46,7 @@ export async function finalizeRunResult(context, run, accepted, active) {
   if (!processed?.applied && !processed?.deduplicated) {
     throw new Error(processed?.reason || "processing_completion_failed");
   }
-  context.state.currentLifecyclePhase = TURN_PHASE.COMPLETION;
+  context.lifecycle.latestTurn = processed.turn;
   await context.finalizeCompleted(context.buildRunStateSnapshot(), {
     commandId: accepted.commandId,
   });

@@ -99,9 +99,9 @@ export function createChatRunService({ normalizeLocale, defaultLocale } = {}) {
     return {
       userId: text(userId),
       sessionId: identity.sessionId,
-      parentSessionId: identity.parentSessionId || "",
-      dialogProcessId: identity.dialogProcessId || "",
-      parentDialogProcessId: identity.parentDialogProcessId || "",
+      parentSessionId: identity.parentSessionId,
+      dialogProcessId: identity.dialogProcessId,
+      parentDialogProcessId: identity.parentDialogProcessId,
       turnScopeId: identity.turnScopeId,
       commandId: command.commandId,
       message: command.input.message,

@@ -8,3 +8,4 @@ export * from "./commands.js";
 export * from "./run-preferences.js";
 export * from "./diagnostics.js";
 export * from "./events.js";
+export * from "./reconnect.js";

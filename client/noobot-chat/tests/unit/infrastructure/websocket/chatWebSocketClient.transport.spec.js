@@ -6,9 +6,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { setTransportDiagnosticsLogSink } from "../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
-import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
   emitCommandReceipt,
+  emitReconnectComplete,
   MockWebSocket,
   setupWebSocketTestHooks,
   streamCommand,
@@ -399,9 +399,8 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       resolveWebSocketUrl: () => "ws://test",
     });
     const reconnectPromise = client.reconnect({
-      currentSessionId: "s-1",
-      currentParentSessionId: "p-1",
-      currentParentDialogProcessId: "pdp-1",
+      identity: { sessionId: "s-1", parentSessionId: "p-1", parentDialogProcessId: "pdp-1" },
+      knownLifecycleSequenceMap: {},
       onReconnectData: vi.fn(),
     });
     const socket = MockWebSocket.instances[0];
@@ -409,18 +408,15 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     socket.onopen?.();
 
     const sent = JSON.parse(socket.sent[0]);
-    expect(sent).toEqual(
-      expect.objectContaining({
-        action: "reconnect",
-        currentSessionId: "s-1",
-        currentParentSessionId: "p-1",
-        currentParentDialogProcessId: "pdp-1",
-        requestId: expect.stringMatching(/^reconnect:/),
-      }),
-    );
-    expect("userId" in sent).toBe(false);
+    expect(sent).toEqual({
+      action: "reconnect",
+      protocolVersion: 1,
+      identity: { sessionId: "s-1", parentSessionId: "p-1", parentDialogProcessId: "pdp-1" },
+      requestId: expect.stringMatching(/^reconnect:/),
+      knownLifecycleSequenceMap: {},
+    });
 
-    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0 });
+    emitReconnectComplete(socket, 0);
     await reconnectPromise;
   });
 
@@ -523,6 +519,24 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);
   });
 
+  it("rejects a malformed reconnect control without leaving reconnect in progress", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+
+    await expect(
+      client.reconnect({ identity: { sessionId: " s-1 " }, knownLifecycleSequenceMap: {} }),
+    ).rejects.toMatchObject({ code: "INVALID_RECONNECT_CONTROL" });
+    expect(MockWebSocket.instances).toHaveLength(0);
+
+    const reconnectPromise = client.reconnect({
+      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      knownLifecycleSequenceMap: {},
+    });
+    const socket = MockWebSocket.instances[0];
+    socket.onopen?.();
+    emitReconnectComplete(socket, 0);
+    await reconnectPromise;
+  });
+
   it("rejects reconnect immediately when command send fails", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const socket = client.connect();
@@ -530,7 +544,12 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       throw new Error("send failed");
     };
 
-    await expect(client.reconnect({ currentSessionId: "s-1" })).rejects.toThrow("send failed");
+    await expect(
+      client.reconnect({
+        identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+        knownLifecycleSequenceMap: {},
+      }),
+    ).rejects.toThrow("send failed");
     expect(client.getActiveSocket()).toBe(null);
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);
   });
@@ -548,7 +567,12 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
 
     expect(() => client.connect()).not.toThrow();
     expect(client.connect()).toBe(null);
-    await expect(client.reconnect({ currentSessionId: "s-1" })).rejects.toThrow();
+    await expect(
+      client.reconnect({
+        identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+        knownLifecycleSequenceMap: {},
+      }),
+    ).rejects.toThrow();
     expect(client.getTransportStatus()).toMatchObject({
       phase: "idle",
       hasSocket: false,

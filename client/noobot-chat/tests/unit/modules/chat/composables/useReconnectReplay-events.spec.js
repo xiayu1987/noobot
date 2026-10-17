@@ -22,6 +22,7 @@ import { INTERACTION_EVENT_TYPE, createReplayBatch } from "@noobot/event-protoco
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protocol";
+import { createReconnectControl, createReconnectData } from "@noobot/agent-transport-protocol";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -389,8 +390,13 @@ describe("useReconnectReplay", () => {
         sequence: 1,
       },
     });
-    await api.applyReconnectData({
-      sessions: [
+    const reconnectControl = createReconnectControl({
+      requestId: "reconnect-s-1",
+      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      knownLifecycleSequenceMap: {},
+    });
+    await api.applyReconnectData(
+      createReconnectData(reconnectControl, [
         {
           sessionId: "s-1",
           replayBatch: createReplayBatch({
@@ -403,8 +409,8 @@ describe("useReconnectReplay", () => {
             snapshotSequence: 1,
           }),
         },
-      ],
-    });
+      ]),
+    );
 
     const userIdx = refs.activeSession.value.messages.findIndex(
       (message) => message.role === RoleEnum.USER && message.content === "new-q",

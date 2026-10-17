@@ -9,6 +9,7 @@ import { createReplayBatch, isPendingInteractionReplay } from "@noobot/event-pro
 import {
   createTurnFinalizeCommand,
   createTurnSnapshotCommand,
+  readKnownLifecycleSequence,
 } from "@noobot/agent-transport-protocol";
 import { isActionableTurnRecovery } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
@@ -154,12 +155,12 @@ export function prepareSessionReplays({
   manager,
   socket,
   channelsBySessionId,
-  knownLifecycleSequenceMap,
+  control,
   snapshotRequests = [],
 }) {
   const sessionsMap = new Map();
   for (const [sessionId, channels] of channelsBySessionId) {
-    const knownSequence = Number(knownLifecycleSequenceMap[sessionId] || 0);
+    const knownSequence = readKnownLifecycleSequence(control, sessionId);
     const { replayBatch, snapshotRequired } = createSessionReplay(
       manager,
       sessionId,

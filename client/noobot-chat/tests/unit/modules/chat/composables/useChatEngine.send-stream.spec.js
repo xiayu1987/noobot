@@ -252,7 +252,10 @@ describe("useChatEngine.send-stream", () => {
       expect.objectContaining({
         identity: {
           sessionId: "local-client-turn",
+          dialogProcessId: "",
           turnScopeId: expect.stringMatching(/^client-turn:/),
+          parentSessionId: "",
+          parentDialogProcessId: "",
         },
       }),
     );

@@ -13,6 +13,7 @@ import {
   canonicalMessageEvent,
   getEvent,
   listEvents,
+  reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
@@ -57,9 +58,12 @@ test("reconnect does not derive authoritative sending state from a running trans
   channel.ownerUserId = "user-1";
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, {
-    currentSessionId: "session-snapshot-running",
-  });
+  manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: "session-snapshot-running",
+    }),
+  );
 
   const firstState = client.sentEvents.find((eventItem) => eventItem?.event === "channel_state");
   assert.equal(firstState?.data?.state, "no_conversation");
@@ -84,9 +88,12 @@ test("reconnect leaves business state empty for a running transport without auth
   channel.ownerUserId = "user-1";
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, {
-    currentSessionId: "session-running-empty",
-  });
+  manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: "session-running-empty",
+    }),
+  );
 
   const reconnectData = getEvent(client, "reconnect_data");
   assert.ok(reconnectData);
@@ -115,7 +122,7 @@ test("reconnect does not manufacture an error when a transport socket disappears
   channel.upstreamClosed = true;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, { currentSessionId: sessionId });
+  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
 
   const reconnectData = getEvent(client, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -144,7 +151,7 @@ test("reconnect keeps transport status separate from authoritative running state
   channel.upstreamClosed = false;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, { currentSessionId: sessionId });
+  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
 
   const reconnectData = getEvent(client, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -153,28 +160,4 @@ test("reconnect keeps transport status separate from authoritative running state
   assert.equal(channel.status, "running");
   assert.equal("hasRunningTask" in sessionEntry, false);
   assert.equal("currentRun" in sessionEntry, false);
-});
-
-test("reconnect rejects a payload-declared user identity", async () => {
-  const manager = new ChannelManager({ OPEN: 1 });
-  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-user-fallback" });
-  const channel = manager.ensureChannel(channelKey, {
-    userId: "user-1",
-    sessionId: "session-user-fallback",
-    turnScopeId: "turn-scope-user-fallback",
-  });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-old";
-  channel.ownerUserId = "user-1";
-
-  const reconnectClient = createMockSocket({ apiKey: "api-key-new", userId: "" });
-  await assert.rejects(
-    manager.handleReconnect(reconnectClient, {
-      userId: "user-1",
-      currentSessionId: "session-user-fallback",
-    }),
-    /unsupported_reconnect_user_identity/,
-  );
-  assert.equal(getEvent(reconnectClient, "reconnect_data"), null);
-  assert.equal(channel.subscribers.has(reconnectClient), false);
 });

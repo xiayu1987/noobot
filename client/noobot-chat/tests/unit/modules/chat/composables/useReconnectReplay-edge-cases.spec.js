@@ -4,12 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createReconnectControl, createReconnectData } from "@noobot/agent-transport-protocol";
 import {
   createCanonicalAssistant,
   createFixture,
   createInteractionEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+
+const reconnectControl = createReconnectControl({
+  requestId: "reconnect-s-1",
+  identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+  knownLifecycleSequenceMap: {},
+});
 
 afterEach(() => {
   vi.useRealTimers();
@@ -54,7 +61,9 @@ describe("useReconnectReplay", () => {
       },
     ];
 
-    await api.applyReconnectData({ sessions: [{ sessionId: "s-1" }] });
+    await api.applyReconnectData(
+      createReconnectData(reconnectControl, [{ sessionId: "s-1", replayBatch: {} }]),
+    );
 
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT,

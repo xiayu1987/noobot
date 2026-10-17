@@ -5,8 +5,10 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
+import { createReconnectControl, createReconnectData } from "@noobot/agent-transport-protocol";
 import { createReconnectCoordinator } from "../../../../../../src/modules/chat/runtime/session/reconnectCoordinator.js";
 import { createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("createReconnectCoordinator", () => {
   it("does not reconnect a local Session without a backend identity", async () => {
@@ -51,9 +53,11 @@ describe("createReconnectCoordinator", () => {
 
     const request = chatWebSocketClient.reconnect.mock.calls[0][0];
     expect(request).toMatchObject({
-      currentSessionId: "child-1",
-      currentParentSessionId: "parent-1",
-      currentParentDialogProcessId: "parent-dp-1",
+      identity: {
+        sessionId: "child-1",
+        parentSessionId: "parent-1",
+        parentDialogProcessId: "parent-dp-1",
+      },
     });
     expect("userId" in request).toBe(false);
   });
@@ -77,7 +81,15 @@ describe("createReconnectCoordinator", () => {
           event: "channel_state",
           data: { sessionId: "s-1", turnScopeId: "turn-1", state: "interaction_pending" },
         });
-        onReconnectData({ sessions: [{ sessionId: "s-1" }] });
+        const control = createReconnectControl({
+          requestId: "reconnect-s-1",
+          identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+          knownLifecycleSequenceMap: {},
+        });
+        onReconnectData({
+          event: StreamEventEnum.RECONNECT_DATA,
+          data: createReconnectData(control, [{ sessionId: "s-1", replayBatch: {} }]),
+        });
       }),
     };
     const notify = vi.fn();

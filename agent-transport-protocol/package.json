@@ -10,6 +10,7 @@
     "./run-preferences": "./src/run-preferences.js",
     "./diagnostics": "./src/diagnostics.js",
     "./events": "./src/events.js",
+    "./reconnect": "./src/reconnect.js",
     "./package.json": "./package.json",
     "./bot-dispatch": "./src/bot-dispatch.js"
   },

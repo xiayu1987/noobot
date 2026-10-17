@@ -238,6 +238,5 @@ export async function acceptRunCommand(context, command, run) {
       lifecycleRevision: accepted.turn.revision,
     },
   });
-  context.state.currentLifecyclePhase = TURN_PHASE.ACTION;
   return { activeBot, agentApplication, commandId: text(command.commandId) };
 }

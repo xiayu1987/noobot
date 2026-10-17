@@ -13,9 +13,6 @@ import {
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
-import { text } from "@noobot/shared/value";
-
-const trimmed = (value) => text(value);
 
 const stopLifecycleCommandId = (stopCommandId, eventType) =>
   createTurnLifecycleCommandId({ commandId: stopCommandId, eventType, phase: TURN_PHASE.STOP });
@@ -63,7 +60,7 @@ export function createMessageStopHandler({
     commitTurnLifecycle({
       userId: target.userId,
       sessionId: target.sessionId,
-      parentSessionId: trimmed(command.identity.parentSessionId),
+      parentSessionId: command.identity.parentSessionId,
       turnScopeId: target.turnScopeId,
       commandId: stopLifecycleCommandId(target.stopCommandId, TURN_EVENT.STOP_ACCEPTED),
       causationId: target.stopCommandId,
@@ -82,7 +79,7 @@ export function createMessageStopHandler({
       sessionId: target.sessionId,
       dialogProcessId: target.dialogProcessId,
       turnScopeId: target.turnScopeId,
-      partialAssistant: command.stop?.partialAssistant || {},
+      partialAssistant: command.stop.partialAssistant,
       commandId: target.stopCommandId,
     };
   };
@@ -106,7 +103,7 @@ export function createMessageStopHandler({
 
   const completeIdleStop = async (command, target, stopPayload) => {
     const stoppedPartialAssistant = {
-      ...(stopPayload.partialAssistant || {}),
+      ...stopPayload.partialAssistant,
       sessionId: stopPayload.sessionId,
       dialogProcessId: stopPayload.dialogProcessId,
       turnScopeId: stopPayload.turnScopeId,
@@ -114,7 +111,7 @@ export function createMessageStopHandler({
     const lifecycleContext = {
       userId: target.userId,
       sessionId: stopPayload.sessionId,
-      parentSessionId: trimmed(command.identity.parentSessionId),
+      parentSessionId: command.identity.parentSessionId,
       turnScopeId: stopPayload.turnScopeId,
       dialogProcessId: stopPayload.dialogProcessId,
       phase: TURN_PHASE.STOP,

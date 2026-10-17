@@ -21,21 +21,16 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { text } from "@noobot/shared/value";
 
-function projectForwardCommandType(payload) {
-  const envelope = payload ?? {};
-  return envelope.commandType || envelope.action || "message";
-}
-
 function projectForwardLogIdentity(payload) {
   const envelope = payload ?? {};
   const identity = envelope.identity ?? {};
   const interaction = envelope.interaction ?? {};
   return {
-    commandType: projectForwardCommandType(envelope),
-    sessionId: identity.sessionId || envelope.sessionId,
-    dialogProcessId: identity.dialogProcessId || envelope.dialogProcessId,
-    turnScopeId: identity.turnScopeId || envelope.turnScopeId,
-    requestId: interaction.requestId || envelope.requestId,
+    commandType: envelope.commandType,
+    sessionId: identity.sessionId,
+    dialogProcessId: identity.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    requestId: interaction.requestId,
   };
 }
 
@@ -88,7 +83,7 @@ class ChannelFlowMethods {
     }
     const identity =
       payload?.identity && typeof payload.identity === "object" ? payload.identity : {};
-    const sessionId = text(identity.sessionId || payload?.sessionId);
+    const sessionId = text(identity.sessionId);
     const explicitChannelKey = text(payload?.channelKey);
     if (explicitChannelKey && this.hasChannel(explicitChannelKey)) {
       if (sessionId && this.getChannel(explicitChannelKey).identity.sessionId !== sessionId) {
@@ -115,8 +110,8 @@ class ChannelFlowMethods {
       const constructedKey = createChannelKey({
         userId,
         sessionId,
-        parentSessionId: identity.parentSessionId || payload?.parentSessionId,
-        parentDialogProcessId: identity.parentDialogProcessId || payload?.parentDialogProcessId,
+        parentSessionId: identity.parentSessionId,
+        parentDialogProcessId: identity.parentDialogProcessId,
       });
       if (this.hasChannel(constructedKey)) {
         const channel = this.getChannel(constructedKey);
@@ -247,7 +242,7 @@ class ChannelFlowMethods {
       event: "agentProxy.upstream.forward.error",
       data: {
         channelKey: channel.key,
-        commandType: projectForwardCommandType(payload),
+        commandType: payload.commandType,
         error: describeForwardError(error),
       },
     });

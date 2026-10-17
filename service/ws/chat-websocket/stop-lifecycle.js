@@ -13,21 +13,14 @@ import {
 } from "@noobot/session-protocol/execution-abort";
 import { text } from "@noobot/shared/value";
 
-export function buildStoppedPartialAssistant({
-  stopPayload = {},
-  runMeta = {},
-  fallbackMessage = "",
-} = {}) {
-  const sourcePartial =
-    stopPayload?.partialAssistant && typeof stopPayload.partialAssistant === "object"
-      ? stopPayload.partialAssistant
-      : {};
+export function buildStoppedPartialAssistant({ stopPayload, runMeta, fallbackMessage }) {
+  const sourcePartial = stopPayload.partialAssistant;
   return {
     ...sourcePartial,
     content: text(sourcePartial.content ?? fallbackMessage),
-    sessionId: normalizeRunIdentityPart(runMeta?.sessionId),
-    dialogProcessId: normalizeRunIdentityPart(runMeta?.dialogProcessId),
-    turnScopeId: normalizeRunIdentityPart(runMeta?.turnScopeId),
+    sessionId: normalizeRunIdentityPart(runMeta.sessionId),
+    dialogProcessId: normalizeRunIdentityPart(runMeta.dialogProcessId),
+    turnScopeId: normalizeRunIdentityPart(runMeta.turnScopeId),
   };
 }
 

@@ -10,7 +10,7 @@ import { collectRatchet, ratchetViolations } from "./quality/baseline-ratchet.mj
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 324,
+  complexityCount: 323,
   longFunctionCount: 66,
   maxComplexity: 48,
   hotspots: Object.freeze({

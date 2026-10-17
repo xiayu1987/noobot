@@ -12,6 +12,7 @@ import {
   canonicalInteractionRequest,
   canonicalMessageEvent,
   createMockSocket,
+  reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
@@ -28,10 +29,13 @@ test("reconnect echoes requestId on data and completion envelopes", async () => 
   const manager = new ChannelManager({ OPEN: 1 });
   const socket = createMockSocket();
 
-  await manager.handleReconnect(socket, {
-    currentSessionId: "session-missing",
-    requestId: "reconnect-request-1",
-  });
+  await manager.handleReconnect(
+    socket,
+    reconnectControl({
+      sessionId: "session-missing",
+      requestId: "reconnect-request-1",
+    }),
+  );
 
   assert.equal(getReconnectDataEvent(socket)?.data?.requestId, "reconnect-request-1");
   assert.equal(getReconnectCompleteEvent(socket)?.data?.requestId, "reconnect-request-1");
@@ -44,11 +48,14 @@ test("reconnect provisions a child session channel with the start_or_join key", 
   };
   const socket = createMockSocket({ userId: "user-1" });
 
-  await manager.handleReconnect(socket, {
-    currentSessionId: "child-1",
-    currentParentSessionId: "parent-1",
-    currentParentDialogProcessId: "parent-dp-1",
-  });
+  await manager.handleReconnect(
+    socket,
+    reconnectControl({
+      sessionId: "child-1",
+      parentSessionId: "parent-1",
+      parentDialogProcessId: "parent-dp-1",
+    }),
+  );
 
   const expectedKey = createChannelKey({
     userId: "user-1",
@@ -66,23 +73,9 @@ test("reconnect does not provision a channel for an unauthenticated socket", asy
   const manager = new ChannelManager({ OPEN: 1 });
   const socket = createMockSocket({ userId: "" });
 
-  await manager.handleReconnect(socket, { currentSessionId: "session-1" });
+  await manager.handleReconnect(socket, reconnectControl({ sessionId: "session-1" }));
 
   assert.equal(manager.channelStore.size, 0);
-});
-
-test("reconnect rejects the removed message cursor protocol", async () => {
-  const manager = new ChannelManager({ OPEN: 1 });
-  const socket = createMockSocket();
-
-  await assert.rejects(
-    manager.handleReconnect(socket, {
-      currentSessionId: "session-1",
-      lastReceivedSeqMap: {},
-    }),
-    /unsupported_reconnect_message_cursor/,
-  );
-  assert.equal(socket.sentEvents.length, 0);
 });
 
 test("reconnect should not replay resolved interaction_request", () => {
@@ -113,9 +106,12 @@ test("reconnect should not replay resolved interaction_request", () => {
   const socket = createMockSocket();
   socket.__agentProxyChannelKeys.add(channelKey);
 
-  manager.handleReconnect(socket, {
-    currentSessionId: "session-1",
-  });
+  manager.handleReconnect(
+    socket,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
 
   const reconnectDataEvent = getReconnectDataEvent(socket);
   assert.ok(reconnectDataEvent, "should send reconnect_data event");
@@ -156,9 +152,12 @@ test("reconnect should replay unresolved interaction_request with pending marker
   const socket = createMockSocket();
   socket.__agentProxyChannelKeys.add(channelKey);
 
-  manager.handleReconnect(socket, {
-    currentSessionId: "session-1",
-  });
+  manager.handleReconnect(
+    socket,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
 
   const reconnectDataEvent = getReconnectDataEvent(socket);
   assert.ok(reconnectDataEvent, "should send reconnect_data event");
@@ -207,7 +206,7 @@ test("reconnect excludes the data-plane journal even when it reached retention c
   const socket = createMockSocket();
   socket.__agentProxyChannelKeys.add(channelKey);
 
-  manager.handleReconnect(socket, { currentSessionId: "session-1" });
+  manager.handleReconnect(socket, reconnectControl({ sessionId: "session-1" }));
 
   const reconnectDataEvent = getReconnectDataEvent(socket);
   assert.ok(reconnectDataEvent, "should send reconnect_data event");

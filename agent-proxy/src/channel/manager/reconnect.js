@@ -23,22 +23,6 @@ import {
 } from "./reconnect/reconnect-publisher.js";
 import { text } from "@noobot/shared/value";
 
-function normalizeReconnectRequest(payload = {}) {
-  if ("lastReceivedSeqMap" in payload || "lastReceivedTurnScopeIdMap" in payload) {
-    throw new Error("unsupported_reconnect_message_cursor");
-  }
-  if ("userId" in payload) {
-    throw new Error("unsupported_reconnect_user_identity");
-  }
-  return {
-    currentSessionId: text(payload.currentSessionId),
-    currentParentSessionId: text(payload.currentParentSessionId),
-    currentParentDialogProcessId: text(payload.currentParentDialogProcessId),
-    requestId: text(payload.requestId),
-    knownLifecycleSequenceMap: payload.knownLifecycleSequenceMap || {},
-  };
-}
-
 function cancelSupersededReconnect(manager, socket) {
   manager.clearPendingLifecycleDeliveries(socket);
   const supersededTransaction = socket.__agentProxyReconnectTransaction;
@@ -99,14 +83,9 @@ function isReconnectChannelCandidate(manager, channelKey, channel, currentSessio
 }
 
 class ReconnectMethods {
-  async handleReconnect(socket, payload = {}) {
-    const {
-      currentSessionId,
-      currentParentSessionId,
-      currentParentDialogProcessId,
-      requestId,
-      knownLifecycleSequenceMap,
-    } = normalizeReconnectRequest(payload);
+  async handleReconnect(socket, control) {
+    const { identity } = control;
+    const currentSessionId = identity.sessionId;
     cancelSupersededReconnect(this, socket);
     let reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId);
     if (
@@ -116,8 +95,8 @@ class ReconnectMethods {
     ) {
       reconnectChannelKeys = await provisionReconnectChannel(this, socket, {
         sessionId: currentSessionId,
-        parentSessionId: currentParentSessionId,
-        parentDialogProcessId: currentParentDialogProcessId,
+        parentSessionId: identity.parentSessionId,
+        parentDialogProcessId: identity.parentDialogProcessId,
       });
     }
     void writeAgentProxyRouteLifecycleEvent({
@@ -129,7 +108,7 @@ class ReconnectMethods {
       },
     });
     if (!reconnectChannelKeys.length) {
-      publishEmptyReconnect(this, socket, { currentSessionId, requestId });
+      publishEmptyReconnect(this, socket, control);
       return;
     }
     const snapshotRequests = [];
@@ -140,7 +119,7 @@ class ReconnectMethods {
       manager: this,
       socket,
       channelsBySessionId,
-      knownLifecycleSequenceMap,
+      control,
       snapshotRequests,
     });
     attachReconnectBaselines(this, socket, reconnectChannelKeys, reconnectTransaction);
@@ -166,29 +145,23 @@ class ReconnectMethods {
       manager: this,
       socket,
       transaction: reconnectTransaction,
-      currentSessionId,
-      requestId,
-      sessions: authoritativeSessions.map(({ replayBatch, ...session }) => ({
-        ...session,
-        replayBatch,
-      })),
+      control,
+      sessions: authoritativeSessions,
     });
   }
 
-  _resolveReconnectChannelKeys(socket, currentSessionId = "") {
+  _resolveReconnectChannelKeys(socket, currentSessionId) {
     const currentSocketChannelKeys = Array.from(
       socket?.__agentProxyChannelKeys instanceof Set ? socket.__agentProxyChannelKeys : [],
     ).filter(Boolean);
     if (currentSocketChannelKeys.length) {
       return currentSocketChannelKeys;
     }
-    const normalizedCurrentSessionId = text(currentSessionId);
     const requesterApiKey = text(socket?.__agentProxyApiKey);
     const requesterUserId = text(socket?.__agentProxyUserId);
     const resolvedChannelKeys = [];
     for (const [channelKey, channel] of this.channelStore.entries()) {
-      if (!isReconnectChannelCandidate(this, channelKey, channel, normalizedCurrentSessionId))
-        continue;
+      if (!isReconnectChannelCandidate(this, channelKey, channel, currentSessionId)) continue;
       if (!this.hasChannelPermission(channel, requesterApiKey, requesterUserId)) continue;
       resolvedChannelKeys.push(channelKey);
     }

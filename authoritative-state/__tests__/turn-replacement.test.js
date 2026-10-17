@@ -191,7 +191,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
       turnScopeId: "turn-old",
       messageId: "source-old",
       presentationMessageId: "presentation-old",
-      phase: TURN_PHASE.ACTION,
+      phase: TURN_PHASE.STOP,
     },
     {
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,

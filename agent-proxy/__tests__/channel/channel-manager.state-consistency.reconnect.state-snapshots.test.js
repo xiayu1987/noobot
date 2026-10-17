@@ -14,6 +14,7 @@ import {
   canonicalMessageEvent,
   getEvent,
   sortReconnectSessions,
+  reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
@@ -51,8 +52,8 @@ test("reconnect state should be consistent for all same-user clients across chan
   const clientA = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   const clientB = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
 
-  manager.handleReconnect(clientA, { currentSessionId: "" });
-  manager.handleReconnect(clientB, { currentSessionId: "" });
+  manager.handleReconnect(clientA, reconnectControl({ sessionId: "" }));
+  manager.handleReconnect(clientB, reconnectControl({ sessionId: "" }));
 
   const reconnectDataA = getEvent(clientA, "reconnect_data");
   const reconnectDataB = getEvent(clientB, "reconnect_data");
@@ -102,9 +103,12 @@ test("reconnect state should be isolated between different users", () => {
   );
 
   const otherUserClient = createMockSocket({ apiKey: "api-key-2", userId: "user-2" });
-  manager.handleReconnect(otherUserClient, {
-    currentSessionId: "session-1",
-  });
+  manager.handleReconnect(
+    otherUserClient,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
 
   const reconnectData = getEvent(otherUserClient, "reconnect_data");
   assert.ok(reconnectData);
@@ -133,9 +137,12 @@ test("reconnect should include pending interactions without a conversationStates
   );
 
   const client = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
-  manager.handleReconnect(client, {
-    currentSessionId: "session-1",
-  });
+  manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
   const reconnectData = getEvent(client, "reconnect_data");
   assert.ok(reconnectData);
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -180,9 +187,12 @@ test("reconnect preserves cached authoritative states without synthesizing curre
   channel.status = "done";
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, {
-    currentSessionId: "session-current-run",
-  });
+  manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: "session-current-run",
+    }),
+  );
 
   const reconnectData = getEvent(client, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -203,9 +213,12 @@ test("reconnect does not expose the removed data-plane cache-expiry branch", () 
   manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, {
-    currentSessionId: "session-1",
-  });
+  manager.handleReconnect(
+    client,
+    reconnectControl({
+      sessionId: "session-1",
+    }),
+  );
   const reconnectData = getEvent(client, "reconnect_data");
   assert.ok(reconnectData);
   const sessionEntry = (reconnectData?.data?.sessions || []).find(

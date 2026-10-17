@@ -24,8 +24,11 @@ import {
   AGENT_TRANSPORT_ERROR_CODE,
   AGENT_TRANSPORT_EVENT,
   createAgentTransportEvent,
+  createReconnectControl,
   getAgentTransportEventSessionId,
   getAgentCommandIdentity,
+  parseReconnectComplete,
+  parseReconnectData,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
 import { EVENT_FAMILY, readProtocolEventPayload } from "@noobot/event-protocol";
@@ -40,7 +43,6 @@ import {
   normalizeErrorMessage,
   normalizeTrimmedString,
 } from "./chatWebSocketProtocol.js";
-import { text } from "@noobot/shared/value";
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
@@ -599,22 +601,22 @@ export function createChatWebSocketClient({
     });
   }
 
-  async function reconnect({
-    currentSessionId = "",
-    currentParentSessionId = "",
-    currentParentDialogProcessId = "",
-    knownLifecycleSequenceMap = {},
-    onReconnectData = () => {},
-  } = {}) {
+  async function reconnect({ identity, knownLifecycleSequenceMap, onReconnectData = () => {} }) {
     return new Promise((resolve, reject) => {
       if (reconnecting) {
         reject(new Error(translateText("infra.reconnectInProgress")));
         return;
       }
+      const requestId = nextRequestId("reconnect");
+      const reconnectControl = createReconnectControl({
+        requestId,
+        identity,
+        knownLifecycleSequenceMap,
+      });
       reconnecting = true;
       reconnectResolve = resolve;
       reconnectReject = reject;
-      const requestId = nextRequestId("reconnect");
+      const currentSessionId = reconnectControl.identity.sessionId;
 
       const currentSocket = getActiveSocket();
       const reusableSocket =
@@ -664,19 +666,7 @@ export function createChatWebSocketClient({
       const sendReconnectCommand = () => {
         try {
           transport.markOpen(ws);
-          ws.send(
-            JSON.stringify({
-              action: "reconnect",
-              requestId,
-              currentSessionId: text(currentSessionId),
-              currentParentSessionId: text(currentParentSessionId),
-              currentParentDialogProcessId: text(currentParentDialogProcessId),
-              knownLifecycleSequenceMap:
-                knownLifecycleSequenceMap && typeof knownLifecycleSequenceMap === "object"
-                  ? knownLifecycleSequenceMap
-                  : {},
-            }),
-          );
+          ws.send(JSON.stringify(reconnectControl));
         } catch (error) {
           failReconnect(error, { closeSocket: true });
         }
@@ -698,22 +688,24 @@ export function createChatWebSocketClient({
           }
 
           if (event === StreamEventEnum.RECONNECT_DATA) {
-            if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
+            const reconnectData = parseReconnectData(data);
+            if (reconnectData.requestId !== requestId) {
               logTransportDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
-                sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
+                sessionId: currentSessionId,
                 protocolEvent: event,
                 reason: "request_id_mismatch",
               }));
               return;
             }
-            onReconnectData(data);
+            onReconnectData({ event, data: reconnectData });
             return;
           }
 
           if (event === StreamEventEnum.RECONNECT_COMPLETE) {
-            if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
+            const reconnectComplete = parseReconnectComplete(data);
+            if (reconnectComplete.requestId !== requestId) {
               logTransportDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
-                sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
+                sessionId: currentSessionId,
                 protocolEvent: event,
                 reason: "request_id_mismatch",
               }));
@@ -728,7 +720,7 @@ export function createChatWebSocketClient({
             liveEventSubscriber = onReconnectData;
             unregisterReconnectHandlers();
             if (activeReconnectContext?.requestId === requestId) activeReconnectContext = null;
-            if (resolveFn) resolveFn(data);
+            if (resolveFn) resolveFn(reconnectComplete);
             return;
           }
 

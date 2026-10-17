@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { validateReconnectData } from "@noobot/agent-transport-protocol";
 import { createFixture } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
@@ -12,13 +13,16 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("rejects the removed cache-expiration reconnect branch", async () => {
-    const { api, mocks } = createFixture();
+  it("rejects the removed cache-expiration reconnect branch at the protocol", () => {
+    const result = validateReconnectData({
+      requestId: "reconnect-s-1",
+      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      sessions: [],
+      cacheExpired: true,
+    });
 
-    await expect(api.applyReconnectData({ sessions: [], cacheExpired: true })).rejects.toThrow(
-      "unsupported_reconnect_cache_branch",
-    );
-    expect(mocks.chatList.fetchSessions).not.toHaveBeenCalled();
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain("unknown_field:cacheExpired");
   });
 
   it("FN-02b: channel_state expired is ignored without refresh", async () => {

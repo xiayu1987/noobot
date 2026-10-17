@@ -156,6 +156,7 @@ test("rejected stop has no abort or interaction side effects", async () => {
           action: "stop",
           sessionId: "session-locked",
           turnScopeId: "turn-locked",
+          partialAssistant: { content: "" },
         }),
       ),
     );

@@ -9,6 +9,7 @@ import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
   createAgentCommandReceipt,
+  createReconnectComplete,
   createTurnRunCommand,
 } from "@noobot/agent-transport-protocol";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
@@ -54,6 +55,22 @@ export class MockWebSocket {
 }
 
 export const flushPromises = () => Promise.resolve();
+
+export function readSentReconnectControl(socket) {
+  const control = socket.sent
+    .map((payload) => JSON.parse(payload))
+    .findLast((payload) => payload.action === "reconnect");
+  if (!control) throw new Error("reconnect_control_not_sent");
+  return control;
+}
+
+export function emitReconnectComplete(socket, totalSessions) {
+  const control = readSentReconnectControl(socket);
+  socket.emit(
+    AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
+    createReconnectComplete(control, Array.from({ length: totalSessions })),
+  );
+}
 
 export function streamCommand(identity = {}) {
   return createTurnRunCommand({
