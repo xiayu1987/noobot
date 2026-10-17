@@ -13,13 +13,10 @@ import {
   deriveAttachmentBindCommandId,
 } from "@noobot/session-protocol";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function emitPreparedTurnDebug({
   eventListener,
-  sessionId,
-  dialogProcessId,
-  turnScopeId,
   requestRunConfig,
   scenarioResolvedRunConfig,
   resolvedRunConfig,
@@ -53,11 +50,6 @@ function projectPreparedCurrentUserTurn({
 function emitCurrentUserIdentityDebug({
   eventListener,
   resolvedRunConfig,
-  userId,
-  sessionId,
-  parentSessionId,
-  dialogProcessId,
-  turnScopeId,
   persistedMessageUid,
   currentUserMessage,
   reusedTurnResult,
@@ -128,9 +120,6 @@ export async function prepareCurrentUserTurn({
   };
   emitPreparedTurnDebug({
     eventListener,
-    sessionId,
-    dialogProcessId,
-    turnScopeId,
     requestRunConfig,
     scenarioResolvedRunConfig,
     resolvedRunConfig,
@@ -208,7 +197,7 @@ export async function prepareCurrentUserTurn({
   if (!reuseExistingUserTurn) {
     await prepareCanonicalAttachments();
     if (canonicalAttachments.length > 0) {
-      if (typeof bindSessionTurnAttachments !== "function") {
+      if (!isFunction(bindSessionTurnAttachments)) {
         throw new Error("bindSessionTurnAttachments is required for attachment-bearing Turns");
       }
       const attachmentBinding = await bindSessionTurnAttachments({
@@ -251,11 +240,6 @@ export async function prepareCurrentUserTurn({
   emitCurrentUserIdentityDebug({
     eventListener,
     resolvedRunConfig,
-    userId,
-    sessionId,
-    parentSessionId,
-    dialogProcessId,
-    turnScopeId,
     persistedMessageUid,
     currentUserMessage,
     reusedTurnResult,

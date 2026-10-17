@@ -6,8 +6,6 @@
 
 class ModelUtility {
   constructor() {}
-  static getStartNode(model) {}
-  static getEndNode(model) {}
   static getNodeFlowtosByRLATType(node, rLATType) {
     const result = [];
     const nodeLineRLATs = node?.getModel?.()?.getNodeLineRLATs?.() || [];

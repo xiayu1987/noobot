@@ -36,7 +36,6 @@ export function createDesktopDependencyManager({
 
   const { findAvailableCommand, isDependencyInstalled, waitForDependencyInstalled } =
     createDependencyDetector({
-      app,
       backendRoot,
       appendEarlyLog,
       writeDependencyLog,
@@ -57,7 +56,6 @@ export function createDesktopDependencyManager({
     waitForDependencyInstalled,
     installLibreOfficeFromDmg,
     installManagedDependencyMac,
-    app,
     backendRoot,
     getDependencyProxyUrl,
   });

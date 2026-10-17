@@ -36,7 +36,7 @@ import {
   EXECUTION_KIND,
 } from "@noobot/session-protocol/execution-lifecycle";
 import { createChatRunService } from "../../services/chat-run-service.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function createAcceptedAgentExecutionIdentity({ turnScopeId } = {}) {
   const executionId = deriveAgentExecutionId({ turnScopeId });
@@ -174,7 +174,6 @@ export async function startServerWithWs({
   bot = null,
   initialTurnLifecycle = {},
   resolveAuthByApiKey = () => ({ userId: "primary-user" }),
-  isForbiddenUserScope = () => false,
 } = {}) {
   const server = createServer((_req, res) => {
     res.statusCode = 404;
@@ -335,7 +334,7 @@ export async function startServerWithWs({
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),
     defaultLocale: "zh-CN",
   });
-  if (typeof suppliedBot.applyTurnLifecycleEvent !== "function") {
+  if (!isFunction(suppliedBot.applyTurnLifecycleEvent)) {
     testBot.runSession = async (payload = {}) => {
       payload?.eventListener?.onEvent?.({
         event: "agent_lifecycle_state_changed",

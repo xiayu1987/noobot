@@ -394,7 +394,6 @@ export function resolveModelMinimumReasoningEffort(provider = {}) {
 export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
   type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
   additionalProperties: false,
-  normalize: normalizeModelReasoningConfiguration,
   properties: Object.freeze({
     enabled: connectionField(booleanField),
     used_for_conversation: connectionField(booleanField),

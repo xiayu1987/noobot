@@ -45,9 +45,7 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.terminalOutcome).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 
   it("EV-04a: data-plane DONE does not reconcile or terminate a Turn", async () => {
@@ -76,7 +74,6 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.terminalOutcome).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
@@ -113,7 +110,6 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.terminalOutcome).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
@@ -194,8 +190,6 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.terminalOutcome).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });

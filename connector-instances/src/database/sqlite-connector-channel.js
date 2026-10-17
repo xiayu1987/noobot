@@ -23,7 +23,7 @@ function databaseKey(channelKey = "") {
   return key;
 }
 
-function getSqliteDatabase(Database, conn = {}, channelKey = "") {
+function getSqliteDatabase(Database, channelKey = "") {
   const key = databaseKey(channelKey);
   const cached = sqliteDatabases.get(key);
   if (cached?.db) return cached.db;
@@ -72,7 +72,7 @@ export async function executeSqliteCommand({
   }
 
   try {
-    const db = getSqliteDatabase(Database, conn, channelKey);
+    const db = getSqliteDatabase(Database, channelKey);
     if (!db) {
       return {
         ok: false,

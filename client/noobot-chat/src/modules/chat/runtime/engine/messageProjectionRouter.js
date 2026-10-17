@@ -107,7 +107,7 @@ function describeProjectionTarget(targetMessage) {
   };
 }
 
-function reduceProjectionTargets(messageEvent, targetMessages, context) {
+function reduceProjectionTargets(messageEvent, targetMessages) {
   const reductions = targetMessages.map((message) =>
     dispatchTurnEnvelope({
       targetMessage: message,
@@ -191,7 +191,7 @@ function projectMainSessionEvent(messageEvent, context) {
       target: targetBefore,
     },
   });
-  const reduction = reduceProjectionTargets(messageEvent, targetMessages, context);
+  const reduction = reduceProjectionTargets(messageEvent, targetMessages);
   logProjectionReduction({
     messageEvent,
     presentationMessageId,

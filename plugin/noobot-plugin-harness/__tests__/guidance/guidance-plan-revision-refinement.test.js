@@ -122,6 +122,7 @@ test("planning revision followup uses dynamic programming scenario over initial 
   const revisedPlan = "UPDATE [1] 修改代码并验证";
   const meta = {
     harness: {
+      planningGuidanceMode: "separate_model",
       resolveModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
         if (payload.purpose === "planning_refinement") return createTestModelResponse("");
@@ -171,6 +172,7 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
   });
   const meta = {
     harness: {
+      planningGuidanceMode: "separate_model",
       resolveModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);

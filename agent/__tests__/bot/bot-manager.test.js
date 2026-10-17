@@ -78,19 +78,13 @@ test("BotManager should delegate attachment and error-log operations", async () 
 test("BotManager replaceSessionTurn ingests uploads before persisting the replacement", async () => {
   const calls = [];
   const manager = createBotManagerWithMocks({
-    globalConfig: { workspaceRoot: "/workspace", attachments: {} },
+    globalConfig: { workspaceRoot: "/workspace" },
     workspaceService: {
       async ensureUserWorkspace(userId) {
         calls.push(["ensure", userId]);
       },
       getWorkspacePath(userId) {
         return `/workspace/${userId}`;
-      },
-    },
-    configService: {
-      async loadUserConfig(basePath) {
-        calls.push(["config", basePath]);
-        return {};
       },
     },
     attach: {
@@ -126,10 +120,10 @@ test("BotManager replaceSessionTurn ingests uploads before persisting the replac
 
   assert.deepEqual(
     calls.map(([name]) => name),
-    ["ensure", "config", "ingest", "replace"],
+    ["ensure", "ingest", "replace"],
   );
-  assert.equal(calls[2][1].attachments[0].contentBase64, "bmV3");
-  assert.deepEqual(calls[3][1].attachments, [
+  assert.equal(calls[1][1].attachments[0].contentBase64, "bmV3");
+  assert.deepEqual(calls[2][1].attachments, [
     {
       attachmentId: "canonical-1",
       sessionId: "s1",

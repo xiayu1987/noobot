@@ -6,22 +6,13 @@
 
 import { PROGRAMMING_REQUIRED_TOOL_NAMES } from "./scenario-policy.js";
 import { normalizeStringList } from "../utils.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
-const normalizeStringArrayFallback = (input = []) => normalizeStringList(input);
-
-export function removeDeniedToolNamesFromAllow({
-  toolPolicy = {},
-  normalizeStringArray = normalizeStringArrayFallback,
-} = {}) {
-  const policy = toolPolicy && typeof toolPolicy === "object" ? toolPolicy : {};
-  const normalize =
-    typeof normalizeStringArray === "function"
-      ? normalizeStringArray
-      : normalizeStringArrayFallback;
-  const allowToolNames = normalize(policy?.allowToolNames);
+export function removeDeniedToolNamesFromAllow({ toolPolicy = {} } = {}) {
+  const policy = isPlainObject(toolPolicy) ? toolPolicy : {};
+  const allowToolNames = normalizeStringList(policy?.allowToolNames);
   if (!allowToolNames.length) return policy;
-  const denySet = new Set([...normalize(policy?.denyToolNames)]);
+  const denySet = new Set([...normalizeStringList(policy?.denyToolNames)]);
   if (!denySet.size) return policy;
   return {
     ...policy,
@@ -29,18 +20,13 @@ export function removeDeniedToolNamesFromAllow({
   };
 }
 
-function mergeToolPolicyDenyToolNames({
-  toolPolicy = {},
-  appendToolNames = [],
-  normalizeStringArray = normalizeStringArrayFallback,
-} = {}) {
-  const basePolicy = toolPolicy && typeof toolPolicy === "object" ? toolPolicy : {};
-  const normalize =
-    typeof normalizeStringArray === "function"
-      ? normalizeStringArray
-      : normalizeStringArrayFallback;
+function mergeToolPolicyDenyToolNames({ toolPolicy = {}, appendToolNames = [] } = {}) {
+  const basePolicy = isPlainObject(toolPolicy) ? toolPolicy : {};
   const mergedDenyToolNames = Array.from(
-    new Set([...normalize(basePolicy?.denyToolNames), ...normalize(appendToolNames)]),
+    new Set([
+      ...normalizeStringList(basePolicy?.denyToolNames),
+      ...normalizeStringList(appendToolNames),
+    ]),
   );
   const policyWithMergedDeny = {
     ...basePolicy,
@@ -48,61 +34,42 @@ function mergeToolPolicyDenyToolNames({
   };
   return removeDeniedToolNamesFromAllow({
     toolPolicy: policyWithMergedDeny,
-    normalizeStringArray: normalize,
   });
 }
 
-export function mergeToolPolicyPatch({
-  baseToolPolicy = {},
-  toolPolicyPatch = {},
-  normalizeStringArray = normalizeStringArrayFallback,
-} = {}) {
-  const basePolicy = baseToolPolicy && typeof baseToolPolicy === "object" ? baseToolPolicy : {};
-  const patchPolicy = toolPolicyPatch && typeof toolPolicyPatch === "object" ? toolPolicyPatch : {};
-  const normalize =
-    typeof normalizeStringArray === "function"
-      ? normalizeStringArray
-      : normalizeStringArrayFallback;
+export function mergeToolPolicyPatch({ baseToolPolicy = {}, toolPolicyPatch = {} } = {}) {
+  const basePolicy = isPlainObject(baseToolPolicy) ? baseToolPolicy : {};
+  const patchPolicy = isPlainObject(toolPolicyPatch) ? toolPolicyPatch : {};
   const merged = {
     ...basePolicy,
     ...patchPolicy,
   };
   const appendToolNames = [
-    ...normalize(basePolicy?.denyToolNames),
-    ...normalize(patchPolicy?.denyToolNames),
+    ...normalizeStringList(basePolicy?.denyToolNames),
+    ...normalizeStringList(patchPolicy?.denyToolNames),
   ];
   delete merged.denyToolNames;
   return mergeToolPolicyDenyToolNames({
     toolPolicy: merged,
     appendToolNames,
-    normalizeStringArray: normalize,
   });
 }
 
-export function hasToolPolicyPatchContent({
-  toolPolicyPatch = {},
-  normalizeStringArray = normalizeStringArrayFallback,
-} = {}) {
-  const patch = toolPolicyPatch && typeof toolPolicyPatch === "object" ? toolPolicyPatch : {};
-  const normalize =
-    typeof normalizeStringArray === "function"
-      ? normalizeStringArray
-      : normalizeStringArrayFallback;
-  const hasPatchDenyToolNames = normalize(patch?.denyToolNames).length > 0;
+export function hasToolPolicyPatchContent({ toolPolicyPatch = {} } = {}) {
+  const patch = isPlainObject(toolPolicyPatch) ? toolPolicyPatch : {};
+  const hasPatchDenyToolNames = normalizeStringList(patch?.denyToolNames).length > 0;
   const hasOtherPatchKeys = Object.keys(patch).some((key) => key !== "denyToolNames");
   return hasPatchDenyToolNames || hasOtherPatchKeys;
 }
 
 export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   const source = Array.isArray(sourceTools) ? sourceTools : [];
-  const policy =
-    runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object" ? runConfig.toolPolicy : {};
-  const normalize = normalizeStringArrayFallback;
+  const policy = isPlainObject(runConfig?.toolPolicy) ? runConfig.toolPolicy : {};
   const mode = text(policy.mode).toLowerCase();
   const customTools = Array.isArray(policy.customTools)
-    ? policy.customTools.filter((item) => item && typeof item === "object" && text(item.name))
+    ? policy.customTools.filter((item) => isPlainObject(item) && text(item.name))
     : [];
-  const includedNames = new Set(normalize(policy.includeToolNames));
+  const includedNames = new Set(normalizeStringList(policy.includeToolNames));
   if (runConfig.allowUserInteraction !== false && policy.forceIncludeUserInteraction !== false) {
     includedNames.add("user_interaction");
   }
@@ -110,7 +77,7 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   let tools = source;
   if (mode === "custom_only") tools = [...customTools, ...included];
   else if (mode === "append_custom") tools = [...source, ...customTools];
-  const allow = new Set(normalize(policy.allowToolNames));
+  const allow = new Set(normalizeStringList(policy.allowToolNames));
 
   if (Array.isArray(runConfig?.pluginTools)) {
     for (const contribution of runConfig.pluginTools) {
@@ -123,7 +90,7 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
     for (const name of PROGRAMMING_REQUIRED_TOOL_NAMES) allow.add(name);
   }
   if (allow.size) tools = tools.filter((item) => allow.has(String(item?.name || "")));
-  const deny = new Set(normalize(policy.denyToolNames));
+  const deny = new Set(normalizeStringList(policy.denyToolNames));
   if (deny.size) tools = tools.filter((item) => !deny.has(String(item?.name || "")));
   const result = [];
   const seen = new Set();
@@ -137,20 +104,13 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   return result;
 }
 
-export function createPluginPolicyApi({
-  baseToolPolicy = {},
-  normalizeStringArray = normalizeStringArrayFallback,
-} = {}) {
-  const normalize =
-    typeof normalizeStringArray === "function"
-      ? normalizeStringArray
-      : normalizeStringArrayFallback;
+export function createPluginPolicyApi({ baseToolPolicy = {} } = {}) {
   const toolPolicyPatch = {};
   const applyToolPolicyPatch = (patch = {}) => {
-    const nextPatch = patch && typeof patch === "object" ? patch : {};
+    const nextPatch = isPlainObject(patch) ? patch : {};
     const accumulatedDenyToolNames = [
-      ...normalize(toolPolicyPatch?.denyToolNames),
-      ...normalize(nextPatch?.denyToolNames),
+      ...normalizeStringList(toolPolicyPatch?.denyToolNames),
+      ...normalizeStringList(nextPatch?.denyToolNames),
     ];
     Object.assign(toolPolicyPatch, nextPatch);
     if (Object.prototype.hasOwnProperty.call(nextPatch, "denyToolNames")) {
@@ -163,7 +123,6 @@ export function createPluginPolicyApi({
       return mergeToolPolicyPatch({
         baseToolPolicy,
         toolPolicyPatch,
-        normalizeStringArray: normalize,
       });
     },
     snapshot: () => ({ ...toolPolicyPatch }),

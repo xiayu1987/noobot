@@ -46,7 +46,6 @@ export async function handleWorkflowFailure({
     semanticText: sourceText,
     semantic: null,
     execution: null,
-    semanticResolution: { invoked: typeof options?.capabilityModelInvoker === "function" },
     phaseTimeline: phaseTracker.list(),
     retryMeta,
     error,

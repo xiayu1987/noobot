@@ -51,14 +51,6 @@ function createActiveReplayFixture(overrides = {}) {
 
   const fixture = {
     activeSession,
-    activeSessionId: { value: "s-1" },
-    chatList: { value: [] },
-    appliedReconnectSequenceByTurnKey: {},
-    getReplayHydrationPromise: vi.fn(() => null),
-    setReplayHydrationPromise: vi.fn(),
-    envelopeCallbacks: {},
-    markReconnectSequenceApplied: vi.fn(),
-    scrollBottom: vi.fn(),
     ...overrides,
   };
   fixture.findCanonicalMessageById =

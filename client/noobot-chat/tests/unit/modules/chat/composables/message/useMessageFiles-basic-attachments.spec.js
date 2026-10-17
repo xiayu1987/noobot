@@ -42,8 +42,6 @@ describe("useMessageFiles basic attachments", () => {
     const { displayedAttachments } = createMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
-      getSessionDocs: () => [],
-      getUserId: () => "admin",
     });
 
     expect(displayedAttachments.value).toHaveLength(1);
@@ -72,8 +70,6 @@ describe("useMessageFiles basic attachments", () => {
     const { displayedAttachments } = createMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
-      getSessionDocs: () => [],
-      getUserId: () => "admin",
     });
 
     expect(displayedAttachments.value).toEqual([{ attachmentId: "legacy-1", name: "legacy.pdf" }]);

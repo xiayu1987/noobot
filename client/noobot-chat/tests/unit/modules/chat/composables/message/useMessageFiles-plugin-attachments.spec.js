@@ -34,8 +34,6 @@ describe("useMessageFiles plugin attachments", () => {
     const { displayedAttachments } = createMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
-      getSessionDocs: () => [],
-      getUserId: () => "admin",
     });
 
     expect(displayedAttachments.value).toHaveLength(2);
@@ -54,7 +52,7 @@ describe("useMessageFiles plugin attachments", () => {
     ).not.toHaveProperty("owner");
   });
 
-  it("keeps refreshed harness attachments as plugin-owned without duplicating agent copies", () => {
+  it("preserves plugin owner metadata carried by the message attachments", () => {
     const messageItem = {
       role: "assistant",
       sessionId: "session-1",
@@ -80,40 +78,10 @@ describe("useMessageFiles plugin attachments", () => {
         },
       ],
     };
-    const refreshedSessionDoc = {
-      sessionId: "session-1",
-      messages: [
-        {
-          role: "assistant",
-          sessionId: "session-1",
-          turnScopeId: "turn-1",
-          dialogProcessId: "dp-1",
-          content: "done",
-          attachments: [
-            {
-              attachmentId: "plan-1",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-plan-text.txt",
-              size: 1400,
-            },
-            {
-              attachmentId: "report-1",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-acceptance-report.txt",
-              size: 5600,
-            },
-          ],
-        },
-      ],
-    };
 
     const { displayedAttachments } = createMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
-      getSessionDocs: () => [refreshedSessionDoc],
-      getUserId: () => "admin",
     });
 
     expect(displayedAttachments.value).toHaveLength(2);
@@ -162,8 +130,6 @@ describe("useMessageFiles plugin attachments", () => {
     const { displayedAttachments } = createMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
-      getSessionDocs: () => [],
-      getUserId: () => "admin",
     });
 
     expect(displayedAttachments.value).toHaveLength(2);
@@ -172,132 +138,6 @@ describe("useMessageFiles plugin attachments", () => {
       attachmentId: "report-1",
       owner: { type: "plugin", id: "harness-plugin" },
     });
-  });
-
-  it("dedupes refreshed harness attachments with different ids by stable file identity and keeps plugin ownership", () => {
-    const messageItem = {
-      role: "assistant",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      dialogProcessId: "dp-1",
-      content: "done",
-      attachments: [
-        {
-          attachmentId: "plan-plugin-live",
-          sessionId: "session-1",
-          attachmentSource: "test",
-          name: "harness-plan-text.txt",
-          size: 1400,
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-        {
-          attachmentId: "report-plugin-live",
-          sessionId: "session-1",
-          attachmentSource: "test",
-          name: "harness-acceptance-report.txt",
-          size: 5600,
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-      ],
-    };
-    const refreshedSessionDoc = {
-      sessionId: "session-1",
-      messages: [
-        {
-          role: "assistant",
-          sessionId: "session-1",
-          turnScopeId: "turn-1",
-          dialogProcessId: "dp-1",
-          content: "done",
-          attachments: [
-            {
-              attachmentId: "plan-agent-refresh",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-plan-text.txt",
-              size: 1400,
-            },
-            {
-              attachmentId: "report-agent-refresh",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-acceptance-report.txt",
-              size: 5600,
-            },
-          ],
-        },
-      ],
-    };
-
-    const { displayedAttachments } = createMessageFiles({
-      getMessageItem: () => messageItem,
-      getAllMessages: () => [messageItem],
-      getSessionDocs: () => [refreshedSessionDoc],
-      getUserId: () => "admin",
-    });
-
-    expect(displayedAttachments.value).toHaveLength(2);
-    expect(displayedAttachments.value.map((item) => item.attachmentId)).toEqual([
-      "plan-plugin-live",
-      "report-plugin-live",
-    ]);
-    expect(displayedAttachments.value).toEqual([
-      expect.objectContaining({
-        name: "harness-plan-text.txt",
-        owner: expect.objectContaining({ type: "plugin" }),
-      }),
-      expect.objectContaining({
-        name: "harness-acceptance-report.txt",
-        owner: expect.objectContaining({ type: "plugin" }),
-      }),
-    ]);
-  });
-
-  it("recognizes harness plugin ownership from owner metadata", () => {
-    const messageItem = {
-      role: "assistant",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      dialogProcessId: "dp-1",
-      content: "done",
-      attachments: [
-        {
-          attachmentId: "plan-nested-owner",
-          sessionId: "session-1",
-          attachmentSource: "test",
-          name: "harness-plan-text.txt",
-          size: 1400,
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-        {
-          attachmentId: "report-nested-owner",
-          sessionId: "session-1",
-          attachmentSource: "test",
-          name: "harness-acceptance-report.txt",
-          size: 5600,
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-      ],
-    };
-
-    const { displayedAttachments } = createMessageFiles({
-      getMessageItem: () => messageItem,
-      getAllMessages: () => [messageItem],
-      getSessionDocs: () => [],
-      getUserId: () => "admin",
-    });
-
-    expect(displayedAttachments.value).toHaveLength(2);
-    expect(displayedAttachments.value).toEqual([
-      expect.objectContaining({
-        attachmentId: "plan-nested-owner",
-        owner: expect.objectContaining({ type: "plugin" }),
-      }),
-      expect.objectContaining({
-        attachmentId: "report-nested-owner",
-        owner: expect.objectContaining({ type: "plugin" }),
-      }),
-    ]);
   });
 
   it("does not infer plugin ownership from persisted harness file names without owner metadata", () => {
@@ -324,40 +164,10 @@ describe("useMessageFiles plugin attachments", () => {
         },
       ],
     };
-    const refreshedSessionDoc = {
-      sessionId: "session-1",
-      messages: [
-        {
-          role: "assistant",
-          sessionId: "session-1",
-          turnScopeId: "turn-1",
-          dialogProcessId: "dp-1",
-          content: "done",
-          attachments: [
-            {
-              attachmentId: "plan-refreshed",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-plan-text.txt",
-              size: 1400,
-            },
-            {
-              attachmentId: "report-refreshed",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-acceptance-report.txt",
-              size: 5600,
-            },
-          ],
-        },
-      ],
-    };
 
     const { displayedAttachments } = createMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
-      getSessionDocs: () => [refreshedSessionDoc],
-      getUserId: () => "admin",
     });
 
     expect(displayedAttachments.value).toHaveLength(2);
@@ -366,83 +176,6 @@ describe("useMessageFiles plugin attachments", () => {
       expect.objectContaining({ attachmentId: "report-current" }),
     ]);
     expect(displayedAttachments.value.every((item) => !Object.hasOwn(item, "owner"))).toBe(true);
-  });
-
-  it("restores persisted harness checklist attachments from owner metadata and dedupes refreshed copies", () => {
-    const messageItem = {
-      role: "assistant",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      dialogProcessId: "dp-1",
-      content: "done",
-      attachments: [
-        {
-          attachmentId: "plan-current",
-          sessionId: "session-1",
-          attachmentSource: "test",
-          name: "harness-plan-text.txt",
-          size: 1400,
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-        {
-          attachmentId: "report-current",
-          sessionId: "session-1",
-          attachmentSource: "test",
-          name: "harness-acceptance-report.txt",
-          size: 5600,
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-      ],
-    };
-    const refreshedSessionDoc = {
-      sessionId: "session-1",
-      messages: [
-        {
-          role: "assistant",
-          sessionId: "session-1",
-          turnScopeId: "turn-1",
-          dialogProcessId: "dp-1",
-          content: "done",
-          attachments: [
-            {
-              attachmentId: "plan-refreshed",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-plan-text.txt",
-              size: 1400,
-              owner: { type: "plugin", id: "harness-plugin" },
-            },
-            {
-              attachmentId: "report-refreshed",
-              sessionId: "session-1",
-              attachmentSource: "test",
-              name: "harness-acceptance-report.txt",
-              size: 5600,
-              owner: { type: "plugin", id: "harness-plugin" },
-            },
-          ],
-        },
-      ],
-    };
-
-    const { displayedAttachments } = createMessageFiles({
-      getMessageItem: () => messageItem,
-      getAllMessages: () => [messageItem],
-      getSessionDocs: () => [refreshedSessionDoc],
-      getUserId: () => "admin",
-    });
-
-    expect(displayedAttachments.value).toHaveLength(2);
-    expect(displayedAttachments.value).toEqual([
-      expect.objectContaining({
-        attachmentId: "plan-current",
-        owner: expect.objectContaining({ type: "plugin" }),
-      }),
-      expect.objectContaining({
-        attachmentId: "report-current",
-        owner: expect.objectContaining({ type: "plugin" }),
-      }),
-    ]);
   });
 
   it("does not infer plugin ownership from harness-like generationSource alone", () => {
@@ -464,8 +197,6 @@ describe("useMessageFiles plugin attachments", () => {
     const { displayedAttachments } = createMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
-      getSessionDocs: () => [],
-      getUserId: () => "admin",
     });
 
     expect(displayedAttachments.value).toHaveLength(1);

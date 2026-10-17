@@ -10,10 +10,6 @@ import { text } from "@noobot/shared/value";
 
 const WORKFLOW_EVENTS = WORKFLOW_PARAMS.workflow.events;
 
-export function resolveWorkflowMode(meta = {}) {
-  return meta?.harness?.planningGuidanceMode === "separate_model" ? "separate_model" : "inject";
-}
-
 function appendWorkflowPriorityDecision(
   ctx = {},
   {

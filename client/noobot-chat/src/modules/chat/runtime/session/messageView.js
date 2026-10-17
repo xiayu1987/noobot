@@ -8,7 +8,6 @@ import {
   buildAppendMessage,
   buildViewMessage,
   findVisibleLastMessage,
-  foldConversationMessages,
   isPluginInjectedMessage,
 } from "../../model/messageModel.js";
 import { nowIso } from "../../model/timeFields.js";
@@ -154,10 +153,6 @@ export function createSessionMessageView({
     return reactive(buildViewMessage(messageItem, { userId: userId.value, isImageMime }));
   }
 
-  function foldMessagesForView(messages = []) {
-    return foldConversationMessages(messages, makeViewMessage);
-  }
-
   function shouldRenderMessageInChat(messageItem) {
     const messageRole = getMessageRole(messageItem);
     const messageTurnScopeId = getMessageTurnScopeId(messageItem);
@@ -193,7 +188,6 @@ export function createSessionMessageView({
     materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage,
-    foldMessagesForView,
     shouldRenderMessageInChat,
   };
 }

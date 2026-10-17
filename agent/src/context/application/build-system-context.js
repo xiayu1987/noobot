@@ -118,7 +118,6 @@ export async function buildSystemContext({
         ? resolveAttachments({
             attachmentService,
             runtimeBasePath,
-            effectiveConfig,
             userMessageAttachments,
             userId: identity.userId,
             sessionId: identity.sessionId,

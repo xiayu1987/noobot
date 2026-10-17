@@ -99,7 +99,6 @@ export function buildFinalAcceptanceSemanticValidationMessages({
 } = {}) {
   const hasRequest = text(requestContent);
   return buildCapabilityProtocolModelMessages({
-    locale,
     contextMessages: [
       planContextContent,
       ...(Array.isArray(phaseReportsContents) ? phaseReportsContents : []),
@@ -261,7 +260,6 @@ export function buildPhaseAcceptanceMessages({
 } = {}) {
   const hasRequest = text(requestContent);
   return buildCapabilityProtocolModelMessages({
-    locale,
     agentMessages,
     contextMessages: [
       ...(Array.isArray(summaryReportsContents) ? summaryReportsContents : []),

@@ -21,7 +21,7 @@ import {
   resolvePluginAssetsRelativePath,
   resolvePluginDataRelativePath,
 } from "@noobot/workspace-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const assetIdPattern = WORKSPACE_PATH_SEGMENT_PATTERN;
 const assetVersionPattern = /^[a-f0-9]{64}$/;
@@ -41,7 +41,7 @@ function createWorkspaceAssetWriter({ resolveRoot }) {
     validate = null,
   } = {}) {
     const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
-    if (!source || typeof source.pipe !== "function") {
+    if (!source || !isFunction(source.pipe)) {
       throw new TypeError("workspace asset source stream is required");
     }
     const expectedBytes = Number(declaredBytes);

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 export function upsertOrderedFact({
   values = [],
   fact,
@@ -15,7 +16,7 @@ export function upsertOrderedFact({
 } = {}) {
   if (!Array.isArray(values)) throw new TypeError("upsertOrderedFact requires values array");
   if (!(index instanceof Map)) throw new TypeError("upsertOrderedFact requires index map");
-  if (typeof compare !== "function") throw new TypeError("upsertOrderedFact requires compare");
+  if (!isFunction(compare)) throw new TypeError("upsertOrderedFact requires compare");
   const existingPosition = index.get(key);
   if (Number.isInteger(existingPosition)) {
     values[existingPosition] = merge(values[existingPosition], fact);
@@ -37,7 +38,7 @@ export function upsertOrderedFact({
     else high = middle;
   }
   values.splice(low, 0, fact);
-  if (typeof recordInsertion !== "function") {
+  if (!isFunction(recordInsertion)) {
     throw new TypeError("ordered insertion requires recordInsertion");
   }
   recordInsertion(values, low);
@@ -49,10 +50,8 @@ export function selectLatestOrderedFacts(
   { limit = 0, compare, project = (fact) => fact } = {},
 ) {
   if (!Array.isArray(facts)) return [];
-  if (typeof compare !== "function")
-    throw new TypeError("selectLatestOrderedFacts requires compare");
-  if (typeof project !== "function")
-    throw new TypeError("selectLatestOrderedFacts requires project");
+  if (!isFunction(compare)) throw new TypeError("selectLatestOrderedFacts requires compare");
+  if (!isFunction(project)) throw new TypeError("selectLatestOrderedFacts requires project");
   const maximum = Math.max(0, Number(limit) || 0);
   if (!maximum) return [];
   const latest = [];

@@ -320,16 +320,3 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
     },
   };
 }
-
-export function resolveWorkflowNodeStateRepository(options = {}) {
-  const candidate = options?.workflowNodeStateRepository;
-  if (
-    candidate &&
-    typeof candidate.initialize === "function" &&
-    typeof candidate.commit === "function" &&
-    typeof candidate.getSnapshot === "function"
-  ) {
-    return candidate;
-  }
-  throw new Error("workflowNodeStateRepository is required");
-}

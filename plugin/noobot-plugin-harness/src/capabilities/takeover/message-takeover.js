@@ -157,7 +157,7 @@ function applyAgentSystemTakeover(ctx = {}, directive = {}) {
   return true;
 }
 
-export function applyMessageTakeover(_point = "", ctx = {}, takeover = {}) {
+export function applyMessageTakeover(ctx = {}, takeover = {}) {
   if (!takeover || typeof takeover !== "object") return false;
   if (takeover.enabled === false) return false;
   const target = text(takeover?.target) || "auto";

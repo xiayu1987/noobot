@@ -26,10 +26,7 @@ import {
   truncateWorkflowResultText,
 } from "../hooks/persistence.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
-import {
-  resolveWorkflowNodeStateRepository,
-  WORKFLOW_NODE_STATUS,
-} from "./node-state-repository.js";
+import { WORKFLOW_NODE_STATUS } from "./node-state-repository.js";
 import {
   commitAndPublishWorkflowNodeState,
   resolveCommittedChildTerminal,
@@ -116,7 +113,6 @@ function buildNodeAgentRunRecord({
   transitions = 0,
   parallelEnabled = false,
   waveSize = 1,
-  ctx = {},
 } = {}) {
   const refs = resolveStepItemRefs(item);
   return {
@@ -148,7 +144,6 @@ function rememberCompletedStepResult({
   item = {},
   semantic = {},
   transitions = 0,
-  ctx = {},
 } = {}) {
   const refs = resolveStepItemRefs(item);
   if (!refs.stepId) return;
@@ -408,7 +403,7 @@ export async function runWorkflowExecution({
     resolveWorkflowExecutionLimits(options);
   const nodeAgentRuns = [];
   const completedStepResults = new Map();
-  const nodeStateRepository = resolveWorkflowNodeStateRepository(options);
+  const nodeStateRepository = options.workflowNodeStateRepository;
   const nodeState = {
     repository: nodeStateRepository,
     snapshot: await nodeStateRepository.initialize({
@@ -474,7 +469,6 @@ export async function runWorkflowExecution({
             transitions,
             parallelEnabled,
             waveSize,
-            ctx,
           }),
         );
         rememberCompletedStepResult({
@@ -482,14 +476,12 @@ export async function runWorkflowExecution({
           item: recordItem,
           semantic,
           transitions,
-          ctx,
         });
       }
     }
     throwIfWorkflowAborted(ctx);
     const execution = {
       started: true,
-      instanceId,
       autoTransitions: transitions,
       completed: snapshot?.completed === true,
       pendingStepCount: Number(snapshot?.pendingStepCount || 0),

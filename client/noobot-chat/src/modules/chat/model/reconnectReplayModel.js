@@ -199,11 +199,7 @@ function patchNonTurnMessageMetadata(targetMessage = {}, sourceMessage = {}) {
   }
 }
 
-function patchMessageObjectPreservingUiState(
-  targetMessage = {},
-  sourceMessage = {},
-  turnStatus = null,
-) {
+function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage = {}) {
   const sourceRole = getMessageRole(sourceMessage);
   const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
 

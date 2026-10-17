@@ -27,7 +27,7 @@ import {
   createDeclaredFrontendComponentLoader,
   validateDeclaredFrontendComponentLoaders,
 } from "@noobot/plugin-runtime/contributions";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 let activeScope = null;
 let lifecycleOperation = Promise.resolve();
@@ -54,7 +54,7 @@ function loadedFrontendEntries() {
       async activate(host, config) {
         const pluginModule =
           typeof item?.loadModule === "function" ? await item.loadModule() : item?.module;
-        if (typeof pluginModule?.activate !== "function") {
+        if (!isFunction(pluginModule?.activate)) {
           throw new Error(
             `[frontend-plugin] ${String(item?.name || pluginId).trim()} must export activate`,
           );

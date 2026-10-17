@@ -32,7 +32,6 @@ export function buildSessionDetailProjection({
     detailMessages: messages,
     sessionDocs,
     rootSessionId: sessionId,
-    turnTimings,
     makeViewMessage,
   });
 

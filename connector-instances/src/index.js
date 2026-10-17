@@ -7,12 +7,13 @@ export * from "./definitions.js";
 export { BUILTIN_CONNECTOR_INSTANCES } from "./implementations.js";
 
 import { BUILTIN_CONNECTOR_INSTANCES } from "./implementations.js";
+import { isFunction } from "@noobot/shared/value";
 
 export function registerBuiltinConnectorInstances(
   runtime,
   instances = BUILTIN_CONNECTOR_INSTANCES,
 ) {
-  if (!runtime || typeof runtime.register !== "function") {
+  if (!runtime || !isFunction(runtime.register)) {
     throw new TypeError("connector runtime is required");
   }
   return instances.map((implementation) => runtime.register(implementation));

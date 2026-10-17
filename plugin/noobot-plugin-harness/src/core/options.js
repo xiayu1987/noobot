@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveCapabilityProfile } from "../capabilities/profile.js";
-import { HARNESS_LIMITS } from "./constants.js";
+import { HARNESS_LIMITS, HARNESS_PLANNING_GUIDANCE_MODE } from "./constants.js";
 import { WORKFLOW_PARAMS } from "./workflow-params.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { z } from "zod";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isFunction, isPlainObject, text } from "@noobot/shared/value";
 
 export function resolveHarnessDenyToolNames(input = null) {
   if (!Array.isArray(input)) return [];
@@ -33,7 +33,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   timeoutMs: TIME_THRESHOLDS.harness.hookTimeoutMs,
   capabilityModelTimeoutMs: TIME_THRESHOLDS.harness.capabilityModelTimeoutMs,
   maxPreviewChars: LENGTH_THRESHOLDS.display.harnessPreviewChars,
-  planningGuidanceMode: "separate_model",
+  planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL,
   summaryOnToolBurstThreshold: false,
   summaryDetailSaveToAttachment: false,
   clipNonMainModelContextMessages: false,
@@ -84,7 +84,9 @@ const HarnessOptionsSchema = z
       .number()
       .positive()
       .default(DEFAULT_OPTIONS.capabilityModelTimeoutMs),
-    planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
+    planningGuidanceMode: z
+      .enum(Object.values(HARNESS_PLANNING_GUIDANCE_MODE))
+      .default(DEFAULT_OPTIONS.planningGuidanceMode),
     planRefinementEnabled: z.boolean().optional(),
     enablePlanRefinement: z.boolean().optional(),
     summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
@@ -97,7 +99,7 @@ const HarnessOptionsSchema = z
       .boolean()
       .default(DEFAULT_OPTIONS.clipNonMainModelContextMessages),
     clipNonMainModelContext: z.boolean().optional(),
-    capabilityModelInvoker: z.any().optional(),
+    capabilityModelInvoker: z.custom(isFunction).nullable().default(null),
     capabilityModelByPurpose: z.record(z.any()).default({}),
     stepModels: z.record(z.any()).default({}),
     guidance: z.record(z.any()).optional(),
@@ -198,6 +200,15 @@ function resolveExplicitPlanRefinementEnabledOption(source = {}) {
   return undefined;
 }
 
+export function assertHarnessAgentHostCapabilities(options) {
+  if (
+    options.planningGuidanceMode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL &&
+    !options.capabilityModelInvoker
+  ) {
+    throw new TypeError("harness separate_model mode requires capabilityModelInvoker");
+  }
+}
+
 export function normalizeOptions(userOptions = {}, api = {}) {
   const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
   const planRefinementEnabled = resolveExplicitPlanRefinementEnabledOption(merged);
@@ -210,8 +221,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       typeof api.options.harness === "object" &&
       api.options.harness.jsonlFlushStrategy &&
       typeof api.options.harness.jsonlFlushStrategy === "object");
-  const parsed = HarnessOptionsSchema.safeParse(merged);
-  const safe = parsed.success ? parsed.data : DEFAULT_OPTIONS;
+  const safe = HarnessOptionsSchema.parse(merged);
   if (
     safe.capabilityModelTimeoutMs + TIME_THRESHOLDS.harness.capabilityModelHookGraceMs >
     safe.timeoutMs
@@ -239,10 +249,6 @@ export function normalizeOptions(userOptions = {}, api = {}) {
   const normalizedOptions = {
     ...merged,
     ...safe,
-    planningGuidanceMode:
-      text(safe.planningGuidanceMode) ||
-      DEFAULT_OPTIONS.planningGuidanceMode ||
-      DEFAULT_OPTIONS.planningGuidanceMode,
     summaryOnToolBurstThreshold:
       safe.enableToolBurstSummary === true || safe.summaryOnToolBurstThreshold === true,
     summaryDetailSaveToAttachment:
@@ -252,8 +258,6 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     clipNonMainModelContextMessages:
       safe.clipNonMainModelContextMessages === true || safe.clipNonMainModelContext === true,
     planRefinementEnabled,
-    capabilityModelInvoker:
-      typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,
     capabilityModelByPurpose,
     stepModels: capabilityModelByPurpose,
     guidance:

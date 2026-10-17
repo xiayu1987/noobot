@@ -5,6 +5,7 @@
  */
 import { createSessionPluginRuntimeBundle } from "#agent/plugin";
 import { assertConnectorAccessPort } from "@noobot/connector-protocol";
+import { isFunction } from "@noobot/shared/value";
 
 export function createRuntimeConfigService({
   startupContext = {},
@@ -15,12 +16,11 @@ export function createRuntimeConfigService({
   setGlobalConfigRaw,
   setGlobalConfig,
   setBot,
-  workspaceRootPath,
   connectorAccessPort,
 } = {}) {
   const connectorPort = assertConnectorAccessPort(connectorAccessPort);
   async function rebuildRuntimeConfig() {
-    if (!globalConfigBuilder || typeof globalConfigBuilder.build !== "function") {
+    if (!globalConfigBuilder || !isFunction(globalConfigBuilder.build)) {
       throw new Error("[runtime-config-service] globalConfigBuilder.build is required");
     }
     const paramsPayload = await readWorkspaceConfigParams({ createIfMissing: true });

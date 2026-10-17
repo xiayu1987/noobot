@@ -75,7 +75,6 @@ export function useChatList({
     userId,
     authFetch,
     getSessionDetailApi,
-    applySessionDetail,
     isSameSessionIdentity,
     translate,
   });
@@ -112,12 +111,9 @@ export function useChatList({
   }
 
   function initSessionsAfterMount(options = {}) {
-    if (connected.value) {
-      return fetchSessions("", options);
-    } else {
-      createLocalSession();
-      return Promise.resolve(true);
-    }
+    if (connected.value) return fetchSessions("", options);
+    createLocalSession();
+    return Promise.resolve(true);
   }
 
   return {

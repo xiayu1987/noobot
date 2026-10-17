@@ -5,38 +5,14 @@
  */
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
-import { projectWorkflowMessageIdentity } from "../composables/useWorkflowMeta.js";
 import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
 import { createStepStatusResolver } from "../runtime/workflowRuntimeStatus.js";
 
 describe("workflow runtime identity projection", () => {
-  it("restores a missing persisted workflowRunId from the outer Turn envelope", () => {
-    const payload = projectWorkflowMessageIdentity(
-      {
-        execution: { completed: true },
-        nodeSessions: [{ sessionId: "child-session" }],
-      },
-      {
-        sessionId: "root-session",
-        dialogProcessId: "root-dialog",
-        turnScopeId: "client-turn:main",
-      },
-    );
-
-    expect(payload).toMatchObject({
-      workflowRunId: "client-turn:main",
-      execution: {
-        workflowRunId: "client-turn:main",
-        instanceId: "client-turn:main",
-      },
-      planningDialog: { sessionId: "root-session", dialogProcessId: "root-dialog" },
-    });
-  });
-
   it("merges a committed node fact into a sparse final node by dialog identity", () => {
     const workflowPayload = ref({
       workflowRunId: "client-turn:main",
-      planningDialog: { sessionId: "root-session" },
+      runMeta: { sessionId: "root-session" },
     });
     const runtimeNodeSessions = createRuntimeNodeSessions({
       workflowPayload,
@@ -49,7 +25,7 @@ describe("workflow runtime identity projection", () => {
         },
       ]),
       executionMeta: ref({ nodeAgentRuns: [] }),
-      workflowNodeStateRegistry: ref({
+      workflowNodeStateRegistry: {
         workflows: {
           "client-turn:main": {
             nodes: {
@@ -68,7 +44,7 @@ describe("workflow runtime identity projection", () => {
             },
           },
         },
-      }),
+      },
     });
 
     expect(runtimeNodeSessions.value).toHaveLength(1);
@@ -92,7 +68,7 @@ describe("workflow runtime identity projection", () => {
         },
       ]),
       executionMeta: ref({ nodeAgentRuns: [] }),
-      workflowNodeStateRegistry: ref({ workflows: {} }),
+      workflowNodeStateRegistry: { workflows: {} },
     });
 
     expect(runtimeNodeSessions.value[0]).toMatchObject({

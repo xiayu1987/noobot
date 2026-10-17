@@ -16,7 +16,7 @@ class FlowtoBox {
   getFlowto() {
     return this.flowto;
   }
-  canFlow(bizinst) {
+  canFlow() {
     return true;
   }
   createFlowtoState(bizinstModel) {

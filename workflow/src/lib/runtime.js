@@ -12,7 +12,7 @@ import BackAction from "../engine/bizinst/action/back-action.js";
 import StopAction from "../engine/bizinst/action/stop-action.js";
 import { compileWorkflowSemantic } from "./compiler.js";
 import { randomUUID } from "node:crypto";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 const WORKFLOW_INSTANCE_STORE = new Map();
 let WORKFLOW_RUNTIME_ID_COUNTER = 0;
 
@@ -287,7 +287,7 @@ function isRuntimeActionNodeState(nodeState = null) {
 }
 
 function isRuntimeStateNodeState(nodeState = null) {
-  return typeof nodeState?.getNode?.()?.getStateType === "function";
+  return isFunction(nodeState?.getNode?.()?.getStateType);
 }
 
 function collectIncomingStartNodeStates(nodeState = null) {

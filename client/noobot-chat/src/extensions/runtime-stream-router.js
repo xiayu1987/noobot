@@ -11,6 +11,7 @@ import {
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import { logPluginRuntimeDiagnostics } from "../modules/debug/loggers/pluginRuntimeDiagnosticsLogger.js";
+import { isFunction } from "@noobot/shared/value";
 
 function executeRuntimeRoutes(
   routes,
@@ -20,7 +21,7 @@ function executeRuntimeRoutes(
   buildDiagnostics,
   logDiagnostics,
 ) {
-  for (const route of routes.filter((item) => typeof item === "function")) {
+  for (const route of routes.filter((item) => isFunction(item))) {
     try {
       if (route({ envelope, descriptor, context }) === true) return true;
     } catch (error) {
@@ -69,7 +70,7 @@ export function routeRuntimeStreamEvent(envelope = {}, context = {}) {
       ...buildProjectionDiagnostics(envelope, context),
       registeredContributionIds: registered.map((item) => item.id),
       matchedContributionIds: matched.map((item) => item.id),
-      projectorCount: routes.filter((route) => typeof route === "function").length,
+      projectorCount: routes.filter((route) => isFunction(route)).length,
     },
   );
   return executeRuntimeRoutes(

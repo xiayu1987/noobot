@@ -465,10 +465,6 @@ test("current config migration removes every retired config path and prunes empt
   assert.notEqual(migrated, config);
   assert.equal(config.configParams.API_KEY, "legacy");
   assert.deepEqual(migrated, {
-    attachments: {
-      limits: { max_file_size_bytes: 1024 },
-      storage: { root: "runtime/attachments" },
-    },
     multimodal: {
       parsing: { default_models: { image: "vision" } },
     },
@@ -482,16 +478,12 @@ test("current config migration removes every retired config path and prunes empt
     },
   });
   assert.deepEqual(migrateConfigFileToCurrentProtocol(migrated), migrated);
-  assert.deepEqual(migrated.attachments.limits, { max_file_size_bytes: 1024 });
+  assert.equal(Object.hasOwn(migrated, "attachments"), false);
 });
 
 test("current config migration preserves active tool and runtime configuration", () => {
   const config = {
     runTimeoutMs: 120000,
-    attachments: {
-      maxFileCount: 5,
-      allowedExtensions: [".pdf"],
-    },
     tools: {
       help: {
         enabled: true,

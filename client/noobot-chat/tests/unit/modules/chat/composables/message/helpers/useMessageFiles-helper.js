@@ -8,8 +8,6 @@ import { useMessageFiles } from "../../../../../../../src/modules/chat/composabl
 export function createMessageFiles(options) {
   return useMessageFiles({
     getAllMessages: () => [],
-    getSessionDocs: () => [],
-    getUserId: () => "admin",
     ...options,
   });
 }

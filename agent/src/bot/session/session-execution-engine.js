@@ -15,7 +15,6 @@ import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
-import { ScopedArtifactPersistenceHelpers } from "./scoped-artifact-persistence-helpers.js";
 import {
   createDefaultRunConfigPluginPreparer,
   createRunConfigPluginPreparerFromRuntimeBundle,
@@ -93,12 +92,6 @@ export class SessionExecutionEngine {
     this.modelMessageRuntimeHelpers = new ModelMessageRuntimeHelpers({
       session: this.session,
     });
-    this.scopedArtifactPersistenceHelpers = new ScopedArtifactPersistenceHelpers({
-      session: this.session,
-      attach: this.attach,
-      workspaceService: this.workspaceService,
-      now: () => this._now(),
-    });
     this.runConfigPluginPreparer = this._createRunConfigPluginPreparer();
   }
 
@@ -139,16 +132,11 @@ export class SessionExecutionEngine {
       : createDefaultRunConfigPluginPreparer;
     return factory({
       loadedPlugins: this.pluginRuntimeBundle?.loadedPlugins,
-      pluginRuntime: this.pluginRuntimeBundle?.pluginRuntime,
       globalConfig: this.globalConfig,
       workspaceService: this.workspaceService,
-      normalizeStringArray: (input) => this._normalizeStringArray(input),
       createPluginResolveModelMessages: (payload = {}) =>
         this._createPluginResolveModelMessages(payload),
       createDetachedSubSessionRunner: () => this._createDetachedSubSessionRunner(),
-      createGeneratedArtifactPersister: () => this._createGeneratedArtifactPersister(),
-      createScopedJsonWriter: () => this._createScopedJsonWriter(),
-      createScopedEventLogger: () => this._createScopedEventLogger(),
     });
   }
 
@@ -254,10 +242,6 @@ export class SessionExecutionEngine {
     });
   }
 
-  _normalizeStringArray(input = []) {
-    return this.runConfigResolver.normalizeStringArray(input);
-  }
-
   _normalizeToolItems(input = []) {
     return this.runConfigResolver.normalizeToolItems(input);
   }
@@ -271,10 +255,6 @@ export class SessionExecutionEngine {
 
   _resolveMemorySummaryTimeoutMs(userConfig = {}) {
     return this.memoryPostProcessService.resolveMemorySummaryTimeoutMs(userConfig);
-  }
-
-  _resolveMemorySummaryAsyncEnabled(userConfig = {}) {
-    return this.memoryPostProcessService.resolveMemorySummaryAsyncEnabled(userConfig);
   }
 
   _resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
@@ -357,26 +337,6 @@ export class SessionExecutionEngine {
       runConfigPatch,
       disabledPlugins,
     });
-  }
-
-  _resolveScopedOutputDir(payload = {}) {
-    return this.scopedArtifactPersistenceHelpers.resolveScopedDir(payload);
-  }
-
-  _resolveScopedFileTarget(payload = {}) {
-    return this.scopedArtifactPersistenceHelpers.resolveScopedFileTarget(payload);
-  }
-
-  _createScopedJsonWriter() {
-    return this.scopedArtifactPersistenceHelpers.createScopedJsonWriter();
-  }
-
-  _createScopedEventLogger() {
-    return this.scopedArtifactPersistenceHelpers.createScopedEventLogger();
-  }
-
-  _createGeneratedArtifactPersister() {
-    return this.scopedArtifactPersistenceHelpers.createGeneratedArtifactPersister();
   }
 
   _createDetachedSubSessionRunner() {

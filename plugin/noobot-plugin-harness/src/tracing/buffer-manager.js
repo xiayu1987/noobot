@@ -209,7 +209,7 @@ async function updateManifest(
   );
 }
 
-export async function injectPrompt(point, ctx, options, plugin = {}) {
+export async function injectPrompt(point, ctx, options) {
   if (!options.enabled || !options.promptPolicy) return;
   if (
     point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
@@ -296,13 +296,7 @@ export async function traceHook(point, ctx, options, plugin = {}) {
   if (!paths) return;
   await ensureRunDir(paths);
   const fsm = await advanceFsmState(point, ctx, paths, options);
-  const event = buildTraceEvent({
-    point,
-    ctx,
-    options,
-    pluginName: plugin.name,
-    pluginVersion: plugin.version,
-  });
+  const event = buildTraceEvent({ point, ctx, options });
   const flushReason = resolveFlushReasonByPoint(point);
 
   await appendJsonlBuffered(

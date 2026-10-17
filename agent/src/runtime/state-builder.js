@@ -3,28 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig } from "../config/index.js";
-import { emitEvent } from "../events/index.js";
-import {
-  buildContextMessages,
-  buildContextMessageBlocks,
-} from "../context/assembly/message-builder.js";
+import { BUILTIN_THRESHOLDS } from "../config/index.js";
+import { buildContextMessageBlocks } from "../context/assembly/message-builder.js";
 import {
   getAgentContextEnvelope,
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
   getToolsFromAgentContext,
 } from "../context/agent-context-accessor.js";
-import { DEFAULT_MAX_TOOL_LOOP_TURNS } from "./constants/index.js";
 import {
   normalizeSystemRuntimeCounters,
   resolveEffectiveModelSpec,
-  resolveHelpPromptLoopTurns,
-  resolveMaxToolLoopTurns,
-  resolvePhaseSummaryMessageCharsThreshold,
   resolvePhaseSummaryLoopTurns,
   resolveTaskCheckLoopTurns,
-  resolveToolFailureHelpCount,
 } from "./run-config/index.js";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
@@ -44,18 +35,15 @@ function trimmedText(value) {
   return text(value);
 }
 
-function resolveLoopConfig(resolvers, sys, effectiveConfig, runConfig) {
+function resolveLoopConfig(resolvers, runConfig) {
   return {
-    maxToolLoopTurns: resolvers.resolveMaxToolLoopTurnsFn({
-      systemRuntime: sys,
-      effectiveConfig,
-    }),
+    maxToolLoopTurns: BUILTIN_THRESHOLDS.maxToolLoopTurns,
     phaseSummaryLoopTurns: resolvers.resolvePhaseSummaryLoopTurnsFn({ runConfig }),
     taskCheckLoopTurns: resolvers.resolveTaskCheckLoopTurnsFn({ runConfig }),
     phaseSummaryMessageCharsThreshold:
-      resolvers.resolvePhaseSummaryMessageCharsThresholdFn(effectiveConfig),
-    helpPromptLoopTurns: resolvers.resolveHelpPromptLoopTurnsFn(effectiveConfig),
-    toolFailureHelpCount: resolvers.resolveToolFailureHelpCountFn(effectiveConfig),
+      BUILTIN_THRESHOLDS.taskSummary.phaseSummaryMessageCharsThreshold,
+    helpPromptLoopTurns: BUILTIN_THRESHOLDS.help.helpPromptLoopTurns,
+    toolFailureHelpCount: BUILTIN_THRESHOLDS.help.toolFailureHelpCount,
   };
 }
 
@@ -134,7 +122,6 @@ function applySelectedModel(modelState, agentContext, selectedModelSpec) {
 
 function createAgentModelContext({
   runtime,
-  context,
   eventListener,
   messages,
   messageBlocks,
@@ -187,7 +174,6 @@ function buildLoopState({
   loopConfig,
   errorLogger,
 }) {
-  const { maxToolLoopTurns } = loopConfig;
   return {
     tools,
     modelContext,
@@ -197,10 +183,7 @@ function buildLoopState({
     currentTurnMessages: runtime.currentTurnMessages || null,
     currentTurnTasks: runtime.currentTurnTasks || null,
     dialogProcessId: activeTurnIdentity.dialogProcessId,
-    maxTurns:
-      Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
-        ? maxToolLoopTurns
-        : DEFAULT_MAX_TOOL_LOOP_TURNS,
+    maxTurns: loopConfig.maxToolLoopTurns,
     phaseSummaryLoopTurns: loopConfig.phaseSummaryLoopTurns,
     taskCheckLoopTurns: loopConfig.taskCheckLoopTurns,
     phaseSummaryMessageCharsThreshold: loopConfig.phaseSummaryMessageCharsThreshold,
@@ -233,9 +216,7 @@ function emitAgentStateDiagnostics({
   context,
   eventListener,
   currentUserMessage,
-  activeTurnIdentity,
   modelContext,
-  identity,
 }) {
   const sourceMessageUid = trimmedText(currentUserMessage?.messageUid);
   const userMetaId = `${sourceMessageUid}::user_meta`;
@@ -269,47 +250,28 @@ function emitAgentStateDiagnostics({
 }
 
 export function createStateBuilder({
-  mergeConfigFn = mergeConfig,
-  emitEventFn = emitEvent,
-  buildContextMessagesFn = buildContextMessages,
   buildContextMessageBlocksFn = buildContextMessageBlocks,
   normalizeSystemRuntimeCountersFn = normalizeSystemRuntimeCounters,
   resolveEffectiveModelSpecFn = resolveEffectiveModelSpec,
-  resolveMaxToolLoopTurnsFn = resolveMaxToolLoopTurns,
   resolvePhaseSummaryLoopTurnsFn = resolvePhaseSummaryLoopTurns,
   resolveTaskCheckLoopTurnsFn = resolveTaskCheckLoopTurns,
-  resolvePhaseSummaryMessageCharsThresholdFn = resolvePhaseSummaryMessageCharsThreshold,
-  resolveHelpPromptLoopTurnsFn = resolveHelpPromptLoopTurns,
-  resolveToolFailureHelpCountFn = resolveToolFailureHelpCount,
 } = {}) {
   const loopResolvers = {
-    resolveMaxToolLoopTurnsFn,
     resolvePhaseSummaryLoopTurnsFn,
     resolveTaskCheckLoopTurnsFn,
-    resolvePhaseSummaryMessageCharsThresholdFn,
-    resolveHelpPromptLoopTurnsFn,
-    resolveToolFailureHelpCountFn,
   };
   return function buildAgentState({ agentContext, currentUserMessage, errorLogger }) {
     const runtime = getRuntimeFromAgentContext(agentContext);
     const context = getAgentContextEnvelope(agentContext);
     const sys = getSystemRuntimeFromRuntime(runtime);
-    const effectiveConfig = mergeConfigFn(runtime.globalConfig || {}, runtime.userConfig || {});
     const eventListener = runtime.eventListener || null;
     const tools = getToolsFromAgentContext(agentContext);
 
     normalizeSystemRuntimeCountersFn(sys, currentUserMessage.content);
-    const loopConfig = resolveLoopConfig(
-      loopResolvers,
-      sys,
-      effectiveConfig,
-      runtime.runConfig || {},
-    );
+    const loopConfig = resolveLoopConfig(loopResolvers, runtime.runConfig || {});
 
     const messageBlocks = buildContextMessageBlocksFn(agentContext, { currentUserMessage });
-    const messages = Array.isArray(messageBlocks?.messages)
-      ? messageBlocks.messages
-      : buildContextMessagesFn(agentContext, { currentUserMessage });
+    const messages = messageBlocks.messages;
 
     const { activeTurnIdentity, contextIdentity } = resolveActiveTurnIdentity(
       currentUserMessage,
@@ -328,7 +290,6 @@ export function createStateBuilder({
 
     const modelContext = createAgentModelContext({
       runtime,
-      context,
       eventListener,
       messages,
       messageBlocks,
@@ -343,21 +304,13 @@ export function createStateBuilder({
       loopConfig,
       errorLogger,
     });
-    const identity = recordModelContextOnRuntime(
-      runtime,
-      context,
-      sys,
-      activeTurnIdentity,
-      modelContext,
-    );
+    recordModelContextOnRuntime(runtime, context, sys, activeTurnIdentity, modelContext);
     emitAgentStateDiagnostics({
       runtime,
       context,
       eventListener,
       currentUserMessage,
-      activeTurnIdentity,
       modelContext,
-      identity,
     });
 
     return { modelState, loopState };

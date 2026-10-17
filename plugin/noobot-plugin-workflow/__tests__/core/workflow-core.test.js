@@ -11,9 +11,11 @@ import path from "node:path";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import { normalizeOptions } from "../../src/core/options.js";
-import { createWorkflowRegistration } from "../../src/core/plugin.js";
-import { createRegisterWorkflowHooks } from "../../src/core/orchestrator.js";
-import { PLUGIN_NAME, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
+import {
+  registerWorkflowAgentHooks,
+  registerWorkflowServiceHooks,
+} from "../../src/core/orchestrator.js";
+import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import { installTurnMessageEventRuntimeFixture } from "../helpers/workflow-hook-session-strategy-helper.js";
@@ -64,33 +66,14 @@ function createMockBotHookManager() {
   };
 }
 
-test("normalizeOptions keeps injected strategy functions", () => {
-  const subSessionRunner = async () => null;
-  const workflowDialogPersister = async () => null;
+test("normalizeOptions does not carry host capabilities", () => {
   const options = normalizeOptions({
     enabled: true,
     mode: "on",
-    subSessionRunner,
-    workflowDialogPersister,
+    subSessionRunner: async () => null,
   });
-  assert.equal(options.enabled, true);
   assert.equal(options.mode, "on");
-  assert.equal(options.subSessionRunner, subSessionRunner);
-  assert.equal(options.workflowDialogPersister, workflowDialogPersister);
-});
-
-test("normalizeOptions keeps workflow extension hooks", () => {
-  const workflowExtensionMounter = () => undefined;
-  const extensionA = () => undefined;
-  const extensionB = () => undefined;
-  const options = normalizeOptions({
-    enabled: true,
-    mode: "on",
-    workflowExtensionMounter,
-    workflowExtensions: [extensionA, null, "x", extensionB],
-  });
-  assert.equal(options.workflowExtensionMounter, workflowExtensionMounter);
-  assert.deepEqual(options.workflowExtensions, [extensionA, extensionB]);
+  assert.equal(Object.hasOwn(options, "subSessionRunner"), false);
 });
 
 test("normalizeOptions applies workflow execution defaults", () => {
@@ -339,51 +322,50 @@ test("parseWorkflowDslText injects locale-aware default start/end names", () => 
   assert.equal(end?.name, "End");
 });
 
-test("createWorkflowRegistration returns empty disposers when workflow disabled", () => {
-  const registerWorkflowCore = createWorkflowRegistration({
-    createPluginRuntimeContext: () => ({
-      options: { enabled: false, mode: "off" },
-      hookManager: { on() {} },
-    }),
-  });
-  const result = registerWorkflowCore({}, {});
-  assert.equal(result?.name, PLUGIN_NAME);
-  assert.deepEqual(result?.disposers || [], []);
+const hostCapabilities = Object.freeze({
+  resolveModelMessages: () => [],
+  capabilityModelInvoker: async () => ({ output: { text: "" } }),
+  subSessionRunner: async () => ({}),
 });
 
-test("createWorkflowRegistration declares denyToolNames through policy.patch", () => {
-  const registerWorkflowCore = createWorkflowRegistration({
-    createPluginRuntimeContext: () => ({
-      options: {
-        enabled: true,
-        mode: "on",
-        denyToolNames: ["help"],
-      },
-      hookManager: createMockBotHookManager(),
-    }),
-    assertHookManager: () => {},
-    registerWorkflowHooks: () => [],
+test("registerWorkflowAgentHooks registers nothing when workflow is off", () => {
+  const hookManager = createMockBotHookManager();
+  const patches = [];
+  const disposers = registerWorkflowAgentHooks({
+    hookManager,
+    policy: { patch: (policy) => patches.push(policy) },
+    config: { enabled: true, mode: "off", denyToolNames: ["help"] },
   });
-  const calls = [];
-  const result = registerWorkflowCore({
-    policy: {
-      patch: (policy = {}) => calls.push(policy),
-    },
-  });
+  assert.deepEqual(disposers, []);
+  assert.deepEqual(patches, []);
+  assert.equal(hookManager.listeners.size, 0);
+});
 
-  assert.equal(result?.name, PLUGIN_NAME);
-  assert.deepEqual(calls, [{ denyToolNames: ["help"] }]);
+test("registerWorkflowAgentHooks declares denyToolNames through policy.patch", () => {
+  const patches = [];
+  registerWorkflowAgentHooks({
+    hookManager: createMockBotHookManager(),
+    policy: { patch: (policy) => patches.push(policy) },
+    config: { enabled: true, mode: "on", denyToolNames: ["help"], ...hostCapabilities },
+  });
+  assert.deepEqual(patches, [{ denyToolNames: ["help"] }]);
+});
+
+test("registerWorkflowAgentHooks requires every agent host capability", () => {
+  for (const name of Object.keys(hostCapabilities)) {
+    const config = { enabled: true, mode: "on", ...hostCapabilities, [name]: undefined };
+    assert.throws(
+      () => registerWorkflowAgentHooks({ hookManager: createMockBotHookManager(), config }),
+      new RegExp(`requires host capability: ${name}`),
+    );
+  }
 });
 
 test("workflow hook skips when source text is empty", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
-      enabled: true,
-      mode: "on",
-    },
+    config: { enabled: true, mode: "on", ...hostCapabilities },
   });
   const listener = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
@@ -402,13 +384,12 @@ test("workflow hook skips when source text is empty", async () => {
 
 test("workflow hook owns the turn and never falls back to main agent when semantic resolution fails", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
-      resolveModelMessages: () => [],
+      ...hostCapabilities,
       capabilityModelInvoker: async () => {
         throw new Error("semantic explode");
       },
@@ -441,11 +422,10 @@ test("workflow hook owns the turn and never falls back to main agent when semant
 
 test("workflow hook in before_agent_dispatch mode can request skipping main agent dispatch", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   let childRunPayload = null;
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       resolveModelMessages: () => [],
@@ -514,14 +494,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
 
 test("workflow plugin cleans workflow runtime dirs when session is deleted", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
-  registerWorkflowHooks({
-    hookManager,
-    options: {
-      enabled: true,
-      mode: "on",
-    },
-  });
+  registerWorkflowServiceHooks({ hookManager, config: { enabled: true, mode: "on" } });
   const cleanupHook = hookManager.listeners.get(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE);
   assert.ok(cleanupHook?.handler);
 

@@ -44,11 +44,7 @@ function resolveConfigRunTimeoutMs(config = {}) {
   });
 }
 
-export async function resolveEffectiveRunTimeoutMs({
-  bot: _bot,
-  userId: _userId = "",
-  runConfig = {},
-} = {}) {
+export async function resolveEffectiveRunTimeoutMs({ runConfig = {} } = {}) {
   const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
   if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
     return resolveRunTimeoutMs(runConfigTimeoutMs);

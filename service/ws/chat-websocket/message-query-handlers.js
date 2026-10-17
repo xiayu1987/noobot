@@ -12,7 +12,7 @@ import {
 } from "@noobot/session-protocol/execution-lifecycle";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
 import { findPendingInteraction } from "./pending-interaction-registry.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const EXECUTION_QUERY_READERS = Object.freeze({
   [EXECUTION_QUERY_COMMAND.SNAPSHOT_GET]: Object.freeze({
@@ -113,7 +113,7 @@ export function createMessageQueryHandlers({
     }
     const bot = resolveBot();
     const reader = bot?.[readerSpec.method];
-    if (typeof reader !== "function") {
+    if (!isFunction(reader)) {
       sendFailedCommandReceipt(sendEvent, command, { code: "execution_query_unavailable" });
       return;
     }

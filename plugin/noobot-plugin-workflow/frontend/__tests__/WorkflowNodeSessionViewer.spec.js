@@ -160,7 +160,7 @@ function mountViewer({
           props: viewerProps,
           emit: vi.fn(),
           translate: (key) => key,
-          workflowPayload: ref({ planningDialog: { sessionId: "root-session" } }),
+          workflowPayload: ref({ runMeta: { sessionId: "root-session" } }),
           flowNodes,
           runtimeNodeSessions: ref(runtimeNodes),
           applyWorkflowRuntimeEvent,

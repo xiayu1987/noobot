@@ -129,23 +129,11 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
   return appliedCount;
 }
 
-export function buildReconnectReplayEnvelopeCallbacks({
-  onInteractionRequest,
-  onAttachments,
-} = {}) {
-  return {
-    onInteractionRequest: (eventData) => onInteractionRequest?.(eventData),
-    onAttachments: (targetMessage, attachments = []) => onAttachments?.(targetMessage, attachments),
-  };
-}
-
 export async function applyReconnectReplayBatchToActiveSession({
   activeSession,
-  activeSessionId,
   findCanonicalMessageById,
   findCanonicalMessagesById,
   materializeTurnPresentation,
-  chatList,
   messages = [],
   dialogProcessId = "",
   turnScopeId = "",

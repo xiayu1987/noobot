@@ -202,11 +202,9 @@ function pickPluginPayloadSnapshot(payload = {}) {
   if (semantic) picked.semantic = semantic;
   if (isPlainObject(payload?.execution)) {
     const execution =
-      pickPlainFields(
-        payload.execution,
-        ["workflowRunId", "instanceId", "completed", "status", "startedAt", "endedAt", "error"],
-        { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
-      ) || {};
+      pickPlainFields(payload.execution, ["completed", "status", "startedAt", "endedAt", "error"], {
+        maxStringLength: SUMMARY_OBJECT_FIELD_CHARS,
+      }) || {};
     const runs = (
       Array.isArray(payload.execution?.nodeAgentRuns) ? payload.execution.nodeAgentRuns : []
     )
@@ -221,12 +219,6 @@ function pickPluginPayloadSnapshot(payload = {}) {
     .map((item) => pickPayloadNodeSession(item))
     .filter(Boolean);
   if (nodeSessions.length) picked.nodeSessions = nodeSessions;
-  const planningDialog = pickPlainFields(
-    payload?.planningDialog,
-    ["sessionId", "dialogProcessId", "dialogId", "parentSessionId"],
-    { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
-  );
-  if (planningDialog) picked.planningDialog = planningDialog;
   const runMeta = pickPlainFields(
     payload?.runMeta,
     ["sessionId", "dialogProcessId", "dialogId", "parentSessionId", "runId"],

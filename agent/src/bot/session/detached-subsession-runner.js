@@ -26,7 +26,7 @@ import {
 } from "./detached-subsession-events.js";
 import { createExecutionFailure } from "../../shared/errors/index.js";
 import { transferCanonicalAttachmentsToSubSession } from "./detached-subsession-attachments.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
 
@@ -108,10 +108,10 @@ async function runDetachedSubSession(dependencies, request) {
 }
 
 function assertDetachedRunnerDependencies({ sessionRunner, session }) {
-  if (typeof sessionRunner?.runSession !== "function") {
+  if (!isFunction(sessionRunner?.runSession)) {
     throw new Error("detached sub-session runner requires the main SessionExecutionRunner");
   }
-  if (typeof session?.createScopedPersistenceContext !== "function") {
+  if (!isFunction(session?.createScopedPersistenceContext)) {
     throw new Error("detached sub-session runner requires scoped persistence context support");
   }
 }
@@ -214,7 +214,6 @@ async function prepareDetachedExecution(dependencies, request, inheritedRuntime,
     parentSessionId: identity.parentSessionId,
     subSessionId: identity.subSessionId,
     attachments: request.attachments,
-    attachmentPolicy: effectiveRunConfig.attachments,
   });
   const systemMessages = await resolveDetachedSystemMessages(
     request.systemMessageFactory,
@@ -230,7 +229,7 @@ function createDetachedRunConfig(
   inheritedRuntime,
   identity,
 ) {
-  if (typeof dependencies.mergeRunConfigPluginPolicy !== "function") {
+  if (!isFunction(dependencies.mergeRunConfigPluginPolicy)) {
     throw new TypeError("detached sub-session runner requires mergeRunConfigPluginPolicy");
   }
   const config = dependencies.mergeRunConfigPluginPolicy({

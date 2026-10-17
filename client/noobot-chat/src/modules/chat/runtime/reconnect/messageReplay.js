@@ -8,53 +8,6 @@ import {
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
 } from "../../model/reconnectReplayModel.js";
-import { _ensureArray, _trimStr } from "./utils.js";
-
-export { renderActiveSessionBeforeReplay } from "./hydrationReplay.js";
-export {
-  applyReconnectReplayBatchToActiveSession,
-  applyReconnectEnvelopeBatchToTargetMessage,
-  applyReconnectEnvelopeToTargetMessage,
-  buildReconnectReplayEnvelopeCallbacks,
-  prepareReconnectReplayBatchPlan,
-  prepareReconnectReplayMessages,
-  shouldSkipReconnectBatchAfterTerminal,
-} from "./batchReplay.js";
-export {
-  findAssistantMessageByDialogProcessId,
-  findAssistantMessageByTurnScopeId,
-  findLatestAssistantMessageForRealtimeLogs,
-  hasAssistantMessageWithContent,
-} from "./messageLookup.js";
-export function applyAssistantFailureState({
-  targetAssistantMessage,
-  errorMessage = "",
-  translate,
-} = {}) {
-  if (!targetAssistantMessage) return;
-  targetAssistantMessage.error = _trimStr(errorMessage);
-  if (!_trimStr(targetAssistantMessage.content)) {
-    targetAssistantMessage.content = `> ${translate("chat.occurredError", {
-      error: targetAssistantMessage.error || translate("chat.unknownError"),
-    })}`;
-  }
-}
-
-export function mergeAssistantAttachments({
-  targetAssistantMessage,
-  attachments = [],
-  makeViewMessage,
-  mergeAttachments,
-} = {}) {
-  if (!targetAssistantMessage || !Array.isArray(attachments) || !attachments.length) {
-    return;
-  }
-  const normalizedAttachments = makeViewMessage({ attachments })?.attachments || attachments;
-  targetAssistantMessage.attachments = mergeAttachments(
-    _ensureArray(targetAssistantMessage.attachments),
-    normalizedAttachments,
-  );
-}
 
 export function applyFoldedMessagesToActiveSession(activeSession, foldedMessages = []) {
   if (!activeSession?.value) return [];

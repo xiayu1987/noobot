@@ -100,7 +100,7 @@ test("createGlobalConfigBuilder: validator 返回 warning 与失败场景", asyn
     validators: [
       {
         name: "warning-only",
-        validate: () => "config uses fallback defaults",
+        validate: () => ({ ok: true, warnings: ["config uses fallback defaults"] }),
       },
     ],
   });
@@ -136,9 +136,12 @@ test("createGlobalConfigBuilder: source 原始 snake_case 配置应由 builder �
       default_provider: "openai",
     })),
     validators: [
-      ({ resolvedConfig }) => ({
-        ok: resolvedConfig.workspaceRoot === "/tmp/workspace",
-      }),
+      {
+        name: "workspace-root-normalized",
+        validate: ({ resolvedConfig }) => ({
+          ok: resolvedConfig.workspaceRoot === "/tmp/workspace",
+        }),
+      },
     ],
   });
 

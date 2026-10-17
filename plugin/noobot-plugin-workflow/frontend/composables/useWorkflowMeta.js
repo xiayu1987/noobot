@@ -4,58 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { isPlainObject, text } from "@noobot/shared/value";
-
-export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
-  const source = isPlainObject(payload) ? payload : {};
-  const workflowRunId = text(
-    source?.workflowRunId ||
-      source?.execution?.workflowRunId ||
-      source?.execution?.instanceId ||
-      messageItem?.workflowRunId ||
-      messageItem?.turnScopeId,
-  );
-  const sessionId = text(
-    source?.planningDialog?.sessionId || source?.runMeta?.sessionId || messageItem?.sessionId,
-  );
-  const dialogProcessId = text(
-    source?.planningDialog?.dialogProcessId ||
-      source?.runMeta?.dialogProcessId ||
-      messageItem?.dialogProcessId,
-  );
-  return {
-    ...source,
-    ...(workflowRunId ? { workflowRunId } : {}),
-    execution: {
-      ...(source?.execution && typeof source.execution === "object" ? source.execution : {}),
-      ...(workflowRunId ? { workflowRunId, instanceId: workflowRunId } : {}),
-    },
-    planningDialog: {
-      ...(source?.planningDialog && typeof source.planningDialog === "object"
-        ? source.planningDialog
-        : {}),
-      ...(sessionId ? { sessionId } : {}),
-      ...(dialogProcessId ? { dialogProcessId } : {}),
-    },
-    runMeta: {
-      ...(source?.runMeta && typeof source.runMeta === "object" ? source.runMeta : {}),
-      ...(sessionId ? { sessionId } : {}),
-      ...(dialogProcessId ? { dialogProcessId } : {}),
-    },
-  };
-}
+import { isPlainObject } from "@noobot/shared/value";
 
 export function useWorkflowMeta(props) {
   const workflowMeta = computed(() =>
     isPlainObject(props.messageItem?.pluginMeta) ? props.messageItem.pluginMeta : {},
   );
 
-  const workflowPayload = computed(() => {
-    const metaPayload = isPlainObject(workflowMeta.value?.payload)
-      ? workflowMeta.value.payload
-      : {};
-    return projectWorkflowMessageIdentity(metaPayload, props.messageItem);
-  });
+  const workflowPayload = computed(() =>
+    isPlainObject(workflowMeta.value?.payload) ? workflowMeta.value.payload : {},
+  );
 
   const semanticFlowtos = computed(() =>
     Array.isArray(workflowPayload.value?.semantic?.flowtos)

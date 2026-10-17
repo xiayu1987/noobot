@@ -13,7 +13,7 @@ import {
 } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { createWorkflowNodeViewKey } from "../../runtime/workflowNodeSessionRuntime.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function uniqueExecutions(detail = {}) {
   return [
@@ -141,7 +141,7 @@ function applyObservedProjection(context, projection) {
         transactionOwnerKey: text(projection?.viewKey || nodeViewTransaction.state.ownerKey),
         selectedRuntimeStepPresent: Boolean(selectedStep && Object.keys(selectedStep).length),
         runtimeNodeFound: projection?.runtimeNodeFound === true,
-        sessionSelectorAvailable: typeof props.selectSessionMessages === "function",
+        sessionSelectorAvailable: isFunction(props.selectSessionMessages),
         subSessionMessageRegistryVersion: Number(projection?.subSessionMessageRegistryVersion || 0),
       },
     });

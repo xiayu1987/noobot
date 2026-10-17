@@ -436,7 +436,6 @@ describe("useChatSession summary and reconnect state", () => {
     });
     const detail = detailPayload({
       sessionId: "s-detail-race",
-      status: "completed",
       dialogProcessId: "dp-detail-race",
       turnScopeId: "turn-detail-race",
     });
@@ -510,7 +509,6 @@ describe("useChatSession summary and reconnect state", () => {
     });
     const detail = detailPayload({
       sessionId: "s-processing-race",
-      status: "processing",
       dialogProcessId,
       turnScopeId,
     });
@@ -676,7 +674,6 @@ describe("useChatSession summary and reconnect state", () => {
     const authFetch = routeAwareFetcher({
       detail: detailPayload({
         sessionId: "s-stop",
-        status: "user_stopped",
         dialogProcessId: "dp-stop",
         turnScopeId: "turn-stop",
         turnLifecycleSnapshot: terminalLifecycleSnapshot({
@@ -725,7 +722,6 @@ describe("useChatSession summary and reconnect state", () => {
       authFetch: routeAwareFetcher({
         detail: detailPayload({
           sessionId: "s-refresh",
-          status: "user_stopped",
           dialogProcessId: "dp-refresh",
           turnScopeId: "turn-refresh",
           turnLifecycleSnapshot: terminalLifecycleSnapshot({
@@ -767,7 +763,6 @@ describe("useChatSession summary and reconnect state", () => {
         authFetch: routeAwareFetcher({
           detail: detailPayload({
             sessionId,
-            status,
             dialogProcessId: `dp-${status}`,
             turnScopeId: `turn-${status}`,
           }),

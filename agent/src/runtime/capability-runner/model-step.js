@@ -8,6 +8,7 @@ import { validateModelResponse } from "@noobot/model-protocol";
 import { requireCapabilityActivity } from "@noobot/plugin-protocol";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
+import { isFunction } from "@noobot/shared/value";
 
 export function createCapabilityModelStep({
   runtime,
@@ -18,7 +19,7 @@ export function createCapabilityModelStep({
   metadata,
 }) {
   const modelPort = runtime?.modelPort;
-  if (!modelPort || typeof modelPort.invoke !== "function") {
+  if (!modelPort || !isFunction(modelPort.invoke)) {
     throw new TypeError("capability model execution requires the host ModelPort");
   }
   const presentation = requireCapabilityActivity(activity);

@@ -55,7 +55,6 @@ function normalizeTextList(items = []) {
 }
 
 export function buildCapabilityModelMessages({
-  locale = "zh-CN",
   agentMessages = [],
   constraints = [],
   task = "",
@@ -114,7 +113,6 @@ export function buildCapabilityModelMessages({
 }
 
 export function buildCapabilityProtocolModelMessages({
-  locale = "zh-CN",
   agentMessages = [],
   contextMessages = [],
   protocolPrompt = "",
@@ -126,7 +124,6 @@ export function buildCapabilityProtocolModelMessages({
     ...normalizeTextList([responsibilityPrompt]),
   ];
   return buildCapabilityModelMessages({
-    locale,
     agentMessages,
     constraints: [],
     task: protocolPrompt,

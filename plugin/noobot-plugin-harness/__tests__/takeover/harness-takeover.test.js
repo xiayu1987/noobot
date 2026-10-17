@@ -23,6 +23,7 @@ test("harness capability hook can take over tool calls", async () => {
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -65,6 +66,7 @@ test("harness capability hook can force inject system message in mid hooks", asy
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -112,6 +114,7 @@ test("harness capability hook can take over and remove agent internal forced mes
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -178,6 +181,7 @@ test("harness message takeover keeps system context before injected ctx messages
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -231,6 +235,7 @@ test("harness ctx message takeover writes through message store views", async ()
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -292,6 +297,7 @@ test("harness agent system takeover does not write ctx message store", async () 
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -346,6 +352,7 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -423,6 +430,7 @@ test("harness ctx message takeover ignores id markers echoed in tool results", a
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {

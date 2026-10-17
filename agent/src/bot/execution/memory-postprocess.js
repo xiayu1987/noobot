@@ -34,10 +34,6 @@ export class MemoryPostProcessService {
     });
   }
 
-  resolveMemorySummaryAsyncEnabled(userConfig = {}) {
-    return true;
-  }
-
   resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
     const configured =
       userConfig?.memory?.postprocess_async ?? this.globalConfig?.memory?.postprocess_async;

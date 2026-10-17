@@ -19,7 +19,7 @@ import {
   assertTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const AUDIT_LIST_LIMIT = QUANTITY_THRESHOLDS.diagnostics.eventAuditListLimit;
 
@@ -188,7 +188,7 @@ export function createRunEventListener({
         if (!validation.valid) {
           throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
         }
-        if (typeof onAuthorityEventCommitted !== "function") {
+        if (!isFunction(onAuthorityEventCommitted)) {
           throw new Error("authority event dispatcher is required");
         }
         return onAuthorityEventCommitted(envelope, {

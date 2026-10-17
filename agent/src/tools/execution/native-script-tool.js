@@ -359,9 +359,8 @@ function buildNativeTaskScript({
   inputMap,
   roots: { inputRoot, outputRoot, tempRoot },
   libreOfficeExecutable,
-  browserExecutablePath,
 }) {
-  return `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nimport { publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)}, browserExecutablePath: ${JSON.stringify(browserExecutablePath)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
+  return `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nimport { publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
 }
 
 async function measureNativeOutputs(outputRoot, succeeded) {
@@ -548,7 +547,6 @@ export function createNativeScriptTool({ agentContext }) {
           inputMap,
           roots,
           libreOfficeExecutable: resolveLibreOfficeExecutable(),
-          browserExecutablePath,
         });
         await writeFile(scriptPath, generated, "utf8");
         const result = await runGeneratedScript({

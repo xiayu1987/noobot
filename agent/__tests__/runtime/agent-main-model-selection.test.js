@@ -122,11 +122,7 @@ function buildStateWithRunConfig(runConfig) {
       received = params;
       return { alias: "selected_alias", model: "selected-model" };
     },
-    resolveMaxToolLoopTurnsFn: () => 1,
     resolvePhaseSummaryLoopTurnsFn: () => 1,
-    resolvePhaseSummaryMessageCharsThresholdFn: () => 1,
-    resolveHelpPromptLoopTurnsFn: () => 1,
-    resolveToolFailureHelpCountFn: () => 1,
   });
 
   builder({

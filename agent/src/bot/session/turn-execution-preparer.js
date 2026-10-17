@@ -16,10 +16,10 @@ import {
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
 } from "@noobot/context-protocol/policy/snapshot";
 import { applySystemRuntimeTurnProgress, resolveToolBindings } from "@noobot/agent-config-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, messageBlocks = {}) {
-  if (typeof engine?.session?.getSessionContextSource !== "function") {
+  if (!isFunction(engine?.session?.getSessionContextSource)) {
     throw new Error("stopped snapshot resume requires authoritative Session messages");
   }
   const sessionSource = await engine.session.getSessionContextSource({
@@ -41,14 +41,9 @@ export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}
     typeof contextBuilder._resolveRuntimeBasePath === "function"
       ? contextBuilder._resolveRuntimeBasePath()
       : await engine._resolveAttachmentIndexBasePath(text(payload.userId));
-  const effectiveConfig =
-    typeof contextBuilder._getEffectiveConfig === "function"
-      ? contextBuilder._getEffectiveConfig()
-      : engine.globalConfig;
   const userMessageAttachments = await resolveAttachments({
     attachmentService: contextBuilder.attachmentService || engine.attach,
     runtimeBasePath,
-    effectiveConfig,
     userMessageAttachments: Array.isArray(payload.userMessageAttachments)
       ? payload.userMessageAttachments
       : [],
@@ -205,7 +200,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
   engine,
   { payload = {}, contextBuilder = null, abortSignal = null } = {},
 ) {
-  if (!contextBuilder || typeof contextBuilder.buildAgentContext !== "function") {
+  if (!contextBuilder || !isFunction(contextBuilder.buildAgentContext)) {
     throw new Error("stopped snapshot resume requires a compatible contextBuilder");
   }
   const runConfig =
@@ -275,10 +270,6 @@ export async function resolveStoppedResumeAttachments(
       typeof contextBuilder._resolveRuntimeBasePath === "function"
         ? contextBuilder._resolveRuntimeBasePath()
         : "",
-    effectiveConfig:
-      typeof contextBuilder._getEffectiveConfig === "function"
-        ? contextBuilder._getEffectiveConfig()
-        : {},
     userMessageAttachments: Array.isArray(payload?.userMessageAttachments)
       ? payload.userMessageAttachments
       : [],

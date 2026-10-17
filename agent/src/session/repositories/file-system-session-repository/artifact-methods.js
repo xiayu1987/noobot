@@ -123,21 +123,20 @@ class SessionArtifactMethods {
       if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
         await this.upsertSessionSummary(userId, session);
         return { summary: rebuilt, migrated, rebuilt: !migrated };
-      } else {
-        await this._refreshSessionDisplaySummary(
-          userId,
-          normalizedSessionId,
-          parentSessionId,
-          session,
-          persistenceContext,
-        );
-        rebuilt = await readDisplaySummaryArtifact({
-          storageService: this.storageService,
-          sessionDir: scope.sessionDir,
-          sessionId: normalizedSessionId,
-        });
-        currentManifest = await this.storageService.readJson(scope.sessionFile, null);
       }
+      await this._refreshSessionDisplaySummary(
+        userId,
+        normalizedSessionId,
+        parentSessionId,
+        session,
+        persistenceContext,
+      );
+      rebuilt = await readDisplaySummaryArtifact({
+        storageService: this.storageService,
+        sessionDir: scope.sessionDir,
+        sessionId: normalizedSessionId,
+      });
+      currentManifest = await this.storageService.readJson(scope.sessionFile, null);
       if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
         return { summary: rebuilt, migrated, rebuilt: !migrated };
       }

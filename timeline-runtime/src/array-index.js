@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 export function createWeakArrayIndex({ keyOf } = {}) {
-  if (typeof keyOf !== "function") {
+  if (!isFunction(keyOf)) {
     throw new TypeError("createWeakArrayIndex requires keyOf");
   }
   const indexes = new WeakMap();

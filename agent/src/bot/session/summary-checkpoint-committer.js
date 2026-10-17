@@ -19,7 +19,7 @@ import {
   resolveContextMessageId,
   resolveContextMessageSummarized,
 } from "@noobot/context-protocol/message/codec";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function createSummaryCompletionMarker(summaryCompletion = null) {
   if (!summaryCompletion || typeof summaryCompletion !== "object") return null;
@@ -82,9 +82,9 @@ function canCommitSummaryCheckpoint({ session, runtime, userId, sessionId } = {}
   const currentTurnMessages = runtime?.currentTurnMessages;
   if (!userId || !sessionId || !currentTurnMessages) return false;
   return (
-    typeof currentTurnMessages.toArray === "function" &&
-    typeof currentTurnMessages.replaceAll === "function" &&
-    typeof session?.commitTurnSummaryCheckpoint === "function"
+    isFunction(currentTurnMessages.toArray) &&
+    isFunction(currentTurnMessages.replaceAll) &&
+    isFunction(session?.commitTurnSummaryCheckpoint)
   );
 }
 

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { EXECUTION_KIND } from "@noobot/session-protocol";
+import { isFunction } from "@noobot/shared/value";
 
 export function createDetachedTerminalReceipt(turn) {
   if (!turn || typeof turn !== "object" || Array.isArray(turn)) {
@@ -15,7 +16,7 @@ export function createDetachedTerminalReceipt(turn) {
 export function createScopedSubSessionEventListener(eventListener = null, identity = {}) {
   const target = resolveObjectEventListener(eventListener);
   if (!target) return null;
-  if (typeof target.forwardEvent !== "function") {
+  if (!isFunction(target.forwardEvent)) {
     throw new TypeError(
       "detached sub-session requires an execution event listener forwardEvent port",
     );

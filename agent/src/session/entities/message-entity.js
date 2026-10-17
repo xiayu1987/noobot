@@ -242,11 +242,7 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
   return normalizedMessage;
 }
 
-export function normalizeMessagesEntity(
-  messages = [],
-  now = () => new Date().toISOString(),
-  { sessionId = "" } = {},
-) {
+export function normalizeMessagesEntity(messages = [], now = () => new Date().toISOString()) {
   return (messages || []).map((messageItem, index) => {
     const normalized = normalizeMessageEntity(messageItem, now);
     if (!normalized.messageUid) {

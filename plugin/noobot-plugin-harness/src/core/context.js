@@ -14,13 +14,7 @@ import { safeId } from "../data/record-builders.js";
 import { normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION, resolveHarnessRunsRelativePath } from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
-import { text } from "@noobot/shared/value";
-
-function normalizePlanningGuidance(options = {}) {
-  if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
-    options.planningGuidanceMode = "inject";
-  }
-}
+import { text, isFunction } from "@noobot/shared/value";
 
 export function extractBasePath(ctx = {}, options = {}) {
   return text(
@@ -90,7 +84,6 @@ export function createPluginRuntimeContextFactory(deps = {}) {
 
   return function createPluginRuntimeContext(api = {}, userOptions = {}) {
     const options = normalizeOptionsFn(userOptions, api);
-    normalizePlanningGuidance(options);
 
     const hookManager = resolveHookManagerFn(api);
     const capabilityRuntime = createCapabilityRuntimeFn({
@@ -104,7 +97,7 @@ export function createPluginRuntimeContextFactory(deps = {}) {
 }
 
 export function assertHookManager(hookManager, { locale = "en-US" } = {}) {
-  if (!hookManager || typeof hookManager.on !== "function") {
+  if (!hookManager || !isFunction(hookManager.on)) {
     throw new Error(
       formatHarnessCoreError(HARNESS_CORE_ERROR.HOOK_MANAGER_REQUIRED, {
         locale,

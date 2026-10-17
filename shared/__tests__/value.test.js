@@ -5,7 +5,25 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { firstText, isPlainObject, text } from "../value.js";
+import { firstText, isFunction, isObjectLike, isPlainObject, text } from "../value.js";
+
+test("isFunction accepts functions and classes only", () => {
+  for (const value of [() => {}, function named() {}, async () => {}, class Sample {}]) {
+    assert.equal(isFunction(value), true);
+  }
+  for (const value of [null, undefined, {}, [], "function", 0]) {
+    assert.equal(isFunction(value), false);
+  }
+});
+
+test("isObjectLike accepts every non-null object including arrays", () => {
+  for (const value of [{}, [], new Date(0), Object.create(null)]) {
+    assert.equal(isObjectLike(value), true);
+  }
+  for (const value of [null, undefined, () => {}, "", 0, false]) {
+    assert.equal(isObjectLike(value), false);
+  }
+});
 
 test("isPlainObject accepts non-null non-array objects", () => {
   assert.equal(isPlainObject({}), true);

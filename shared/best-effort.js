@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "./value.js";
+import { text, isFunction } from "./value.js";
 function defaultReportDiagnostic(diagnostic) {
   console.warn("[best-effort] operation failed", diagnostic);
 }
@@ -13,14 +13,14 @@ export async function runBestEffort(
   operation,
   { operationName, context = {}, reportDiagnostic = defaultReportDiagnostic } = {},
 ) {
-  if (typeof operation !== "function") {
+  if (!isFunction(operation)) {
     throw new TypeError("runBestEffort operation must be a function");
   }
   const normalizedOperationName = text(operationName);
   if (!normalizedOperationName) {
     throw new TypeError("runBestEffort operationName is required");
   }
-  if (typeof reportDiagnostic !== "function") {
+  if (!isFunction(reportDiagnostic)) {
     throw new TypeError("runBestEffort reportDiagnostic must be a function");
   }
 

@@ -14,7 +14,7 @@ import {
   PLUGIN_SURFACE,
   requirePluginSurface,
 } from "@noobot/plugin-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export * from "./core.js";
 export * from "./contributions.js";
@@ -138,7 +138,7 @@ export async function loadNoobotPlugins(options = {}) {
       }
       await access(entryPath);
       const moduleNamespace = await import(pathToFileURL(entryPath).href);
-      if (typeof moduleNamespace.activate !== "function") {
+      if (!isFunction(moduleNamespace.activate)) {
         throw new Error(
           `plugin surface entry must export activate: ${manifest.id}/${normalized.surface}`,
         );

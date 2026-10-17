@@ -5,10 +5,10 @@
  */
 import { randomUUID } from "node:crypto";
 import { cp, rename, rm } from "node:fs/promises";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export async function runAtomicSessionRepair({ sessionDir = "", repair, validate } = {}) {
-  if (!text(sessionDir) || typeof repair !== "function" || typeof validate !== "function") {
+  if (!text(sessionDir) || !isFunction(repair) || !isFunction(validate)) {
     throw Object.assign(
       new TypeError("Atomic Session repair requires sessionDir, repair and validate"),
       {

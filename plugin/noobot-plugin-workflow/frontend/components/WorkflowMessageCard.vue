@@ -37,17 +37,10 @@ function logCardRender(stage) {
   const payload = props.messageItem?.pluginMeta?.payload || {};
   const content = String(props.messageItem?.content || "");
   props.logWorkflowDiagnostics?.(`frontend.workflowRender.card${stage}`, {
-    sessionId: String(payload?.planningDialog?.sessionId || props.messageItem?.sessionId || ""),
-    dialogProcessId: String(
-      props.messageItem?.dialogProcessId || payload?.planningDialog?.dialogProcessId || "",
-    ),
+    sessionId: String(payload?.runMeta?.sessionId || ""),
+    dialogProcessId: String(payload?.runMeta?.dialogProcessId || ""),
     turnScopeId: String(props.messageItem?.turnScopeId || ""),
-    workflowRunId: String(
-      payload?.workflowRunId ||
-        payload?.execution?.workflowRunId ||
-        payload?.execution?.instanceId ||
-        "",
-    ),
+    workflowRunId: String(payload?.workflowRunId || ""),
     liveProjection: props.messageItem?.__workflowLiveProjection === true,
     pluginPhase: String(props.messageItem?.pluginMeta?.phase || ""),
     contentLength: content.length,

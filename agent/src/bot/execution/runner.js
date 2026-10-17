@@ -23,7 +23,7 @@ import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export class SessionExecutionRunner {
   constructor({
@@ -54,7 +54,7 @@ export class SessionExecutionRunner {
       saveExecutionReport,
       getExecutionTurnLogs,
     })) {
-      if (typeof dependency !== "function") throw new TypeError(`${name} is required`);
+      if (!isFunction(dependency)) throw new TypeError(`${name} is required`);
     }
     this.agentRunner = agentRunner;
     this.errorLogger = errorLogger;
@@ -222,7 +222,7 @@ export class SessionExecutionRunner {
           scenarioResolvedRunConfig,
           turnAcceptance,
         });
-      if (typeof this.prepareAgentTurnExecution !== "function") {
+      if (!isFunction(this.prepareAgentTurnExecution)) {
         throw new Error("prepareAgentTurnExecution is required");
       }
       const preparedAgentTurnExecution = await this.prepareAgentTurnExecution({
@@ -292,7 +292,6 @@ export class SessionExecutionRunner {
         botHookRuntime,
         botHookBase,
         agentContextSummary,
-        usedSessionId,
         dialogProcessId,
         resolvedTurnScopeId,
         syncLifecycleRuntimeState,

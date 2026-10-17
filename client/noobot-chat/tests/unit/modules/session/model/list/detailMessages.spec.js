@@ -14,7 +14,6 @@ describe("buildNormalizedDetailMessages turnTimings", () => {
       rootSessionId: "session-envelope",
       isSummaryDetail: true,
       makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (source) => source.map((message) => ({ ...message })),
     });
 
     expect(messages[0]).toMatchObject({
@@ -32,7 +31,6 @@ describe("buildNormalizedDetailMessages turnTimings", () => {
       rootSessionId: "session-stop",
       isSummaryDetail: true,
       makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (source) => source.map((message) => ({ ...message })),
     });
 
     expect(messages).toHaveLength(2);
@@ -68,7 +66,6 @@ describe("buildNormalizedDetailMessages turnTimings", () => {
       ],
       isSummaryDetail: true,
       makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (source) => source.map((message) => ({ ...message })),
     });
 
     expect(messages[0].thinkingStartedAt).toBeUndefined();
@@ -92,7 +89,6 @@ describe("buildNormalizedDetailMessages turnTimings", () => {
       turnTimings: [],
       isSummaryDetail: true,
       makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (source) => source.map((message) => ({ ...message })),
     });
 
     expect(messages[0].thinkingStartedAt).toBe("2026-02-01T00:00:00.000Z");

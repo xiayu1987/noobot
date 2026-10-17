@@ -483,7 +483,6 @@ describe("useChatSession reconnect replay", () => {
       ensureConnected: vi.fn(() => true),
       authFetch,
       isImageMime: () => false,
-      scrollBottom: vi.fn(),
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
     });
@@ -544,7 +543,6 @@ describe("useChatSession reconnect replay", () => {
       ensureConnected: vi.fn(() => true),
       authFetch: null,
       isImageMime: () => false,
-      scrollBottom: vi.fn(),
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
     });
@@ -727,7 +725,6 @@ describe("useChatSession reconnect replay", () => {
         ensureConnected: vi.fn(() => true),
         authFetch,
         isImageMime: () => false,
-        scrollBottom: vi.fn(),
         notify,
         clearUploadSelection: vi.fn(),
       });

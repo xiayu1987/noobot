@@ -31,7 +31,6 @@ function createRequests() {
     userId: ref("admin"),
     authFetch: vi.fn(),
     getSessionDetailApi: vi.fn(),
-    applySessionDetail: vi.fn(),
     isSameSessionIdentity: (left, right) => left === right,
     translate: (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
   });

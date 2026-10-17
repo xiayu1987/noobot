@@ -16,7 +16,7 @@ import {
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeCapabilityModel,
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
   resolveCapabilityModelName,
   resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
@@ -77,14 +77,7 @@ export async function runPlanningRefinementBySeparateModel(
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return { applied: false, status: "missing_harness_bucket" };
   const { bucket, state } = holder;
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: PLANNING_EVENTS.refinementInvokerMissing,
-    });
-    return { applied: false, status: "invoker_missing" };
-  }
+  const invoker = readCapabilityModelInvoker(meta);
   const locale = state?.locale || LOCALE.ZH_CN;
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
     ctx,
@@ -131,7 +124,6 @@ export async function runPlanningRefinementBySeparateModel(
     dynamicPolicyPrompt,
   });
   const refinementMessages = buildCapabilityProtocolModelMessages({
-    locale,
     agentMessages: agentMessagesBase,
     contextMessages: refinementContextMessages,
     protocolPrompt: refinementTask,

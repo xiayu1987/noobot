@@ -3,14 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const DB = "noobot-character-assets-v2";
 const STORE = "glb";
 let authenticatedRequest = null;
 
 export function configureImportedAssetStore({ request } = {}) {
-  if (typeof request !== "function") {
+  if (!isFunction(request)) {
     throw new TypeError("character asset store requires authenticated request capability");
   }
   authenticatedRequest = request;
@@ -29,7 +29,7 @@ function database() {
   });
 }
 function requireService() {
-  if (typeof authenticatedRequest !== "function") {
+  if (!isFunction(authenticatedRequest)) {
     throw new Error("character asset service is unavailable");
   }
   return authenticatedRequest;

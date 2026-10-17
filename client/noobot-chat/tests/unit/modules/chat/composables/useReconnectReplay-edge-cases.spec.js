@@ -24,7 +24,7 @@ afterEach(() => {
 
 describe("useReconnectReplay", () => {
   it("transport channel_state has no Authority or message side effects", async () => {
-    const { api, refs, mocks } = createFixture();
+    const { api, refs } = createFixture();
     const assistant = createCanonicalAssistant({
       messageId: "message-order",
       dialogProcessId: "dp-order",
@@ -41,10 +41,6 @@ describe("useReconnectReplay", () => {
 
     expect(result).toEqual({ applied: false, reason: "transport_channel_state_ignored" });
     expect(assistant.content).toBe("");
-    expect(mocks.appendMessage).not.toHaveBeenCalled();
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
-    expect(mocks.scrollBottom).not.toHaveBeenCalled();
   });
 
   it("a reconnect entry without a valid Replay Batch is reconciled without creating a Turn", async () => {
@@ -69,13 +65,11 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT,
     );
     expect(refs.sending.value).toBe(false);
-    expect(mocks.notify).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1200);
     expect(assistant?.terminalOutcome).toBe("");
     expect(assistant?.error).toBeUndefined();
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-    expect(mocks.notify).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -113,7 +107,6 @@ describe("useReconnectReplay", () => {
     );
 
     expect(refs.sending.value).toBe(false);
-    expect(mocks.notify).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 });

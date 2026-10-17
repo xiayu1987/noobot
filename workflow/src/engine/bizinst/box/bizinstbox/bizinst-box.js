@@ -14,6 +14,7 @@ import EModelStateType from "../../state/modelstate/enums/model-state-type.js";
 import EActionNodeStateProcessHandleWay from "../../state/proc/fschange/enums/action-node-state-process-handle-way.js";
 import ECompositeNodeStateProcessHandleWay from "../../state/proc/fschange/enums/composite-node-state-process-handle-way.js";
 import EStateNodeStateProcessHandleWay from "../../state/proc/fschange/enums/state-node-state-process-handle-way.js";
+import { isFunction } from "@noobot/shared/value";
 
 class BizinstBox {
   constructor() {
@@ -60,24 +61,21 @@ class BizinstBox {
     if (!stateProcess) return;
 
     if (
-      typeof stateProcess.getStepState === "function" &&
-      typeof stateProcess.getActionNodeStateProcessHandleWay === "function"
+      isFunction(stateProcess.getStepState) &&
+      isFunction(stateProcess.getActionNodeStateProcessHandleWay)
     ) {
       this._saveActionNodeState(stateProcess);
       return;
     }
-    if (typeof stateProcess.getCompositeNodeStateProcessHandleWay === "function") {
+    if (isFunction(stateProcess.getCompositeNodeStateProcessHandleWay)) {
       this._saveCompositeNodeState(stateProcess);
       return;
     }
-    if (typeof stateProcess.getStateNodeStateProcessHandleWay === "function") {
+    if (isFunction(stateProcess.getStateNodeStateProcessHandleWay)) {
       this._saveStateNodeState(stateProcess);
       return;
     }
-    if (
-      typeof stateProcess.getModelStateType === "function" &&
-      typeof stateProcess.getModelState === "function"
-    ) {
+    if (isFunction(stateProcess.getModelStateType) && isFunction(stateProcess.getModelState)) {
       this._saveDiscoverModelState(stateProcess);
       return;
     }
@@ -86,8 +84,8 @@ class BizinstBox {
       return;
     }
     if (
-      typeof stateProcess.getActionNodeState === "function" &&
-      typeof stateProcess.getHandleStepState === "function"
+      isFunction(stateProcess.getActionNodeState) &&
+      isFunction(stateProcess.getHandleStepState)
     ) {
       this._saveAddStepState(stateProcess);
     }

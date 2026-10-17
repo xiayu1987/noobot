@@ -5,7 +5,7 @@
  */
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isFunction } from "@noobot/shared/value";
 
 export const AUTHORITY_EVENT_CONSUMER = Object.freeze({
   WEBSOCKET: "service.websocket",
@@ -85,9 +85,9 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
     }
     const bot = resolveBot?.();
     if (
-      typeof bot?.getPendingAuthorityEvents !== "function" ||
-      typeof bot?.recordAuthorityEventAttempts !== "function" ||
-      typeof bot?.acknowledgeAuthorityEvents !== "function"
+      !isFunction(bot?.getPendingAuthorityEvents) ||
+      !isFunction(bot?.recordAuthorityEventAttempts) ||
+      !isFunction(bot?.acknowledgeAuthorityEvents)
     ) {
       throw new Error("authority event outbox API is required");
     }

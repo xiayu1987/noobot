@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export async function transferCanonicalAttachmentsToSubSession({
   attachmentService = null,
@@ -12,7 +12,6 @@ export async function transferCanonicalAttachmentsToSubSession({
   parentSessionId = "",
   subSessionId = "",
   attachments = [],
-  attachmentPolicy = {},
 } = {}) {
   const source = Array.isArray(attachments) ? attachments : [];
   if (!source.length) return [];
@@ -25,7 +24,6 @@ export async function transferCanonicalAttachmentsToSubSession({
         parentSessionId,
         subSessionId,
         attachment,
-        attachmentPolicy,
       }),
     );
   }
@@ -38,7 +36,6 @@ async function transferCanonicalAttachment({
   parentSessionId,
   subSessionId,
   attachment,
-  attachmentPolicy,
 }) {
   const attachmentId = text(attachment?.attachmentId);
   const path = text(attachment?.path);
@@ -47,8 +44,7 @@ async function transferCanonicalAttachment({
   if (attachmentSessionId === subSessionId) return attachment;
   assertParentAttachmentOwnership(attachmentSessionId, parentSessionId);
   assertCanonicalAttachmentService(attachmentService);
-  const attachmentSource =
-    text(attachment?.attachmentSource) || ATTACHMENT_SOURCE.USER || ATTACHMENT_SOURCE.USER;
+  const attachmentSource = text(attachment?.attachmentSource) || ATTACHMENT_SOURCE.USER;
   const parentRecord = await attachmentService.getAttachmentById({
     userId,
     attachmentId,
@@ -67,8 +63,6 @@ async function transferCanonicalAttachment({
     userId,
     sessionId: subSessionId,
     attachmentSource: ATTACHMENT_SOURCE.USER,
-    attachmentPolicy:
-      attachmentPolicy && typeof attachmentPolicy === "object" ? attachmentPolicy : {},
     attachments: [
       createTransferredAttachment(attachment, parentRecord, sourceContent, attachmentId),
     ],
@@ -96,7 +90,7 @@ function assertParentAttachmentContent(sourceContent) {
 
 function assertCanonicalAttachmentService(attachmentService) {
   const requiredMethods = ["getAttachmentById", "readAttachmentContent", "ingest"];
-  if (requiredMethods.every((method) => typeof attachmentService?.[method] === "function")) return;
+  if (requiredMethods.every((method) => isFunction(attachmentService?.[method]))) return;
   throw new Error("detached sub-session canonical attachment transfer requires AttachmentService");
 }
 

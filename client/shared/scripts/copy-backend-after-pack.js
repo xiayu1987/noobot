@@ -42,7 +42,7 @@ async function assertRequiredBackendRuntimeFiles(rootDir, label) {
   });
 }
 
-function getBackendCopyOptions(context) {
+function getBackendCopyOptions() {
   return { recursive: true, dereference: true };
 }
 
@@ -65,7 +65,7 @@ export default async function copyBackendAfterPack(context) {
 
   await assertRequiredBackendRuntimeFiles(backendSource, "prepare");
   await rm(backendDestination, { recursive: true, force: true });
-  await cp(backendSource, backendDestination, getBackendCopyOptions(context));
+  await cp(backendSource, backendDestination, getBackendCopyOptions());
   await assertRequiredBackendRuntimeFiles(backendDestination, "copy");
   console.log(`Copied backend runtime to ${backendDestination}`);
 

@@ -26,7 +26,6 @@ export {
 } from "./runtime-user-message-attachments.js";
 export { readAttachIndex, writeAttachIndex } from "./index-manager.js";
 export {
-  validateAttachmentPolicy,
   resolveAttachmentPolicy,
   isMimeTypeAllowed,
   isExtensionAllowed,

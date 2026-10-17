@@ -13,7 +13,7 @@ import ECompositeNodeStateProcessHandleWay from "../bizinst/state/proc/fschange/
 import EStateNodeStateProcessHandleWay from "../bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js";
 import PathStateProcess from "../bizinst/state/proc/fschange/path-state-process.js";
 import StateNodeStateProcess from "../bizinst/state/proc/fschange/state-node-state-process.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function isWorkflowVerboseLogEnabled() {
   const raw = text(process?.env?.NOOBOT_WORKFLOW_VERBOSE_LOG).toLowerCase();
@@ -49,10 +49,10 @@ class FlowListener {
     if (modelState && typeof modelState.getFlowto === "function") {
       this.logVerbose("Discovered flowto state: " + modelState.getFlowto().getName());
       modelStateType = EModelStateType.FlowtoState;
-    } else if (modelState && typeof modelState.getBizinst === "function") {
+    } else if (modelState && isFunction(modelState.getBizinst)) {
       this.logVerbose("Discovered composite node state: " + modelState.getNode().getName());
       modelStateType = EModelStateType.CompositeNodeState;
-    } else if (modelState && typeof modelState.getStepStates === "function") {
+    } else if (modelState && isFunction(modelState.getStepStates)) {
       this.logVerbose("Discovered action node state: " + modelState.getNode().getName());
       modelStateType = EModelStateType.ActionNodeState;
     } else {

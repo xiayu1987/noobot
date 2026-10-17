@@ -17,7 +17,10 @@ import { waitForFile, readJsonl } from "../test-helpers.js";
 test("harness plugin rejects illegal FSM transitions and audits state commits", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { basePath, promptPolicy: false, manifestDebounceMs: 0 });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", basePath, promptPolicy: false, manifestDebounceMs: 0 },
+  );
 
   await hookManager.emit("agent.before_tool_calls", {
     userId: "u-fsm",
@@ -69,7 +72,10 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
 
   {
     const hookManager = createAgentHookManager();
-    registerHarnessCore({ hookManager }, { basePath, promptPolicy: false, manifestDebounceMs: 0 });
+    registerHarnessCore(
+      { hookManager },
+      { planningGuidanceMode: "inject", basePath, promptPolicy: false, manifestDebounceMs: 0 },
+    );
     await hookManager.emit("agent.after_llm_call", {
       userId: "u-resume",
       sessionId: "s-resume",
@@ -109,6 +115,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       basePath,
       promptPolicy: false,
       manifestDebounceMs: 0,
@@ -213,6 +220,7 @@ test("harness FSM remains planning when checklist is absent", async () => {
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       basePath,
       promptPolicy: false,
       manifestDebounceMs: 0,

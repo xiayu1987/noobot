@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { isTransientAtomicRenameError } from "./file-system.js";
+import { isFunction } from "@noobot/shared/value";
 
 export const ATOMIC_RENAME_RETRY_DELAYS_MS = Object.freeze([25, 75, 150, 300, 600]);
 
@@ -23,11 +24,7 @@ export async function writeFileAtomic({
   retryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS,
   platform = process.platform,
 } = {}) {
-  if (
-    typeof writeFile !== "function" ||
-    typeof rename !== "function" ||
-    typeof remove !== "function"
-  ) {
+  if (!isFunction(writeFile) || !isFunction(rename) || !isFunction(remove)) {
     throw new TypeError("atomic file write requires writeFile, rename, and remove operations");
   }
   const delays = Array.isArray(retryDelaysMs) ? retryDelaysMs : ATOMIC_RENAME_RETRY_DELAYS_MS;

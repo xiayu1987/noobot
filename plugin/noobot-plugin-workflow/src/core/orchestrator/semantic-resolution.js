@@ -59,21 +59,13 @@ function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
 
 export async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } = {}) {
   throwIfWorkflowAborted(ctx);
-  if (typeof options?.capabilityModelInvoker !== "function") {
-    return {
-      text: sourceText,
-      invoked: false,
-      model: "",
-      traceCount: 0,
-    };
-  }
   const userMessage = text(ctx?.userMessage);
   const locale = text(ctx?.runConfig?.locale) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE;
   const userAttachments = resolveWorkflowInputAttachments(ctx);
   const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachments, ctx);
   const availableToolNames = resolveWorkflowAvailableToolNames(ctx);
   const availableToolsPlanningBlock = buildWorkflowAvailableToolsPlanningBlock(ctx, locale);
-  const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx, locale });
+  const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx });
   const availableToolsSystemMessage = text(availableToolsPlanningBlock)
     ? { role: "system", content: availableToolsPlanningBlock }
     : null;
@@ -119,8 +111,6 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
   const resolvedText = text(result?.output?.text) || sourceText;
   return {
     text: resolvedText,
-    invoked: true,
-    model: text(options?.semanticModel),
     traceCount: Array.isArray(result?.traces) ? result.traces.length : 0,
     requestMessages: semanticMessages,
     toolAllowlist: availableToolNames,

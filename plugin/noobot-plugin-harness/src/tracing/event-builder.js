@@ -5,8 +5,8 @@
  */
 import { buildContextSnapshot, buildEvent, buildPromptRecord } from "../data/record-builders.js";
 
-export function buildTraceEvent({ point, ctx, options, pluginName, pluginVersion }) {
-  return buildEvent({ point, ctx, options, pluginName, pluginVersion });
+export function buildTraceEvent({ point, ctx, options }) {
+  return buildEvent({ point, ctx, options });
 }
 
 export function buildTracePromptRecord({ promptId, point, content, maxPreviewChars }) {

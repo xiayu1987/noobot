@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export const PLUGIN_PROTOCOL_VERSION = 2;
 
@@ -205,7 +205,7 @@ export function validatePluginActivationResult(result = {}, { pluginId = "", sur
       `plugin activation surface mismatch: ${expectedSurface}`,
     );
   }
-  if (result.dispose != null && typeof result.dispose !== "function") {
+  if (result.dispose != null && !isFunction(result.dispose)) {
     throw new PluginProtocolError(
       "PLUGIN_ACTIVATION_DISPOSE_INVALID",
       "plugin activation dispose must be a function",

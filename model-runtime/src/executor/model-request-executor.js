@@ -33,7 +33,7 @@ import {
   resolvePreferredStreaming,
   streamingProviderCacheKey,
 } from "../policies/streaming-mode-policy.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function wrapStreamingCallbacks(callbacks, attemptState) {
   if (!Array.isArray(callbacks) || !callbacks.length) return callbacks;
@@ -147,7 +147,7 @@ export function createModelRequestExecutor({
         observationPort.emit(type, { invocation, ...payload, model: observableModel });
       observe("model.invocation.started");
       if (requestBase.operation.kind !== MODEL_OPERATION_KIND.CHAT) {
-        if (typeof adapter.executeOperation !== "function") {
+        if (!isFunction(adapter.executeOperation)) {
           throw new TypeError(
             `provider adapter ${adapter.id} does not support operation: ${requestBase.operation.kind}`,
           );

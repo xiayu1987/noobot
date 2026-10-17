@@ -4,8 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+export function isFunction(value) {
+  return typeof value === "function";
+}
+
+export function isObjectLike(value) {
+  return value !== null && typeof value === "object";
+}
+
 export function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  return isObjectLike(value) && !Array.isArray(value);
 }
 
 export function text(value) {

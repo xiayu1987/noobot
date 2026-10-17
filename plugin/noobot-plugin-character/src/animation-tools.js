@@ -28,7 +28,7 @@ import {
   CHARACTER_ANIMATION_UPDATE_TOOL_ID,
   CHARACTER_CAMERA_PRESET_LIST_TOOL_ID,
 } from "./contract.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function validateAssetReferences(asset, character) {
   const allowedClips = new Set((asset.animations || []).map((item) => text(item?.name)));
@@ -201,7 +201,7 @@ function createCameraTools({ getArtifact, commitArtifact }) {
 }
 
 export function createAnimationTools({ commitArtifact, getArtifact, resolveSelectedAssets } = {}) {
-  if (typeof resolveSelectedAssets !== "function") {
+  if (!isFunction(resolveSelectedAssets)) {
     throw new TypeError("character animation tools require an asset catalog resolver");
   }
   const commit = async (protocol, selectedAssets) => {

@@ -5,18 +5,16 @@
  */
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { PLUGIN_ID } from "../core/constants.js";
-import { normalizeOptions } from "../core/options.js";
 import { registerWorkflowServiceHooks } from "../core/orchestrator.js";
 import { createWorkflowServiceRouteHandlers } from "../service/routes.js";
 
-export function activate(host = {}, config = {}) {
-  const options = normalizeOptions(config);
+export function activate(host, config) {
   const disposers = registerWorkflowServiceHooks({
-    hookManager: { on: host?.hooks?.register, emit: host?.hooks?.emit },
-    options,
+    hookManager: { on: host.hooks.register, emit: host.hooks.emit },
+    config,
   });
-  const handlers = createWorkflowServiceRouteHandlers({ ports: host?.ports });
-  for (const [routeId, handler] of Object.entries(handlers)) host?.routes?.bind(routeId, handler);
+  const handlers = createWorkflowServiceRouteHandlers({ ports: host.ports });
+  for (const [routeId, handler] of Object.entries(handlers)) host.routes.bind(routeId, handler);
   return createPluginActivationResult({
     pluginId: PLUGIN_ID,
     surface: PLUGIN_SURFACE.SERVICE,

@@ -2,8 +2,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction } from "@noobot/shared/value";
 export function requireModelPort(port) {
-  if (!port || typeof port.invoke !== "function")
-    throw new TypeError("model port.invoke is required");
+  if (!port || !isFunction(port.invoke)) throw new TypeError("model port.invoke is required");
   return port;
 }

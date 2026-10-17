@@ -17,7 +17,6 @@ import {
   resolveAttachmentPolicy,
   isMimeTypeAllowed,
   isExtensionAllowed,
-  validateAttachmentPolicy,
 } from "../../src/artifacts/policy/policy-validator.js";
 import {
   readSessionArtifact,
@@ -787,17 +786,12 @@ test("index-manager persists only versioned protocol records and isolates every 
   });
 });
 
-test("policy + mime minimal compatibility", () => {
-  const policy = resolveAttachmentPolicy({
-    maxFileSizeBytes: "12.9",
-    allowedMimeTypes: ["IMAGE/*", "text/plain"],
-    allowedExtensions: ["PNG", ".txt"],
-  });
+test("attachment policy is resolved from builtin thresholds only", () => {
+  const policy = resolveAttachmentPolicy();
 
   assert.equal(policy.maxFileSizeBytes, BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes);
   assert.deepEqual(policy.allowedMimeTypes, BUILTIN_ATTACHMENT_POLICY.allowedMimeTypes);
   assert.deepEqual(policy.allowedExtensions, []);
-  assert.deepEqual(validateAttachmentPolicy(policy), policy);
 
   assert.equal(isMimeTypeAllowed("image/png", policy.allowedMimeTypes), true);
   assert.equal(isExtensionAllowed("a.png", policy.allowedExtensions), true);

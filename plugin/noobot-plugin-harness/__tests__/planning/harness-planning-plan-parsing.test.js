@@ -14,7 +14,10 @@ import {
 
 test("harness planning accepts numbered plain-text plan output", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -40,7 +43,10 @@ test("harness planning accepts numbered plain-text plan output", async () => {
 
 test("harness planning ignores wrapped non-plan payload even when non-empty", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -90,7 +96,10 @@ test("harness planning ignores wrapped non-plan payload even when non-empty", as
 
 test("harness planning rejects malformed non-plan json text", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },

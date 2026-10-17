@@ -24,7 +24,6 @@ describe("buildSessionDetailProjection", () => {
       },
       sessionDocs: [{ sessionId: "session-1" }],
       makeViewMessage: identity,
-      foldMessagesForView: (messages) => messages.map(identity),
     });
 
     expect(projection.sessionId).toBe("session-1");
@@ -39,7 +38,6 @@ describe("buildSessionDetailProjection", () => {
         messages: [{ role: "assistant", content: "streaming", turnScopeId: "turn-1" }],
       },
       makeViewMessage: identity,
-      foldMessagesForView: (messages) => messages.map(identity),
     });
 
     expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
@@ -67,7 +65,6 @@ describe("buildSessionDetailProjection", () => {
         ],
       },
       makeViewMessage: identity,
-      foldMessagesForView: (messages) => messages.map(identity),
     });
 
     expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");

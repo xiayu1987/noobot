@@ -114,11 +114,7 @@ function logDisplayedAttachmentsSummary({
   }));
 }
 
-export function useMessageFiles({
-  getMessageItem = () => ({}),
-  getAllMessages = () => [],
-  getUserId = () => "",
-} = {}) {
+export function useMessageFiles({ getMessageItem = () => ({}), getAllMessages = () => [] } = {}) {
   const displayedAttachments = computed(() => {
     const messageItem = getMessageItem() || {};
     const sessionId = getMessageSessionId(messageItem);

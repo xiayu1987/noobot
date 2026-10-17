@@ -14,7 +14,7 @@ import {
 import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function projectExecutionLogRecord(event = "", data = {}) {
   if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
@@ -49,7 +49,7 @@ export function createExecutionEventListener({
   persistenceContext = null,
   upstream = null,
 }) {
-  if (typeof sessionManager?.appendExecutionLog !== "function") {
+  if (!isFunction(sessionManager?.appendExecutionLog)) {
     throw new TypeError("sessionManager.appendExecutionLog is required");
   }
   const dialogProcessId = normalizeDialogProcessId(upstream?.dialogProcessId);

@@ -439,7 +439,6 @@ test("hydrates child messages when the local Execution projection has not arrive
     },
     {
       executionId: "agent:starting",
-      execution: null,
     },
   );
   assert.equal(hydrated.sessionSummary.executionId, "agent:starting");

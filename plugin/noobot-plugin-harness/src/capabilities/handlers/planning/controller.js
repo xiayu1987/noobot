@@ -21,7 +21,9 @@ import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import { LOCALE } from "../shared/constants.js";
 import { translateI18nText } from "../shared/i18n.js";
-import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { resolvePlanningGuidanceMode } from "../shared/model/utils.js";
+import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../../core/constants.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { resolveGatedThresholdWithSource } from "../shared/threshold-utils.js";
@@ -363,7 +365,7 @@ async function executePlanningBeforeLlm(ctx, meta, mode, setupChanged) {
   changed = primaryChanged || changed;
   return {
     requestedAction:
-      mode === "separate_model"
+      mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
         ? PLANNING_DECISION.requestedAction.planningSeparateModel
         : PLANNING_DECISION.requestedAction.planningInject,
     executedPrimary: primaryChanged === true,
@@ -383,7 +385,7 @@ async function handlePlanningBeforeLlmCall({ capability, point, ctx, meta }) {
   const setupChanged =
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) === true;
   const holder = ensureHarnessBucket(ctx);
-  const mode = resolveWorkflowMode(meta);
+  const mode = resolvePlanningGuidanceMode(meta);
   const decision = {
     reason: PLANNING_DECISION.reason.idle,
     blockedActions: [],
@@ -409,7 +411,7 @@ async function handlePlanningBeforeLlmCall({ capability, point, ctx, meta }) {
 }
 
 async function handlePlanningAfterLlmCall({ capability, point, ctx, meta }) {
-  const mode = resolveWorkflowMode(meta);
+  const mode = resolvePlanningGuidanceMode(meta);
   const holder = ensureHarnessBucket(ctx);
   const lifecycle = await runWorkflowLifecycle(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,

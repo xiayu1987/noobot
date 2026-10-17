@@ -76,7 +76,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
     metadata: {
       contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
     },
-    async func(args = {}, _runManager = null, config = {}) {
+    async func(args = {}, runManager, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
       const capabilityLogStartIndex = Array.isArray(toolCtx.harnessCapabilityLogs)
         ? toolCtx.harnessCapabilityLogs.length
@@ -126,7 +126,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
           toolMeta,
           { forceRun: true },
         );
-        const report = buildAcceptanceReport({ bucket, state, ctx: toolCtx, mode, forcedReason });
+        const report = buildAcceptanceReport({ bucket, state, mode, forcedReason });
         bucket.lastAcceptanceReport = report;
         bucket.acceptanceReports.push(report);
         await runAcceptanceBySeparateModel(toolCtx, toolMeta, report);

@@ -51,13 +51,7 @@ test("summary failure is classified as completion without authoritative complete
 
 test("authoritative stop follows accepted -> stop processed -> stop summary completed", async () => {
   const authoritative = createAuthoritativeBot();
-  authoritative.bot.runSession = async ({
-    sessionId,
-    turnScopeId,
-    runConfig,
-    eventListener,
-    abortSignal,
-  }) => {
+  authoritative.bot.runSession = async ({ sessionId, turnScopeId, eventListener, abortSignal }) => {
     eventListener.onEvent({
       event: "agent_lifecycle_state_changed",
       data: {

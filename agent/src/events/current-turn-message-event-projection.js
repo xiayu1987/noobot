@@ -13,14 +13,14 @@ import {
   reduceCanonicalToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
 import { resolveMessageEventModelMessageId } from "@noobot/event-protocol/message-event";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
   if (!runtime || typeof runtime !== "object") {
     throw new Error("current Turn message event projection requires runtime");
   }
   const store = runtime.currentTurnMessages;
-  if (!store || typeof store.toArray !== "function" || typeof store.updateWhere !== "function") {
+  if (!store || !isFunction(store.toArray) || !isFunction(store.updateWhere)) {
     throw new Error(
       "current Turn message event projection requires the canonical currentTurnMessages store",
     );

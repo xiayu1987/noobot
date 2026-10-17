@@ -70,7 +70,6 @@ export function createMessageHandler({
     canonicalRunOwnerId,
     sendEvent,
     translateText,
-    resolveBot,
     rejectTurnInteractions,
     commitTurnLifecycle,
   });

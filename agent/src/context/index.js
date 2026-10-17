@@ -27,7 +27,7 @@ import { emitEvent } from "../events/index.js";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/constants.js";
 import { MEMORY_SUMMARY_STAGE } from "../memory/stage-runner.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
@@ -88,7 +88,7 @@ export class ContextBuilder {
     this.attachmentService = attachmentService;
     this.skillService = skillService;
     this.botManager = botManager;
-    if (memoryService && typeof errorLogger?.log !== "function") {
+    if (memoryService && !isFunction(errorLogger?.log)) {
       throw new TypeError("ContextBuilder with memoryService requires errorLogger.log");
     }
     this.errorLogger = errorLogger;

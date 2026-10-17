@@ -56,14 +56,6 @@ export class BaseMcpClient {
     this.id = 1;
   }
 
-  async _doRequest({ method, params = {} }) {
-    throw new Error("_doRequest must be implemented by subclass");
-  }
-
-  async _doNotify({ method, params = {} }) {
-    throw new Error("_doNotify must be implemented by subclass");
-  }
-
   async _request({ method, params = {} }) {
     const result = await this._doRequest({ method, params });
     if (result?.error) {

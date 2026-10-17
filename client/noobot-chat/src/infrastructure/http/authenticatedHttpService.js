@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 let authenticatedFetcher = null;
 
@@ -32,7 +32,7 @@ export function createScopedAuthenticatedHttpService({ routePatterns = [] } = {}
   const allowedRoutes = routePatterns.map(compileRoutePattern).filter(Boolean);
   return Object.freeze({
     request(url = "", options = {}) {
-      if (typeof authenticatedFetcher !== "function") {
+      if (!isFunction(authenticatedFetcher)) {
         throw new Error("authenticated HTTP service is unavailable");
       }
       const parsed = new URL(String(url || ""), window.location.origin);

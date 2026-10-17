@@ -7,7 +7,7 @@ import {
   EXTENSION_ARBITRATION,
   requireDeclaredFrontendContribution,
 } from "@noobot/plugin-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const REGISTRY_SNAPSHOT = Symbol("plugin-runtime.extension-registry-snapshot");
 
@@ -21,7 +21,7 @@ export function validateDeclaredFrontendComponentLoaders(manifest = {}, componen
   const loaders = componentLoaders && typeof componentLoaders === "object" ? componentLoaders : {};
   const declaredIds = declaredFrontendComponents(manifest).map((extension) => extension.id);
   const loaderIds = Object.keys(loaders);
-  const missing = declaredIds.filter((id) => typeof loaders[id] !== "function");
+  const missing = declaredIds.filter((id) => !isFunction(loaders[id]));
   const unexpected = loaderIds.filter((id) => !declaredIds.includes(id));
   if (missing.length || unexpected.length) {
     throw new TypeError(
@@ -105,7 +105,7 @@ export function createExtensionRegistry({
       point: entry.point,
       priority: entry.priority,
       enabled: entry.enabled !== false,
-      hasProvider: typeof entry.provide === "function",
+      hasProvider: isFunction(entry.provide),
     }));
   };
   const replacePlugin = (pluginId = "", contributions = []) => {
@@ -261,7 +261,7 @@ export function createExtensionRegistry({
       });
     },
     publish(generation) {
-      if (!generation || typeof generation[REGISTRY_SNAPSHOT] !== "function") {
+      if (!generation || !isFunction(generation[REGISTRY_SNAPSHOT])) {
         throw new TypeError("extension registry generation is required");
       }
       contributionsByPoint = generation[REGISTRY_SNAPSHOT]();

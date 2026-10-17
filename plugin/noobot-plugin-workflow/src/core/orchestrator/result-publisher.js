@@ -14,11 +14,8 @@ export async function publishWorkflowResult({
   agentResult = {},
   sourceText = "",
   semanticText = "",
-  semanticResolution = {},
   workflowPayload = {},
-  nodeAgentRuns = [],
   execution = {},
-  beforeDispatchMode = false,
 } = {}) {
   agentResult.workflow = workflowPayload;
   await publishWorkflowFinalMessage({
@@ -27,9 +24,7 @@ export async function publishWorkflowResult({
     ctx,
     sourceText,
     semanticText,
-    semanticResolution,
     workflowPayload,
-    nodeAgentRuns,
   });
   appendWorkflowTrace(agentResult, {
     stage: WORKFLOW_TRACE.STAGE_EXECUTED,

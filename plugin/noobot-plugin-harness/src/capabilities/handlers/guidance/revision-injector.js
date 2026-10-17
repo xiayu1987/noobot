@@ -98,7 +98,7 @@ export function schedulePlanUpdateByInject(
       );
       return true;
     },
-    buildScheduledDetail: ({ bucket, state }) => ({
+    buildScheduledDetail: ({ bucket }) => ({
       stage: normalizedStage,
       refinementTargetMainStepIndexes:
         normalizedStage === "refinement"

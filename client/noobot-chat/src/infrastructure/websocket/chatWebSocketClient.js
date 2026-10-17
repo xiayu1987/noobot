@@ -43,6 +43,7 @@ import {
   normalizeErrorMessage,
   normalizeTrimmedString,
 } from "./chatWebSocketProtocol.js";
+import { isFunction } from "@noobot/shared/value";
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
@@ -224,7 +225,7 @@ export function createChatWebSocketClient({
           const channelSessionId = getAgentTransportEventSessionId(transportEvent);
           parsedEvent = event;
           parsedData = data;
-          const hasLiveSubscriber = typeof liveEventSubscriber === "function";
+          const hasLiveSubscriber = isFunction(liveEventSubscriber);
           const observedData = receivedTransportEvent.data;
           logTransportDiagnostics("frontend.websocket.transportEventReceived", () => ({
             ...summarizeReceivedEventData(observedData),
@@ -423,7 +424,7 @@ export function createChatWebSocketClient({
 
       async function recoverHandshakeAuthentication(failedSocket) {
         if (settled || authenticationRetryStarted) return;
-        if (typeof refreshAuthentication !== "function") {
+        if (!isFunction(refreshAuthentication)) {
           rejectHandshake();
           return;
         }

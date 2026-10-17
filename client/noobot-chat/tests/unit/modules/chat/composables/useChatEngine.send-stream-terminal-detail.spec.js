@@ -52,7 +52,6 @@ describe("useChatEngine.send-stream terminal detail", () => {
       sessions,
       activeSessionId: harness.activeSessionId,
       makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
       sessionTitleFromMessages: () => "title",
       applyCompletedToolLogsToMessages: vi.fn(),
       scrollBottom: vi.fn(),

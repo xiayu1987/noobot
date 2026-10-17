@@ -19,7 +19,6 @@ export async function applyReconnectEventReplay({
   consumeReplayCacheForSession,
   applyReconnectMessagesToActiveSession,
   applyTurnLifecycleEnvelope,
-  applyTurnLifecycleSnapshot,
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,

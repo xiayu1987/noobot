@@ -55,7 +55,6 @@ export function createTestLifecycleEnvelope({
   sessionId = "child-session",
   parentSessionId = "root-session",
   turnScopeId = "workflow-node:child-turn",
-  persistenceScope,
 } = {}) {
   const facts = TEST_EVENT_FACTS[eventType];
   const payload = createTurnLifecycleEnvelope({

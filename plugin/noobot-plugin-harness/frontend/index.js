@@ -5,13 +5,14 @@
  */
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { useHarnessLocale } from "./i18n/index.js";
+import { isFunction } from "@noobot/shared/value";
 
 const GUIDANCE_ANALYSIS_ACTIVITY_KIND = "guidance_analysis";
 
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
-  if (typeof contribute !== "function" || !points) {
+  if (!isFunction(contribute) || !points) {
     throw new Error("frontend contribution API is required");
   }
   contribute(points.MARKDOWN_COLLAPSE_MARKERS, {

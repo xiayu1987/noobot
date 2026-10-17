@@ -192,10 +192,11 @@ function collectViolations(filePath, text) {
   const code = stripCommentsAndStrings(text);
   const violations = [];
 
-  const declarations = /\b(?:export\s+)?(?:const|let|var)\s+([A-Z_$][\w$]*)\s*=\s*([^;\n]+)/g;
+  const declarations =
+    /\b(?:export\s+)?(?:const|let|var)\s+(?<name>[A-Z_$][\w$]*)\s*=\s*(?<expr>[^;\n]+)/g;
   let match;
   while ((match = declarations.exec(code))) {
-    const [, name, expr] = match;
+    const { name, expr } = match.groups;
     const rule = classifyName(name, "name");
     if (!rule || !expressionLooksNumeric(expr)) continue;
     violations.push({
@@ -207,9 +208,9 @@ function collectViolations(filePath, text) {
     });
   }
 
-  const properties = /\b([A-Za-z_$][\w$]*)\s*:\s*([^,\n}]+)/g;
+  const properties = /\b(?<name>[A-Za-z_$][\w$]*)\s*:\s*(?<expr>[^,\n}]+)/g;
   while ((match = properties.exec(code))) {
-    const [, name, expr] = match;
+    const { name, expr } = match.groups;
     const rule = classifyName(name, "prop");
     if (!rule || !expressionLooksNumeric(expr)) continue;
     violations.push({

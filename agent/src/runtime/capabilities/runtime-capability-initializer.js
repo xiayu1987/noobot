@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
@@ -62,7 +62,7 @@ function ensureSharedTools(runtimeContext = {}) {
 }
 
 function initializeSharedFetch(sharedTools = {}) {
-  if (typeof sharedTools.fetch !== "function") {
+  if (!isFunction(sharedTools.fetch)) {
     sharedTools.fetch = defaultSharedFetch;
   }
 }

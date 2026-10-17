@@ -12,7 +12,7 @@ import { initializeCurrentTurnMessageEventProjection } from "../../../src/events
 import { createModelContext } from "@noobot/context-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function createTestTurnMessagesStore(messages = []) {
   return createCurrentTurnMessagesStore(messages);
@@ -33,7 +33,7 @@ export function createTestModelPort(providerModel = {}) {
         tools.length && typeof providerModel.bindTools === "function"
           ? providerModel.bindTools(tools, request?.options?.toolBinding || {})
           : providerModel;
-      if (typeof invoker?.invoke !== "function") {
+      if (!isFunction(invoker?.invoke)) {
         throw new TypeError("test ModelPort provider must expose invoke()");
       }
       const response = await invoker.invoke(request.messages || [], {

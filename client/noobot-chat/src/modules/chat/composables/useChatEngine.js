@@ -50,7 +50,6 @@ export function useChatEngine({
   navigateToLastMessage,
   activeSession,
   activeSessionId,
-  sessions,
   turnRuntimeRegistry,
   applyTurnRuntimeEvent,
   applyTurnLifecycleEnvelope: commitTurnLifecycleEnvelope,
@@ -65,7 +64,6 @@ export function useChatEngine({
   materializeTurnPresentation,
   upsertCanonicalAssistantMessage,
   makeViewMessage,
-  foldMessagesForView,
   applySessionDetail,
   deleteSessionMessagesFromApi,
   replaceSessionTurnApi,
@@ -292,7 +290,6 @@ export function useChatEngine({
 
   function stopSending(executionId = "") {
     return requestStopSending({
-      userId,
       activeSession,
       turnRuntimeRegistry,
       chatWebSocketClient,
@@ -318,7 +315,6 @@ export function useChatEngine({
     findCanonicalMessagesById,
     materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
-    foldMessagesForView,
     makeViewMessage,
     mergeAssistantAttachments,
   };
@@ -326,7 +322,6 @@ export function useChatEngine({
     pendingInteractionRequest,
     interactionSubmitting,
     clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
     clearMissingInteractionPayloadTimer,
     setPendingInteractionRequest,
     tryAutoResolveInteraction,
@@ -398,7 +393,6 @@ export function useChatEngine({
     messageOperationStore,
     monotonicActionStopTimeoutMs,
     monotonicActionStopPollIntervalMs,
-    appendMessage,
     removeWorkflowOwnersForReplacedTurns,
     invalidateTerminalResolution: (sessionId, turnScopeId) =>
       terminalResolutionCoordinator.invalidate(sessionId, turnScopeId),

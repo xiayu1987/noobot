@@ -10,7 +10,7 @@ import {
   mergeTransferEnvelopes,
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);
@@ -46,7 +46,7 @@ export async function transferSummaryInjectionMessage(
 ) {
   const runtime = ctx?.agentContext?.bindings?.runtime || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  if (typeof transferSemanticContent !== "function") {
+  if (!isFunction(transferSemanticContent)) {
     throw new Error("harness_semantic_transfer_runtime_required");
   }
   const transferred = await transferSemanticContent({

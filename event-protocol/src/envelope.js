@@ -26,38 +26,53 @@ const isIntegerAtLeast = (minimum) => (value) =>
   Number.isInteger(Number(value)) && Number(value) >= minimum;
 
 const ENVELOPE_RULES = Object.freeze([
-  ["protocol", "name", (value) => value === EVENT_PROTOCOL_NAME, "invalid_protocol_name"],
-  [
-    "protocol",
-    "version",
-    (value) => Number(value) === EVENT_PROTOCOL_VERSION,
-    "unsupported_protocol_version",
-  ],
-  ["protocol", "family", text, "missing_event_family"],
-  ["protocol", "schemaVersion", isIntegerAtLeast(1), "invalid_schema_version"],
-  [null, "identity", isPlainObject, "invalid_identity"],
-  ["identity", "eventId", text, "missing_event_id"],
-  ["identity", "eventType", text, "missing_event_type"],
-  ["identity", "sessionId", text, "missing_session_id"],
-  [null, "causality", isPlainObject, "invalid_causality"],
-  [null, "ordering", isPlainObject, "invalid_ordering"],
-  ["ordering", "domain", text, "missing_ordering_domain"],
-  ["ordering", "scopeId", text, "missing_ordering_scope"],
-  ["ordering", "sequence", isIntegerAtLeast(0), "invalid_sequence"],
-  [null, "producer", isPlainObject, "invalid_producer"],
-  ["producer", "type", text, "missing_producer_type"],
-  ["producer", "id", text, "missing_producer_id"],
-  [null, "occurredAt", text, "missing_occurred_at"],
-  [null, "payload", isPlainObject, "invalid_payload"],
+  {
+    section: "protocol",
+    field: "name",
+    predicate: (value) => value === EVENT_PROTOCOL_NAME,
+    error: "invalid_protocol_name",
+  },
+  {
+    section: "protocol",
+    field: "version",
+    predicate: (value) => Number(value) === EVENT_PROTOCOL_VERSION,
+    error: "unsupported_protocol_version",
+  },
+  { section: "protocol", field: "family", predicate: text, error: "missing_event_family" },
+  {
+    section: "protocol",
+    field: "schemaVersion",
+    predicate: isIntegerAtLeast(1),
+    error: "invalid_schema_version",
+  },
+  { field: "identity", predicate: isPlainObject, error: "invalid_identity" },
+  { section: "identity", field: "eventId", predicate: text, error: "missing_event_id" },
+  { section: "identity", field: "eventType", predicate: text, error: "missing_event_type" },
+  { section: "identity", field: "sessionId", predicate: text, error: "missing_session_id" },
+  { field: "causality", predicate: isPlainObject, error: "invalid_causality" },
+  { field: "ordering", predicate: isPlainObject, error: "invalid_ordering" },
+  { section: "ordering", field: "domain", predicate: text, error: "missing_ordering_domain" },
+  { section: "ordering", field: "scopeId", predicate: text, error: "missing_ordering_scope" },
+  {
+    section: "ordering",
+    field: "sequence",
+    predicate: isIntegerAtLeast(0),
+    error: "invalid_sequence",
+  },
+  { field: "producer", predicate: isPlainObject, error: "invalid_producer" },
+  { section: "producer", field: "type", predicate: text, error: "missing_producer_type" },
+  { section: "producer", field: "id", predicate: text, error: "missing_producer_id" },
+  { field: "occurredAt", predicate: text, error: "missing_occurred_at" },
+  { field: "payload", predicate: isPlainObject, error: "invalid_payload" },
 ]);
 
 export function validateEventEnvelope(value = {}) {
   if (!isPlainObject(value))
     return Object.freeze({ valid: false, errors: ["envelope_not_object"] });
-  const errors = ENVELOPE_RULES.filter(([section, field, predicate]) => {
+  const errors = ENVELOPE_RULES.filter(({ section, field, predicate }) => {
     const owner = section ? value[section] : value;
     return !predicate(owner?.[field]);
-  }).map(([, , , error]) => error);
+  }).map(({ error }) => error);
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 

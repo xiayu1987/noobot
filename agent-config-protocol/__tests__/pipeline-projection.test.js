@@ -31,7 +31,7 @@ test("build, migration, and validation pipeline exposes one result contract", as
   assert.deepEqual(
     await validateEffectiveConfig({
       resolvedConfig: migrationResult.config,
-      validators: [() => ({ warnings: ["reviewed"] })],
+      validators: [{ name: "review", validate: () => ({ ok: true, warnings: ["reviewed"] }) }],
     }),
     ["reviewed"],
   );

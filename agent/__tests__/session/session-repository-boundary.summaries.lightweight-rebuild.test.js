@@ -212,8 +212,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
                 flowtos: [{ from: "start", to: "act", extra: { keep: true } }],
               },
               execution: {
-                workflowRunId: "workflow-run-1",
-                instanceId: "workflow-run-1",
                 completed: true,
                 status: "success",
                 nodeAgentRuns: [
@@ -402,8 +400,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const workflowMessage = summary.messages.find((item) => item.messageId === "w1");
     assert.equal(workflowMessage.type, "workflow");
     assert.equal(workflowMessage.pluginMeta.payload.workflowRunId, "workflow-run-1");
-    assert.equal(workflowMessage.pluginMeta.payload.execution.workflowRunId, "workflow-run-1");
-    assert.equal(workflowMessage.pluginMeta.payload.execution.instanceId, "workflow-run-1");
     assert.equal(workflowMessage.content, longWorkflowContent);
     assert.equal(workflowMessage.content.endsWith(workflowContentTail), true);
     assert.equal(workflowMessage.content.includes(`${workflowContentTail}…`), false);

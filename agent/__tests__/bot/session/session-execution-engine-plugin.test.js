@@ -49,7 +49,7 @@ test("SessionExecutionEngine activates harness by Manifest id", async () => {
   assert.equal(Object.hasOwn(prepared.hookManager, "runtime"), false);
 });
 
-test("SessionExecutionEngine preserves an explicit harness model invoker", () => {
+test("SessionExecutionEngine owns the harness model invoker instead of run config", () => {
   const capabilityModelInvoker = async () => ({ output: "ok" });
   const engine = new SessionExecutionEngine({});
   const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
@@ -64,7 +64,8 @@ test("SessionExecutionEngine preserves an explicit harness model invoker", () =>
     },
   });
 
-  assert.equal(prepared.plugins.harness.capabilityModelInvoker, capabilityModelInvoker);
+  assert.equal(typeof prepared.plugins.harness.capabilityModelInvoker, "function");
+  assert.notEqual(prepared.plugins.harness.capabilityModelInvoker, capabilityModelInvoker);
 });
 
 test("plugin policy declarations merge through the single policy.patch port", () => {

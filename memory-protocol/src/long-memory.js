@@ -30,7 +30,7 @@ export const LONG_MEMORY_ERROR_CODE = Object.freeze({
 const FIELD_KEY_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 const LIST_ITEM_RE = /^(\d+)\.\s+(\S.*)$/;
 const PATCH_LINE_RE = new RegExp(
-  `^(ADD|UPDATE|DELETE)\\s+([a-z0-9_.]+)(?:\\s+(\\d+))?\\s*(?:${LONG_MEMORY_VALUE_SEPARATOR}\\s*(\\S.*))?$`,
+  `^(?<action>ADD|UPDATE|DELETE)\\s+(?<key>[a-z0-9_.]+)(?:\\s+(?<rawIndex>\\d+))?\\s*(?:${LONG_MEMORY_VALUE_SEPARATOR}\\s*(?<rawValue>\\S.*))?$`,
 );
 
 function longMemoryError(code, message) {
@@ -342,7 +342,7 @@ export function renderLongMemoryFieldsForPrompt(model, values) {
 function parsePatchLine(model, line) {
   const matched = PATCH_LINE_RE.exec(line);
   if (!matched) throw patchError(`invalid long memory patch line: ${line}`);
-  const [, action, key, rawIndex, rawValue] = matched;
+  const { action, key, rawIndex, rawValue } = matched.groups;
   const field = model.byKey.get(key);
   if (!field) throw patchError(`unknown long memory field: ${key}`);
   const index = rawIndex === undefined ? null : Number(rawIndex);

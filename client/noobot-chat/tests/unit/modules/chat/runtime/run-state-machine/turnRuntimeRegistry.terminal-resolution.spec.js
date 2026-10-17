@@ -282,7 +282,6 @@ it.each([
     failedPhase: "completion",
     failedState: "frontend_completion_error",
     successEvent: "turn.completed",
-    terminal: "completed",
     prepare(registry) {
       sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
       applyTurnRuntimeEvent(registry, {
@@ -316,7 +315,6 @@ it.each([
     failedPhase: "stop",
     failedState: "frontend_stop_error",
     successEvent: "turn.stop_completed",
-    terminal: "user_stopped",
     prepare(registry) {
       sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
       applyTurnRuntimeEvent(registry, {
@@ -361,7 +359,7 @@ it.each([
   },
 ])(
   "allows only the matching authoritative success to settle a retryable $name failure",
-  ({ prepare, failedPhase, failedState, successEvent, terminal }) => {
+  ({ prepare, failedPhase, failedState, successEvent }) => {
     const registry = createTurnRuntimeRegistryState();
     prepare(registry);
     const failureTerminalState = failedPhase === "stop" ? "stop_failed" : "completion_failed";

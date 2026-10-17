@@ -10,7 +10,7 @@ import {
   validatePluginContributionReceipt,
   validatePluginActivationResult,
 } from "@noobot/plugin-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function normalizePath(path = []) {
   const normalized = Array.isArray(path) ? path.map((item) => text(item)).filter(Boolean) : [];
@@ -69,8 +69,7 @@ export function createPluginHostFacade({
 }
 
 export function createContributionTransaction({ commit, rollback = null } = {}) {
-  if (typeof commit !== "function")
-    throw new TypeError("contribution transaction commit is required");
+  if (!isFunction(commit)) throw new TypeError("contribution transaction commit is required");
   const staged = [];
   let state = "staging";
   return Object.freeze({
@@ -95,7 +94,7 @@ export function createContributionTransaction({ commit, rollback = null } = {}) 
     },
     rollback() {
       if (state === "rolled_back") return;
-      if (state === "committed" && typeof rollback !== "function") {
+      if (state === "committed" && !isFunction(rollback)) {
         throw new Error("committed contribution transaction has no rollback operation");
       }
       const previousState = state;
@@ -124,8 +123,7 @@ function captureLifecycle({ lifecycleEvents, lifecycleSink, event, entry, option
 }
 
 function ensureSync(value, operation) {
-  if (value && typeof value.then === "function")
-    throw new TypeError(`${operation} must be synchronous`);
+  if (value && isFunction(value.then)) throw new TypeError(`${operation} must be synchronous`);
   return value;
 }
 
@@ -415,14 +413,12 @@ function activateScopeSync({
 }
 
 export function createPluginActivationScopeSync(options = {}) {
-  if (typeof options.hostFactory !== "function")
-    throw new TypeError("plugin hostFactory is required");
+  if (!isFunction(options.hostFactory)) throw new TypeError("plugin hostFactory is required");
   return activateScopeSync(options);
 }
 
 export async function createPluginActivationScope(options = {}) {
-  if (typeof options.hostFactory !== "function")
-    throw new TypeError("plugin hostFactory is required");
+  if (!isFunction(options.hostFactory)) throw new TypeError("plugin hostFactory is required");
   const entries = [...(options.entries || [])];
   const activations = new Map();
   const transactions = new Map();

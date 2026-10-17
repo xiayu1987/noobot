@@ -148,14 +148,7 @@ export function enrichWorkflowPayload({
   semantic = {},
   nodeAgentRuns = [],
   nodeStateSnapshot = null,
-  planningPersistResult = null,
 } = {}) {
-  workflowPayload.planningDialog = {
-    dialogProcessId: text(ctx?.dialogProcessId),
-    sessionId: text(ctx?.sessionId),
-    storagePath: text(planningPersistResult?.outputDir),
-    storageFile: text(planningPersistResult?.outputFile),
-  };
   workflowPayload.nodeSessions = buildWorkflowNodeSessions({
     ctx,
     semantic,

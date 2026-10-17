@@ -15,6 +15,7 @@ import {
   appendCapabilityLog,
   clearPendingPlanRefinement,
   ensureHarnessBucket,
+  shouldUseSeparateModel,
   syncPlanRefinementPolicyFlag,
   translateI18nText,
 } from "./deps.js";
@@ -46,7 +47,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
     metadata: {
       contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
     },
-    async func(args = {}, _runManager = null, config = {}) {
+    async func(args = {}, runManager, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
       const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
       if (state?.flags?.planningCaptured !== true) {
@@ -116,7 +117,7 @@ export function synchronizePlanRefinementTool(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { state } = holder;
-  if (syncPlanRefinementPolicyFlag(ctx, state, meta) !== true) {
+  if (!shouldUseSeparateModel(meta) || syncPlanRefinementPolicyFlag(ctx, state, meta) !== true) {
     clearPendingPlanRefinement(state);
     return false;
   }

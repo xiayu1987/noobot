@@ -7,8 +7,6 @@ import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDeb
 import { text } from "@noobot/shared/value";
 
 export function createRuntimeEventProjector({
-  sessions,
-  activeSession,
   turnRuntimeRegistry,
   chatStore,
   resolveActiveSessionIdentity,

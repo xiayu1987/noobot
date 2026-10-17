@@ -55,8 +55,6 @@ describe("useReconnectReplay channel_state contract", () => {
 
       expect(result).toMatchObject({ applied: false, reason: "transport_channel_state_ignored" });
       expect(refs.activeSession.value.messages).toEqual(before);
-      expect(mocks.applyTurnRuntimeEvents).not.toHaveBeenCalled();
-      expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
       expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
     },
   );
@@ -74,7 +72,6 @@ describe("useReconnectReplay channel_state contract", () => {
     expect(result).toMatchObject({ applied: false, reason: "transport_channel_state_ignored" });
     expect(refs.activeSession.value.messages).toHaveLength(1);
     expect(mocks.findCanonicalMessageById).not.toHaveBeenCalled();
-    expect(mocks.appendMessage).not.toHaveBeenCalled();
   });
 
   it("does not use channel timestamps as timing facts", async () => {
@@ -98,7 +95,7 @@ describe("useReconnectReplay channel_state contract", () => {
   });
 
   it("does not let stale or terminal channel state affect a newer turn", async () => {
-    const { api, refs, mocks } = createFixture();
+    const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "new", turnScopeId: "turn-new" },
       createCanonicalAssistant({
@@ -118,6 +115,5 @@ describe("useReconnectReplay channel_state contract", () => {
     expect(result).toMatchObject({ applied: false, reason: "transport_channel_state_ignored" });
     expect(refs.activeSession.value.messages[1].pending).toBe(true);
     expect(refs.activeSession.value.messages[1].turnScopeId).toBe("turn-new");
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
   });
 });

@@ -99,7 +99,7 @@ function createFailureCommitter(context) {
   };
 }
 
-function createRunTransportDiagnostic(context) {
+function createRunTransportDiagnostic() {
   return (identity) =>
     (data = {}) => {
       void recordServiceWebSocketLifecycle({
@@ -162,7 +162,7 @@ export function createMessageRunHandler(dependencies) {
     lifecycle: { pending: null, latestTurn: null },
   };
   context.recoverConflictingTurn = createConflictTurnRecovery(context);
-  context.recordRunTransportDiagnostic = createRunTransportDiagnostic(context);
+  context.recordRunTransportDiagnostic = createRunTransportDiagnostic();
   return {
     handleRun: createRunHandler(context),
     commitCurrentFailure: createFailureCommitter(context),

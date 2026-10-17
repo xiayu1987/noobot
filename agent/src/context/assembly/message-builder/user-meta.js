@@ -130,7 +130,7 @@ export function buildHumanMessagesForUser(
   return [contentMessage, metaMessage];
 }
 
-export function shouldBuildUserMetaForHistoryMessage(msg = {}, runtime = {}) {
+export function shouldBuildUserMetaForHistoryMessage(msg = {}) {
   if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
   const messageOrigin = resolveContextMessageOrigin(msg);
   const injectedMessageType = readContextMessageField(msg, "injectedMessageType");

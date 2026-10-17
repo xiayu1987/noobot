@@ -8,7 +8,7 @@ import { appendJsonlBuffered } from "../store/store.js";
 import { HARNESS_FLUSH_REASONS } from "../core/constants.js";
 import { HARNESS_FSM_EFFECTS } from "./transitions.js";
 
-async function appendFsmAudit(paths, ctx = {}, payload = {}, options = {}) {
+async function appendFsmAudit(paths, payload = {}, options = {}) {
   if (!paths?.events || !payload?.type) return;
   const flushReason =
     payload.accepted === false || String(payload.type).includes("rejected")
@@ -33,13 +33,7 @@ async function appendFsmAudit(paths, ctx = {}, payload = {}, options = {}) {
   );
 }
 
-export async function applyFsmTransitionEffects(
-  paths,
-  ctx = {},
-  options = {},
-  plan = {},
-  cacheApi = {},
-) {
+export async function applyFsmTransitionEffects(paths, options = {}, plan = {}, cacheApi = {}) {
   const actions = Array.isArray(plan.actions) ? plan.actions : [];
   for (const action of actions) {
     const payload = action?.payload || {};
@@ -50,7 +44,6 @@ export async function applyFsmTransitionEffects(
     ) {
       await appendFsmAudit(
         paths,
-        ctx,
         {
           point: payload.point,
           type:

@@ -57,7 +57,6 @@ export function registerStartupIpcHandlers({
   app,
   ipcMain = getDefaultIpcMain(),
   getStartupStatuses = () => [],
-  getDesktopConfigState = () => null,
   setDesktopConfigState = () => {},
   getPendingConfigResolve = () => null,
   setPendingConfigResolve = () => {},

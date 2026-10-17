@@ -64,7 +64,10 @@ test("harness summary selection does not mutate canonical messages before commit
 
 test("harness review reports failed or inconsistent semantic acceptance", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
   const agentContext = {
     payload: {
       messages: { system: [], history: [] },

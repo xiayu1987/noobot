@@ -19,7 +19,7 @@ import {
   rejectPendingInteractionsForTurn,
   unregisterPendingInteraction,
 } from "./pending-interaction-registry.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 const USER_INTERACTION_TIMEOUT_MS = resolveUserInteractionTimeoutMs();
 
@@ -152,7 +152,7 @@ export function createUserInteractionBridge({
 } = {}) {
   const interactionOwnerUserId = text(ownerUserId);
   if (!interactionOwnerUserId) throw new TypeError("ownerUserId is required");
-  if (typeof commitInteractionRequest !== "function") {
+  if (!isFunction(commitInteractionRequest)) {
     throw new TypeError("commitInteractionRequest is required");
   }
   const interactionRequestsByIdentity = new Map();

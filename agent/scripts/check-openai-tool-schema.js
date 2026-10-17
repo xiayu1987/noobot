@@ -21,7 +21,7 @@ import { loadGlobalConfig } from "../src/config/core/global-config-loader.js";
 import { createAgentContextEnvelope, createModelContext } from "@noobot/context-protocol";
 import { createAgentExecutionScope } from "../src/context/agent-execution-scope.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function parseArgs(argv = []) {
   const out = {
@@ -92,7 +92,7 @@ function formatSchemaIssues(error) {
 }
 
 async function assertToolCallMatchesSchema(tool, call) {
-  if (!tool?.schema || typeof tool.schema.safeParseAsync !== "function") {
+  if (!tool?.schema || !isFunction(tool.schema.safeParseAsync)) {
     throw new TypeError(`tool ${String(tool?.name || "(unknown)")} has no parseable schema`);
   }
   const parsed = await tool.schema.safeParseAsync(call?.args);

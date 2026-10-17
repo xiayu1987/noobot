@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 export function acceptsDebugSink(sink) {
-  return Boolean(sink && typeof sink.debug === "function" && typeof sink.isEnabled === "function");
+  return Boolean(sink && isFunction(sink.debug) && isFunction(sink.isEnabled));
 }
 
 export function isDebugTypeEnabled(sink, debugType) {

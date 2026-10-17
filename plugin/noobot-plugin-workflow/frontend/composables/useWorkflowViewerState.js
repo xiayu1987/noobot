@@ -6,27 +6,11 @@
 import { computed, ref, watch } from "vue";
 import { text } from "@noobot/shared/value";
 
-function resolveWorkflowViewerKey(workflowPayload = {}) {
-  return text(
-    workflowPayload?.workflowRunId ||
-      workflowPayload?.execution?.workflowRunId ||
-      workflowPayload?.execution?.instanceId ||
-      workflowPayload?.planningDialog?.workflowRunId ||
-      workflowPayload?.runMeta?.workflowRunId,
-  );
-}
-
-function registryValue(registry) {
-  if (registry && typeof registry === "object" && "value" in registry) return registry.value;
-  return registry;
-}
-
 export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistry = null) {
-  const workflowRunId = computed(() => resolveWorkflowViewerKey(workflowPayload.value));
-  const registry = registryValue(workflowNodeStateRegistry);
+  const workflowRunId = computed(() => text(workflowPayload.value?.workflowRunId));
   const initialState =
-    workflowRunId.value && registry?.viewerStates?.[workflowRunId.value]
-      ? registry.viewerStates[workflowRunId.value]
+    workflowRunId.value && workflowNodeStateRegistry?.viewerStates?.[workflowRunId.value]
+      ? workflowNodeStateRegistry.viewerStates[workflowRunId.value]
       : {};
 
   const viewerVisible = ref(false);
@@ -38,18 +22,16 @@ export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistr
   watch(
     [
       workflowRunId,
-      viewerVisible,
       selectedNode,
       selectedRuntimeNode,
       selectedRuntimeStep,
       selectedGraphDialogProcessId,
     ],
-    ([key, visible, node, runtimeNode, runtimeStep, dialogProcessId]) => {
-      const target = registryValue(workflowNodeStateRegistry);
+    ([key, node, runtimeNode, runtimeStep, dialogProcessId]) => {
+      const target = workflowNodeStateRegistry;
       if (!key || !target) return;
       target.viewerStates ||= {};
       target.viewerStates[key] = {
-        viewerVisible: false,
         selectedNode: node,
         selectedRuntimeNode: runtimeNode,
         selectedRuntimeStep: runtimeStep,

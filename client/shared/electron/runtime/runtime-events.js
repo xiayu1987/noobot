@@ -5,12 +5,13 @@
  */
 import { writeRuntimeEvent } from "@noobot/runtime-events";
 import { joinClientPath } from "../../path-resolver.js";
+import { isFunction } from "@noobot/shared/value";
 
 const SENSITIVE_KEY_PATTERN =
   /(token|cookie|authorization|secret|apikey|apiKey|headers|body|url|href|password|path|file)/i;
 
 export function getDesktopRuntimeEventsRoot(app) {
-  if (!app || typeof app.getPath !== "function") {
+  if (!app || !isFunction(app.getPath)) {
     throw new Error("getDesktopRuntimeEventsRoot requires an Electron app");
   }
   return joinClientPath(app.getPath("userData"), "runtime", "events");

@@ -7,7 +7,7 @@ import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
-export function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
+export function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId }) {
   const revision = 100;
   const sequence = 100;
   const completionCommitId = `commit-${turnScopeId}-${revision}`;

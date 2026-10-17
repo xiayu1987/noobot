@@ -15,6 +15,7 @@ import {
   validateEffectiveConfig,
 } from "@noobot/agent-config-protocol";
 import { resolveConfiguredPathPolicy } from "./path-policy-adapter.js";
+import { isFunction, isPlainObject } from "@noobot/shared/value";
 
 function cloneConfig(value) {
   if (value === null || value === undefined) return value;
@@ -23,19 +24,13 @@ function cloneConfig(value) {
 
 function assertGlobalConfigSource(source) {
   const name = typeof source?.name === "string" ? source.name.trim() : "";
-  if (typeof source?.loadRawConfig !== "function" || !name) {
+  if (!isFunction(source?.loadRawConfig) || !name) {
     throw new TypeError("global config source requires loadRawConfig() and name");
   }
   return name;
 }
 
-export function createGlobalConfigBuilder({
-  source,
-  migrations = [],
-  validators = [],
-  normalizeRawConfigFn = normalizeKnownConfigKeys,
-  resolveConfigTemplatesFn = resolveConfigTemplates,
-} = {}) {
+export function createGlobalConfigBuilder({ source, migrations = [], validators = [] } = {}) {
   const sourceName = assertGlobalConfigSource(source);
   let lastRawConfig = {};
   const normalizedMigrations = normalizeConfigMigrations(migrations);
@@ -46,26 +41,16 @@ export function createGlobalConfigBuilder({
       return cloneConfig(lastRawConfig);
     }
     const sourceRawConfig = await source.loadRawConfig();
-    const normalizedRawConfig =
-      typeof normalizeRawConfigFn === "function"
-        ? normalizeRawConfigFn(sourceRawConfig || {})
-        : sourceRawConfig || {};
-    lastRawConfig = normalizedRawConfig || {};
+    if (!isPlainObject(sourceRawConfig)) {
+      throw new TypeError(`global config source ${sourceName} must return a plain object`);
+    }
+    lastRawConfig = normalizeKnownConfigKeys(sourceRawConfig);
     return cloneConfig(lastRawConfig);
   }
 
-  async function build({
-    configParams = {},
-    reloadRawConfig = true,
-    env = process.env,
-    extraContext = {},
-  } = {}) {
+  async function build({ configParams = {}, reloadRawConfig = true, env = process.env } = {}) {
     const rawConfig = await loadRawConfig({ reload: reloadRawConfig });
-    const buildContext = {
-      env,
-      configParams,
-      extraContext: extraContext && typeof extraContext === "object" ? extraContext : {},
-    };
+    const buildContext = { env, configParams };
     const migrationResult = await applyConfigMigrations({
       config: rawConfig,
       migrations: normalizedMigrations,
@@ -73,7 +58,7 @@ export function createGlobalConfigBuilder({
     });
     const persistedConfig = migrationResult.config || {};
     const migratedRawConfig = normalizeConfiguredModelProviders(persistedConfig);
-    const resolvedConfig = resolveConfigTemplatesFn(migratedRawConfig, {
+    const resolvedConfig = resolveConfigTemplates(migratedRawConfig, {
       lookup: createConfigValueLookup(configParams, env),
     });
     resolveConfiguredPathPolicy(resolvedConfig);

@@ -28,7 +28,7 @@ function finiteNumberOrUndefined(primary, fallback) {
 function resolveNodeRootSessionId(source, workflowPayload) {
   if (source.rootSessionId) return firstText(source.rootSessionId);
   const payload = workflowPayload.value;
-  return firstText(payload?.planningDialog?.sessionId, payload?.runMeta?.sessionId);
+  return firstText(payload?.runMeta?.sessionId);
 }
 
 function makeNodeSessionFromRun(item = {}, workflowPayload) {
@@ -59,19 +59,6 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
     parallelWave: Number(source.parallelWave || 0),
     waveOrder: Number(source.waveOrder || 0),
   };
-}
-
-function getRegistryValue(registry) {
-  if (registry && typeof registry === "object" && "value" in registry) return registry.value || {};
-  return registry && typeof registry === "object" ? registry : {};
-}
-
-function resolveWorkflowRunId(workflowPayload) {
-  return text(
-    workflowPayload.value?.workflowRunId ||
-      workflowPayload.value?.execution?.workflowRunId ||
-      workflowPayload.value?.execution?.instanceId,
-  );
 }
 
 function finiteNumberFrom(value) {
@@ -176,9 +163,10 @@ export function createRuntimeNodeSessions({
   return computed(() => {
     const entries = [];
     const entryIndexByKey = new Map();
-    const workflowRunId = resolveWorkflowRunId(workflowPayload);
-    const registry = getRegistryValue(workflowNodeStateRegistry);
-    const committedNodes = workflowRunId ? registry?.workflows?.[workflowRunId]?.nodes || {} : {};
+    const workflowRunId = text(workflowPayload.value?.workflowRunId);
+    const committedNodes = workflowRunId
+      ? workflowNodeStateRegistry?.workflows?.[workflowRunId]?.nodes || {}
+      : {};
 
     for (const item of nodeSessions.value) {
       const canonicalItem = normalizeRuntimeStatusInput(item);

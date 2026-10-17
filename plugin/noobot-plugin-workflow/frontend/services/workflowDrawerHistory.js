@@ -19,10 +19,7 @@ export function buildWorkflowDrawerRoute(nodeItem = {}, workflowPayload = {}, pa
   const rootSessionId = String(
     Object.prototype.hasOwnProperty.call(patch, "rootSessionId")
       ? patch.rootSessionId
-      : nodeItem?.rootSessionId ||
-          workflowPayload?.planningDialog?.sessionId ||
-          workflowPayload?.runMeta?.sessionId ||
-          "",
+      : nodeItem?.rootSessionId || workflowPayload?.runMeta?.sessionId || "",
   ).trim();
   return { dialogProcessId, rootSessionId };
 }
@@ -81,9 +78,7 @@ export function useWorkflowDrawerHistory({ workflowPayload, flowNodes }) {
       collectWorkflowSessionTargets().find((target = {}) => {
         const targetDialogProcessId = resolveWorkflowDialogProcessId(target);
         const targetRootSessionId = text(
-          target?.rootSessionId ||
-            workflowPayload.value?.planningDialog?.sessionId ||
-            workflowPayload.value?.runMeta?.sessionId,
+          target?.rootSessionId || workflowPayload.value?.runMeta?.sessionId,
         );
         return targetDialogProcessId === dialogProcessId && targetRootSessionId === rootSessionId;
       }) || null

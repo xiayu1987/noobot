@@ -29,7 +29,7 @@ import { randomUUID } from "node:crypto";
 import { isWorkspaceRuntimeRelativePath } from "@noobot/workspace-protocol";
 import { AttachmentService } from "../artifacts/index.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
@@ -244,7 +244,7 @@ export function createSessionFacade(runtime = {}) {
     if (requestedParentSessionId && requestedParentSessionId !== scopeParentSessionId) {
       throw new Error("scoped session parent does not match its authority protocol scope");
     }
-    if (typeof runtime.createScopedPersistenceContext !== "function") {
+    if (!isFunction(runtime.createScopedPersistenceContext)) {
       throw new Error("scoped persistence context factory is unavailable");
     }
     return {
@@ -263,7 +263,7 @@ export function createSessionFacade(runtime = {}) {
 
   return {
     createScopedPersistenceContext(payload = {}) {
-      if (typeof runtime.createScopedPersistenceContext !== "function") {
+      if (!isFunction(runtime.createScopedPersistenceContext)) {
         throw new Error("scoped persistence context factory is unavailable");
       }
       return runtime.createScopedPersistenceContext(payload);

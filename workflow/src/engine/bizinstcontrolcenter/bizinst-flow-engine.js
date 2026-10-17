@@ -11,6 +11,7 @@ import ModelStateBoxFactory from "../bizinst/box/modelstatebox/model-state-box-f
 import ENodeType from "../../design/model/node/enums/node-type.js";
 import CantFlowException from "../exception/cant-flow-exception.js";
 import FlowPolicyException from "../exception/flow-policy-exception.js";
+import { isFunction } from "@noobot/shared/value";
 
 class BizinstFlowEngine {
   static instance = new BizinstFlowEngine();
@@ -92,7 +93,7 @@ class BizinstFlowEngine {
     let canFlowtoCount = 0;
     for (const flowto of flowtos) {
       const flowtoBox = this.getModelBoxFactory().getFlowtoBox(flowto);
-      if (flowtoBox.canFlow && !flowtoBox.canFlow(bizinst)) continue;
+      if (!flowtoBox.canFlow(bizinst)) continue;
       canFlowtoCount++;
 
       const currentNode = currentNodeState.getNode?.();
@@ -111,10 +112,9 @@ class BizinstFlowEngine {
       const endNode = flowtoStateBox.getFlowtoState().getFlowto().getEndNode();
 
       const nodeType = endNode?.getNodeType?.();
-      const isActionNode =
-        nodeType === ENodeType.ActionNode || typeof endNode?.getStepCount === "function";
+      const isActionNode = nodeType === ENodeType.ActionNode || isFunction(endNode?.getStepCount);
       const isCompositeNode =
-        nodeType === ENodeType.CompositeNode || typeof endNode?.getSubModel === "function";
+        nodeType === ENodeType.CompositeNode || isFunction(endNode?.getSubModel);
 
       if (isActionNode) {
         const nextActionNodeState = this.getModelBoxFactory()
@@ -194,7 +194,7 @@ class BizinstFlowEngine {
     const preNodeState = pathState.getStartNodeState();
     flowListener.goThrough(bizinst, pathState, 0);
 
-    if (preNodeState && typeof preNodeState.getStepStates === "function") {
+    if (preNodeState && isFunction(preNodeState.getStepStates)) {
       const preActionNodeStateBox =
         this.getModelStateBoxFactory().getActionNodeStateBox(preNodeState);
       flowListener.arriveStepState(bizinst, preActionNodeStateBox.getLastStepState());

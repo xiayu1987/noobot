@@ -11,19 +11,18 @@ import {
   createSemanticTransferTool,
   getBeforeDispatch,
   callsByNodeName,
-  createRegisterWorkflowHooks,
+  registerWorkflowAgentHooks,
   WORKFLOW_PLUGIN_DEFAULTS,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook injects upstream node result attachments into downstream sub-session system messages", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
   const semanticTransferCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
@@ -80,7 +79,6 @@ test("workflow hook injects upstream node result attachments into downstream sub
           },
         };
       },
-      generatedArtifactPersister: undefined,
     },
   });
 
@@ -136,12 +134,11 @@ test("workflow hook injects upstream node result attachments into downstream sub
 
 test("workflow hook injects one upstream action attachments into multiple direct downstream action nodes", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
@@ -187,7 +184,6 @@ test("workflow hook injects one upstream action attachments into multiple direct
           },
         };
       },
-      generatedArtifactPersister: undefined,
     },
   });
 

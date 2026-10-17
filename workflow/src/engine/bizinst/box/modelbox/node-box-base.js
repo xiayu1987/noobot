@@ -26,10 +26,6 @@ class NodeBoxBase {
   getNodeEndFlowtos() {
     return ModelUtility.getNodeEndFlowtos(this.getNode());
   }
-
-  createNodeState(modelState) {
-    return null;
-  }
 }
 
 export default NodeBoxBase;

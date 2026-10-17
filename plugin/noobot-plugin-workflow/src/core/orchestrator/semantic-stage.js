@@ -29,7 +29,6 @@ export async function runSemanticResolutionStage({
   throwIfWorkflowAborted(ctx);
 
   const semanticResolutionMeta = {
-    invoked: semanticResolution?.invoked === true,
     traceCount: Number(semanticResolution?.traceCount || 0),
   };
   await endWorkflowPhase({

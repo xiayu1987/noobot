@@ -24,7 +24,6 @@ export function buildNormalizedDetailMessages({
   detailMessages = [],
   sessionDocs = [],
   rootSessionId = "",
-  turnTimings = [],
   makeViewMessage,
 } = {}) {
   const sourceMessages = Array.isArray(detailMessages) ? detailMessages : [];

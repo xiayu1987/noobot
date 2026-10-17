@@ -6,7 +6,7 @@
 
 import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
 import { PLUGIN_ID } from "../constants.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function resolveWorkflowCommitScope({ ctx, payload }) {
   return {
@@ -66,7 +66,7 @@ function requireCommittedWorkflowEnvelope(committed) {
 }
 
 async function dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope }) {
-  if (typeof ctx?.eventListener?.onEvent !== "function") {
+  if (!isFunction(ctx?.eventListener?.onEvent)) {
     throw new Error("workflow authority event dispatcher is required");
   }
   await ctx.eventListener.onEvent({

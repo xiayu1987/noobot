@@ -209,13 +209,7 @@ test("dynamic policy changes cannot rewrite the main-flow system prefix after fi
 test("harness policy prompt survives agent-side system message compaction", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerHarnessCore(
-    { hookManager },
-    {
-      basePath,
-      trace: false,
-    },
-  );
+  registerHarnessCore({ hookManager }, { planningGuidanceMode: "inject", basePath, trace: false });
   const ctx = {
     userId: "u-policy-compact",
     sessionId: "s-policy-compact",
@@ -249,6 +243,7 @@ test("harness policy preservation ignores ordinary system text that only mention
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       basePath,
       trace: false,
       promptPolicy: false,

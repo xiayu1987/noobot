@@ -10,7 +10,6 @@ import { joinClientPath } from "../../path-resolver.js";
 import { text } from "@noobot/shared/value";
 
 export function createDependencyInstaller({
-  app = null,
   backendRoot = "",
   appendEarlyLog = () => {},
   writeDependencyLog = () => {},

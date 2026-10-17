@@ -22,7 +22,6 @@ export async function buildFinalWorkflowPayload({
   retryMeta = {},
   nodeAgentRuns = [],
   nodeStateSnapshot = null,
-  planningPersistResult = null,
 } = {}) {
   phaseTracker.start(WORKFLOW_PHASES.PAYLOAD_BUILD);
   throwIfWorkflowAborted(ctx);
@@ -47,7 +46,6 @@ export async function buildFinalWorkflowPayload({
     semantic,
     nodeAgentRuns,
     nodeStateSnapshot,
-    planningPersistResult,
   });
 
   return {

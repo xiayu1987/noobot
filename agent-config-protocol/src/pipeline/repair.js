@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MODEL_PROVIDER_CONFIG_CONTRACT } from "@noobot/model-protocol";
 import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_NODE_POLICY,
@@ -97,7 +96,6 @@ function repairInvalidNode({ template, path, changes, reason }) {
 }
 
 function repairDeclaredContractProperties({
-  contract,
   properties,
   templateObject,
   valueObject,
@@ -209,62 +207,31 @@ function repairTargetAdditionalProperties({
   }
 }
 
-function normalizeContractObject({
+function repairModelProviderOptions({
   contract,
   properties,
-  templateObject,
   valueObject,
   output,
-  normalizationFallback,
   path,
   changes,
-  scope,
   enforceValueConstraints,
 }) {
-  const isModelProviderContract =
-    contract === MODEL_PROVIDER_CONFIG_CONTRACT ||
-    contract.agentConfigContract === "model_provider";
-  if (isModelProviderContract) {
-    if (!enforceValueConstraints) return output;
-    for (const [key, childContract] of Object.entries(properties)) {
-      const optionsField = childContract.optionsField;
-      if (!optionsField || output[key] === undefined) continue;
-      const options = Array.isArray(valueObject[optionsField])
-        ? valueObject[optionsField]
-        : Array.isArray(templateObject[optionsField])
-          ? templateObject[optionsField]
-          : [];
-      if (!options.length || options.includes(output[key])) continue;
-      const fallback = options.includes(valueObject[key]) ? valueObject[key] : options[0];
-      output[key] = clone(fallback);
-      recordChange(
-        changes,
-        [...path, key],
-        CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT,
-        "invalid_option_value",
-      );
+  if (contract.agentConfigContract !== "model_provider" || !enforceValueConstraints) return output;
+  for (const [key, childContract] of Object.entries(properties)) {
+    const optionsField = childContract.optionsField;
+    if (!optionsField || output[key] === undefined) continue;
+    const options = valueObject[optionsField];
+    if (!Array.isArray(options)) {
+      throw new TypeError(`model provider ${pathText(path)} requires ${optionsField} array`);
     }
-    return output;
-  }
-  if (typeof contract.normalize !== "function") return output;
-
-  const normalized = contract.normalize(
-    { ...templateObject, ...output },
-    {
-      ...normalizationFallback,
-      ...valueObject,
-    },
-  );
-  for (const [key, value] of Object.entries(normalized)) {
-    const childContract = properties[key];
-    if (childContract && !structureAllowsScope(childContract, scope)) continue;
-    if (JSON.stringify(output[key]) === JSON.stringify(value)) continue;
-    output[key] = clone(value);
+    if (!options.length || options.includes(output[key])) continue;
+    const fallback = options.includes(valueObject[key]) ? valueObject[key] : options[0];
+    output[key] = clone(fallback);
     recordChange(
       changes,
       [...path, key],
       CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT,
-      "normalized_contract_value",
+      "invalid_option_value",
     );
   }
   return output;
@@ -277,7 +244,6 @@ function repairContractNode({
   target,
   path,
   changes,
-  normalizationFallback = {},
   scope = CONFIG_DOCUMENT_SCOPE.GLOBAL,
   enforceValueConstraints = true,
 }) {
@@ -298,7 +264,6 @@ function repairContractNode({
       target: {},
       path,
       changes,
-      normalizationFallback,
       scope,
       enforceValueConstraints,
     });
@@ -367,11 +332,7 @@ function repairContractNode({
   const output = repairDeclaredContractProperties(repairContext);
   repairTemplateAdditionalProperties({ ...repairContext, output });
   repairTargetAdditionalProperties({ ...repairContext, output });
-  return normalizeContractObject({
-    ...repairContext,
-    output,
-    normalizationFallback,
-  });
+  return repairModelProviderOptions({ ...repairContext, output });
 }
 
 function repairStructureNode({ node, target, path, values, scope, changes }) {
@@ -410,7 +371,7 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
 
   if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION) {
     if (!isPlainObject(target)) {
-      return resetFromValues({ node, path, values, scope, changes, optional });
+      return resetFromValues({ node, path, values, scope, changes });
     }
     const output = {};
     for (const [key, entryTarget] of Object.entries(target)) {
@@ -425,7 +386,7 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
       if (repaired !== REMOVE_NODE) output[key] = repaired;
     }
 
-    for (const key of collectionValueKeys({ node, path, values })) {
+    for (const key of collectionValueKeys({ path, values })) {
       if (Object.prototype.hasOwnProperty.call(output, key)) continue;
       const repaired = repairStructureNode({
         node: node.entry,
@@ -442,7 +403,7 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
 
   if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT) {
     if (!isPlainObject(target)) {
-      return resetFromValues({ node, path, values, scope, changes, optional });
+      return resetFromValues({ node, path, values, scope, changes });
     }
     if (node.open) return clone(target);
     const output = {};
@@ -480,7 +441,6 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
       values,
       scope,
       changes,
-      optional,
       reason: validatesStructureLeafType(target, node) ? "invalid_node_value" : "invalid_node_type",
     });
   }
@@ -497,15 +457,7 @@ function materializeFromValues({ node, path, values, scope, changes }) {
   return repairStructureNode({ node, target: {}, path, values, scope, changes });
 }
 
-function resetFromValues({
-  node,
-  path,
-  values,
-  scope,
-  changes,
-  optional,
-  reason = "invalid_node_value",
-}) {
+function resetFromValues({ node, path, values, scope, changes, reason = "invalid_node_value" }) {
   if (!values.has(path)) {
     recordChange(changes, path, CONFIG_REPAIR_ACTION.REMOVE_INVALID_OPTIONAL, reason);
     return REMOVE_NODE;
@@ -514,7 +466,7 @@ function resetFromValues({
   return materializeFromValues({ node, path, values, scope, changes });
 }
 
-function collectionValueKeys({ node, path, values }) {
+function collectionValueKeys({ path, values }) {
   if (pathText(path) === "providers") return values.listProviderAliases();
   const declared = values.has(path) ? values.resolve(path) : null;
   return isPlainObject(declared) ? Object.keys(declared) : [];

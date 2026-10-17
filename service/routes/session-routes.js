@@ -34,15 +34,6 @@ function toText(value) {
   return String(value || "");
 }
 
-function resolveWorkflowRunId(message, payload) {
-  return toText(
-    payload?.workflowRunId ||
-      payload?.execution?.workflowRunId ||
-      payload?.execution?.instanceId ||
-      message?.workflowRunId,
-  ).trim();
-}
-
 function resolveTagKeys(message) {
   return Array.isArray(message?.tags)
     ? message.tags.map((item) => toText(item))
@@ -91,7 +82,7 @@ function projectWorkflowMessage(doc, message, index, payload, facts) {
 function summarizeWorkflowMessage(doc, message = {}, index) {
   const payload = message?.pluginMeta?.payload || {};
   const facts = {
-    workflowRunId: resolveWorkflowRunId(message, payload),
+    workflowRunId: toText(payload?.workflowRunId).trim(),
     tagKeys: resolveTagKeys(message),
     suspiciousAssistantPlaceholder: isSuspiciousAssistantPlaceholder(message),
   };

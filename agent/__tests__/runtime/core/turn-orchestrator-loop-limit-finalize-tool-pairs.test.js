@@ -31,7 +31,7 @@ function createToolCallingLlm(responses = []) {
   const capturedNoToolInvokeOptions = [];
   let invokeIndex = 0;
   const llm = {
-    bindTools(_tools = [], bindOptions = {}) {
+    bindTools(_tools, bindOptions = {}) {
       capturedBindOptions.push(bindOptions);
       return {
         async invoke(messages = [], options = {}) {

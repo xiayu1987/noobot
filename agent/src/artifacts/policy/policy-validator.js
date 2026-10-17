@@ -9,7 +9,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { BUILTIN_ATTACHMENT_POLICY } from "../../config/index.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
-export function resolveAttachmentPolicy(policy = {}) {
+export function resolveAttachmentPolicy() {
   return {
     maxFileSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes,
     maxTotalSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxTotalSizeBytes,
@@ -55,8 +55,4 @@ export function isExtensionAllowed(fileName = "", allowedExtensions = []) {
   const ext = safeStr(path.extname(safeStr(fileName))).toLowerCase();
   if (!ext) return false;
   return allowedExtensions.includes(ext);
-}
-
-export function validateAttachmentPolicy(policy = {}) {
-  return resolveAttachmentPolicy(policy);
 }

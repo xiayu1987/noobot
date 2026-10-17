@@ -8,20 +8,14 @@ export function createRunConfigPluginPreparer({
   globalConfig = {},
   workspaceService = null,
   loadedPlugins = null,
-  pluginRuntime = {},
-  normalizeStringArray = null,
   createPluginResolveModelMessages = null,
   createDetachedSubSessionRunner = null,
-  createGeneratedArtifactPersister = null,
 } = {}) {
   return new RunConfigPluginPreparer({
     globalConfig,
     workspaceService,
     loadedDynamicPlugins: loadedPlugins,
-    pluginRuntime,
-    normalizeStringArray,
     createPluginResolveModelMessages,
     createDetachedSubSessionRunner,
-    createGeneratedArtifactPersister,
   });
 }

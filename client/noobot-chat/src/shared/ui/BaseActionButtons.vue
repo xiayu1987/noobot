@@ -4,13 +4,14 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { isFunction } from "@noobot/shared/value";
 const props = defineProps({
   actions: { type: Array, default: () => [] },
 });
 
 function normalizeActions() {
-  return (Array.isArray(props.actions) ? props.actions : []).filter(
-    (item = {}) => typeof item?.onClick === "function",
+  return (Array.isArray(props.actions) ? props.actions : []).filter((item = {}) =>
+    isFunction(item?.onClick),
   );
 }
 </script>

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function secureCrypto() {
   const crypto = globalThis.crypto;
-  if (!crypto || typeof crypto.getRandomValues !== "function") {
+  if (!crypto || !isFunction(crypto.getRandomValues)) {
     throw new Error("secure Web Crypto identity source is unavailable");
   }
   return crypto;

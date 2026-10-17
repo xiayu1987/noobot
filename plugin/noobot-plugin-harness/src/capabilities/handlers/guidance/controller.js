@@ -41,7 +41,9 @@ import {
   transferSummaryInjectionMessage,
 } from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
-import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { resolvePlanningGuidanceMode } from "../shared/model/utils.js";
+import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../../core/constants.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import {
@@ -225,31 +227,30 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   return true;
 }
 
-function resolveWorkflowActionName(action = "", stage = "", mode = "inject") {
-  const normalizedMode = text(mode) === "separate_model" ? "separate_model" : "inject";
+function resolveWorkflowActionName(action = "", stage = "", mode = "") {
   if (action === GUIDANCE_DECISION.action.planUpdate) {
     const revisionStage = text(stage).toLowerCase() === GUIDANCE_DECISION.stage.revision;
     if (revisionStage) {
-      return normalizedMode === "separate_model"
+      return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
         ? GUIDANCE_DECISION.requestedAction.planUpdateRevisionSeparateModel
         : GUIDANCE_DECISION.requestedAction.planUpdateRevisionInject;
     }
-    return normalizedMode === "separate_model"
+    return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
       ? GUIDANCE_DECISION.requestedAction.planUpdateRefinementSeparateModel
       : GUIDANCE_DECISION.requestedAction.planUpdateRefinementInject;
   }
   if (action === GUIDANCE_DECISION.action.summary) {
-    return normalizedMode === "separate_model"
+    return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
       ? GUIDANCE_DECISION.requestedAction.summarySeparateModel
       : GUIDANCE_DECISION.requestedAction.summaryInject;
   }
   if (action === GUIDANCE_DECISION.action.guidance) {
-    return normalizedMode === "separate_model"
+    return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
       ? GUIDANCE_DECISION.requestedAction.guidanceSeparateModel
       : GUIDANCE_DECISION.requestedAction.guidanceInject;
   }
   if (action === GUIDANCE_DECISION.action.analysis) {
-    return normalizedMode === "separate_model"
+    return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
       ? GUIDANCE_DECISION.requestedAction.analysisSeparateModel
       : GUIDANCE_DECISION.requestedAction.analysisInject;
   }
@@ -261,12 +262,12 @@ async function executeGuidanceWorkflowAction({
   ctx = {},
   meta = {},
 } = {}) {
-  const mode = resolveWorkflowMode(meta);
+  const mode = resolvePlanningGuidanceMode(meta);
   let changed = false;
   let executedPrimary = false;
   let executedFollowup = false;
 
-  if (mode === "separate_model") {
+  if (mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL) {
     if (nextAction.action === GUIDANCE_DECISION.action.summary) {
       const result = await runGuidanceBySeparateModel(ctx, meta, { action: nextAction.action });
       changed = result || changed;
@@ -403,7 +404,7 @@ async function handleBeforeLlmCall(ctx, meta) {
   const lifecycle = await runWorkflowLifecycle(ctx, {
     domain: CAPABILITY_DOMAIN.GUIDANCE,
     point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-    mode: resolveWorkflowMode(meta),
+    mode: resolvePlanningGuidanceMode(meta),
     resolveDecision: () => ({
       chosenAction: decision.chosenAction,
       chosenReason: decision.chosenReason,

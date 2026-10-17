@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 export function createAuthorityResolutionTracker({ applyTurnLifecycleEnvelope }) {
   const pending = [];
 
   const track = (result) => {
-    if (result && typeof result.then === "function") {
+    if (result && isFunction(result.then)) {
       const settled = Promise.resolve(result);
       pending.push(settled);
       void settled.finally(() => {

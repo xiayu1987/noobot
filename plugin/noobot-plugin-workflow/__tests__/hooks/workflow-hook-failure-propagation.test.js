@@ -10,7 +10,7 @@ import {
   createMockBotHookManager,
   getBeforeDispatch,
   callsByNodeName,
-  createRegisterWorkflowHooks,
+  registerWorkflowAgentHooks,
   WORKFLOW_PLUGIN_DEFAULTS,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 import { createInMemoryWorkflowNodeStateRepository } from "../../src/core/orchestrator/node-state-repository.js";
@@ -36,12 +36,11 @@ function assertWorkflowFailedWithoutSuccessfulResult({
 
 test("workflow hook fails the parent workflow and stops downstream after a sub-agent failure", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       resolveModelMessages: () => [],
@@ -98,14 +97,6 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
           },
         };
       },
-      generatedArtifactPersister: async (payload = {}) => [
-        {
-          attachmentId: `att-${String(payload?.artifacts?.[0]?.name || "x")}`,
-          name: String(payload?.artifacts?.[0]?.name || "result.md"),
-          mimeType: "text/markdown",
-          path: `/attachments/${String(payload?.artifacts?.[0]?.name || "result.md")}`,
-        },
-      ],
     },
   });
 
@@ -131,12 +122,11 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
 
 test("workflow hook stops all fan-out downstream nodes after their upstream node fails", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       resolveModelMessages: () => [],
@@ -193,7 +183,6 @@ test("workflow hook stops all fan-out downstream nodes after their upstream node
           result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
         };
       },
-      generatedArtifactPersister: async () => [],
     },
   });
 
@@ -217,12 +206,11 @@ test("workflow hook stops all fan-out downstream nodes after their upstream node
 
 test("workflow hook does not execute a merge downstream node after an upstream branch fails", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
@@ -283,7 +271,6 @@ test("workflow hook does not execute a merge downstream node after an upstream b
           result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
         };
       },
-      generatedArtifactPersister: async () => [],
     },
   });
 
@@ -306,12 +293,11 @@ test("workflow hook does not execute a merge downstream node after an upstream b
 
 test("workflow hook does not execute any post-merge fan-out node after an upstream branch fails", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
@@ -377,7 +363,6 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
           result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
         };
       },
-      generatedArtifactPersister: async () => [],
     },
   });
 
@@ -400,16 +385,15 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
 
 test("workflow hook commits FAILED for a node whose sub-session throws without a lifecycle", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const workflowNodeStateRepository = createInMemoryWorkflowNodeStateRepository();
   const subSessionCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    workflowNodeStateRepository,
+    config: {
       enabled: true,
       mode: "on",
-      workflowNodeStateRepository,
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: {
@@ -432,7 +416,6 @@ test("workflow hook commits FAILED for a node whose sub-session throws without a
         error.code = "SUB_SESSION_START_FAILED";
         throw error;
       },
-      generatedArtifactPersister: async () => [],
     },
   });
 

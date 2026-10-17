@@ -149,9 +149,7 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.deepEqual(config.security.trusted_directories, ["*"]);
     assert.equal(config.security.execution_isolation.mode, "host");
     assert.equal(config.security.path_policy, undefined);
-    assert.deepEqual(config.attachments, {
-      limits: { max_file_size_bytes: 2048 },
-    });
+    assert.equal(config.attachments, undefined);
     assert.deepEqual(config.multimodal.parsing.default_models, {
       audio: "openai",
       image: "openai",

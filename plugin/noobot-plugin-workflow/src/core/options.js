@@ -6,7 +6,7 @@
 
 import { WORKFLOW_PLUGIN_DEFAULTS } from "./constants.js";
 import { getWorkflowDefaultSemanticPrompt, normalizeWorkflowLocale } from "./i18n.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 function normalizeToolNameList(input = []) {
   if (!Array.isArray(input)) return [];
@@ -38,9 +38,21 @@ function normalizeNodeAgentTimeoutMs(input = null) {
   return Math.floor(value);
 }
 
-function normalizeWorkflowExtensions(input = null) {
-  if (!Array.isArray(input)) return [];
-  return input.filter((item) => typeof item === "function");
+const WORKFLOW_AGENT_HOST_CAPABILITIES = Object.freeze([
+  "capabilityModelInvoker",
+  "resolveModelMessages",
+  "subSessionRunner",
+]);
+
+export function resolveWorkflowAgentHostCapabilities(input = {}) {
+  return Object.fromEntries(
+    WORKFLOW_AGENT_HOST_CAPABILITIES.map((name) => {
+      if (!isFunction(input?.[name])) {
+        throw new TypeError(`workflow agent surface requires host capability: ${name}`);
+      }
+      return [name, input[name]];
+    }),
+  );
 }
 
 export function normalizeOptions(input = {}) {
@@ -79,34 +91,6 @@ export function normalizeOptions(input = {}) {
     nodeAgentTimeoutMs: normalizeNodeAgentTimeoutMs(source?.nodeAgentTimeoutMs),
     priority: normalizePriority(source?.priority),
     timeoutMs: normalizeTimeoutMs(source?.timeoutMs),
-    capabilityModelInvoker:
-      typeof source?.capabilityModelInvoker === "function" ? source.capabilityModelInvoker : null,
-    resolveModelMessages:
-      typeof source?.resolveModelMessages === "function" ? source.resolveModelMessages : null,
-    subSessionRunner:
-      typeof source?.subSessionRunner === "function" ? source.subSessionRunner : null,
-    generatedArtifactPersister:
-      typeof source?.generatedArtifactPersister === "function"
-        ? source.generatedArtifactPersister
-        : null,
-    workflowDialogPersister:
-      typeof source?.workflowDialogPersister === "function" ? source.workflowDialogPersister : null,
-    workflowNodeStateRepository:
-      source?.workflowNodeStateRepository &&
-      typeof source.workflowNodeStateRepository.initialize === "function" &&
-      typeof source.workflowNodeStateRepository.commit === "function" &&
-      typeof source.workflowNodeStateRepository.getSnapshot === "function"
-        ? source.workflowNodeStateRepository
-        : null,
-    workflowNodeSystemMessageBuilder:
-      typeof source?.workflowNodeSystemMessageBuilder === "function"
-        ? source.workflowNodeSystemMessageBuilder
-        : null,
-    workflowExtensionMounter:
-      typeof source?.workflowExtensionMounter === "function"
-        ? source.workflowExtensionMounter
-        : null,
-    workflowExtensions: normalizeWorkflowExtensions(source?.workflowExtensions),
     denyToolNames: resolveWorkflowDenyToolNames(source?.denyToolNames),
   };
 }

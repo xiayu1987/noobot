@@ -6,7 +6,7 @@
 import { createPluginArtifactCommitRequest } from "@noobot/event-protocol/plugin-artifact-event";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export async function commitPluginArtifact({
   pluginId = "",
@@ -30,7 +30,7 @@ export async function commitPluginArtifact({
     operation: text(artifact?.operation) || "created",
     baseRevision: artifact?.baseRevision == null ? null : Number(artifact.baseRevision),
   });
-  if (typeof runtime?.sessionManager?.commitAuthorityEvent !== "function") {
+  if (!isFunction(runtime?.sessionManager?.commitAuthorityEvent)) {
     throw new Error("plugin artifact commit port is unavailable");
   }
   const committed = await runtime.sessionManager.commitAuthorityEvent({
@@ -67,7 +67,7 @@ export async function commitPluginArtifact({
 export async function getPluginArtifact({ pluginId = "", artifact = {}, toolContext = {} } = {}) {
   const runtime = getRuntimeFromAgentContext(toolContext?.agentContext);
   const system = runtime?.systemRuntime || {};
-  if (typeof runtime?.sessionManager?.getPluginArtifact !== "function")
+  if (!isFunction(runtime?.sessionManager?.getPluginArtifact))
     throw new Error("plugin artifact query port is unavailable");
   return runtime.sessionManager.getPluginArtifact({
     userId: text(system.userId),

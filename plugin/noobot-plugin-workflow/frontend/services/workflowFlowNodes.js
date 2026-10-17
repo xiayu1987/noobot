@@ -51,11 +51,7 @@ function buildFlowNodeFromSemantic({
     stateType: Number.isFinite(Number(nodeItem?.stateType))
       ? Number(nodeItem.stateType)
       : undefined,
-    rootSessionId: text(
-      firstStep?.rootSessionId ||
-        workflowPayload.value?.planningDialog?.sessionId ||
-        workflowPayload.value?.runMeta?.sessionId,
-    ),
+    rootSessionId: text(firstStep?.rootSessionId || workflowPayload.value?.runMeta?.sessionId),
     actionNodeStates: isAction ? cleanRuntime.actionNodeStates : [],
     runtimeBoxes: isAction ? cleanRuntime.actionNodeStates : [],
     status: restoredStatus,

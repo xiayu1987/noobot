@@ -11,12 +11,12 @@ import {
   assertMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
 import { createUserInterjectionContentFact } from "@noobot/event-protocol/thinking-detail-content";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function createUserInterjectionAuthorityBridge({ resolveBot } = {}) {
   return async function commitUserInterjection({ activeRun = {}, interjection = {} } = {}) {
     const bot = resolveBot?.();
-    if (typeof bot?.commitAuthorityEvent !== "function") {
+    if (!isFunction(bot?.commitAuthorityEvent)) {
       throw new Error("commitAuthorityEvent is required");
     }
     const userId = text(activeRun.userId);

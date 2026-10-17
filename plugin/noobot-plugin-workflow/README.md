@@ -52,7 +52,6 @@ END
     "locale": "zh-CN"
   },
   "orchestration": {
-    "mode": "separate_model",
     "semanticPurpose": "workflow_semantic",
     "semanticModel": "qwen3_6_plus"
   },
@@ -80,7 +79,6 @@ END
     "execution": {}
   },
   "diagnostics": {
-    "invokerUsed": true,
     "invokerTraceCount": 2,
     "error": null
   }

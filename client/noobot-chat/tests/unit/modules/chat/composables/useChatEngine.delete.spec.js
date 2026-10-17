@@ -23,7 +23,7 @@ import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
-function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
+function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId }) {
   const revision = 100;
   const sequence = 100;
   const completionCommitId = `commit-${turnScopeId}-${revision}`;
@@ -168,7 +168,6 @@ describe("useChatEngine.delete", () => {
         settleStoppedTurn(turnRuntimeRegistry, {
           sessionId: "local-delete",
           turnScopeId: target.turnScopeId,
-          messages: [first, target],
         });
         stopConfirmed = true;
       });
@@ -568,7 +567,6 @@ describe("useChatEngine.delete", () => {
     settleStoppedTurn(turnRuntimeRegistry, {
       sessionId,
       turnScopeId,
-      messages: [first, target],
     });
     expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)?.terminal).toBe(
       "user_stopped",

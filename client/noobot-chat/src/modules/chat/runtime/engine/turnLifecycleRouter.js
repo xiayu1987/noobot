@@ -15,6 +15,7 @@ import {
   validateTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
 import { isTerminalTurnEvent } from "@noobot/session-protocol/turn-lifecycle";
+import { isFunction } from "@noobot/shared/value";
 
 const TURN_USER_MESSAGE_EVENTS = Object.freeze({
   [TURN_COMMITTED_WIRE_EVENT]: {
@@ -58,7 +59,7 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
         revision: Number(data?.revision || 0),
         sequence: Number(data?.sequence || 0),
         hasPersistenceScope: Boolean(data?.persistenceScope?.scopeId),
-        reducerAvailable: typeof applyTurnLifecycleEnvelope === "function",
+        reducerAvailable: isFunction(applyTurnLifecycleEnvelope),
       },
     });
     if (isChildLifecycle) {

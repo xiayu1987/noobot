@@ -36,10 +36,7 @@ export class RunConfigResolver {
 
   normalizeToolPolicyConflicts(toolPolicy = {}) {
     if (!isPlainObject(toolPolicy)) return toolPolicy;
-    return removeDeniedToolNamesFromAllow({
-      toolPolicy,
-      normalizeStringArray: (value) => this.normalizeStringArray(value),
-    });
+    return removeDeniedToolNamesFromAllow({ toolPolicy });
   }
 
   normalizeRunConfigToolPolicyConflicts(runConfig = {}) {

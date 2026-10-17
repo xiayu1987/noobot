@@ -19,7 +19,7 @@ import {
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeCapabilityModel,
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
   resolveCapabilityModelName,
   resolveCapabilityModelMessages,
   resolvePlanningToolAllowlist,
@@ -164,7 +164,6 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
     includeWorkflowPolicy: false,
   });
   const messages = renderMessagePlanForSeparateModel({
-    locale,
     agentMessages,
     plan: messagePlan,
   });
@@ -255,7 +254,6 @@ async function handleSeparateModelPlanningProcessResult(
   processed = {},
   locale = LOCALE.ZH_CN,
   responseText = "",
-  meta = {},
 ) {
   const operationDirectory = resolveOperationDirectoryContext(ctx);
   applyDynamicPolicyPromptFromText(ctx, responseText, {
@@ -326,8 +324,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     state.flags.planningCaptured = true;
     return false;
   }
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) return false;
+  const invoker = readCapabilityModelInvoker(meta);
   state.flags.planningSeparateModelInFlight = true;
   const locale = state?.locale || LOCALE.ZH_CN;
   const planningMessages = buildPlanningMessagesForSeparateModel(ctx, meta, locale);
@@ -379,16 +376,9 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       source: "separate_model",
       rawText: responseText,
       locale,
-      repairInvoker: invoker,
       appendCapabilityModelTraceLog,
     });
-    return await handleSeparateModelPlanningProcessResult(
-      ctx,
-      processed,
-      locale,
-      responseText,
-      meta,
-    );
+    return await handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText);
   } finally {
     state.flags.planningSeparateModelInFlight = false;
   }
@@ -418,7 +408,6 @@ export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
       source: "after_llm_call_tool_calls_blocked",
       rawText: "",
       locale,
-      repairInvoker: resolveCapabilityModelInvoker(meta),
       appendCapabilityModelTraceLog,
     });
     return handleAfterLlmPlanningProcessResult(ctx, processed, state);
@@ -432,7 +421,6 @@ export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     source: HOOK_POINT.AGENT.AFTER_LLM_CALL,
     rawText: sourceContent,
     locale,
-    repairInvoker: resolveCapabilityModelInvoker(meta),
     appendCapabilityModelTraceLog,
   });
   return handleAfterLlmPlanningProcessResult(ctx, processed, state);

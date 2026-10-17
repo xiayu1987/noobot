@@ -12,6 +12,7 @@ import {
   ensureTestHookContext,
 } from "./public-runtime-fixtures.js";
 import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
+import { isFunction } from "@noobot/shared/value";
 
 const resolveModelMessages = createTestResolveModelMessages();
 
@@ -19,7 +20,7 @@ function ensureTestHandlerMeta(input = {}) {
   const meta = input.meta && typeof input.meta === "object" ? input.meta : (input.meta = {});
   const harness =
     meta.harness && typeof meta.harness === "object" ? meta.harness : (meta.harness = {});
-  if (typeof harness.resolveModelMessages !== "function") {
+  if (!isFunction(harness.resolveModelMessages)) {
     harness.resolveModelMessages = resolveModelMessages;
   }
 }

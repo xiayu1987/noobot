@@ -5,12 +5,12 @@
  */
 
 import { ModelBoxFactory, FlowtoBox, registerModelBoxFactory } from "workflow/extension";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 let cached = null;
 
 function assertFn(name = "", value = null) {
-  if (typeof value !== "function") {
+  if (!isFunction(value)) {
     throw new Error(`invalid workflow extension api: ${text(name)} must be a function`);
   }
 }

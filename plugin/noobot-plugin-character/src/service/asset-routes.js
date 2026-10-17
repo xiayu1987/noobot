@@ -5,7 +5,7 @@
  */
 import { AnimationAssetSchema } from "../animation-protocol.js";
 import { migrateLegacyAssetDescriptor } from "../asset-metadata-migration.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const GLB_MIME_TYPE = "model/gltf-binary";
 
@@ -68,11 +68,11 @@ function parseDescriptor(req = {}) {
 export function createCharacterAssetRouteHandlers({ workspaceAssets } = {}) {
   if (
     !workspaceAssets ||
-    typeof workspaceAssets.write !== "function" ||
-    typeof workspaceAssets.read !== "function" ||
-    typeof workspaceAssets.listMetadata !== "function" ||
-    typeof workspaceAssets.writeMetadata !== "function" ||
-    typeof workspaceAssets.delete !== "function"
+    !isFunction(workspaceAssets.write) ||
+    !isFunction(workspaceAssets.read) ||
+    !isFunction(workspaceAssets.listMetadata) ||
+    !isFunction(workspaceAssets.writeMetadata) ||
+    !isFunction(workspaceAssets.delete)
   ) {
     throw new Error("character service workspace asset port is required");
   }

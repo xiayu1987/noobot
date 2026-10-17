@@ -5,7 +5,7 @@
  */
 
 import { isPlainObject } from "../utils.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming", "text"]);
 export const PROGRAMMING_SCENARIO_KEY = "programming";
@@ -75,7 +75,7 @@ export const BUILTIN_SCENARIOS = Object.freeze({
 });
 
 function assertTranslate(translate, caller) {
-  if (typeof translate !== "function") {
+  if (!isFunction(translate)) {
     throw new TypeError(`${caller} requires an explicit translate function`);
   }
 }

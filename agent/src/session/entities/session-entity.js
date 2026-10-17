@@ -183,9 +183,7 @@ export function normalizeSessionEntity(
   }
   assertSessionAggregateInvariants(session);
   const context = resolveSessionNormalizationContext(session, { now, sessionId, parentSessionId });
-  const normalizedMessages = normalizeMessagesEntity(session?.messages || [], now, {
-    sessionId: context.sessionId,
-  });
+  const normalizedMessages = normalizeMessagesEntity(session?.messages || [], now);
   const normalizedTurnSummaryCheckpoints = normalizeTurnSummaryCheckpoints(
     session?.turnSummaryCheckpoints || {},
     normalizedMessages,

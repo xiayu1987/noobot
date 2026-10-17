@@ -10,18 +10,17 @@ import {
   createMockBotHookManager,
   installTurnMessageEventRuntimeFixture,
   getBeforeDispatch,
-  createRegisterWorkflowHooks,
+  registerWorkflowAgentHooks,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook aborts node sub-session when parent stop signal fires", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const abortController = new AbortController();
   let receivedAbortSignal = null;
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "semantic-model",
@@ -63,8 +62,6 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
           );
         });
       },
-      generatedArtifactPersister: async () => [],
-      workflowDialogPersister: async () => null,
     },
   });
 
@@ -91,14 +88,13 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
 
 test("workflow waits for every parallel node sub-session to stop before planner rejects", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const abortController = new AbortController();
   const settledNodes = [];
   let startedNodes = 0;
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "semantic-model",
@@ -137,8 +133,6 @@ test("workflow waits for every parallel node sub-session to stop before planner 
         error.name = "AbortError";
         throw error;
       },
-      generatedArtifactPersister: async () => [],
-      workflowDialogPersister: async () => null,
     },
   });
 

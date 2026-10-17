@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 function requireMethod(target, methodName) {
   const method = target?.[methodName];
-  if (typeof method !== "function") {
+  if (!isFunction(method)) {
     throw new TypeError(`Agent Application requires runtime.${methodName}()`);
   }
   return method.bind(target);

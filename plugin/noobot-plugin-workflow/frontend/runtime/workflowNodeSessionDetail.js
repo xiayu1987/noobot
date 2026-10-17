@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 function requireSessionMethod(props, method) {
   const service = props?.workflowSessionService;
-  if (typeof service?.[method] !== "function") {
+  if (!isFunction(service?.[method])) {
     throw new Error("workflow session service is unavailable");
   }
   return service[method].bind(service);
@@ -211,10 +211,7 @@ function normalizeExecutionDetail(context, payload) {
   }
 }
 
-export function hydrateExecutionSessionDetail(
-  detail = {},
-  { executionId = "", execution = null } = {},
-) {
+export function hydrateExecutionSessionDetail(detail = {}, { executionId = "" } = {}) {
   const messages = Array.isArray(detail?.messages) ? detail.messages : [];
   return {
     ...(detail && typeof detail === "object" ? detail : {}),

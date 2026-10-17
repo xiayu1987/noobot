@@ -80,7 +80,6 @@ function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults =
 }
 
 export async function buildWorkflowUpstreamAttachmentSystemMessage({
-  options = {},
   ctx = {},
   pendingStep = {},
   upstreamNodeResults = [],
@@ -89,14 +88,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
   const normalizedResults = Array.isArray(upstreamNodeResults) ? upstreamNodeResults : [];
   const lines = collectUpstreamEvidence(normalizedResults, ctx, locale);
   if (!lines.length) return "";
-  const customUpstreamMessage = buildCustomUpstreamMessage(
-    options,
-    ctx,
-    pendingStep,
-    normalizedResults,
-  );
-  const pendingName = text(pendingStep?.nodeName);
-  return customUpstreamMessage || buildDefaultUpstreamMessage(locale, pendingName, lines);
+  return buildDefaultUpstreamMessage(locale, text(pendingStep?.nodeName), lines);
 }
 
 function collectUpstreamEvidence(results, ctx, locale) {
@@ -117,23 +109,6 @@ function appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale) {
       text(file?.name) ||
       tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 });
     lines.push(`- ${nodeLabel} / ${label}: ${formatAttachmentIdentityRef(file?.identity)}`);
-  }
-}
-
-function buildCustomUpstreamMessage(options, ctx, pendingStep, upstreamNodeResults) {
-  if (typeof options?.workflowNodeSystemMessageBuilder !== "function") return "";
-  try {
-    return text(
-      options.workflowNodeSystemMessageBuilder({
-        ctx,
-        pendingStep,
-        upstreamNodeResults,
-        attachments: [],
-      }),
-    );
-  } catch (error) {
-    console.warn("[workflow] workflowNodeSystemMessageBuilder failed:", error);
-    return "";
   }
 }
 

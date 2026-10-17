@@ -5,7 +5,6 @@
  */
 export function applySendErrorState({
   error,
-  activeSession,
   botMessage,
   clearPendingInteraction,
   notify,

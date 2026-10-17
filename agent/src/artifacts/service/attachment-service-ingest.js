@@ -92,13 +92,13 @@ export async function saveAttachmentRecord({
 
 export async function ingestAttachments(
   service,
-  { userId, sessionId = "", attachmentSource = "user", attachments, attachmentPolicy = {} },
+  { userId, sessionId = "", attachmentSource = "user", attachments },
 ) {
   const basePath = resolveBasePath(service.globalConfig, userId);
   if (!attachments?.length) return [];
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
-  const policy = resolveAttachmentPolicy(attachmentPolicy);
+  const policy = resolveAttachmentPolicy();
   const entries = requireArtifactEntries(attachments, "attachments");
 
   if (policy.maxFileCount > 0 && attachments.length > policy.maxFileCount) {

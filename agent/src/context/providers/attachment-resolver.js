@@ -10,16 +10,11 @@ import { text } from "@noobot/shared/value";
 export async function resolveAttachments({
   attachmentService = null,
   runtimeBasePath = "",
-  effectiveConfig = {},
   userMessageAttachments = [],
   userId = "",
   sessionId = "",
 } = {}) {
   if (!attachmentService || !runtimeBasePath) return [];
-  const attachmentPolicy =
-    effectiveConfig?.attachments && typeof effectiveConfig.attachments === "object"
-      ? effectiveConfig.attachments
-      : {};
   const sourceAttachments = Array.isArray(userMessageAttachments) ? userMessageAttachments : [];
   if (!sourceAttachments.length) return [];
   const isCanonical = (attachmentItem) =>
@@ -35,7 +30,6 @@ export async function resolveAttachments({
         sessionId: sessionId || "",
         attachmentSource: ATTACHMENT_SOURCE.USER,
         attachments: rawAttachments,
-        attachmentPolicy,
       })
     : [];
   let ingestedIndex = 0;

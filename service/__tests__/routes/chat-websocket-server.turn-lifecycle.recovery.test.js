@@ -29,13 +29,7 @@ test("socket close detaches an accepted turn which still completes and releases 
   const authoritative = createAuthoritativeBot();
   let aborted = false;
   let releaseRun = null;
-  authoritative.bot.runSession = async ({
-    sessionId,
-    turnScopeId,
-    runConfig,
-    abortSignal,
-    eventListener,
-  }) => {
+  authoritative.bot.runSession = async ({ sessionId, turnScopeId, abortSignal, eventListener }) => {
     abortSignal.addEventListener(
       "abort",
       () => {

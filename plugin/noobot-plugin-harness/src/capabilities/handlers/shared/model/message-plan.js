@@ -28,7 +28,6 @@ export function renderMessagePlanForInject(plan = []) {
 }
 
 export function renderMessagePlanForSeparateModel({
-  locale = "zh-CN",
   agentMessages = [],
   plan = [],
   workflowPolicyPrompt = "",
@@ -52,7 +51,6 @@ export function renderMessagePlanForSeparateModel({
     constraints.push(content);
   }
   return buildCapabilityProtocolModelMessages({
-    locale,
     agentMessages,
     contextMessages: constraints,
     protocolPrompt: tasks[0] || "",

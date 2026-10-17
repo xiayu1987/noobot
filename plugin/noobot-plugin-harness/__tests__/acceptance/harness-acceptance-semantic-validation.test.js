@@ -292,6 +292,7 @@ test("request_task_acceptance returns a compact receipt while retaining the full
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       acceptance: { semanticValidation: false },

@@ -14,7 +14,7 @@ import { EVENT_FAMILY } from "@noobot/event-protocol";
 import { CHARACTER_ANIMATION_ARTIFACT_TYPE, CHARACTER_PLUGIN_ID } from "../src/contract.js";
 import { configureImportedAssetStore } from "./runtime/importedAssetStore.js";
 import { useCharacterLocale } from "./i18n/index.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
   if (
@@ -59,7 +59,7 @@ export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
   const pluginId = text(ctx?.pluginMeta?.pluginId);
-  if (typeof contribute !== "function" || !points) {
+  if (!isFunction(contribute) || !points) {
     throw new Error("frontend contribution API is required");
   }
   if (!pluginId) throw new Error("frontend plugin identity is required");

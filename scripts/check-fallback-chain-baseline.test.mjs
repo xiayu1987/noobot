@@ -11,6 +11,7 @@ import {
   findFallbackChains,
   findInlineTypeChecks,
   findInlineTrimFallbacks,
+  findRawTypeofChecks,
   findTextShadowing,
   RULES,
   renderModuleSection,
@@ -49,6 +50,18 @@ test("inline trim does not recount field chains already counted as fallback chai
   const source = "const v = text(a.x || b.x); const w = text(name || alias);";
   assert.equal(RULES.inlineTrim.find(source, "agent/src/a.js").length, 1);
   assert.equal(RULES.inlineTrim.find(source, "agent/__tests__/helpers/fixture.js").length, 2);
+});
+
+test("detects raw typeof object/function comparisons in both polarities", () => {
+  assert.equal(findRawTypeofChecks('const ok = typeof v === "object";').length, 1);
+  assert.equal(findRawTypeofChecks('if (typeof fn !== "function") throw x;').length, 1);
+  assert.equal(findRawTypeofChecks('const ok = "function" === typeof fn;').length, 1);
+  assert.equal(findRawTypeofChecks('const ok = v && typeof v.x == "object";').length, 1);
+  assert.equal(findRawTypeofChecks('const ok = typeof v === "string";').length, 0);
+  assert.equal(findRawTypeofChecks("const ok = isFunction(fn) && isObjectLike(v);").length, 0);
+  assert.equal(RULES.rawTypeof.includeFile("shared/value.js"), false);
+  assert.equal(RULES.rawTypeof.includeFile("agent/__tests__/a.test.js"), false);
+  assert.equal(RULES.rawTypeof.includeFile("agent/src/a.js"), true);
 });
 
 test("detects local object type checks that duplicate shared isPlainObject", () => {
@@ -127,10 +140,10 @@ test("module table is generated from the grouped baseline", () => {
   const section = renderModuleSection(baseline);
   assert.match(
     section,
-    /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件；内联类型判断 0 处 \/ 0 个文件；遮蔽 text\(\) 0 处 \/ 0 个文件。/,
+    /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件；内联类型判断 0 处 \/ 0 个文件；原始 typeof 判断 0 处 \/ 0 个文件；遮蔽 text\(\) 0 处 \/ 0 个文件。/,
   );
-  assert.match(section, /\| `agent` \| 2 \| 4 \| 0 \| 0 \|/);
-  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \| 0 \| 0 \|/);
+  assert.match(section, /\| `agent` \| 2 \| 4 \| 0 \| 0 \| 0 \|/);
+  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \| 0 \| 0 \| 0 \|/);
   const doc =
     "head\n<!-- fallback-chain-modules:start -->\nold\n<!-- fallback-chain-modules:end -->\ntail";
   assert.equal(replaceModuleSection(doc, baseline), `head\n${section}\ntail`);

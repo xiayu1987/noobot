@@ -15,7 +15,6 @@ import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
 export async function commitNoToolsTurnState({
   modelState,
   loopState,
-  messages = [],
   traces = [],
   modelResponse = null,
   responseContentText = "",

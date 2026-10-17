@@ -12,6 +12,11 @@ export const PLUGIN_ID = "harness";
 export const PLUGIN_NAME = "noobot-plugin-harness";
 export const PLUGIN_VERSION = "4.4.0";
 
+export const HARNESS_PLANNING_GUIDANCE_MODE = Object.freeze({
+  SEPARATE_MODEL: "separate_model",
+  INJECT: "inject",
+});
+
 const HARNESS_DATA_SCOPE = Object.freeze({
   RUNS: "runs",
 });

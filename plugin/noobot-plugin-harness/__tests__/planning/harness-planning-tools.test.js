@@ -20,7 +20,10 @@ import {
 
 test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const ctx = {
     userId: "u10",
@@ -50,7 +53,10 @@ test("harness planning disables blocked tools (except help) and injects request_
 
 test("harness planning skips auxiliary scope llm hooks", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const messages = [{ role: "user", content: "auxiliary planning call" }];
   const ctx = {
@@ -352,6 +358,7 @@ test("harness planning allows tool-call turn without assistant text when plannin
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityToolAllowlistByPurpose: {

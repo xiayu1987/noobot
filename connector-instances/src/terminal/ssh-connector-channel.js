@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const SSH_COMMAND_TIMEOUT_MS = 30000;
 
@@ -69,7 +69,7 @@ async function ensureSshShellState({ channelKey = "", connectionInfo = {} } = {}
 
   const ssh2 = await importSsh2();
   const Client = ssh2?.Client;
-  if (typeof Client !== "function") {
+  if (!isFunction(Client)) {
     throw new Error("ssh2 is not installed");
   }
 

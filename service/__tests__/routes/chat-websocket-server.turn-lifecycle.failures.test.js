@@ -32,7 +32,7 @@ test("processing-start persistence rejection is observed while Agent execution i
     }
     return applyLifecycle(input);
   };
-  authoritative.bot.runSession = async ({ sessionId, turnScopeId, runConfig, eventListener }) => {
+  authoritative.bot.runSession = async ({ sessionId, turnScopeId, eventListener }) => {
     eventListener.onEvent({
       event: "agent_lifecycle_state_changed",
       data: {

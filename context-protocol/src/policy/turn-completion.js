@@ -10,13 +10,14 @@ import {
   mirrorSummarizedMessagesById,
 } from "./summary.js";
 import { resolveContextMessageId } from "../message/codec.js";
+import { isFunction } from "@noobot/shared/value";
 
 export function applyTurnCompletionPolicy({
   modelMessages = [],
   turnMessageStore = null,
   policyOptions = {},
 } = {}) {
-  if (!turnMessageStore || typeof turnMessageStore.updateWhere !== "function") {
+  if (!turnMessageStore || !isFunction(turnMessageStore.updateWhere)) {
     throw new Error("turn completion policy requires the canonical turn message store");
   }
 

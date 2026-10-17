@@ -9,7 +9,6 @@ import { desktopDependencyTimeouts } from "./specs.js";
 import { sleep } from "./process.js";
 
 export function createDependencyDetector({
-  app = null,
   backendRoot = "",
   appendEarlyLog = () => {},
   writeDependencyLog = () => {},

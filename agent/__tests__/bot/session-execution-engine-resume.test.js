@@ -180,9 +180,6 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     _resolveRuntimeBasePath() {
       return "";
     },
-    _getEffectiveConfig() {
-      return {};
-    },
     async buildExistingSessionContext() {
       throw new Error("stopped resume must not rebuild Context from Session history");
     },
@@ -260,9 +257,6 @@ test("_resolveStoppedResumeAttachments ingests raw attachments into the current 
     _resolveRuntimeBasePath() {
       return "/workspace/u1";
     },
-    _getEffectiveConfig() {
-      return { attachments: { maxFileSize: 1024 } };
-    },
   };
 
   const attachments = await engine._resolveStoppedResumeAttachments({
@@ -328,9 +322,6 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
     attachmentService: null,
     _resolveRuntimeBasePath() {
       return "";
-    },
-    _getEffectiveConfig() {
-      return {};
     },
     async buildAgentContext() {
       return createTestAgentExecutionScope({ systemRuntime });

@@ -24,10 +24,11 @@ export {
 } from "../shared/attachment-log-utils.js";
 
 export {
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
+  shouldUseSeparateModel,
 } from "../shared/model/utils.js";
 
 export {

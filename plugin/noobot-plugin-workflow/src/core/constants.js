@@ -45,8 +45,6 @@ export const WORKFLOW_PLUGIN_DEFAULTS = Object.freeze({
 export const WORKFLOW_SEMANTIC = Object.freeze({
   PURPOSE: "workflow_semantic",
   DOMAIN: "workflow",
-  MODE_SEPARATE_MODEL: "separate_model",
-  MODE_INLINE_TEXT: "inline_text",
 });
 
 export const WORKFLOW_TRACE = Object.freeze({

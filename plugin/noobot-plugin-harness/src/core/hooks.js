@@ -81,19 +81,18 @@ export function createRegisterHarnessHooks(deps = {}) {
             try {
               const globalBootstrap = async () => {
                 if (point !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
-                await injectPromptFn(point, ctx, options, plugin);
+                await injectPromptFn(point, ctx, options);
                 emitHarnessHookProgressFn(ctx, "global_bootstrap_done", { point });
               };
-              const capabilityModelInvoker =
-                typeof options.capabilityModelInvoker === "function"
-                  ? (payload = {}) =>
-                      invokeCapabilityModelWithinDeadline({
-                        invoker: options.capabilityModelInvoker,
-                        payload,
-                        parentSignal: invocation.signal || null,
-                        timeoutMs: options.capabilityModelTimeoutMs,
-                      })
-                  : options.capabilityModelInvoker;
+              const capabilityModelInvoker = options.capabilityModelInvoker
+                ? (payload = {}) =>
+                    invokeCapabilityModelWithinDeadline({
+                      invoker: options.capabilityModelInvoker,
+                      payload,
+                      parentSignal: invocation.signal || null,
+                      timeoutMs: options.capabilityModelTimeoutMs,
+                    })
+                : null;
               await capabilityRuntime.runHook(point, ctx, {
                 pluginName: plugin.name,
                 pluginVersion: plugin.version,
@@ -112,7 +111,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                 point !== HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
                 shouldInjectPromptAtPointFn(point, options)
               ) {
-                await injectPromptFn(point, ctx, options, plugin);
+                await injectPromptFn(point, ctx, options);
                 emitHarnessHookProgressFn(ctx, "prompt_injected", { point });
               }
               applyAgentResolvedModelMessages(point, ctx, options);

@@ -102,16 +102,7 @@ Session log WebSocket:
 
 Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProcessId/dialogId` rounds. There is no session history-window configuration.
 
-### 3.3 Attachments
-
-| Key                                | Type     | Description              |
-| ---------------------------------- | -------- | ------------------------ |
-| `attachments.max_file_count`       | number   | Max files per request    |
-| `attachments.max_file_size_bytes`  | number   | Max size per file        |
-| `attachments.max_total_size_bytes` | number   | Max total upload size    |
-| `attachments.allowed_extensions`   | string[] | Allowed suffix whitelist |
-
-#### Multimodal Defaults
+### 3.3 Multimodal Defaults
 
 | Key                                          | Type   | Description                                 |
 | -------------------------------------------- | ------ | ------------------------------------------- |
@@ -285,7 +276,6 @@ User config overrides only fields permitted by `@noobot/agent-config-protocol`. 
 | Section                | Description                                                                                                                              |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `default_provider`     | User default provider                                                                                                                    |
-| `attachments`          | User attachment settings allowed by the protocol; upload limits remain system-owned                                                      |
 | `tools`                | User tool switches/options allowed by the protocol; execution and orchestration limits remain system-owned                               |
 | `scenarios`            | User scenario selection and per-scenario model overrides (only `default`, `definitions.programming.model`, and `definitions.text.model`) |
 | `plugins`              | User plugin default/enable override                                                                                                      |

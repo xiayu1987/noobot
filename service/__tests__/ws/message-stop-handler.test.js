@@ -22,7 +22,6 @@ function createStopHarness() {
     canonicalRunOwnerId: OWNER,
     sendEvent: () => {},
     translateText: (key) => key,
-    resolveBot: () => ({}),
     rejectTurnInteractions: () => {},
     commitTurnLifecycle: async (input) => {
       lifecycle.push(input);

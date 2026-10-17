@@ -12,10 +12,6 @@ import {
   mergeToolPolicyPatch,
 } from "@noobot/agent-config-protocol";
 
-function normalizeStringArray(input = []) {
-  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
-}
-
 test("mergeToolPolicyPatch merges base/patched deny tool names", () => {
   const merged = mergeToolPolicyPatch({
     baseToolPolicy: {
@@ -25,7 +21,6 @@ test("mergeToolPolicyPatch merges base/patched deny tool names", () => {
     toolPolicyPatch: {
       denyToolNames: ["b", "a"],
     },
-    normalizeStringArray,
   });
 
   assert.equal(merged.mode, "append_custom");
@@ -38,7 +33,6 @@ test("createPluginPolicyApi patches deny tool names without dropping base policy
       mode: "append_custom",
       allowToolNames: ["read_file"],
     },
-    normalizeStringArray,
   });
   const merged = policyApi.patch({ denyToolNames: ["execute_script"] });
 
@@ -50,7 +44,6 @@ test("createPluginPolicyApi patches deny tool names without dropping base policy
 test("createPluginPolicyApi accumulates deny declarations from multiple plugins", () => {
   const policyApi = createPluginPolicyApi({
     baseToolPolicy: { denyToolNames: ["base_tool"] },
-    normalizeStringArray,
   });
   policyApi.patch({ denyToolNames: ["harness_tool"] });
   const merged = policyApi.patch({ denyToolNames: ["workflow_tool", "harness_tool"] });
@@ -66,7 +59,6 @@ test("mergeToolPolicyPatch removes denied tools from allowToolNames", () => {
     toolPolicyPatch: {
       denyToolNames: ["task_summary"],
     },
-    normalizeStringArray,
   });
 
   assert.deepEqual(merged.allowToolNames, ["read_file", "execute_script"]);
@@ -74,11 +66,10 @@ test("mergeToolPolicyPatch removes denied tools from allowToolNames", () => {
 });
 
 test("hasToolPolicyPatchContent handles empty/deny-only patches", () => {
-  assert.equal(hasToolPolicyPatchContent({ toolPolicyPatch: {}, normalizeStringArray }), false);
+  assert.equal(hasToolPolicyPatchContent({ toolPolicyPatch: {} }), false);
   assert.equal(
     hasToolPolicyPatchContent({
       toolPolicyPatch: { denyToolNames: ["execute_script"] },
-      normalizeStringArray,
     }),
     true,
   );

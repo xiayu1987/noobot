@@ -14,7 +14,7 @@ import { emitEvent } from "../events/index.js";
 import { emitMessageEvent } from "../events/message-event-stream.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistant-artifact-projection.js";
 import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
   return text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
@@ -22,7 +22,7 @@ function messageIdentity(message = {}) {
 
 function canonicalTurnMessages(runtime = {}) {
   const store = runtime?.currentTurnMessages;
-  if (!store || typeof store.toArray !== "function") {
+  if (!store || !isFunction(store.toArray)) {
     throw new Error("authoritative final result requires the canonical currentTurnMessages store");
   }
   return store.toArray();

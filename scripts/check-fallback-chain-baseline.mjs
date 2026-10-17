@@ -280,6 +280,29 @@ export function findInlineTypeChecks(source, filename = "source.js") {
 
 const isSharedValueModule = (file) => file === "shared/value.js";
 
+const RAW_TYPEOF_KINDS = new Set(["object", "function"]);
+const EQUALITY_OPERATORS = new Set(["===", "!==", "==", "!="]);
+
+function isRawTypeofTest(node) {
+  if (node.type !== "BinaryExpression" || !EQUALITY_OPERATORS.has(node.operator)) return false;
+  const [unary, literal] =
+    node.left.type === "UnaryExpression" ? [node.left, node.right] : [node.right, node.left];
+  return (
+    unary.type === "UnaryExpression" &&
+    unary.operator === "typeof" &&
+    literal.type === "Literal" &&
+    RAW_TYPEOF_KINDS.has(literal.value)
+  );
+}
+
+export function findRawTypeofChecks(source, filename = "source.js") {
+  const hits = [];
+  walk(parseSource(source, filename), null, (node) => {
+    if (isRawTypeofTest(node)) hits.push(snippet(source, node));
+  });
+  return hits;
+}
+
 export const RULES = Object.freeze({
   fallbackChain: {
     title: "回退链",
@@ -299,6 +322,12 @@ export const RULES = Object.freeze({
     find: findInlineTypeChecks,
     includeFile: (file) => !isTestFilePath(file) && !isSharedValueModule(file),
     hint: 'use isPlainObject from "@noobot/shared/value" instead of local object type checks',
+  },
+  rawTypeof: {
+    title: "原始 typeof 判断",
+    find: findRawTypeofChecks,
+    includeFile: (file) => !isTestFilePath(file) && !isSharedValueModule(file),
+    hint: 'use isFunction/isObjectLike/isPlainObject from "@noobot/shared/value" instead of typeof x ===/!== "object"/"function"',
   },
   textShadow: {
     title: "遮蔽 text()",
@@ -415,9 +444,13 @@ function describeTotals(counts) {
 export function findRebaseIncreases(previous, next) {
   return Object.keys(RULES)
     .filter((name) => previous[name])
-    .map((name) => [name, sumCounts(previous[name]), sumCounts(next[name] ?? {})])
-    .filter(([, before, after]) => after > before)
-    .map(([name, before, after]) => `rebase raises ${name} from ${before} to ${after}`);
+    .map((name) => ({
+      name,
+      before: sumCounts(previous[name]),
+      after: sumCounts(next[name] ?? {}),
+    }))
+    .filter(({ before, after }) => after > before)
+    .map(({ name, before, after }) => `rebase raises ${name} from ${before} to ${after}`);
 }
 
 async function writeBaseline(markdown, measured) {

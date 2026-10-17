@@ -15,7 +15,8 @@ import {
   invokeCapabilityModel,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
+  shouldUseSeparateModel,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
@@ -136,10 +137,10 @@ export async function runPhaseAcceptanceBySeparateModel(
   const shouldRunFromPending = state.pending.phaseAcceptance === true;
   const shouldRun = forceRun === true || shouldRunFromPending;
   if (!shouldRun) return false;
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) {
+  if (!shouldUseSeparateModel(meta)) {
     return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx, meta);
   }
+  const invoker = readCapabilityModelInvoker(meta);
   const locale = state?.locale || LOCALE.ZH_CN;
   const {
     summaryReportsContents,
@@ -279,8 +280,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     meta,
     includeWorkflowPolicy: false,
   });
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) {
+  if (!shouldUseSeparateModel(meta)) {
     const fallbackText = buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
     const report = appendPhaseAcceptanceReport(bucket, fallbackText);
     if (!report) return false;
@@ -294,6 +294,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     });
     return true;
   }
+  const invoker = readCapabilityModelInvoker(meta);
   let response = null;
   try {
     response = await invokeCapabilityModel({

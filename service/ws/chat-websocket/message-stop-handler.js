@@ -43,7 +43,6 @@ export function createMessageStopHandler({
   canonicalRunOwnerId,
   sendEvent,
   translateText,
-  resolveBot,
   rejectTurnInteractions,
   commitTurnLifecycle,
 }) {

@@ -35,11 +35,11 @@ import {
   createConfigSnapshot,
 } from "@noobot/agent-config-protocol";
 import { createAgentCapabilityModelInvoker } from "../../runtime/capability-runner/index.js";
-import { normalizeTrimmedStringList, selectHookManager } from "./session-execution-engine-utils.js";
+import { selectHookManager } from "./session-execution-engine-utils.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { commitPluginArtifact, getPluginArtifact } from "./plugin-artifact-committer.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS =
@@ -78,23 +78,14 @@ export class RunConfigPluginPreparer {
     globalConfig = {},
     workspaceService = null,
     loadedDynamicPlugins = null,
-    normalizeStringArray = null,
     createPluginResolveModelMessages = null,
     createDetachedSubSessionRunner = null,
-    createBotSubSessionRunner = null,
-    createGeneratedArtifactPersister = null,
   } = {}) {
     this.globalConfig = globalConfig;
     this.workspaceService = workspaceService;
     this.loadedDynamicPlugins = loadedDynamicPlugins;
-    this.normalizeStringArray =
-      typeof normalizeStringArray === "function"
-        ? normalizeStringArray
-        : normalizeTrimmedStringList;
     this.createPluginResolveModelMessages = createPluginResolveModelMessages;
-    this.createDetachedSubSessionRunner =
-      createDetachedSubSessionRunner || createBotSubSessionRunner;
-    this.createGeneratedArtifactPersister = createGeneratedArtifactPersister;
+    this.createDetachedSubSessionRunner = createDetachedSubSessionRunner;
   }
 
   selectedEntries({ runConfig = {}, userConfig = {} } = {}) {
@@ -171,55 +162,40 @@ export class RunConfigPluginPreparer {
     );
     const hasExecutionIntent = Boolean(agentContributions?.executionIntent);
 
-    if (hasAgentLifecycle) {
-      next.resolveModelMessages = this.createPluginResolveModelMessages?.({
-        pluginId: entry.pluginId,
-        pluginOptions: next,
-      });
+    if (hasAgentLifecycle || hasExecutionIntent) {
       next.miniRunnerMaxTurns =
         Number.isFinite(Number(next.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
           ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)
           : AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS;
-      next.planningGuidanceMode = String(next.planningGuidanceMode || "separate_model");
-      if (next.planningGuidanceMode === "separate_model") {
-        if (
-          !Number.isFinite(Number(next.timeoutMs)) ||
-          Number(next.timeoutMs) < AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS
-        ) {
-          next.timeoutMs = AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS;
-        }
-        if (typeof next.capabilityModelInvoker !== "function") {
-          next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
-            maxTurns: next.miniRunnerMaxTurns,
-            enableToolBinding: false,
-            configSnapshot,
-          });
-        }
-      }
-    }
-
-    if (hasExecutionIntent) {
-      next.resolveModelMessages = this.createPluginResolveModelMessages?.({
+      next.resolveModelMessages = this.createPluginResolveModelMessages({
         pluginId: entry.pluginId,
         pluginOptions: next,
       });
-      next.semanticMode = String(next.semanticMode || "separate_model");
+    }
+
+    if (hasAgentLifecycle) {
       if (
-        next.semanticMode === "separate_model" &&
-        typeof next.capabilityModelInvoker !== "function"
+        !Number.isFinite(Number(next.timeoutMs)) ||
+        Number(next.timeoutMs) < AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS
       ) {
-        next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
-          maxTurns: next.miniRunnerMaxTurns,
-          enableToolBinding: false,
-          headerNamespace: "plugin",
-          flowPrefix: entry.pluginId,
-          configSnapshot,
-        });
+        next.timeoutMs = AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS;
       }
-      if (typeof next.subSessionRunner !== "function")
-        next.subSessionRunner = this.createDetachedSubSessionRunner?.();
-      if (typeof next.generatedArtifactPersister !== "function")
-        next.generatedArtifactPersister = this.createGeneratedArtifactPersister?.();
+      next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
+        maxTurns: next.miniRunnerMaxTurns,
+        enableToolBinding: false,
+        configSnapshot,
+      });
+    }
+
+    if (hasExecutionIntent) {
+      next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
+        maxTurns: next.miniRunnerMaxTurns,
+        enableToolBinding: false,
+        headerNamespace: "plugin",
+        flowPrefix: entry.pluginId,
+        configSnapshot,
+      });
+      next.subSessionRunner = this.createDetachedSubSessionRunner();
     }
     return next;
   }
@@ -247,10 +223,7 @@ export class RunConfigPluginPreparer {
       managerKey: "botHookManager",
       createManager: createHookManager,
     });
-    const policy = createPluginPolicyApi({
-      baseToolPolicy: runConfig?.toolPolicy,
-      normalizeStringArray: (input) => this.normalizeStringArray(input),
-    });
+    const policy = createPluginPolicyApi({ baseToolPolicy: runConfig?.toolPolicy });
     const configuredPlugins = { ...plainObject(runConfig?.plugins) };
     const pluginTools = [];
     for (const entry of entries) {
@@ -329,7 +302,7 @@ export class RunConfigPluginPreparer {
               path: ["tools", "register"],
               value: (toolId, factory) => {
                 const declaration = requireDeclaredPluginTool(entry.manifest, toolId);
-                if (typeof factory !== "function")
+                if (!isFunction(factory))
                   throw new TypeError(`plugin tool factory is required: ${toolId}`);
                 if (pluginTools.some((item) => item.id === declaration.id)) {
                   throw new Error(`duplicate plugin tool: ${declaration.id}`);
@@ -354,7 +327,6 @@ export class RunConfigPluginPreparer {
       Object.keys(plainObject(runConfig?.toolPolicy)).length > 0 ||
       hasToolPolicyPatchContent({
         toolPolicyPatch,
-        normalizeStringArray: (input) => this.normalizeStringArray(input),
       });
     return {
       ...runConfig,
@@ -367,7 +339,6 @@ export class RunConfigPluginPreparer {
             toolPolicy: mergeToolPolicyPatch({
               baseToolPolicy: runConfig?.toolPolicy,
               toolPolicyPatch,
-              normalizeStringArray: (input) => this.normalizeStringArray(input),
             }),
           }
         : {}),

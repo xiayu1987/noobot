@@ -71,7 +71,6 @@ export async function runNodeAgent({
     semantic,
   });
   const upstreamAttachmentSystemMessage = await buildWorkflowUpstreamAttachmentSystemMessage({
-    options,
     ctx,
     pendingStep,
     upstreamNodeResults,
@@ -104,7 +103,6 @@ export async function runNodeAgent({
   throwIfWorkflowAborted(ctx);
   return resolveNodeAgentResult({
     hookManager,
-    options,
     ctx,
     pendingStep,
     hookPayload,
@@ -191,9 +189,6 @@ function collectUpstreamAttachmentReferences(upstreamNodeResults, ctx) {
 }
 
 async function runWorkflowNodeSubSession(params) {
-  if (typeof params.options?.subSessionRunner !== "function") {
-    return { subSession: null, childFailed: false };
-  }
   try {
     const subSession = await executeWorkflowNodeSubSession(params);
     if (subSession) await persistWorkflowNodeSubSession(params, subSession);
@@ -336,7 +331,6 @@ function resolveNodeAgentTimeout(options) {
 async function persistWorkflowNodeSubSession(params, subSession) {
   throwIfWorkflowAborted(params.ctx);
   await persistWorkflowNodeResultAttachment({
-    options: params.options,
     ctx: params.ctx,
     subSession,
     transition: params.transition,
@@ -349,7 +343,6 @@ async function persistWorkflowNodeSubSession(params, subSession) {
 
 async function resolveNodeAgentResult({
   hookManager,
-  options,
   ctx,
   pendingStep,
   hookPayload,

@@ -7,7 +7,7 @@ import { createSessionFacade, createSessionServices } from "../session/index.js"
 import { MemoryManager } from "../memory/index.js";
 import { AttachmentService } from "../artifacts/index.js";
 import { SkillService } from "../skills/index.js";
-import { ConfigService, WORKSPACE_SANDBOX_PATHS, mergeConfig } from "../config/index.js";
+import { ConfigService, WORKSPACE_SANDBOX_PATHS } from "../config/index.js";
 import { SystemErrorLogger } from "../observability/index.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
@@ -88,11 +88,9 @@ export class BotManager {
     if (attachments?.length) {
       await this.ensureUserWorkspace(userId);
       const runtimeBasePath = this.getWorkspacePath(userId);
-      const userConfig = await this.loadUserConfig(runtimeBasePath);
       canonicalAttachments = await resolveAttachments({
         attachmentService: this.attach,
         runtimeBasePath,
-        effectiveConfig: mergeConfig(this.globalConfig, userConfig),
         userMessageAttachments: attachments,
         userId,
         sessionId,

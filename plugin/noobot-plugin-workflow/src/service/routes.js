@@ -13,7 +13,7 @@ import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 const normalizeRouteText = (value) => text(value);
 
 function mergeSessionSnapshotBody(session, sessionSummary) {
@@ -150,9 +150,9 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
   const httpStatus = context?.ports?.http?.status;
   if (
     !sessions ||
-    typeof sessions.readSnapshot !== "function" ||
-    typeof sessions.readThinkingDetail !== "function" ||
-    typeof sessions.readExecutionReport !== "function"
+    !isFunction(sessions.readSnapshot) ||
+    !isFunction(sessions.readThinkingDetail) ||
+    !isFunction(sessions.readExecutionReport)
   ) {
     throw new Error("workflow service session ports are required");
   }

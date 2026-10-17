@@ -24,7 +24,7 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { TOOL_CALL_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
@@ -304,7 +304,7 @@ async function generateImages(input, deps, state) {
   assertGenerationModelSupported(state, runtime);
   state.effectiveImageSize = trimmedText(input.size || input.image_size);
   const modelPort = runtime?.modelPort;
-  if (!modelPort || typeof modelPort.invoke !== "function") {
+  if (!modelPort || !isFunction(modelPort.invoke)) {
     throw new TypeError("multimodal generation requires runtime.modelPort");
   }
   const response = await modelPort.invoke(

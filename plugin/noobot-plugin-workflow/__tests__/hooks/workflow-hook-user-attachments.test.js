@@ -9,18 +9,17 @@ import assert from "node:assert/strict";
 import {
   createMockBotHookManager,
   getBeforeDispatch,
-  createRegisterWorkflowHooks,
+  registerWorkflowAgentHooks,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook passes planned user attachments to node sub-session", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
   const semanticRequestMessages = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       resolveModelMessages: () => [],
@@ -61,7 +60,6 @@ test("workflow hook passes planned user attachments to node sub-session", async 
           },
         };
       },
-      generatedArtifactPersister: async () => [],
     },
   });
 
@@ -96,7 +94,9 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   assert.match(nodeSystemMessages, /attachment:v1:s-input-att\/user\/att-user-1/);
   assert.doesNotMatch(nodeSystemMessages, /workspace|attachments\/s-input-att/);
 
-  const semanticPrompt = String(semanticRequestMessages[0]?.content || "");
+  const semanticPrompt = String(
+    semanticRequestMessages.find((message) => message.role === "user")?.content,
+  );
   assert.match(semanticPrompt, /用户附件/);
   assert.match(semanticPrompt, /identityRef=attachment:v1:s-input-att\/user\/att-user-1/);
   assert.doesNotMatch(semanticPrompt, /sessionId=|attachmentSource=/);

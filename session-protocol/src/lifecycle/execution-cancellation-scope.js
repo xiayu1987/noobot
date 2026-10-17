@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 function isAbortSignalLike(value) {
-  return Boolean(value) && typeof value.addEventListener === "function";
+  return Boolean(value) && isFunction(value.addEventListener);
 }
 
 function normalizeDisposer(disposer) {

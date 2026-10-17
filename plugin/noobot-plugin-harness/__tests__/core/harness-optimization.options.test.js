@@ -6,10 +6,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
+import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../src/core/constants.js";
+import {
+  assertHarnessAgentHostCapabilities,
+  DEFAULT_HARNESS_DENY_TOOL_NAMES,
+  normalizeOptions,
+} from "../../src/core/options.js";
+
+const INJECT_MODE = { planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.INJECT };
 
 test("normalizeOptions applies schema defaults and coercion", () => {
   const options = normalizeOptions({
+    ...INJECT_MODE,
     miniRunnerMaxTurns: "15",
     manifestDebounceMs: "0",
     jsonlFlushStrategy: { maxSize: "100", maxTime: "5000", onTerminal: false },
@@ -35,13 +43,14 @@ test("normalizeOptions applies schema defaults and coercion", () => {
 
 test("normalizeOptions requires capability calls to finish before the hook deadline", () => {
   assert.throws(
-    () => normalizeOptions({ timeoutMs: 1000, capabilityModelTimeoutMs: 1000 }),
+    () => normalizeOptions({ ...INJECT_MODE, timeoutMs: 1000, capabilityModelTimeoutMs: 1000 }),
     /capabilityModelTimeoutMs/,
   );
 });
 
 test("normalizeOptions does not expose workflow strategy options", () => {
   const options = normalizeOptions({
+    ...INJECT_MODE,
     ["nonProgramming" + "Workflow" + "Strategy"]: "risk" + "_first",
     ["workflow" + "Strategy"]: "execution" + "-first",
     ["prompt" + "Strategy"]: "risk" + "First",
@@ -59,18 +68,39 @@ test("normalizeOptions does not expose workflow strategy options", () => {
 });
 
 test("normalizeOptions enables optional tool-burst summary trigger", () => {
-  const options = normalizeOptions({ enableToolBurstSummary: true });
+  const options = normalizeOptions({ ...INJECT_MODE, enableToolBurstSummary: true });
   assert.equal(options.summaryOnToolBurstThreshold, true);
 });
 
 test("normalizeOptions can explicitly enable non-main model context clipping", () => {
-  const options = normalizeOptions({ clipNonMainModelContextMessages: true });
+  const options = normalizeOptions({ ...INJECT_MODE, clipNonMainModelContextMessages: true });
   assert.equal(options.clipNonMainModelContextMessages, true);
 });
 
 test("normalizeOptions keeps custom harness denyToolNames", () => {
   const options = normalizeOptions({
+    ...INJECT_MODE,
     denyToolNames: ["task_summary", "", "task_summary"],
   });
   assert.deepEqual(options.denyToolNames, ["task_summary"]);
+});
+
+test("agent host capabilities reject separate_model without capabilityModelInvoker", () => {
+  const options = normalizeOptions({
+    planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL,
+  });
+  assert.throws(
+    () => assertHarnessAgentHostCapabilities(options),
+    /separate_model mode requires capabilityModelInvoker/,
+  );
+});
+
+test("normalizeOptions keeps separate_model with injected capabilityModelInvoker", () => {
+  const capabilityModelInvoker = async () => null;
+  const options = normalizeOptions({
+    planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL,
+    capabilityModelInvoker,
+  });
+  assert.equal(options.planningGuidanceMode, HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL);
+  assert.equal(options.capabilityModelInvoker, capabilityModelInvoker);
 });

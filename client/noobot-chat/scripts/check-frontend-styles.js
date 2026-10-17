@@ -137,8 +137,10 @@ function inspectIconOnlyButtons(filePath, source) {
     );
   }
 
-  for (const match of source.matchAll(/<(el-button|button)\b([^>]*)>([\s\S]*?)<\/\1>/g)) {
-    const [, , attributes, body] = match;
+  for (const match of source.matchAll(
+    /<(?<tag>el-button|button)\b(?<attributes>[^>]*)>(?<body>[\s\S]*?)<\/\k<tag>>/g,
+  )) {
+    const { attributes, body } = match.groups;
     if (!/<(?:el-icon|svg)\b/.test(body)) continue;
     const visibleText = body
       .replace(/<[^>]+>/g, " ")

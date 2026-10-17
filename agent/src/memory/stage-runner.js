@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isAbortError } from "../shared/utils/error-utils.js";
+import { isFunction } from "@noobot/shared/value";
 
 export const MEMORY_SUMMARY_STAGE = Object.freeze({
   LONG_MEMORY: "long_memory",
@@ -14,7 +15,7 @@ export const MEMORY_SUMMARY_STAGE = Object.freeze({
 });
 
 export async function runMemorySummaryStage(stage, run, { abortSignal = null, onStageError }) {
-  if (typeof onStageError !== "function") {
+  if (!isFunction(onStageError)) {
     throw new TypeError("memory summary stage requires onStageError");
   }
   try {

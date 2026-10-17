@@ -109,7 +109,6 @@ function buildStopPayload({
 export function stopSending({
   activeSession,
   turnRuntimeRegistry,
-  userId,
   chatWebSocketClient,
   applyRunStateEvent,
   executionId = "",

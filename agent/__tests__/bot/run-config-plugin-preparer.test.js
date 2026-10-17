@@ -49,7 +49,6 @@ function activation(id, hostAction = () => {}) {
 function preparer(entries) {
   return new RunConfigPluginPreparer({
     loadedDynamicPlugins: { registry: new Map(entries.map((item) => [item.pluginId, item])) },
-    normalizeStringArray: (input) => (Array.isArray(input) ? input : []),
     createPluginResolveModelMessages: () => () => [],
   });
 }
@@ -154,7 +153,6 @@ test("configuration mode cannot select a workflow omitted from the turn protocol
   const instance = new RunConfigPluginPreparer({
     globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
     loadedDynamicPlugins: { registry: new Map([["workflow", workflow]]) },
-    normalizeStringArray: (input) => (Array.isArray(input) ? input : []),
     createPluginResolveModelMessages: () => () => [],
   });
 
@@ -181,7 +179,6 @@ test("an unavailable plugin cannot be activated by selectedPlugins", () => {
   const instance = new RunConfigPluginPreparer({
     globalConfig: { plugins: { demo: { enabled: false, mode: "on" } } },
     loadedDynamicPlugins: { registry: new Map([["demo", demo]]) },
-    normalizeStringArray: (input) => (Array.isArray(input) ? input : []),
     createPluginResolveModelMessages: () => () => [],
   });
 

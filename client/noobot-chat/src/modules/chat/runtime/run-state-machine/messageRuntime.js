@@ -185,10 +185,7 @@ function buildInFlightMessageRuntimePatch(stateItem = {}) {
   };
 }
 
-function buildClearMessageRuntimePatch({
-  messageItem = {},
-  stateSnapshot = createInitialSessionRunState(),
-} = {}) {
+function buildClearMessageRuntimePatch() {
   return {
     clearRuntimeMark: true,
     pending: false,
@@ -199,10 +196,7 @@ function buildClearMessageRuntimePatch({
   };
 }
 
-function buildFailedMessageRuntimePatch({
-  messageItem = {},
-  stateSnapshot = createInitialSessionRunState(),
-} = {}) {
+function buildFailedMessageRuntimePatch({ stateSnapshot = createInitialSessionRunState() } = {}) {
   return {
     clearRuntimeMark: true,
     pending: false,
@@ -308,7 +302,7 @@ export function resolveSessionRunMessageRuntimePatch({
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
-      patch: buildFailedMessageRuntimePatch({ messageItem, stateSnapshot }),
+      patch: buildFailedMessageRuntimePatch({ stateSnapshot }),
     };
   }
   if (
@@ -320,7 +314,7 @@ export function resolveSessionRunMessageRuntimePatch({
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
-      patch: buildClearMessageRuntimePatch({ messageItem, stateSnapshot }),
+      patch: buildClearMessageRuntimePatch(),
     };
   }
   if (
@@ -330,7 +324,7 @@ export function resolveSessionRunMessageRuntimePatch({
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.OBSOLETE_PENDING_ASSISTANT,
-      patch: buildClearMessageRuntimePatch({ messageItem, stateSnapshot }),
+      patch: buildClearMessageRuntimePatch(),
     };
   }
   return { action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE };

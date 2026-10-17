@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const objectValue = (value, label) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -28,7 +28,7 @@ export function normalizeConnectorAccessRequest(request = {}) {
 export function normalizeConnectorAccessContext(context = {}) {
   const source = objectValue(context ?? {}, "connector access context");
   const abortSignal = source.abortSignal ?? null;
-  if (abortSignal !== null && typeof abortSignal?.addEventListener !== "function") {
+  if (abortSignal !== null && !isFunction(abortSignal?.addEventListener)) {
     throw new TypeError("connector access abortSignal must be an AbortSignal");
   }
   return Object.freeze({

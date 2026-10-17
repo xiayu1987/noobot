@@ -117,7 +117,6 @@ export function createMonotonicMessageActions({
   monotonicActionStopTimeoutMs,
   monotonicActionStopPollIntervalMs,
   applyRunStateEvent,
-  appendMessage,
   removeWorkflowOwnersForReplacedTurns,
   invalidateTerminalResolution,
 }) {

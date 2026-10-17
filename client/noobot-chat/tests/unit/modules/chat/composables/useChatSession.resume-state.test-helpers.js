@@ -12,13 +12,7 @@ export function detailResponse(options) {
   return { ok: true, json: async () => payload };
 }
 
-export function detailPayload({
-  sessionId,
-  status,
-  dialogProcessId,
-  turnScopeId,
-  turnLifecycleSnapshot,
-}) {
+export function detailPayload({ sessionId, dialogProcessId, turnScopeId, turnLifecycleSnapshot }) {
   return {
     ok: true,
     exists: true,

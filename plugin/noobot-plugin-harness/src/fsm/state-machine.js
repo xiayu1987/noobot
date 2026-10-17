@@ -77,7 +77,7 @@ export async function advanceFsmState(point, ctx = {}, paths = null, options = {
   }
   const { state: currentState, resumed } = await resolveCurrentFsmState(paths, options);
   const plan = buildFsmTransitionPlan(point, ctx, currentState, resumed, paths.runId);
-  await applyFsmTransitionEffects(paths, ctx, options, plan, {
+  await applyFsmTransitionEffects(paths, options, plan, {
     set: setFsmState,
     delete: deleteFsmState,
   });

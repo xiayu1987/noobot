@@ -11,7 +11,7 @@ import { resolveWorkflowSemanticContextMessages } from "../../src/core/hooks/mes
 import {
   createMockBotHookManager,
   getBeforeDispatch,
-  createRegisterWorkflowHooks,
+  registerWorkflowAgentHooks,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 function assertSystemBlockPrecedesConversation(messages = []) {
@@ -60,12 +60,11 @@ test("workflow semantic context projects canonical tool evidence for the observe
 
 test("workflow semantic planning passes conversation context before current user task", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "semantic-model",
@@ -99,8 +98,6 @@ test("workflow semantic planning passes conversation context before current user
         dialogProcessId: "wf_node_dialog_context",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
       }),
-      generatedArtifactPersister: async () => [],
-      workflowDialogPersister: async () => null,
     },
   });
 
@@ -148,12 +145,11 @@ test("workflow semantic planning passes conversation context before current user
 
 test("workflow semantic planning uses the authoritative resolver when the flat projection is empty", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "semantic-model",
@@ -187,8 +183,6 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
         dialogProcessId: "wf_node_dialog_context_blocks",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
       }),
-      generatedArtifactPersister: async () => [],
-      workflowDialogPersister: async () => null,
     },
   });
 
@@ -229,12 +223,11 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
 
 test("workflow semantic planning includes current available tools like harness planning", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "semantic-model",
@@ -268,8 +261,6 @@ test("workflow semantic planning includes current available tools like harness p
         dialogProcessId: "wf_node_dialog_tools",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
       }),
-      generatedArtifactPersister: async () => [],
-      workflowDialogPersister: async () => null,
     },
   });
 
@@ -310,12 +301,11 @@ test("workflow semantic planning includes current available tools like harness p
 
 test("workflow semantic planning reads available tools from the canonical agentContext", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "semantic-model",
@@ -349,8 +339,6 @@ test("workflow semantic planning reads available tools from the canonical agentC
         dialogProcessId: "wf_node_dialog_runtime_tools",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
       }),
-      generatedArtifactPersister: async () => [],
-      workflowDialogPersister: async () => null,
     },
   });
 
@@ -386,12 +374,11 @@ test("workflow semantic planning reads available tools from the canonical agentC
 
 test("workflow semantic planning reads authoritative modelContext history", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "semantic-model",
@@ -425,8 +412,6 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
         dialogProcessId: "wf_node_dialog_runtime_history",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
       }),
-      generatedArtifactPersister: async () => [],
-      workflowDialogPersister: async () => null,
     },
   });
 

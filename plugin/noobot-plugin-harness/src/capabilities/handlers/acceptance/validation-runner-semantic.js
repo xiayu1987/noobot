@@ -15,10 +15,10 @@ import {
   invokeCapabilityModel,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
-  resolvePlanningGuidanceMode,
+  shouldUseSeparateModel,
 } from "./deps.js";
 import { captureInjectedResult, scheduleInjectTask } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
@@ -224,13 +224,10 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
       ? WORKFLOW_PARAMS.acceptance.semanticValidation.enabled === true
       : acceptanceOptions.semanticValidation === true;
   if (!semanticValidationEnabled) return false;
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) {
-    if (resolvePlanningGuidanceMode(meta) === "inject") {
-      return scheduleAcceptanceSemanticValidationByInject(ctx, baseReport);
-    }
-    return false;
+  if (!shouldUseSeparateModel(meta)) {
+    return scheduleAcceptanceSemanticValidationByInject(ctx, baseReport);
   }
+  const invoker = readCapabilityModelInvoker(meta);
   const locale = state?.locale || LOCALE.ZH_CN;
   const finalOutput = text(ctx?.result?.output);
   const promptPayload = buildSemanticValidationPromptPayload({

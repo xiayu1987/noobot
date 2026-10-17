@@ -7,6 +7,7 @@
 import { isPlainObject } from "../utils.js";
 import { normalizeConfigParamKey } from "./config-params.js";
 import { AgentConfigProtocolError, CONFIG_ERROR_CODE } from "../contract/errors.js";
+import { isFunction } from "@noobot/shared/value";
 
 export const UNRESOLVED_TEMPLATE_POLICY = Object.freeze({
   EMPTY: "empty",
@@ -52,7 +53,7 @@ export function resolveConfigTemplates(
   input,
   { lookup, unresolved = UNRESOLVED_TEMPLATE_POLICY.EMPTY } = {},
 ) {
-  if (typeof lookup !== "function") throw new TypeError("config template lookup is required");
+  if (!isFunction(lookup)) throw new TypeError("config template lookup is required");
   if (!Object.values(UNRESOLVED_TEMPLATE_POLICY).includes(unresolved)) {
     throw new TypeError(`unsupported unresolved config template policy: ${unresolved}`);
   }

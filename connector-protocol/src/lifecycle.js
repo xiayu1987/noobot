@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export const CONNECTOR_STATUS = Object.freeze({
   DISCONNECTED: "disconnected",
@@ -30,7 +30,7 @@ export function assertConnectorInstanceImplementation(implementation = {}) {
   const definition = implementation.definition;
   if (!definition?.instanceType) throw new TypeError("connector definition is required");
   for (const method of ["create", "health", "access", "dispose"]) {
-    if (typeof implementation[method] !== "function") {
+    if (!isFunction(implementation[method])) {
       throw new TypeError(`connector implementation method is required: ${method}`);
     }
   }
@@ -40,7 +40,7 @@ export function assertConnectorInstanceImplementation(implementation = {}) {
 
 export function assertConnectorAccessPort(port = {}) {
   for (const method of ["access", "listUserConnectors"]) {
-    if (typeof port?.[method] !== "function") {
+    if (!isFunction(port?.[method])) {
       throw new TypeError(`connector access port method is required: ${method}`);
     }
   }

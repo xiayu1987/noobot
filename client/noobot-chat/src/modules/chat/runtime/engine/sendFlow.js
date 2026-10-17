@@ -32,10 +32,8 @@ export function createChatEngineSender({
   reduceSubSessionMessageEvent,
   clearMissingInteractionPayloadTimer,
   clearPendingInteraction,
-  clearPendingInteractionIfObsolete,
   clearUploads,
   ensureConnected,
-  foldMessagesForView,
   safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
@@ -203,7 +201,6 @@ export function createChatEngineSender({
     } catch (error) {
       applySendErrorState({
         error,
-        activeSession,
         botMessage: botMsg,
         clearPendingInteraction,
         notify,

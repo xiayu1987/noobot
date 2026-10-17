@@ -18,12 +18,9 @@ describe("createReconnectCoordinator", () => {
     const chatWebSocketClient = { reconnect: vi.fn() };
     const coordinator = createReconnectCoordinator({
       activeSession: ref({ id: "local-1", sessionId: "", isLocal: true, messages: [] }),
-      activeSessionId: ref("local-1"),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       chatWebSocketClient,
       reconnectReplay: {},
-      chatList: {},
-      resolveActiveSessionIdentity: () => "local-1",
       resolveActiveTurnScopeIdentity: () => "",
     });
 
@@ -40,12 +37,9 @@ describe("createReconnectCoordinator", () => {
         parentDialogProcessId: "parent-dp-1",
         messages: [],
       }),
-      activeSessionId: ref("child-1"),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       chatWebSocketClient,
       reconnectReplay: {},
-      chatList: {},
-      resolveActiveSessionIdentity: () => "child-1",
       resolveActiveTurnScopeIdentity: () => "",
       logSessionSystemEvent: vi.fn(),
       notify: vi.fn(),
@@ -99,12 +93,9 @@ describe("createReconnectCoordinator", () => {
     const logSessionSystemEvent = vi.fn();
     const coordinator = createReconnectCoordinator({
       activeSession: ref({ sessionId: "s-1", messages: [] }),
-      activeSessionId: ref("s-1"),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       chatWebSocketClient,
       reconnectReplay,
-      chatList: {},
-      resolveActiveSessionIdentity: () => "s-1",
       resolveActiveTurnScopeIdentity: () => "",
       logSessionSystemEvent,
       notify,
@@ -172,12 +163,9 @@ describe("createReconnectCoordinator", () => {
     };
     const coordinator = createReconnectCoordinator({
       activeSession: ref({ sessionId: "s-1", messages: [] }),
-      activeSessionId: ref("s-1"),
       turnRuntimeRegistry: ref(registry),
       chatWebSocketClient,
       reconnectReplay,
-      chatList: {},
-      resolveActiveSessionIdentity: () => "s-1",
       resolveActiveTurnScopeIdentity: () => "turn-1",
       logSessionSystemEvent: vi.fn(),
       notify: vi.fn(),

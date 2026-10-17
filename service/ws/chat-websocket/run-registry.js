@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const activeRunRegistry = new Map();
 let nextRunHandleId = 0;
@@ -84,7 +84,7 @@ export function enqueueUserInterjection(handle = {}, interjection = {}, commitAu
   const commandId = normalizeRunIdentityPart(interjection.commandId);
   const message = text(interjection.message);
   if (!commandId || !message) throw new TypeError("invalid_user_interjection");
-  if (typeof commitAuthority !== "function") {
+  if (!isFunction(commitAuthority)) {
     throw new TypeError("user interjection authority commit is required");
   }
   const pendingAcceptance = handle.userInterjectionAcceptanceByCommandId.get(commandId);

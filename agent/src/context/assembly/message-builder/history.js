@@ -148,7 +148,7 @@ export function buildHistoryMessages({
       continue;
     }
     const materializedMeta = hasMaterializedUserMeta(effectiveHistoryMessages, messageIndex, msg);
-    if (shouldBuildUserMetaForHistoryMessage(msg, runtime) && !materializedMeta) {
+    if (shouldBuildUserMetaForHistoryMessage(msg) && !materializedMeta) {
       history.push(
         ...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
           allowFallbackAttachments: false,

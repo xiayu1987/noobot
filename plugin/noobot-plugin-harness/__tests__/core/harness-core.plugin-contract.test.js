@@ -17,7 +17,7 @@ import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handle
 test("harness plugin injects prompt into before_llm_call messages", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { basePath, trace: false });
+  registerHarnessCore({ hookManager }, { planningGuidanceMode: "inject", basePath, trace: false });
   const messages = [{ role: "user", content: "hello" }];
 
   await hookManager.emit("agent.before_llm_call", {
@@ -40,6 +40,7 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       basePath,
       promptPolicy: false,
       capabilityHandlers: {

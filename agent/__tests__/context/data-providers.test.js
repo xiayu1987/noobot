@@ -84,9 +84,6 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
       },
     },
     runtimeBasePath: "/workspace/u1",
-    effectiveConfig: {
-      attachments: { maxFileCount: 3 },
-    },
     userMessageAttachments: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
     userId: "u1",
     sessionId: "s1",
@@ -94,7 +91,7 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
   assert.equal(receivedPayload.userId, "u1");
   assert.equal(receivedPayload.sessionId, "s1");
   assert.equal(receivedPayload.attachmentSource, "user");
-  assert.deepEqual(receivedPayload.attachmentPolicy, { maxFileCount: 3 });
+  assert.equal(Object.hasOwn(receivedPayload, "attachmentPolicy"), false);
   assert.deepEqual(result, [{ attachmentId: "att-ingested" }]);
 });
 

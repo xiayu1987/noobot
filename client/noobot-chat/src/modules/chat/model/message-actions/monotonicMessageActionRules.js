@@ -10,7 +10,7 @@ import {
   isTurnTerminalNotice,
 } from "../../runtime/sessionRunStateMachine.js";
 import { areTurnScopeIdsEquivalent } from "../messageIdentity.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 function normalizeText(value = "") {
   return text(value).toLowerCase();
 }
@@ -261,8 +261,8 @@ export function resolveMonotonicMessageActionProps(context = {}) {
     context?.messageItem && typeof context.messageItem === "object" ? context.messageItem : {};
   const allMessages = Array.isArray(context?.allMessages) ? context.allMessages : [];
   const monotonicUserTarget = resolveMonotonicUserTarget(messageItem, allMessages);
-  const canDelete = typeof context?.deleteMonotonicMessage === "function";
-  const canResend = typeof context?.resendMonotonicMessage === "function";
+  const canDelete = isFunction(context?.deleteMonotonicMessage);
+  const canResend = isFunction(context?.resendMonotonicMessage);
   const monotonicSource = getMonotonicSourceForUser(messageItem, allMessages, context);
   const tailOrphanUserMessage = isTailOrphanUserMessage(messageItem, allMessages);
   const latestUserMessage = isLatestUserMessage(messageItem, allMessages);

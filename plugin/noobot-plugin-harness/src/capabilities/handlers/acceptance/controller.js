@@ -31,8 +31,9 @@ import {
   maybeRefreshAcceptanceReportBeforeFinalOutput,
 } from "./output-finalizer.js";
 import { synchronizeTaskAcceptanceTool } from "./tool-injector.js";
-import { shouldUseSeparateModel } from "../shared/model/utils.js";
-import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { resolvePlanningGuidanceMode, shouldUseSeparateModel } from "../shared/model/utils.js";
+import { runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../../core/constants.js";
 import {
   ACCEPTANCE_PHASE_BLOCKER_KEYS,
   hasAcceptancePhaseBlockers,
@@ -252,7 +253,6 @@ function resolveAcceptanceRequestedAction({
   chosenReason = ACCEPTANCE_DECISION.reason.idle,
   forceAcceptanceDueToOverflow = false,
 } = {}) {
-  const normalizedMode = text(mode) === "separate_model" ? "separate_model" : "inject";
   const hook = text(point);
   if (hook === HOOK_POINT.AGENT.BEFORE_TURN) {
     return ACCEPTANCE_REQUESTED_ACTION.acceptanceToolGuardBeforeTurn;
@@ -272,7 +272,7 @@ function resolveAcceptanceRequestedAction({
       return ACCEPTANCE_REQUESTED_ACTION.forcedAcceptanceBeforeLlmInject;
     }
     if (chosenAction === ACCEPTANCE_DECISION.action.phaseAcceptance) {
-      return normalizedMode === "separate_model"
+      return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
         ? ACCEPTANCE_REQUESTED_ACTION.phaseAcceptanceSeparateModel
         : ACCEPTANCE_REQUESTED_ACTION.phaseAcceptanceInject;
     }
@@ -356,7 +356,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
   const invariantChanged =
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.ACCEPTANCE }) === true;
   const holder = ensureHarnessBucket(ctx);
-  const mode = resolveWorkflowMode(meta);
+  const mode = resolvePlanningGuidanceMode(meta);
   const blockedByMainFlowFinalNoTools = hasFinalNoToolsMainFlowInstruction(ctx);
   const forceAcceptanceDueToOverflow =
     blockedByMainFlowFinalNoTools !== true &&

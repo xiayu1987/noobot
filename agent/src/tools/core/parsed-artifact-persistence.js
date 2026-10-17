@@ -28,7 +28,7 @@ import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { AGENT_RUN_EVENT, emitEvent } from "../../events/index.js";
 import { queueUserMetaBackwrite } from "../../context/assembly/message-builder/user-meta-backwrite.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME } from "../constants/index.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function sanitizeArtifactBaseName(input = "", fallback = "multimodal-parse") {
   const normalized = text(input);
@@ -86,7 +86,7 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
     runId: text(system.runId) || undefined,
     relation,
   });
-  if (typeof runtime.sessionManager?.commitAuthorityEvent !== "function") {
+  if (!isFunction(runtime.sessionManager?.commitAuthorityEvent)) {
     throw new Error("attachment authority event commit port is unavailable");
   }
   const persistenceScope = system.persistenceScope || null;

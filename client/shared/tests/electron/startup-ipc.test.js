@@ -49,7 +49,6 @@ test("save super admin refreshes desktop config before writing the global config
     superAdmin: { missing: false, userId: "owner", connectCode: "secret" },
     missingParams: [],
   };
-  let desktopConfigState = staleState;
 
   registerStartupIpcHandlers({
     app: {
@@ -60,10 +59,8 @@ test("save super admin refreshes desktop config before writing the global config
       },
     },
     ipcMain,
-    getDesktopConfigState: () => desktopConfigState,
     setDesktopConfigState: (state) => {
       calls.push(["setDesktopConfigState", state.globalConfigPath]);
-      desktopConfigState = state;
     },
     ensureDesktopGlobalConfig: ({ isPackaged, userDataPath: requestedUserDataPath }) => {
       calls.push([

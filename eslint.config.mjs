@@ -7,6 +7,7 @@ import security from "eslint-plugin-security";
 import unusedImports from "eslint-plugin-unused-imports";
 import globals from "globals";
 import vue from "eslint-plugin-vue";
+import { noobotLocalRules } from "./scripts/quality/eslint-local-rules.mjs";
 
 const testGlobals = {
   afterAll: "readonly",
@@ -42,6 +43,7 @@ export default [
     files: ["**/*.{js,mjs,cjs,vue}"],
     plugins: {
       "unused-imports": unusedImports,
+      noobot: noobotLocalRules,
     },
     languageOptions: {
       ecmaVersion: "latest",
@@ -78,10 +80,13 @@ export default [
       "no-invalid-regexp": "warn",
       "no-irregular-whitespace": "warn",
       "no-empty": ["error", { allowEmptyCatch: false }],
+      "no-else-return": ["error", { allowElseIf: false }],
+      "max-nested-callbacks": ["error", 4],
+      "noobot/no-positional-pattern-holes": "error",
       "no-obj-calls": "warn",
       "no-self-assign": "warn",
       "no-self-compare": "warn",
-      "no-sparse-arrays": "warn",
+      "no-sparse-arrays": "error",
       "no-unreachable": "warn",
       "no-unused-vars": "off",
       "no-warning-comments": ["warn", { terms: ["todo", "fixme"], location: "anywhere" }],
@@ -92,7 +97,7 @@ export default [
         "error",
         {
           vars: "all",
-          args: "none",
+          args: "after-used",
           ignoreRestSiblings: true,
           caughtErrors: "none",
         },

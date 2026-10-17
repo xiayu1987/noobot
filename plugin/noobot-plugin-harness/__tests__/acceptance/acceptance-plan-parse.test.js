@@ -111,7 +111,8 @@ test("sub-plan 1.10 keeps its own planId and never collides with 1.1", () => {
     planAcceptanceStatusByPlanId: { "1.10": { planId: "1.10", status: "pass" } },
   };
   const report = buildAcceptanceReport({ bucket, state: { locale: "zh-CN", signals: {} } });
-  const [, sub1, sub10] = report.finalPlanChecklist;
+  const sub1 = report.finalPlanChecklist.find((item) => item.index === "1.1");
+  const sub10 = report.finalPlanChecklist.find((item) => item.index === "1.10");
   assert.equal(sub1.index, "1.1");
   assert.equal(sub10.index, "1.10");
   assert.equal(sub1.status, "pending");

@@ -122,8 +122,6 @@ const suppressDefaultAssets = computed(() =>
 const { displayedAttachments } = useMessageFiles({
   getMessageItem: () => props.messageItem,
   getAllMessages: () => props.allMessages,
-  getSessionDocs: () => props.sessionDocs,
-  getUserId: () => props.userId,
 });
 const completedToolArtifacts = computed(() => selectCompletedToolArtifacts(props.messageItem));
 const writeMutations = computed(() => completedToolArtifacts.value.writeMutations);

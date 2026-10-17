@@ -27,7 +27,7 @@ import {
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset }) {
   const { answer, traces, messages } = detachedRun.result;
@@ -71,7 +71,7 @@ function requireTaskInput(runtime, { mcpName, task }) {
 }
 
 function requireRunContext(runtime, identity) {
-  if (typeof runtime.botManager?.runDetachedSubSession !== "function") {
+  if (!isFunction(runtime.botManager?.runDetachedSubSession)) {
     throw runContextMissing(runtime);
   }
   if (!identity.userId || !identity.sessionId) throw runContextMissing(runtime);

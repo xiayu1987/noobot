@@ -24,7 +24,7 @@ export {
 } from "../shared/attachment-log-utils.js";
 
 export {
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,

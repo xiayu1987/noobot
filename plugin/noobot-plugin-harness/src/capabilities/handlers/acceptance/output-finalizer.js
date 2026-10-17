@@ -53,7 +53,6 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
       : buildAcceptanceReport({
           bucket,
           state,
-          ctx,
           mode: ACCEPTANCE_MODE.FORCED,
           forcedReason: [
             translateI18nText(
@@ -166,7 +165,6 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   const report = buildAcceptanceReport({
     bucket,
     state,
-    ctx,
     mode: ACCEPTANCE_MODE.FORCED,
     forcedReason,
   });
@@ -212,7 +210,6 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
   const refreshedReport = buildAcceptanceReport({
     bucket,
     state,
-    ctx,
     mode: lastReport?.mode || ACCEPTANCE_MODE.ACTIVE,
     forcedReason: text(lastReport?.forcedReason),
   });

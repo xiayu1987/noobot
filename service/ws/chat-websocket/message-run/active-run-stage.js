@@ -104,8 +104,6 @@ export async function activateRun(context, command, run, accepted) {
   });
   await recordPluginDebug(context, command, run);
   const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
-    bot: accepted.activeBot,
-    userId: run.userId,
     runConfig: run.normalizedRunConfig,
   });
   if (!context.state.currentAbortSignal.aborted) scheduleTimeout(context, runMeta, runTimeoutMs);

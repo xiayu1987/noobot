@@ -18,17 +18,14 @@ import {
   CHARACTER_CAMERA_PRESET_LIST_TOOL_ID,
   CHARACTER_PLUGIN_ID,
 } from "../contract.js";
+import { isFunction } from "@noobot/shared/value";
 
 export function activate(host = {}, config = {}) {
   const registerHook = host?.hooks?.register;
   const registerTool = host?.tools?.register;
   const commitArtifact = host?.artifacts?.commit;
   const getArtifact = host?.artifacts?.get;
-  if (
-    [registerHook, registerTool, commitArtifact, getArtifact].some(
-      (item) => typeof item !== "function",
-    )
-  ) {
+  if ([registerHook, registerTool, commitArtifact, getArtifact].some((item) => !isFunction(item))) {
     throw new Error(
       "character animation plugin requires hooks.register, tools.register, artifacts.commit/get",
     );

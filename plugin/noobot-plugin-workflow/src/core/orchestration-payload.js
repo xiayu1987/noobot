@@ -30,7 +30,7 @@ function createInteractionId(ctx = {}) {
   return `wf_${userId}_${sessionId}_${randomUUID()}`;
 }
 
-function resolveRunMeta(ctx = {}, options = {}) {
+function resolveRunMeta(ctx = {}) {
   return {
     userId: normalizeMetaValue(ctx?.userId),
     sessionId: normalizeMetaValue(ctx?.sessionId),
@@ -50,15 +50,6 @@ function previewText(
   return `${raw.slice(0, maxChars)}...(truncated)`;
 }
 
-function bindWorkflowExecutionIdentity(execution = null, workflowRunId = "") {
-  if (!execution) return null;
-  return {
-    ...execution,
-    workflowRunId,
-    instanceId: workflowRunId,
-  };
-}
-
 export function buildWorkflowOrchestrationPayload({
   workflowRunId = "",
   ctx = {},
@@ -74,21 +65,10 @@ export function buildWorkflowOrchestrationPayload({
 } = {}) {
   const resolvedWorkflowRunId = normalizeMetaValue(workflowRunId);
   if (!resolvedWorkflowRunId) throw new Error("workflowRunId is required");
-  for (const candidate of [execution?.workflowRunId, execution?.instanceId]) {
-    const existingIdentity = normalizeMetaValue(candidate);
-    if (existingIdentity && existingIdentity !== resolvedWorkflowRunId) {
-      throw new Error("workflow execution identity conflicts with workflowRunId");
-    }
-  }
   const protocolVersion = WORKFLOW_PROTOCOL.ORCHESTRATION_VERSION;
   const now = new Date().toISOString();
   const success = !error && semantic && execution;
-  const mode =
-    semanticResolution?.invoked === true
-      ? WORKFLOW_SEMANTIC.MODE_SEPARATE_MODEL
-      : WORKFLOW_SEMANTIC.MODE_INLINE_TEXT;
   const interactionId = createInteractionId(ctx);
-  const identifiedExecution = bindWorkflowExecutionIdentity(execution, resolvedWorkflowRunId);
 
   return {
     protocolVersion,
@@ -96,11 +76,10 @@ export function buildWorkflowOrchestrationPayload({
     status: success ? WORKFLOW_PHASE_STATUS.SUCCEEDED : WORKFLOW_PHASE_STATUS.FAILED,
     timestamp: now,
     interactionId,
-    runMeta: resolveRunMeta(ctx, options),
+    runMeta: resolveRunMeta(ctx),
     orchestration: {
-      mode,
       semanticPurpose: WORKFLOW_SEMANTIC.PURPOSE,
-      semanticModel: normalizeMetaValue(semanticResolution?.model || options?.semanticModel || ""),
+      semanticModel: normalizeMetaValue(options.semanticModel),
     },
     interaction: {
       sourceTextPreview: previewText(sourceText),
@@ -115,18 +94,17 @@ export function buildWorkflowOrchestrationPayload({
       history: Array.isArray(retryMeta?.history) ? retryMeta.history : [],
     },
     semantic: semantic || null,
-    execution: identifiedExecution,
+    execution,
     artifacts: success
       ? {
           semantic,
-          execution: identifiedExecution,
+          execution,
         }
       : {
           semantic: semantic || null,
-          execution: identifiedExecution,
+          execution,
         },
     diagnostics: {
-      invokerUsed: semanticResolution?.invoked === true,
       invokerTraceCount: Number(semanticResolution?.traceCount || 0),
       error: error
         ? {

@@ -23,7 +23,6 @@ export function createBoundLlmToolChoiceInvoker({
 }) {
   return async function invokeBoundLlmWithToolChoice(
     toolChoiceOverride = "",
-    _llmOverride = null,
     invokeMode = "with_tools",
   ) {
     const baseBindOptions =

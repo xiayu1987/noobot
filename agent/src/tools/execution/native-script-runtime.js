@@ -391,7 +391,6 @@ export async function createNativeScriptRuntime({
   args,
   timeoutMs,
   libreOfficeExecutable,
-  browserExecutablePath,
 }) {
   const pathRoots = { inputRoot, outputRoot, tempRoot };
   const taskRoots = { input: inputRoot, output: outputRoot, temp: tempRoot };

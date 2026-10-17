@@ -6,10 +6,12 @@
 
 import { text } from "@noobot/shared/value";
 
-const MAIN_PLAN_LINE = /^\s*(\d+)\.\s+(.+?)\s*$/;
-const SUB_PLAN_LINE = /^\s*(\d+)\.(\d+)\.?\s+(.+?)\s*$/;
-const PATCH_ADD_UPDATE = /^\s*(ADD|UPDATE)\s+([[\]\d.\s]+)\s+(.+?)\s*$/i;
-const PATCH_DELETE = /^\s*(DELETE)\s+([[\]\d.\s]+)\s*$/i;
+const MAIN_PLAN_LINE = /^\s*(?<mainId>\d+)\.\s+(?<content>.+?)\s*$/;
+const SUB_PLAN_LINE = /^\s*(?<mainId>\d+)\.(?<subIndex>\d+)\.?\s+(?<content>.+?)\s*$/;
+const PATCH_ADD_UPDATE =
+  /^\s*(?<action>ADD|UPDATE)\s+(?<target>[[\]\d.\s]+)\s+(?<content>.+?)\s*$/i;
+const PATCH_DELETE = /^\s*(?<action>DELETE)\s+(?<target>[[\]\d.\s]+)\s*$/i;
+const PATCH_LINE_PATTERNS = Object.freeze([PATCH_ADD_UPDATE, PATCH_DELETE]);
 
 function normalizeText(inputText = "") {
   return String(inputText || "")
@@ -162,42 +164,47 @@ function deleteSubPlan(doc = {}, mainId = 0, subIndex = 0) {
   return next.length !== currentList.length;
 }
 
+function parsePatchLine(line) {
+  const match = PATCH_LINE_PATTERNS.map((pattern) => line.match(pattern)).find(Boolean);
+  if (!match) return null;
+  const { action, target: rawTarget, content: rawContent } = match.groups;
+  const target = parseId(rawTarget);
+  const normalizedAction = text(action).toUpperCase();
+  const isDelete = normalizedAction === "DELETE";
+  const content = isDelete ? "" : text(rawContent);
+  if (!target || (!isDelete && !content)) return { command: null };
+  return { command: { action: normalizedAction, target, content, raw: line } };
+}
+
+function applyPatchCommand(doc, { action, target, content }) {
+  if (action === "DELETE") {
+    return target.isSub
+      ? deleteSubPlan(doc, target.mainId, target.subIndex)
+      : deleteMainPlan(doc, target.mainId);
+  }
+  return target.isSub
+    ? upsertSubPlan(doc, target.mainId, target.subIndex, content)
+    : upsertMainPlan(doc, target.mainId, content);
+}
+
 export function parsePlanDocumentFromText(inputText = "") {
   const doc = ensurePlanDocumentShape({});
   for (const line of splitLines(inputText)) {
-    const addOrUpdate = line.match(PATCH_ADD_UPDATE);
-    if (addOrUpdate) {
-      const action = text(addOrUpdate[1]).toUpperCase();
-      const target = parseId(addOrUpdate[2]);
-      const content = text(addOrUpdate[3]);
-      if (!target || !content) continue;
-      if (target.isSub) {
-        if (action === "ADD" || action === "UPDATE") {
-          upsertSubPlan(doc, Number(target.mainId), Number(target.subIndex), content);
-        }
-      } else if (action === "ADD" || action === "UPDATE") {
-        upsertMainPlan(doc, Number(target.mainId), content);
-      }
-      continue;
-    }
-    const del = line.match(PATCH_DELETE);
-    if (del) {
-      const target = parseId(del[2]);
-      if (!target) continue;
-      if (target.isSub) deleteSubPlan(doc, Number(target.mainId), Number(target.subIndex));
-      else deleteMainPlan(doc, Number(target.mainId));
+    const patchLine = parsePatchLine(line);
+    if (patchLine) {
+      if (patchLine.command) applyPatchCommand(doc, patchLine.command);
       continue;
     }
     const subMatch = line.match(SUB_PLAN_LINE);
     if (subMatch) {
-      const [, mainRaw, subRaw, contentRaw] = subMatch;
-      upsertSubPlan(doc, Number(mainRaw), Number(subRaw), contentRaw);
+      const { mainId, subIndex, content } = subMatch.groups;
+      upsertSubPlan(doc, Number(mainId), Number(subIndex), content);
       continue;
     }
     const mainMatch = line.match(MAIN_PLAN_LINE);
     if (!mainMatch) continue;
-    const [, idRaw, contentRaw] = mainMatch;
-    upsertMainPlan(doc, Number(idRaw), contentRaw);
+    const { mainId, content } = mainMatch.groups;
+    upsertMainPlan(doc, Number(mainId), content);
   }
   return ensurePlanDocumentShape(doc);
 }
@@ -229,22 +236,8 @@ export function parseSubPlansFromPlanText(inputText = "", mainId = 0) {
 export function parsePatchCommands(rawText = "") {
   const commands = [];
   for (const line of splitLines(rawText)) {
-    const addOrUpdate = line.match(PATCH_ADD_UPDATE);
-    if (addOrUpdate) {
-      const action = text(addOrUpdate[1]).toUpperCase();
-      const target = parseId(addOrUpdate[2]);
-      const content = text(addOrUpdate[3]);
-      if (!target || !content) continue;
-      commands.push({ action, target, content, raw: line });
-      continue;
-    }
-    const del = line.match(PATCH_DELETE);
-    if (del) {
-      const action = text(del[1]).toUpperCase();
-      const target = parseId(del[2]);
-      if (!target) continue;
-      commands.push({ action, target, content: "", raw: line });
-    }
+    const command = parsePatchLine(line)?.command;
+    if (command) commands.push(command);
   }
   return commands;
 }
@@ -271,19 +264,9 @@ export function applyPatchCommandsToPlanDocument(
     targetMainIds: new Set(targetMainStepIndexes.map(Number)),
   };
   let changed = false;
-  for (const { action, target, content } of commands) {
-    if (!isCommandInStageScope(doc, target, scope)) continue;
-    if (action === "DELETE") {
-      changed =
-        (target.isSub
-          ? deleteSubPlan(doc, target.mainId, target.subIndex)
-          : deleteMainPlan(doc, target.mainId)) || changed;
-      continue;
-    }
-    changed =
-      (target.isSub
-        ? upsertSubPlan(doc, target.mainId, target.subIndex, content)
-        : upsertMainPlan(doc, target.mainId, content)) || changed;
+  for (const command of commands) {
+    if (!isCommandInStageScope(doc, command.target, scope)) continue;
+    changed = applyPatchCommand(doc, command) || changed;
   }
   return { changed, commands };
 }

@@ -247,30 +247,3 @@ test("createRuntimeNodeSessions does not infer identity for runs without nodeExe
   assert.equal(sessions[0].nodeName, undefined);
   assert.equal(sessions[0].status, "pending");
 });
-
-test("createRuntimeNodeSessions accepts Vue ref-like registry objects", () => {
-  const sessions = buildSessions({
-    workflowPayload: { workflowRunId: "run-ref" },
-    nodeSessions: [
-      {
-        workflowRunId: "run-ref",
-        nodeExecutionId: "node-ref",
-        status: "pending",
-      },
-    ],
-    registry: ref(
-      registryWith("run-ref", {
-        "node-ref": {
-          workflowRunId: "run-ref",
-          nodeExecutionId: "node-ref",
-          status: "succeeded",
-          nodeSessionId: "session-ref",
-        },
-      }),
-    ),
-  });
-
-  assert.equal(sessions.length, 1);
-  assert.equal(sessions[0].status, "succeeded");
-  assert.equal(sessions[0].sessionId, "session-ref");
-});

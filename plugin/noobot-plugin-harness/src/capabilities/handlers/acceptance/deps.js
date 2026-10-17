@@ -30,11 +30,11 @@ export {
 } from "../shared/attachment-log-utils.js";
 
 export {
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
-  resolvePlanningGuidanceMode,
+  shouldUseSeparateModel,
 } from "../shared/model/utils.js";
 
 export { buildCapabilityProtocolModelMessages } from "../shared/model/message-factory.js";

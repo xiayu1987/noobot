@@ -5,7 +5,7 @@
  */
 import { createImapClient, normalizeEmailConnectionInfo } from "./connection.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const BINARY_MIME_TYPE = "application/octet-stream";
 
@@ -80,8 +80,7 @@ function toBufferChunk(sourceChunk) {
 
 function isIterableSource(sourceValue) {
   return (
-    typeof sourceValue?.[Symbol.asyncIterator] === "function" ||
-    typeof sourceValue?.[Symbol.iterator] === "function"
+    isFunction(sourceValue?.[Symbol.asyncIterator]) || isFunction(sourceValue?.[Symbol.iterator])
   );
 }
 

@@ -5,7 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { buildSessionArtifactFileMap } from "./session-artifact-store.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const SESSION_PERSISTENCE_SCOPE_KIND = "noobot.session_persistence_scope";
 const SESSION_PERSISTENCE_SCOPE_VERSION = 1;
@@ -103,7 +103,7 @@ export class ScopedSessionLocationResolver {
 }
 
 export function createPersistenceContext({ locationResolver, metadataContributor = null } = {}) {
-  if (!locationResolver || typeof locationResolver.resolveSessionScope !== "function") {
+  if (!locationResolver || !isFunction(locationResolver.resolveSessionScope)) {
     throw new TypeError("persistence context requires a locationResolver");
   }
   if (
@@ -113,7 +113,7 @@ export function createPersistenceContext({ locationResolver, metadataContributor
   ) {
     throw new TypeError("persistence context requires a bound userId, sessionId and scopeId");
   }
-  if (metadataContributor !== null && typeof metadataContributor !== "function") {
+  if (metadataContributor !== null && !isFunction(metadataContributor)) {
     throw new TypeError("metadataContributor must be a function");
   }
   return Object.freeze({

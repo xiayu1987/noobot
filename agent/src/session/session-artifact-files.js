@@ -6,7 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { readFile, writeFile } from "node:fs/promises";
 import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   session: "session.json",
@@ -48,7 +48,7 @@ export async function readJsonArtifactFile(filePath = "", fallback = null) {
 }
 
 function requireSessionWritableGuard(assertSessionWritable) {
-  if (typeof assertSessionWritable !== "function") {
+  if (!isFunction(assertSessionWritable)) {
     throw new TypeError("assertSessionWritable is required for session artifact mutation");
   }
   return assertSessionWritable;

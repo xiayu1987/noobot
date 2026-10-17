@@ -516,7 +516,6 @@ describe("useChatEngine.resend stopped state", () => {
     settleStoppedTurn(turnRuntimeRegistry, {
       sessionId: "local-resend-second-stopped",
       turnScopeId: firstTurnScopeId,
-      messages: activeSession.value.messages,
     });
     await expect(engine.resendMonotonicMessage(firstReplacementAssistant, "third")).resolves.toBe(
       true,
@@ -653,7 +652,6 @@ describe("useChatEngine.resend stopped state", () => {
     settleStoppedTurn(turnRuntimeRegistry, {
       sessionId: "local-resend-stale-stop-replay",
       turnScopeId: firstAssistant.turnScopeId,
-      messages: activeSession.value.messages,
     });
 
     await expect(engine.resendMonotonicMessage(firstAssistant, "third")).resolves.toBe(true);

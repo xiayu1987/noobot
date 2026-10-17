@@ -23,7 +23,7 @@ import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
 } from "@noobot/session-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
@@ -61,7 +61,7 @@ export function createStateCommitter({
       attachments = [],
     } = {}) {
       if (!turnMessageStore?.push) return;
-      if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
+      if (!isFunction(runtime?.materializePendingCurrentTurnMessageEvents)) {
         throw new Error("Turn message event materializer is required");
       }
       const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
@@ -119,7 +119,7 @@ export function createStateCommitter({
       });
       if (assistantMessage.chatPresentation === true) {
         assertCanonicalAssistantPresentation(assistantMessage);
-        if (typeof turnMessageStore.updateWhere !== "function") {
+        if (!isFunction(turnMessageStore.updateWhere)) {
           throw new Error("canonical assistant presentation requires an updatable Turn store");
         }
         const incomingPresentation = canonicalAssistantPresentationIdentity(assistantMessage);

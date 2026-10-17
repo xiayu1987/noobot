@@ -19,7 +19,8 @@ import {
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeCapabilityModel,
-  resolveCapabilityModelInvoker,
+  readCapabilityModelInvoker,
+  shouldUseSeparateModel,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
@@ -76,8 +77,6 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { state } = holder;
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) return false;
   const pendingData = resolvePendingPlanUpdate(state);
   if (!pendingData?.active) return false;
 
@@ -112,7 +111,7 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   return runPlanUpdateAfterSummary(ctx, meta);
 }
 
-function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, state, modelMessages }) {
+function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, modelMessages }) {
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
     ctx,
     meta,
@@ -125,7 +124,6 @@ function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, state, mode
     .map((item = {}) => text(item?.content))
     .filter(Boolean);
   return buildCapabilityProtocolModelMessages({
-    locale,
     agentMessages: modelMessages,
     contextMessages: revisionContextMessages,
     protocolPrompt: buildPlanningRevisionPrompt(locale, bucket),
@@ -147,10 +145,10 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) {
+  if (!shouldUseSeparateModel(meta)) {
     return schedulePlanUpdateByInject(ctx, "revision");
   }
+  const invoker = readCapabilityModelInvoker(meta);
   const pendingPlanUpdate = resolvePendingPlanUpdate(state);
   if (pendingPlanUpdate?.active) {
     return false;
@@ -171,7 +169,6 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     meta,
     locale,
     bucket,
-    state,
     modelMessages,
   });
   let revisionResponse = null;
@@ -386,7 +383,6 @@ function buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request }) {
       : "";
   if (workflowPurpose === "guidance" || workflowPurpose === "analysis") {
     return buildCapabilityModelMessages({
-      locale,
       agentMessages: modelMessages,
       task: prompt,
       taskRole: "user",
@@ -396,7 +392,6 @@ function buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request }) {
     });
   }
   return buildCapabilityProtocolModelMessages({
-    locale,
     agentMessages: modelMessages,
     contextMessages: workflowContextContents,
     protocolPrompt: prompt,
@@ -590,8 +585,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) return false;
+  const invoker = readCapabilityModelInvoker(meta);
   const locale = state?.locale || LOCALE.ZH_CN;
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
     ctx,

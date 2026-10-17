@@ -38,11 +38,7 @@ export function makeRuntimeStep({
     dialogProcessId,
     stepId,
     stepIndex,
-    rootSessionId: text(
-      item?.rootSessionId ||
-        workflowPayload.value?.planningDialog?.sessionId ||
-        workflowPayload.value?.runMeta?.sessionId,
-    ),
+    rootSessionId: text(item?.rootSessionId || workflowPayload.value?.runMeta?.sessionId),
   };
   return {
     ...merged,

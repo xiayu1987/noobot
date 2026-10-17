@@ -32,8 +32,8 @@ function workflow({
       },
       interaction: { semanticTextPreview: "WORKFLOW_DSL/1" },
       nodeSessions: [{ nodeExecutionId: "node-a", sessionId: "node-session-a", status: "ready" }],
-      planningDialog: { sessionId, dialogProcessId },
-      execution: { workflowRunId, instanceId: workflowRunId, started: false },
+      runMeta: { sessionId, dialogProcessId },
+      execution: { started: false },
     },
     nodes: {
       nodeA: {

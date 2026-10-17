@@ -79,7 +79,6 @@ test("darwin managed dependency probe uses managedVersionArgs", async () => {
 test("Playwright dependency detection delegates to the packaged Playwright version", async () => {
   const calls = [];
   const detector = createDependencyDetector({
-    app: { isPackaged: true },
     backendRoot: "/application/backend",
     runProcess: async (command, args, options) => {
       calls.push({ command, args, options });
@@ -98,7 +97,6 @@ test("Playwright dependency detection delegates to the packaged Playwright versi
 test("Playwright installer runs only when selected", async () => {
   const runs = [];
   const installer = createDependencyInstaller({
-    app: { isPackaged: true },
     backendRoot: "/application/backend",
     findAvailableCommand: async () => "",
     isDependencyInstalled: async () => false,

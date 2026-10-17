@@ -9,10 +9,7 @@ import {
   buildChildAttachmentsByParentDialogProcessId,
   mergeChildTurnAttachmentsIntoRootMessages,
 } from "../../../../../src/modules/session/model/list/detailMessages.js";
-import {
-  buildViewMessage,
-  foldConversationMessages,
-} from "../../../../../src/modules/chat/model/messageModel.js";
+import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
@@ -123,16 +120,12 @@ describe("detailMessages", () => {
       sessionDocs,
       rootSessionId: "root-session",
       makeViewMessage: buildViewMessage,
-      foldMessagesForView: (messages) =>
-        messages.map((messageItem) => buildViewMessage(messageItem)),
     });
     const normalizedForPreserve = buildNormalizedDetailMessages({
       detailMessages,
       sessionDocs,
       rootSessionId: "root-session",
       makeViewMessage: buildViewMessage,
-      foldMessagesForView: (messages) =>
-        messages.map((messageItem) => buildViewMessage(messageItem)),
     });
 
     expect(
@@ -470,7 +463,6 @@ describe("detailMessages", () => {
       sessionDocs: [],
       rootSessionId: "root-session",
       makeViewMessage: buildViewMessage,
-      foldMessagesForView: (messages) => foldConversationMessages(messages, buildViewMessage),
     });
 
     expect(normalizedMessages).toHaveLength(1);
@@ -514,7 +506,6 @@ describe("detailMessages", () => {
       sessionDocs: [],
       rootSessionId: "root-session",
       makeViewMessage: buildViewMessage,
-      foldMessagesForView: (messages) => foldConversationMessages(messages, buildViewMessage),
     });
 
     expect(normalizedMessages).toHaveLength(2);

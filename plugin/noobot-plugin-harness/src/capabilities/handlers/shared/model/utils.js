@@ -3,20 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../../../core/constants.js";
 
 export function resolvePlanningGuidanceMode(meta = {}) {
-  return (text(meta?.harness?.planningGuidanceMode) || "separate_model").toLowerCase();
+  return meta.harness.planningGuidanceMode;
 }
 
 export function shouldUseSeparateModel(meta = {}) {
-  return resolvePlanningGuidanceMode(meta) === "separate_model";
+  return resolvePlanningGuidanceMode(meta) === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL;
 }
 
-export function resolveCapabilityModelInvoker(meta = {}) {
-  return typeof meta?.harness?.capabilityModelInvoker === "function"
-    ? meta.harness.capabilityModelInvoker
-    : null;
+export function readCapabilityModelInvoker(meta = {}) {
+  return meta.harness.capabilityModelInvoker;
 }
 
 function normalizeCapabilityModelMap(source = {}) {
@@ -59,7 +58,7 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
 
 export function resolveCapabilityModelMessages(meta = {}, { ctx = {}, purpose = "" } = {}) {
   const resolver = meta?.harness?.resolveModelMessages;
-  if (typeof resolver !== "function") {
+  if (!isFunction(resolver)) {
     throw new Error("capability model messages require the authoritative modelContext resolver");
   }
   const resolved = resolver({

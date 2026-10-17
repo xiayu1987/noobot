@@ -10,7 +10,7 @@ import { useWorkflowViewerState } from "../composables/useWorkflowViewerState.js
 describe("workflow viewer state ownership", () => {
   it("preserves selection without reopening after the live-to-persisted remount", async () => {
     const registry = reactive({ workflows: {}, viewerStates: {} });
-    const livePayload = ref({ execution: { instanceId: "workflow-a" } });
+    const livePayload = ref({ workflowRunId: "workflow-a", execution: { started: false } });
     const live = useWorkflowViewerState(livePayload, registry);
     const node = { nodeId: "node-a", actionNodeStates: [{ steps: [] }] };
     const step = { stepId: "step-a", sessionId: "session-a" };
@@ -24,7 +24,7 @@ describe("workflow viewer state ownership", () => {
 
     const persistedPayload = ref({
       workflowRunId: "workflow-a",
-      execution: { workflowRunId: "workflow-a" },
+      execution: { completed: true },
     });
     const persisted = useWorkflowViewerState(persistedPayload, registry);
 
@@ -33,5 +33,6 @@ describe("workflow viewer state ownership", () => {
     expect(persisted.selectedRuntimeStep.value).toEqual(step);
     expect(persisted.selectedNode.value).toEqual(step);
     expect(persisted.selectedGraphDialogProcessId.value).toBe("dialog-a");
+    expect(registry.viewerStates["workflow-a"]).not.toHaveProperty("viewerVisible");
   });
 });

@@ -17,7 +17,10 @@ import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 
 test("harness review keeps its report internal by default", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const agentContext = {
     payload: {
@@ -69,7 +72,12 @@ test("harness review attaches to final output only when explicitly enabled", asy
   const hookManager = createAgentHookManager();
   registerHarnessCore(
     { hookManager },
-    { trace: false, promptPolicy: false, review: { attachToFinalOutput: true } },
+    {
+      planningGuidanceMode: "inject",
+      trace: false,
+      promptPolicy: false,
+      review: { attachToFinalOutput: true },
+    },
   );
   const result = { output: "done" };
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
@@ -92,6 +100,7 @@ test("harness before_final_output capability runtime runs once", async () => {
   registerHarnessCore(
     { hookManager },
     {
+      planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
       capabilityHandlers: {
@@ -272,7 +281,7 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
   const hookManager = createAgentHookManager();
   registerHarnessCore(
     { hookManager },
-    { trace: false, promptPolicy: true, finalResponseGuard: false },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: true, finalResponseGuard: false },
   );
 
   const result = { output: "done" };
@@ -294,7 +303,10 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
 test("harness promptPolicy false still traces before_llm_call", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { basePath, promptPolicy: false, trace: true });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", basePath, promptPolicy: false, trace: true },
+  );
 
   await hookManager.emit("agent.before_llm_call", {
     executionScope: "primary",
@@ -326,7 +338,10 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
 
 test("harness review records reports on error and abort hooks", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
 
   await hookManager.emit("agent.on_error", {
@@ -356,7 +371,10 @@ test("harness review records reports on error and abort hooks", async () => {
 
 test("harness full engineering capability flow plans, guides, accepts and reviews", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const agentContext = {
     payload: {
@@ -470,7 +488,12 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
   const hookManager = createAgentHookManager();
   registerHarnessCore(
     { hookManager },
-    { trace: false, promptPolicy: false, review: { attachToFinalOutput: false } },
+    {
+      planningGuidanceMode: "inject",
+      trace: false,
+      promptPolicy: false,
+      review: { attachToFinalOutput: false },
+    },
   );
 
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
@@ -497,7 +520,10 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
 
 test("harness resets acceptance lifecycle and checklist artifacts on next turn start", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const agentContext = {
     payload: {
@@ -538,7 +564,10 @@ test("harness resets acceptance lifecycle and checklist artifacts on next turn s
 
 test("harness forced acceptance is owned by acceptance without appending to final output", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const agentContext = {
     payload: {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { takeReplayCacheGroupsForSession } from "./replayCache.js";
-import { applyReconnectReplayBatchToActiveSession } from "./messageReplay.js";
+import { applyReconnectReplayBatchToActiveSession } from "./batchReplay.js";
 import { _trimStr } from "./utils.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
@@ -40,26 +40,20 @@ export async function consumeReconnectReplayCacheForSession({
 
 export async function applyReconnectMessagesToActiveSessionReplay({
   activeSession,
-  activeSessionId,
   findCanonicalMessageById,
   findCanonicalMessagesById,
   materializeTurnPresentation,
-  chatList,
   messages,
   dialogProcessId,
   turnScopeId = "",
-  envelopeCallbacks,
 } = {}) {
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
-    activeSessionId,
     findCanonicalMessageById,
     findCanonicalMessagesById,
     materializeTurnPresentation,
-    chatList,
     messages,
     dialogProcessId,
     turnScopeId,
-    envelopeCallbacks,
   });
 }

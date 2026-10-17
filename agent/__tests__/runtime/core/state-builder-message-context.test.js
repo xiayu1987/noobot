@@ -50,11 +50,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     }),
     normalizeSystemRuntimeCountersFn: () => {},
     resolveEffectiveModelSpecFn: () => ({ model: "test-model", alias: "test" }),
-    resolveMaxToolLoopTurnsFn: () => 3,
     resolvePhaseSummaryLoopTurnsFn: () => 0,
-    resolvePhaseSummaryMessageCharsThresholdFn: () => 0,
-    resolveHelpPromptLoopTurnsFn: () => 0,
-    resolveToolFailureHelpCountFn: () => 0,
   });
 
   const runtime = createRuntime();

@@ -92,13 +92,7 @@ function resolveToolTurnLimitReached(capabilityLogs = []) {
   );
 }
 
-export function buildEvent({
-  point,
-  ctx = {},
-  options = {},
-  pluginName = "",
-  pluginVersion = "",
-} = {}) {
+export function buildEvent({ point, ctx = {}, options = {} } = {}) {
   const capabilityLogs = Array.isArray(ctx?.harnessCapabilityLogs) ? ctx.harnessCapabilityLogs : [];
   const toolTurnLimitReached = resolveToolTurnLimitReached(capabilityLogs);
   return {

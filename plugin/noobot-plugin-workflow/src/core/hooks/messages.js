@@ -86,16 +86,7 @@ export function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-
   ].join("\n");
 }
 
-export function resolveWorkflowSemanticContextMessages({
-  options = {},
-  ctx = {},
-  locale = "zh-CN",
-} = {}) {
-  if (typeof options?.resolveModelMessages !== "function") {
-    throw new TypeError(
-      "workflow semantic context requires the authoritative modelContext resolver",
-    );
-  }
+export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {} } = {}) {
   const resolved = options.resolveModelMessages({
     ctx,
     purpose: WORKFLOW_SEMANTIC.PURPOSE,

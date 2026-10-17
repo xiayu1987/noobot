@@ -15,7 +15,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
 
@@ -210,11 +210,11 @@ export function createRunner({
       runtime.sessionManager = runtime.sessionManager || sessionManager;
       const currentStore = runtime.currentTurnMessages;
       const isCanonicalStore =
-        typeof currentStore?.push === "function" &&
-        typeof currentStore?.updateLast === "function" &&
-        typeof currentStore?.removeLast === "function" &&
-        typeof currentStore?.updateWhere === "function" &&
-        typeof currentStore?.toArray === "function";
+        isFunction(currentStore?.push) &&
+        isFunction(currentStore?.updateLast) &&
+        isFunction(currentStore?.removeLast) &&
+        isFunction(currentStore?.updateWhere) &&
+        isFunction(currentStore?.toArray);
       if (!isCanonicalStore) {
         runtime.currentTurnMessages = createCurrentTurnMessagesStore(
           typeof currentStore?.toArray === "function" ? currentStore.toArray() : [],

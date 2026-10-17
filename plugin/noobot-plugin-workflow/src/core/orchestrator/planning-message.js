@@ -14,11 +14,9 @@ import {
 import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
 import { text } from "@noobot/shared/value";
 
-function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
+function createPlanningExecutionStub({ nodeSessions = [] } = {}) {
   return {
     started: false,
-    instanceId: workflowRunId,
-    workflowRunId,
     autoTransitions: 0,
     completed: false,
     pendingStepCount: nodeSessions.filter((item) => ["pending", "ready"].includes(item?.status))
@@ -26,16 +24,6 @@ function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } =
     actionRecords: [],
     nodeAgentRuns: [],
   };
-}
-
-function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = null) {
-  payload.planningDialog = {
-    dialogProcessId: text(ctx?.dialogProcessId),
-    sessionId: text(ctx?.sessionId),
-    storagePath: text(planningPersistResult?.outputDir),
-    storageFile: text(planningPersistResult?.outputFile),
-  };
-  return payload;
 }
 
 function countArray(value) {
@@ -51,9 +39,7 @@ function pickPluginMetaText(pluginMeta) {
 }
 
 function resolveSourceWorkflowRunId(pluginMeta) {
-  return String(
-    pluginMeta?.payload?.workflowRunId || pluginMeta?.payload?.execution?.workflowRunId || "",
-  );
+  return String(pluginMeta?.payload?.workflowRunId || "");
 }
 
 function buildPlanningSourceMessage(
@@ -86,7 +72,6 @@ export async function prepareWorkflowPlanningMessage({
   semanticResolution = {},
   phaseTracker,
   retryMeta = {},
-  planningPersistResult = null,
   workflowRunId = "",
   planningNodeSessions = [],
 } = {}) {
@@ -97,12 +82,11 @@ export async function prepareWorkflowPlanningMessage({
     sourceText,
     semanticText,
     semantic,
-    execution: createPlanningExecutionStub({ workflowRunId, nodeSessions: planningNodeSessions }),
+    execution: createPlanningExecutionStub({ nodeSessions: planningNodeSessions }),
     semanticResolution,
     phaseTimeline: phaseTracker.list(),
     retryMeta,
   });
-  attachPlanningDialog(planningWorkflowPayload, ctx, planningPersistResult);
   planningWorkflowPayload.nodeSessions = planningNodeSessions;
   planningWorkflowPayload.attachments = [];
   const workflowMessage = await appendWorkflowPlanningMessage({
@@ -111,7 +95,6 @@ export async function prepareWorkflowPlanningMessage({
     ctx,
     sourceText,
     semanticText,
-    semanticResolution,
     workflowPayload: planningWorkflowPayload,
     attachments: [],
   });

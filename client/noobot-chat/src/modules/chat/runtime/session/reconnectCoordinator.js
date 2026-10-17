@@ -21,8 +21,6 @@ export function createReconnectCoordinator({
   turnRuntimeRegistry,
   chatWebSocketClient,
   reconnectReplay,
-  chatList,
-  resolveActiveSessionIdentity,
   resolveActiveTurnScopeIdentity,
   logSessionSystemEvent,
   notify,

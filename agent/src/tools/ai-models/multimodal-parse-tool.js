@@ -45,7 +45,7 @@ import {
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
 const require = createRequire(import.meta.url);
@@ -248,7 +248,7 @@ export function createMultimodalParseTool({ agentContext }) {
         });
       }
       const modelPort = runtime?.modelPort;
-      if (!modelPort || typeof modelPort.invoke !== "function") {
+      if (!modelPort || !isFunction(modelPort.invoke)) {
         throw new TypeError("multimodal_parse requires runtime.modelPort");
       }
       const inputAttachments = await Promise.all(

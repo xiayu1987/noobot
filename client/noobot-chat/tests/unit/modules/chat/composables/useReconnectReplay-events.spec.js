@@ -166,7 +166,6 @@ describe("useReconnectReplay", () => {
     await api.applyReconnectEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, data);
 
     expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledWith(data, { source: "reconnect" });
-    expect(mocks.applyTurnRuntimeEvents).not.toHaveBeenCalled();
   });
 
   it("EV-02: THINKING updates logs and keeps pending true", async () => {
@@ -448,7 +447,6 @@ describe("useReconnectReplay", () => {
 
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
     expect(refs.interactionSubmitting.value).toBe(false);
   });
 
@@ -472,7 +470,8 @@ describe("useReconnectReplay", () => {
       text: "resume",
     });
 
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+    expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 
   it("EV-03b2: auto-resolved interaction replay does not enter pending", async () => {
@@ -503,8 +502,8 @@ describe("useReconnectReplay", () => {
       seq: 12,
     });
 
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+    expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 
   it("EV-03d: channel_state interaction_pending has no pending-interaction side effects", async () => {
@@ -538,7 +537,6 @@ describe("useReconnectReplay", () => {
       state: "sending",
       seq: 14,
     });
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
@@ -548,6 +546,7 @@ describe("useReconnectReplay", () => {
       requestId: "req-int5",
       seq: 15,
     });
-    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 });

@@ -15,7 +15,7 @@ import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } fro
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -159,7 +159,7 @@ function buildNodeResultTransferMeta({ identity, subSession, normalizedTransitio
 function requireSemanticTransferContent(ctx, purpose) {
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const semanticTransferContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  if (typeof semanticTransferContent !== "function") {
+  if (!isFunction(semanticTransferContent)) {
     throw new Error(`Semantic transfer service is required for ${purpose}`);
   }
   return semanticTransferContent;
@@ -178,7 +178,6 @@ function applyNodeResultTransfer(subSession, transferPayload) {
 }
 
 export async function persistWorkflowNodeResultAttachment({
-  options = {},
   ctx = {},
   subSession = null,
   transition = 0,
@@ -286,11 +285,6 @@ function buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId) {
   const sessionWorkflowPayload =
     sanitizeWorkflowPayloadForSessionMessage(baseWorkflowPayload) || {};
   sessionWorkflowPayload.workflowRunId = workflowRunId;
-  sessionWorkflowPayload.execution = {
-    ...(sessionWorkflowPayload.execution || {}),
-    workflowRunId,
-    instanceId: workflowRunId,
-  };
   return sessionWorkflowPayload;
 }
 
@@ -346,7 +340,6 @@ function pickNonEmptyTimelines(messageEventProjection = {}) {
 
 function buildWorkflowPluginMeta({
   normalizedPhase = "",
-  semanticResolution = {},
   sourceText = "",
   semanticText = "",
   sessionWorkflowPayload = {},
@@ -355,7 +348,6 @@ function buildWorkflowPluginMeta({
     source: "workflow-plugin",
     kind: "workflow",
     phase: normalizedPhase,
-    semanticInvokerUsed: semanticResolution?.invoked === true,
     sourceTextPreview: String(sourceText || "").slice(
       0,
       LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars,
@@ -374,11 +366,7 @@ async function upsertWorkflowMessage({
   ctx = {},
   sourceText = "",
   semanticText = "",
-  semanticResolution = {},
-  semantic = null,
-  planningNodeSessions = [],
   workflowPayload = null,
-  nodeAgentRuns = [],
   phase = "",
 } = {}) {
   const normalizedPhase = text(phase);
@@ -402,7 +390,7 @@ async function upsertWorkflowMessage({
   });
   const { presentationMessageId, messageId, workflowRunId } = resolveWorkflowRunIdentity(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
+  if (!isFunction(runtime?.materializePendingCurrentTurnMessageEvents)) {
     throw new Error("Turn message event materializer is required");
   }
   const messageEventProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
@@ -418,8 +406,8 @@ async function upsertWorkflowMessage({
     ...pickNonEmptyTimelines(messageEventProjection),
     content,
     dialogProcessId,
-    modelAlias: text(semanticResolution?.model || options?.semanticModel),
-    modelName: text(semanticResolution?.model || options?.semanticModel),
+    modelAlias: text(options.semanticModel),
+    modelName: text(options.semanticModel),
     summarized: false,
     ...(mergedTransferPayload.transferEnvelopes.length
       ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
@@ -427,7 +415,6 @@ async function upsertWorkflowMessage({
     pluginMessage: true,
     pluginMeta: buildWorkflowPluginMeta({
       normalizedPhase,
-      semanticResolution,
       sourceText,
       semanticText,
       sessionWorkflowPayload,
@@ -449,7 +436,6 @@ async function upsertWorkflowMessage({
 export function appendWorkflowPlanningMessage(payload = {}) {
   return upsertWorkflowMessage({
     ...payload,
-    nodeAgentRuns: [],
     phase: "planning",
   });
 }

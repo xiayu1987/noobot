@@ -10,9 +10,12 @@ import { collectRatchet, ratchetViolations } from "./quality/baseline-ratchet.mj
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 319,
+  complexityCount: 313,
   longFunctionCount: 66,
   maxComplexity: 48,
+  nestedTernaryCount: 131,
+  deepNestingCount: 22,
+  longParameterListCount: 83,
   hotspots: Object.freeze({
     "event-protocol/src/event-registry-validators.js": [0, 0, 0],
     "agent/src/runtime/state-builder.js": [0, 0, 0],
@@ -82,6 +85,9 @@ function summarize(messages = []) {
   let complexityCount = 0;
   let longFunctionCount = 0;
   let maxComplexity = 0;
+  let nestedTernaryCount = 0;
+  let deepNestingCount = 0;
+  let longParameterListCount = 0;
   for (const message of messages) {
     if (message.ruleId === "complexity") {
       complexityCount += 1;
@@ -89,8 +95,18 @@ function summarize(messages = []) {
       maxComplexity = Math.max(maxComplexity, measured);
     }
     if (message.ruleId === "max-lines-per-function") longFunctionCount += 1;
+    if (message.ruleId === "no-nested-ternary") nestedTernaryCount += 1;
+    if (message.ruleId === "max-depth") deepNestingCount += 1;
+    if (message.ruleId === "max-params") longParameterListCount += 1;
   }
-  return { complexityCount, maxComplexity, longFunctionCount };
+  return {
+    complexityCount,
+    maxComplexity,
+    longFunctionCount,
+    nestedTernaryCount,
+    deepNestingCount,
+    longParameterListCount,
+  };
 }
 
 const lint = new ESLint({
@@ -101,6 +117,9 @@ const lint = new ESLint({
       rules: {
         complexity: ["error", 20],
         "max-lines-per-function": ["error", { max: 150, skipBlankLines: true, skipComments: true }],
+        "no-nested-ternary": "error",
+        "max-depth": ["error", 4],
+        "max-params": ["error", 4],
       },
     },
   ],
@@ -115,6 +134,13 @@ const entries = [
   ["complexity violations", totals.complexityCount, baseline.complexityCount],
   ["long-function violations", totals.longFunctionCount, baseline.longFunctionCount],
   ["maximum complexity", totals.maxComplexity, baseline.maxComplexity],
+  ["nested ternary violations", totals.nestedTernaryCount, baseline.nestedTernaryCount],
+  ["deep nesting (max-depth 4) violations", totals.deepNestingCount, baseline.deepNestingCount],
+  [
+    "long parameter list (max-params 4) violations",
+    totals.longParameterListCount,
+    baseline.longParameterListCount,
+  ],
 ];
 for (const [relativePath, limits] of Object.entries(baseline.hotspots)) {
   const measured = byRelativePath.get(relativePath) || {
@@ -138,6 +164,6 @@ if (violations.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Complexity baseline passed (${totals.complexityCount} complex, ${totals.longFunctionCount} long, max ${totals.maxComplexity})`,
+    `Complexity baseline passed (${totals.complexityCount} complex, ${totals.longFunctionCount} long, max ${totals.maxComplexity}, ${totals.nestedTernaryCount} nested ternary, ${totals.deepNestingCount} deep nesting, ${totals.longParameterListCount} long params)`,
   );
 }

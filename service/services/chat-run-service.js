@@ -5,7 +5,7 @@
  */
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export async function resolveAuthoritativeConnectorSelection({
   bot,
@@ -14,11 +14,7 @@ export async function resolveAuthoritativeConnectorSelection({
 } = {}) {
   const userId = text(request?.userId);
   const sessionId = text(request?.sessionId);
-  if (
-    !userId ||
-    !sessionId ||
-    typeof bot?.session?.getRootSessionSelectedConnectorIds !== "function"
-  ) {
+  if (!userId || !sessionId || !isFunction(bot?.session?.getRootSessionSelectedConnectorIds)) {
     throw new Error("connector selection authority is unavailable");
   }
   let selectedConnectorIds;

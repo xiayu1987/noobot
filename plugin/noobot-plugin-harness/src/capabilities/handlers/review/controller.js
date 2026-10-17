@@ -10,7 +10,8 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN } from "../shared/constants.js";
 import { ensureHarnessBucket } from "../shared/bucket-utils.js";
 import { translateI18nText } from "../shared/i18n.js";
-import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { runWorkflowLifecycle } from "../shared/workflow/pattern.js";
+import { resolvePlanningGuidanceMode } from "../shared/model/utils.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { text } from "@noobot/shared/value";
 
@@ -36,7 +37,7 @@ export function createReviewHandler() {
     if (!REVIEW_HOOKS.has(hook)) {
       return { capability, point, status: "active", changed: false };
     }
-    const mode = resolveWorkflowMode(meta);
+    const mode = resolvePlanningGuidanceMode(meta);
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.REVIEW });
     const locale = text(ensureHarnessBucket(ctx)?.state?.locale) || "zh-CN";
     const reviewOptions =

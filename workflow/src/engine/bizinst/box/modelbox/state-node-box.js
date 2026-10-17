@@ -17,12 +17,6 @@ class StateNodeBox extends NodeBoxBase {
     result.setBizinstModel(bizinstModel);
     return result;
   }
-  canForwardChange(bizinst) {
-    return true;
-  }
-  canBackwardChange(bizinst) {
-    return true;
-  }
   getLastForwardChangeStateNodeStates(bizinst) {
     const result = [];
     const stateNodeStates = bizinst.getState().getCurrentState().getStateNodeStates();

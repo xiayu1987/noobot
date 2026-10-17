@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function normalizeDependencyProxyUrl(proxyUrl = "") {
   const value = text(proxyUrl);
@@ -66,7 +66,7 @@ export async function validateDependencyProxy({
 } = {}) {
   const normalized = normalizeDependencyProxyUrl(proxyUrl);
   if (!normalized) return { ok: true, proxyUrl: "", maskedProxyUrl: "" };
-  if (typeof runProcess !== "function") throw new Error("Proxy validation is unavailable.");
+  if (!isFunction(runProcess)) throw new Error("Proxy validation is unavailable.");
   const maskedProxyUrl = maskDependencyProxyUrl(normalized);
   const targetUrl = "https://github.com/";
   let result;

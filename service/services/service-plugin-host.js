@@ -34,7 +34,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function reportPluginEvent(record = {}) {
   void writeRuntimeEvent({
@@ -57,8 +57,7 @@ function createRouteGeneration({ context = {} } = {}) {
     router,
     routes,
     stage(entry, routeId, handler) {
-      if (typeof handler !== "function")
-        throw new TypeError(`plugin route handler is required: ${routeId}`);
+      if (!isFunction(handler)) throw new TypeError(`plugin route handler is required: ${routeId}`);
       const route = requireDeclaredPluginRoute(entry.manifest, routeId);
       for (const routePath of route.paths) {
         const endpoint = `${route.method} ${routePath}`;
@@ -72,7 +71,7 @@ function createRouteGeneration({ context = {} } = {}) {
     commit() {
       for (const { route, handler } of routes) {
         const register = router[String(route.method || "").toLowerCase()];
-        if (typeof register !== "function")
+        if (!isFunction(register))
           throw new Error(`service does not support route method ${route.method}`);
         for (const routePath of route.paths) register.call(router, routePath, jsonRoute(handler));
       }
@@ -115,7 +114,7 @@ export function createServicePluginHost({
   }
 
   function mountDispatcher(app) {
-    if (!app || typeof app.use !== "function")
+    if (!app || !isFunction(app.use))
       throw new TypeError("service plugin host requires an Express application");
     if (mountedApp && mountedApp !== app)
       throw new Error("service plugin host cannot mount on multiple applications");
@@ -154,7 +153,7 @@ export function createServicePluginHost({
         entries: listLoadedNoobotPluginEntries(runtime),
         lifecycleSink: reportPluginEvent,
         configFactory: (entry) => entry.manifest.configuration?.defaults || {},
-        transactionFactory: (entry) => {
+        transactionFactory: () => {
           const routeStart = generation.routes.length;
           return createContributionTransaction({
             commit: () => undefined,

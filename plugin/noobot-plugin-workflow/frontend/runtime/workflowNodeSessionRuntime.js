@@ -10,11 +10,7 @@ export function resolveWorkflowDetailSessionId(detail = {}) {
 }
 
 function resolveWorkflowRootSessionId(nodeItem = {}, workflowPayload = {}) {
-  return text(
-    nodeItem?.rootSessionId ||
-      workflowPayload?.planningDialog?.sessionId ||
-      workflowPayload?.runMeta?.sessionId,
-  );
+  return text(nodeItem?.rootSessionId || workflowPayload?.runMeta?.sessionId);
 }
 
 export function createWorkflowNodeViewKey(nodeItem = {}, workflowPayload = {}) {

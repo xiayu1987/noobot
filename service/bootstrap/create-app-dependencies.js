@@ -21,7 +21,7 @@ import { createRuntimeConfigService } from "../services/runtime-config-service.j
 import { createWorkspacePathService } from "../services/workspace-path-service.js";
 import { createWorkspaceUsersService } from "../services/workspace-users-service.js";
 import { createOpenVSCodeService } from "../services/openvscode-service.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export async function createAppDependencies({
   serviceDir,
@@ -30,7 +30,7 @@ export async function createAppDependencies({
   buildWorkspaceTree,
   connectorAccessPort,
 } = {}) {
-  if (typeof globalConfigBuilder?.build !== "function") {
+  if (!isFunction(globalConfigBuilder?.build)) {
     throw new TypeError("createAppDependencies requires globalConfigBuilder");
   }
   const configBuilder = globalConfigBuilder;
@@ -139,7 +139,6 @@ export async function createAppDependencies({
     setBot: (nextBot) => {
       bot = nextBot;
     },
-    workspaceRootPath,
     connectorAccessPort,
   });
   const { rebuildRuntimeConfig } = runtimeConfigService;

@@ -33,7 +33,6 @@ import { terminalStatusFixture } from "./terminalStatusFixture.js";
 const terminalResolutionFromUrl = (
   url,
   state = "completed",
-  messages = [],
   { revision = 2, sequence = revision, turnTiming = {} } = {},
 ) => {
   const match = String(url).match(/\/session\/[^/]+\/([^/]+)\/turns\/([^/]+)\/terminal/);
@@ -273,7 +272,6 @@ export const createHarness = ({
     scrollBottom: vi.fn(),
     activeSession,
     activeSessionId,
-    sessions,
     turnRuntimeRegistry,
     applyTurnRuntimeEvent: commitTurnRuntimeEvent,
     applyTurnLifecycleEnvelope: commitTurnLifecycleEnvelope,
@@ -286,7 +284,6 @@ export const createHarness = ({
     findCanonicalMessageById,
     upsertCanonicalAssistantMessage,
     makeViewMessage: (message) => ({ ...message }),
-    foldMessagesForView: (messages) => [...messages],
     fetchSessionDetail: vi.fn(async () => ({})),
     applySessionDetail: vi.fn(),
     refreshSessionConnectorsAsync: vi.fn(),
@@ -322,16 +319,11 @@ export const createHarness = ({
     terminalResolutionFetcher: vi.fn(async (url) => ({
       ok: true,
       json: async () =>
-        terminalResolutionFromUrl(
-          url,
-          terminalResolutionState,
-          JSON.parse(JSON.stringify(activeSession.value?.rawMessages || [])),
-          {
-            revision: terminalResolutionRevision,
-            sequence: terminalResolutionSequence,
-            turnTiming: terminalResolutionTurnTiming,
-          },
-        ),
+        terminalResolutionFromUrl(url, terminalResolutionState, {
+          revision: terminalResolutionRevision,
+          sequence: terminalResolutionSequence,
+          turnTiming: terminalResolutionTurnTiming,
+        }),
     })),
   };
 

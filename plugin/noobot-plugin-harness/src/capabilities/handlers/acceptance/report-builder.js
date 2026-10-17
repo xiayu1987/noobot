@@ -171,7 +171,6 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
 export function buildAcceptanceReport({
   bucket = {},
   state = {},
-  ctx = {},
   mode = ACCEPTANCE_MODE.ACTIVE,
   forcedReason = "",
 } = {}) {

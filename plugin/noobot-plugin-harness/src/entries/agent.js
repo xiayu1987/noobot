@@ -7,9 +7,15 @@ import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-pro
 import { createHarnessRegistration } from "../core/plugin.js";
 import { PLUGIN_ID } from "../core/constants.js";
 import { createRegisterHarnessHooks } from "../core/hooks.js";
+import { assertHarnessAgentHostCapabilities } from "../core/options.js";
 
 const registerAgentHooks = createRegisterHarnessHooks({ sessionCleanupPoints: [] });
-const registerAgentPlugin = createHarnessRegistration({ registerHarnessHooks: registerAgentHooks });
+const registerAgentPlugin = createHarnessRegistration({
+  registerHarnessHooks: (registration) => {
+    assertHarnessAgentHostCapabilities(registration.options);
+    return registerAgentHooks(registration);
+  },
+});
 
 export function activate(host = {}, config = {}) {
   const registration = registerAgentPlugin(

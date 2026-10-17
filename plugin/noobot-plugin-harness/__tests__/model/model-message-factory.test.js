@@ -16,7 +16,6 @@ function source(message = {}) {
 
 test("buildCapabilityModelMessages projects assistant tool calls for the observer", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [
       source({
         role: "assistant",
@@ -41,7 +40,6 @@ test("buildCapabilityModelMessages projects assistant tool calls for the observe
 
 test("buildCapabilityModelMessages keeps assistant tool-call semantics in observer content", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [
       source({
         role: "assistant",
@@ -60,7 +58,6 @@ test("buildCapabilityModelMessages keeps assistant tool-call semantics in observ
 
 test("buildCapabilityModelMessages preserves a matched tool result", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [
       source({
         role: "assistant",
@@ -85,7 +82,6 @@ test("buildCapabilityModelMessages preserves a matched tool result", () => {
 
 test("buildCapabilityModelMessages keeps regular messages unchanged", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [
       source({ role: "system", content: "s1" }),
       source({ role: "user", content: "u1" }),
@@ -106,7 +102,6 @@ test("buildCapabilityModelMessages keeps regular messages unchanged", () => {
 
 test("buildCapabilityModelMessages keeps natural-user metadata for unchanged messages", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [
       source({
         role: "user",
@@ -130,7 +125,6 @@ test("buildCapabilityModelMessages keeps natural-user metadata for unchanged mes
 
 test("buildCapabilityModelMessages keeps one authoritative tool execution pair", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [
       source({
         role: "assistant",
@@ -157,7 +151,6 @@ test("buildCapabilityModelMessages keeps one authoritative tool execution pair",
 
 test("buildCapabilityModelMessages preserves provided agent messages without plugin-side filtering", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [
       source({ role: "user", content: "keep" }),
       source({ role: "assistant", content: "drop", summarized: true }),
@@ -176,7 +169,6 @@ test("buildCapabilityModelMessages preserves provided agent messages without plu
 
 test("buildCapabilityModelMessages does not clip capability agent context in plugin message factory", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: Array.from({ length: 22 }, (_, index) =>
       source({
         role: "user",
@@ -218,7 +210,6 @@ test("buildCapabilityModelMessages does not clip capability agent context in plu
 
 test("buildCapabilityModelMessages orders protocol, scenario policy, then responsibility", () => {
   const output = buildCapabilityModelMessages({
-    locale: "zh-CN",
     agentMessages: [source({ role: "user", content: "actual user request" })],
     task: "protocol prompt",
     taskRole: "system",

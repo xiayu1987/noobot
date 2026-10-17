@@ -13,7 +13,7 @@ import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
 import { sanitizeUserConfig } from "../policy/user-override.js";
 import { CONFIG_NODE_ACCESS, USER_CONFIG_MERGE_MODE } from "../contract/repair.js";
 import { MODEL_PROVIDER_AGENT_CONFIG_CONTRACT } from "../contract/config-structure.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 function projectProviderFields(provider, access) {
   if (!isPlainObject(provider)) return {};
@@ -98,17 +98,17 @@ export function resolveRunConfigValue({
   runConfig = {},
   config = {},
   key = "",
-  normalize = (value) => value,
+  normalize,
   fallback = undefined,
 } = {}) {
   const normalizedKey = text(key);
-  const normalizer = typeof normalize === "function" ? normalize : (value) => value;
+  if (!isFunction(normalize)) throw new TypeError("resolveRunConfigValue requires normalize");
   if (!normalizedKey) return fallback;
   if (hasOwnConfigKey(runConfig, normalizedKey)) {
-    return normalizer(runConfig[normalizedKey]);
+    return normalize(runConfig[normalizedKey]);
   }
   if (hasOwnConfigKey(config, normalizedKey)) {
-    return normalizer(config[normalizedKey]);
+    return normalize(config[normalizedKey]);
   }
   return fallback;
 }

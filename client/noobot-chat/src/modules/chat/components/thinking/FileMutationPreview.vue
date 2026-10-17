@@ -8,7 +8,7 @@ import { computed, ref, watch } from "vue";
 import { DocumentAdd, Download, EditPen } from "@element-plus/icons-vue";
 import { BaseFileCardList } from "../../../../shared/public-api/ui.js";
 import MutationDiffSplit from "./MutationDiffSplit.vue";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -51,7 +51,7 @@ async function loadTab(tab) {
   error.value = "";
   try {
     if (tab === tabs.DIFF) {
-      if (typeof props.service?.getDiff !== "function") {
+      if (!isFunction(props.service?.getDiff)) {
         throw new Error(props.translate("message.mutationDiffServiceUnavailable"));
       }
       const payload = await props.service.getDiff({
@@ -63,7 +63,7 @@ async function loadTab(tab) {
       if (generation !== requestGeneration) return;
       diff.value = payload.diff || payload;
     } else if (tab === tabs.FILE) {
-      if (typeof props.service?.getFile !== "function") {
+      if (!isFunction(props.service?.getFile)) {
         throw new Error(props.translate("message.mutationFileServiceUnavailable"));
       }
       const payload = await props.service.getFile({

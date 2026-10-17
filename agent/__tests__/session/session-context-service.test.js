@@ -39,7 +39,7 @@ function createSessionContextService(
   });
 }
 
-function createIndexedSessionContextService(messages = [], dialogOrder = []) {
+function createIndexedSessionContextService(messages = []) {
   return new SessionContextService({
     sessionService: {
       async getSessionContextSource() {
@@ -245,7 +245,7 @@ test("getRecentSessionMessages applies the terminal-history protocol before summ
 });
 
 test("getRecentSessionMessages projects error and timeout explanations as assistant messages", async () => {
-  const messages = ["error", "timeout"].map((terminalStatus, index) => ({
+  const messages = ["error", "timeout"].map((terminalStatus) => ({
     messageUid: `${terminalStatus}-user`,
     role: "user",
     content: `${terminalStatus} question`,
@@ -556,14 +556,7 @@ test("getRecentSessionMessages uses message first occurrence as the only model h
     { role: "user", content: "d4 user", dialogProcessId: "d4" },
     { role: "user", content: "d5 user", dialogProcessId: "d5" },
   ];
-  const service = createIndexedSessionContextService(messages, [
-    { dialogProcessId: "d1", dialogOrdinal: 1 },
-    { dialogProcessId: "d2", dialogOrdinal: 2 },
-    { dialogProcessId: "d3", dialogOrdinal: 3 },
-    { dialogProcessId: "d4", dialogOrdinal: 4 },
-    { dialogProcessId: "d5", dialogOrdinal: 5 },
-    { dialogProcessId: "d6", dialogOrdinal: 6 },
-  ]);
+  const service = createIndexedSessionContextService(messages);
 
   const result = await service.getRecentSessionMessages({
     userId: "u1",

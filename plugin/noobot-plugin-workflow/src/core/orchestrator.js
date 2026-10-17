@@ -5,18 +5,26 @@
  */
 
 import { WORKFLOW_HOOKS, WORKFLOW_PLUGIN_DEFAULTS } from "./constants.js";
+import { normalizeOptions, resolveWorkflowAgentHostCapabilities } from "./options.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { handleBeforeAgentDispatch } from "./orchestrator/hook-handler.js";
 import { registerWorkflowSessionCleanupHook } from "./orchestrator/session-cleanup.js";
 import { createInMemoryWorkflowNodeStateRepository } from "./orchestrator/node-state-repository.js";
 
-export function registerWorkflowAgentHooks({ hookManager, options }) {
+export function registerWorkflowAgentHooks({
+  hookManager,
+  policy,
+  config,
+  workflowNodeStateRepository = createInMemoryWorkflowNodeStateRepository(),
+}) {
+  const options = normalizeOptions(config);
+  if (!options.enabled || options.mode !== WORKFLOW_PLUGIN_DEFAULTS.MODE_ON) return [];
+  if (options.denyToolNames.length) policy.patch({ denyToolNames: options.denyToolNames });
   const disposers = [];
   const hookPoint = HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
-  const workflowNodeStateRepository =
-    options?.workflowNodeStateRepository || createInMemoryWorkflowNodeStateRepository();
   const runtimeOptions = {
     ...options,
+    ...resolveWorkflowAgentHostCapabilities(config),
     workflowNodeStateRepository,
   };
 
@@ -32,11 +40,8 @@ export function registerWorkflowAgentHooks({ hookManager, options }) {
         }),
       {
         id: WORKFLOW_HOOKS.AFTER_AGENT_DISPATCH_LISTENER_ID,
-        priority: Number(runtimeOptions.priority) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_PRIORITY,
-        timeoutMs:
-          Number(runtimeOptions.timeoutMs) > 0
-            ? Number(runtimeOptions.timeoutMs)
-            : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_TIMEOUT_MS,
+        priority: runtimeOptions.priority,
+        timeoutMs: runtimeOptions.timeoutMs,
       },
     ),
   );
@@ -44,17 +49,6 @@ export function registerWorkflowAgentHooks({ hookManager, options }) {
   return disposers;
 }
 
-export function registerWorkflowServiceHooks({ hookManager, options }) {
-  return [registerWorkflowSessionCleanupHook({ hookManager, options })];
+export function registerWorkflowServiceHooks({ hookManager, config }) {
+  return [registerWorkflowSessionCleanupHook({ hookManager, options: normalizeOptions(config) })];
 }
-
-export function createRegisterWorkflowHooks() {
-  return function registerWorkflowHooks({ hookManager, options }) {
-    return [
-      ...registerWorkflowAgentHooks({ hookManager, options }),
-      ...registerWorkflowServiceHooks({ hookManager, options }),
-    ];
-  };
-}
-
-export const registerWorkflowHooks = createRegisterWorkflowHooks();

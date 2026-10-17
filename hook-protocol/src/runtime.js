@@ -10,7 +10,7 @@ import {
   HOOK_PROTOCOL_VERSION,
   requireHookPointDescriptor,
 } from "./points.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export const HOOK_OUTCOME_STATUS = Object.freeze({
   OK: "ok",
@@ -148,7 +148,7 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
 
   function on(point, handler, options = {}) {
     const descriptor = requireHookPointDescriptor(point);
-    if (typeof handler !== "function") throw new TypeError("hook handler is required");
+    if (!isFunction(handler)) throw new TypeError("hook handler is required");
     const id = text(options?.id);
     if (!id) throw new TypeError(`hook handler id is required: ${descriptor.point}`);
     const handlers = registry.get(descriptor.point) || [];

@@ -8,14 +8,11 @@ import { vi } from "vitest";
 import { useReconnectReplay } from "../../../../../src/modules/chat/composables/useReconnectReplay.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
-  applyTurnTerminalResolution,
-  applyTurnRuntimeEvent,
   applyTurnLifecycleSnapshot,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import {
   clearExtensionRegistry,
   contributeExtension,
@@ -217,50 +214,15 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   const pendingInteractionRequest = ref(null);
 
   const clearPendingInteraction = vi.fn();
-  const clearPendingInteractionIfObsolete = vi.fn();
   const setPendingInteractionRequest = vi.fn((request) => {
     pendingInteractionRequest.value = request || null;
   });
-  const upsertConnectedConnectorInPanelState = vi.fn();
-  const refreshSessionConnectorsAsync = vi.fn();
-  const applyCompletedToolLogsToMessages = vi.fn();
-  const scrollBottom = vi.fn();
-  const notify = vi.fn();
-  const applyTurnRuntimeEvents = vi.fn((events = []) =>
-    events.map((event) => {
-      const result = applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
-      projectTurnRuntimeToMessages({
-        sessions,
-        turnRuntimeRegistry,
-        turn: result?.turn || event,
-      });
-      return result;
-    }),
-  );
   const applyAuthoritativeTurnSnapshot = vi.fn((snapshot) => {
     const result = applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, snapshot);
     return result;
   });
-  const resolveTurnTerminalState = vi.fn(async () => ({
-    applied: false,
-    reason: "terminal_unresolved",
-  }));
   const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
   const reduceSubSessionMessageEvent = vi.fn(() => ({ applied: true }));
-  const applyTerminalResolution = (response) => {
-    const result = applyTurnTerminalResolution(turnRuntimeRegistry.value, response);
-    if (result?.applied) {
-      turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
-      projectTurnRuntimeToMessages({
-        sessions,
-        activeSession,
-        turnRuntimeRegistry,
-        turn: result.turn,
-      });
-    }
-    return result;
-  };
-
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
     fetchSessionDetail: vi.fn(async (id) => ({
@@ -293,17 +255,6 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
     }),
   };
 
-  const chatWebSocketClient = {
-    reconnect: vi.fn(async () => {}),
-  };
-
-  const appendMessage = vi.fn((role, content = "") => {
-    const msg = { role, content, pending: false, terminalOutcome: "", realtimeLogs: [] };
-    activeSession.value.messages.push(msg);
-    activeSession.value.rawMessages.push(msg);
-    return msg;
-  });
-
   const findCanonicalMessageById = vi.fn((sessionId, messageId) => {
     const normalizedSessionId = text(sessionId);
     const normalizedMessageId = text(messageId);
@@ -321,52 +272,21 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
     );
   });
 
-  const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
-    const normalizedMessageId = text(messageId);
-    if (!normalizedMessageId || !activeSession.value) return null;
-    const existing = activeSession.value.messages.find(
-      (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
-    );
-    if (existing) return existing;
-    const message = createCanonicalAssistant({
-      ...identity,
-      messageId: normalizedMessageId,
-    });
-    activeSession.value.messages.push(message);
-    activeSession.value.rawMessages.push(message);
-    return message;
-  });
-
   const api = useReconnectReplay({
     sessions,
     activeSession,
     activeSessionId,
     interactionSubmitting,
     chatList,
-    chatWebSocketClient,
-    appendMessage,
     findCanonicalMessageById,
-    upsertCanonicalAssistantMessage,
     makeViewMessage: (message) => ({ ...message }),
-    foldMessagesForView: (messages) => [...messages],
-    applyCompletedToolLogsToMessages,
-    sessionTitleFromMessages: () => "session",
-    pendingInteractionRequest,
     clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     isInteractionRequestHandled: vi.fn(() => false),
-    connectorTypeSet: new Set(["email"]),
-    upsertConnectedConnectorInPanelState,
-    refreshSessionConnectorsAsync,
-    scrollBottom,
-    translate: (key) => key,
-    notify,
     turnRuntimeRegistry,
     applyWorkflowRuntimeEvent,
     reduceSubSessionMessageEvent,
     applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
-    resolveTurnTerminalState,
   });
 
   const applyCanonicalMessageEvent = (eventType, data = {}) => {
@@ -390,24 +310,13 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
       pendingInteractionRequest,
     },
     mocks: {
-      appendMessage,
       findCanonicalMessageById,
       clearPendingInteraction,
-      clearPendingInteractionIfObsolete,
       setPendingInteractionRequest,
-      upsertConnectedConnectorInPanelState,
-      refreshSessionConnectorsAsync,
-      applyCompletedToolLogsToMessages,
-      scrollBottom,
-      notify,
       chatList,
-      chatWebSocketClient,
-      applyTurnRuntimeEvents,
       applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
       applyWorkflowRuntimeEvent,
       reduceSubSessionMessageEvent,
-      resolveTurnTerminalState,
-      applyTerminalResolution,
     },
   };
 }

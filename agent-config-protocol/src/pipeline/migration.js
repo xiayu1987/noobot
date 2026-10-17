@@ -5,12 +5,12 @@
  */
 
 import { isPlainObject } from "../utils.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 const RETIRED_CONFIG_PATHS = Object.freeze(
   [
     ["configParams"],
-    ["attachments", "attachment_models"],
+    ["attachments"],
     ["session", "use_last_running_task_range"],
     ["session", "use_last_completed_task_range"],
     ["session", "executionBundleTimeoutMs"],
@@ -55,20 +55,18 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
 
-export function normalizeConfigMigrations(migrations = []) {
-  return (Array.isArray(migrations) ? migrations : []).map((entry, index) => {
-    const migrate = typeof entry === "function" ? entry : entry?.migrate;
-    if (typeof migrate !== "function")
-      throw new TypeError(`invalid config migration at index ${index}`);
-    return Object.freeze({
-      name:
-        text(typeof entry === "function" ? entry.name : entry?.name) || `migration#${index + 1}`,
-      migrate,
-    });
+export function normalizeConfigMigrations(migrations) {
+  if (!Array.isArray(migrations)) throw new TypeError("config migrations must be an array");
+  return migrations.map((entry, index) => {
+    const name = text(entry?.name);
+    if (!name || !isFunction(entry?.migrate)) {
+      throw new TypeError(`config migration at index ${index} requires { name, migrate }`);
+    }
+    return Object.freeze({ name, migrate: entry.migrate });
   });
 }
 
-export async function applyConfigMigrations({ config = {}, migrations = [], context = {} } = {}) {
+export async function applyConfigMigrations({ config = {}, migrations, context = {} } = {}) {
   let nextConfig = clone(config) || {};
   const appliedMigrations = [];
   for (const migration of normalizeConfigMigrations(migrations)) {

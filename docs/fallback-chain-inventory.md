@@ -40,7 +40,22 @@
 
 保留 2 处：`attachment-protocol/src/protocol-utils.js` 和 `client/noobot-chat/tests/e2e/protocol/helpers/snapshot-assertions.js` 的 `isPlainObject` 额外要求原型为 `Object.prototype` 或 `null`，比 shared 版更严，替换会放宽校验；`attachment-protocol` 也不依赖 `@noobot/shared`。
 
-### 1.4 遮蔽 `text()`（`textShadow`）
+### 1.4 原始 typeof 判断（`rawTypeof`）
+
+`typeof x ===/!==/==/!= "object"` 和 `"function"`（含字面量写在左侧）一律计数，改用 `@noobot/shared/value` 的判断函数：
+
+- `isFunction(x)`：`typeof x === "function"`。
+- `isObjectLike(x)`：非 null 对象，含数组。对应 `x && typeof x === "object"`、`x !== null && typeof x === "object"`。
+- `isPlainObject(x)`：`isObjectLike(x) && !Array.isArray(x)`。
+
+范围同 1.3，`shared/value.js` 除外（判断函数的唯一实现）。
+
+- 与 `typeCheck` 口径不同：`typeCheck` 统计重复实现 `isPlainObject` 的组合与本地 helper，本规则统计每个原始比较节点。两者在 `x && typeof x === "object" && !Array.isArray(x)` 上同时命中，属有意重叠，改为 `isPlainObject(x)` 后两边一起下降。
+- 改写不是机械替换：取值位置（`return x && typeof x === "object"` 返回 `x` 本身）改为布尔会改变返回值；裸 `typeof x === "object"` 放行 `null`，替换前确认写入方不会写入 `null`；对未声明标识符做 `typeof` 探测的写法不能改为函数调用。
+- 依赖边界同 1.2/1.3：不依赖 `@noobot/shared` 的包（`attachment-protocol`、`memory-repair`、`sanitize`、`workspace-protocol`）照常计数，清零时先补依赖。
+- 能力探测（`typeof deps.fn === "function"` 决定是否调用）不应改写为 `isFunction`，而应改为装配端必传、删除探测分支。
+
+### 1.5 遮蔽 `text()`（`textShadow`）
 
 导入了 `text` 的文件，不允许在局部作用域重新绑定 `text`（参数、解构、`const`/`let`）。被遮蔽后，作用域内的 `text(x)` 会在运行时报 `text is not a function`。改名为 `inputText` 等；对外字段名用 `text: inputText` 保持不变。
 
@@ -69,43 +84,51 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 720 处 / 296 个文件；内联 trim 兜底 117 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 705 处 / 292 个文件；内联 trim 兜底 116 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；原始 typeof 判断 1235 处 / 505 个文件；遮蔽 text() 0 处 / 0 个文件。
 
-| 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 遮蔽 text() |
-| -------------------------------- | ------ | -------------- | ------------ | ----------- |
-| `client/noobot-chat`             | 270    | 32             | 1            | 0           |
-| `agent`                          | 124    | 30             | 0            | 0           |
-| `plugin/noobot-plugin-workflow`  | 112    | 11             | 0            | 0           |
-| `plugin/noobot-plugin-harness`   | 46     | 10             | 0            | 0           |
-| `service`                        | 39     | 5              | 0            | 0           |
-| `client/shared`                  | 24     | 0              | 0            | 0           |
-| `agent-proxy`                    | 11     | 2              | 0            | 0           |
-| `path-resolver`                  | 12     | 1              | 0            | 0           |
-| `user-template`                  | 4      | 9              | 0            | 0           |
-| `event-protocol`                 | 10     | 0              | 0            | 0           |
-| `model-runtime`                  | 8      | 0              | 0            | 0           |
-| `authoritative-state`            | 7      | 0              | 0            | 0           |
-| `context-protocol`               | 5      | 1              | 0            | 0           |
-| `plugin/noobot-plugin-character` | 5      | 1              | 0            | 0           |
-| `session-repair`                 | 4      | 2              | 0            | 0           |
-| `shared`                         | 6      | 0              | 0            | 0           |
-| `scripts`                        | 4      | 1              | 0            | 0           |
-| `client/startup`                 | 4      | 0              | 0            | 0           |
-| `connector-instances`            | 4      | 0              | 0            | 0           |
-| `connector-protocol`             | 1      | 3              | 0            | 0           |
-| `i18n`                           | 3      | 1              | 0            | 0           |
-| `workflow`                       | 2      | 2              | 0            | 0           |
-| `agent-config-protocol`          | 3      | 0              | 0            | 0           |
-| `model-protocol`                 | 3      | 0              | 0            | 0           |
-| `session-protocol`               | 3      | 0              | 0            | 0           |
-| `workspace-protocol`             | 0      | 3              | 0            | 0           |
-| `memory-protocol`                | 2      | 0              | 0            | 0           |
-| `runtime-events`                 | 1      | 1              | 0            | 0           |
-| `sanitize`                       | 1      | 1              | 0            | 0           |
-| `attachment-protocol`            | 0      | 0              | 1            | 0           |
-| `platform-compatibility`         | 1      | 0              | 0            | 0           |
-| `plugin-protocol`                | 1      | 0              | 0            | 0           |
-| `semantic-transfer-protocol`     | 0      | 1              | 0            | 0           |
+| 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 原始 typeof 判断 | 遮蔽 text() |
+| -------------------------------- | ------ | -------------- | ------------ | ---------------- | ----------- |
+| `agent`                          | 124    | 30             | 0            | 342              | 0           |
+| `client/noobot-chat`             | 270    | 31             | 1            | 176              | 0           |
+| `plugin/noobot-plugin-harness`   | 46     | 10             | 0            | 227              | 0           |
+| `plugin/noobot-plugin-workflow`  | 99     | 11             | 0            | 64               | 0           |
+| `service`                        | 38     | 5              | 0            | 66               | 0           |
+| `context-protocol`               | 5      | 1              | 0            | 78               | 0           |
+| `agent-proxy`                    | 11     | 2              | 0            | 25               | 0           |
+| `session-protocol`               | 3      | 0              | 0            | 31               | 0           |
+| `client/shared`                  | 24     | 0              | 0            | 6                | 0           |
+| `event-protocol`                 | 10     | 0              | 0            | 16               | 0           |
+| `workflow`                       | 2      | 2              | 0            | 22               | 0           |
+| `authoritative-state`            | 7      | 0              | 0            | 17               | 0           |
+| `model-runtime`                  | 8      | 0              | 0            | 15               | 0           |
+| `path-resolver`                  | 12     | 1              | 0            | 6                | 0           |
+| `shared`                         | 6      | 0              | 0            | 10               | 0           |
+| `agent-config-protocol`          | 2      | 0              | 0            | 13               | 0           |
+| `user-template`                  | 4      | 9              | 0            | 2                | 0           |
+| `plugin-runtime`                 | 0      | 0              | 0            | 14               | 0           |
+| `model-protocol`                 | 3      | 0              | 0            | 10               | 0           |
+| `model-proxy`                    | 0      | 0              | 0            | 13               | 0           |
+| `session-repair`                 | 4      | 2              | 0            | 7                | 0           |
+| `agent-transport-protocol`       | 0      | 0              | 0            | 12               | 0           |
+| `connector-instances`            | 4      | 0              | 0            | 8                | 0           |
+| `memory-protocol`                | 2      | 0              | 0            | 10               | 0           |
+| `i18n`                           | 3      | 1              | 0            | 7                | 0           |
+| `scripts`                        | 4      | 1              | 0            | 6                | 0           |
+| `plugin/noobot-plugin-character` | 5      | 1              | 0            | 4                | 0           |
+| `plugin-protocol`                | 1      | 0              | 0            | 6                | 0           |
+| `connector-protocol`             | 1      | 3              | 0            | 2                | 0           |
+| `semantic-transfer-protocol`     | 0      | 1              | 0            | 5                | 0           |
+| `workspace-protocol`             | 0      | 3              | 0            | 3                | 0           |
+| `client/startup`                 | 4      | 0              | 0            | 0                | 0           |
+| `runtime-events`                 | 1      | 1              | 0            | 2                | 0           |
+| `sanitize`                       | 1      | 1              | 0            | 2                | 0           |
+| `attachment-protocol`            | 0      | 0              | 1            | 2                | 0           |
+| `hook-protocol`                  | 0      | 0              | 0            | 2                | 0           |
+| `connector-runtime`              | 0      | 0              | 0            | 1                | 0           |
+| `file-mutation-protocol`         | 0      | 0              | 0            | 1                | 0           |
+| `memory-repair`                  | 0      | 0              | 0            | 1                | 0           |
+| `platform-compatibility`         | 1      | 0              | 0            | 0                | 0           |
+| `security-assessment-protocol`   | 0      | 0              | 0            | 1                | 0           |
 
 <!-- fallback-chain-modules:end -->
 

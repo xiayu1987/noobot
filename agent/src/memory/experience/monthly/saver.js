@@ -18,7 +18,6 @@ export async function saveMonthlyDomainSummary({
   return saveSubcategoryDomainSummary({
     schemaKey: "monthly",
     storage,
-    basePath,
     periodKey: monthKey,
     periodDir: storage.monthlySummaryDir(basePath),
     domainName,

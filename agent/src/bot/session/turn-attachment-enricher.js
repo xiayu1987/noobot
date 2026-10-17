@@ -6,7 +6,7 @@
 import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { readAttachIndex } from "../../artifacts/index.js";
 import { ATTACHMENT_SOURCE, findAttachmentByIdentity } from "@noobot/attachment-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 export async function resolveExistingUserMessageAttachments(
   engine,
@@ -69,7 +69,7 @@ export async function enrichUserInputAttachmentsFromIndex(
 export async function resolveAttachmentIndexBasePath(engine, userId = "") {
   const normalizedUserId = text(userId);
   if (!normalizedUserId) return "";
-  if (typeof engine.workspaceService?.ensureUserWorkspace !== "function") {
+  if (!isFunction(engine.workspaceService?.ensureUserWorkspace)) {
     throw new TypeError("attachment enrichment requires WorkspaceService");
   }
   const basePath = await engine.workspaceService.ensureUserWorkspace(normalizedUserId);

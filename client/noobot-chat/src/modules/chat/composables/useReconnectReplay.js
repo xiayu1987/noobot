@@ -7,11 +7,7 @@ import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
 } from "../runtime/interactionPayload.js";
-import { mergeAttachments } from "../model/dialogProcessChain.js";
-import {
-  createReconnectInteractionEnvelopeCallbacks,
-  tryAutoResolveReconnectInteraction,
-} from "../runtime/reconnect/interactionHandlers.js";
+import { tryAutoResolveReconnectInteraction } from "../runtime/reconnect/interactionHandlers.js";
 import { applyReconnectDataReplay } from "../runtime/reconnect/reconnectDataReplay.js";
 import { applyReconnectEventReplay } from "../runtime/reconnect/reconnectEventReplay.js";
 
@@ -24,10 +20,6 @@ import {
   applyReconnectMessagesToActiveSessionReplay,
   consumeReconnectReplayCacheForSession,
 } from "../runtime/reconnect/replayCacheConsumer.js";
-import {
-  buildReconnectReplayEnvelopeCallbacks,
-  mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
-} from "../runtime/reconnect/messageReplay.js";
 import { createReconnectReplayPublicApi } from "../runtime/reconnect/publicApi.js";
 import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
@@ -39,7 +31,7 @@ import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationR
 import { applyReconnectInteractionRequest } from "../runtime/reconnect/interactionReplay.js";
 import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function useReconnectReplay({
   sessions,
@@ -47,24 +39,14 @@ export function useReconnectReplay({
   activeSessionId,
   interactionSubmitting,
   chatList,
-  chatWebSocketClient,
-  appendMessage,
   findCanonicalMessageById,
   findCanonicalMessagesById,
   materializeTurnPresentation,
   makeViewMessage,
-  foldMessagesForView,
-  sessionTitleFromMessages,
-  pendingInteractionRequest,
   clearPendingInteraction,
-  clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
   isInteractionRequestHandled,
-  navigateToLastMessage,
-  translate,
-  onConversationState,
   sessionLogWebSocketClient,
-  notify = () => {},
   turnRuntimeRegistry,
   applyTurnLifecycleEnvelope,
   applyExecutionSnapshot,
@@ -111,15 +93,6 @@ export function useReconnectReplay({
     return { applied: false, reason: "workflow_runtime_projection_unavailable" };
   };
 
-  function mergeAssistantAttachments(targetAssistantMessage, attachments = []) {
-    return mergeAssistantAttachmentsWithContext({
-      targetAssistantMessage,
-      attachments,
-      makeViewMessage,
-      mergeAttachments,
-    });
-  }
-
   function tryAutoResolveInteraction(rawRequest = {}) {
     return tryAutoResolveReconnectInteraction({
       rawRequest,
@@ -127,18 +100,6 @@ export function useReconnectReplay({
       normalizeInteractionRequestPayload,
       isAutoResolvedInteraction,
       clearPendingInteraction,
-    });
-  }
-
-  function createReconnectReplayEnvelopeCallbacks() {
-    return createReconnectInteractionEnvelopeCallbacks({
-      buildReconnectReplayEnvelopeCallbacks,
-      normalizeInteractionRequestPayload,
-      tryAutoResolveInteraction,
-      isInteractionRequestHandled,
-      setPendingInteractionRequest,
-      clearPendingInteraction,
-      onAttachments: mergeAssistantAttachments,
     });
   }
 
@@ -268,7 +229,7 @@ export function useReconnectReplay({
     if (!normalizedSessionId) return false;
     let detailApplied = false;
     if (
-      typeof chatList?.fetchSessionDetail === "function" &&
+      isFunction(chatList?.fetchSessionDetail) &&
       typeof chatList?.applySessionDetail === "function"
     ) {
       const detail = await chatList
@@ -320,15 +281,12 @@ export function useReconnectReplay({
     }
     return applyReconnectMessagesToActiveSessionReplay({
       activeSession,
-      activeSessionId,
       findCanonicalMessageById,
       findCanonicalMessagesById,
       materializeTurnPresentation,
-      chatList,
       messages,
       dialogProcessId,
       turnScopeId,
-      envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
     });
   }
 

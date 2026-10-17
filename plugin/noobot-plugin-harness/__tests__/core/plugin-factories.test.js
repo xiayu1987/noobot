@@ -11,14 +11,14 @@ import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "../../src/core/error
 import { createHarnessCoreFactory, createHarnessRegistration } from "../../src/core/plugin.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "../../src/core/constants.js";
 
-test("createPluginRuntimeContextFactory wires injected deps and normalizes planning guidance", () => {
+test("createPluginRuntimeContextFactory wires injected deps and keeps normalized planning guidance mode", () => {
   const calls = [];
   const hookManager = { on() {} };
   const capabilityRuntime = { hookMap: { before_turn: ["planning"] } };
   const normalizeOptions = (userOptions, api) => {
     calls.push(["normalizeOptions", userOptions, api]);
     return {
-      planningGuidanceMode: "separate_model",
+      planningGuidanceMode: "inject",
       capabilityModelInvoker: null,
       capabilityProfile: "engineering",
       capabilityHandlers: { planning: async () => null },

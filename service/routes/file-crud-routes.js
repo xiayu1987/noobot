@@ -15,7 +15,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { safeJoin } from "#agent/utils";
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 const DEFAULT_I18N_KEYS = {
   treeFailed: "common.loadWorkspaceTreeFailed",
@@ -126,7 +126,7 @@ export function registerFileCrudRoutes(
   };
 
   const resolveRequestMutationRoot = async (req, root) => {
-    if (typeof resolveMutationRoot !== "function") {
+    if (!isFunction(resolveMutationRoot)) {
       throw new Error("file mutation session scope resolver is required");
     }
     const resolved = await resolveMutationRoot(req, root);

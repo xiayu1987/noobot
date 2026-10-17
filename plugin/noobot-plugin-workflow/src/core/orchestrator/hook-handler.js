@@ -8,7 +8,6 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { executeWorkflowText } from "../../workflow/adapter.js";
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { createPhaseTracker } from "../hooks/phase.js";
-import { persistWorkflowPlanningDialog } from "../hooks/planning-dialog-persistence.js";
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
 import {
   buildWorkflowPlanningNodeSessions,
@@ -67,17 +66,6 @@ export async function handleBeforeAgentDispatch({
       options,
     });
     const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
-    const planningPersistResult = await persistWorkflowPlanningDialog({
-      options,
-      ctx,
-      sourceText,
-      semanticText,
-      semanticResolution,
-      semantic,
-      workflowRunId,
-      planningNodeSessions,
-    });
-    throwIfWorkflowAborted(ctx);
     await prepareWorkflowPlanningMessage({
       options,
       ctx,
@@ -88,7 +76,6 @@ export async function handleBeforeAgentDispatch({
       semanticResolution,
       phaseTracker,
       retryMeta,
-      planningPersistResult,
       workflowRunId,
       planningNodeSessions,
     });
@@ -116,7 +103,6 @@ export async function handleBeforeAgentDispatch({
       retryMeta,
       nodeAgentRuns,
       nodeStateSnapshot,
-      planningPersistResult,
     });
 
     await publishWorkflowResult({
@@ -125,11 +111,8 @@ export async function handleBeforeAgentDispatch({
       agentResult,
       sourceText,
       semanticText,
-      semanticResolution,
       workflowPayload,
-      nodeAgentRuns,
       execution,
-      beforeDispatchMode,
     });
     return createBotDispatchHandled({ owner: "workflow", result: agentResult });
   } catch (error) {

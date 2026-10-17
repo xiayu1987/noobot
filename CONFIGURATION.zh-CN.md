@@ -102,16 +102,7 @@ Session 日志 WebSocket：
 
 模型历史上下文由 agent 运行时固定处理：保留最新 5 个 `dialogProcessId/dialogId` 轮次。会话历史窗口不提供配置项。
 
-### 3.3 附件策略
-
-| 键名                               | 类型     | 说明               |
-| ---------------------------------- | -------- | ------------------ |
-| `attachments.max_file_count`       | number   | 单次请求最大附件数 |
-| `attachments.max_file_size_bytes`  | number   | 单文件大小上限     |
-| `attachments.max_total_size_bytes` | number   | 总上传大小上限     |
-| `attachments.allowed_extensions`   | string[] | 允许后缀白名单     |
-
-#### 多模态默认模型
+### 3.3 多模态默认模型
 
 | 键名                                         | 类型   | 说明                 |
 | -------------------------------------------- | ------ | -------------------- |
@@ -287,7 +278,6 @@ Session 日志 WebSocket：
 | 模块                   | 说明                                                                                                            |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `default_provider`     | 用户默认模型                                                                                                    |
-| `attachments`          | 协议允许的用户附件设置；上传限制仍归系统配置所有                                                                |
 | `tools`                | 协议允许的用户工具开关/参数；执行与编排限制仍归系统配置所有                                                     |
 | `scenarios`            | 用户级情景选择与各情景模型覆盖（只允许 `default`、`definitions.programming.model` 和 `definitions.text.model`） |
 | `plugins`              | 用户级插件开关/默认模式覆盖                                                                                     |

@@ -84,7 +84,6 @@ export async function materializeTextForToolResult({
   inlineMaxChars = null,
   previewChars = DEFAULT_PREVIEW_CHARS,
   forcePreview = false,
-  sessionId = "",
   identity = null,
   scenario = "tool",
   strategy = "tool_result_text",

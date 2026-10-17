@@ -49,7 +49,6 @@ function createUseChatListFixture(overrides = {}) {
     getSessionDetailApi,
     deleteSessionApi: vi.fn(),
     makeViewMessage: (message) => ({ ...message }),
-    foldMessagesForView: (messages) => [...messages],
     scrollBottom,
     refreshSessionConnectorsAsync,
     clearUploads: vi.fn(),

@@ -20,7 +20,7 @@ import {
 import { safeError } from "../data/record-builders.js";
 import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
 import { applyAgentResolvedModelMessages } from "../core/model-message-context.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
   const bootstrap = meta?.harness?.globalBootstrap;
@@ -105,13 +105,13 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
       markHarnessTurnLifecycle(point, ctx);
       consumeDeferredCapabilityLogs(ctx);
       cleanupExpiredPendingOnHook(point, ctx, meta);
-      applyAgentResolvedModelMessages(point, ctx, meta?.harness || {});
+      applyAgentResolvedModelMessages(point, ctx, meta.harness);
       await runInternalGlobalBootstrap(point, ctx, meta);
       const capabilities = prepareMainPlanningState(point, ctx, this.resolveByHook(point));
       const handlerMeta = {
-        ...(meta && typeof meta === "object" ? meta : {}),
+        ...meta,
         harness: {
-          ...(meta?.harness && typeof meta.harness === "object" ? meta.harness : {}),
+          ...meta.harness,
           capabilityProfile: resolvedProfile,
         },
       };
@@ -123,7 +123,7 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
 
       for (const capability of capabilities) {
         const handler = resolvedHandlers[capability];
-        if (typeof handler !== "function") continue;
+        if (!isFunction(handler)) continue;
 
         const profileState = resolvedProfile[capability] || {};
         let result = null;
@@ -184,7 +184,7 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
         applyToolTakeover(point, ctx, item.directive);
       }
       for (const item of sortTakeovers(pendingMessageTakeovers)) {
-        applyMessageTakeover(point, ctx, item.directive);
+        applyMessageTakeover(ctx, item.directive);
       }
       for (const item of sortTakeovers(pendingMemoryTakeovers)) {
         applyMemoryTakeover(point, ctx, item.directive);

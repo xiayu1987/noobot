@@ -13,7 +13,7 @@ import {
 } from "@noobot/file-mutation-protocol";
 import { assertFileMutationVersion, withFileMutationLocks } from "./file-mutation-state.js";
 import { resolveSessionGeneratedDataRoot } from "../../session/session-generated-data.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function resolveFileMutationRoot(sessionDir) {
   return resolveSessionGeneratedDataRoot(sessionDir, "fileMutations");
@@ -135,7 +135,7 @@ function normalizeMutationRequest({ logicalPath, operation, scopeId, mutationRoo
   if (!normalizedLogicalPath) throw new TypeError("file mutation logical path is required");
   const root = text(mutationRoot);
   if (!root) throw new Error("file mutation repository root is required");
-  if (typeof writeText !== "function") {
+  if (!isFunction(writeText)) {
     throw new TypeError("file mutation write capability is required");
   }
   return {

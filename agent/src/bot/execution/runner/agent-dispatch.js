@@ -19,7 +19,7 @@ import {
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
   const messageId = text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
@@ -37,9 +37,9 @@ function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
   const store = runtime?.currentTurnMessages;
   if (
     !store ||
-    typeof store.push !== "function" ||
-    typeof store.updateWhere !== "function" ||
-    typeof store.toArray !== "function"
+    !isFunction(store.push) ||
+    !isFunction(store.updateWhere) ||
+    !isFunction(store.toArray)
   ) {
     throw new Error("bot dispatch requires the canonical currentTurnMessages store");
   }
@@ -67,8 +67,6 @@ function buildDispatchModelContext({
   context,
   dispatchRuntime,
   runtimeEventListener,
-  normalizedMessage,
-  usedSessionId,
   dialogProcessId,
   resolvedTurnScopeId,
 }) {
@@ -257,7 +255,6 @@ export async function dispatchAgentTurn({
   botHookRuntime,
   botHookBase,
   agentContextSummary,
-  usedSessionId,
   dialogProcessId,
   resolvedTurnScopeId,
   syncLifecycleRuntimeState,
@@ -266,8 +263,6 @@ export async function dispatchAgentTurn({
     context: getAgentContextEnvelope(runtimeAgentContext),
     dispatchRuntime,
     runtimeEventListener,
-    normalizedMessage,
-    usedSessionId,
     dialogProcessId,
     resolvedTurnScopeId,
   });

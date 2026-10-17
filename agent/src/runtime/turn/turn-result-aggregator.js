@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function requireCanonicalTurnMessageStore(turnMessageStore = null) {
   if (
     !turnMessageStore ||
-    typeof turnMessageStore.toArray !== "function" ||
-    typeof turnMessageStore.updateWhere !== "function"
+    !isFunction(turnMessageStore.toArray) ||
+    !isFunction(turnMessageStore.updateWhere)
   ) {
     throw new Error("turn result requires the canonical currentTurnMessages store");
   }

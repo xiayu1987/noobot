@@ -28,25 +28,6 @@ export function resolveTaskCheckLoopTurns({ runConfig = {} } = {}) {
   });
 }
 
-export function resolvePhaseSummaryMessageCharsThreshold(_effectiveConfig = {}) {
-  return BUILTIN_THRESHOLDS.taskSummary.phaseSummaryMessageCharsThreshold;
-}
-
-export function resolveHelpPromptLoopTurns(_effectiveConfig = {}) {
-  return BUILTIN_THRESHOLDS.help.helpPromptLoopTurns;
-}
-
-export function resolveToolFailureHelpCount(_effectiveConfig = {}) {
-  return BUILTIN_THRESHOLDS.help.toolFailureHelpCount;
-}
-
-export function resolveMaxToolLoopTurns({
-  systemRuntime: _systemRuntime = {},
-  effectiveConfig: _effectiveConfig = {},
-} = {}) {
-  return BUILTIN_THRESHOLDS.maxToolLoopTurns;
-}
-
 export function resolveEffectiveModelSpec({
   globalConfig = {},
   userConfig = {},

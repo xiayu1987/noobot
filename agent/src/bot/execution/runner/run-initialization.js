@@ -11,7 +11,7 @@ import {
   resolveInitialLifecycleState,
 } from "../../../runtime/lifecycle/state-machine.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
   "presentationMessageId",
@@ -76,7 +76,7 @@ export async function initializeSessionRun({
     throw error;
   }
   if (runConfig?.reuseExistingUserTurn === true) {
-    if (typeof assertReusedUserTurnIdentity !== "function") {
+    if (!isFunction(assertReusedUserTurnIdentity)) {
       throw new Error("assertReusedUserTurnIdentity is required before reused Turn initialization");
     }
     await assertReusedUserTurnIdentity({

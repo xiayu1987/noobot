@@ -16,14 +16,14 @@ import {
   TRANSFER_REASON,
 } from "@noobot/semantic-transfer-protocol";
 
-import { createRegisterWorkflowHooks } from "../../src/core/orchestrator.js";
+import { registerWorkflowAgentHooks } from "../../src/core/orchestrator.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { resolveWorkflowNodeDialogProcessId } from "../../src/core/node-dialog-process-id.js";
 import {
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
 } from "../../frontend/utils/workflowDialogProcessId.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export function createMockBotHookManager() {
   const listeners = new Map();
@@ -360,13 +360,13 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   }
 
   if (!existingAgentContext) target.agentContext = agentContext;
-  if (typeof target.claimAgentDispatch !== "function") {
+  if (!isFunction(target.claimAgentDispatch)) {
     target.claimAgentDispatch = () => {};
   }
-  if (typeof target?.eventListener?.onEvent !== "function") {
+  if (!isFunction(target?.eventListener?.onEvent)) {
     target.eventListener = { async onEvent() {} };
   }
-  if (typeof runtime.materializePendingCurrentTurnMessageEvents !== "function") {
+  if (!isFunction(runtime.materializePendingCurrentTurnMessageEvents)) {
     runtime.materializePendingCurrentTurnMessageEvents = ({ messageId } = {}) => {
       assert.ok(text(messageId), "materializer requires messageId");
       return { activityTimeline: [], toolTimeline: [] };
@@ -388,9 +388,9 @@ export function getBeforeDispatch(hookManager) {
 
 export async function runWorkflowHook({ options = {}, context = {} } = {}) {
   const hookManager = createMockBotHookManager();
-  createRegisterWorkflowHooks()({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: { enabled: true, mode: "on", ...options },
+    config: { enabled: true, mode: "on", ...options },
   });
   const ctx = createBaseContext(context);
   const dispatchOutcome = await getBeforeDispatch(hookManager).handler(ctx);
@@ -408,7 +408,7 @@ export function workflowTurn(agentResult) {
 }
 
 export {
-  createRegisterWorkflowHooks,
+  registerWorkflowAgentHooks,
   WORKFLOW_PLUGIN_DEFAULTS,
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,

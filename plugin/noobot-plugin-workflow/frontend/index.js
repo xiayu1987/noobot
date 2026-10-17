@@ -6,7 +6,7 @@
 import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRoute.js";
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 function routeWorkflowRuntimeEvent({ envelope, descriptor, context = {} } = {}) {
   if (descriptor?.family !== EVENT_FAMILY.WORKFLOW_RUNTIME) return false;
@@ -45,7 +45,7 @@ function routeWorkflowRuntimeEvent({ envelope, descriptor, context = {} } = {}) 
 }
 
 function requireAuthenticatedRequest(request) {
-  if (typeof request !== "function") {
+  if (!isFunction(request)) {
     throw new Error("authenticated HTTP capability is required");
   }
   return request;
@@ -106,7 +106,7 @@ export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
   const authenticatedRequest = ctx?.services?.authenticatedRequest?.request;
-  if (typeof contribute !== "function" || !points) {
+  if (!isFunction(contribute) || !points) {
     throw new Error("frontend contribution API is required");
   }
   contribute(points.COMPOSER_OPTIONS_MODEL, {
@@ -146,8 +146,7 @@ export async function activate(ctx = {}) {
         typeof context?.logWorkflowDiagnostics === "function"
           ? (event, payload = {}) => {
               const parentSessionId = text(
-                context?.messageItem?.sessionId ||
-                  context?.messageItem?.pluginMeta?.payload?.planningDialog?.sessionId,
+                context?.messageItem?.pluginMeta?.payload?.runMeta?.sessionId,
               );
               context.logWorkflowDiagnostics(
                 event,

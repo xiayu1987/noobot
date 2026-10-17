@@ -5,7 +5,7 @@
  */
 import { BUILTIN_EXPERIENCE_FIELDS } from "@noobot/memory-protocol/experience/fields";
 import { renderExperiencePatchProtocol } from "@noobot/memory-protocol/experience/schema";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function resolvePatchMeta(promptI18n = {}, stage = "", fields = BUILTIN_EXPERIENCE_FIELDS) {
   return renderExperiencePatchProtocol(stage, {
@@ -16,8 +16,7 @@ function resolvePatchMeta(promptI18n = {}, stage = "", fields = BUILTIN_EXPERIEN
 
 function buildPrompt({ promptI18n, stage, fields, builderName, payload }) {
   const builder = promptI18n?.[builderName];
-  if (typeof builder !== "function")
-    throw new Error(`memory prompt builder is missing: ${builderName}`);
+  if (!isFunction(builder)) throw new Error(`memory prompt builder is missing: ${builderName}`);
   const patchMeta = resolvePatchMeta(promptI18n, stage, fields);
   return text(
     builder({

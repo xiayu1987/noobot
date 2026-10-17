@@ -25,7 +25,7 @@ import {
   resolveRuntimeNodeSession,
 } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function isCurrentRequest(nodeViewTransaction, viewTicket, targetSessionId, detail) {
   if (!nodeViewTransaction.accepts(viewTicket)) return false;
@@ -167,7 +167,7 @@ function mergeRestSnapshot(context, prepared, opening, hydratedDetail, sessionId
     workflowRunId: text(canonicalNodeItem.workflowRunId),
     nodeExecutionId: text(canonicalNodeItem.nodeExecutionId),
     messageCount: rawMessages.length,
-    storeMergeAvailable: typeof applyWorkflowRuntimeEvent === "function",
+    storeMergeAvailable: isFunction(applyWorkflowRuntimeEvent),
     storeMergeApplied: mergeResult?.applied === true,
     storeMergeReason: text(mergeResult?.reason),
     storedMessageCount: storedMessages.length,
@@ -212,14 +212,7 @@ async function loadMaterializedSession(context, prepared, opening, identity) {
     refs.viewerState.value = "pending";
     return;
   }
-  const localExecution =
-    executionId && typeof props.selectExecutionDetail === "function"
-      ? props.selectExecutionDetail(executionId)?.execution || null
-      : null;
-  const hydratedDetail = hydrateExecutionSessionDetail(detail, {
-    executionId,
-    execution: localExecution,
-  });
+  const hydratedDetail = hydrateExecutionSessionDetail(detail, { executionId });
   mergeRestSnapshot(context, prepared, opening, hydratedDetail, sessionIdHint);
   refs.viewerState.value = detail?.state === "empty" ? "empty" : "ready";
 }

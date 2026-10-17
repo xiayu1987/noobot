@@ -25,7 +25,6 @@ export function createSessionDetailRequests({
   userId,
   authFetch,
   getSessionDetailApi,
-  applySessionDetail,
   isSameSessionIdentity,
   translate,
 } = {}) {

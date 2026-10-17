@@ -254,7 +254,6 @@ export const CONFIG_STRUCTURE = object({
   streaming: boolean({ policy: GLOBAL_ONLY }),
   security: SECURITY_STRUCTURE,
 
-  attachments: object({}, builtin({ open: true, scopes: GLOBAL_SCOPE_ONLY })),
   desktop: object({ dependency_proxy_url: string() }, builtin({ scopes: GLOBAL_SCOPE_ONLY })),
   memory: object(
     { summarizeTimeoutMs: integer({ minimum: 1 }), postprocess_async: boolean() },

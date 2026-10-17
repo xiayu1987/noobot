@@ -473,10 +473,9 @@ test("log-websocket-server: failed writes are not reported as written", () =>
         "debug.jsonl",
       );
       const isWritten = (record) => record.data?.message === "written";
+      const isSessionWritten = (record) => isWritten(record) && record.data.sessionId === "s-ok";
       const diagnostics = (
-        await waitForJsonLines(diagnosticFile, (records) =>
-          records.some((record) => isWritten(record) && record.data.sessionId === "s-ok"),
-        )
+        await waitForJsonLines(diagnosticFile, (records) => records.some(isSessionWritten))
       ).filter(isWritten);
       assert.deepEqual(
         diagnostics.map((record) => record.data.sessionId),

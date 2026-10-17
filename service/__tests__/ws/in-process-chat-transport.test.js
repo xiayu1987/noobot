@@ -75,13 +75,7 @@ test("client close resolves once and is idempotent", async () => {
 test("in-process close aborts the running turn and releases the session", async () => {
   const authoritative = createAuthoritativeBot();
   let aborted = false;
-  authoritative.bot.runSession = async ({
-    sessionId,
-    turnScopeId,
-    runConfig,
-    abortSignal,
-    eventListener,
-  }) => {
+  authoritative.bot.runSession = async ({ sessionId, turnScopeId, abortSignal, eventListener }) => {
     eventListener.onEvent({
       event: "agent_lifecycle_state_changed",
       data: {

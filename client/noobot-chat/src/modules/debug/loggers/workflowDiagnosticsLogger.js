@@ -24,21 +24,11 @@ function summarizePluginFields(pluginMeta = {}) {
   };
 }
 
-function resolveWorkflowRunId(message, payload) {
-  const execution = payload.execution || {};
-  return firstText(
-    payload.workflowRunId,
-    execution.workflowRunId,
-    execution.instanceId,
-    message.workflowRunId,
-  );
-}
-
 export function summarizeWorkflowMessage(message = {}, index = -1) {
   const source = message || {};
   const pluginMeta = source.pluginMeta || {};
   const payload = pluginMeta.payload || {};
-  const planningDialog = payload.planningDialog || {};
+  const runMeta = payload.runMeta || {};
   return {
     ...(index >= 0 ? { index } : {}),
     id: firstText(source.id, source.messageId),
@@ -46,10 +36,10 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
     type: firstText(source.type),
     pluginMessage: source.pluginMessage === true,
     ...summarizePluginFields(pluginMeta),
-    sessionId: firstText(source.sessionId, planningDialog.sessionId),
-    dialogProcessId: firstText(source.dialogProcessId, planningDialog.dialogProcessId),
+    sessionId: firstText(runMeta.sessionId),
+    dialogProcessId: firstText(runMeta.dialogProcessId),
     turnScopeId: firstText(source.turnScopeId),
-    workflowRunId: resolveWorkflowRunId(source, payload),
+    workflowRunId: firstText(payload.workflowRunId),
     contentLength: firstText(source.content).length,
     presentationMessageId: firstText(source.presentationMessageId, source.messageId, source.id),
     tagKeys: summarizeTagKeys(source.tags),

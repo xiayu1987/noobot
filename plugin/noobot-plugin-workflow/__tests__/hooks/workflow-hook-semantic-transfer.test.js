@@ -13,20 +13,18 @@ import {
   installTurnMessageEventRuntimeFixture,
   getBeforeDispatch,
   workflowTurn,
-  createRegisterWorkflowHooks,
+  registerWorkflowAgentHooks,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 test("workflow hook uses injected sub-session strategy and marks workflow message", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
   const semanticTransferCalls = [];
-  const planningPersistCalls = [];
 
-  const disposers = registerWorkflowHooks({
+  const disposers = registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "qwen3_6_plus",
@@ -63,14 +61,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
             answer: 'answer-node-done\n\n[Harness-Review]\n{"status":"pass"}',
             messages: [{ role: "assistant", content: "message-node-done", type: "message" }],
           },
-        };
-      },
-      generatedArtifactPersister: undefined,
-      workflowDialogPersister: async (payload = {}) => {
-        planningPersistCalls.push(payload);
-        return {
-          outputDir: "/tmp/noobot/workflow/s1/d1",
-          outputFile: "/tmp/noobot/workflow/s1/d1/planning.json",
         };
       },
     },
@@ -143,9 +133,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     semanticTransferCalls.some((item) => item?.strategy === "workflow_subagent"),
     true,
   );
-  assert.equal(planningPersistCalls.length, 1);
-  assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/plugin-data/workflow/planning/s1/d1");
-  assert.equal(planningPersistCalls[0]?.fileName, "planning.json");
 
   const subCall = subSessionCalls[0] || {};
   assert.equal(Array.isArray(subCall?.strategy?.disabledPlugins), true);
@@ -173,10 +160,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
 
   assert.ok(agentResult.workflow);
   assert.ok(String(agentResult.workflow?.workflowRunId || "").trim());
-  assert.equal(agentResult.workflow?.execution?.workflowRunId, agentResult.workflow?.workflowRunId);
-  assert.equal(agentResult.workflow?.execution?.instanceId, agentResult.workflow?.workflowRunId);
-  assert.equal(agentResult.workflow?.planningDialog?.dialogProcessId, "d1");
-  assert.equal(agentResult.workflow?.planningDialog?.dialogId, undefined);
+  assert.equal("workflowRunId" in agentResult.workflow.execution, false);
+  assert.equal("instanceId" in agentResult.workflow.execution, false);
+  assert.equal(agentResult.workflow?.runMeta?.dialogProcessId, "d1");
+  assert.equal("planningDialog" in agentResult.workflow, false);
   assert.match(String(agentResult.workflow.nodeSessions[0]?.dialogProcessId || ""), /^wf_node_/);
   assert.equal(agentResult.workflow.nodeSessions[0]?.dialogId, undefined);
   assert.match(
@@ -184,10 +171,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     /^wf_node_/,
   );
   assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogId, undefined);
-  assert.equal(
-    String(agentResult.workflow?.planningDialog?.storageFile || "").endsWith("planning.json"),
-    true,
-  );
   assert.equal(Array.isArray(agentResult.workflow?.nodeSessions), true);
   assert.equal(agentResult.workflow.nodeSessions.length, 1);
   assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
@@ -237,7 +220,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
 
 test("workflow hook propagates semantic transfer envelopes for node result artifacts", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const fallbackArtifactCalls = [];
   const envelope = createV2AttachmentTransferEnvelope({
     attachmentId: "wf-semantic-result-1",
@@ -246,9 +228,9 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
     name: "workflow-node-result.md",
   });
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "qwen3_6_plus",
@@ -281,7 +263,6 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
           messages: [{ role: "assistant", content: "semantic-node-done", type: "message" }],
         },
       }),
-      generatedArtifactPersister: undefined,
     },
   });
 
@@ -351,12 +332,11 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
 
 test("workflow hook routes final attachment summary composition through semantic-transfer", async () => {
   const hookManager = createMockBotHookManager();
-  const registerWorkflowHooks = createRegisterWorkflowHooks();
   const semanticTransferCalls = [];
 
-  registerWorkflowHooks({
+  registerWorkflowAgentHooks({
     hookManager,
-    options: {
+    config: {
       enabled: true,
       mode: "on",
       semanticModel: "qwen3_6_plus",
@@ -389,7 +369,6 @@ test("workflow hook routes final attachment summary composition through semantic
           messages: [{ role: "assistant", content: "summary-node-done", type: "message" }],
         },
       }),
-      generatedArtifactPersister: async () => [],
     },
   });
 

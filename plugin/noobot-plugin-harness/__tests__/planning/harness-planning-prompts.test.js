@@ -13,7 +13,10 @@ import {
 
 test("harness planning prompt includes current tool names and descriptions", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const messages = [{ role: "user", content: "开始任务" }];
   const ctx = {
@@ -57,7 +60,10 @@ test("harness planning prompt includes current tool names and descriptions", asy
 
 test("harness initial planning keeps scenario policy out of text protocol and responsibility", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const messages = [{ role: "user", content: "整理这些文本资料" }];
   const ctx = {
@@ -308,7 +314,10 @@ test("harness planning separate model keeps latest user goal in planning context
 
 test("harness planning operation directory uses sandbox view without losing host view", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore(
+    { hookManager },
+    { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
+  );
 
   const hostBasePath = "/host/user-a";
   const sandboxBasePath = "/workspace/user-a";

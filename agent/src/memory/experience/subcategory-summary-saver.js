@@ -11,7 +11,6 @@ import { renderSectionLines } from "../utils/format.js";
 export async function saveSubcategoryDomainSummary({
   schemaKey = "",
   storage,
-  basePath = "",
   periodKey = "",
   periodDir,
   domainName = "",

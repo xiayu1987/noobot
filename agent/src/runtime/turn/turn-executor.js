@@ -250,7 +250,6 @@ export async function invokeNoToolsTurn({
   const { turnMessageStore, turnTaskStore } = await commitNoToolsTurnState({
     modelState,
     loopState,
-    messages,
     traces,
     modelResponse,
     responseContentText,
@@ -392,7 +391,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       throw error;
     }
     try {
-      ai = await invokeBoundLlmWithToolChoice("auto", null, "with_tools_required_retry");
+      ai = await invokeBoundLlmWithToolChoice("auto", "with_tools_required_retry");
     } catch (retryError) {
       if (isRecoverableNoFinalResponse(retryError, runtime)) throw retryError;
       await runAgentRuntimeHook({

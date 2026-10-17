@@ -18,8 +18,6 @@ export const ENGINE_I18N_KEY_MAP = {
   taskCheckPrompt: "agent.taskCheckPrompt",
 };
 
-export const DEFAULT_MAX_TOOL_LOOP_TURNS = TURN_THRESHOLDS.agent.maxToolLoopTurns;
-
 export const DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS = TURN_THRESHOLDS.agent.toolLoopLimitBufferTurns;
 
 export const PHASE_SUMMARY_OVERFLOW_POLICY = Object.freeze({

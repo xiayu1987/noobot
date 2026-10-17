@@ -126,7 +126,6 @@ test("executeMcpTask preserves the explicitly selected OpenAI-compatible ModelSp
     globalConfig: createGlobalConfig(),
     mcpName: "fake",
     task: "do it",
-    modelName: "openai-alias",
     fetchImpl: createMcpFetch(),
     runtime: { modelPort, modelSpec: OPENAI_MODEL },
   });

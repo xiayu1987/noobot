@@ -218,7 +218,6 @@ registerFileIpcHandlers({ app, dialog, ipcMain, appendDesktopLog, getMainWindow 
 registerStartupIpcHandlers({
   app,
   getStartupStatuses: () => startupStatuses,
-  getDesktopConfigState: () => desktopConfigState,
   setDesktopConfigState,
   getPendingConfigResolve: () => pendingConfigResolve,
   setPendingConfigResolve: (resolve) => {

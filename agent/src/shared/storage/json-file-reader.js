@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 export const PERSISTED_JSON_READ_ERROR_CODE = Object.freeze({
   CORRUPTED: "PERSISTED_JSON_CORRUPTED",
   PERMISSION_DENIED: "PERSISTENCE_PERMISSION_DENIED",
@@ -33,7 +34,7 @@ function createPersistedJsonReadError(filePath, cause) {
 }
 
 export async function readPersistedJsonFile({ filePath = "", fallback = null, readFile } = {}) {
-  if (typeof readFile !== "function") {
+  if (!isFunction(readFile)) {
     throw new TypeError("readPersistedJsonFile requires readFile");
   }
   try {
