@@ -117,7 +117,6 @@ export async function buildSystemContext({
       attachmentsAvailableToRuntime
         ? resolveAttachments({
             attachmentService,
-            runtimeBasePath,
             userMessageAttachments,
             userId: identity.userId,
             sessionId: identity.sessionId,

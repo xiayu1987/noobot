@@ -282,7 +282,11 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
     serviceContainer: {
       sessionManager: createContextSessionManager(),
       memoryService: null,
-      attachmentService: null,
+      attachmentService: {
+        async ingest() {
+          throw new Error("fixture has no raw attachments");
+        },
+      },
       skillService: null,
       eventListener: null,
       botManager: null,

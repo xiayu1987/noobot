@@ -10,11 +10,15 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import {
+  prepareStoppedSnapshotResumeTurnExecution,
+  resolvePayloadAttachments,
+} from "../../src/bot/session/turn-execution-preparer.js";
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { persistSession } from "../helpers/runtime-events-env.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
-test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
+test("prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   const contextBuilder = {
     async buildAgentContext() {
@@ -24,8 +28,9 @@ test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snaps
 
   await assert.rejects(
     () =>
-      engine._prepareStoppedSnapshotResumeTurnExecution({
+      prepareStoppedSnapshotResumeTurnExecution(engine, {
         payload: {
+          contextBuilder,
           userId: "u1",
           sessionId: "s1",
           dialogProcessId: "dialog-current",
@@ -36,7 +41,6 @@ test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snaps
             turnScopeId: "turn-current",
           },
         },
-        contextBuilder,
       }),
     /stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId/,
   );
@@ -58,8 +62,9 @@ test("stopped snapshot resume degrades to a normal turn when the optional snapsh
   const contextBuilder = { buildAgentContext() {} };
 
   try {
-    const result = await engine._prepareStoppedSnapshotResumeTurnExecution({
+    const result = await prepareStoppedSnapshotResumeTurnExecution(engine, {
       payload: {
+        contextBuilder,
         userId: "u1",
         sessionId: "workflow-session",
         dialogProcessId: "dialog-current",
@@ -70,7 +75,6 @@ test("stopped snapshot resume degrades to a normal turn when the optional snapsh
           resumeTurnScopeId: "turn-stopped",
         },
       },
-      contextBuilder,
     });
 
     assert.deepEqual(result, { degraded: true });
@@ -176,9 +180,10 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   };
   const captured = [];
   const contextBuilder = {
-    attachmentService: null,
-    _resolveRuntimeBasePath() {
-      return "";
+    attachmentService: {
+      async ingest() {
+        throw new Error("fixture has no raw attachments");
+      },
     },
     async buildExistingSessionContext() {
       throw new Error("stopped resume must not rebuild Context from Session history");
@@ -190,8 +195,9 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   };
 
   try {
-    await engine._prepareStoppedSnapshotResumeTurnExecution({
+    await prepareStoppedSnapshotResumeTurnExecution(engine, {
       payload: {
+        contextBuilder,
         userId: "u1",
         sessionId: "s1",
         dialogProcessId: "dialog-current",
@@ -203,7 +209,6 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
           turnScopeId: "turn-current",
         },
       },
-      contextBuilder,
     });
 
     assert.deepEqual(
@@ -236,8 +241,7 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   }
 });
 
-test("_resolveStoppedResumeAttachments ingests raw attachments into the current session", async () => {
-  const engine = Object.create(SessionExecutionEngine.prototype);
+test("resolvePayloadAttachments ingests raw attachments into the current session", async () => {
   const ingestCalls = [];
   const contextBuilder = {
     attachmentService: {
@@ -254,18 +258,13 @@ test("_resolveStoppedResumeAttachments ingests raw attachments into the current 
         ];
       },
     },
-    _resolveRuntimeBasePath() {
-      return "/workspace/u1";
-    },
   };
 
-  const attachments = await engine._resolveStoppedResumeAttachments({
+  const attachments = await resolvePayloadAttachments({
     contextBuilder,
-    payload: {
-      userId: "u1",
-      sessionId: "s1",
-      userMessageAttachments: [{ name: "resume.docx", type: "application/octet-stream" }],
-    },
+    userId: "u1",
+    sessionId: "s1",
+    userMessageAttachments: [{ name: "resume.docx", type: "application/octet-stream" }],
   });
 
   assert.equal(ingestCalls.length, 1);
@@ -319,9 +318,10 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
     },
   };
   const contextBuilder = {
-    attachmentService: null,
-    _resolveRuntimeBasePath() {
-      return "";
+    attachmentService: {
+      async ingest() {
+        throw new Error("fixture has no raw attachments");
+      },
     },
     async buildAgentContext() {
       return createTestAgentExecutionScope({ systemRuntime });
@@ -329,8 +329,9 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
   };
 
   try {
-    await engine._prepareStoppedSnapshotResumeTurnExecution({
+    await prepareStoppedSnapshotResumeTurnExecution(engine, {
       payload: {
+        contextBuilder,
         userId: "u1",
         sessionId: "s1",
         dialogProcessId: "dialog-current",
@@ -342,7 +343,6 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
           turnScopeId: "turn-current",
         },
       },
-      contextBuilder,
     });
 
     assert.equal(systemRuntime.phaseSummaryLoopCount, 7);

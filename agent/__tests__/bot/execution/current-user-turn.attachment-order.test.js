@@ -10,6 +10,7 @@ import { prepareCurrentUserTurn } from "../../../src/bot/execution/runner/curren
 
 function createInput(overrides = {}) {
   return {
+    buildContextBuilder: () => ({ kind: "context-builder" }),
     normalizedMessage: "message with attachment",
     attachments: [{ name: "report.pdf" }],
     systemMessages: [],

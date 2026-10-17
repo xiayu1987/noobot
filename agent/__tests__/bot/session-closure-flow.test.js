@@ -13,6 +13,7 @@ import path from "node:path";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
+import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
@@ -38,6 +39,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   let capturedAgentContext = null;
 
   const session = {
+    assertPersistenceContextIdentity,
     async getSessionBundle() {
       return { exists: false, session: { messages: [] } };
     },
@@ -242,6 +244,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       caller,
     };
     return {
+      attachmentService: engine.attach,
       async buildNewSessionContext({ dialogProcessId = "" } = {}) {
         const effectiveAttachments =
           Array.isArray(userMessageAttachments) && userMessageAttachments.length
@@ -410,6 +413,7 @@ test("continue mode closed-loop: should build continue context and persist paren
   let capturedRunConfig = null;
 
   const session = {
+    assertPersistenceContextIdentity,
     async getSessionBundle() {
       return {
         exists: true,
@@ -475,7 +479,11 @@ test("continue mode closed-loop: should build continue context and persist paren
       async captureSessionToShortMemory() {},
       async maybeSummarize() {},
     },
-    attach: {},
+    attach: {
+      async ingest() {
+        throw new Error("continue closed-loop carries no raw attachments");
+      },
+    },
     skill: {},
     configService: {
       async loadUserConfig() {
@@ -510,6 +518,7 @@ test("continue mode closed-loop: should build continue context and persist paren
   });
 
   engine._buildContextBuilder = ({ sessionId = "", runConfig = {} } = {}) => ({
+    attachmentService: engine.attach,
     async buildNewSessionContext({ dialogProcessId = "" } = {}) {
       return createTestAgentExecutionScope(
         {

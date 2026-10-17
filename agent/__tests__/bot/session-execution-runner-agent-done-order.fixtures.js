@@ -121,6 +121,14 @@ export function createRunner({
       ...inputRunConfig,
       ...runConfig,
     }),
+    buildContextBuilder: () => ({ kind: "context-builder" }),
+    prepareTurnInput: async ({ buildContextPayload }) => ({
+      userMessageAttachments: buildContextPayload.userMessageAttachments,
+    }),
+    assertPersistenceContextIdentity: () => {},
+    bindSessionTurnAttachments: async () => {
+      throw new Error("attachment binding is not part of this fixture");
+    },
     prepareAgentTurnExecution: async (payload) => {
       const prepared = prepareAgentTurnExecution
         ? await prepareAgentTurnExecution(payload)

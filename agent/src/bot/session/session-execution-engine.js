@@ -23,14 +23,8 @@ import {
 import {
   resolveExistingUserMessageAttachments,
   enrichUserInputAttachmentsFromIndex,
-  resolveAttachmentIndexBasePath,
 } from "./turn-attachment-enricher.js";
-import {
-  prepareTurnInput,
-  prepareAgentTurnExecution,
-  prepareStoppedSnapshotResumeTurnExecution,
-  resolveStoppedResumeAttachments,
-} from "./turn-execution-preparer.js";
+import { prepareTurnInput, prepareAgentTurnExecution } from "./turn-execution-preparer.js";
 import { commitSummaryCheckpoint } from "./summary-checkpoint-committer.js";
 
 export class SessionExecutionEngine {
@@ -64,7 +58,7 @@ export class SessionExecutionEngine {
     this.workspaceService = workspaceService;
     this.errorLogger = errorLogger;
     this.botManager = botManager;
-    this.agentRunner = typeof agentRunner === "function" ? agentRunner : runAgentTurn;
+    this.agentRunner = agentRunner;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
   }
 
@@ -152,6 +146,7 @@ export class SessionExecutionEngine {
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
+      buildContextBuilder: (payload = {}) => this._buildContextBuilder(payload),
       prepareTurnInput: (payload = {}) => this._prepareTurnInput(payload),
       prepareAgentTurnExecution: (payload = {}) => this._prepareAgentTurnExecution(payload),
       commitSummaryCheckpoint: (payload = {}) =>
@@ -162,16 +157,10 @@ export class SessionExecutionEngine {
         }),
     };
     const runnerPersistenceDeps = {
-      assertPersistenceContextIdentity:
-        typeof this.session?.assertPersistenceContextIdentity === "function"
-          ? (context = null, identity = {}) =>
-              this.session.assertPersistenceContextIdentity(context, identity)
-          : null,
+      assertPersistenceContextIdentity: (context = null, identity = {}) =>
+        this.session.assertPersistenceContextIdentity(context, identity),
       appendAgentMessages: (payload = {}) => this._appendAgentMessages(payload),
-      bindSessionTurnAttachments:
-        typeof this.session?.bindTurnAttachments === "function"
-          ? (payload = {}) => this.session.bindTurnAttachments(payload)
-          : null,
+      bindSessionTurnAttachments: (payload = {}) => this.session.bindTurnAttachments(payload),
       assertReusedUserTurnIdentity: (payload = {}) => this._assertReusedUserTurnIdentity(payload),
       getSessionTurns: (payload = {}) => this.session.getSessionTurns(payload),
       getTurnSummaryCheckpointState: (payload = {}) =>
@@ -395,27 +384,11 @@ export class SessionExecutionEngine {
   }
 
   async _prepareTurnInput({ buildContextPayload = {} } = {}) {
-    return prepareTurnInput(this, { buildContextPayload });
+    return prepareTurnInput({ buildContextPayload });
   }
 
   async _prepareAgentTurnExecution({ buildContextPayload = {}, abortSignal = null } = {}) {
     return prepareAgentTurnExecution(this, { buildContextPayload, abortSignal });
-  }
-
-  async _prepareStoppedSnapshotResumeTurnExecution({
-    payload = {},
-    contextBuilder = null,
-    abortSignal = null,
-  } = {}) {
-    return prepareStoppedSnapshotResumeTurnExecution(this, {
-      payload,
-      contextBuilder,
-      abortSignal,
-    });
-  }
-
-  async _resolveStoppedResumeAttachments({ contextBuilder = null, payload = {} } = {}) {
-    return resolveStoppedResumeAttachments(this, { contextBuilder, payload });
   }
 
   async _resolveExistingUserMessageAttachments({
@@ -446,10 +419,6 @@ export class SessionExecutionEngine {
       attachments,
       existingAttachments,
     });
-  }
-
-  async _resolveAttachmentIndexBasePath(userId = "") {
-    return resolveAttachmentIndexBasePath(this, userId);
   }
 
   async _appendAgentMessages({

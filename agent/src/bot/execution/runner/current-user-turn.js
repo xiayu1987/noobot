@@ -13,7 +13,7 @@ import {
   deriveAttachmentBindCommandId,
 } from "@noobot/session-protocol";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
-import { text, isFunction } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 function emitPreparedTurnDebug({
   eventListener,
@@ -76,6 +76,7 @@ function emitCurrentUserIdentityDebug({
 }
 
 export async function prepareCurrentUserTurn({
+  buildContextBuilder,
   prepareTurnInput,
   assertReusedUserTurnIdentity,
   bindSessionTurnAttachments,
@@ -118,6 +119,7 @@ export async function prepareCurrentUserTurn({
     persistenceContext,
     persistenceScope,
   };
+  buildContextPayload.contextBuilder = buildContextBuilder(buildContextPayload);
   emitPreparedTurnDebug({
     eventListener,
     requestRunConfig,
@@ -131,17 +133,8 @@ export async function prepareCurrentUserTurn({
   let reusedTurnResult = null;
   let committedTurnResult = null;
   const prepareCanonicalAttachments = async () => {
-    const preparedTurnInput =
-      typeof prepareTurnInput === "function"
-        ? await prepareTurnInput({ buildContextPayload })
-        : { userMessageAttachments: attachments };
-    canonicalAttachments = Array.isArray(preparedTurnInput?.userMessageAttachments)
-      ? preparedTurnInput.userMessageAttachments
-      : [];
+    canonicalAttachments = (await prepareTurnInput({ buildContextPayload })).userMessageAttachments;
     buildContextPayload.userMessageAttachments = canonicalAttachments;
-    if (preparedTurnInput?.contextBuilder) {
-      buildContextPayload.contextBuilder = preparedTurnInput.contextBuilder;
-    }
   };
   const acceptanceReceipt = turnAcceptance ? createTurnAcceptanceReceipt(turnAcceptance) : null;
   const reuseExistingUserTurn = resolvedRunConfig?.reuseExistingUserTurn === true;
@@ -158,7 +151,7 @@ export async function prepareCurrentUserTurn({
   }
   const precommittedUserTurn = Boolean(acceptanceReceipt);
   if (!precommittedUserTurn) await prepareCanonicalAttachments();
-  reusedTurnResult = await assertReusedUserTurnIdentity?.({
+  reusedTurnResult = await assertReusedUserTurnIdentity({
     userId,
     sessionId,
     parentSessionId,
@@ -197,9 +190,6 @@ export async function prepareCurrentUserTurn({
   if (!reuseExistingUserTurn) {
     await prepareCanonicalAttachments();
     if (canonicalAttachments.length > 0) {
-      if (!isFunction(bindSessionTurnAttachments)) {
-        throw new Error("bindSessionTurnAttachments is required for attachment-bearing Turns");
-      }
       const attachmentBinding = await bindSessionTurnAttachments({
         userId,
         sessionId,

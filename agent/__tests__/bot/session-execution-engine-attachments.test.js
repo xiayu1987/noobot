@@ -11,6 +11,8 @@ import path from "node:path";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 
+const CONTEXT_BUILDER = Object.freeze({ kind: "context-builder" });
+
 async function createAttachmentWorkspaceService() {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-workspace-"));
   return {
@@ -25,7 +27,6 @@ async function createAttachmentWorkspaceService() {
 test("_prepareAgentTurnExecution uses canonical payload attachments when prepared runtime has none", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.workspaceService = await createAttachmentWorkspaceService();
-  engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
       return {
@@ -42,6 +43,7 @@ test("_prepareAgentTurnExecution uses canonical payload attachments when prepare
 
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
+      contextBuilder: CONTEXT_BUILDER,
       userId: "admin",
       userMessageAttachments: [
         {
@@ -67,7 +69,6 @@ test("_prepareAgentTurnExecution uses canonical payload attachments when prepare
 
 test("_prepareAgentTurnExecution preserves explicit empty payload userMessageAttachments", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
-  engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
       return {
@@ -84,6 +85,7 @@ test("_prepareAgentTurnExecution preserves explicit empty payload userMessageAtt
 
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
+      contextBuilder: CONTEXT_BUILDER,
       userId: "admin",
       userMessageAttachments: [],
     },
@@ -134,7 +136,6 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
       return path.join(workspaceRoot, userId);
     },
   };
-  engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
       return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
@@ -143,6 +144,7 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
 
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
+      contextBuilder: CONTEXT_BUILDER,
       userId: "admin",
       sessionId,
       userMessageAttachments: [
@@ -187,7 +189,6 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
   };
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.workspaceService = await createAttachmentWorkspaceService();
-  engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.session = {
     async findById() {
       return {
@@ -210,6 +211,7 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
 
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
+      contextBuilder: CONTEXT_BUILDER,
       userId: "admin",
       sessionId: "session-existing-a",
       turnScopeId: "turn-existing",
@@ -234,7 +236,6 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
 
 test("_prepareAgentTurnExecution fails closed when attachment enrichment has no WorkspaceService", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
-  engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
       return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
@@ -244,6 +245,7 @@ test("_prepareAgentTurnExecution fails closed when attachment enrichment has no 
   await assert.rejects(
     engine._prepareAgentTurnExecution({
       buildContextPayload: {
+        contextBuilder: CONTEXT_BUILDER,
         userId: "admin",
         sessionId: "session-missing-workspace-service",
         userMessageAttachments: [
@@ -262,7 +264,6 @@ test("_prepareAgentTurnExecution fails closed when attachment enrichment has no 
 
 test("_prepareAgentTurnExecution does not restore old rich attachments when payload explicitly deletes all", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
-  engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.session = {
     async findById() {
       return {
@@ -284,6 +285,7 @@ test("_prepareAgentTurnExecution does not restore old rich attachments when payl
 
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
+      contextBuilder: CONTEXT_BUILDER,
       userId: "admin",
       sessionId: "session-delete",
       turnScopeId: "turn-delete",

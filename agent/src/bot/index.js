@@ -87,10 +87,8 @@ export class BotManager {
     let canonicalAttachments = attachments;
     if (attachments?.length) {
       await this.ensureUserWorkspace(userId);
-      const runtimeBasePath = this.getWorkspacePath(userId);
       canonicalAttachments = await resolveAttachments({
         attachmentService: this.attach,
-        runtimeBasePath,
         userMessageAttachments: attachments,
         userId,
         sessionId,

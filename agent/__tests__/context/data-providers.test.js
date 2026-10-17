@@ -53,7 +53,6 @@ test("resolveAttachments should bypass ingest when attachment already ingested",
         return [];
       },
     },
-    runtimeBasePath: "/workspace/u1",
     userMessageAttachments: [
       {
         attachmentId: "att1",
@@ -83,7 +82,6 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
         return [{ attachmentId: "att-ingested" }];
       },
     },
-    runtimeBasePath: "/workspace/u1",
     userMessageAttachments: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
     userId: "u1",
     sessionId: "s1",
@@ -117,7 +115,6 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
 
   const result = await resolveAttachments({
     attachmentService,
-    runtimeBasePath: "/tmp/runtime",
     userMessageAttachments: source,
     userId: "u1",
     sessionId: "s1",
@@ -139,7 +136,6 @@ test("resolveAttachments does not infer a canonical identity from an incomplete 
         return [];
       },
     },
-    runtimeBasePath: "/workspace/u1",
     userMessageAttachments: [
       {
         attachmentId: "existing",
@@ -165,7 +161,6 @@ test("resolveAttachments reads only userMessageAttachments", async () => {
         return [{ attachmentId: "att-input" }];
       },
     },
-    runtimeBasePath: "/workspace/u1",
     userMessageAttachments: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
     userId: "u1",
     sessionId: "s1",
@@ -228,7 +223,6 @@ test("resolveLongMemory only reads static long memory payload from memoryService
         return "static-long-memory-only";
       },
     },
-    runtimeBasePath: "/workspace/u1",
     userId: "u1",
   });
   assert.equal(longMemory, "static-long-memory-only");

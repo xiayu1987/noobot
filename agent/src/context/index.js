@@ -289,7 +289,6 @@ export class ContextBuilder {
     try {
       return await resolveLongMemory({
         memoryService: this.memoryService,
-        runtimeBasePath: this._resolveRuntimeBasePath(),
         userId: this.userId,
       });
     } catch (error) {

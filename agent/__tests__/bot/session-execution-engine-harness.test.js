@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
+import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createStateCommitter } from "../../src/runtime/tool-execution/state-committer.js";
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
@@ -314,6 +315,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   const sessionId = randomUUID();
 
   const session = {
+    assertPersistenceContextIdentity,
     async getRootSessionId({ sessionId }) {
       return sessionId;
     },
@@ -381,7 +383,11 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       async captureSessionToShortMemory() {},
       async maybeSummarize() {},
     },
-    attach: {},
+    attach: {
+      async ingest() {
+        throw new Error("harness smoke run carries no raw attachments");
+      },
+    },
     skill: {},
     configService: {
       async loadUserConfig() {

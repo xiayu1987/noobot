@@ -16,12 +16,9 @@ import {
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
 } from "@noobot/context-protocol/policy/snapshot";
 import { applySystemRuntimeTurnProgress, resolveToolBindings } from "@noobot/agent-config-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, messageBlocks = {}) {
-  if (!isFunction(engine?.session?.getSessionContextSource)) {
-    throw new Error("stopped snapshot resume requires authoritative Session messages");
-  }
   const sessionSource = await engine.session.getSessionContextSource({
     userId: identity.userId,
     sessionId: identity.sessionId,
@@ -33,48 +30,31 @@ async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, message
   );
 }
 
-export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}) {
-  const payload =
-    buildContextPayload && typeof buildContextPayload === "object" ? buildContextPayload : {};
-  const contextBuilder = engine._buildContextBuilder(payload);
-  const runtimeBasePath =
-    typeof contextBuilder._resolveRuntimeBasePath === "function"
-      ? contextBuilder._resolveRuntimeBasePath()
-      : await engine._resolveAttachmentIndexBasePath(text(payload.userId));
-  const userMessageAttachments = await resolveAttachments({
-    attachmentService: contextBuilder.attachmentService || engine.attach,
-    runtimeBasePath,
+export function resolvePayloadAttachments(payload = {}) {
+  return resolveAttachments({
+    attachmentService: payload.contextBuilder.attachmentService,
     userMessageAttachments: Array.isArray(payload.userMessageAttachments)
       ? payload.userMessageAttachments
       : [],
     userId: text(payload.userId),
     sessionId: text(payload.sessionId),
   });
-  return { contextBuilder, userMessageAttachments };
+}
+
+export async function prepareTurnInput({ buildContextPayload = {} } = {}) {
+  return { userMessageAttachments: await resolvePayloadAttachments(buildContextPayload) };
 }
 
 export async function prepareAgentTurnExecution(
   engine,
   { buildContextPayload = {}, abortSignal = null } = {},
 ) {
-  const payload =
-    buildContextPayload && typeof buildContextPayload === "object" ? buildContextPayload : {};
-  const contextBuilder =
-    payload?.contextBuilder && typeof payload.contextBuilder === "object"
-      ? payload.contextBuilder
-      : engine._buildContextBuilder(payload);
+  const payload = buildContextPayload;
   const prepared =
     payload?.runConfig?.resumeFromStoppedSnapshot === true
-      ? await prepareStoppedSnapshotResumeTurnExecution(engine, {
-          payload,
-          contextBuilder,
-          abortSignal,
-        })
+      ? await prepareStoppedSnapshotResumeTurnExecution(engine, { payload, abortSignal })
       : await engine.agentRuntimeFacade.prepareTurnExecution({
-          buildContextPayload: {
-            ...payload,
-            contextBuilder,
-          },
+          buildContextPayload: payload,
           abortSignal,
         });
   const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
@@ -102,7 +82,7 @@ export async function prepareAgentTurnExecution(
     existingAttachments: existingSessionAttachments,
   });
   return {
-    ...(prepared && typeof prepared === "object" ? prepared : {}),
+    ...prepared,
     userMessageAttachments: mapAttachmentRecordsToMetas(enrichedRuntimeAttachments, {
       fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
       userId: text(payload?.userId),
@@ -148,16 +128,12 @@ function buildContinuationIdentity(payload) {
   };
 }
 
-function prepareWithoutStoppedSnapshot(
-  engine,
-  { payload, contextBuilder, runConfig, abortSignal },
-) {
+function prepareWithoutStoppedSnapshot(engine, { payload, abortSignal }) {
   return engine.agentRuntimeFacade.prepareTurnExecution({
     buildContextPayload: {
       ...payload,
-      contextBuilder,
       runConfig: {
-        ...runConfig,
+        ...payload.runConfig,
         resumeFromStoppedSnapshot: false,
         resumeSnapshotUnavailable: true,
       },
@@ -198,13 +174,9 @@ function markRuntimeResumedFromSnapshot(runtime, { identity, userMetaBackwrites,
 
 export async function prepareStoppedSnapshotResumeTurnExecution(
   engine,
-  { payload = {}, contextBuilder = null, abortSignal = null } = {},
+  { payload, abortSignal = null },
 ) {
-  if (!contextBuilder || !isFunction(contextBuilder.buildAgentContext)) {
-    throw new Error("stopped snapshot resume requires a compatible contextBuilder");
-  }
-  const runConfig =
-    payload?.runConfig && typeof payload.runConfig === "object" ? payload.runConfig : {};
+  const { contextBuilder, runConfig } = payload;
   const identity = buildStoppedResumeIdentity(payload, runConfig);
   const snapshot = await loadStoppedModelMessageSnapshot({
     globalConfig: engine.globalConfig,
@@ -212,17 +184,9 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     allowMissing: true,
   });
   if (!snapshot) {
-    return prepareWithoutStoppedSnapshot(engine, {
-      payload,
-      contextBuilder,
-      runConfig,
-      abortSignal,
-    });
+    return prepareWithoutStoppedSnapshot(engine, { payload, abortSignal });
   }
-  const userMessageAttachments = await resolveStoppedResumeAttachments(engine, {
-    contextBuilder,
-    payload,
-  });
+  const userMessageAttachments = await resolvePayloadAttachments(payload);
   const hydratedMessageBlocks = await restoreSnapshotUserAttachmentFacts(
     engine,
     identity,
@@ -257,23 +221,4 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     runtimeAgentContext,
     userMessageAttachments,
   };
-}
-
-export async function resolveStoppedResumeAttachments(
-  engine,
-  { contextBuilder = null, payload = {} } = {},
-) {
-  if (!contextBuilder) return [];
-  return resolveAttachments({
-    attachmentService: contextBuilder.attachmentService,
-    runtimeBasePath:
-      typeof contextBuilder._resolveRuntimeBasePath === "function"
-        ? contextBuilder._resolveRuntimeBasePath()
-        : "",
-    userMessageAttachments: Array.isArray(payload?.userMessageAttachments)
-      ? payload.userMessageAttachments
-      : [],
-    userId: text(payload?.userId),
-    sessionId: text(payload?.sessionId),
-  });
 }

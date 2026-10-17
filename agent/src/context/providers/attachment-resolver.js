@@ -5,16 +5,17 @@
  */
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export async function resolveAttachments({
-  attachmentService = null,
-  runtimeBasePath = "",
+  attachmentService,
   userMessageAttachments = [],
   userId = "",
   sessionId = "",
 } = {}) {
-  if (!attachmentService || !runtimeBasePath) return [];
+  if (!isFunction(attachmentService?.ingest)) {
+    throw new TypeError("resolveAttachments requires attachmentService.ingest");
+  }
   const sourceAttachments = Array.isArray(userMessageAttachments) ? userMessageAttachments : [];
   if (!sourceAttachments.length) return [];
   const isCanonical = (attachmentItem) =>

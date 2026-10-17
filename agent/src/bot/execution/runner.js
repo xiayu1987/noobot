@@ -35,6 +35,7 @@ export class SessionExecutionRunner {
     initializeRunSessionRuntime,
     resolveScenarioRunConfig,
     prepareRunConfig,
+    buildContextBuilder,
     prepareTurnInput,
     prepareAgentTurnExecution,
     commitSummaryCheckpoint,
@@ -51,6 +52,12 @@ export class SessionExecutionRunner {
     now,
   } = {}) {
     for (const [name, dependency] of Object.entries({
+      agentRunner,
+      buildContextBuilder,
+      prepareTurnInput,
+      assertPersistenceContextIdentity,
+      assertReusedUserTurnIdentity,
+      bindSessionTurnAttachments,
       saveExecutionReport,
       getExecutionTurnLogs,
     })) {
@@ -64,6 +71,7 @@ export class SessionExecutionRunner {
     this.initializeRunSessionRuntime = initializeRunSessionRuntime;
     this.resolveScenarioRunConfig = resolveScenarioRunConfig;
     this.prepareRunConfig = prepareRunConfig;
+    this.buildContextBuilder = buildContextBuilder;
     this.prepareTurnInput = prepareTurnInput;
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.commitSummaryCheckpoint = commitSummaryCheckpoint;
@@ -110,7 +118,7 @@ export class SessionExecutionRunner {
     if (Boolean(persistenceContext) !== Boolean(persistenceScopeValidation.scope)) {
       throw new TypeError("scoped Session execution requires persistence context and scope");
     }
-    this.assertPersistenceContextIdentity?.(persistenceContext, {
+    this.assertPersistenceContextIdentity(persistenceContext, {
       userId,
       sessionId,
       parentSessionId,
@@ -198,6 +206,7 @@ export class SessionExecutionRunner {
 
       const { buildContextPayload, canonicalAttachments, currentUserMessage, committedTurnResult } =
         await prepareCurrentUserTurn({
+          buildContextBuilder: this.buildContextBuilder,
           prepareTurnInput: this.prepareTurnInput,
           assertReusedUserTurnIdentity: this.assertReusedUserTurnIdentity,
           bindSessionTurnAttachments: this.bindSessionTurnAttachments,

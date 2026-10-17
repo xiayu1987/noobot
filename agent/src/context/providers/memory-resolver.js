@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export async function resolveLongMemory({
-  memoryService = null,
-  runtimeBasePath = "",
-  userId = "",
-} = {}) {
-  if (!memoryService || !runtimeBasePath) return "";
+export async function resolveLongMemory({ memoryService = null, userId = "" } = {}) {
+  if (!memoryService) return "";
   return memoryService.readLongMemory({ userId });
 }
