@@ -44,7 +44,18 @@ test("workflow run and node identities are stable and attempt-scoped", () => {
   });
   assert.deepEqual(first, again);
   assert.notEqual(first.nodeExecutionId, retry.nodeExecutionId);
-  assert.equal(first.commandId, `workflow-node:${first.nodeExecutionId}:send`);
+  assert.equal(first.commandId, first.turnScopeId);
+  assert.throws(
+    () => createWorkflowNodeIdentity({ node: { id: "a" } }),
+    /workflow run id is required/,
+  );
+  for (const attempt of [0, 1.5, "2"]) {
+    assert.throws(
+      () =>
+        createWorkflowNodeIdentity({ workflowRunId: "run-explicit", node: { id: "a" }, attempt }),
+      /attempt must be a positive integer/,
+    );
+  }
 });
 
 test("planning projection follows parsed flowtos and only action dependencies", () => {

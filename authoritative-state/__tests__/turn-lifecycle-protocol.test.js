@@ -32,6 +32,17 @@ import {
   createCommittedTurnLifecycleEnvelope,
 } from "../src/application/commit-turn-lifecycle.js";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
+import { deriveAgentExecutionId, EXECUTION_KIND } from "@noobot/session-protocol";
+
+function acceptedAgentExecution(turnScopeId, sessionId = "session-1") {
+  const executionId = deriveAgentExecutionId({ turnScopeId });
+  return {
+    sessionId,
+    executionId,
+    executionKind: EXECUTION_KIND.AGENT,
+    rootExecutionId: executionId,
+  };
+}
 
 test("turn lifecycle receipt identifies one authoritative delivery without carrying state", () => {
   const receipt = createTurnLifecycleReceipt({
@@ -170,6 +181,7 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
 
 test("durable command receipt returns the original envelope after outbox compaction", () => {
   const event = {
+    ...acceptedAgentExecution("turn-1"),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     commandId: "durable-command-1",
     causationId: "durable-command-1",
@@ -571,6 +583,7 @@ test("dialogProcessId is immutable after acceptance", () => {
   const accepted = transitionTurnLifecycle(
     {},
     {
+      ...acceptedAgentExecution("dialog-turn"),
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       commandId: "dialog-r1",
       causationId: "dialog-r1",
@@ -601,6 +614,7 @@ test("failed transition requires failure code and message", () => {
   const accepted = transitionTurnLifecycle(
     {},
     {
+      ...acceptedAgentExecution("failure-turn"),
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       commandId: "failure-r1",
       causationId: "failure-r1",
@@ -644,6 +658,7 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
     return result.lifecycle;
   };
   const identity = (turnScopeId, dialogProcessId) => ({
+    ...acceptedAgentExecution(turnScopeId),
     turnScopeId,
     dialogProcessId,
     messageId: `message-${turnScopeId}`,

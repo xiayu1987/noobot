@@ -38,7 +38,6 @@ export function createMessageHandler({
   webSocket,
   sendEvent,
   translateText,
-  normalizeLocale,
   mapAgentRunCommand,
   connectorAccessPort,
   resolveBot,
@@ -81,7 +80,6 @@ export function createMessageHandler({
     authInfo,
     sendEvent,
     translateText,
-    normalizeLocale,
     mapAgentRunCommand,
     connectorAccessPort,
     resolveBot,
@@ -321,12 +319,7 @@ async function settleAbortedRun(context, error) {
       description: timeoutMessage,
       errorObject: { message: timeoutMessage, code: "run_timeout" },
     });
-  } else if (
-    isUserStopRunAbort({
-      stopRequested: state.stopRequested,
-      abortSignal: state.currentAbortSignal,
-    })
-  ) {
+  } else if (isUserStopRunAbort(state.currentAbortSignal)) {
     await context.finalizeUserStopped(buildRunStateSnapshot());
   } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {
     await context.commitCurrentFailure(error, state.currentLifecyclePhase || TURN_PHASE.ACTION);

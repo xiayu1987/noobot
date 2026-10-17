@@ -22,7 +22,10 @@ import {
   TURN_PHASE,
   TURN_STATE,
 } from "@noobot/session-protocol";
-import { createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
+import {
+  createAcceptedAgentExecutionIdentity,
+  createProtocolTestCommand,
+} from "./chat-websocket-server.test-helpers.js";
 import { text } from "@noobot/shared/value";
 
 const TEST_EVENT_FACTS = Object.freeze({
@@ -112,16 +115,8 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
   let lastTurnAcceptance = null;
   const userMessages = new Map();
   const bot = {
-    async resolveExecutionIntent({ turnScopeId = "", runConfig = {} } = {}) {
-      const executionId = text(runConfig?.executionId) || `agent:${turnScopeId}`;
-      return {
-        executionId,
-        executionKind: text(runConfig?.executionKind) || "agent",
-        parentExecutionId: text(runConfig?.parentExecutionId),
-        rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
-        origin: runConfig?.origin && typeof runConfig.origin === "object" ? runConfig.origin : {},
-        stage: text(runConfig?.stage),
-      };
+    async resolveExecutionIntent({ turnScopeId } = {}) {
+      return createAcceptedAgentExecutionIdentity({ turnScopeId });
     },
     async applyTurnLifecycleEvent(input) {
       if (

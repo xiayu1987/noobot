@@ -11,7 +11,7 @@ const now = () => "2026-07-20T00:00:00.000Z";
 
 function turn(overrides = {}) {
   return {
-    turnScopeId: "turn-root",
+    turnScopeId: "root",
     executionId: "agent:root",
     executionKind: "agent",
     rootExecutionId: "agent:root",
@@ -57,7 +57,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       turnLifecycle: {
         turns: {
           child: turn({
-            turnScopeId: "turn-child",
+            turnScopeId: "child",
             executionId: "agent:child",
             parentExecutionId: "agent:root",
             rootExecutionId: "agent:root",
@@ -72,7 +72,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       turnLifecycle: {
         turns: {
           grandchild: turn({
-            turnScopeId: "turn-grandchild",
+            turnScopeId: "grandchild",
             executionId: "agent:grandchild",
             parentExecutionId: "agent:child",
             rootExecutionId: "agent:root",
@@ -99,7 +99,7 @@ test("execution recovery keeps lifecycle and thinking timing as separate authori
       turnLifecycle: { turns: { root: turn({ createdAt: "2026-07-20T00:00:05.000Z" }) } },
       turnTimings: [
         {
-          turnScopeId: "turn-root",
+          turnScopeId: "root",
           thinkingStartedAt: "2026-07-20T00:00:01.000Z",
         },
       ],
@@ -122,7 +122,7 @@ test("children query returns direct children only and preserves historical attem
       turnLifecycle: {
         turns: {
           a1: turn({
-            turnScopeId: "a1",
+            turnScopeId: "attempt-1",
             executionId: "agent:attempt-1",
             parentExecutionId: "agent:root",
           }),
@@ -135,7 +135,7 @@ test("children query returns direct children only and preserves historical attem
       turnLifecycle: {
         turns: {
           a2: turn({
-            turnScopeId: "a2",
+            turnScopeId: "attempt-2",
             executionId: "agent:attempt-2",
             parentExecutionId: "agent:root",
           }),
@@ -170,6 +170,7 @@ test("same execution identity resolves deterministically to the newest authorita
       turnLifecycle: {
         turns: {
           old: turn({
+            turnScopeId: "duplicate",
             executionId: "agent:duplicate",
             revision: 2,
             updatedAt: "2026-07-19T00:00:00.000Z",
@@ -182,6 +183,7 @@ test("same execution identity resolves deterministically to the newest authorita
       turnLifecycle: {
         turns: {
           newer: turn({
+            turnScopeId: "duplicate",
             executionId: "agent:duplicate",
             revision: 3,
             updatedAt: "2026-07-20T00:00:00.000Z",
@@ -199,11 +201,15 @@ test("duplicate executionId with different ownership is diagnosed and excluded",
   const reader = service([
     {
       sessionId: "left",
-      turnLifecycle: { turns: { left: turn({ executionId: "agent:duplicate" }) } },
+      turnLifecycle: {
+        turns: { left: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
+      },
     },
     {
       sessionId: "right",
-      turnLifecycle: { turns: { right: turn({ executionId: "agent:duplicate" }) } },
+      turnLifecycle: {
+        turns: { right: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
+      },
     },
   ]);
   const result = await reader.getExecution({ userId: "u1", executionId: "agent:duplicate" });
@@ -222,6 +228,7 @@ test("orphan execution remains visible as a root in the read model", async () =>
       turnLifecycle: {
         turns: {
           orphan: turn({
+            turnScopeId: "orphan",
             executionId: "agent:orphan",
             parentExecutionId: "agent:missing",
             rootExecutionId: "agent:missing",
@@ -250,7 +257,9 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
         sessionId: "u2-session",
         updatedAt: "2026-07-20T00:00:00.000Z",
         turnLifecycle: {
-          turns: { root: turn({ executionId: "agent:u2", rootExecutionId: "agent:u2" }) },
+          turns: {
+            root: turn({ turnScopeId: "u2", executionId: "agent:u2", rootExecutionId: "agent:u2" }),
+          },
         },
       },
     ],

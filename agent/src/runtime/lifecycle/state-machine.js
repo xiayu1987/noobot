@@ -71,6 +71,22 @@ export function bindLifecycleToRuntime(runtime = null, lifecycle = null) {
   return runtime;
 }
 
+function assertExecutionIdentityUnchanged(executionIdentity, origin, extra) {
+  const conflicts = Object.keys(executionIdentity).filter(
+    (field) =>
+      normalizeText(extra?.[field]) && normalizeText(extra[field]) !== executionIdentity[field],
+  );
+  if (extra?.origin !== undefined && JSON.stringify(extra.origin) !== JSON.stringify(origin)) {
+    conflicts.push("origin");
+  }
+  if (conflicts.length > 0) {
+    throw Object.assign(
+      new Error(`agent lifecycle execution identity is immutable: ${conflicts.join(",")}`),
+      { code: "AGENT_LIFECYCLE_EXECUTION_IDENTITY_CONFLICT" },
+    );
+  }
+}
+
 export function createAgentLifecycleMachine({
   eventListener = null,
   now = () => new Date().toISOString(),
@@ -81,12 +97,14 @@ export function createAgentLifecycleMachine({
   let revision = 0;
   let sequence = 0;
   let latestSnapshot = null;
-  let executionIdentity = {
+  const executionIdentity = Object.freeze({
     executionId: normalizeText(basePayload?.executionId),
-    executionKind: normalizeText(basePayload?.executionKind) || "agent",
+    executionKind: normalizeText(basePayload?.executionKind),
     parentExecutionId: normalizeText(basePayload?.parentExecutionId),
-    rootExecutionId: normalizeText(basePayload?.rootExecutionId || basePayload?.executionId),
-  };
+    rootExecutionId: normalizeText(basePayload?.rootExecutionId),
+    stage: normalizeText(basePayload?.stage),
+  });
+  const executionOrigin = isPlainObject(basePayload?.origin) ? { ...basePayload.origin } : {};
 
   const emit = (nextState, extra = {}) => {
     const branchState = isBranchState(nextState) ? nextState : "";
@@ -99,20 +117,7 @@ export function createAgentLifecycleMachine({
       currentState = state;
       currentBranchState = "";
     }
-    executionIdentity = {
-      executionId: normalizeText(extra?.executionId || executionIdentity.executionId),
-      executionKind:
-        normalizeText(extra?.executionKind || executionIdentity.executionKind) || "agent",
-      parentExecutionId: normalizeText(
-        extra?.parentExecutionId || executionIdentity.parentExecutionId,
-      ),
-      rootExecutionId: normalizeText(
-        extra?.rootExecutionId ||
-          executionIdentity.rootExecutionId ||
-          extra?.executionId ||
-          executionIdentity.executionId,
-      ),
-    };
+    assertExecutionIdentityUnchanged(executionIdentity, executionOrigin, extra);
     revision += 1;
     sequence += 1;
     const payload = {
@@ -129,6 +134,7 @@ export function createAgentLifecycleMachine({
         extra?.resumeFromStoppedSnapshot === true ||
         basePayload?.resumeFromStoppedSnapshot === true,
       ...executionIdentity,
+      origin: { ...executionOrigin },
       revision,
       sequence,
     };

@@ -9,6 +9,7 @@ import { runBotRuntimeHook } from "../../hook/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import {
   BOT_DISPATCH_DISPOSITION,
+  BOT_DISPATCH_ROOT_OWNER,
   isBotDispatchOutcome,
   resolveBotDispatchOutcome,
 } from "@noobot/agent-transport-protocol/bot-dispatch";
@@ -18,7 +19,7 @@ import {
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
   const messageId = text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
@@ -92,40 +93,23 @@ function buildDispatchModelContext({
   });
 }
 
-function normalizeDispatchOwner({ owner, source, executionKind, origin, stage }) {
-  return {
-    owner: text(owner),
-    source: text(source) || "agent_dispatch",
-    executionKind: (text(executionKind) || "agent").toLowerCase(),
-    origin: isPlainObject(origin) ? { ...origin } : {},
-    stage: text(stage),
-  };
-}
-
 function createDispatchClaim({ lifecycle, dispatchRuntime, syncLifecycleRuntimeState }) {
   const state = { claimed: false, owner: null };
-  const claim = ({
-    owner = "",
-    source = "agent_dispatch",
-    executionId = "",
-    executionKind = "agent",
-    parentExecutionId = "",
-    rootExecutionId = "",
-    origin = {},
-    stage = "",
-  } = {}) => {
+  const claim = ({ owner = "", source = "", ...unexpected } = {}) => {
+    const unexpectedFields = Object.keys(unexpected);
+    if (unexpectedFields.length > 0) {
+      throw new TypeError(
+        `agent dispatch claim only declares ownership: ${unexpectedFields.join(",")}`,
+      );
+    }
+    if (!text(owner)) throw new TypeError("agent dispatch claim requires owner");
+    if (!text(source)) throw new TypeError("agent dispatch claim requires source");
     if (state.claimed) return false;
     state.claimed = true;
-    state.owner = normalizeDispatchOwner({ owner, source, executionKind, origin, stage });
+    state.owner = { owner: text(owner), source: text(source) };
     lifecycle.enterRunning({
       executionOwner: state.owner.owner,
       source: state.owner.source,
-      executionId: text(executionId),
-      executionKind: state.owner.executionKind,
-      parentExecutionId: text(parentExecutionId),
-      rootExecutionId: text(rootExecutionId),
-      origin: state.owner.origin,
-      stage: state.owner.stage,
     });
     syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
     return true;
@@ -149,7 +133,7 @@ function assertDispatchOwnership(hookResult, dispatchOutcome, claimState) {
     throw dispatchError(
       "claimed bot dispatch cannot be released to the root Agent",
       "BOT_DISPATCH_CLAIM_RELEASE_FORBIDDEN",
-      { dispatchOwner: claimOwner?.owner || claimOwner?.source || "claimed_dispatch" },
+      { dispatchOwner: claimOwner.owner },
     );
   }
   if (hasStructuredHandledOutcome && !claimed) {
@@ -159,7 +143,7 @@ function assertDispatchOwnership(hookResult, dispatchOutcome, claimState) {
       { dispatchOwner: dispatchOutcome.owner },
     );
   }
-  if (claimed && claimOwner?.owner && isHandled && dispatchOutcome.owner !== claimOwner.owner) {
+  if (claimed && isHandled && dispatchOutcome.owner !== claimOwner.owner) {
     throw dispatchError(
       `bot dispatch claim/outcome owner mismatch: ${claimOwner.owner},${dispatchOutcome.owner}`,
       "BOT_DISPATCH_OWNERSHIP_CONFLICT",
@@ -172,11 +156,9 @@ function emitDispatchRouted(runtimeEventListener, dispatchOutcome, claimState) {
   const claimOwner = claimState.owner;
   emitEvent(runtimeEventListener, "bot_dispatch_routed", {
     disposition: dispatchOutcome.disposition,
-    owner: dispatchOutcome.owner || "root_agent",
+    owner: dispatchOutcome.owner,
     claimed: claimState.claimed,
     claimedSource: claimOwner?.source || "",
-    executionKind: claimOwner?.executionKind || "agent",
-    stage: claimOwner?.stage || "",
     failureCode: text(dispatchOutcome?.failure?.code),
   });
 }
@@ -211,7 +193,7 @@ async function runRootAgent({
   hookArgs,
 }) {
   try {
-    claim({ source: "agent_dispatch" });
+    claim({ owner: BOT_DISPATCH_ROOT_OWNER, source: "agent_dispatch" });
     return await agentRunner({
       errorLogger,
       agentContext: runtimeAgentContext,
@@ -249,7 +231,7 @@ function acceptAgentResultMessages({
   });
   emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
     disposition: dispatchOutcome.disposition,
-    owner: dispatchOutcome.owner || "root_agent",
+    owner: dispatchOutcome.owner,
     assistantMessageId: text(agentResult?.assistantMessageId),
     outputChars: String(agentResult?.output || "").length,
     resultAttachmentCount: Array.isArray(agentResult?.attachments)

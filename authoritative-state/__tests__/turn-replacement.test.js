@@ -5,17 +5,32 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTurnReplacementCommit } from "@noobot/session-protocol";
+import {
+  createTurnReplacementCommit,
+  deriveAgentExecutionId,
+  EXECUTION_KIND,
+} from "@noobot/session-protocol";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 import { commitTurnReplacement } from "../src/application/commit-turn-replacement.js";
 import { createAuthoritativeTurnSnapshot } from "../src/application/authority-query-service.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol/turn-lifecycle";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 
+function acceptedAgentExecution(turnScopeId, sessionId = "session-1") {
+  const executionId = deriveAgentExecutionId({ turnScopeId });
+  return {
+    sessionId,
+    executionId,
+    executionKind: EXECUTION_KIND.AGENT,
+    rootExecutionId: executionId,
+  };
+}
+
 function acceptedTurn() {
   return commitTurnLifecycle({
     lifecycle: {},
     event: {
+      ...acceptedAgentExecution("turn-old"),
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       commandId: "send-old",
       causationId: "send-old",
@@ -201,6 +216,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
     sourceAccepted.lifecycle,
   );
   const continued = transitionTurnLifecycle(sourceStopped, {
+    ...acceptedAgentExecution("turn-target"),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     commandId: "continue-target",
     causationId: "continue-target",
@@ -266,4 +282,38 @@ test("turn replacement rejects removing a Continue source while its target survi
   assert.equal(committed.reason, "turn_replacement_breaks_continuation_source");
   assert.ok(committed.lifecycle.turns["turn-old"]);
   assert.ok(committed.lifecycle.turns["turn-target"]);
+});
+
+test("replaying a follow-up event without identity fields deduplicates and a conflicting identity is rejected", () => {
+  const accepted = acceptedTurn();
+  const processing = {
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    commandId: "processing-old",
+    causationId: "processing-old",
+    sessionId: "session-1",
+    turnScopeId: "turn-old",
+    dialogProcessId: "dialog-old",
+    phase: TURN_PHASE.PROCESSING,
+  };
+  const started = commitTurnLifecycle({
+    lifecycle: accepted.lifecycle,
+    event: processing,
+    createEventId: () => "event-processing-old",
+  });
+  assert.equal(started.applied, true);
+
+  const replay = commitTurnLifecycle({
+    lifecycle: started.lifecycle,
+    event: processing,
+    createEventId: () => "must-not-be-used",
+  });
+  assert.equal(replay.deduplicated, true);
+
+  const conflicting = commitTurnLifecycle({
+    lifecycle: started.lifecycle,
+    event: { ...processing, executionId: deriveAgentExecutionId({ turnScopeId: "turn-other" }) },
+    createEventId: () => "must-not-be-used",
+  });
+  assert.equal(conflicting.applied, false);
+  assert.equal(conflicting.reason, "idempotency_key_reused");
 });

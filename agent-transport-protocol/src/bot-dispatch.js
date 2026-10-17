@@ -9,13 +9,16 @@ import { isPlainObject, text as clean } from "@noobot/shared/value";
 const BOT_DISPATCH_OUTCOME_KIND = "noobot.bot_dispatch_outcome";
 const BOT_DISPATCH_OUTCOME_VERSION = 1;
 export const BOT_DISPATCH_DISPOSITION = Object.freeze({ PASS: "pass", HANDLED: "handled" });
+export const BOT_DISPATCH_ROOT_OWNER = "root_agent";
 
 export function createBotDispatchPass({ owner = "" } = {}) {
+  const normalizedOwner = clean(owner);
+  if (!normalizedOwner) throw new Error("pass bot dispatch outcome requires owner");
   return Object.freeze({
     kind: BOT_DISPATCH_OUTCOME_KIND,
     version: BOT_DISPATCH_OUTCOME_VERSION,
     disposition: BOT_DISPATCH_DISPOSITION.PASS,
-    owner: clean(owner),
+    owner: normalizedOwner,
   });
 }
 
@@ -68,5 +71,5 @@ export function resolveBotDispatchOutcome(hookResult = {}) {
     throw error;
   }
   if (handled.length === 1) return handled[0];
-  return createBotDispatchPass();
+  return createBotDispatchPass({ owner: BOT_DISPATCH_ROOT_OWNER });
 }

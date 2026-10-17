@@ -5,31 +5,30 @@
  */
 import { recordServiceWebSocketRuntimeError } from "./runtime-events.js";
 import { buildAbortErrorMessage, buildStoppedPartialAssistant } from "./stop-lifecycle.js";
-import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  TURN_PHASE,
+  createTurnLifecycleCommandId,
+  deriveTurnCommandId,
+  resolveUserStopPayload,
+} from "@noobot/session-protocol";
 import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
   createAgentCommandReceipt,
 } from "@noobot/agent-transport-protocol";
-import { firstText, text } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
-export function snapshotRunState({
-  runMeta = null,
-  turnScopeId = "",
-  stopPayload = null,
-  abortSignal = null,
-  locale = "",
-} = {}) {
-  const resolvedTurnScopeId = firstText(runMeta?.turnScopeId, turnScopeId);
+export function snapshotRunState({ runMeta, abortSignal = null, locale = "" }) {
+  if (!runMeta) throw new TypeError("run_state_snapshot_requires_run_meta");
   const identity = {
-    userId: text(runMeta?.userId),
-    sessionId: text(runMeta?.sessionId),
-    parentSessionId: text(runMeta?.parentSessionId),
-    dialogProcessId: text(runMeta?.dialogProcessId),
-    turnScopeId: resolvedTurnScopeId,
-    commandRoot: text(runMeta?.commandId) || resolvedTurnScopeId,
+    userId: text(runMeta.userId),
+    sessionId: text(runMeta.sessionId),
+    parentSessionId: text(runMeta.parentSessionId),
+    dialogProcessId: text(runMeta.dialogProcessId),
+    turnScopeId: text(runMeta.turnScopeId),
   };
-  return { runMeta, identity, stopPayload, abortSignal, locale };
+  return { runMeta, identity, abortSignal, locale };
 }
 
 export function createTurnFinalizer({
@@ -56,7 +55,7 @@ export function createTurnFinalizer({
     );
   const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
     const commandId = createTurnLifecycleCommandId({
-      commandId: state.identity.commandRoot,
+      commandId: deriveTurnCommandId(state.identity.turnScopeId),
       eventType: TURN_EVENT.FAILED,
       phase: TURN_PHASE.PROCESSING,
     });
@@ -90,20 +89,19 @@ export function createTurnFinalizer({
   };
 
   const finalizeUserStopped = async (state) => {
-    const stopPayload = state.stopPayload || state.abortSignal?.reason?.stopPayload || {};
+    const stopPayload = resolveUserStopPayload({ abortSignal: state.abortSignal });
     const stoppedMessage = translateText("ws.dialogStoppedByUser", state.locale);
     const stoppedPartialAssistant = buildStoppedPartialAssistant({
       stopPayload,
       runMeta: state.runMeta,
       fallbackMessage: stoppedMessage,
     });
-    const stopCommandId = text(stopPayload?.commandId);
-    if (!stopCommandId) throw new TypeError("user stop finalization requires the stop commandId");
+    const stopCommandId = text(stopPayload.commandId);
     const processed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: stoppedPartialAssistant.sessionId,
       parentSessionId: state.identity.parentSessionId,
-      turnScopeId: stoppedPartialAssistant.turnScopeId || state.identity.turnScopeId,
+      turnScopeId: stoppedPartialAssistant.turnScopeId,
       dialogProcessId: stoppedPartialAssistant.dialogProcessId,
       commandId: createTurnLifecycleCommandId({
         commandId: stopCommandId,
@@ -132,7 +130,7 @@ export function createTurnFinalizer({
       userId: state.identity.userId,
       sessionId: stoppedPartialAssistant.sessionId,
       parentSessionId: state.identity.parentSessionId,
-      turnScopeId: stoppedPartialAssistant.turnScopeId || state.identity.turnScopeId,
+      turnScopeId: stoppedPartialAssistant.turnScopeId,
       dialogProcessId: stoppedPartialAssistant.dialogProcessId,
       commandId: completionCommitId,
       causationId: stopCommandId,
@@ -157,7 +155,8 @@ export function createTurnFinalizer({
   };
 
   const finalizeCompleted = async (state, { commandId = "" } = {}) => {
-    const rootCommandId = text(commandId) || state.identity.commandRoot;
+    const rootCommandId = text(commandId);
+    if (!rootCommandId) throw new TypeError("turn completion requires the accepted commandId");
     const completionCommitId = createTurnLifecycleCommandId({
       commandId: rootCommandId,
       eventType: TURN_EVENT.COMPLETED,

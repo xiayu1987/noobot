@@ -31,7 +31,7 @@ export async function assertFileMutationVersion(filePath, expectedSha256) {
     `file changed since it was loaded: ${filePath}; read the file again and rebuild the patch`,
   );
   error.code = "file_mutation_conflict";
-  error.status = 409;
+  error.statusCode = 409;
   error.details = { filePath, expectedSha256, actualSha256 };
   throw error;
 }

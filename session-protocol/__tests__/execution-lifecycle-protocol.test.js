@@ -23,14 +23,47 @@ import {
   resolveExecutionAbortMessage,
   resolveExecutionAbortReason,
   resolveExecutionAbortType,
+  resolveUserStopPayload,
 } from "@noobot/session-protocol/execution-abort";
 
-test("agent execution identity is a stable compatibility projection of turn scope", () => {
+test("agent execution id is derived only from turn scope", () => {
   assert.equal(deriveAgentExecutionId({ turnScopeId: "turn-1" }), "agent:turn-1");
-  const result = validateExecutionIdentity({ sessionId: "session-1", turnScopeId: "turn-1" });
-  assert.equal(result.valid, true);
-  assert.equal(result.identity.executionId, "agent:turn-1");
-  assert.equal(result.identity.rootExecutionId, "agent:turn-1");
+  assert.throws(() => deriveAgentExecutionId({}), { code: "EXECUTION_TURN_SCOPE_REQUIRED" });
+  const identity = {
+    executionId: "agent:turn-1",
+    executionKind: "agent",
+    rootExecutionId: "agent:turn-1",
+    sessionId: "session-1",
+    turnScopeId: "turn-1",
+  };
+  assert.equal(validateExecutionIdentity(identity).valid, true);
+});
+
+test("execution identity validation rejects derived-field gaps instead of filling them", () => {
+  const errorsOf = (source) => validateExecutionIdentity(source).errors;
+  assert.deepEqual(errorsOf({ sessionId: "session-1", turnScopeId: "turn-1" }), [
+    "missing_execution_id",
+    "invalid_execution_kind",
+    "missing_root_execution_id",
+  ]);
+  assert.deepEqual(
+    errorsOf({
+      executionId: "agent:other",
+      executionKind: "agent",
+      rootExecutionId: "agent:other",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+    }),
+    ["agent_execution_id_not_derived"],
+  );
+  assert.deepEqual(
+    errorsOf({
+      executionId: "workflow:turn-1",
+      executionKind: "workflow",
+      rootExecutionId: "workflow:other",
+    }),
+    ["root_execution_id_mismatch"],
+  );
 });
 
 test("execution query contract covers every query command with one response wire event", () => {
@@ -65,23 +98,25 @@ test("execution tree supports arbitrary child agent depth", () => {
   const tree = buildExecutionTree([
     { executionId: "root", executionKind: "workflow", rootExecutionId: "root" },
     {
-      executionId: "child",
+      executionId: "agent:child",
       executionKind: "agent",
       rootExecutionId: "root",
       parentExecutionId: "root",
       sessionId: "s1",
+      turnScopeId: "child",
     },
     {
-      executionId: "grandchild",
+      executionId: "agent:grandchild",
       executionKind: "agent",
       rootExecutionId: "root",
-      parentExecutionId: "child",
+      parentExecutionId: "agent:child",
       sessionId: "s2",
+      turnScopeId: "grandchild",
     },
   ]);
   assert.deepEqual(tree.rootExecutionIds, ["root"]);
-  assert.deepEqual(tree.executions.root.childExecutionIds, ["child"]);
-  assert.deepEqual(tree.executions.child.childExecutionIds, ["grandchild"]);
+  assert.deepEqual(tree.executions.root.childExecutionIds, ["agent:child"]);
+  assert.deepEqual(tree.executions["agent:child"].childExecutionIds, ["agent:grandchild"]);
 });
 
 test("structured signal reason is authoritative over a generic SDK abort error", () => {
@@ -160,4 +195,22 @@ test("provider error types cannot enter the execution abort protocol", () => {
     () => createExecutionAbortReason({ type: "invalid_request_error" }),
     /supported type/,
   );
+});
+
+test("user stop payload is read only from a user_stop abort reason with a stop commandId", () => {
+  const stopPayload = { commandId: "stop:turn-1", turnScopeId: "turn-1" };
+  const stopped = new AbortController();
+  stopped.abort(createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.USER_STOP, stopPayload }));
+  assert.deepEqual(resolveUserStopPayload({ abortSignal: stopped.signal }), stopPayload);
+
+  const timedOut = new AbortController();
+  timedOut.abort(createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT }));
+  assert.throws(() => resolveUserStopPayload({ abortSignal: timedOut.signal }), /user_stop/);
+  assert.throws(() => resolveUserStopPayload({ abortSignal: null }), /user_stop/);
+
+  const missing = new AbortController();
+  missing.abort(
+    createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.USER_STOP, stopPayload: {} }),
+  );
+  assert.throws(() => resolveUserStopPayload({ abortSignal: missing.signal }), /commandId/);
 });

@@ -14,14 +14,19 @@ import { createTestLifecycleEnvelope } from "../routes/chat-websocket-server.tur
 function createListener(dispatchResult, runHandle = {}) {
   const calls = [];
   const context = {
-    state: { currentRunMeta: { dialogProcessId: "dialog-1" }, currentTurnScopeId: "scope-1" },
+    state: { currentRunMeta: { dialogProcessId: "dialog-1" } },
     lifecycle: {},
     dispatchAuthorityEvents: async (request) => {
       calls.push(request);
       return dispatchResult;
     },
   };
-  const run = { userId: "u1", sessionId: "root-session", parentSessionId: "" };
+  const run = {
+    userId: "u1",
+    sessionId: "root-session",
+    parentSessionId: "",
+    turnScopeId: "scope-1",
+  };
   const active = { runHandle, runMeta: { turnScopeId: "scope-1" } };
   const { eventListener } = createMessageRunEventListener(context, run, {}, active);
   return { eventListener, calls };

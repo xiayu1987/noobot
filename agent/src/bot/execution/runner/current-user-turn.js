@@ -8,7 +8,10 @@ import { resolveContextMessageId } from "@noobot/context-protocol/message/codec"
 import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
 import { assertTurnAttachmentsBoundEventData } from "@noobot/session-protocol/turn-attachment-bind";
-import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
+import {
+  createTurnAcceptanceReceipt,
+  deriveAttachmentBindCommandId,
+} from "@noobot/session-protocol";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import { text } from "@noobot/shared/value";
 
@@ -216,7 +219,7 @@ export async function prepareCurrentUserTurn({
         messageUid: text(currentUserMessage?.messageUid),
         attachments: canonicalAttachments,
         expectedAggregateVersion: committedTurnResult?.aggregateVersion,
-        commandId: `${resolvedRunConfig.commandId}:attachments.bind`,
+        commandId: deriveAttachmentBindCommandId(turnScopeId),
         persistenceContext,
       });
       currentUserMessage = attachmentBinding?.userMessage;

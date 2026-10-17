@@ -17,7 +17,7 @@ import {
   decideAggregateConcurrency,
   materializeTurnTerminalMessages,
   normalizeDialogProcessId,
-  resolveTurnCommitAction,
+  requireTurnCommitAction,
   validateSessionProvisionIntent,
   requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
@@ -173,7 +173,7 @@ function materializeAcceptedUserMessage({
       userMetaMaterialized: input.userMetaMaterialized === true,
       attachments: [],
       turnCommit: {
-        action: resolveTurnCommitAction(event.action),
+        action: requireTurnCommitAction(event.action),
         commandId: text(event.causationId),
         ...(event.continuationSource
           ? {

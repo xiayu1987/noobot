@@ -11,25 +11,37 @@ import {
   decideCommandIdempotency,
   decideTurnContinuation,
   deriveAuthoritativeTurnCapabilities,
-  deriveAgentExecutionId,
   deriveTurnExecutionState,
-  EXECUTION_KIND,
   isRetryableFinalizeFailure,
   isTerminalTurnState,
   normalizeTurnContinuationSource,
+  validateExecutionIdentity,
 } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
 
-function normalizeOrigin(inputOrigin, currentOrigin) {
-  if (!inputOrigin || typeof inputOrigin !== "object" || Array.isArray(inputOrigin)) {
-    return currentOrigin || {};
-  }
+function normalizeOrigin(origin) {
+  if (!isPlainObject(origin)) return {};
   return Object.fromEntries(
-    Object.entries(inputOrigin).sort(([left], [right]) => left.localeCompare(right)),
+    Object.entries(origin).sort(([left], [right]) => left.localeCompare(right)),
   );
+}
+
+const EXECUTION_IDENTITY_FIELDS = Object.freeze([
+  "executionId",
+  "executionKind",
+  "parentExecutionId",
+  "rootExecutionId",
+  "stage",
+]);
+
+function pickExecutionIdentity(source) {
+  return {
+    ...Object.fromEntries(EXECUTION_IDENTITY_FIELDS.map((field) => [field, text(source[field])])),
+    origin: normalizeOrigin(source.origin),
+  };
 }
 
 export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
@@ -38,22 +50,9 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
   const commandId = text(input.commandId);
   const eventType = text(input.eventType);
   const phase = text(input.phase);
-  const executionIdentity = {
-    executionId: deriveAgentExecutionId({
-      executionId: input.executionId || currentValue.executionId,
-      turnScopeId,
-    }),
-    executionKind: text(input.executionKind || currentValue.executionKind) || EXECUTION_KIND.AGENT,
-    parentExecutionId: text(input.parentExecutionId || currentValue.parentExecutionId),
-    rootExecutionId:
-      text(input.rootExecutionId || currentValue.rootExecutionId) ||
-      deriveAgentExecutionId({
-        executionId: input.executionId || currentValue.executionId,
-        turnScopeId,
-      }),
-    origin: normalizeOrigin(input.origin, currentValue.origin),
-    stage: text(input.stage || currentValue.stage),
-  };
+  const executionIdentity = current
+    ? pickExecutionIdentity(currentValue)
+    : pickExecutionIdentity(input);
   const presentationMessageId = text(
     input.presentationMessageId || currentValue.presentationMessageId,
   );
@@ -142,29 +141,33 @@ function requestHashFor(request) {
       input.finalizePayload && typeof input.finalizePayload === "object"
         ? input.finalizePayload
         : null,
-    ...request.executionIdentity,
+    ...pickExecutionIdentity(input),
   });
 }
 
-function validateCurrentIdentity(request) {
-  const { current, executionIdentity, input } = request;
-  if (current) {
-    const immutableFields = [
-      "executionId",
-      "executionKind",
-      "parentExecutionId",
-      "rootExecutionId",
-    ];
-    const conflict = immutableFields.some(
-      (field) => text(current[field]) !== text(executionIdentity[field]),
-    );
-    if (
-      conflict ||
-      JSON.stringify(current.origin || {}) !== JSON.stringify(executionIdentity.origin || {})
-    ) {
-      return "execution_identity_conflict";
-    }
+function executionIdentityFailure({ current, executionIdentity, input, turnScopeId }) {
+  if (!current) {
+    const validation = validateExecutionIdentity({
+      ...executionIdentity,
+      sessionId: input.sessionId,
+      turnScopeId,
+    });
+    return validation.valid ? "" : "execution_identity_invalid";
   }
+  const conflict = EXECUTION_IDENTITY_FIELDS.some(
+    (field) => text(input[field]) && text(input[field]) !== executionIdentity[field],
+  );
+  const originConflict =
+    isPlainObject(input.origin) &&
+    Object.keys(input.origin).length > 0 &&
+    JSON.stringify(normalizeOrigin(input.origin)) !== JSON.stringify(executionIdentity.origin);
+  return conflict || originConflict ? "execution_identity_conflict" : "";
+}
+
+function validateCurrentIdentity(request) {
+  const { current, input } = request;
+  const identityFailure = executionIdentityFailure(request);
+  if (identityFailure) return identityFailure;
   if (
     input.expectedRevision !== undefined &&
     Number(input.expectedRevision) !== Number(current?.revision || 0)

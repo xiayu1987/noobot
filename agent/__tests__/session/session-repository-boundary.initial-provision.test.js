@@ -12,6 +12,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 
 async function withTempWorkspace(operation) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-initial-provision-"));
@@ -45,6 +46,7 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: "send",
+    ...createAcceptedAgentExecution(turnScopeId, "session-1"),
     userMessage: {
       content: "persist me before execution",
       messageId: `user-message-${turnScopeId}`,

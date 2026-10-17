@@ -30,6 +30,7 @@ import {
 } from "../../ws/chat-websocket/run-registry.js";
 
 import { createTestLifecycleEnvelope } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
+import { createAcceptedAgentExecutionIdentity } from "./chat-websocket-server.test-helpers.js";
 
 test("plugin artifact outbox commit is sent through the active WebSocket before acknowledgement", async () => {
   const envelope = createPluginArtifactEnvelope({
@@ -114,6 +115,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
       commandId: "command-send-retry",
       causationId: "command-send-retry",
       eventType: TURN_EVENT.ACTION_ACCEPTED,
+      ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-send-retry" }),
       phase: TURN_PHASE.ACTION,
       action: "send",
       messageId: "message-send-retry",
@@ -527,6 +529,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
       commandId: "command-ack-retry",
       causationId: "command-ack-retry",
       eventType: TURN_EVENT.ACTION_ACCEPTED,
+      ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-ack-retry" }),
       phase: TURN_PHASE.ACTION,
       action: "send",
       messageId: "message-ack-retry",

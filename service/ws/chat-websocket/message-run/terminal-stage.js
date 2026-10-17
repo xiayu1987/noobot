@@ -24,12 +24,7 @@ export async function finalizeRunResult(context, run, accepted, active) {
     });
     return;
   }
-  if (
-    isUserStopRunAbort({
-      stopRequested: context.state.stopRequested,
-      abortSignal: context.state.currentAbortSignal,
-    })
-  ) {
+  if (isUserStopRunAbort(context.state.currentAbortSignal)) {
     await context.finalizeUserStopped(context.buildRunStateSnapshot());
     return;
   }
@@ -37,7 +32,7 @@ export async function finalizeRunResult(context, run, accepted, active) {
     userId: run.userId,
     sessionId: run.sessionId,
     parentSessionId: run.parentSessionId,
-    turnScopeId: context.state.currentTurnScopeId,
+    turnScopeId: run.turnScopeId,
     dialogProcessId: run.dialogProcessId,
     commandId: createTurnLifecycleCommandId({
       commandId: accepted.commandId,

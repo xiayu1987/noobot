@@ -9,6 +9,7 @@ import path from "node:path";
 import { after } from "node:test";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -76,6 +77,7 @@ export async function acceptTurn(
     messageId: `turn-${turnScopeId}`,
     presentationMessageId: `presentation-${turnScopeId}`,
     expectedRevision: 0,
+    ...createAcceptedAgentExecution(turnScopeId, extra.sessionId ?? "s1"),
     userMessage: {
       content,
       messageId,

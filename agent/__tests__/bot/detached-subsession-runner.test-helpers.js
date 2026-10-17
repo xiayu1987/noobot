@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { TOOL_NAME } from "../../src/tools/constants/index.js";
+
+export const DETACHED_REQUEST_METADATA = Object.freeze({ scope: TOOL_NAME.CALL_MCP_TASK });
 
 export function createDeps(overrides = {}) {
   const calls = {
@@ -141,7 +144,6 @@ export function createCompleteStrategy(overrides = {}) {
     parentDialogProcessId: "parent-dialog",
     dialogProcessId: "sub-dialog",
     turnScopeId,
-    commandId: turnScopeId,
     executionId,
     rootExecutionId: executionId,
     relativeDir: "runtime/plugin-data/workflow/session/root/node-a",

@@ -25,7 +25,7 @@ import {
   normalizeTurnCommitMetadata,
   normalizeCommandReceipt,
   resolveSessionArtifactSchemaVersion,
-  resolveTurnCommitAction,
+  isTurnCommitAction,
 } from "@noobot/session-protocol";
 import {
   completedSemanticTransferMigrationNames,
@@ -65,8 +65,17 @@ function migrateArtifactSchema(document, migrations, sourceSchemaVersion) {
   return true;
 }
 
+function requireMigratableTurnCommitAction(turnCommit) {
+  if (isTurnCommitAction(turnCommit?.action)) return turnCommit.action;
+  throw migrationError(
+    "Session message turnCommit action is not a protocol commit action",
+    "SESSION_TURN_COMMIT_UNMIGRATABLE",
+  );
+}
+
 function migrateTurnCommitMetadata(message) {
   if (message.turnCommit === undefined) return false;
+  if (text(message.turnCommit?.commandId)) requireMigratableTurnCommitAction(message.turnCommit);
   const canonical = normalizeTurnCommitMetadata(message.turnCommit);
   if (JSON.stringify(message.turnCommit) === JSON.stringify(canonical)) return false;
   if (canonical) message.turnCommit = canonical;
@@ -409,7 +418,7 @@ function migrateTurnCommitReceipts(context) {
     const commandId = text(turnCommit?.commandId);
     if (!commandId) continue;
     const requestHash = createTurnCommitFingerprint({
-      action: resolveTurnCommitAction(turnCommit.action),
+      action: requireMigratableTurnCommitAction(turnCommit),
       content: text(message.content),
       turnScopeId: text(message.turnScopeId),
       resumeDialogProcessId: text(turnCommit.resumeDialogProcessId),

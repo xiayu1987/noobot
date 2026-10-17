@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as clean } from "@noobot/shared/value";
-import { EXECUTION_KIND, normalizeExecutionIdentity } from "./execution-lifecycle.js";
+import { normalizeExecutionIdentity } from "./execution-lifecycle.js";
 import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
 import {
@@ -274,7 +274,7 @@ export function createTurnLifecycleEnvelope({
   failure = null,
   payload = {},
   executionId = "",
-  executionKind = EXECUTION_KIND.AGENT,
+  executionKind = "",
   parentExecutionId = "",
   rootExecutionId = "",
   origin = {},

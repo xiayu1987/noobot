@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createAgentDetachedSubSessionStrategy } from "../../src/bot/session/detached-subsession-strategy.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { DETACHED_REQUEST_METADATA } from "./detached-subsession-runner.test-helpers.js";
 
 test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for tool/model switch consistency", () => {
   const engine = new SessionExecutionEngine({});
@@ -188,6 +189,7 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
       runConfig: {},
     },
     message: "node task",
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createAgentDetachedSubSessionStrategy({
       userId: "u1",
       parentSessionId: "parent-session",

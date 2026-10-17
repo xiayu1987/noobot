@@ -11,6 +11,7 @@ import {
 } from "./useChatSession.test-helpers.js";
 import { useChatSession } from "../../../../../src/modules/chat/composables/useChatSession.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { createPinia, setActivePinia } from "pinia";
 import { ref } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
@@ -52,6 +53,8 @@ function canonicalExecutionQueryEvent({ family, eventType, commandId, sequence, 
     payload,
   });
 }
+const CHILD_AGENT_ID = deriveAgentExecutionId({ turnScopeId: "child-turn" });
+
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -594,7 +597,7 @@ describe("useChatSession reconnect replay", () => {
     };
 
     const child = {
-      executionId: "child-agent",
+      executionId: CHILD_AGENT_ID,
       executionKind: "agent",
       parentExecutionId: "workflow-root",
       rootExecutionId: "workflow-root",
@@ -620,7 +623,7 @@ describe("useChatSession reconnect replay", () => {
             tree: {
               executions: {
                 "workflow-root": store.turnRuntimeRegistry.executions["workflow-root"],
-                "child-agent": child,
+                [CHILD_AGENT_ID]: child,
               },
             },
           },
@@ -661,9 +664,9 @@ describe("useChatSession reconnect replay", () => {
         knownLifecycleSequenceMap: { "workflow-session": 1 },
       }),
     );
-    expect(store.turnRuntimeRegistry.executions["child-agent"]).toMatchObject(child);
+    expect(store.turnRuntimeRegistry.executions[CHILD_AGENT_ID]).toMatchObject(child);
     expect(store.turnRuntimeRegistry.childExecutionIdsByParentId["workflow-root"]).toEqual([
-      "child-agent",
+      CHILD_AGENT_ID,
     ]);
     expect(store.turnRuntimeRegistry.executions["workflow-root"]).toMatchObject({
       revision: 2,

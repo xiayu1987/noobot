@@ -94,7 +94,7 @@ export function registerWorkspaceRoutes(
     const isSandbox = text(req?.query?.isSandbox).toLowerCase();
     if (isSandbox !== "false") {
       const error = new Error("Host file access requires non-sandbox attachment metadata.");
-      error.status = 403;
+      error.statusCode = 403;
       error.code = "host_access_requires_non_sandbox";
       throw error;
     }
@@ -109,14 +109,14 @@ export function registerWorkspaceRoutes(
     }
     if (!path.isAbsolute(hostPath)) {
       const error = new Error("Host file path must be absolute.");
-      error.status = 400;
+      error.statusCode = 400;
       error.code = "not_absolute";
       throw error;
     }
     const fileStats = await stat(hostPath);
     if (!fileStats.isFile()) {
       const error = new Error(translateText("common.pathIsNotFile", req.locale));
-      error.status = 400;
+      error.statusCode = 400;
       error.code = "not_file";
       throw error;
     }

@@ -16,11 +16,18 @@ export function normalizeTurnCommitAction(value = "") {
   return clean(value).toLowerCase();
 }
 
-export function resolveTurnCommitAction(value = "") {
+export function isTurnCommitAction(value = "") {
+  return TURN_COMMIT_ACTION_VALUES.includes(normalizeTurnCommitAction(value));
+}
+
+export function requireTurnCommitAction(value = "") {
   const normalized = normalizeTurnCommitAction(value);
-  return normalized === TURN_COMMIT_ACTION.CONTINUE
-    ? TURN_COMMIT_ACTION.CONTINUE
-    : TURN_COMMIT_ACTION.SEND;
+  if (!TURN_COMMIT_ACTION_VALUES.includes(normalized)) {
+    throw Object.assign(new TypeError(`invalid turn commit action: ${String(value)}`), {
+      code: "TURN_COMMIT_ACTION_INVALID",
+    });
+  }
+  return normalized;
 }
 
 export function isTurnCommitContinuation(value = "") {

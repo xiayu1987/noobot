@@ -31,8 +31,24 @@ import {
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
 import { TURN_EVENT, materializeTurnTerminalMessages } from "@noobot/session-protocol";
+import {
+  deriveAgentExecutionId,
+  EXECUTION_KIND,
+} from "@noobot/session-protocol/execution-lifecycle";
 import { createChatRunService } from "../../services/chat-run-service.js";
 import { text } from "@noobot/shared/value";
+
+export function createAcceptedAgentExecutionIdentity({ turnScopeId } = {}) {
+  const executionId = deriveAgentExecutionId({ turnScopeId });
+  return {
+    executionId,
+    executionKind: EXECUTION_KIND.AGENT,
+    parentExecutionId: "",
+    rootExecutionId: executionId,
+    origin: {},
+    stage: "",
+  };
+}
 
 export function createProtocolTestCommand(payload = {}) {
   if (Number(payload?.protocolVersion) === 1) return payload;
@@ -150,17 +166,7 @@ export function withTestBotAuthorities(suppliedBot = {}) {
     },
     resolveExecutionIntent:
       suppliedBot.resolveExecutionIntent ||
-      (async ({ turnScopeId = "", runConfig = {} } = {}) => {
-        const executionId = text(runConfig?.executionId) || `agent:${turnScopeId}`;
-        return {
-          executionId,
-          executionKind: text(runConfig?.executionKind) || "agent",
-          parentExecutionId: text(runConfig?.parentExecutionId),
-          rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
-          origin: {},
-          stage: "",
-        };
-      }),
+      (async ({ turnScopeId } = {}) => createAcceptedAgentExecutionIdentity({ turnScopeId })),
   };
 }
 

@@ -27,9 +27,6 @@ const userStopAbortReason = (stopPayload) =>
     stopPayload,
   });
 
-const isUsableActiveRun = (activeRun) =>
-  Boolean(activeRun && activeRun.abortController && !activeRun.abortController.signal?.aborted);
-
 function stopCompletedLogData(completed) {
   const envelope = completed?.envelope;
   const dispatch = completed?.dispatch;
@@ -75,14 +72,12 @@ export function createMessageStopHandler({
       expectedRevision: command.concurrency.expectedTurnRevision,
     });
 
-  const markStopRequested = (command, target) => {
-    state.stopRequested = true;
-    state.currentTurnScopeId = target.turnScopeId;
+  const createStopPayload = (command, target) => {
     rejectTurnInteractions(
       { sessionId: target.sessionId, turnScopeId: target.turnScopeId },
       new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)),
     );
-    state.currentStopPayload = {
+    return {
       userId: target.userId,
       sessionId: target.sessionId,
       dialogProcessId: target.dialogProcessId,
@@ -103,18 +98,13 @@ export function createMessageStopHandler({
     });
   };
 
-  const abortActiveRun = () => {
-    const activeRun = findActiveRun(state.currentStopPayload);
-    if (!isUsableActiveRun(activeRun)) return false;
+  const abortRegisteredRun = (activeRun, stopPayload) => {
+    if (activeRun.abortController.signal.aborted) return;
     closeUserInterjectionQueue(activeRun);
-    activeRun.stopRequested = true;
-    activeRun.stopPayload = state.currentStopPayload;
-    activeRun.abortController.abort(userStopAbortReason(state.currentStopPayload));
-    return true;
+    activeRun.abortController.abort(userStopAbortReason(stopPayload));
   };
 
-  const completeIdleStop = async (command, target) => {
-    const stopPayload = state.currentStopPayload;
+  const completeIdleStop = async (command, target, stopPayload) => {
     const stoppedPartialAssistant = {
       ...(stopPayload.partialAssistant || {}),
       sessionId: stopPayload.sessionId,
@@ -168,21 +158,16 @@ export function createMessageStopHandler({
     const accepted = await commitStopAccepted(command, target);
     if (rejectedCommit(command, accepted, "stop_not_allowed")) return;
     target.dialogProcessId = accepted.turn.dialogProcessId;
-    markStopRequested(command, target);
-    recordStopLifecycle(
-      "service.websocket.run.cancel.requested",
-      target.userId,
-      state.currentStopPayload,
-      { activeRunPresent: Boolean(findActiveRun(state.currentStopPayload)) },
-    );
-    if (abortActiveRun()) return;
-    if (!state.isRunning || !state.currentAbortController) {
-      await completeIdleStop(command, target);
+    const stopPayload = createStopPayload(command, target);
+    const activeRun = findActiveRun(stopPayload);
+    recordStopLifecycle("service.websocket.run.cancel.requested", target.userId, stopPayload, {
+      activeRunPresent: Boolean(activeRun),
+    });
+    if (activeRun) {
+      abortRegisteredRun(activeRun, stopPayload);
       return;
     }
-    if (state.isRunning && state.currentAbortController) {
-      state.currentAbortController.abort(userStopAbortReason(state.currentStopPayload));
-    }
+    await completeIdleStop(command, target, stopPayload);
   };
 
   return handleStop;

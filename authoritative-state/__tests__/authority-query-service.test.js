@@ -19,6 +19,7 @@ const turn = (overrides = {}) => ({
   messageId: "message-1",
   presentationMessageId: "message-1",
   executionId: "agent:turn-1",
+  executionKind: "agent",
   rootExecutionId: "agent:turn-1",
   state: "processing",
   phase: "processing",

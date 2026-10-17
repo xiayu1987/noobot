@@ -89,10 +89,10 @@ function collectExternalChanges(existingRecord, before, beforeSha256) {
   return changes;
 }
 
-function createMutationError(message, code, status) {
+function createMutationError(message, code, statusCode) {
   const error = new Error(message);
   error.code = code;
-  error.status = status;
+  error.statusCode = statusCode;
   return error;
 }
 
@@ -357,7 +357,7 @@ export async function readFileMutation({ mutationRoot, mutationId } = {}) {
   const id = text(mutationId);
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
     const error = new Error("invalid file mutation id");
-    error.status = 400;
+    error.statusCode = 400;
     throw error;
   }
   return assertFileMutationResult(
@@ -381,7 +381,7 @@ async function rollbackFileMutationInternal({
   ) {
     const error = new Error("file mutation record changed before rollback");
     error.code = "file_mutation_conflict";
-    error.status = 409;
+    error.statusCode = 409;
     throw error;
   }
   await assertFileMutationVersion(filePath, record.mutations[0].after.sha256);

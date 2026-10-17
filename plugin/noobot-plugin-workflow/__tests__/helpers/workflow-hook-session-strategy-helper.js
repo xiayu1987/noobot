@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
-import { deriveAgentExecutionId } from "@noobot/session-protocol";
+import { deriveAgentExecutionId, deriveTurnCommandId } from "@noobot/session-protocol";
 import {
   createTransferEnvelope,
   createTransferIdentity,
@@ -285,9 +285,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   if (!text(runConfig.turnScopeId)) {
     runConfig.turnScopeId = `test-turn:${sessionId}:${dialogProcessId}`;
   }
-  if (!text(runConfig.commandId)) {
-    runConfig.commandId = runConfig.turnScopeId;
-  }
+  runConfig.commandId = deriveTurnCommandId(runConfig.turnScopeId);
   if (!text(runConfig.executionId)) {
     runConfig.executionId = deriveAgentExecutionId({ turnScopeId: runConfig.turnScopeId });
   }

@@ -7,6 +7,7 @@ import { normalizeRunIdentityPart } from "./run-registry.js";
 import {
   EXECUTION_ABORT_TYPE,
   isExecutionAbortError,
+  isExecutionUserStop,
   resolveExecutionAbortMessage,
   resolveExecutionAbortType,
 } from "@noobot/session-protocol/execution-abort";
@@ -34,15 +35,8 @@ export function isAbortLikeError(error) {
   return isExecutionAbortError({ error });
 }
 
-function isUserStopAbortReason(reason = {}) {
-  return (
-    resolveExecutionAbortType({ abortSignal: { aborted: true, reason } }) ===
-    EXECUTION_ABORT_TYPE.USER_STOP
-  );
-}
-
-export function isUserStopRunAbort({ stopRequested = false, abortSignal = null } = {}) {
-  return stopRequested === true || isUserStopAbortReason(abortSignal?.reason);
+export function isUserStopRunAbort(abortSignal = null) {
+  return isExecutionUserStop({ abortSignal });
 }
 
 export function isSocketCloseRunAbort(abortSignal = null) {

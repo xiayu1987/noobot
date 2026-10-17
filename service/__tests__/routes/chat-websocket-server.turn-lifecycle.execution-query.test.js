@@ -11,7 +11,10 @@ import { TURN_EVENT } from "@noobot/session-protocol";
 import { finalizeTurnSnapshot } from "../../ws/chat-websocket/turn-recovery.js";
 
 import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
-import { createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
+import {
+  createAcceptedAgentExecutionIdentity,
+  createProtocolTestCommand,
+} from "./chat-websocket-server.test-helpers.js";
 
 test("finalize recovery is idempotent across repeated service recovery attempts", async () => {
   let lifecycle = {};
@@ -21,7 +24,9 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     return result;
   };
   apply({
+    sessionId: "s-recover",
     turnScopeId: "turn-recover",
+    ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-recover" }),
     messageId: "turn-message-recover",
     presentationMessageId: "presentation-recover",
     commandId: "start",

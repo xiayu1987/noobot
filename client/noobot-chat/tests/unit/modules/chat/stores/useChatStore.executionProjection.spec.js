@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
+import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyExecutionTree } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { canonicalWorkflowRuntimeEvent } from "../helpers/workflowRuntimeEventFixture.js";
@@ -16,6 +17,11 @@ import {
   createSubSessionEvent,
   resetChatStore,
 } from "./useChatStoreTestFixture.js";
+
+const MAIN_EXECUTION_ID = deriveAgentExecutionId({ turnScopeId: "main-turn" });
+const CHILD_EXECUTION_ID = deriveAgentExecutionId({ turnScopeId: "child-turn" });
+const CHILD_AGENT_ID = CHILD_EXECUTION_ID;
+const GRANDCHILD_AGENT_ID = deriveAgentExecutionId({ turnScopeId: "grandchild-turn" });
 
 describe("useChatStore execution projection", () => {
   beforeEach(resetChatStore);
@@ -55,23 +61,23 @@ describe("useChatStore execution projection", () => {
       messages: [{ id: "child-message", messageId: "child-message", content: "child" }],
     });
     applyExecutionTree(store.turnRuntimeRegistry, {
-      rootExecutionId: "main-execution",
+      rootExecutionId: MAIN_EXECUTION_ID,
       tree: {
         executions: {
-          "main-execution": {
-            executionId: "main-execution",
+          [MAIN_EXECUTION_ID]: {
+            executionId: MAIN_EXECUTION_ID,
             executionKind: "agent",
-            rootExecutionId: "main-execution",
+            rootExecutionId: MAIN_EXECUTION_ID,
             sessionId: "main-session",
             turnScopeId: "main-turn",
             revision: 1,
             sequence: 1,
           },
-          "child-execution": {
-            executionId: "child-execution",
+          [CHILD_EXECUTION_ID]: {
+            executionId: CHILD_EXECUTION_ID,
             executionKind: "agent",
-            parentExecutionId: "main-execution",
-            rootExecutionId: "main-execution",
+            parentExecutionId: MAIN_EXECUTION_ID,
+            rootExecutionId: MAIN_EXECUTION_ID,
             sessionId: "child-session",
             turnScopeId: "child-turn",
             revision: 1,
@@ -81,11 +87,11 @@ describe("useChatStore execution projection", () => {
       },
     });
 
-    expect(store.selectExecutionDetail("main-execution")?.messages[0].content).toBe("main");
-    expect(store.selectExecutionDetail("child-execution")?.messages[0].content).toBe("child");
+    expect(store.selectExecutionDetail(MAIN_EXECUTION_ID)?.messages[0].content).toBe("main");
+    expect(store.selectExecutionDetail(CHILD_EXECUTION_ID)?.messages[0].content).toBe("child");
     expect(
-      store.selectExecutionDetail("main-execution")?.children.map((item) => item.executionId),
-    ).toEqual(["child-execution"]);
+      store.selectExecutionDetail(MAIN_EXECUTION_ID)?.children.map((item) => item.executionId),
+    ).toEqual([CHILD_EXECUTION_ID]);
     expect(store.selectExecutionDetail("unknown")).toBeNull();
   });
 
@@ -104,8 +110,8 @@ describe("useChatStore execution projection", () => {
             revision: 1,
             sequence: 1,
           },
-          child: {
-            executionId: "child",
+          [CHILD_AGENT_ID]: {
+            executionId: CHILD_AGENT_ID,
             executionKind: "agent",
             parentExecutionId: "workflow",
             rootExecutionId: "workflow",
@@ -114,10 +120,10 @@ describe("useChatStore execution projection", () => {
             revision: 1,
             sequence: 1,
           },
-          grandchild: {
-            executionId: "grandchild",
+          [GRANDCHILD_AGENT_ID]: {
+            executionId: GRANDCHILD_AGENT_ID,
             executionKind: "agent",
-            parentExecutionId: "child",
+            parentExecutionId: CHILD_AGENT_ID,
             rootExecutionId: "workflow",
             sessionId: "grandchild-session",
             turnScopeId: "grandchild-turn",
@@ -127,11 +133,11 @@ describe("useChatStore execution projection", () => {
         },
       },
     });
-    store.turnRuntimeRegistry.childExecutionIdsByParentId.grandchild = ["child"];
+    store.turnRuntimeRegistry.childExecutionIdsByParentId[GRANDCHILD_AGENT_ID] = [CHILD_AGENT_ID];
 
     expect(store.selectExecutionDescendants("workflow").map((item) => item.executionId)).toEqual([
-      "child",
-      "grandchild",
+      CHILD_AGENT_ID,
+      GRANDCHILD_AGENT_ID,
     ]);
   });
 

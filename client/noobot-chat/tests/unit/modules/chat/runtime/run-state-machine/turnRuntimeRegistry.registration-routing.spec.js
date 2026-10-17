@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, it, expect } from "vitest";
+import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import {
   createTurnRuntimeRegistryState,
   applyTurnRuntimeEvent,
@@ -34,42 +35,46 @@ import {
 describe("turnRuntimeRegistry: registration and routing", () => {
   it("indexes canonical Execution Turn identities per Session and removes only the targeted Session", () => {
     const registry = createTurnRuntimeRegistryState();
-    const execution = (executionId, sessionId, turnScopeId) => ({
-      protocolVersion: 1,
-      executionId,
-      rootExecutionId: executionId,
-      parentExecutionId: "",
-      executionKind: "agent",
-      userId: "u1",
-      sessionId,
-      turnScopeId,
-      revision: 1,
-      sequence: 1,
-    });
+    const execution = (sessionId, turnScopeId) => {
+      const executionId = deriveAgentExecutionId({ turnScopeId });
+      return {
+        protocolVersion: 1,
+        executionId,
+        rootExecutionId: executionId,
+        parentExecutionId: "",
+        executionKind: "agent",
+        userId: "u1",
+        sessionId,
+        turnScopeId,
+        revision: 1,
+        sequence: 1,
+      };
+    };
+    const first = execution("s1", "workflow-node:run-1");
+    const second = execution("s2", "workflow-node_run-2");
 
-    expect(
-      applyExecutionSnapshot(registry, execution("e1", "s1", "workflow-node:shared")).applied,
-    ).toBe(true);
-    expect(
-      applyExecutionSnapshot(registry, execution("e2", "s2", "workflow-node_shared")).applied,
-    ).toBe(true);
-    expect(registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_shared")]).toBe(
-      "e1",
+    expect(applyExecutionSnapshot(registry, first).applied).toBe(true);
+    expect(applyExecutionSnapshot(registry, second).applied).toBe(true);
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_run-1")]).toBe(
+      first.executionId,
     );
-    expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node:shared")]).toBe(
-      "e2",
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node:run-2")]).toBe(
+      second.executionId,
     );
+    expect(
+      registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node:run-1")],
+    ).toBeUndefined();
 
     applyExecutionTree(registry, {
-      rootExecutionId: "e1",
-      tree: { executions: { e1: registry.executions.e1 } },
-      removedExecutions: [{ executionId: "e1", revision: 2, sequence: 2 }],
+      rootExecutionId: first.executionId,
+      tree: { executions: { [first.executionId]: registry.executions[first.executionId] } },
+      removedExecutions: [{ executionId: first.executionId, revision: 2, sequence: 2 }],
     });
     expect(
-      registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_shared")],
+      registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_run-1")],
     ).toBeUndefined();
-    expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node_shared")]).toBe(
-      "e2",
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node_run-2")]).toBe(
+      second.executionId,
     );
   });
   it("creates and activates a session turn", () => {

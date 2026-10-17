@@ -56,12 +56,14 @@ test("initial provision replay is idempotent and concurrent first actions are mu
   });
   const accepted = await h.service.applyTurnLifecycleEvent(first);
   const replay = await h.service.applyTurnLifecycleEvent(first);
-  const competing = await h.service.applyTurnLifecycleEvent({
-    ...first,
-    commandId: "competing",
-    causationId: "competing",
-    turnScopeId: "t2",
-  });
+  const competing = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "competing", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+      createSessionIfAbsent: true,
+      turnScopeId: "t2",
+    }),
+  );
   assert.equal(accepted.sessionCreated, true);
   assert.equal(replay.deduplicated, true);
   assert.equal(eventIdOf(replay.envelope), eventIdOf(accepted.envelope));
@@ -352,8 +354,10 @@ test("command idempotency fingerprint includes execution ownership metadata", as
   const replay = await h.service.applyTurnLifecycleEvent(input);
   const conflict = await h.service.applyTurnLifecycleEvent({
     ...input,
+    executionId: "workflow:t1",
     executionKind: "workflow",
-    origin: { type: "workflow", workflowRunId: "wf-1" },
+    rootExecutionId: "workflow:t1",
+    origin: { type: "workflow", workflowRunId: "workflow:t1" },
     stage: "planning",
   });
   assert.equal(replay.deduplicated, true);
@@ -366,10 +370,13 @@ test("session mutex, turn revision and session version conflicts do not mutate s
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }),
   );
-  const second = await h.service.applyTurnLifecycleEvent({
-    ...event(TURN_EVENT.ACTION_ACCEPTED, "c2", 0, { action: "resend", phase: TURN_PHASE.ACTION }),
-    turnScopeId: "t2",
-  });
+  const second = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "c2", 0, {
+      action: "resend",
+      phase: TURN_PHASE.ACTION,
+      turnScopeId: "t2",
+    }),
+  );
   const stale = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "c3", 0, {
       phase: TURN_PHASE.PROCESSING,
@@ -526,10 +533,13 @@ test("retryable finalize failure keeps the session locked and completes idempote
   assert.equal(failed.turn.executionState, "error");
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
   assert.equal(h.reload().turnLifecycle.turns.t1.finalizeIntent.commandId, "finalize:t1");
-  const blocked = await h.service.applyTurnLifecycleEvent({
-    ...event(TURN_EVENT.ACTION_ACCEPTED, "other", 0, { action: "send", phase: TURN_PHASE.ACTION }),
-    turnScopeId: "t2",
-  });
+  const blocked = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "other", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+      turnScopeId: "t2",
+    }),
+  );
   assert.equal(blocked.reason, "session_action_conflict");
   const completed = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.COMPLETED, "finalize:t1", 4, {

@@ -56,7 +56,6 @@ test("timeout finalization exposes the canonical timeout error code", async () =
         turnScopeId: "turn-timeout",
         dialogProcessId: "dialog-timeout",
       },
-      turnScopeId: "turn-timeout",
     }),
     {
       description: "run timeout after 18000000ms",
@@ -75,20 +74,70 @@ test("timeout finalization exposes the canonical timeout error code", async () =
   assert.equal(receipt?.data?.error?.message, "run timeout after 18000000ms");
 });
 
-test("run state snapshot resolves identity once, falling back to the connection turn before runMeta binds", () => {
-  assert.deepEqual(snapshotRunState({ runMeta: null, turnScopeId: " turn-early " }).identity, {
-    userId: "",
-    sessionId: "",
-    parentSessionId: "",
-    dialogProcessId: "",
-    turnScopeId: "turn-early",
-    commandRoot: "turn-early",
-  });
+test("run state snapshot resolves identity only from runMeta", () => {
+  assert.throws(() => snapshotRunState({ runMeta: null }), /run_state_snapshot_requires_run_meta/);
   const bound = snapshotRunState({
     runMeta: { commandId: "cmd-1", userId: "u", sessionId: "s", turnScopeId: "turn-run" },
-    turnScopeId: "turn-connection",
   }).identity;
   assert.equal(bound.turnScopeId, "turn-run");
-  assert.equal(bound.commandRoot, "cmd-1");
   assert.equal(bound.sessionId, "s");
+});
+
+test("timeout finalization derives the lifecycle command from the turn scope", async () => {
+  const committed = [];
+  const finalizer = createTurnFinalizer({
+    sendEvent: () => {},
+    rejectUnpersistedTurnStatus: () => assert.fail("timeout status must persist"),
+    translateText: (key) => key,
+    webSocket: { close() {} },
+    commitTurnLifecycle: async (command) => {
+      committed.push(command);
+      return { applied: true };
+    },
+  });
+  await finalizer.finalizeTimeout(
+    snapshotRunState({
+      runMeta: {
+        commandId: "turn-run",
+        commandType: AGENT_COMMAND.SEND,
+        sessionId: "s",
+        turnScopeId: "turn-run",
+      },
+    }),
+    { description: "timeout" },
+  );
+  assert.equal(committed[0].commandId.startsWith("turn-run:"), true);
+  assert.equal(committed[0].turnScopeId, "turn-run");
+});
+
+test("user stop finalization reads the stop payload only from the abort reason", async () => {
+  const finalizer = createTurnFinalizer({
+    sendEvent: () => {},
+    rejectUnpersistedTurnStatus: () => assert.fail("unexpected rejection"),
+    translateText: (key) => key,
+    webSocket: { close() {} },
+    commitTurnLifecycle: async () => ({ applied: true }),
+  });
+  const controller = new AbortController();
+  controller.abort({ type: "run_timeout", reason: "run timeout" });
+  await assert.rejects(
+    finalizer.finalizeUserStopped(
+      snapshotRunState({ runMeta: { turnScopeId: "t" }, abortSignal: controller.signal }),
+    ),
+    /user_stop abort reason/,
+  );
+});
+
+test("completion finalization requires the accepted commandId", async () => {
+  const finalizer = createTurnFinalizer({
+    sendEvent: () => {},
+    rejectUnpersistedTurnStatus: () => {},
+    translateText: (key) => key,
+    webSocket: { close() {} },
+    commitTurnLifecycle: async () => assert.fail("must not commit without commandId"),
+  });
+  await assert.rejects(
+    finalizer.finalizeCompleted(snapshotRunState({ runMeta: { turnScopeId: "t" } })),
+    /accepted commandId/,
+  );
 });

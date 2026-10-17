@@ -7,7 +7,7 @@ import {
   createWorkflowNodeDialogProcessId,
   createWorkflowNodeTurnScopeId,
 } from "@noobot/session-protocol/turn-scope-identity";
-import { deriveAgentExecutionId } from "@noobot/session-protocol";
+import { deriveAgentExecutionId, deriveTurnCommandId } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
 function safeId(value = "") {
@@ -35,20 +35,25 @@ export function resolveWorkflowRunIdentity(ctx = {}) {
 }
 
 export function createWorkflowNodeIdentity({ workflowRunId = "", node = {}, attempt = 1 } = {}) {
+  const runId = text(workflowRunId);
+  if (!runId) throw new TypeError("workflow run id is required");
   const nodeId = text(node?.id);
   if (!nodeId) throw new TypeError("workflow node id is required");
-  const nodeExecutionId = `${safeId(workflowRunId || "workflow")}_${safeId(nodeId)}_${Math.max(1, Number(attempt) || 1)}`;
+  if (!Number.isInteger(attempt) || attempt < 1) {
+    throw new TypeError("workflow node attempt must be a positive integer");
+  }
+  const nodeExecutionId = `${safeId(runId)}_${safeId(nodeId)}_${attempt}`;
   const dialogProcessId = createWorkflowNodeDialogProcessId(nodeExecutionId);
   const turnScopeId = createWorkflowNodeTurnScopeId(nodeExecutionId);
   return {
-    workflowRunId: text(workflowRunId),
+    workflowRunId: runId,
     nodeExecutionId,
     nodeId,
-    attempt: Math.max(1, Number(attempt) || 1),
+    attempt,
     dialogProcessId,
     turnScopeId,
     activeChildExecutionId: deriveAgentExecutionId({ turnScopeId }),
-    commandId: `workflow-node:${nodeExecutionId}:send`,
+    commandId: deriveTurnCommandId(turnScopeId),
   };
 }
 

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { createHarness, activateRuntimeTurn } from "../helpers/useChatEngineHarness.js";
 import {
   AGENT_CHANNEL_STATE,
@@ -14,6 +15,8 @@ import {
   applyExecutionSnapshot,
   resolveSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+
+const CHILD_EXECUTION_ID = deriveAgentExecutionId({ turnScopeId: "child-turn" });
 
 describe("useChatEngine.interaction-stop: stop-request", () => {
   it("send enables stop while stream is active", async () => {
@@ -253,7 +256,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
   it("stopSending targets a child Agent by executionId with authoritative identity and revision", () => {
     const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
     applyExecutionSnapshot(turnRuntimeRegistry.value, {
-      executionId: "child-execution",
+      executionId: CHILD_EXECUTION_ID,
       executionKind: "agent",
       parentExecutionId: "workflow-execution",
       rootExecutionId: "workflow-execution",
@@ -269,7 +272,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
-    expect(engine.stopSending("child-execution")).toBe(true);
+    expect(engine.stopSending(CHILD_EXECUTION_ID)).toBe(true);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:child-turn",
@@ -280,7 +283,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           turnScopeId: "child-turn",
         }),
         concurrency: { expectedTurnRevision: 7 },
-        stop: expect.objectContaining({ executionId: "child-execution" }),
+        stop: expect.objectContaining({ executionId: CHILD_EXECUTION_ID }),
       }),
     );
   });

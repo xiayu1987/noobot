@@ -16,7 +16,7 @@ export function withJsonError(
       return await handler(req, res);
     } catch (error) {
       const fallbackMessage = fallbackErrorKey ? translateText(fallbackErrorKey, req?.locale) : "";
-      const errorStatusCode = Number(error?.statusCode || error?.status || 0);
+      const errorStatusCode = Number(error?.statusCode);
       const responseStatusCode =
         Number.isInteger(errorStatusCode) && errorStatusCode >= 400 && errorStatusCode < 600
           ? errorStatusCode

@@ -38,10 +38,7 @@ export async function mapRunCommand(context, command) {
     connectorAccessPort: context.connectorAccessPort,
     request: context.mapAgentRunCommand(command, { userId: context.authInfo?.userId }),
   });
-  context.state.currentTurnScopeId = text(mapped.turnScopeId);
-  context.state.currentLocale = context.normalizeLocale(
-    mapped.runConfig.locale || context.state.currentLocale,
-  );
+  context.state.currentLocale = mapped.runConfig.locale;
   return { ...mapped, normalizedRunConfig: mapped.runConfig };
 }
 
@@ -76,7 +73,7 @@ export async function bindExistingRun(context, run, onRunBound) {
   const runningTurn = findActiveRun({
     userId: context.canonicalRunOwnerId,
     sessionId: run.sessionId,
-    turnScopeId: context.state.currentTurnScopeId,
+    turnScopeId: run.turnScopeId,
     dialogProcessId: run.dialogProcessId,
   });
   if (!runningTurn || runningTurn.abortController?.signal?.aborted) return false;
@@ -95,7 +92,7 @@ export async function bindExistingRun(context, run, onRunBound) {
     userId: run.userId,
     sessionId: run.sessionId,
     dialogProcessId: runningTurn.dialogProcessId,
-    turnScopeId: context.state.currentTurnScopeId,
+    turnScopeId: run.turnScopeId,
   });
   return true;
 }
@@ -113,7 +110,7 @@ function createActionEvent(context, command, run, executionIntent, startedAt) {
     userId: run.userId,
     sessionId: run.sessionId,
     parentSessionId: run.parentSessionId,
-    turnScopeId: context.state.currentTurnScopeId,
+    turnScopeId: run.turnScopeId,
     dialogProcessId: run.dialogProcessId,
     commandId: createTurnLifecycleCommandId({
       commandId,
@@ -191,7 +188,7 @@ export async function acceptRunCommand(context, command, run) {
     userId: run.userId,
     sessionId: run.sessionId,
     parentSessionId: run.parentSessionId,
-    turnScopeId: context.state.currentTurnScopeId,
+    turnScopeId: run.turnScopeId,
     runConfig: run.normalizedRunConfig,
   });
   Object.assign(run.normalizedRunConfig, executionIntent);
@@ -203,14 +200,14 @@ export async function acceptRunCommand(context, command, run) {
       sessionId: run.sessionId,
       aggregateVersion: accepted.aggregateVersion,
       dialogProcessId: run.dialogProcessId,
-      turnScopeId: context.state.currentTurnScopeId,
+      turnScopeId: run.turnScopeId,
       userMessage: accepted.userMessage,
     });
     context.sendEvent(TURN_COMMITTED_WIRE_EVENT, committedEvent);
     run.turnAcceptance = createTurnAcceptanceReceipt({
       commandId: text(command.commandId),
       sessionId: run.sessionId,
-      turnScopeId: context.state.currentTurnScopeId,
+      turnScopeId: run.turnScopeId,
       dialogProcessId: run.dialogProcessId,
       messageUid: accepted.userMessage.messageUid,
       aggregateVersion: accepted.aggregateVersion,
@@ -228,7 +225,7 @@ export async function acceptRunCommand(context, command, run) {
     });
   }
   context.lifecycle.pending = null;
-  context.lifecycle.latestTurn = accepted.turn || null;
+  context.lifecycle.latestTurn = accepted.turn;
   void recordServiceAgentTransportDebug({
     event: "service.agentTransport.commandConsumed",
     command,
@@ -238,10 +235,9 @@ export async function acceptRunCommand(context, command, run) {
       consumed: true,
       transport: "websocket",
       lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
-      lifecycleRevision: Number(accepted?.turn?.revision || accepted?.currentRevision || 0),
+      lifecycleRevision: accepted.turn.revision,
     },
   });
-  context.state.currentLifecycleCommandId = text(command.commandId);
   context.state.currentLifecyclePhase = TURN_PHASE.ACTION;
   return { activeBot, agentApplication, commandId: text(command.commandId) };
 }

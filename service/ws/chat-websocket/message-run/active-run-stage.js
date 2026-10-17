@@ -40,18 +40,18 @@ async function recordPluginDebug(context, command, run) {
   });
 }
 
-function scheduleTimeout(context, run, timeoutMs) {
+function scheduleTimeout(context, runMeta, timeoutMs) {
   context.state.currentRunTimeoutTimer = setTimeout(() => {
     context.state.currentRunTimedOut = true;
     void recordServiceWebSocketLifecycle({
       event: "service.websocket.run.timeout",
-      userId: context.state.currentRunMeta?.userId || run.userId,
-      sessionId: context.state.currentRunMeta?.sessionId || run.sessionId,
-      dialogProcessId: context.state.currentRunMeta?.dialogProcessId || "",
-      turnScopeId: context.state.currentRunMeta?.turnScopeId || context.state.currentTurnScopeId,
+      userId: runMeta.userId,
+      sessionId: runMeta.sessionId,
+      dialogProcessId: runMeta.dialogProcessId,
+      turnScopeId: runMeta.turnScopeId,
       data: { timeoutMs },
     });
-    context.state.currentAbortController?.abort(
+    context.state.currentAbortController.abort(
       createExecutionAbortReason({
         type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT,
         reason: `run timeout after ${timeoutMs}ms`,
@@ -77,47 +77,38 @@ function createRunMeta(context, command, run) {
   };
 }
 
-function applyPendingStop(context, runHandle) {
-  const controller = context.state.currentAbortController;
-  if (!context.state.stopRequested || !controller || controller.signal?.aborted) return;
-  runHandle.stopRequested = true;
-  runHandle.stopPayload = context.state.currentStopPayload;
-  controller.abort(
-    createExecutionAbortReason({
-      type: EXECUTION_ABORT_TYPE.USER_STOP,
-      reason: "user stop action",
-      stopPayload: context.state.currentStopPayload,
-    }),
-  );
-}
-
-export async function activateRun(context, command, run, accepted, onRunBound) {
+export function reserveRun(context, run, onRunBound) {
   context.state.isRunning = true;
   context.state.currentAbortController = new AbortController();
   context.state.currentRunTimedOut = false;
   context.state.currentAbortSignal = context.state.currentAbortController.signal;
+  const runHandle = registerActiveRun({
+    userId: context.canonicalRunOwnerId,
+    sessionId: text(run.sessionId),
+    turnScopeId: text(run.turnScopeId),
+    abortController: context.state.currentAbortController,
+  });
+  context.state.currentRunHandle = runHandle;
+  onRunBound?.(runHandle);
+  return runHandle;
+}
+
+export async function activateRun(context, command, run, accepted) {
+  const runMeta = createRunMeta(context, command, run);
+  context.state.currentRunMeta = runMeta;
+  const runHandle = registerActiveRun(
+    Object.assign(context.state.currentRunHandle, runMeta, { userId: runMeta.runOwnerId }),
+  );
+  context.state.currentRunTransportBinding = attachRunTransport(runHandle, context.sendEvent, {
+    onDiagnostic: context.recordRunTransportDiagnostic(runMeta),
+  });
   await recordPluginDebug(context, command, run);
   const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
     bot: accepted.activeBot,
     userId: run.userId,
     runConfig: run.normalizedRunConfig,
   });
-  scheduleTimeout(context, run, runTimeoutMs);
-  const runMeta = createRunMeta(context, command, run);
-  context.state.currentRunMeta = runMeta;
-  const runHandle = registerActiveRun({
-    ...runMeta,
-    userId: runMeta.runOwnerId,
-    abortController: context.state.currentAbortController,
-    stopRequested: false,
-    stopPayload: null,
-  });
-  context.state.currentRunHandle = runHandle;
-  context.state.currentRunTransportBinding = attachRunTransport(runHandle, context.sendEvent, {
-    onDiagnostic: context.recordRunTransportDiagnostic(runMeta),
-  });
-  onRunBound?.(runHandle);
-  applyPendingStop(context, runHandle);
+  if (!context.state.currentAbortSignal.aborted) scheduleTimeout(context, runMeta, runTimeoutMs);
   const textStreamingEnabled = await resolveEffectiveStreamingEnabled({
     bot: accepted.activeBot,
     userId: run.userId,

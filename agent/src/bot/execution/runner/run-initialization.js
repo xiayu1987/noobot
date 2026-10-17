@@ -17,6 +17,7 @@ const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
   "presentationMessageId",
   "messageId",
   "executionId",
+  "executionKind",
   "rootExecutionId",
   "commandId",
 ]);
@@ -135,10 +136,12 @@ export async function initializeSessionRun({
       dialogProcessId,
       turnScopeId,
       resumeFromStoppedSnapshot,
-      executionId: text(resolvedRunConfig?.executionId),
-      executionKind: text(resolvedRunConfig?.executionKind) || "agent",
-      parentExecutionId: text(resolvedRunConfig?.parentExecutionId),
-      rootExecutionId: resolvedRunConfig.rootExecutionId,
+      executionId: text(resolvedRunConfig.executionId),
+      executionKind: text(resolvedRunConfig.executionKind),
+      parentExecutionId: text(resolvedRunConfig.parentExecutionId),
+      rootExecutionId: text(resolvedRunConfig.rootExecutionId),
+      origin: isPlainObject(resolvedRunConfig.origin) ? { ...resolvedRunConfig.origin } : {},
+      stage: text(resolvedRunConfig.stage),
     },
   });
   lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));

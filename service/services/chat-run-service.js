@@ -69,7 +69,7 @@ export function createChatRunService({ normalizeLocale, defaultLocale } = {}) {
         ? { streaming: preferences.streaming }
         : {}),
       frontendThresholdsEnabled: preferences.frontendThresholdsEnabled === true,
-      locale: normalizeLocale(preferences.locale || defaultLocale),
+      locale: normalizeLocale(preferences.locale, defaultLocale),
       ...(preferences.scenario ? { scenario: preferences.scenario } : {}),
       ...(preferences.selectedModel ? { selectedModel: preferences.selectedModel } : {}),
       ...(preferences.memoryModel ? { memoryModel: preferences.memoryModel } : {}),

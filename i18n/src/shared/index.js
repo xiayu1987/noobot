@@ -15,7 +15,7 @@ export function normalizeLocale(inputLocale = "", fallbackLocale = DEFAULT_LOCAL
   const lowered = normalized.toLowerCase();
   if (lowered.startsWith("zh")) return "zh-CN";
   if (lowered.startsWith("en")) return "en-US";
-  return text(fallbackLocale) || DEFAULT_LOCALE || DEFAULT_LOCALE;
+  return text(fallbackLocale) || DEFAULT_LOCALE;
 }
 
 export function resolveLocaleFromAcceptLanguage(

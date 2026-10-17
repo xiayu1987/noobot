@@ -9,7 +9,7 @@ import {
   HOOK_POINT_DOMAIN,
   isHookPointInDomain,
 } from "@noobot/hook-protocol";
-import { deriveAgentExecutionId } from "@noobot/session-protocol";
+import { deriveAgentExecutionId, EXECUTION_KIND } from "@noobot/session-protocol";
 import {
   contributionsForSurface,
   PLUGIN_HOST_PORT,
@@ -55,19 +55,14 @@ function requireTurnScopeId(turnScopeId = "") {
   return scopeId;
 }
 
-function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
-  const scopeId = requireTurnScopeId(turnScopeId);
-  const executionId = deriveAgentExecutionId({
-    executionId: runConfig?.executionId,
-    turnScopeId: scopeId,
-  });
+function createRootExecutionIntent({ executionId, executionKind, origin, stage }) {
   return Object.freeze({
     executionId,
-    executionKind: "agent",
-    parentExecutionId: text(runConfig?.parentExecutionId),
-    rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
-    origin: Object.freeze(plainObject(runConfig?.origin)),
-    stage: text(runConfig?.stage),
+    executionKind,
+    parentExecutionId: "",
+    rootExecutionId: executionId,
+    origin: Object.freeze(origin),
+    stage,
   });
 }
 
@@ -132,19 +127,21 @@ export class RunConfigPluginPreparer {
         `multiple selected plugins declare execution intent: ${declarations.map((item) => item.pluginId).join(", ")}`,
       );
     }
-    const declaration = declarations[0];
-    if (!declaration) return createAgentExecutionIntent({ runConfig, turnScopeId });
     const scopeId = requireTurnScopeId(turnScopeId);
-    const executionId = text(runConfig?.executionId) || `${declaration.idPrefix}:${scopeId}`;
-    return Object.freeze({
+    const declaration = declarations[0];
+    if (!declaration) {
+      return createRootExecutionIntent({
+        executionId: deriveAgentExecutionId({ turnScopeId: scopeId }),
+        executionKind: EXECUTION_KIND.AGENT,
+        origin: {},
+        stage: "",
+      });
+    }
+    const executionId = `${declaration.idPrefix}:${scopeId}`;
+    return createRootExecutionIntent({
       executionId,
       executionKind: declaration.kind,
-      parentExecutionId: text(runConfig?.parentExecutionId),
-      rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
-      origin: Object.freeze({
-        type: declaration.originType,
-        [declaration.originIdKey]: executionId,
-      }),
+      origin: { type: declaration.originType, [declaration.originIdKey]: executionId },
       stage: text(declaration.stage),
     });
   }

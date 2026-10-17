@@ -11,6 +11,7 @@ import { TURN_COMMAND, TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/sessio
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { registerActiveRun, unregisterActiveRun } from "../../ws/chat-websocket/run-registry.js";
 import {
+  createAcceptedAgentExecutionIdentity,
   startServerWithWs,
   closeServer,
   callChatWs,
@@ -125,6 +126,7 @@ test("a new action recovers a stale persisted turn lost after service restart", 
     commandId: "command-before-restart",
     causationId: "command-before-restart",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-before-restart" }),
     phase: "action",
     action: "send",
   });
@@ -188,6 +190,7 @@ test("snapshot get only annotates an orphan; finalize settles it exactly once", 
     commandId: "command-snapshot-restart",
     causationId: "command-snapshot-restart",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-snapshot-restart" }),
     phase: TURN_PHASE.ACTION,
     action: "send",
   });
@@ -268,6 +271,7 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
     commandId: "command-live-snapshot",
     causationId: "command-live-snapshot",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-live-snapshot" }),
     phase: TURN_PHASE.ACTION,
     action: "send",
   });

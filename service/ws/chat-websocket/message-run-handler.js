@@ -18,7 +18,7 @@ import {
   recordReceivedCommand,
   validateRunIdentity,
 } from "./message-run/command-stage.js";
-import { activateRun } from "./message-run/active-run-stage.js";
+import { activateRun, reserveRun } from "./message-run/active-run-stage.js";
 import { createMessageRunEventListener } from "./message-run/event-listener-stage.js";
 import { finalizeRunResult } from "./message-run/terminal-stage.js";
 import { text } from "@noobot/shared/value";
@@ -57,17 +57,15 @@ function resolveFailureContext(context, fallbackPhase) {
   const authorityPhase = Object.values(TURN_PHASE).includes(context.lifecycle.latestTurn?.phase)
     ? context.lifecycle.latestTurn.phase
     : "";
-  const meta = context.state.currentRunMeta || {};
+  const meta = context.state.currentRunMeta;
   return {
     phase: authorityPhase || context.state.currentLifecyclePhase || fallbackPhase,
-    commandBase: text(
-      context.state.currentLifecycleCommandId || context.state.currentTurnScopeId || "turn",
-    ),
-    userId: meta.userId || text(context.authInfo?.userId),
-    sessionId: meta.sessionId || "",
-    parentSessionId: meta.parentSessionId || "",
-    turnScopeId: meta.turnScopeId || context.state.currentTurnScopeId || "",
-    dialogProcessId: meta.dialogProcessId || "",
+    commandBase: meta.commandId,
+    userId: meta.userId,
+    sessionId: meta.sessionId,
+    parentSessionId: meta.parentSessionId,
+    turnScopeId: meta.turnScopeId,
+    dialogProcessId: meta.dialogProcessId,
   };
 }
 
@@ -158,8 +156,9 @@ function createRunHandler(context) {
     recordReceivedCommand(context, command, run);
     validateRunIdentity(context, run);
     if (await bindExistingRun(context, run, onRunBound)) return { rebound: true };
+    reserveRun(context, run, onRunBound);
     const accepted = await acceptRunCommand(context, command, run);
-    const active = await activateRun(context, command, run, accepted, onRunBound);
+    const active = await activateRun(context, command, run, accepted);
     await executeAcceptedRun(context, run, accepted, active);
   };
 }

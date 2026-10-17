@@ -274,7 +274,6 @@ function buildWorkflowNodeRunConfigPatch(ctx, identity) {
     turnScopeId: identity.turnScopeId,
     workflowRunId: identity.workflowRunId,
     workflowNodeExecutionId: identity.nodeExecutionId,
-    workflowNodeCommandId: identity.commandId,
   };
   if (!harnessEnabled) return patch;
   return {
@@ -291,7 +290,6 @@ function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
     parentDialogProcessId: text(ctx?.dialogProcessId),
     dialogProcessId: identity.dialogProcessId,
     turnScopeId: identity.turnScopeId,
-    commandId: identity.commandId,
     executionId: identity.activeChildExecutionId,
     parentExecutionId: identity.workflowExecutionId,
     rootExecutionId: identity.rootExecutionId,

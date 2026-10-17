@@ -15,6 +15,8 @@ import {
   createSessionPersistenceScope,
   createTurnAcceptanceReceipt,
   createTurnLifecycleCommandId,
+  deriveTurnCommandId,
+  EXECUTION_KIND,
   isExecutionAbortError,
 } from "@noobot/session-protocol";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
@@ -33,7 +35,6 @@ function assertDetachedSubSessionStrategy(strategy = {}) {
     "sessionId",
     "dialogProcessId",
     "turnScopeId",
-    "commandId",
     "executionId",
     "rootExecutionId",
     "relativeDir",
@@ -121,7 +122,7 @@ function resolveDetachedRuntime(request) {
     return getRuntimeFromAgentContext(parentExecutionScope);
   } catch (error) {
     emitEvent(eventListener, "detached_sub_session_scope_rejected", {
-      scopeId: text(metadata.scope) || "detached_sub_session",
+      scopeId: text(metadata.scope),
       reason: "bindings.runtime_missing",
       error: error?.message || String(error),
     });
@@ -147,7 +148,7 @@ function resolveDetachedIdentity(request, inheritedRuntime) {
     throw new Error("sub-session runner requires userId and parentSessionId");
   }
   assertDetachedSubSessionStrategy(strategy);
-  Object.assign(identity, resolveChildStrategyIdentity(strategy));
+  Object.assign(identity, resolveChildStrategyIdentity(strategy), resolveDetachedStage(request));
   identity.scopedEventListener = createScopedSubSessionEventListener(request.eventListener, {
     userId: identity.userId,
     sessionId: identity.subSessionId,
@@ -158,12 +159,19 @@ function resolveDetachedIdentity(request, inheritedRuntime) {
   return identity;
 }
 
+function resolveDetachedStage(request) {
+  const stage = text(request.metadata?.scope);
+  if (!stage) throw new Error("detached sub-session requires metadata.scope");
+  const origin = request.metadata?.origin;
+  return { stage, origin: isObjectRecord(origin) ? { ...origin } : {} };
+}
+
 function resolveChildStrategyIdentity(strategy) {
   return {
     subSessionId: text(strategy.sessionId),
     subDialogProcessId: text(strategy.dialogProcessId),
     turnScopeId: text(strategy.turnScopeId),
-    commandId: text(strategy.commandId),
+    commandId: deriveTurnCommandId(strategy.turnScopeId),
     executionId: text(strategy.executionId),
     parentExecutionId: text(strategy.parentExecutionId),
     rootExecutionId: text(strategy.rootExecutionId),
@@ -238,9 +246,11 @@ function createDetachedRunConfig(
   if (runtimeModel) config.runtimeModel = runtimeModel;
   else delete config.runtimeModel;
   config.executionId = identity.executionId;
-  config.executionKind = "agent";
+  config.executionKind = EXECUTION_KIND.AGENT;
   config.parentExecutionId = identity.parentExecutionId;
   config.rootExecutionId = identity.rootExecutionId;
+  config.origin = identity.origin;
+  config.stage = identity.stage;
   config.commandId = identity.commandId;
   const presentationMessageId = `msg_${randomUUID()}`;
   config.presentationMessageId = presentationMessageId;
@@ -296,7 +306,6 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
     metadataContributor: () => createDetachedMetadata(request, identity, runtimePluginState),
   });
   const lifecycleIdentity = createLifecycleIdentity(
-    request,
     identity,
     prepared.mergedRunConfig,
     persistenceContext,
@@ -331,7 +340,7 @@ function createDetachedMetadata(request, identity, runtimePluginState) {
   };
 }
 
-function createLifecycleIdentity(request, identity, config, persistenceContext, persistenceScope) {
+function createLifecycleIdentity(identity, config, persistenceContext, persistenceScope) {
   return {
     userId: identity.userId,
     sessionId: identity.subSessionId,
@@ -343,11 +352,11 @@ function createLifecycleIdentity(request, identity, config, persistenceContext, 
     messageId: config.messageId,
     presentationMessageId: config.presentationMessageId,
     executionId: identity.executionId,
-    executionKind: "agent",
+    executionKind: EXECUTION_KIND.AGENT,
     parentExecutionId: config.parentExecutionId,
     rootExecutionId: config.rootExecutionId,
-    origin: request.metadata?.origin || {},
-    stage: text(request.metadata?.scope) || "detached_sub_session",
+    origin: identity.origin,
+    stage: identity.stage,
   };
 }
 

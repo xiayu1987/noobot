@@ -51,16 +51,8 @@ export async function handleBeforeAgentDispatch({
   });
   if (skipped) return createBotDispatchPass({ owner: "workflow" });
 
-  const { workflowRunId, executionId, rootExecutionId } = resolveWorkflowRunIdentity(ctx);
-  ctx.claimAgentDispatch({
-    owner: "workflow",
-    source: "workflow_before_agent_dispatch",
-    executionId,
-    executionKind: "workflow",
-    rootExecutionId,
-    origin: { type: "workflow", workflowRunId },
-    stage: "planning",
-  });
+  const { workflowRunId } = resolveWorkflowRunIdentity(ctx);
+  ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_before_agent_dispatch" });
 
   try {
     const { semanticResolution, semanticText } = await runSemanticResolutionStage({

@@ -7,11 +7,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isTurnCommitContinuation,
+  normalizeTurnCommitMetadata,
   normalizeTurnCommitAction,
-  resolveTurnCommitAction,
+  requireTurnCommitAction,
   TURN_COMMIT_ACTION,
   TURN_COMMIT_ACTION_VALUES,
   TURN_PHASE,
+  validateTurnCommitMetadata,
 } from "../src/index.js";
 
 test("commit action vocabulary is frozen and exhaustive", () => {
@@ -33,12 +35,21 @@ test("commit action normalization trims and lowercases", () => {
   assert.equal(normalizeTurnCommitAction(""), "");
 });
 
-test("commit action resolution defaults every non continue input to send", () => {
-  assert.equal(resolveTurnCommitAction("  CONTINUE "), TURN_COMMIT_ACTION.CONTINUE);
-  assert.equal(resolveTurnCommitAction(TURN_COMMIT_ACTION.SEND), TURN_COMMIT_ACTION.SEND);
-  assert.equal(resolveTurnCommitAction(""), TURN_COMMIT_ACTION.SEND);
-  assert.equal(resolveTurnCommitAction("unknown"), TURN_COMMIT_ACTION.SEND);
-  assert.equal(resolveTurnCommitAction(undefined), TURN_COMMIT_ACTION.SEND);
+test("commit action requirement accepts only protocol commit actions", () => {
+  assert.equal(requireTurnCommitAction("  CONTINUE "), TURN_COMMIT_ACTION.CONTINUE);
+  assert.equal(requireTurnCommitAction(TURN_COMMIT_ACTION.SEND), TURN_COMMIT_ACTION.SEND);
+  for (const invalid of ["", "unknown", "resend", undefined]) {
+    assert.throws(() => requireTurnCommitAction(invalid), { code: "TURN_COMMIT_ACTION_INVALID" });
+  }
+});
+
+test("turn commit metadata rejects a missing or unknown action instead of defaulting", () => {
+  assert.throws(() => normalizeTurnCommitMetadata({ commandId: "c1" }), {
+    code: "TURN_COMMIT_ACTION_INVALID",
+  });
+  assert.deepEqual(validateTurnCommitMetadata({ commandId: "c1", action: "resend" }).errors, [
+    "invalid_turn_commit_action",
+  ]);
 });
 
 test("continuation predicate matches only the continue action", () => {

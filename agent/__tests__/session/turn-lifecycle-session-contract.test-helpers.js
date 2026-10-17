@@ -17,6 +17,7 @@ import {
   readAuthorityOutbox,
 } from "../../src/session/authority-outbox-store/outbox-journal.js";
 import { text } from "@noobot/shared/value";
+import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
@@ -143,6 +144,9 @@ const event = (eventType, commandId, expectedRevision, extra = {}) => {
     commandId,
     causationId: commandId,
     expectedRevision,
+    ...(eventType === TURN_EVENT.ACTION_ACCEPTED
+      ? createAcceptedAgentExecution(extra.turnScopeId ?? "t1", extra.sessionId ?? "s1")
+      : {}),
     ...extra,
     ...(eventType === TURN_EVENT.ACTION_ACCEPTED && action !== "resend"
       ? {

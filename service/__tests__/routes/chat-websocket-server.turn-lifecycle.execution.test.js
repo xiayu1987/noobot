@@ -23,8 +23,13 @@ import {
   AUTHORITY_EVENT_CONSUMER,
   createAuthorityEventDispatcher,
 } from "../../ws/chat-websocket/authority-event-dispatcher.js";
-import { attachRunTransport, publishRunEvent } from "../../ws/chat-websocket/run-registry.js";
 import {
+  attachRunTransport,
+  findActiveRun,
+  publishRunEvent,
+} from "../../ws/chat-websocket/run-registry.js";
+import {
+  createAcceptedAgentExecutionIdentity,
   startServerWithWs,
   closeServer,
   callChatWs,
@@ -224,6 +229,14 @@ test("stale aggregate version is rejected before lifecycle state and Agent execu
     )?.data;
     assert.equal(receipt?.error?.code, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
     assert.equal(receipt?.identity?.turnScopeId, "turn-stale-aggregate");
+    assert.equal(
+      findActiveRun({
+        userId: "primary-user",
+        sessionId: "s-stale-aggregate",
+        turnScopeId: "turn-stale-aggregate",
+      }),
+      null,
+    );
   } finally {
     await closeServer(server);
   }
@@ -301,6 +314,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
     commandId: "command-deduplicated-ack",
     causationId: "command-deduplicated-ack",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-deduplicated-ack" }),
     phase: TURN_PHASE.ACTION,
     action: "send",
     messageId: "message-deduplicated-ack",

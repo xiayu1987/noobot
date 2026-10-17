@@ -5,10 +5,10 @@
  */
 import { text as clean } from "@noobot/shared/value";
 import { createCommandRequestHash } from "./command-fingerprint.js";
-import { TURN_COMMIT_ACTION, normalizeTurnCommitAction } from "../lifecycle/turn-commit-action.js";
+import { requireTurnCommitAction } from "../lifecycle/turn-commit-action.js";
 
 export function createTurnCommitFingerprint({
-  action = TURN_COMMIT_ACTION.SEND,
+  action,
   content = "",
   turnScopeId = "",
   resumeDialogProcessId = "",
@@ -16,7 +16,7 @@ export function createTurnCommitFingerprint({
 } = {}) {
   return createCommandRequestHash({
     type: "session.turn.commit",
-    action: normalizeTurnCommitAction(action),
+    action: requireTurnCommitAction(action),
     content: clean(content),
     turnScopeId: clean(turnScopeId),
     resumeDialogProcessId: clean(resumeDialogProcessId),

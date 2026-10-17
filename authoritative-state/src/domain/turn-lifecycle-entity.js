@@ -5,8 +5,6 @@
  */
 import {
   decideTurnTransition,
-  deriveAgentExecutionId,
-  EXECUTION_KIND,
   isRetryableFinalizeFailure,
   isTerminalTurnState,
   normalizeTurnContinuationSource,
@@ -44,12 +42,10 @@ function normalizeTurn(value, key) {
     turnScopeId,
     messageId: clean(value.messageId),
     presentationMessageId: clean(value.presentationMessageId),
-    executionId: deriveAgentExecutionId({ executionId: value.executionId, turnScopeId }),
-    executionKind: clean(value.executionKind) || EXECUTION_KIND.AGENT,
+    executionId: clean(value.executionId),
+    executionKind: clean(value.executionKind).toLowerCase(),
     parentExecutionId: clean(value.parentExecutionId),
-    rootExecutionId:
-      clean(value.rootExecutionId) ||
-      deriveAgentExecutionId({ executionId: value.executionId, turnScopeId }),
+    rootExecutionId: clean(value.rootExecutionId),
     origin: isPlainObject(value.origin) ? { ...value.origin } : {},
     stage: clean(value.stage),
     dialogProcessId: clean(value.dialogProcessId),

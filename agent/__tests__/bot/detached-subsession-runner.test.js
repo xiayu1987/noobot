@@ -24,6 +24,7 @@ import { normalizeSessionEntity } from "../../src/session/entities/session-entit
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createSessionServices } from "../../src/session/index.js";
 import {
+  DETACHED_REQUEST_METADATA,
   createCompleteStrategy,
   createDeps,
   createParentContext,
@@ -51,7 +52,6 @@ test("detached sub-session delegates execution and persistence to the main runne
       parentDialogProcessId: "parent-dialog",
       dialogProcessId: "sub-dialog",
       turnScopeId: "turn-1",
-      commandId: "turn-1",
       executionId: "agent:turn-1",
       parentExecutionId: "workflow:root",
       rootExecutionId: "workflow:root",
@@ -73,6 +73,16 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.deepEqual(payload.attachments, [{ name: "a.txt" }]);
   assert.deepEqual(payload.systemMessages, ["system"]);
   assert.equal(payload.turnScopeId, "turn-1");
+  assert.equal(payload.runConfig.stage, "workflow_node");
+  assert.deepEqual(payload.runConfig.origin, {});
+  assert.equal(
+    calls.lifecyclePayloads.every(
+      (item) =>
+        item.stage === payload.runConfig.stage &&
+        JSON.stringify(item.origin) === JSON.stringify(payload.runConfig.origin),
+    ),
+    true,
+  );
   assert.equal(payload.runConfig.hookManager, undefined);
   assert.equal(payload.runConfig.hooks, undefined);
   assert.equal(payload.runConfig.botHookManager, undefined);
@@ -172,6 +182,7 @@ test("detached sub-session projects finalizer messages and their transfer envelo
     parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext(),
     message: "hello",
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
   });
 
@@ -190,6 +201,7 @@ test("detached sub-session uses the selected parent model over a stale runtime m
       runConfig: { selectedModel: "gpt_5_4", runtimeModel: "parent_override" },
     }),
     message: "hello",
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
   });
 
@@ -205,6 +217,7 @@ test("detached sub-session explicit model override wins over the selected parent
     parentContext: createParentContext({ runConfig: { selectedModel: "gpt_5_4" } }),
     message: "hello",
     runConfigPatch: { runtimeModel: "child_model" },
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
   });
 
@@ -220,6 +233,7 @@ test("detached sub-session empty model override preserves the selected parent mo
     parentContext: createParentContext({ runConfig: { selectedModel: "gpt_5_4" } }),
     message: "hello",
     runConfigPatch: { runtimeModel: "  " },
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
   });
 
@@ -297,6 +311,7 @@ test("detached sub-session transfers canonical parent attachments into child own
         })),
       ),
     ],
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
   });
 
@@ -320,7 +335,7 @@ test("detached sub-session rejects an incomplete persistence and identity strate
         parentSessionId: "parent1",
       },
     }),
-    /detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, commandId, executionId, rootExecutionId, relativeDir, allowedRoot/,
+    /detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, rootExecutionId, relativeDir, allowedRoot/,
   );
 });
 
@@ -348,7 +363,6 @@ test("agent detached strategy resolves through the authoritative scoped persiste
     );
 
     assert.equal(strategy.allowedRoot, AGENT_DETACHED_SESSION_ROOT);
-    assert.equal(strategy.commandId, strategy.turnScopeId);
     assert.equal(strategy.rootExecutionId, strategy.executionId);
     assert.equal(strategy.relativeDir, `${AGENT_DETACHED_SESSION_ROOT}/${strategy.sessionId}`);
     assert.equal(
@@ -423,6 +437,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     parentContext: createParentContext(),
     message: "hello",
     runConfigPatch: { turnScopeId: "turn-persisted" },
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy({
       sessionId: "sub-persisted",
       turnScopeId: "turn-persisted",
@@ -464,6 +479,7 @@ test("detached sub-session rejects a runner result with a second dialog identity
       parentExecutionScope: createParentExecutionScope(),
       parentContext: createParentContext(),
       message: "hello",
+      metadata: DETACHED_REQUEST_METADATA,
       strategy: createCompleteStrategy({
         dialogProcessId: "authoritative-dialog",
         executionId: "agent:turn-identity-mismatch",
@@ -533,6 +549,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
       presentationMessageId: "root-presentation-message-from-patch",
       assistantMessageId: "root-assistant-message-from-patch",
     },
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy({
       turnScopeId: "child-turn",
       executionId: "agent:child-turn",
@@ -566,7 +583,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(calls.mergePayload.baseRunConfig.commandId, undefined);
 });
 
-test("detached sub-session takes commandId from strategy and other child-owned fields from its patch", async () => {
+test("detached sub-session derives commandId from the strategy turnScopeId and takes other child-owned fields from its patch", async () => {
   const { calls, deps } = createDeps();
   const runner = createDetachedSubSessionRunner(deps);
 
@@ -580,17 +597,17 @@ test("detached sub-session takes commandId from strategy and other child-owned f
       expectedAggregateVersion: 0,
       thinkingStartedAt: "2026-07-26T12:30:00.000Z",
     },
+    metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy({
       turnScopeId: "child-turn",
-      commandId: "child-command",
       executionId: "agent:child-turn",
     }),
   });
 
   const runConfig = calls.runSessionPayloads[0].runConfig;
   assert.equal(runConfig.expectedAggregateVersion, 0);
-  assert.equal(runConfig.commandId, "child-command");
-  assert.equal(calls.lifecyclePayloads.at(-1)?.commandId, "child-command:turn.completed");
+  assert.equal(runConfig.commandId, "child-turn");
+  assert.equal(calls.lifecyclePayloads.at(-1)?.commandId, "child-turn:turn.completed");
   assert.equal(runConfig.thinkingStartedAt, "2026-07-26T12:30:00.000Z");
 });
 
@@ -615,6 +632,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
           onEvent: (event) => events.push(event),
           forwardEvent: (event) => events.push(event),
         },
+        metadata: DETACHED_REQUEST_METADATA,
         strategy: createCompleteStrategy({
           turnScopeId: "internal-turn:abort-test",
           executionId: "agent:internal-turn:abort-test",
@@ -676,6 +694,7 @@ test("detached sub-session failure receipt carries the committed turn failure", 
       runner({
         parentExecutionScope: createParentExecutionScope(),
         parentContext: createParentContext(),
+        metadata: DETACHED_REQUEST_METADATA,
         strategy: createCompleteStrategy(),
       }),
     (error) => {
@@ -757,6 +776,7 @@ test("createDetachedSubSessionRunner propagates user config loading failures", a
       runner({
         parentExecutionScope: createParentExecutionScope(),
         parentContext: createParentContext(),
+        metadata: DETACHED_REQUEST_METADATA,
         strategy: createCompleteStrategy(),
       }),
     /config unavailable/,

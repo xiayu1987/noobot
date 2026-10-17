@@ -82,6 +82,18 @@ export function isExecutionUserStop({ error = null, abortSignal = null } = {}) {
   return resolveExecutionAbortType({ error, abortSignal }) === EXECUTION_ABORT_TYPE.USER_STOP;
 }
 
+export function resolveUserStopPayload({ abortSignal = null } = {}) {
+  const reason = structuredAbortReason(abortSignal?.reason);
+  if (reason?.type !== EXECUTION_ABORT_TYPE.USER_STOP) {
+    throw new TypeError("user stop payload requires a user_stop abort reason");
+  }
+  const stopPayload = reason.stopPayload;
+  if (!stopPayload || typeof stopPayload !== "object" || !clean(stopPayload.commandId)) {
+    throw new TypeError("user stop abort reason requires a stopPayload with commandId");
+  }
+  return stopPayload;
+}
+
 function createExecutionAbortError({ abortSignal = null } = {}) {
   const reason = resolveExecutionAbortReason({ abortSignal });
   const error = new Error(clean(reason?.reason) || clean(reason?.type) || EXECUTION_ABORTED);

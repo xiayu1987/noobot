@@ -129,12 +129,11 @@ test("rejected stop has no abort or interaction side effects", async () => {
   const sent = [];
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
   const handler = createMessageHandler({
-    state: { currentTurnScopeId: "turn-locked", currentRunMeta: { sessionId: "session-locked" } },
+    state: { currentRunMeta: { sessionId: "session-locked" } },
     authInfo: { userId: "u1" },
     webSocket: { close() {} },
     sendEvent: (event, data) => sent.push({ event, data }),
     translateText: (key) => key,
-    normalizeLocale: (value) => value,
     resolveBot: () => ({}),
     rejectTurnInteractions: () => {
       rejectCount += 1;

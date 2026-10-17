@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import {
+  createAcceptedAgentExecutionIdentity,
   startServerWithWs,
   closeServer,
   stopChatWs,
@@ -362,7 +363,9 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
   };
   for (const event of [
     {
+      sessionId: "session-idle-stop",
       turnScopeId: "turn-idle-stop",
+      ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-idle-stop" }),
       commandId: "turn-idle-stop",
       causationId: "turn-idle-stop",
       eventType: "turn.action_accepted",
@@ -546,7 +549,9 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
     assert.equal(lifecycle.activeTurnScopeId, "");
     assert.equal(lifecycle.turns["turn-idle-stop"]?.state, "stop_completed");
     const nextAction = transitionTurnLifecycle(lifecycle, {
+      sessionId: "session-idle-stop",
       turnScopeId: "turn-after-idle-stop",
+      ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-after-idle-stop" }),
       commandId: "turn-after-idle-stop",
       causationId: "turn-after-idle-stop",
       eventType: "turn.action_accepted",

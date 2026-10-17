@@ -111,7 +111,8 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   const identity = planningNodeSessions.find((item) => item.nodeId === "a");
   assert.ok(identity);
   assert.equal(subSessionCalls.length, 1);
-  assert.equal(subSessionCalls[0].strategy.commandId, identity.commandId);
+  assert.equal(Object.hasOwn(subSessionCalls[0].strategy, "commandId"), false);
+  assert.equal(identity.commandId, identity.turnScopeId);
   assert.equal(subSessionCalls[0].strategy.dialogProcessId, identity.dialogProcessId);
   assert.equal(subSessionCalls[0].strategy.turnScopeId, identity.turnScopeId);
   assert.ok(subSessionCalls[0].strategy.sessionId);

@@ -16,6 +16,18 @@ import {
 } from "./runner-bot-hook.fixtures.js";
 import { createModelResponse } from "@noobot/model-protocol";
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
+import { BOT_DISPATCH_ROOT_OWNER } from "@noobot/agent-transport-protocol/bot-dispatch";
+
+function workflowRunIdentity(workflowRunId) {
+  const executionId = `workflow:${workflowRunId}`;
+  return {
+    executionId,
+    executionKind: "workflow",
+    rootExecutionId: executionId,
+    origin: { type: "workflow", workflowRunId },
+    stage: "planning",
+  };
+}
 
 function createCompletedModelResponse(request, text) {
   const output = {
@@ -169,22 +181,9 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
   const botHookManager = createTestBotHookManager();
   const lifecycleStates = [];
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+    assert.equal(ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_takeover" }), true);
     assert.equal(
-      ctx.claimAgentDispatch({
-        owner: "workflow",
-        source: "workflow_takeover",
-        executionKind: "workflow",
-        origin: { type: "workflow", workflowRunId: "wf-1" },
-        stage: "planning",
-      }),
-      true,
-    );
-    assert.equal(
-      ctx.claimAgentDispatch({
-        source: "conflicting_takeover",
-        executionKind: "agent",
-        origin: { type: "chat" },
-      }),
+      ctx.claimAgentDispatch({ owner: BOT_DISPATCH_ROOT_OWNER, source: "conflicting_takeover" }),
       false,
     );
     return createBotDispatchHandled({
@@ -198,7 +197,7 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
     userId: "u1",
     sessionId: "s1",
     message: "hello",
-    runConfig: {},
+    runConfig: workflowRunIdentity("wf-1"),
     eventListener: {
       onEvent(event = {}) {
         if (event.event === "agent_lifecycle_state_changed" && event.data?.state === "running") {
@@ -209,6 +208,9 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
   });
 
   assert.equal(lifecycleStates.length, 1);
+  assert.equal(lifecycleStates[0].executionOwner, "workflow");
+  assert.equal(lifecycleStates[0].source, "workflow_takeover");
+  assert.equal(lifecycleStates[0].executionId, "workflow:wf-1");
   assert.equal(lifecycleStates[0].executionKind, "workflow");
   assert.equal(lifecycleStates[0].stage, "planning");
   assert.deepEqual(lifecycleStates[0].origin, { type: "workflow", workflowRunId: "wf-1" });
@@ -219,13 +221,7 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
   const events = [];
   let rootAgentCalls = 0;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
-    ctx.claimAgentDispatch({
-      owner: "workflow",
-      source: "workflow_router",
-      executionKind: "workflow",
-      origin: { type: "workflow", workflowRunId: "wf-structured" },
-      stage: "planning",
-    });
+    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router" });
     return createBotDispatchHandled({
       owner: "workflow",
       result: createCanonicalHandledResult(ctx, "workflow result"),
@@ -254,8 +250,6 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
     owner: "workflow",
     claimed: true,
     claimedSource: "workflow_router",
-    executionKind: "workflow",
-    stage: "planning",
     failureCode: "",
   });
 });
@@ -264,11 +258,7 @@ test("a handled workflow failure terminates the root Turn without Agent fallback
   const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
-    ctx.claimAgentDispatch({
-      owner: "workflow",
-      source: "workflow_router",
-      executionKind: "workflow",
-    });
+    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router" });
     return createBotDispatchHandled({
       owner: "workflow",
       failure: { code: "WORKFLOW_NODE_FAILED", message: "node failed" },
@@ -300,7 +290,7 @@ test("a claimed dispatch hook failure cannot fall back to the root Agent", async
   const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
-    ctx.claimAgentDispatch({ source: "workflow_router", executionKind: "workflow" });
+    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router" });
     throw new Error("workflow owner failed");
   });
   const runner = createRunner({
@@ -329,11 +319,7 @@ test("a claimed dispatch cannot pass the same task back to the root Agent", asyn
   const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
-    ctx.claimAgentDispatch({
-      owner: "workflow",
-      source: "workflow_router",
-      executionKind: "workflow",
-    });
+    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router" });
     return undefined;
   });
   const runner = createRunner({

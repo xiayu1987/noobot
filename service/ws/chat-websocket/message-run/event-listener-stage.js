@@ -131,7 +131,7 @@ function startProcessing(context, run, accepted, lifecycleData) {
       userId: run.userId,
       sessionId: run.sessionId,
       parentSessionId: run.parentSessionId,
-      turnScopeId: context.state.currentTurnScopeId,
+      turnScopeId: run.turnScopeId,
       dialogProcessId: run.dialogProcessId,
       commandId: createTurnLifecycleCommandId({
         commandId: accepted.commandId,
@@ -171,7 +171,7 @@ function createRootRunningHandler(context, run, accepted, lifecycle) {
         userId: run.userId,
         sessionId: run.sessionId,
         dialogProcessId: run.dialogProcessId,
-        turnScopeId: context.state.currentTurnScopeId,
+        turnScopeId: run.turnScopeId,
         data: { errorType: error?.name || "Error", errorCode: text(error?.code) },
       });
     });

@@ -47,23 +47,22 @@ export function isExecutionQueryTargetValid(
     : Boolean(executionId || rootExecutionId);
 }
 
-export function deriveAgentExecutionId({ executionId = "", turnScopeId = "" } = {}) {
+export function deriveAgentExecutionId({ turnScopeId = "" } = {}) {
   const canonicalTurnScopeId = canonicalizeTurnScopeId(turnScopeId);
-  return clean(executionId) || (canonicalTurnScopeId ? `agent:${canonicalTurnScopeId}` : "");
+  if (!canonicalTurnScopeId) {
+    throw Object.assign(new TypeError("agent execution id requires turnScopeId"), {
+      code: "EXECUTION_TURN_SCOPE_REQUIRED",
+    });
+  }
+  return `agent:${canonicalTurnScopeId}`;
 }
 
 export function normalizeExecutionIdentity(source = {}) {
-  const executionKind = clean(source.executionKind).toLowerCase() || EXECUTION_KIND.AGENT;
-  const executionId =
-    executionKind === EXECUTION_KIND.AGENT
-      ? deriveAgentExecutionId(source)
-      : clean(source.executionId);
-  const parentExecutionId = clean(source.parentExecutionId);
   return Object.freeze({
-    executionId,
-    executionKind,
-    parentExecutionId,
-    rootExecutionId: clean(source.rootExecutionId) || (parentExecutionId ? "" : executionId),
+    executionId: clean(source.executionId),
+    executionKind: clean(source.executionKind).toLowerCase(),
+    parentExecutionId: clean(source.parentExecutionId),
+    rootExecutionId: clean(source.rootExecutionId),
     sessionId: clean(source.sessionId),
     parentSessionId: clean(source.parentSessionId),
     turnScopeId: canonicalizeTurnScopeId(source.turnScopeId),
@@ -73,6 +72,15 @@ export function normalizeExecutionIdentity(source = {}) {
   });
 }
 
+function collectAgentExecutionIdErrors(identity) {
+  if (identity.executionKind !== EXECUTION_KIND.AGENT) return [];
+  if (!identity.sessionId) return ["missing_session_id"];
+  if (!identity.turnScopeId) return ["missing_turn_scope_id"];
+  return identity.executionId === deriveAgentExecutionId(identity)
+    ? []
+    : ["agent_execution_id_not_derived"];
+}
+
 export function validateExecutionIdentity(source = {}) {
   const identity = normalizeExecutionIdentity(source);
   const errors = [];
@@ -80,10 +88,11 @@ export function validateExecutionIdentity(source = {}) {
   if (!Object.values(EXECUTION_KIND).includes(identity.executionKind))
     errors.push("invalid_execution_kind");
   if (!identity.rootExecutionId) errors.push("missing_root_execution_id");
+  if (!identity.parentExecutionId && identity.rootExecutionId !== identity.executionId)
+    errors.push("root_execution_id_mismatch");
   if (identity.parentExecutionId && identity.parentExecutionId === identity.executionId)
     errors.push("self_parent_execution");
-  if (identity.executionKind === EXECUTION_KIND.AGENT && !identity.sessionId)
-    errors.push("missing_session_id");
+  if (identity.executionId) errors.push(...collectAgentExecutionIdErrors(identity));
   return { valid: errors.length === 0, errors, identity };
 }
 

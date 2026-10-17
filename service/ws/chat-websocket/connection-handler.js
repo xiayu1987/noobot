@@ -62,17 +62,17 @@ function registerConnectionDiagnostics(webSocket, authInfo, logConnection) {
   );
 }
 
-function createTurnStatusRejection({ webSocket, state }) {
-  return ({ runMeta = {}, status = "", result = null } = {}) => {
+function createTurnStatusRejection({ webSocket }) {
+  return ({ runMeta, status, result = null }) => {
     const errorCode = "turn_status_persistence_failed";
-    const errorMessage = `failed to persist terminal turn status: ${text(status || "unknown")}`;
+    const errorMessage = `failed to persist terminal turn status: ${text(status)}`;
     void recordServiceWebSocketRuntimeError({
       event: "service.websocket.turnStatusPersistenceFailed",
       error: new Error(errorMessage),
-      userId: runMeta?.userId,
-      sessionId: runMeta?.sessionId,
-      dialogProcessId: runMeta?.dialogProcessId,
-      turnScopeId: runMeta?.turnScopeId || state.currentTurnScopeId,
+      userId: runMeta.userId,
+      sessionId: runMeta.sessionId,
+      dialogProcessId: runMeta.dialogProcessId,
+      turnScopeId: runMeta.turnScopeId,
       data: {
         errorCode,
         status,
@@ -111,8 +111,6 @@ function createRunStateSnapshot(state) {
   return () =>
     snapshotRunState({
       runMeta: state.currentRunMeta,
-      turnScopeId: state.currentTurnScopeId,
-      stopPayload: state.currentStopPayload,
       abortSignal: state.currentAbortSignal,
       locale: state.currentLocale,
     });
@@ -233,7 +231,6 @@ function createConnectionMessageHandler(context, runtime) {
     webSocket: context.webSocket,
     sendEvent: context.sendEvent,
     translateText: context.translateText,
-    normalizeLocale: context.normalizeLocale,
     mapAgentRunCommand: context.mapAgentRunCommand,
     connectorAccessPort: context.connectorAccessPort,
     resolveBot: context.resolveBot,
@@ -259,7 +256,7 @@ export function createChatConnectionHandler(options) {
   return (webSocket, request) => {
     const authInfo = request?.auth || null;
     const state = createConnectionState({
-      locale: options.normalizeLocale(request?.locale || options.defaultLocale),
+      locale: options.normalizeLocale(request?.locale, options.defaultLocale),
     });
     const logConnection = createConnectionLogger(state);
     registerConnectionDiagnostics(webSocket, authInfo, logConnection);

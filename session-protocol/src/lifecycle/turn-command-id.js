@@ -22,3 +22,7 @@ export function deriveStopCommandId(turnScopeId) {
 export function deriveInteractionCommandId(requestId) {
   return `interaction:${requireSource(requestId, "interaction_command_id_requires_request_id")}`;
 }
+
+export function deriveAttachmentBindCommandId(turnScopeId) {
+  return `${requireSource(turnScopeId, "attachment_bind_command_id_requires_turn_scope_id")}:attachments.bind`;
+}

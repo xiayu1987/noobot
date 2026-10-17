@@ -82,7 +82,6 @@ function createRejectingHandler() {
     webSocket: { close: (...args) => closed.push(args) },
     sendEvent,
     translateText: (key) => key,
-    normalizeLocale: (value) => value,
   });
   return { handler, sent, closed };
 }
