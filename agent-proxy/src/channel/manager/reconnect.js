@@ -71,7 +71,7 @@ function attachReconnectBaselines(manager, socket, channelKeys, transaction) {
   }
 }
 
-function isReconnectChannelCandidate(manager, channelKey, channel, currentSessionId) {
+function isReconnectChannelCandidate(channel, currentSessionId) {
   if (!channel) return false;
   if (!currentSessionId) return true;
   if (channel.identity.sessionId === currentSessionId) return true;
@@ -161,7 +161,7 @@ class ReconnectMethods {
     const requesterUserId = text(socket?.__agentProxyUserId);
     const resolvedChannelKeys = [];
     for (const [channelKey, channel] of this.channelStore.entries()) {
-      if (!isReconnectChannelCandidate(this, channelKey, channel, currentSessionId)) continue;
+      if (!isReconnectChannelCandidate(channel, currentSessionId)) continue;
       if (!this.hasChannelPermission(channel, requesterApiKey, requesterUserId)) continue;
       resolvedChannelKeys.push(channelKey);
     }

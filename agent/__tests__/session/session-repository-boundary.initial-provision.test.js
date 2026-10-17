@@ -10,7 +10,8 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
-import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
+import { createSessionFacade } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 
@@ -60,7 +61,7 @@ function firstSend(commandId, turnScopeId = "turn-1") {
 
 test("file repository provisions Session and initial Turn in one persisted artifact", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-07-19T00:00:00.000Z" },
     );
@@ -99,7 +100,7 @@ test("file repository provisions Session and initial Turn in one persisted artif
 
 test("connector selection reads only the Session manifest fact", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     await runtime.sessionCrudService.ensureSession("u1", "session-1");
     await runtime.sessionCrudService.setRootSessionSelectedConnectorIds({
@@ -135,7 +136,7 @@ test("connector selection reads only the Session manifest fact", async () => {
 
 test("initial acceptance allocates one stable dialog identity before persistence", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const input = firstSend("dialog-allocation");
     delete input.dialogProcessId;
     const accepted = await runtime.sessionMessageService.applyTurnLifecycleEvent(input);
@@ -149,8 +150,8 @@ test("initial acceptance allocates one stable dialog identity before persistence
 
 test("shared file mutation lock makes concurrent initial provisions idempotent and exclusive", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const firstRuntime = createSessionServices({ workspaceRoot });
-    const secondRuntime = createSessionServices({ workspaceRoot });
+    const firstRuntime = createTestSessionServices({ workspaceRoot });
+    const secondRuntime = createTestSessionServices({ workspaceRoot });
     const same = firstSend("same-command");
     const [first, replay] = await Promise.all([
       firstRuntime.sessionMessageService.applyTurnLifecycleEvent(same),
@@ -175,7 +176,7 @@ test("shared file mutation lock makes concurrent initial provisions idempotent a
 
 test("deleted Session cannot be revived by initial provision", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     await runtime.sessionCrudService.ensureSession("u1", "session-1");
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
       "u1",
@@ -194,7 +195,7 @@ test("deleted Session cannot be revived by initial provision", async () => {
 
 test("failed initial provision save leaves no empty Session artifact or summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     const scope = await repository.resolveSessionScope("u1", "session-1", "");
     const originalSave = repository.save.bind(repository);
@@ -220,7 +221,7 @@ test("failed initial provision save leaves no empty Session artifact or summary"
 
 test("summary write failure is repaired from the committed Session artifact", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     const originalUpsert = repository.upsertSessionSummary.bind(repository);
     let failures = 0;
@@ -248,7 +249,7 @@ test("summary write failure is repaired from the committed Session artifact", as
 
 test("appendTurns cannot implicitly create a missing Session", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
       "u1",
       "session-1",
@@ -266,7 +267,7 @@ test("appendTurns cannot implicitly create a missing Session", async () => {
 
 test("getSessionTurns reads from the same scoped persistence location used by appendTurns", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const session = runtime.sessionMessageService;
     const facade = createSessionFacade(runtime);
     const persistenceContext = runtime.createScopedPersistenceContext({

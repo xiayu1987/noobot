@@ -27,18 +27,12 @@ import {
 } from "./session-location-resolver.js";
 import { randomUUID } from "node:crypto";
 import { isWorkspaceRuntimeRelativePath } from "@noobot/workspace-protocol";
-import { AttachmentService } from "../artifacts/index.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
 } from "./session-generated-data.js";
-
-function createNow(now = null) {
-  if (typeof now === "function") return now;
-  return () => new Date().toISOString();
-}
 
 function normalizeContextServicePayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
@@ -90,12 +84,14 @@ function createScopedPersistenceContextFactory(pathResolver) {
 }
 
 export function createSessionServices(
-  globalConfig = {},
-  { now = null, attachmentService = null } = {},
+  globalConfig,
+  { now = () => new Date().toISOString(), attachmentService } = {},
 ) {
-  const nowFn = createNow(now);
-  const canonicalAttachmentService = attachmentService || new AttachmentService(globalConfig);
-  const pathResolver = new PathResolver(globalConfig || {});
+  if (!isFunction(now)) throw new TypeError("createSessionServices requires now function");
+  if (!isFunction(attachmentService?.ingest)) {
+    throw new TypeError("createSessionServices requires attachmentService");
+  }
+  const pathResolver = new PathResolver(globalConfig);
   const storageService = new StorageService({ pathResolver });
   const connectorInstanceRepository = new FileSystemConnectorInstanceRepository({
     workspaceRoot: globalConfig.workspaceRoot,
@@ -116,7 +112,7 @@ export function createSessionServices(
     sessionPathResolver,
     sessionTreeRepository,
     storageService,
-    now: nowFn,
+    now,
   });
 
   const taskRepository = new FileSystemTaskRepository({
@@ -136,7 +132,7 @@ export function createSessionServices(
 
   const executionRepository = new ExecutionLogRepository({
     executionRepository: fileSystemExecutionRepository,
-    now: nowFn,
+    now,
   });
 
   const sessionTreeService = new SessionTreeService({
@@ -148,20 +144,20 @@ export function createSessionServices(
     sessionRepo: sessionRepository,
     taskRepo: taskRepository,
     sessionTreeService,
-    attachmentService: canonicalAttachmentService,
-    now: nowFn,
+    attachmentService,
+    now,
   });
 
   const sessionMessageService = new SessionMessageService({
     sessionRepo: sessionRepository,
     sessionCrudService,
-    now: nowFn,
+    now,
     allocateDialogProcessId: randomUUID,
   });
 
   const executionReadService = new ExecutionReadService({
     sessionCrudService,
-    now: nowFn,
+    now,
   });
 
   const sessionContextService = new SessionContextService({
@@ -172,7 +168,7 @@ export function createSessionServices(
   const taskService = new TaskService({
     taskRepo: taskRepository,
     sessionRepo: sessionRepository,
-    now: nowFn,
+    now,
   });
 
   const executionLogService = new ExecutionLogService({
@@ -185,7 +181,7 @@ export function createSessionServices(
     sessionPathResolver,
     ...createSessionLifecycleAccess(sessionRepository),
     storageService,
-    attachmentService: canonicalAttachmentService,
+    attachmentService,
     createScopedPersistenceContext: createScopedPersistenceContextFactory(pathResolver),
     sessionTreeService,
     sessionCrudService,

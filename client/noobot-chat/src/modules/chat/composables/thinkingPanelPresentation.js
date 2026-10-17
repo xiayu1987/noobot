@@ -39,7 +39,7 @@ export function createThinkingPanelPresentation({
     });
   }
 
-  function getThinkingDetailItemKey(_groupedToolLogs, toolLogItem) {
+  function getThinkingDetailItemKey(toolLogItem) {
     return toolLogDetailKey(toolLogItem);
   }
 

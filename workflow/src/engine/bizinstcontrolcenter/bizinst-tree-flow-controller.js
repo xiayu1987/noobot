@@ -14,9 +14,13 @@ class BizinstTreeFlowControler {
     flowListener.setBizinstTreeBox(bizinstTreeBox);
 
     if (flowAction.isStartAction()) {
-      flowAction.exec(bizinstTreeBox.getRootBizinst(), null, flowListener);
+      flowAction.exec({ bizinst: bizinstTreeBox.getRootBizinst(), stepState: null, flowListener });
     } else {
-      flowAction.exec(bizinstTreeBox.getCurrentBizinst(stepState), stepState, flowListener);
+      flowAction.exec({
+        bizinst: bizinstTreeBox.getCurrentBizinst(stepState),
+        stepState,
+        flowListener,
+      });
     }
   }
 }

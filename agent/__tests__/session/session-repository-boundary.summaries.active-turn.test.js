@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import {
   withTempWorkspace,
@@ -130,7 +130,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     const userId = "u1";
     const sessionId = "active-full-detail";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
 

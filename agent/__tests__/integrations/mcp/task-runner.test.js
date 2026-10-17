@@ -28,7 +28,7 @@ function createJsonResponse(payload = {}, { status = 200, headers = {} } = {}) {
 }
 
 function createMcpFetch() {
-  return async (url, options = {}) => {
+  return async (_url, options = {}) => {
     const body = options?.body ? JSON.parse(String(options.body)) : {};
     if (body?.method === "initialize") {
       return createJsonResponse({

@@ -47,7 +47,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
     metadata: {
       contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
     },
-    async func(args = {}, runManager, config = {}) {
+    async func(args = {}, _runManager, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
       const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
       if (state?.flags?.planningCaptured !== true) {

@@ -16,7 +16,7 @@ function createSink(enabled = true) {
   return {
     records,
     isEnabled: (type) => enabled && type === "stream-delta",
-    debug: (type, build) => records.push(build()),
+    debug: (_type, build) => records.push(build()),
   };
 }
 

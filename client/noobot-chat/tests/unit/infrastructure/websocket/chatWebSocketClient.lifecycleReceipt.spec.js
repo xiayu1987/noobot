@@ -43,7 +43,7 @@ function lifecycle(eventId = "event-receipt") {
 
 function setup({ enabled = true } = {}) {
   const entries = [];
-  const debug = vi.fn((debugType, factory) => {
+  const debug = vi.fn((_debugType, factory) => {
     entries.push(factory());
     return true;
   });

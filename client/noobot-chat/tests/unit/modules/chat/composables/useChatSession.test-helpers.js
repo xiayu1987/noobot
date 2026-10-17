@@ -20,7 +20,7 @@ export const wsClientMock = {
 
 export const sessionLogClientMock = {
   log: vi.fn(() => true),
-  debug: vi.fn((debugType, factory) => factory()),
+  debug: vi.fn((_debugType, factory) => factory()),
   isEnabled: vi.fn(() => true),
   dispose: vi.fn(),
 };

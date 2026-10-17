@@ -53,7 +53,7 @@ for (const protocol of ["responses", "chat", "messages"]) {
       const replay = await testModelAccess({
         modelSpec: spec,
         body,
-        fetch: async (url, options) => {
+        fetch: async (_url, options) => {
           assert.deepEqual(JSON.parse(options.body), body);
           return Response.json(responseFor(protocol));
         },
@@ -227,7 +227,7 @@ test("cancellation reaches the adapter transport", async () => {
   const result = await testModelAccess({
     modelSpec,
     signal: controller.signal,
-    fetch: async (url, options) => {
+    fetch: async (_url, options) => {
       assert.equal(options.signal, controller.signal);
       controller.abort();
       options.signal.throwIfAborted();

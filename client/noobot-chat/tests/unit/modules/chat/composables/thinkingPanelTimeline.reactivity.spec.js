@@ -81,13 +81,7 @@ describe("thinking panel round timeline reactivity", () => {
     const allMessages = reactive([toolMessage(0), toolMessage(1), live]);
     const props = reactive({ messageItem: allMessages[2], allMessages, variant: "panel" });
     scope = effectScope();
-    const timeline = scope.run(() =>
-      useThinkingTimeline(
-        props,
-        (key) => key,
-        () => ({ running: true }),
-      ),
-    );
+    const timeline = scope.run(() => useThinkingTimeline(props, () => ({ running: true })));
     return { allMessages, live: allMessages[2], timeline };
   }
 
@@ -158,13 +152,7 @@ describe("thinking panel round timeline reactivity", () => {
       userId: "user-a",
     });
     scope = effectScope();
-    const timeline = scope.run(() =>
-      useThinkingTimeline(
-        props,
-        (key) => key,
-        () => ({ running: true }),
-      ),
-    );
+    const timeline = scope.run(() => useThinkingTimeline(props, () => ({ running: true })));
     const texts = () => timeline.thinkingContentItems.value.map((item) => item.text);
     const live = allMessages[0];
 

@@ -44,7 +44,7 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
         setTimeout(() => {
           abortController.abort({ type: "user_stop", reason: "test stop" });
         }, 0);
-        await new Promise((resolve, reject) => {
+        await new Promise((_resolve, reject) => {
           if (abortSignal?.aborted) {
             const error = new Error("aborted before node");
             error.name = "AbortError";

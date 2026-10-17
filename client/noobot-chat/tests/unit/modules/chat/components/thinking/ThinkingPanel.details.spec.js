@@ -301,7 +301,7 @@ describe("ThinkingPanel canonical details", () => {
     const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
     const group = wrapper.vm.groupExecutionLogs(messageItem)[0];
     const item = group.items[0];
-    const key = wrapper.vm.getThinkingDetailItemKey(group, item, 0);
+    const key = wrapper.vm.getThinkingDetailItemKey(item);
 
     expect(wrapper.vm.isThinkingDetailExpanded(messageItem, key)).toBe(false);
     wrapper.vm.toggleThinkingDetailExpanded(messageItem, key);
@@ -319,12 +319,12 @@ describe("ThinkingPanel canonical details", () => {
     const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
     const group = wrapper.vm.groupExecutionLogs(messageItem)[0];
     const item = group.items[0];
-    const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(group, item, 0);
-    const afterRefreshKey = wrapper.vm.getThinkingDetailItemKey(
-      group,
-      { ...item, eventId: "replayed-result-id", ts: "2026-08-01T12:00:00.000Z" },
-      9,
-    );
+    const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(item);
+    const afterRefreshKey = wrapper.vm.getThinkingDetailItemKey({
+      ...item,
+      eventId: "replayed-result-id",
+      ts: "2026-08-01T12:00:00.000Z",
+    });
 
     expect(beforeRefreshKey).toBe("tool:call-1:call");
     expect(afterRefreshKey).toBe(beforeRefreshKey);
@@ -343,11 +343,11 @@ describe("ThinkingPanel canonical details", () => {
     });
     const group = wrapper.vm.groupExecutionLogs(messageItem)[0];
     const item = group.items[0];
-    const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(group, item);
+    const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(item);
     wrapper.vm.toggleThinkingDetailExpanded(messageItem, beforeRefreshKey);
     await wrapper.vm.$nextTick();
     const replayedItem = { ...item, eventId: "replayed-call-id" };
-    const replayedKey = wrapper.vm.getThinkingDetailItemKey(group, replayedItem);
+    const replayedKey = wrapper.vm.getThinkingDetailItemKey(replayedItem);
     expect(replayedKey).toBe(beforeRefreshKey);
     expect(wrapper.vm.isThinkingDetailExpanded(messageItem, replayedKey)).toBe(true);
   });
@@ -364,11 +364,11 @@ describe("ThinkingPanel canonical details", () => {
     );
 
     expect(
-      wrapper.vm.getThinkingDetailItemKey(
-        { key: "tool-timeline" },
-        { toolCallId: "call-without-event", event: "tool_call", ts: "now" },
-        0,
-      ),
+      wrapper.vm.getThinkingDetailItemKey({
+        toolCallId: "call-without-event",
+        event: "tool_call",
+        ts: "now",
+      }),
     ).toBe("tool:call-without-event:call");
   });
 

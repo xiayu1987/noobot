@@ -478,7 +478,6 @@
     "agent/src/session/entities/message-entity.js": 4,
     "agent/src/session/entities/session-entity.js": 5,
     "agent/src/session/entities/task-entity.js": 1,
-    "agent/src/session/index.js": 1,
     "agent/src/session/repositories/file-system-session-repository/access-methods.js": 1,
     "agent/src/session/repositories/file-system-session-repository/lifecycle-methods.js": 2,
     "agent/src/session/services/execution-read-service.js": 1,

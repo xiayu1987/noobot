@@ -8,7 +8,7 @@ import { isAbsolutePathForPlatform } from "@noobot/path-resolver/syntax";
 export function workspaceFileLinkPlugin(md) {
   const renderLink =
     md.renderer.rules.link_open ||
-    ((tokens, index, options, env, self) => self.renderToken(tokens, index, options));
+    ((tokens, index, options, _env, self) => self.renderToken(tokens, index, options));
   md.renderer.rules.link_open = (tokens, index, options, env, self) => {
     const token = tokens[index];
     const href = token.attrGet("href") || "";

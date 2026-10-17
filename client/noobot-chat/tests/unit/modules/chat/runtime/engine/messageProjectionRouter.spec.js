@@ -51,7 +51,7 @@ describe("live canonical message projection", () => {
     diagnostics = [];
     setTransportDiagnosticsLogSink({
       isEnabled: (type) => type === "transport-diagnostics",
-      debug: (debugType, factory) => diagnostics.push(factory()) > 0,
+      debug: (_debugType, factory) => diagnostics.push(factory()) > 0,
     });
   });
   afterEach(() => setTransportDiagnosticsLogSink(null));

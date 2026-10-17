@@ -14,7 +14,7 @@ class StopAction extends ActionBase {
   getName() {
     return "stop";
   }
-  exec(bizinst, stepState, flowListener) {
+  exec({ bizinst, stepState, flowListener }) {
     BizinstFlowEngine.getInstance().stopBizinst(bizinst, stepState, flowListener);
   }
 }

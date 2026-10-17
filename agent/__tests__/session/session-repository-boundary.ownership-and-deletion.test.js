@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import { readExecutionLogs } from "../../src/session/session-artifact-store.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
@@ -37,7 +37,7 @@ test("session/task/execution repositories should keep file ownership boundaries"
     const sessionId = "s1";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
@@ -98,7 +98,7 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
@@ -168,7 +168,7 @@ test("ensureSession registers child Sessions in the Session Tree and deleteSessi
     const childSessionId = "workflow-child";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({
       userId,
       sessionId: rootSessionId,
@@ -219,7 +219,7 @@ test("appendTurns should not recreate session after deletion marker is set", asy
     const sessionId = "race-session";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
@@ -249,7 +249,7 @@ test("task and execution writes should not recreate a deleted session directory"
     const userId = "u1";
     const sessionId = "deleted-write-barrier";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
@@ -275,7 +275,7 @@ test("task and execution writes should not recreate a deleted session directory"
     );
     assert.equal(await exists(scope.sessionDir), false);
 
-    const restartedRuntime = createSessionServices({ workspaceRoot });
+    const restartedRuntime = createTestSessionServices({ workspaceRoot });
     assert.equal(
       await restartedRuntime.repositories.sessionRepository.isSessionDeleted(userId, sessionId),
       true,
@@ -296,7 +296,7 @@ test("late execution initialization should not restore a deleted session tree no
     const userId = "u1";
     const sessionId = "deleted-tree-node";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
 
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
@@ -321,7 +321,7 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
     const userId = "u1";
     const sessionId = "deleted-context-session";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
@@ -389,7 +389,7 @@ test("a session deleted before the lifecycle lock is rejected without creating a
     const userId = "u1";
     const sessionId = "deleted-before-lock";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const repo = runtime.repositories.sessionRepository;
     const scope = await repo.resolveSessionScope(userId, sessionId);
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
@@ -407,7 +407,7 @@ test("a child of a deleted parent is rejected before any artifact or tree node i
     const parentSessionId = "deleted-parent";
     const childSessionId = "late-child";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const repo = runtime.repositories.sessionRepository;
     await runtime.sessionCrudService.ensureSession(userId, parentSessionId);
     const parentScope = await repo.resolveSessionScope(userId, parentSessionId);

@@ -16,7 +16,7 @@ describe("stateMachineLogger", () => {
   beforeEach(() => setStateMachineDebugLogSink(null));
 
   it("emits lazy state-machine diagnostics through the centralized policy", () => {
-    const sink = { debug: vi.fn((debugType, factory) => factory()), isEnabled: () => true };
+    const sink = { debug: vi.fn((_debugType, factory) => factory()), isEnabled: () => true };
     setStateMachineDebugLogSink(sink);
 
     logStateMachineDebug("stateMachine.reducer.decision", () => ({

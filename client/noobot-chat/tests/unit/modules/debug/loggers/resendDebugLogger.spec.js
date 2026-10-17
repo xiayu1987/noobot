@@ -17,7 +17,7 @@ describe("resendDebugLogger", () => {
   });
 
   it("writes resend debug events to the session log sink for runtime-events filtering", () => {
-    const sink = { debug: vi.fn((debugType, factory) => factory()), isEnabled: () => true };
+    const sink = { debug: vi.fn((_debugType, factory) => factory()), isEnabled: () => true };
     setResendDebugLogSink(sink);
 
     logResendDebug("resend.disabled", { sessionId: "s-1" });
@@ -34,7 +34,7 @@ describe("resendDebugLogger", () => {
   });
 
   it("constructs lazy resend details only when the authoritative policy enables them", () => {
-    const sink = { debug: vi.fn((debugType, factory) => factory()), isEnabled: () => true };
+    const sink = { debug: vi.fn((_debugType, factory) => factory()), isEnabled: () => true };
     setResendDebugLogSink(sink);
 
     logResendDebug("resend.trace", {

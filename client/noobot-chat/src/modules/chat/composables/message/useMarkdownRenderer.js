@@ -65,7 +65,7 @@ attachmentInlineRefPlugin(md);
 workspaceFileLinkPlugin(md);
 const defaultFenceRenderer =
   md.renderer.rules.fence ||
-  ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx] || {};
   const info = text(token?.info).toLowerCase();

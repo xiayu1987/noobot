@@ -436,7 +436,7 @@ describe("useChatEngine.send-stream", () => {
 
   it("DONE stays locked until the authoritative terminal response succeeds", async () => {
     let releaseStream;
-    const stream = vi.fn(async (payload, onEvent) => {
+    const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.DONE,
         data: {
@@ -540,7 +540,7 @@ describe("useChatEngine.send-stream", () => {
     const diagnostics = [];
     setTransportDiagnosticsLogSink({
       isEnabled: (type) => type === "transport-diagnostics",
-      debug: (debugType, factory) => diagnostics.push(factory()) > 0,
+      debug: (_debugType, factory) => diagnostics.push(factory()) > 0,
     });
 
     await engine.send();

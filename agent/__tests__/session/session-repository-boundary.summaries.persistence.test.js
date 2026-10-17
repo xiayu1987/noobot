@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import {
   withTempWorkspace,
   canonicalActivity,
@@ -21,7 +21,7 @@ test("session save refreshes the display projection with live activity timeline"
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "live" });
     await runtime.sessionCrudService.ensureSession(userId, "live", "");
 
@@ -72,7 +72,7 @@ test("session save writes the display summary once", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({
       userId,
       sessionId: "single-summary-write",
@@ -105,7 +105,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     const userId = "u1";
     const sessionId = "checkpoint-receipt";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
 
@@ -185,7 +185,7 @@ test("concurrent saves for different sessions preserve every sessions summary en
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "B" });
     await runtime.sessionCrudService.ensureSession(userId, "A", "");

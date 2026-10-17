@@ -272,7 +272,7 @@ export function registerWorkspaceRoutes(
     requireApiKey,
     requireSuperAdmin,
     jsonRoute(
-      async (req, res) => {
+      async (_req, res) => {
         const root = workspaceRootPath();
         const userDirs = await listWorkspaceUserDirs(root, globalConfig);
         const syncedUsers = [];

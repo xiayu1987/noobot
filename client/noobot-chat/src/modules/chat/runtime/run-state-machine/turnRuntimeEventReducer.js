@@ -64,7 +64,7 @@ function createObservation({ registry, event, rawEvent, requestedSessionId, turn
   };
 }
 
-function resolveProjectedStart(current, currentValue, event, rawEvent) {
+function resolveProjectedStart(currentValue, event, rawEvent) {
   const observed = rawEvent.startedAt;
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return observed || currentValue.startedAt;
@@ -85,7 +85,7 @@ function projectTurn({ current, transition, event, rawEvent, sessionId, turnScop
   const currentValue = current || {};
   const nowMs = Number(event.timestamp || Date.now());
   const terminal = transition.next.terminal;
-  const startedAt = resolveProjectedStart(current, currentValue, event, rawEvent);
+  const startedAt = resolveProjectedStart(currentValue, event, rawEvent);
   const finishedAt = resolveProjectedFinish(currentValue, event, rawEvent, terminal);
   return {
     ...currentValue,

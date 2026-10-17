@@ -100,7 +100,7 @@ function isToolLog(logItem = {}) {
   return ["tool_call", "tool_result"].includes(text(logItem.event));
 }
 function detailKey(logItem = {}) {
-  return isToolLog(logItem) ? props.getDetailKey({ key: "tool-timeline" }, logItem) : "";
+  return isToolLog(logItem) ? props.getDetailKey(logItem) : "";
 }
 function isExpandable(logItem = {}) {
   return Boolean(

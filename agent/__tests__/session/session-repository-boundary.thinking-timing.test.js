@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
@@ -27,7 +27,7 @@ test("session save persists thinking timing fields to full session and display s
     const userId = "u-thinking";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-07-08T10:00:10.000Z" },
     );
@@ -87,7 +87,7 @@ test("session save keeps the model loop round on persisted turn timings", async 
     const userId = "u-loop-round";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-07-08T10:00:10.000Z" },
     );

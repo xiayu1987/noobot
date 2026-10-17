@@ -14,7 +14,7 @@ class BackAction extends ActionBase {
   getName() {
     return "back";
   }
-  exec(bizinst, stepState, flowListener) {
+  exec({ bizinst, stepState, flowListener }) {
     BizinstFlowEngine.getInstance().goPre(bizinst, stepState, flowListener);
   }
 }

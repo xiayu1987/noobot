@@ -10,10 +10,10 @@ import { TaskService } from "../../src/session/services/task-service.js";
 function createRepos({ session = null, bundle = { tasks: [], currentTaskId: "" } } = {}) {
   const calls = { saved: [], savedBatch: [], savedSessions: [], mutations: 0, ensured: [] };
   const sessionRepo = {
-    async resolveSessionScope(userId, sessionId, parentSessionId) {
+    async resolveSessionScope(_userId, _sessionId, parentSessionId) {
       return { resolvedParentSessionId: parentSessionId || "resolved-parent" };
     },
-    async withSessionMutation(userId, sessionId, parentSessionId, operation) {
+    async withSessionMutation(_userId, _sessionId, _parentSessionId, operation) {
       calls.mutations += 1;
       return operation();
     },
@@ -23,7 +23,7 @@ function createRepos({ session = null, bundle = { tasks: [], currentTaskId: "" }
     async findById() {
       return session;
     },
-    async save(userId, saved) {
+    async save(_userId, saved) {
       calls.savedSessions.push(saved);
     },
   };
@@ -31,10 +31,10 @@ function createRepos({ session = null, bundle = { tasks: [], currentTaskId: "" }
     async getBundle() {
       return bundle;
     },
-    async save(userId, sessionId, task) {
+    async save(_userId, _sessionId, task) {
       calls.saved.push(task);
     },
-    async saveBatch(userId, sessionId, tasks, parentSessionId, currentTaskId) {
+    async saveBatch(_userId, _sessionId, tasks, _parentSessionId, currentTaskId) {
       calls.savedBatch.push({ tasks, currentTaskId });
     },
   };

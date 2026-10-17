@@ -97,7 +97,8 @@ export default [
         "error",
         {
           vars: "all",
-          args: "after-used",
+          args: "all",
+          argsIgnorePattern: "^_",
           ignoreRestSiblings: true,
           caughtErrors: "none",
         },

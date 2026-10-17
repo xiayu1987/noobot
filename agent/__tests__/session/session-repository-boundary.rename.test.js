@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
@@ -28,7 +28,7 @@ test("renameSession should persist custom title to full, display summary and ses
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-05-14T01:02:03.000Z" },
     );
@@ -81,7 +81,7 @@ test("renameSession should validate title and return null for missing session", 
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
 
     await assert.rejects(
       () =>

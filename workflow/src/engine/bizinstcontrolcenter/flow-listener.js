@@ -162,29 +162,6 @@ class FlowListener {
     this.bizinstTreeBox.saveState(bizinst, process);
   }
 
-  noticeParentBizinst(
-    parentBizinst,
-    childBizinst,
-    compositeNodeState,
-    routeNoteInfo,
-    sourceNoteInfo,
-  ) {
-    this.logVerbose("Notified parent instance");
-    const process = new CompositeNodeStateProcess();
-    process.setNodeState(compositeNodeState);
-    process.setChildBizinst(compositeNodeState.getBizinst());
-    process.setCompositeNodeStateProcessHandleWay(
-      ECompositeNodeStateProcessHandleWay.noticeParentBizinst,
-    );
-    process.setRouteNoteInfo(routeNoteInfo);
-    process.setSourceNoteInfo(sourceNoteInfo);
-    this.getRealTimeProcess(parentBizinst)
-      .getFlowProcess()
-      .getCompositeNodeStateProcesses()
-      .push(process);
-    this.bizinstTreeBox.saveState(parentBizinst, process);
-  }
-
   start(bizinst, stateNodeState) {
     const process = new StateNodeStateProcess();
     process.setNodeState(stateNodeState);

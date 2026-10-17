@@ -167,7 +167,7 @@ function rewriteAttachmentLinkTokens(state) {
   }
 }
 
-function renderAttachmentToken(tokens, idx, options, env) {
+function renderAttachmentToken(tokens, idx, _options, env) {
   const meta = tokens[idx]?.meta || {};
   const { identity, ref, label } = meta;
   if (!identity) return escapeHtmlAttribute(ref || "");

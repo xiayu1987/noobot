@@ -46,7 +46,7 @@ const activeDetailTab = ref(DETAIL_TAB.EXECUTION);
 const rendererProjection = computed(() =>
   (Array.isArray(props.groupedToolLogs) ? props.groupedToolLogs : []).flatMap((group = {}) =>
     (Array.isArray(group.items) ? group.items : []).map((item, itemIndex) => ({
-      detailKey: props.getDetailKey(group, item, itemIndex),
+      detailKey: props.getDetailKey(item),
       group,
       item,
       itemIndex,

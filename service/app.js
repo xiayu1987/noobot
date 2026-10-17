@@ -51,10 +51,6 @@ registerGlobalMiddlewares(app, {
   defaultLocale,
 });
 
-if (shouldServeDesktopFrontend) {
-  app.use("/api", (req, _res, next) => next());
-}
-
 await registerHttpModules(app, { ...buildHttpModuleDependencies(), connectorRuntime });
 
 app.get("/health", (_, res) => res.json({ ok: true }));

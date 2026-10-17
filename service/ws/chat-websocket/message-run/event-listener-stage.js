@@ -33,7 +33,7 @@ function recordEventAudit(run, audit, { debugType, event }) {
   });
 }
 
-function onEventReceived(context, run, audit) {
+function onEventReceived(run, audit) {
   if (WORKFLOW_DIAGNOSTIC_EVENT_TYPES.has(audit.eventType)) {
     recordEventAudit(run, audit, {
       debugType: "workflow-diagnostics",
@@ -193,7 +193,7 @@ export function createMessageRunEventListener(context, run, accepted, active) {
     sessionId: run.sessionId,
     getCurrentRunMeta: () => active.runMeta,
     getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
-    onEventReceived: (audit) => onEventReceived(context, run, audit),
+    onEventReceived: (audit) => onEventReceived(run, audit),
     onDeliveryTiming: isSessionLogDebugTypeEnabled(DELIVERY_TIMING_DEBUG_TYPE)
       ? (summary) => recordDeliveryTiming(run, summary)
       : null,

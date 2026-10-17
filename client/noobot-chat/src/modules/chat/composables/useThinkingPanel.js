@@ -13,7 +13,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
   const getRuntimeView = () =>
     props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
 
-  const timeline = useThinkingTimeline(props, translate, getRuntimeView, {
+  const timeline = useThinkingTimeline(props, getRuntimeView, {
     shouldLoadThinkingDetail,
   });
   const runtime = useThinkingRuntime(props, getRuntimeView);

@@ -14,7 +14,7 @@ describe("toolLogWindowDebugLogger", () => {
   afterEach(() => setToolLogWindowDebugLogSink(null));
 
   it("routes a bounded structured record to its dedicated debug type", () => {
-    const debug = vi.fn((debugType, factory) => factory());
+    const debug = vi.fn((_debugType, factory) => factory());
     setToolLogWindowDebugLogSink({ debug, isEnabled: () => true });
 
     logToolLogWindowDebug("frontend.toolLogWindow.rendererReceived", {

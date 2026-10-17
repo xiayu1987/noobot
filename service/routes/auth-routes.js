@@ -199,7 +199,7 @@ export function registerAuthRoutes(
     requireApiKey,
     requireSuperAdmin,
     withJsonError(
-      async (req, res) => {
+      async (_req, res) => {
         const payload = await readWorkspaceUsersConfig();
         res.json({ ok: true, ...payload });
       },

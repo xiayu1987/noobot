@@ -14,7 +14,7 @@ class NextSignatureAction extends ActionBase {
   getName() {
     return "next_signature";
   }
-  exec(bizinst, currentStepState, modelStateListener) {
+  exec({ bizinst, currentStepState, modelStateListener }) {
     var actionNodeState = currentStepState.getActionNodeState();
     var index = actionNodeState.getStepStates().indexOf(currentStepState) + 1;
     BizinstModelEngine.getInstance().addStepState(

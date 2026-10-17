@@ -5,33 +5,13 @@
  */
 
 import Model from "../src/design/model/model.js";
-import Flowto from "../src/design/model/flowto/flowto.js";
-import NodeLineRLAT from "../src/design/model/flowto/node-line-rlat.js";
 import ActionNode from "../src/design/model/node/action-node.js";
 import StateNode from "../src/design/model/node/state-node.js";
 import ENodeType from "../src/design/model/node/enums/node-type.js";
 import Business from "../src/engine/bizinst/business.js";
 import SubmitAction from "../src/engine/bizinst/action/submit-action.js";
 import BizinstTreeControlCenter from "../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js";
-
-function linkFlow(model, flowName, fromNode, toNode) {
-  const flow = new Flowto();
-  flow.setName(flowName);
-  flow.setStartNode(fromNode);
-  flow.setEndNode(toNode);
-
-  const fromRLAT = new NodeLineRLAT();
-  fromRLAT.setNode(fromNode);
-  fromRLAT.setFlowto(flow);
-  fromRLAT.setRLATType(1);
-
-  const toRLAT = new NodeLineRLAT();
-  toRLAT.setNode(toNode);
-  toRLAT.setFlowto(flow);
-  toRLAT.setRLATType(0);
-
-  return { flow, fromRLAT, toRLAT };
-}
+import { linkFlow } from "./link-flow.js";
 
 function buildActionModel() {
   const model = new Model();
@@ -53,8 +33,8 @@ function buildActionModel() {
   endNode.setStateType(1);
   endNode.setModel(model);
 
-  const s2a = linkFlow(model, "开始到审核", startNode, actionNode);
-  const a2e = linkFlow(model, "审核到结束", actionNode, endNode);
+  const s2a = linkFlow("开始到审核", startNode, actionNode);
+  const a2e = linkFlow("审核到结束", actionNode, endNode);
 
   model.setNodes([startNode, actionNode, endNode]);
   model.setFlowtos([s2a.flow, a2e.flow]);

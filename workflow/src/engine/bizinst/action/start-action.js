@@ -17,7 +17,7 @@ class StartAction extends ActionBase {
   isStartAction() {
     return true;
   }
-  exec(bizinst, stepState, flowListener) {
+  exec({ bizinst, flowListener }) {
     BizinstFlowEngine.getInstance().startBizinst(bizinst, flowListener);
   }
 }

@@ -58,7 +58,7 @@ describe("chatWebSocketClient event processing timing", () => {
   it("records queue, dispatch and next-frame durations keyed by eventId", () => {
     const frames = [];
     vi.stubGlobal("requestAnimationFrame", (callback) => frames.push(callback));
-    const debug = vi.fn((debugType, factory) => factory());
+    const debug = vi.fn((_debugType, factory) => factory());
     setEventProcessingTimingLogSink({
       debug,
       isEnabled: (type) => type === "event-processing-timing",

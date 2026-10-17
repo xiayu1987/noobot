@@ -7,10 +7,8 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import {
-  createSessionServices,
-  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-} from "../../src/session/index.js";
+import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import {
   canonicalMessages,
   withTempWorkspace,
@@ -58,7 +56,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
     const userId = "u1";
     const sessionId = "canonical-display-source";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
@@ -120,7 +118,7 @@ test("failed Session repair projects an unavailable list item", async () => {
     const userId = "u1";
     const sessionId = "unavailable-display-source";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createSessionServices({ workspaceRoot });
+    const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");

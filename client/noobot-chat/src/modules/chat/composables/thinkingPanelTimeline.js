@@ -52,7 +52,6 @@ import { thinkingDetailService } from "../../../infrastructure/api/thinking/thin
 
 export function useThinkingTimeline(
   props,
-  translate,
   getRuntimeView,
   { shouldLoadThinkingDetail = () => true } = {},
 ) {

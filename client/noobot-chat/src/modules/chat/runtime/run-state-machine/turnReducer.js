@@ -199,7 +199,7 @@ function reduceInteractionProjection(current, event) {
   };
 }
 
-function allowsActionRequesting(currentState, current, event) {
+function allowsActionRequesting(currentState, event) {
   if (currentState !== FrontendRunState.PROCESSING) return false;
   if (STOP_REQUEST_EVENTS.has(event.type)) return true;
   return (
@@ -250,7 +250,7 @@ function isAllowed(current, event, nextState) {
   if (nextState === currentState) return true;
   if (FINAL_STATES.has(nextState)) return false;
   if (nextState === FrontendRunState.ACTION_REQUESTING)
-    return allowsActionRequesting(currentState, current, event);
+    return allowsActionRequesting(currentState, event);
   if (nextState === FrontendRunState.PROCESSING)
     return (
       currentState === FrontendRunState.ACTION_REQUESTING && lowerToken(current.action) !== "stop"

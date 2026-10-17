@@ -14,7 +14,7 @@ class AuditAction extends ActionBase {
   getName() {
     return "audit";
   }
-  exec(bizinst, stepState, flowListener) {
+  exec({ bizinst, stepState, flowListener }) {
     BizinstFlowEngine.getInstance().goNext(bizinst, stepState, flowListener);
   }
 }

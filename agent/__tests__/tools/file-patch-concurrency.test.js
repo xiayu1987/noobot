@@ -28,7 +28,7 @@ async function fixture(t, overrides = () => ({})) {
   const io = createWorkspaceIoExecutor({
     executionPolicy: resolveToolExecutionPolicy({ toolName: "patch_file" }),
   });
-  const workspaceIo = { ...io, ...overrides(root, io) };
+  const workspaceIo = { ...io, ...overrides({ root, io }) };
   const tool = createPatchFileTool({
     agentContext: context,
     runtime: context.bindings.runtime,
@@ -81,7 +81,7 @@ test("patch continues after script and write_file changes, recording the gaps se
 
 test("a change after patch preparation is rejected and a fresh read recovers", async (t) => {
   let interfere = true;
-  const { root, invoke } = await fixture(t, (root, io) => ({
+  const { root, invoke } = await fixture(t, ({ io }) => ({
     async readBuffer(target) {
       const buffer = await io.readBuffer(target);
       if (interfere) {
@@ -113,7 +113,7 @@ test("add cannot overwrite a file that appeared after preparation", async (t) =>
 });
 
 test("delete checks the version read during preparation", async (t) => {
-  const { root, invoke } = await fixture(t, (root, io) => ({
+  const { root, invoke } = await fixture(t, ({ io }) => ({
     async readBuffer(target) {
       const buffer = await io.readBuffer(target);
       await fs.writeFile(target, "external\n");
@@ -126,10 +126,10 @@ test("delete checks the version read during preparation", async (t) => {
 });
 
 test("move detects a changed source and restores the overwritten destination", async (t) => {
-  const { root, invoke } = await fixture(t, (root, io) => ({
+  const { root, invoke } = await fixture(t, ({ root: tmpRoot, io }) => ({
     async readBuffer(target) {
       const buffer = await io.readBuffer(target);
-      if (target.endsWith("b.txt")) await fs.writeFile(path.join(root, "a.txt"), "external\n");
+      if (target.endsWith("b.txt")) await fs.writeFile(path.join(tmpRoot, "a.txt"), "external\n");
       return buffer;
     },
   }));
@@ -143,10 +143,10 @@ test("move detects a changed source and restores the overwritten destination", a
 });
 
 test("rollback preserves external changes and still restores other files", async (t) => {
-  const { root, invoke } = await fixture(t, (root, io) => ({
+  const { root, invoke } = await fixture(t, ({ root: tmpRoot, io }) => ({
     async writeText(target, content) {
       if (target.endsWith("c.txt")) {
-        await fs.writeFile(path.join(root, "b.txt"), "external\n");
+        await fs.writeFile(path.join(tmpRoot, "b.txt"), "external\n");
         throw new Error("injected failure");
       }
       await io.writeText(target, content);
@@ -164,7 +164,7 @@ test("rollback preserves external changes and still restores other files", async
 });
 
 test("repeated updates to one file use the preceding planned version and roll back in reverse", async (t) => {
-  const { root, invoke } = await fixture(t, (root, io) => ({
+  const { root, invoke } = await fixture(t, ({ io }) => ({
     async writeText(target, content) {
       if (target.endsWith("b.txt")) throw new Error("injected failure");
       await io.writeText(target, content);

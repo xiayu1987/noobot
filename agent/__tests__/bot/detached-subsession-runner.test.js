@@ -22,7 +22,7 @@ import {
 import { CALLER_ROLE } from "../../src/bot/config/constants.js";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import {
   DETACHED_REQUEST_METADATA,
   createCompleteStrategy,
@@ -344,7 +344,7 @@ test("agent detached strategy resolves through the authoritative scoped persiste
       parentSessionId: "parent1",
       parentDialogProcessId: "parent-dialog",
     });
-    const services = createSessionServices({ workspaceRoot });
+    const services = createTestSessionServices({ workspaceRoot });
     const persistenceContext = services.createScopedPersistenceContext({
       userId: strategy.userId,
       sessionId: strategy.sessionId,

@@ -94,7 +94,7 @@ function projection(messageValue) {
 
 describe("turnProjectionStore convergence", () => {
   it("logs canonical envelope identity and payload presence at the shared reducer boundary", () => {
-    const debug = vi.fn((debugType, factory) => factory());
+    const debug = vi.fn((_debugType, factory) => factory());
     setThinkingReplayDebugLogSink({ debug, isEnabled: () => true });
     const event = envelope({
       eventId: "guidance-1",

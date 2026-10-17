@@ -17,7 +17,7 @@ import {
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
-function applyMessageEvent(store, eventName, data) {
+function applyMessageEvent(store, data) {
   return store.reduceSubSessionMessageEvent(data, { source: "test" });
 }
 
@@ -42,7 +42,6 @@ function commitPresentation(store, identity = {}) {
   const assistantMessageId = identity.presentationMessageId || identity.messageId || "message-1";
   return applyMessageEvent(
     store,
-    "turn_presentation_committed",
     messageEvent("turn_presentation_committed", {
       ...identity,
       sessionId,
@@ -108,7 +107,6 @@ describe("sub-session realtime message projection", () => {
 
     applyMessageEvent(
       store,
-      "thinking_delta",
       messageEvent("thinking", {
         ...identity,
         eventId: "thinking-1",
@@ -119,7 +117,6 @@ describe("sub-session realtime message projection", () => {
     );
     applyMessageEvent(
       store,
-      "tool_result",
       messageEvent("tool_call_end", {
         ...identity,
         eventId: "tool-result-1",
@@ -154,7 +151,6 @@ describe("sub-session realtime message projection", () => {
     });
     applyMessageEvent(
       store,
-      "thinking_delta",
       messageEvent("thinking", {
         sessionId: "child-session",
         turnScopeId: "turn-1",
@@ -172,7 +168,6 @@ describe("sub-session realtime message projection", () => {
     });
     applyMessageEvent(
       store,
-      "tool_result",
       messageEvent("tool_call_end", {
         sessionId: "child-session",
         turnScopeId: "turn-2",
@@ -203,7 +198,6 @@ describe("sub-session realtime message projection", () => {
     commitPresentation(store, identity);
     applyMessageEvent(
       store,
-      "thinking",
       messageEvent("thinking", {
         ...identity,
         eventId: "started",
@@ -251,7 +245,6 @@ describe("sub-session realtime message projection", () => {
     commitPresentation(store, identity);
     applyMessageEvent(
       store,
-      "thinking",
       messageEvent("thinking", {
         ...identity,
         eventId: "thinking-started",
@@ -409,7 +402,6 @@ describe("sub-session realtime message projection", () => {
     };
     applyMessageEvent(
       store,
-      "thinking",
       messageEvent("thinking", {
         ...identity,
         eventId: "message-arrived",
@@ -590,7 +582,7 @@ describe("sub-session realtime message projection", () => {
       nodeExecutionId: undefined,
     });
     delete missingNode.payload.nodeExecutionId;
-    expect(applyMessageEvent(store, "", missingNode)).toMatchObject({
+    expect(applyMessageEvent(store, missingNode)).toMatchObject({
       applied: false,
       reason: "invalid_authoritative_message_event",
     });
@@ -616,7 +608,6 @@ describe("sub-session realtime message projection", () => {
     commitPresentation(store, identity);
     applyMessageEvent(
       store,
-      "thinking_delta",
       messageEvent("thinking", {
         ...identity,
         parentSessionId: "parent-b",

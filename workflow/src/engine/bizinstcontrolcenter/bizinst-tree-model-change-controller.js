@@ -11,11 +11,11 @@ class BizinstTreeModelChangeControler {
   execAction(modelStateChangeAction, bizinstTreeBox, stepState) {
     var modelStateListener = new ModelStateListener();
     modelStateListener.setBizinstTreeBox(bizinstTreeBox);
-    modelStateChangeAction.exec(
-      bizinstTreeBox.getCurrentBizinst(stepState),
-      stepState,
+    modelStateChangeAction.exec({
+      bizinst: bizinstTreeBox.getCurrentBizinst(stepState),
+      currentStepState: stepState,
       modelStateListener,
-    );
+    });
   }
 }
 

@@ -140,12 +140,12 @@ function removeDeadStateFlags(state = {}) {
 }
 
 const MIGRATION_STEPS = Object.freeze([
-  { toVersion: 4, migrate: (bucket, state) => migratePlanUpdateState(state) },
-  { toVersion: 5, migrate: (bucket) => removeTaskChecklistFields(bucket) },
-  { toVersion: 6, migrate: (bucket) => removeAcceptanceReportDuplicateFields(bucket) },
-  { toVersion: 7, migrate: (bucket) => removeChecklistItemDeadFields(bucket) },
-  { toVersion: 8, migrate: (bucket) => removePlanDocumentCache(bucket) },
-  { toVersion: 9, migrate: (bucket, state) => removeDeadStateFlags(state) },
+  { toVersion: 4, migrate: ({ state }) => migratePlanUpdateState(state) },
+  { toVersion: 5, migrate: ({ bucket }) => removeTaskChecklistFields(bucket) },
+  { toVersion: 6, migrate: ({ bucket }) => removeAcceptanceReportDuplicateFields(bucket) },
+  { toVersion: 7, migrate: ({ bucket }) => removeChecklistItemDeadFields(bucket) },
+  { toVersion: 8, migrate: ({ bucket }) => removePlanDocumentCache(bucket) },
+  { toVersion: 9, migrate: ({ state }) => removeDeadStateFlags(state) },
 ]);
 
 export function migrateHarnessBucket(ctx = {}) {
@@ -166,7 +166,7 @@ export function migrateHarnessBucket(ctx = {}) {
     throw new Error(`unsupported_harness_bucket_version:${fromVersion}`);
   }
   for (const step of MIGRATION_STEPS) {
-    if (step.toVersion > fromVersion) step.migrate(bucket, state);
+    if (step.toVersion > fromVersion) step.migrate({ bucket, state });
   }
   delete state.__harnessBucketVersion;
   bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;

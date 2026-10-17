@@ -195,7 +195,7 @@ export function createChatWebSocketClient({
     }
   }
 
-  function resolveAuthoritativeSequence(event, data = {}) {
+  function resolveAuthoritativeSequence(data = {}) {
     return Number(data?.ordering?.sequence) || null;
   }
 
@@ -231,7 +231,7 @@ export function createChatWebSocketClient({
             ...summarizeReceivedEventData(observedData),
             protocolEvent: event,
             transportSequence: null,
-            authoritativeSequence: resolveAuthoritativeSequence(event, observedData),
+            authoritativeSequence: resolveAuthoritativeSequence(observedData),
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
@@ -327,7 +327,7 @@ export function createChatWebSocketClient({
             eventId: normalizeTrimmedString(data?.eventId || data?.event?.eventId),
             protocolEvent: event,
             transportSequence: Number(data?.seq || 0) || null,
-            authoritativeSequence: resolveAuthoritativeSequence(event, data),
+            authoritativeSequence: resolveAuthoritativeSequence(data),
             owner,
             dispatched: dispatchEligible,
           }));

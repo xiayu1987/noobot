@@ -73,7 +73,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   });
 
   it("records every received protocol event at the shared websocket transport boundary", async () => {
-    const debug = vi.fn((debugType, factory) => factory());
+    const debug = vi.fn((_debugType, factory) => factory());
     setTransportDiagnosticsLogSink({
       debug,
       isEnabled: (type) => type === "transport-diagnostics",

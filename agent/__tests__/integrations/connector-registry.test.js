@@ -9,7 +9,8 @@ import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os";
 import path from "node:path";
 import { FileSystemConnectorInstanceRepository } from "../../src/session/repositories/file-system-connector-instance-repository.js";
-import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
+import { createSessionFacade } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 
 const sealedParameters = (ciphertext = "c2VhbGVk") => ({
   version: 1,
@@ -86,7 +87,7 @@ test("Session facade is the connector instance persistence port", async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-connectors-"));
   try {
     const session = createSessionFacade(
-      createSessionServices({ workspaceRoot }, { now: () => "2026-08-20T00:00:00.000Z" }),
+      createTestSessionServices({ workspaceRoot }, { now: () => "2026-08-20T00:00:00.000Z" }),
     );
     const created = await session.createConnectorInstance({
       userId: "u1",

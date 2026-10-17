@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
@@ -25,7 +25,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-05-14T00:00:00.000Z" },
     );

@@ -15,7 +15,7 @@ const baseline = Object.freeze({
   maxComplexity: 48,
   nestedTernaryCount: 129,
   deepNestingCount: 22,
-  longParameterListCount: 79,
+  longParameterListCount: 78,
   hotspots: Object.freeze({
     "event-protocol/src/event-registry-validators.js": [0, 0, 0],
     "agent/src/runtime/state-builder.js": [0, 0, 0],

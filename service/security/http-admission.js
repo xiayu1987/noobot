@@ -54,7 +54,7 @@ export function createHttpAdmissionOptions({
     skip: (req) => requestClass(req) === "exempt",
     standardHeaders: "draft-8",
     legacyHeaders: false,
-    handler(req, res) {
+    handler(_req, res) {
       const retryAfterSeconds = Number(res.getHeader("Retry-After") || 1);
       res.status(429).json({ ok: false, error: "rate_limit_exceeded", retryAfterSeconds });
     },

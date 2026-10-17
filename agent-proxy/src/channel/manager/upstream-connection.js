@@ -282,7 +282,7 @@ class UpstreamConnectionMethods {
     return connection;
   }
 
-  parseUpstreamMessage(channel, rawData) {
+  parseUpstreamMessage(rawData) {
     const parsed = JSON.parse(String(rawData || "{}"));
     const eventName = text(parsed?.event);
     if (!eventName) throw new TypeError("missing_upstream_event");
@@ -389,7 +389,7 @@ class UpstreamConnectionMethods {
   }
 
   handleUpstreamMessage(channel, rawData) {
-    const { eventName, eventData } = this.parseUpstreamMessage(channel, rawData);
+    const { eventName, eventData } = this.parseUpstreamMessage(rawData);
     this.logUpstreamActionAccepted(channel, eventName, eventData);
     if (eventName === TURN_SNAPSHOT_WIRE_EVENT) {
       this.routeUpstreamSnapshot(channel, eventName, eventData);

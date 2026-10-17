@@ -685,7 +685,7 @@ test("Anthropic web search continues the turn when the server tool reports pause
   const previousFetch = globalThis.fetch;
   const bodies = [];
   const stopReasons = ["pause_turn", "end_turn"];
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = async (_url, init) => {
     const attempt = bodies.length;
     bodies.push(JSON.parse(init.body));
     return new Response(
@@ -788,7 +788,7 @@ test("prompt_cache_ttl reaches the wire through the selected cache field", () =>
 test("Anthropic Messages adapter sends the configured 1h cache_control ttl", async () => {
   const previousFetch = globalThis.fetch;
   let body;
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = async (_url, init) => {
     body = JSON.parse(init.body);
     return new Response(
       JSON.stringify({

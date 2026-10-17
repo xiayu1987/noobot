@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 
-import { createSessionServices } from "../../src/session/index.js";
+import { createTestSessionServices } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 async function withTempWorkspace(fn) {
@@ -25,7 +25,7 @@ test("createSessionServices wires repositories/services with expected dependency
   await withTempWorkspace(async (workspaceRoot) => {
     await initializeUserWorkspace(workspaceRoot, "u1");
 
-    const runtime = createSessionServices(
+    const runtime = createTestSessionServices(
       { workspaceRoot },
       { now: () => "2026-05-14T00:00:00.000Z" },
     );

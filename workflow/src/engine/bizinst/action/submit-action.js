@@ -14,7 +14,7 @@ class SubmitAction extends ActionBase {
   getName() {
     return "submit";
   }
-  exec(bizinst, stepState, flowListener) {
+  exec({ bizinst, stepState, flowListener }) {
     BizinstFlowEngine.getInstance().goNext(bizinst, stepState, flowListener);
   }
 }
