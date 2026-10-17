@@ -19,6 +19,7 @@ import {
   createEventEnvelope,
   readProtocolEventPayload,
   readProtocolEventReducerInput,
+  validateProtocolEvent,
 } from "../src/index.js";
 import {
   createTurnLifecycleEnvelope,
@@ -272,4 +273,57 @@ test("interaction request requires stable identity and a complete payload", () =
   );
   assert.equal(validateInteractionRequestPayload({ ...base, timeoutMs: 0 }).valid, false);
   assert.equal(validateInteractionRequestPayload({ ...base, timeoutMs: 1000 }).valid, true);
+});
+
+test("turn lifecycle envelope causality must equal the payload causality", () => {
+  const payload = createTurnLifecycleEnvelope({
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    eventId: "event-causality-1",
+    commandId: "command-causality-1",
+    causationId: "cause-causality-1",
+    correlationId: "turn-causality-1",
+    sessionId: "session-causality-1",
+    turnScopeId: "turn-causality-1",
+    messageId: "message-causality-1",
+    presentationMessageId: "presentation-causality-1",
+    revision: 2,
+    sequence: 2,
+    phase: TURN_PHASE.PROCESSING,
+    state: TURN_STATE.PROCESSING,
+  });
+  const envelopeWith = (causality) =>
+    createEventEnvelope({
+      family: EVENT_FAMILY.TURN_LIFECYCLE,
+      identity: {
+        eventId: payload.eventId,
+        eventType: TURN_LIFECYCLE_WIRE_EVENT,
+        sessionId: payload.sessionId,
+        turnScopeId: payload.turnScopeId,
+        messageId: payload.messageId,
+      },
+      causality,
+      ordering: { domain: "session", scopeId: payload.sessionId, sequence: 2, revision: 2 },
+      producer: { type: "test", id: "event-registry" },
+      occurredAt: payload.occurredAt,
+      payload,
+    });
+  const exact = {
+    commandId: payload.commandId,
+    causationId: payload.causationId,
+    correlationId: payload.correlationId,
+  };
+
+  assert.equal(validateProtocolEvent(envelopeWith(exact)).valid, true);
+  assert.deepEqual(validateProtocolEvent(envelopeWith({ ...exact, commandId: "" })).errors, [
+    "missing_command_id",
+    "lifecycle_commandId_mismatch",
+  ]);
+  assert.deepEqual(
+    validateProtocolEvent(envelopeWith({ ...exact, commandId: "command-other" })).errors,
+    ["lifecycle_commandId_mismatch"],
+  );
+  assert.deepEqual(
+    validateProtocolEvent(envelopeWith({ ...exact, causationId: "", correlationId: "x" })).errors,
+    ["lifecycle_causationId_mismatch", "lifecycle_correlationId_mismatch"],
+  );
 });

@@ -11,6 +11,7 @@ import { TURN_EVENT } from "@noobot/session-protocol";
 import { finalizeTurnSnapshot } from "../../ws/chat-websocket/turn-recovery.js";
 
 import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
+import { validateProtocolEvent } from "@noobot/event-protocol";
 import {
   createAcceptedAgentExecutionIdentity,
   createProtocolTestCommand,
@@ -110,12 +111,13 @@ test("execution queries expose authoritative snapshot, children and tree envelop
     revision: 1,
     sequence: 1,
   };
+  const generatedAt = "2026-10-17T00:00:00.000Z";
   const bot = {
     async getExecution() {
-      return { found: true, execution: root, generatedAt: "now" };
+      return { found: true, execution: root, generatedAt };
     },
     async getExecutionChildren() {
-      return { found: true, execution: root, children: [child], generatedAt: "now" };
+      return { found: true, execution: root, children: [child], generatedAt };
     },
     async getExecutionTree() {
       return {
@@ -129,7 +131,7 @@ test("execution queries expose authoritative snapshot, children and tree envelop
           },
           rootExecutionIds: [root.executionId],
         },
-        generatedAt: "now",
+        generatedAt,
       };
     },
   };
@@ -148,6 +150,7 @@ test("execution queries expose authoritative snapshot, children and tree envelop
         commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
         sessionId: "root-session",
         executionId: root.executionId,
+        rootExecutionId: "",
         commandId: "q1",
       }),
     ),
@@ -158,6 +161,7 @@ test("execution queries expose authoritative snapshot, children and tree envelop
         commandType: EXECUTION_QUERY_COMMAND.CHILDREN_GET,
         sessionId: "root-session",
         executionId: root.executionId,
+        rootExecutionId: "",
         commandId: "q2",
       }),
     ),
@@ -167,6 +171,7 @@ test("execution queries expose authoritative snapshot, children and tree envelop
       createProtocolTestCommand({
         commandType: EXECUTION_QUERY_COMMAND.TREE_GET,
         sessionId: "root-session",
+        executionId: "",
         rootExecutionId: root.executionId,
         commandId: "q3",
       }),
@@ -177,9 +182,17 @@ test("execution queries expose authoritative snapshot, children and tree envelop
     ["execution_snapshot", "execution_children", "execution_tree"],
   );
   assert.deepEqual(
-    sent.map(({ data }) => data.commandId),
+    sent.map(({ data }) => data.causality.commandId),
     ["q1", "q2", "q3"],
   );
+  for (const { data } of sent) {
+    assert.equal(validateProtocolEvent(data).valid, true);
+    assert.equal(data.identity.executionId, root.executionId);
+    assert.equal(data.ordering.scopeId, root.executionId);
+    assert.equal(data.occurredAt, generatedAt);
+    assert.equal("commandId" in data, false);
+  }
+  assert.deepEqual(Object.keys(sent[2].data.payload).sort(), ["rootExecutionId", "tree"]);
 });
 
 test("execution query rejects malformed and unavailable requests", async () => {
@@ -194,13 +207,16 @@ test("execution query rejects malformed and unavailable requests", async () => {
       resolveBot: () => bot,
     });
   await create()(
-    JSON.stringify(
-      createProtocolTestCommand({
+    JSON.stringify({
+      ...createProtocolTestCommand({
         commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
         sessionId: "s1",
+        executionId: "agent:x",
+        rootExecutionId: "",
         commandId: "bad",
       }),
-    ),
+      query: { executionId: "", rootExecutionId: "" },
+    }),
   );
   await create()(
     JSON.stringify(
@@ -208,6 +224,7 @@ test("execution query rejects malformed and unavailable requests", async () => {
         commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
         sessionId: "s1",
         executionId: "agent:x",
+        rootExecutionId: "",
         commandId: "missing-reader",
       }),
     ),
@@ -215,7 +232,7 @@ test("execution query rejects malformed and unavailable requests", async () => {
   assert.deepEqual(
     sent.map(({ data }) => ({ commandId: data.commandId, code: data.error?.code })),
     [
-      { commandId: "bad", code: "missing_execution_id" },
+      { commandId: "bad", code: "invalid_execution_query_target" },
       { commandId: "missing-reader", code: "execution_query_unavailable" },
     ],
   );

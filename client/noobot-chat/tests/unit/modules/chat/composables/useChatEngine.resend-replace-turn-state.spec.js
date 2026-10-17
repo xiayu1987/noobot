@@ -34,6 +34,7 @@ describe("useChatEngine.resend replacement turn state", () => {
         aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
       });
     });
     const applySessionDetail = vi.fn((detail) => {

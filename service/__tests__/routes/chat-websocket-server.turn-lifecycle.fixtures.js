@@ -26,6 +26,7 @@ import {
   createAcceptedAgentExecutionIdentity,
   createProtocolTestCommand,
 } from "./chat-websocket-server.test-helpers.js";
+import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 import { text } from "@noobot/shared/value";
 
 const TEST_EVENT_FACTS = Object.freeze({
@@ -60,6 +61,8 @@ export function createTestLifecycleEnvelope({
   const payload = createTurnLifecycleEnvelope({
     eventId,
     commandId: `${eventId}:command`,
+    causationId: `${eventId}:command`,
+    correlationId: turnScopeId,
     eventType,
     userId: "u1",
     sessionId,
@@ -89,8 +92,8 @@ export function createTestLifecycleEnvelope({
     },
     causality: {
       commandId: payload.commandId,
-      causationId: payload.commandId,
-      correlationId: payload.turnScopeId,
+      causationId: payload.causationId,
+      correlationId: payload.correlationId,
     },
     ordering: {
       domain: "session",
@@ -311,6 +314,8 @@ export async function requestTurnSnapshot({
             userId: "u1",
             sessionId,
             commandId,
+            knownSequence: 0,
+            terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT,
           }),
         ),
       ),

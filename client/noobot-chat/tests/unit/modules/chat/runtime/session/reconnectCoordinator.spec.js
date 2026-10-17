@@ -6,8 +6,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { createReconnectControl, createReconnectData } from "@noobot/agent-transport-protocol";
+import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
+import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { createReconnectCoordinator } from "../../../../../../src/modules/chat/runtime/session/reconnectCoordinator.js";
 import { createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { executionTurnKey } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistryIdentity.js";
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("createReconnectCoordinator", () => {
@@ -115,5 +118,79 @@ describe("createReconnectCoordinator", () => {
       error: "projection failed",
     });
     expect(notify).toHaveBeenCalledWith({ type: "warning", message: "infra.reconnectFailed" });
+  });
+
+  it("does not replay a direct execution restore response delivered to the live subscriber", async () => {
+    const registry = createTurnRuntimeRegistryState();
+    registry.sessions["s-1"] = {
+      activeTurnScopeId: "turn-1",
+      turns: { "turn-1": { sessionId: "s-1", turnScopeId: "turn-1", state: "processing" } },
+    };
+    const executionId = deriveAgentExecutionId({ turnScopeId: "turn-1" });
+    registry.executionIdByTurnScopeId[executionTurnKey("s-1", "turn-1")] = executionId;
+    const execution = {
+      executionId,
+      executionKind: "agent",
+      rootExecutionId: executionId,
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      revision: 1,
+      sequence: 1,
+      state: "processing",
+    };
+    let liveSubscriber = null;
+    const reconnectReplay = {
+      applyReconnectData: vi.fn(),
+      applyReconnectEvent: vi.fn(async () => ({ applied: true })),
+    };
+    const responseFor = (command) =>
+      command.commandType === "execution.tree.get"
+        ? {
+            event: StreamEventEnum.EXECUTION_TREE,
+            payload: {
+              rootExecutionId: executionId,
+              tree: { executions: { [executionId]: execution } },
+            },
+          }
+        : { event: StreamEventEnum.EXECUTION_SNAPSHOT, payload: { execution } };
+    const chatWebSocketClient = {
+      reconnect: vi.fn(async ({ onReconnectData }) => {
+        liveSubscriber = onReconnectData;
+      }),
+      requestJson: vi.fn(async (command) => {
+        const { event, payload } = responseFor(command);
+        const data = createExecutionQueryEnvelope({
+          wireEvent: event,
+          commandId: command.commandId,
+          executionId,
+          payload,
+          occurredAt: "2026-01-01T00:00:00.000Z",
+        });
+        liveSubscriber({ event, data });
+        return { event, data };
+      }),
+    };
+    const coordinator = createReconnectCoordinator({
+      activeSession: ref({ sessionId: "s-1", messages: [] }),
+      activeSessionId: ref("s-1"),
+      turnRuntimeRegistry: ref(registry),
+      chatWebSocketClient,
+      reconnectReplay,
+      chatList: {},
+      resolveActiveSessionIdentity: () => "s-1",
+      resolveActiveTurnScopeIdentity: () => "turn-1",
+      logSessionSystemEvent: vi.fn(),
+      notify: vi.fn(),
+      translate: (key) => key,
+    });
+
+    await coordinator.handleReconnect();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(chatWebSocketClient.requestJson).toHaveBeenCalledTimes(2);
+    expect(reconnectReplay.applyReconnectEvent.mock.calls.map(([event]) => event)).toEqual([
+      StreamEventEnum.EXECUTION_TREE,
+      StreamEventEnum.EXECUTION_SNAPSHOT,
+    ]);
   });
 });

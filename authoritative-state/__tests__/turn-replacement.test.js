@@ -92,6 +92,8 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
   const snapshot = createAuthoritativeTurnSnapshot({
     lifecycle: committed.lifecycle,
     sessionId: "session-1",
+    knownSequence: 0,
+    terminalLimit: 10,
   });
   assert.equal(snapshot.activeTurn, null);
   assert.deepEqual(snapshot.recentTerminalTurns, []);

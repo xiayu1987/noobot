@@ -7,6 +7,7 @@ import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import { executionTurnKey } from "../run-state-machine/turnRuntimeRegistryIdentity.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineTurn,
@@ -57,27 +58,24 @@ export function createReconnectCoordinator({
           const packetData = reconnectPayload.data;
           const isReconnectData = protocolEvent === StreamEventEnum.RECONNECT_DATA;
           const reconnectSessionCount = isReconnectData ? packetData.sessions.length : 0;
+          const packetSessionId = text(packetData?.identity?.sessionId);
+          const packetTurnScopeId = text(packetData?.identity?.turnScopeId);
+          const packetCommandId = text(packetData?.causality?.commandId);
           logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", () => ({
             sessionId: reconnectSessionId,
             protocolEvent,
             sessionCount: reconnectSessionCount,
-            dataSequence: packetData?.sequence ?? packetData?.seq ?? null,
-            dialogProcessId: String(packetData?.dialogProcessId || ""),
-            turnScopeId: String(packetData?.turnScopeId || ""),
+            dataSequence: packetData?.ordering?.sequence,
+            turnScopeId: packetTurnScopeId,
             dataKeys: Object.keys(packetData || {}).sort(),
           }));
           logStateMachineDebug("stateMachine.reconnect.packet.queued", () => ({
-            sessionId: String(packetData?.sessionId || reconnectSessionId),
-            dialogProcessId: String(packetData?.dialogProcessId || ""),
-            turnScopeId: String(packetData?.turnScopeId || ""),
+            sessionId: packetSessionId,
+            turnScopeId: packetTurnScopeId,
             protocolEvent,
-            commandId: String(packetData?.commandId || ""),
-            transportSequence: Number(packetData?.seq || 0),
+            commandId: packetCommandId,
             activeTurnBefore: summarizeStateMachineTurn(
-              resolveSessionTurnRuntime(
-                turnRuntimeRegistry.value,
-                String(packetData?.sessionId || reconnectSessionId),
-              ),
+              resolveSessionTurnRuntime(turnRuntimeRegistry.value, packetSessionId),
             ),
             snapshot:
               reconnectPayload?.event === StreamEventEnum.TURN_SNAPSHOT
@@ -87,13 +85,12 @@ export function createReconnectCoordinator({
           }));
           const replayPayload = async () => {
             if (isReconnectData) return reconnectReplay.applyReconnectData(packetData);
-            if (directExecutionRestoreCommandIds.has(text(packetData?.commandId))) {
+            if (directExecutionRestoreCommandIds.has(packetCommandId)) {
               return { applied: false, reason: "direct_execution_restore_owned" };
             }
             return reconnectReplay.applyReconnectEvent(protocolEvent, packetData);
           };
           const replayAndTrace = async () => {
-            const packetSessionId = String(packetData?.sessionId || reconnectSessionId);
             try {
               const result = await replayPayload();
               const activeTurn = resolveSessionTurnRuntime(
@@ -102,12 +99,9 @@ export function createReconnectCoordinator({
               );
               logStateMachineDebug("stateMachine.reconnect.packet.committed", () => ({
                 sessionId: packetSessionId,
-                dialogProcessId: String(
-                  packetData?.dialogProcessId || activeTurn?.dialogProcessId || "",
-                ),
-                turnScopeId: String(packetData?.turnScopeId || activeTurn?.turnScopeId || ""),
+                turnScopeId: packetTurnScopeId,
                 protocolEvent,
-                commandId: String(packetData?.commandId || ""),
+                commandId: packetCommandId,
                 applied: result?.applied === true,
                 reason: result?.reason || "",
                 activeTurnAfter: summarizeStateMachineTurn(activeTurn),
@@ -121,12 +115,9 @@ export function createReconnectCoordinator({
               );
               logStateMachineDebug("stateMachine.reconnect.packet.failed", () => ({
                 sessionId: packetSessionId,
-                dialogProcessId: String(
-                  packetData?.dialogProcessId || activeTurn?.dialogProcessId || "",
-                ),
-                turnScopeId: String(packetData?.turnScopeId || activeTurn?.turnScopeId || ""),
+                turnScopeId: packetTurnScopeId,
                 protocolEvent,
-                commandId: String(packetData?.commandId || ""),
+                commandId: packetCommandId,
                 errorType: String(error?.name || "Error"),
                 errorCode: String(error?.code || ""),
                 errorMessage: String(error?.message || error || "").slice(0, 240),
@@ -172,8 +163,8 @@ export function createReconnectCoordinator({
         );
         const executionId = text(
           turnRuntimeRegistry.value?.executionIdByTurnScopeId?.[
-            `${sessionId}::${currentTurn?.turnScopeId || ""}`
-          ] || currentTurn?.executionId,
+            executionTurnKey(sessionId, currentTurn?.turnScopeId)
+          ],
         );
         if (!executionId) return;
         const execution = turnRuntimeRegistry.value?.executions?.[executionId] || {};
@@ -189,7 +180,7 @@ export function createReconnectCoordinator({
             rootExecutionId: String(payload?.rootExecutionId || ""),
           }));
           try {
-            const response = await chatWebSocketClient.requestJson(
+            const { event, data } = await chatWebSocketClient.requestJson(
               createExecutionQueryCommand({
                 commandType: action,
                 commandId,
@@ -198,15 +189,12 @@ export function createReconnectCoordinator({
               }),
               { expectedEvents: [expectedEvent] },
             );
-            const result = await reconnectReplay.applyReconnectEvent(
-              response?.identity?.eventType,
-              response,
-            );
+            const result = await reconnectReplay.applyReconnectEvent(event, data);
             logStateMachineDebug("stateMachine.reconnect.executionQuery.after", () => ({
               sessionId: reconnectSessionId,
               commandType: action,
               commandId,
-              responseEvent: String(response?.identity?.eventType || ""),
+              responseEvent: event,
               applied: result?.applied === true,
               reason: String(result?.reason || ""),
             }));
@@ -230,12 +218,12 @@ export function createReconnectCoordinator({
         try {
           await requestExecution(
             "execution.tree.get",
-            { rootExecutionId },
+            { executionId: "", rootExecutionId },
             StreamEventEnum.EXECUTION_TREE,
           );
           await requestExecution(
             "execution.snapshot.get",
-            { executionId },
+            { executionId, rootExecutionId: "" },
             StreamEventEnum.EXECUTION_SNAPSHOT,
           );
           logStateMachineDebug("stateMachine.reconnect.executionRestore.complete", () => ({

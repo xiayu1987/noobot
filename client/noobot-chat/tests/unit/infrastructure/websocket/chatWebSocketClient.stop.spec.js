@@ -44,7 +44,6 @@ describe("chatWebSocketClient stop transport", () => {
     let resolved = false;
     const runCommand = streamCommand({
       sessionId: "s-1",
-      dialogProcessId: "main-dp",
       turnScopeId: "main-turn",
     });
     const streamPromise = client.stream(runCommand, vi.fn()).then(() => {

@@ -16,7 +16,6 @@ import {
   selectTurnMessageRuntime,
   turnRuntimeDisplayState,
   applyExecutionSnapshot,
-  applyExecutionTree,
   executionTurnKey,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
@@ -33,7 +32,7 @@ import {
 } from "./turnRuntimeRegistryTestFixtures.js";
 
 describe("turnRuntimeRegistry: registration and routing", () => {
-  it("indexes canonical Execution Turn identities per Session and removes only the targeted Session", () => {
+  it("indexes canonical Execution Turn identities per Session", () => {
     const registry = createTurnRuntimeRegistryState();
     const execution = (sessionId, turnScopeId) => {
       const executionId = deriveAgentExecutionId({ turnScopeId });
@@ -53,8 +52,8 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     const first = execution("s1", "workflow-node:run-1");
     const second = execution("s2", "workflow-node_run-2");
 
-    expect(applyExecutionSnapshot(registry, first).applied).toBe(true);
-    expect(applyExecutionSnapshot(registry, second).applied).toBe(true);
+    expect(applyExecutionSnapshot(registry, { execution: first }).applied).toBe(true);
+    expect(applyExecutionSnapshot(registry, { execution: second }).applied).toBe(true);
     expect(registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_run-1")]).toBe(
       first.executionId,
     );
@@ -64,18 +63,6 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     expect(
       registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node:run-1")],
     ).toBeUndefined();
-
-    applyExecutionTree(registry, {
-      rootExecutionId: first.executionId,
-      tree: { executions: { [first.executionId]: registry.executions[first.executionId] } },
-      removedExecutions: [{ executionId: first.executionId, revision: 2, sequence: 2 }],
-    });
-    expect(
-      registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_run-1")],
-    ).toBeUndefined();
-    expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node_run-2")]).toBe(
-      second.executionId,
-    );
   });
   it("creates and activates a session turn", () => {
     const registry = createTurnRuntimeRegistryState();

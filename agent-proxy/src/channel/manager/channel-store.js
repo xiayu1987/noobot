@@ -147,8 +147,7 @@ function cleanupTerminalChannel(store, channel, scope, nextState) {
   );
 }
 
-function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
-  const sequence = Number(knownSequence || 0);
+function buildTurnLifecycleReplay(window, sequence) {
   if (!window.length) return { events: [], hasReplayGap: sequence > 0 };
   const first = Number(window[0]?.ordering?.sequence || 0);
   let previous = first - 1;
@@ -475,13 +474,13 @@ class ChannelStoreMethods {
     return next;
   }
 
-  getTurnLifecycleReplay(channel, sessionId = "", knownSequence = 0) {
+  getTurnLifecycleReplay(channel, sessionId, knownSequence) {
     const normalizedSessionId = text(sessionId);
     const window = channel?.lifecycleWindowsBySessionId?.get(normalizedSessionId) || [];
     return buildTurnLifecycleReplay(window, knownSequence);
   }
 
-  getTurnLifecycleReplayForChannels(channels = [], sessionId = "", knownSequence = 0) {
+  getTurnLifecycleReplayForChannels(channels, sessionId, knownSequence) {
     const normalizedSessionId = text(sessionId);
     const mergedBySequence = new Map();
     for (const channel of channels) {

@@ -9,6 +9,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createTurnSnapshotCommand } from "@noobot/agent-transport-protocol";
+import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 import { writeAgentTransportDebugEvent } from "../../src/runtime-events/agent-transport-debug-runtime-events.js";
 import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
 
@@ -25,7 +26,7 @@ test("reconnect snapshot forward event takes identity from channel key without s
   const command = createTurnSnapshotCommand({
     commandId: "proxy-snapshot:child-session:test",
     identity: { sessionId: "child-session" },
-    options: { knownSequence: 0 },
+    options: { knownSequence: 0, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
   });
 
   try {

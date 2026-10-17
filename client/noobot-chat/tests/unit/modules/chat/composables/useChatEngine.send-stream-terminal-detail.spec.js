@@ -67,12 +67,14 @@ describe("useChatEngine.send-stream terminal detail", () => {
         role: RoleEnum.USER,
         content: "edited question",
         turnScopeId: "client-turn:fresh",
+        dialogProcessId: "dialog:client-turn:fresh",
       },
     ];
 
     await harness.engine.send({
       content: "edited question",
       turnScopeId: "client-turn:fresh",
+      dialogProcessId: "dialog:client-turn:fresh",
       reuseExistingUserTurn: true,
       userMessageId: "msg-user-fresh",
     });

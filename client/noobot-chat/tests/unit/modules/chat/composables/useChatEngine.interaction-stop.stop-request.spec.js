@@ -256,19 +256,21 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
   it("stopSending targets a child Agent by executionId with authoritative identity and revision", () => {
     const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
     applyExecutionSnapshot(turnRuntimeRegistry.value, {
-      executionId: CHILD_EXECUTION_ID,
-      executionKind: "agent",
-      parentExecutionId: "workflow-execution",
-      rootExecutionId: "workflow-execution",
-      sessionId: "child-session",
-      parentSessionId: "main-session",
-      dialogProcessId: "child-dialog",
-      turnScopeId: "child-turn",
-      state: "processing",
-      terminal: false,
-      revision: 7,
-      sequence: 9,
-      capabilities: { canStop: true },
+      execution: {
+        executionId: CHILD_EXECUTION_ID,
+        executionKind: "agent",
+        parentExecutionId: "workflow-execution",
+        rootExecutionId: "workflow-execution",
+        sessionId: "child-session",
+        parentSessionId: "main-session",
+        dialogProcessId: "child-dialog",
+        turnScopeId: "child-turn",
+        state: "processing",
+        terminal: false,
+        revision: 7,
+        sequence: 9,
+        capabilities: { canStop: true },
+      },
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
@@ -292,17 +294,19 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
     const add = (executionId, overrides = {}) =>
       applyExecutionSnapshot(turnRuntimeRegistry.value, {
-        executionId,
-        executionKind: "agent",
-        rootExecutionId: executionId,
-        sessionId: `${executionId}-session`,
-        turnScopeId: `${executionId}-turn`,
-        state: "processing",
-        terminal: false,
-        revision: 1,
-        sequence: 1,
-        capabilities: { canStop: true },
-        ...overrides,
+        execution: {
+          executionId,
+          executionKind: "agent",
+          rootExecutionId: executionId,
+          sessionId: `${executionId}-session`,
+          turnScopeId: `${executionId}-turn`,
+          state: "processing",
+          terminal: false,
+          revision: 1,
+          sequence: 1,
+          capabilities: { canStop: true },
+          ...overrides,
+        },
       });
     add("terminal-execution", { state: "completed", terminal: true });
     add("locked-execution", { capabilities: { canStop: false } });

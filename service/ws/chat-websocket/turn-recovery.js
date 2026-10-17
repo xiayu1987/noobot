@@ -59,7 +59,7 @@ export async function finalizeTurnSnapshot({
   const read = snapshotReader(bot);
   if (!read) return { recovered: false, reason: "lifecycle_snapshot_unavailable" };
   const identity = identityOf(identityInput);
-  const initial = await read({ ...identity, commandId, terminalLimit });
+  const initial = await read({ ...identity, commandId, knownSequence: 0, terminalLimit });
   if (!initial?.found) {
     return { recovered: false, reason: initial?.reason || "snapshot_not_found" };
   }
@@ -81,6 +81,7 @@ export async function finalizeTurnSnapshot({
     bot,
     inspectExecution,
     commandId,
+    knownSequence: 0,
     terminalLimit,
   });
   if (!result?.found) return { ...recovered, reason: result?.reason || "snapshot_not_found" };

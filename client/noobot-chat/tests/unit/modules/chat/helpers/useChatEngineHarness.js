@@ -106,11 +106,10 @@ export function makeTurnReplacementResponse({
   aggregateVersion,
   replacedTurnScopeIds,
   replacementUser,
+  replacementDialogProcessId,
   messages = [replacementUser],
   session = {},
 }) {
-  const replacementDialogProcessId =
-    replacementUser.dialogProcessId || `dialog:${replacementUser.turnScopeId}`;
   const committedMessages = messages.map((message) =>
     message === replacementUser
       ? { ...message, dialogProcessId: replacementDialogProcessId }

@@ -51,7 +51,6 @@ export function createAcceptedAgentExecutionIdentity({ turnScopeId } = {}) {
 }
 
 export function createProtocolTestCommand(payload = {}) {
-  if (Number(payload?.protocolVersion) === 1) return payload;
   const action = text(payload?.action).toLowerCase();
   const commandType = text(payload?.commandType).toLowerCase();
   const config = payload?.config && typeof payload.config === "object" ? payload.config : {};
@@ -427,7 +426,7 @@ export async function closeServer(serverHandle) {
   });
 }
 
-export async function callChatWs({ port, payload = {}, timeoutMs = 2000 } = {}) {
+export async function callChatWs({ port, payload = {}, frame, timeoutMs = 2000 } = {}) {
   return new Promise((resolve, reject) => {
     const messages = [];
     const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
@@ -441,7 +440,7 @@ export async function callChatWs({ port, payload = {}, timeoutMs = 2000 } = {}) 
       clearTimeout(timer);
       callback(value);
     };
-    ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand(payload))));
+    ws.on("open", () => ws.send(JSON.stringify(frame ?? createProtocolTestCommand(payload))));
     ws.on("message", (raw) => {
       try {
         const parsed = JSON.parse(String(raw || "{}"));

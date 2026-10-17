@@ -179,6 +179,8 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
     userId: "u1",
     sessionId: "s1",
     commandId: "snapshot-after-delete",
+    knownSequence: 0,
+    terminalLimit: 10,
   });
   assert.deepEqual(
     summary.messages.map((message) => message.turnScopeId),

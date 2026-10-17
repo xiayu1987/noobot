@@ -17,6 +17,7 @@ import {
 } from "../session-display-source-revision.js";
 import { text } from "@noobot/shared/value";
 import { requireSessionAggregateVersion } from "@noobot/session-protocol";
+import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 28;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
@@ -119,6 +120,8 @@ function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
   return createSessionTurnLifecycleSnapshot({
     session,
     commandId: `session-summary:${sessionId}:${Number(lifecycle.sequence || 0)}`,
+    knownSequence: 0,
+    terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT,
     generatedAt: text(session.updatedAt),
   });
 }

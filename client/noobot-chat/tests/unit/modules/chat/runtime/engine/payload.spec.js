@@ -7,32 +7,44 @@ import { describe, expect, it } from "vitest";
 
 import { buildChatPayload } from "../../../../../../src/modules/chat/runtime/engine/payload.js";
 
+function buildRequiredPayload(options) {
+  return buildChatPayload({
+    activeSession: { value: { sessionId: "session-1", isLocal: false } },
+    userMessageId: `user-message:${options.turnScopeId}`,
+    assistantMessageId: `assistant-message:${options.turnScopeId}`,
+    expectedAggregateVersion: 0,
+    ...options,
+  });
+}
+
 describe("buildChatPayload model preferences", () => {
   it("grants session provision intent only to an initial send", () => {
     expect(
-      buildChatPayload({
+      buildRequiredPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: true } },
         message: "new",
         turnScopeId: "turn-1",
       }).session.createIfAbsent,
     ).toBe(true);
     expect(
-      buildChatPayload({
+      buildRequiredPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: false } },
         message: "existing",
         turnScopeId: "turn-1",
       }).session.createIfAbsent,
     ).toBe(false);
     expect(
-      buildChatPayload({
+      buildRequiredPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: true } },
         message: "continue",
         turnScopeId: "turn-1",
         continueFromStopped: true,
+        resumeDialogProcessId: "dlg-stopped",
+        resumeTurnScopeId: "turn-stopped",
       }).session.createIfAbsent,
     ).toBe(false);
     expect(
-      buildChatPayload({
+      buildRequiredPayload({
         activeSession: { value: { sessionId: "session-1", isLocal: true } },
         message: "resend",
         turnScopeId: "turn-1",
@@ -43,37 +55,40 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("disables text streaming by default", () => {
-    expect(buildChatPayload({ message: "x", turnScopeId: "turn-1" }).preferences.streaming).toBe(
-      false,
-    );
     expect(
-      buildChatPayload({ message: "x", turnScopeId: "turn-1" }).preferences
+      buildRequiredPayload({ message: "x", turnScopeId: "turn-1" }).preferences.streaming,
+    ).toBe(false);
+    expect(
+      buildRequiredPayload({ message: "x", turnScopeId: "turn-1" }).preferences
         .frontendThresholdsEnabled,
     ).toBe(false);
   });
 
   it("enables output sanitization by default and sends an explicit opt-out", () => {
     expect(
-      buildChatPayload({ message: "x", turnScopeId: "turn-1" }).preferences.sanitizeOutput,
+      buildRequiredPayload({ message: "x", turnScopeId: "turn-1" }).preferences.sanitizeOutput,
     ).toBe(true);
     expect(
-      buildChatPayload({ message: "x", turnScopeId: "turn-1", sanitizeOutput: false }).preferences
-        .sanitizeOutput,
+      buildRequiredPayload({ message: "x", turnScopeId: "turn-1", sanitizeOutput: false })
+        .preferences.sanitizeOutput,
     ).toBe(false);
   });
 
   it("normalizes and sends the safety confirmation level", () => {
     expect(
-      buildChatPayload({ message: "x", turnScopeId: "turn-1", safeConfirmLevel: { value: "HIGH" } })
-        .preferences.confirmationLevel,
+      buildRequiredPayload({
+        message: "x",
+        turnScopeId: "turn-1",
+        safeConfirmLevel: { value: "HIGH" },
+      }).preferences.confirmationLevel,
     ).toBe("high");
     expect(
-      buildChatPayload({ message: "x", turnScopeId: "turn-1", safeConfirmLevel: "invalid" })
+      buildRequiredPayload({ message: "x", turnScopeId: "turn-1", safeConfirmLevel: "invalid" })
         .preferences.confirmationLevel,
     ).toBe("low");
   });
   it("writes selectedModel and current scenario pluginModelConfig to preferences", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       userId: "admin",
       message: "hello",
       turnScopeId: "turn-1",
@@ -129,7 +144,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("writes the canonical main-flow summary policy to preferences", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       activeSession: { value: { sessionId: "session-1" } },
       message: "hello",
       turnScopeId: "turn-1",
@@ -142,7 +157,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("accepts selectedPlugins as a plain array", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       userId: "admin",
       message: "hello",
       turnScopeId: "turn-1",
@@ -153,7 +168,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("carries the preallocated assistant message identity once in presentation", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       message: "hello",
       turnScopeId: "turn-1",
       assistantMessageId: "  msg_assistant-1  ",
@@ -165,7 +180,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("carries the preallocated user message identity once in presentation", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       message: "hello",
       turnScopeId: "turn-1",
       userMessageId: "  msg_user-1  ",
@@ -176,7 +191,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("keeps new Turn revision separate from the caller-owned session version", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       message: "hello",
       turnScopeId: "turn-1",
       expectedAggregateVersion: 7,
@@ -187,7 +202,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("carries connector selection only as initial state for a new Session", () => {
-    const localPayload = buildChatPayload({
+    const localPayload = buildRequiredPayload({
       activeSession: {
         value: {
           sessionId: "local-1",
@@ -198,7 +213,7 @@ describe("buildChatPayload model preferences", () => {
       message: "hello",
       turnScopeId: "turn-1",
     });
-    const persistedPayload = buildChatPayload({
+    const persistedPayload = buildRequiredPayload({
       activeSession: {
         value: {
           sessionId: "persisted-1",
@@ -221,7 +236,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("carries the Session-committed resend dialog identity once in transport identity", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       activeSession: { value: { sessionId: "session-1" } },
       message: "edited",
       reuseExistingUserTurn: true,
@@ -238,9 +253,13 @@ describe("buildChatPayload model preferences", () => {
   it("leaves dialog identity of send and continue to service acceptance", () => {
     for (const options of [
       {},
-      { continueFromStopped: true, resumeDialogProcessId: "dlg-stopped" },
+      {
+        continueFromStopped: true,
+        resumeDialogProcessId: "dlg-stopped",
+        resumeTurnScopeId: "turn-stopped",
+      },
     ]) {
-      const payload = buildChatPayload({
+      const payload = buildRequiredPayload({
         activeSession: { value: { sessionId: "session-1" } },
         message: "hello",
         dialogProcessId: "dialog-client",
@@ -252,7 +271,7 @@ describe("buildChatPayload model preferences", () => {
   });
 
   it("builds independent continue payload with new turn and stopped snapshot identity", () => {
-    const payload = buildChatPayload({
+    const payload = buildRequiredPayload({
       userId: "admin",
       activeSession: { value: { sessionId: "s1" } },
       message: "continue question",

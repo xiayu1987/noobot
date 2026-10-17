@@ -91,7 +91,7 @@ export class ExecutionReadService {
     );
   }
 
-  async getExecutionTree({ userId, executionId = "", rootExecutionId = "" } = {}) {
+  async getExecutionTree({ userId, executionId, rootExecutionId } = {}) {
     if (!userId) return { found: false, reason: "missing_user" };
     const readModel = await this._readAll(userId);
     const result = queryAuthoritativeExecutionTree(readModel, {

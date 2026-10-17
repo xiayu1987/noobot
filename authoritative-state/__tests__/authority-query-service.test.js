@@ -54,6 +54,7 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
     sessionId: "s1",
     terminalTurnScopeIds: ["turn-0"],
     knownSequence: 3,
+    terminalLimit: 10,
     generatedAt: now,
   });
   assert.equal(snapshot.activeTurn.startedAt, "");
@@ -73,6 +74,8 @@ test("authority snapshot carries the read-side recovery annotation verbatim", ()
     userId: "u1",
     sessionId: "s1",
     recovery: "finalize",
+    knownSequence: 0,
+    terminalLimit: 10,
     generatedAt: now,
   });
   assert.equal(snapshot.recovery, "finalize");
@@ -92,6 +95,8 @@ test("authority snapshots only terminal Turns represented by canonical messages"
     commandId: "snapshot-message-projection",
     userId: "u1",
     sessionId: "s1",
+    knownSequence: 0,
+    terminalLimit: 10,
     generatedAt: now,
   });
 

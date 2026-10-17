@@ -7,6 +7,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
+import {
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_SNAPSHOT_WIRE_EVENT,
+  deriveAgentExecutionId,
+} from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
   AGENT_COMMAND_RECEIPT_OUTCOME,
@@ -14,6 +20,7 @@ import {
   AGENT_TRANSPORT_ERROR_CODE,
   createAgentCommandReceipt,
   createAgentTransportError,
+  createExecutionQueryCommand,
 } from "@noobot/agent-transport-protocol";
 import { canonicalMessageEvent } from "../../modules/chat/helpers/messageEventFixture.js";
 import {
@@ -422,18 +429,39 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     replacementSocket.onopen?.();
     emitReconnectComplete(replacementSocket, 1);
     await reconnectPromise;
+    const executionId = deriveAgentExecutionId({ turnScopeId: "turn-1" });
     const commandPromise = client.requestJson(
-      { action: "turn.snapshot.get", commandId: "snapshot-after-reconnect" },
-      { expectedEvents: ["turn_snapshot"] },
+      createExecutionQueryCommand({
+        commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
+        commandId: "snapshot-after-reconnect",
+        identity: { sessionId: "s-1" },
+        query: { executionId, rootExecutionId: "" },
+      }),
+      { expectedEvents: [EXECUTION_SNAPSHOT_WIRE_EVENT] },
     );
-    replacementSocket.emit("turn_snapshot", {
+    const envelope = createExecutionQueryEnvelope({
+      wireEvent: EXECUTION_SNAPSHOT_WIRE_EVENT,
       commandId: "snapshot-after-reconnect",
-      sessionId: "s-1",
+      executionId,
+      payload: {
+        execution: {
+          executionId,
+          executionKind: "agent",
+          parentExecutionId: "",
+          rootExecutionId: executionId,
+          sessionId: "s-1",
+          turnScopeId: "turn-1",
+          sequence: 1,
+          revision: 1,
+        },
+      },
+      occurredAt: "2026-10-17T00:00:00.000Z",
     });
+    replacementSocket.emit(EXECUTION_SNAPSHOT_WIRE_EVENT, envelope);
 
     await expect(commandPromise).resolves.toEqual({
-      event: "turn_snapshot",
-      data: { commandId: "snapshot-after-reconnect", sessionId: "s-1" },
+      event: EXECUTION_SNAPSHOT_WIRE_EVENT,
+      data: envelope,
     });
     emitCompletedCommand(replacementSocket, streamRequestId, "s-1", "turn-1");
     await streamPromise;

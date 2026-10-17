@@ -10,7 +10,11 @@ import {
   EXECUTION_QUERY_COMMAND_TYPES,
   RUN_COMMAND_TYPES,
 } from "./constants.js";
-import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
+import { isExecutionQueryTargetValid } from "@noobot/session-protocol/execution-lifecycle";
+import {
+  isTurnSnapshotKnownSequence,
+  isTurnSnapshotTerminalLimit,
+} from "@noobot/session-protocol/turn-lifecycle";
 import {
   deriveInteractionCommandId,
   deriveStopCommandId,
@@ -74,8 +78,11 @@ function compactObject(source = {}) {
   );
 }
 
-function createIdentity(input = {}) {
-  return Object.fromEntries([...IDENTITY_KEYS].map((key) => [key, clean(input[key])]));
+function createIdentity(input) {
+  if (!isPlainObject(input)) throw new TypeError("identity_not_object");
+  return Object.fromEntries(
+    [...IDENTITY_KEYS].map((key) => [key, input[key] === undefined ? "" : input[key]]),
+  );
 }
 
 const DERIVED_COMMAND_ID_SOURCES = Object.freeze({
@@ -93,20 +100,26 @@ export function deriveAgentCommandId(command) {
   return derive(command);
 }
 
-function createEnvelope(commandType, input = {}) {
+function createEnvelope(commandType, input) {
   return {
     protocolVersion: AGENT_TRANSPORT_PROTOCOL_VERSION,
     commandType,
-    commandId: clean(input.commandId),
+    commandId: input.commandId,
     identity: createIdentity(input.identity),
   };
+}
+
+function assertValidCommand(command) {
+  const validation = validateAgentCommand(command);
+  if (!validation.valid) throw new AgentTransportProtocolError(validation.errors, command);
+  return command;
 }
 
 function withDerivedCommandId(input, command) {
   if (Object.prototype.hasOwnProperty.call(input, "commandId")) {
     throw new TypeError("command_id_is_protocol_derived");
   }
-  return { ...command, commandId: deriveAgentCommandId(command) };
+  return assertValidCommand({ ...command, commandId: deriveAgentCommandId(command) });
 }
 
 export function createTurnRunCommand(input = {}) {
@@ -162,13 +175,11 @@ export function createTurnStopCommand(input = {}) {
   });
 }
 
-export function createTurnInterjectionCommand(input = {}) {
-  return {
+export function createTurnInterjectionCommand(input) {
+  return assertValidCommand({
     ...createEnvelope(AGENT_COMMAND.INTERJECT, input),
-    interaction: {
-      message: String(input.interaction?.message ?? ""),
-    },
-  };
+    interaction: { message: input.interaction?.message },
+  });
 }
 
 export function createInteractionResponseCommand(input = {}) {
@@ -181,34 +192,34 @@ export function createInteractionResponseCommand(input = {}) {
   });
 }
 
-export function createExecutionQueryCommand(input = {}) {
-  const commandType = clean(input.commandType).toLowerCase();
-  if (!EXECUTION_QUERY_SET.has(commandType))
+export function createExecutionQueryCommand(input) {
+  if (!EXECUTION_QUERY_SET.has(input.commandType)) {
     throw new TypeError("invalid_execution_query_command_type");
-  return {
-    ...createEnvelope(commandType, input),
-    query: compactObject({
-      executionId: clean(input.query?.executionId),
-      rootExecutionId: clean(input.query?.rootExecutionId),
-    }),
-  };
+  }
+  return assertValidCommand({
+    ...createEnvelope(input.commandType, input),
+    query: {
+      executionId: input.query?.executionId,
+      rootExecutionId: input.query?.rootExecutionId,
+    },
+  });
 }
 
-export function createTurnSnapshotCommand(input = {}) {
-  return {
+export function createTurnSnapshotCommand(input) {
+  return assertValidCommand({
     ...createEnvelope(AGENT_COMMAND.TURN_SNAPSHOT_GET, input),
-    options: compactObject({
+    options: {
       knownSequence: input.options?.knownSequence,
       terminalLimit: input.options?.terminalLimit,
-    }),
-  };
+    },
+  });
 }
 
-export function createTurnFinalizeCommand(input = {}) {
-  return {
+export function createTurnFinalizeCommand(input) {
+  return assertValidCommand({
     ...createEnvelope(AGENT_COMMAND.FINALIZE, input),
-    options: compactObject({ terminalLimit: input.options?.terminalLimit }),
-  };
+    options: { terminalLimit: input.options?.terminalLimit },
+  });
 }
 
 function validateIdentity(command, errors) {
@@ -389,12 +400,28 @@ function validateInteractionResponseCommand(command, errors) {
 }
 
 function validateExecutionQueryCommand(command, commandType, errors) {
-  validateNestedObject(command.query, QUERY_KEYS, "query", errors);
-  const { requiresExecutionId } = EXECUTION_QUERY_CONTRACT[commandType];
-  const hasExecutionId = Boolean(clean(command.query?.executionId));
-  if (requiresExecutionId && !hasExecutionId) errors.push("missing_execution_id");
-  if (!requiresExecutionId && !hasExecutionId && !clean(command.query?.rootExecutionId)) {
-    errors.push("missing_execution_query_root");
+  if (!validateNestedObject(command.query, QUERY_KEYS, "query", errors)) return;
+  for (const key of QUERY_KEYS) {
+    const value = command.query[key];
+    if (typeof value !== "string" || value !== value.trim()) {
+      errors.push(`invalid_query_field:${key}`);
+    }
+  }
+  if (!isExecutionQueryTargetValid(commandType, command.query)) {
+    errors.push("invalid_execution_query_target");
+  }
+}
+
+function validateSnapshotOptions(command, allowedKeys, errors) {
+  if (!validateNestedObject(command.options, allowedKeys, "options", errors)) return;
+  if (
+    allowedKeys.has("knownSequence") &&
+    !isTurnSnapshotKnownSequence(command.options.knownSequence)
+  ) {
+    errors.push("invalid_known_sequence");
+  }
+  if (!isTurnSnapshotTerminalLimit(command.options.terminalLimit)) {
+    errors.push("invalid_terminal_limit");
   }
 }
 
@@ -407,9 +434,9 @@ function validateCommandBody(command, commandType, errors) {
   } else if (EXECUTION_QUERY_SET.has(commandType)) {
     validateExecutionQueryCommand(command, commandType, errors);
   } else if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
-    validateNestedObject(command.options, SNAPSHOT_OPTION_KEYS, "options", errors);
+    validateSnapshotOptions(command, SNAPSHOT_OPTION_KEYS, errors);
   } else if (commandType === AGENT_COMMAND.FINALIZE) {
-    validateNestedObject(command.options, FINALIZE_OPTION_KEYS, "options", errors);
+    validateSnapshotOptions(command, FINALIZE_OPTION_KEYS, errors);
   }
 }
 

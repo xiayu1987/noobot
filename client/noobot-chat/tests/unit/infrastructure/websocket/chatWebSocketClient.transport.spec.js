@@ -513,7 +513,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     };
 
     await expect(
-      client.stream(streamCommand({ turnScopeId: "turn-send-failed" }), vi.fn()),
+      client.stream(
+        streamCommand({ sessionId: "s-send-failed", turnScopeId: "turn-send-failed" }),
+        vi.fn(),
+      ),
     ).rejects.toMatchObject({ name: "InvalidStateError" });
     expect(client.getActiveSocket()).toBe(null);
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);

@@ -5,9 +5,6 @@
  */
 import { text } from "@noobot/shared/value";
 import {
-  EXECUTION_CHILDREN_WIRE_EVENT,
-  EXECUTION_SNAPSHOT_WIRE_EVENT,
-  EXECUTION_TREE_WIRE_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_SNAPSHOT_WIRE_EVENT,
   validateSessionEvent,
@@ -23,10 +20,15 @@ import { MESSAGE_EVENT_WIRE_EVENT, validateMessageEventPayload } from "./message
 import {
   domainResult,
   validateAttachment,
-  validateExecutionPayload,
   validateInteractionEnvelope,
   validateMessageEnvelope,
+  validateTurnLifecycleEventEnvelope,
 } from "./event-registry-validators.js";
+import {
+  EXECUTION_QUERY_FAMILY,
+  EXECUTION_QUERY_WIRE_EVENT_BY_FAMILY,
+  validateExecutionQueryEnvelope,
+} from "./execution-query.js";
 import {
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
@@ -57,9 +59,9 @@ export const EVENT_REDUCER_INPUT = Object.freeze({
 export const EVENT_FAMILY = Object.freeze({
   TURN_LIFECYCLE: "turn.lifecycle",
   TURN_SNAPSHOT: TURN_SNAPSHOT_EVENT_FAMILY,
-  EXECUTION_SNAPSHOT: "execution.snapshot",
-  EXECUTION_CHILDREN: "execution.children",
-  EXECUTION_TREE: "execution.tree",
+  EXECUTION_SNAPSHOT: EXECUTION_QUERY_FAMILY.SNAPSHOT,
+  EXECUTION_CHILDREN: EXECUTION_QUERY_FAMILY.CHILDREN,
+  EXECUTION_TREE: EXECUTION_QUERY_FAMILY.TREE,
   ATTACHMENT_LIFECYCLE: "attachment.lifecycle",
   INTERACTION_REQUEST: "interaction.request",
   INTERACTION_RESPONSE: "interaction.response",
@@ -74,6 +76,7 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.TURN_LIFECYCLE,
       wireEvents: [TURN_LIFECYCLE_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.TURN,
+      validateEnvelope: validateTurnLifecycleEventEnvelope,
       validatePayload: (payload) => domainResult(validateSessionEvent(payload)),
     },
     {
@@ -84,15 +87,12 @@ const descriptors = Object.freeze(
       validateEnvelope: validateTurnSnapshotEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
     },
-    ...[
-      [EVENT_FAMILY.EXECUTION_SNAPSHOT, EXECUTION_SNAPSHOT_WIRE_EVENT],
-      [EVENT_FAMILY.EXECUTION_CHILDREN, EXECUTION_CHILDREN_WIRE_EVENT],
-      [EVENT_FAMILY.EXECUTION_TREE, EXECUTION_TREE_WIRE_EVENT],
-    ].map(([family, wireEvent]) => ({
+    ...Object.entries(EXECUTION_QUERY_WIRE_EVENT_BY_FAMILY).map(([family, wireEvent]) => ({
       family,
       wireEvents: [wireEvent],
       reducerTarget: EVENT_REDUCER_TARGET.EXECUTION,
-      validatePayload: validateExecutionPayload,
+      validateEnvelope: validateExecutionQueryEnvelope,
+      validatePayload: () => ({ valid: true, errors: [] }),
     })),
     {
       family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,

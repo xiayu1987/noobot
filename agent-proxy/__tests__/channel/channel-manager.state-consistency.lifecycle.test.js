@@ -33,6 +33,40 @@ import {
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
 import { EVENT_FAMILY, createEventEnvelope } from "@noobot/event-protocol";
+import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
+import {
+  EXECUTION_CHILDREN_WIRE_EVENT,
+  EXECUTION_SNAPSHOT_WIRE_EVENT,
+  EXECUTION_TREE_WIRE_EVENT,
+} from "@noobot/session-protocol/execution-lifecycle";
+
+const QUERY_ROOT_EXECUTION = Object.freeze({
+  executionId: "workflow:root",
+  executionKind: "workflow",
+  rootExecutionId: "workflow:root",
+  sessionId: "session-execution-query",
+  sequence: 1,
+  revision: 1,
+});
+
+const QUERY_PAYLOAD_BY_WIRE_EVENT = Object.freeze({
+  [EXECUTION_SNAPSHOT_WIRE_EVENT]: { execution: QUERY_ROOT_EXECUTION },
+  [EXECUTION_CHILDREN_WIRE_EVENT]: { execution: QUERY_ROOT_EXECUTION, children: [] },
+  [EXECUTION_TREE_WIRE_EVENT]: {
+    rootExecutionId: QUERY_ROOT_EXECUTION.executionId,
+    tree: { executions: { [QUERY_ROOT_EXECUTION.executionId]: QUERY_ROOT_EXECUTION } },
+  },
+});
+
+function executionQueryEnvelope(wireEvent, commandId) {
+  return createExecutionQueryEnvelope({
+    wireEvent,
+    commandId,
+    executionId: QUERY_ROOT_EXECUTION.executionId,
+    payload: QUERY_PAYLOAD_BY_WIRE_EVENT[wireEvent],
+    occurredAt: "2026-10-17T00:00:00.000Z",
+  });
+}
 import {
   createPluginArtifactEnvelope,
   PLUGIN_ARTIFACT_EVENT,
@@ -332,16 +366,15 @@ test("upstream execution query responses return only to the registered requester
   upstream.emit(
     "message",
     JSON.stringify({
-      event: "execution_tree",
-      data: {
-        commandId: "execution-query-1",
-        rootExecutionId: "workflow-root",
-        tree: { executions: {} },
-      },
+      event: EXECUTION_TREE_WIRE_EVENT,
+      data: executionQueryEnvelope(EXECUTION_TREE_WIRE_EVENT, "execution-query-1"),
     }),
   );
 
-  assert.equal(getEvent(requester, "execution_tree")?.data?.commandId, "execution-query-1");
+  assert.equal(
+    getEvent(requester, "execution_tree")?.data?.causality?.commandId,
+    "execution-query-1",
+  );
   assert.equal(getEvent(observer, "execution_tree"), null);
   assert.equal(channel.pendingExecutionRequests.size, 0);
 });
@@ -358,17 +391,32 @@ test("orphan execution query responses are dropped without closing upstream", ()
   upstream.emit("open");
   const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, observer);
+  const logged = [];
+  const logChannelEvent = manager.logChannelEvent.bind(manager);
+  manager.logChannelEvent = (target, entry) => {
+    logged.push(entry.event);
+    return logChannelEvent(target, entry);
+  };
 
-  for (const event of ["execution_tree", "execution_snapshot", "execution_children"]) {
+  for (const event of [
+    EXECUTION_TREE_WIRE_EVENT,
+    EXECUTION_SNAPSHOT_WIRE_EVENT,
+    EXECUTION_CHILDREN_WIRE_EVENT,
+  ]) {
     upstream.emit(
       "message",
-      JSON.stringify({ event, data: { commandId: `late-${event}`, found: true } }),
+      JSON.stringify({ event, data: executionQueryEnvelope(event, `late-${event}`) }),
     );
   }
 
   assert.equal(channel.upstreamClosed, false);
   assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR), null);
   assert.equal(getEvent(observer, "execution_tree"), null);
+  assert.equal(
+    logged.filter((event) => event === "agentProxy.upstream.executionQuery.orphanDropped").length,
+    3,
+  );
+  assert.equal(logged.includes("agentProxy.upstream.message.dropped"), false);
 });
 
 test("execution query wire events without commandId remain invalid upstream events", () => {

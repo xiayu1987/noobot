@@ -450,6 +450,7 @@ test("snapshot reloads authoritative state without mutating sequence and support
     sessionId: "s1",
     commandId: "snapshot-1",
     knownSequence: before,
+    terminalLimit: 10,
   });
   assert.equal(result.found, true);
   assert.equal(result.snapshot.unchanged, true);
@@ -493,6 +494,8 @@ test("summary and reconnect snapshots share action-failure presentation scope", 
       userId: "u1",
       sessionId: "s1",
       commandId: "snapshot-action-failure",
+      knownSequence: 0,
+      terminalLimit: 10,
     })
   ).snapshot;
   const projectTerminalScopes = (snapshot) =>

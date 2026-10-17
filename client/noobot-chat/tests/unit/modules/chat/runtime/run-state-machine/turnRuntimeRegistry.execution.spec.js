@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
+import {
+  EXECUTION_TREE_WIRE_EVENT,
+  deriveAgentExecutionId,
+} from "@noobot/session-protocol/execution-lifecycle";
+import { validateExecutionQueryPayload } from "@noobot/event-protocol/execution-query";
 import {
   applyExecutionSnapshot,
   applyExecutionTree,
@@ -26,18 +30,18 @@ const execution = (turnScopeId, overrides = {}) => ({
   ...overrides,
 });
 
+const applySnapshot = (registry, item) => applyExecutionSnapshot(registry, { execution: item });
+
 describe("Execution Registry authoritative projections", () => {
   it("deduplicates identical coordinates and rejects conflicting facts", () => {
     const registry = createTurnRuntimeRegistryState();
-    expect(applyExecutionSnapshot(registry, execution("root")).applied).toBe(true);
-    expect(applyExecutionSnapshot(registry, execution("root"))).toMatchObject({
+    expect(applySnapshot(registry, execution("root")).applied).toBe(true);
+    expect(applySnapshot(registry, execution("root"))).toMatchObject({
       applied: false,
       deduplicated: true,
       reason: "duplicate_execution",
     });
-    expect(
-      applyExecutionSnapshot(registry, execution("root", { state: "completed" })),
-    ).toMatchObject({
+    expect(applySnapshot(registry, execution("root", { state: "completed" }))).toMatchObject({
       applied: false,
       reason: "execution_sequence_conflict",
     });
@@ -46,28 +50,26 @@ describe("Execution Registry authoritative projections", () => {
 
   it("rejects stale projections and accepts a newer revision", () => {
     const registry = createTurnRuntimeRegistryState();
-    applyExecutionSnapshot(registry, execution("root", { revision: 2, sequence: 2 }));
+    applySnapshot(registry, execution("root", { revision: 2, sequence: 2 }));
+    expect(applySnapshot(registry, execution("root", { revision: 1, sequence: 99 })).reason).toBe(
+      "stale_execution",
+    );
     expect(
-      applyExecutionSnapshot(registry, execution("root", { revision: 1, sequence: 99 })).reason,
-    ).toBe("stale_execution");
-    expect(
-      applyExecutionSnapshot(
-        registry,
-        execution("root", { revision: 3, sequence: 3, state: "completed" }),
-      ).applied,
+      applySnapshot(registry, execution("root", { revision: 3, sequence: 3, state: "completed" }))
+        .applied,
     ).toBe(true);
     expect(registry.executions[id("root")].state).toBe("completed");
   });
 
   it("moves a child between parents without retaining the old relation", () => {
     const registry = createTurnRuntimeRegistryState();
-    applyExecutionSnapshot(registry, execution("parent-a"));
-    applyExecutionSnapshot(registry, execution("parent-b"));
-    applyExecutionSnapshot(
+    applySnapshot(registry, execution("parent-a"));
+    applySnapshot(registry, execution("parent-b"));
+    applySnapshot(
       registry,
       execution("child", { parentExecutionId: id("parent-a"), rootExecutionId: id("parent-a") }),
     );
-    applyExecutionSnapshot(
+    applySnapshot(
       registry,
       execution("child", {
         parentExecutionId: id("parent-b"),
@@ -82,14 +84,8 @@ describe("Execution Registry authoritative projections", () => {
     ).toEqual([id("child")]);
   });
 
-  it("atomically rejects an invalid tree before deleting an existing projection", () => {
-    const registry = createTurnRuntimeRegistryState();
-    applyExecutionSnapshot(registry, execution("root"));
-    applyExecutionSnapshot(
-      registry,
-      execution("old-child", { parentExecutionId: id("root"), rootExecutionId: id("root") }),
-    );
-    const result = applyExecutionTree(registry, {
+  it("leaves invalid trees to the execution query protocol", () => {
+    const validation = validateExecutionQueryPayload(EXECUTION_TREE_WIRE_EVENT, {
       rootExecutionId: id("root"),
       tree: {
         executions: {
@@ -97,18 +93,18 @@ describe("Execution Registry authoritative projections", () => {
         },
       },
     });
-    expect(result.reason).toBe("invalid_execution_tree");
-    expect(registry.executions[id("old-child")]).toBeTruthy();
+    expect(validation.valid).toBe(false);
+    expect(validation.errors.some((error) => error.startsWith("tree.broken:"))).toBe(true);
   });
 
   it("merges an unversioned tree without deleting newer local projections", () => {
     const registry = createTurnRuntimeRegistryState();
-    applyExecutionSnapshot(registry, execution("root"));
-    applyExecutionSnapshot(
+    applySnapshot(registry, execution("root"));
+    applySnapshot(
       registry,
       execution("old-child", { parentExecutionId: id("root"), rootExecutionId: id("root") }),
     );
-    applyExecutionSnapshot(registry, execution("other-root"));
+    applySnapshot(registry, execution("other-root"));
     const nextChild = execution("next-child", {
       parentExecutionId: id("root"),
       rootExecutionId: id("root"),
@@ -130,33 +126,6 @@ describe("Execution Registry authoritative projections", () => {
         .map((item) => item.executionId)
         .sort(),
     ).toEqual([id("next-child"), id("old-child")].sort());
-  });
-
-  it("only removes a projection through a newer versioned tombstone", () => {
-    const registry = createTurnRuntimeRegistryState();
-    applyExecutionSnapshot(registry, execution("root", { revision: 2, sequence: 2 }));
-    applyExecutionSnapshot(
-      registry,
-      execution("child", {
-        parentExecutionId: id("root"),
-        rootExecutionId: id("root"),
-        revision: 3,
-        sequence: 5,
-      }),
-    );
-    applyExecutionTree(registry, {
-      rootExecutionId: id("root"),
-      removedExecutions: [{ executionId: id("child"), revision: 3, sequence: 5 }],
-      tree: { executions: { [id("root")]: execution("root", { revision: 2, sequence: 2 }) } },
-    });
-    expect(registry.executions[id("child")]).toBeTruthy();
-    const result = applyExecutionTree(registry, {
-      rootExecutionId: id("root"),
-      removedExecutions: [{ executionId: id("child"), revision: 4, sequence: 6 }],
-      tree: { executions: { [id("root")]: execution("root", { revision: 2, sequence: 2 }) } },
-    });
-    expect(result.removedExecutionIds).toEqual([id("child")]);
-    expect(registry.executions[id("child")]).toBeUndefined();
   });
 
   it("indexes a workflow root and nested child agents", () => {

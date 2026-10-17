@@ -30,6 +30,7 @@ describe("useChatEngine.resend scoped pruning", () => {
         aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser: staleReplacementUser,
+        replacementDialogProcessId: `dialog:${staleReplacementUser.turnScopeId}`,
       });
     });
     const applySessionDetail = vi.fn((detail) => {
@@ -101,6 +102,7 @@ describe("useChatEngine.resend scoped pruning", () => {
         aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         session: { messageCount: 1 },
       });
     });
@@ -190,6 +192,7 @@ describe("useChatEngine.resend scoped pruning", () => {
         aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         messages: [previousUser, previousAssistant, replacementUser],
       });
     });
@@ -263,6 +266,7 @@ describe("useChatEngine.resend scoped pruning", () => {
         aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
       });
     });
     const applySessionDetail = vi.fn((detail) => {

@@ -65,6 +65,15 @@ export const TURN_SNAPSHOT_WIRE_EVENT = "turn_snapshot";
 export const TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";
+export const TURN_SNAPSHOT_TERMINAL_LIMIT = Object.freeze({ DEFAULT: 10, MAX: 100 });
+
+export function isTurnSnapshotTerminalLimit(value) {
+  return Number.isInteger(value) && value >= 0 && value <= TURN_SNAPSHOT_TERMINAL_LIMIT.MAX;
+}
+
+export function isTurnSnapshotKnownSequence(value) {
+  return Number.isInteger(value) && value >= 0;
+}
 
 const EVENT_VALUES = new Set(TURN_EVENT_VALUES);
 const EVENT_STATE = TURN_EVENT_STATE;

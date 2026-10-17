@@ -12,6 +12,7 @@ import {
   readKnownLifecycleSequence,
 } from "@noobot/agent-transport-protocol";
 import { isActionableTurnRecovery } from "@noobot/session-protocol";
+import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 import { text } from "@noobot/shared/value";
 
 export function groupReconnectChannels(manager, channelKeys) {
@@ -69,7 +70,11 @@ async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
   const promise = createSnapshotPromise(channel, commandId, socket);
   const forwarded = manager.forwardToUpstream(
     channel,
-    createTurnFinalizeCommand({ commandId, identity: { sessionId } }),
+    createTurnFinalizeCommand({
+      commandId,
+      identity: { sessionId },
+      options: { terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
+    }),
   );
   if (!forwarded) {
     const pendingRequest = channel.pendingSnapshotRequests.get(commandId);
@@ -98,7 +103,7 @@ function startSnapshotRequest(manager, socket, sessionId, channels, knownSequenc
   const command = createTurnSnapshotCommand({
     commandId,
     identity: { sessionId },
-    options: { knownSequence },
+    options: { knownSequence, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
   });
   const forwarded = manager.forwardToUpstream(channel, command);
   const queryConnection = forwarded

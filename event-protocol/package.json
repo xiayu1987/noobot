@@ -11,6 +11,7 @@
     "./package.json": "./package.json",
     "./message-event": "./src/message-event.js",
     "./turn-snapshot": "./src/turn-snapshot.js",
+    "./execution-query": "./src/execution-query.js",
     "./tool-presentation": "./src/tool-presentation.js",
     "./tool-timeline": "./src/tool-timeline.js",
     "./activity-timeline": "./src/activity-timeline.js",

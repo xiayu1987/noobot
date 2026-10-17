@@ -240,7 +240,7 @@ export async function getTurnLifecycleSnapshot({
   persistenceContext = null,
   commandId = "",
   knownSequence,
-  terminalLimit = 10,
+  terminalLimit,
 } = {}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
   const { session } = await this._findSession(

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { text } from "@noobot/shared/value";
-import { validateExecutionIdentity } from "@noobot/session-protocol";
 import { createAttachmentLifecycleEvent } from "@noobot/attachment-protocol";
 import { INTERACTION_SEQUENCE_DOMAIN } from "./interaction.js";
 import {
@@ -34,9 +33,6 @@ export const validateAttachment = (payload) => {
   }
 };
 
-export const validateExecutionPayload = (payload) =>
-  domainResult(validateExecutionIdentity(payload));
-
 export const validateInteractionEnvelope = (envelope) => {
   const errors = [];
   const requestId = text(envelope?.payload?.requestId);
@@ -45,6 +41,19 @@ export const validateInteractionEnvelope = (envelope) => {
     errors.push("sequence_domain_mismatch");
   if (requestId && envelope?.ordering?.scopeId !== requestId)
     errors.push("sequence_scope_mismatch");
+  return { valid: errors.length === 0, errors };
+};
+
+export const validateTurnLifecycleEventEnvelope = (envelope) => {
+  const errors = [];
+  const payload = envelope?.payload;
+  const causality = envelope?.causality;
+  if (!text(causality?.commandId)) errors.push("missing_command_id");
+  for (const field of ["commandId", "causationId", "correlationId"]) {
+    if (text(causality?.[field]) !== text(payload?.[field])) {
+      errors.push(`lifecycle_${field}_mismatch`);
+    }
+  }
   return { valid: errors.length === 0, errors };
 };
 

@@ -23,7 +23,6 @@ setupWebSocketTestHooks();
 function startScopedStream(client, overrides = {}, onEvent = vi.fn()) {
   const payload = streamCommand({
     sessionId: "s-1",
-    dialogProcessId: "main-dp",
     turnScopeId: "main-turn",
     ...overrides,
   });

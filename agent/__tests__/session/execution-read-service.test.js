@@ -237,9 +237,16 @@ test("orphan execution remains visible as a root in the read model", async () =>
       },
     },
   ]);
-  const result = await reader.getExecutionTree({ userId: "u1" });
+  const result = await reader.getExecutionTree({ userId: "u1", executionId: "agent:orphan" });
   assert.equal(result.found, true);
+  assert.equal(result.execution.executionId, "agent:orphan");
   assert.deepEqual(result.tree.rootExecutionIds, ["agent:orphan"]);
+});
+
+test("execution tree query without target is rejected", async () => {
+  const reader = service([{ sessionId: "s1", turnLifecycle: { turns: { root: turn() } } }]);
+  const result = await reader.getExecutionTree({ userId: "u1" });
+  assert.deepEqual(result, { found: false, reason: "missing_execution" });
 });
 
 test("disposable read index is isolated by user and rebuilds when authoritative summaries change", async () => {

@@ -24,27 +24,6 @@ export function runtimeFingerprint(value = {}) {
   return JSON.stringify(normalize(value));
 }
 
-function removeExecutionProjection(registry, executionId) {
-  const execution = registry?.executions?.[executionId];
-  if (!execution) return false;
-  const parentId = runtimeText(execution?.parentExecutionId);
-  if (parentId && registry.childExecutionIdsByParentId?.[parentId]) {
-    registry.childExecutionIdsByParentId[parentId] = registry.childExecutionIdsByParentId[
-      parentId
-    ].filter((id) => id !== executionId);
-    if (!registry.childExecutionIdsByParentId[parentId].length) {
-      delete registry.childExecutionIdsByParentId[parentId];
-    }
-  }
-  const indexedTurnKey = executionTurnKey(execution?.sessionId, execution?.turnScopeId);
-  if (indexedTurnKey && registry.executionIdByTurnScopeId?.[indexedTurnKey] === executionId) {
-    delete registry.executionIdByTurnScopeId[indexedTurnKey];
-  }
-  delete registry.executions[executionId];
-  delete registry.childExecutionIdsByParentId?.[executionId];
-  return true;
-}
-
 export function applyExecutionProjection(registry, source = {}) {
   const validation = validateExecutionIdentity(source);
   if (!validation.valid) {
@@ -117,95 +96,25 @@ export function applyExecutionProjection(registry, source = {}) {
   return { applied: true, execution };
 }
 
-export function applyExecutionSnapshot(registry, payload = {}) {
-  return applyExecutionProjection(registry, payload?.execution || payload);
+export function applyExecutionSnapshot(registry, payload) {
+  return applyExecutionProjection(registry, payload.execution);
 }
 
-export function applyExecutionChildren(registry, payload = {}) {
-  const results = [
-    payload?.execution,
-    ...(Array.isArray(payload?.children) ? payload.children : []),
-  ]
-    .filter(Boolean)
-    .map((item) => applyExecutionProjection(registry, item));
+export function applyExecutionChildren(registry, payload) {
+  const results = [payload.execution, ...payload.children].map((item) =>
+    applyExecutionProjection(registry, item),
+  );
   return { applied: results.some((item) => item.applied), results };
 }
 
-export function applyExecutionTree(registry, payload = {}) {
-  const rootExecutionId = runtimeText(payload?.rootExecutionId);
-  const incoming = Object.values(payload?.tree?.executions || {});
-  if (!rootExecutionId) {
-    return { applied: false, reason: "invalid_execution_tree_root", results: [], rootExecutionId };
-  }
-  const validations = incoming.map((item) => validateExecutionIdentity(item));
-  if (validations.some((item) => !item.valid)) {
-    return {
-      applied: false,
-      reason: "invalid_execution_tree",
-      errors: validations.flatMap((item) => item.errors || []),
-      results: [],
-      rootExecutionId,
-    };
-  }
-  if (
-    validations.some(
-      ({ identity }) =>
-        identity.executionId !== rootExecutionId && identity.rootExecutionId !== rootExecutionId,
-    )
-  ) {
-    return { applied: false, reason: "execution_tree_root_conflict", results: [], rootExecutionId };
-  }
-  const tombstones = Array.isArray(payload?.removedExecutions) ? payload.removedExecutions : [];
-  const removedExecutionIds = [];
-  const acceptedTombstones = new Map();
-  for (const tombstone of tombstones) {
-    const executionId = runtimeText(tombstone?.executionId);
-    const current = registry?.executions?.[executionId];
-    const revision = Number(tombstone?.revision);
-    const sequence = Number(tombstone?.sequence);
-    if (
-      !executionId ||
-      !current ||
-      runtimeText(current?.rootExecutionId || current?.executionId) !== rootExecutionId
-    ) {
-      continue;
-    }
-    if (
-      !Number.isInteger(revision) ||
-      revision < 1 ||
-      !Number.isInteger(sequence) ||
-      sequence < 1
-    ) {
-      continue;
-    }
-    if (
-      Number(current.revision || 0) > revision ||
-      (Number(current.revision || 0) === revision && Number(current.sequence || 0) >= sequence)
-    ) {
-      continue;
-    }
-    if (removeExecutionProjection(registry, executionId)) {
-      removedExecutionIds.push(executionId);
-      acceptedTombstones.set(executionId, { revision, sequence });
-    }
-  }
-  const results = incoming
-    .filter((item = {}) => {
-      const tombstone = acceptedTombstones.get(runtimeText(item.executionId));
-      if (!tombstone) return true;
-      const revision = Number(item.revision || 0);
-      const sequence = Number(item.sequence || 0);
-      return (
-        revision > tombstone.revision ||
-        (revision === tombstone.revision && sequence > tombstone.sequence)
-      );
-    })
-    .map((item) => applyExecutionProjection(registry, item));
+export function applyExecutionTree(registry, payload) {
+  const results = Object.values(payload.tree.executions).map((item) =>
+    applyExecutionProjection(registry, item),
+  );
   return {
-    applied: removedExecutionIds.length > 0 || results.some((item) => item.applied),
+    applied: results.some((item) => item.applied),
     results,
-    removedExecutionIds,
-    rootExecutionId,
+    rootExecutionId: payload.rootExecutionId,
   };
 }
 

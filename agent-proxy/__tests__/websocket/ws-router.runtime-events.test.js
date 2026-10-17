@@ -157,7 +157,7 @@ test("ws router forwards execution queries by authoritative commandType", () => 
     commandType: AGENT_COMMAND.EXECUTION_TREE_GET,
     commandId: "execution-query-1",
     identity: { sessionId: "session-1" },
-    query: { rootExecutionId: "workflow-root" },
+    query: { executionId: "", rootExecutionId: "workflow-root" },
   });
 
   new WsRouter(channelManager).handle(socket, "connection-api-key", "en");

@@ -287,15 +287,7 @@ class UpstreamConnectionMethods {
     const eventName = text(parsed?.event);
     if (!eventName) throw new TypeError("missing_upstream_event");
     const eventData = parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
-    const queryCommandId = text(eventData?.commandId);
-    const isQueryResponse =
-      eventName === TURN_SNAPSHOT_WIRE_EVENT ||
-      Boolean(
-        queryCommandId &&
-        (EXECUTION_QUERY_WIRE_EVENTS.has(eventName) ||
-          channel.pendingExecutionRequests?.has(queryCommandId)),
-      );
-    if (!isQueryResponse) assertLocatableDataPlaneEvent(eventName, eventData);
+    if (eventName !== TURN_SNAPSHOT_WIRE_EVENT) assertLocatableDataPlaneEvent(eventName, eventData);
     return { eventName, eventData };
   }
 
@@ -367,14 +359,18 @@ class UpstreamConnectionMethods {
     return true;
   }
 
-  routeExecutionQueryResponse(channel, eventName, eventData, commandId) {
-    const executionRequester = commandId ? channel.pendingExecutionRequests?.get(commandId) : null;
-    if (executionRequester) {
-      channel.pendingExecutionRequests.delete(commandId, "delivered");
-      this.sendSocketEvent(executionRequester, { event: eventName, data: eventData });
-      return true;
-    }
+  deliverExecutionQueryResult(channel, eventName, eventData, commandId) {
+    const executionRequester = channel.pendingExecutionRequests?.get(commandId);
+    if (!executionRequester) return false;
+    channel.pendingExecutionRequests.delete(commandId, "delivered");
+    this.sendSocketEvent(executionRequester, { event: eventName, data: eventData });
+    return true;
+  }
+
+  routeExecutionQueryResponse(channel, eventName, eventData) {
     if (!EXECUTION_QUERY_WIRE_EVENTS.has(eventName)) return false;
+    const commandId = eventData.causality.commandId;
+    if (this.deliverExecutionQueryResult(channel, eventName, eventData, commandId)) return true;
     const removal = this.commandRegistry?.lastRemoval?.(commandId) || null;
     this.logChannelEvent(channel, {
       category: "transport",
@@ -399,18 +395,19 @@ class UpstreamConnectionMethods {
       this.routeUpstreamSnapshot(channel, eventName, eventData);
       return;
     }
+    if (this.routeExecutionQueryResponse(channel, eventName, eventData)) return;
     const commandId = text(eventData?.commandId);
     if (
       eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
-      this.resolvePendingSnapshotFailure(
+      (this.resolvePendingSnapshotFailure(
         channel,
         commandId,
         String(eventData?.error?.code || eventData?.outcome || "snapshot_failed").trim(),
-      )
+      ) ||
+        this.deliverExecutionQueryResult(channel, eventName, eventData, commandId))
     ) {
       return;
     }
-    if (this.routeExecutionQueryResponse(channel, eventName, eventData, commandId)) return;
     if (
       eventName === AGENT_TRANSPORT_EVENT.ERROR &&
       this.resolvePendingSnapshotFailure(channel, commandId, eventData.code)

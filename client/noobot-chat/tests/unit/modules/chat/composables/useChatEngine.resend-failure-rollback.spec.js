@@ -158,6 +158,7 @@ describe("useChatEngine.resend failure rollback", () => {
         aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
       });
     });
     const { engine, activeSession } = createHarness({
@@ -204,6 +205,7 @@ describe("useChatEngine.resend failure rollback", () => {
         aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         messages: [staleFirst, staleTarget, replacementUser],
       });
     });
@@ -253,6 +255,7 @@ describe("useChatEngine.resend failure rollback", () => {
         aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
       });
     });
     const applySessionDetail = vi.fn((detail) => {

@@ -70,6 +70,7 @@ describe("useChatEngine.resend stopped state", () => {
           aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -199,6 +200,7 @@ describe("useChatEngine.resend stopped state", () => {
           aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -310,6 +312,7 @@ describe("useChatEngine.resend stopped state", () => {
           aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -468,6 +471,7 @@ describe("useChatEngine.resend stopped state", () => {
           aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -607,6 +611,7 @@ describe("useChatEngine.resend stopped state", () => {
           aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
           messages,
         });
       },
@@ -700,6 +705,7 @@ describe("useChatEngine.resend stopped state", () => {
           aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -763,6 +769,7 @@ describe("useChatEngine.resend stopped state", () => {
           aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );

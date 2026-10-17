@@ -9,6 +9,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   validateAgentCommandReceipt,
 } from "@noobot/agent-transport-protocol";
+import { validateProtocolEvent } from "@noobot/event-protocol";
 
 export function createWebSocketCommandRequests({
   getActiveSocket,
@@ -28,16 +29,18 @@ export function createWebSocketCommandRequests({
     pendingRequests.clear();
   }
 
-  function settle(event, data = {}) {
-    const commandId = normalizeTrimmedString(data?.commandId);
-    const pending = commandId ? pendingRequests.get(commandId) : null;
-    if (!pending) return;
+  function readSettlementCommandId(isReceipt, data) {
+    return isReceipt ? data?.commandId : data?.causality?.commandId;
+  }
+
+  function settle(event, data) {
     const isReceipt = event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT;
+    const commandId = readSettlementCommandId(isReceipt, data);
+    const pending = pendingRequests.get(commandId);
+    if (!pending) return;
     if (!isReceipt && pending.expectedEvents.size && !pending.expectedEvents.has(event)) return;
-    if (isReceipt) {
-      const validation = validateAgentCommandReceipt(data);
-      if (!validation.valid) throw new TypeError(validation.errors.join(","));
-    }
+    const validation = isReceipt ? validateAgentCommandReceipt(data) : validateProtocolEvent(data);
+    if (!validation.valid) throw new TypeError(validation.errors.join(","));
     pendingRequests.delete(commandId);
     clearTimeout(pending.timeout);
     if (isReceipt && data.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
@@ -45,10 +48,6 @@ export function createWebSocketCommandRequests({
       error.event = event;
       error.data = data;
       pending.reject(error);
-      return;
-    }
-    if (isReceipt) {
-      pending.resolve({ event, data });
       return;
     }
     pending.resolve({ event, data });

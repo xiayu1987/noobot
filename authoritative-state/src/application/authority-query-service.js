@@ -11,6 +11,8 @@ import {
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
   deriveAuthoritativeTurnCapabilities,
+  isTurnSnapshotKnownSequence,
+  isTurnSnapshotTerminalLimit,
 } from "@noobot/session-protocol/turn-lifecycle";
 import {
   isTerminalTurnLifecycleState,
@@ -26,11 +28,17 @@ export function createAuthoritativeTurnSnapshot({
   userId = "",
   sessionId = "",
   knownSequence,
-  terminalLimit = 10,
+  terminalLimit,
   terminalTurnScopeIds = [],
   recovery,
   generatedAt = new Date().toISOString(),
 } = {}) {
+  if (!isTurnSnapshotKnownSequence(knownSequence)) {
+    throw new TypeError("turn_snapshot_requires_known_sequence");
+  }
+  if (!isTurnSnapshotTerminalLimit(terminalLimit)) {
+    throw new TypeError("turn_snapshot_requires_terminal_limit");
+  }
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
   const terminalTurnScopes = new Set(
     (Array.isArray(terminalTurnScopeIds) ? terminalTurnScopeIds : []).map(clean).filter(Boolean),
@@ -41,14 +49,13 @@ export function createAuthoritativeTurnSnapshot({
         sessionId: clean(sessionId),
       }
     : null;
-  const limit = Math.max(0, Math.min(100, Number(terminalLimit) || 10));
   const recentTerminalTurns = Object.values(lifecycle.turns)
     .filter(
       (turn) =>
         terminalTurnScopes.has(turn.turnScopeId) && isTerminalTurnLifecycleState(turn.state),
     )
     .sort((left, right) => Number(right.sequence) - Number(left.sequence))
-    .slice(0, limit)
+    .slice(0, terminalLimit)
     .map((turn) => ({
       ...projectTurnLifecycleTiming(turn, turnTimings),
       sessionId: clean(sessionId),
@@ -62,7 +69,7 @@ export function createAuthoritativeTurnSnapshot({
     activeTurn,
     recentTerminalTurns,
     replacedTurns: Object.values(lifecycle.replacedTurns),
-    unchanged: knownSequence !== undefined && Number(knownSequence) === lifecycle.sequence,
+    unchanged: knownSequence > 0 && knownSequence === lifecycle.sequence,
     recovery,
     generatedAt,
   });
@@ -253,27 +260,27 @@ export function queryAuthoritativeExecutionTree(
 ) {
   const requestedExecutionId = clean(executionId);
   const requestedRootId = clean(rootExecutionId);
-  const conflict = readModel.conflicts.get(requestedExecutionId || requestedRootId);
+  const targetId = requestedExecutionId || requestedRootId;
+  if (!targetId) return { found: false, reason: "missing_execution" };
+  const conflict = readModel.conflicts.get(targetId);
   if (conflict) return { found: false, reason: conflict.reason, conflict };
   const selected = requestedExecutionId
     ? readModel.executions.find((item) => item.executionId === requestedExecutionId)
     : readModel.executions.find(
         (item) => item.executionId === requestedRootId || item.rootExecutionId === requestedRootId,
       );
-  if ((requestedExecutionId || requestedRootId) && !selected)
-    return { found: false, reason: "execution_not_found" };
-  const rootId = requestedRootId || selected?.rootExecutionId || selected?.executionId || "";
-  const scoped = rootId
-    ? readModel.executions.filter(
-        (item) => item.executionId === rootId || item.rootExecutionId === rootId,
-      )
-    : readModel.executions;
-  const tree = buildExecutionTree(scoped);
+  if (!selected) return { found: false, reason: "execution_not_found" };
+  const rootId = requestedRootId || selected.rootExecutionId;
+  const tree = buildExecutionTree(
+    readModel.executions.filter(
+      (item) => item.executionId === rootId || item.rootExecutionId === rootId,
+    ),
+  );
+  const execution = tree.executions[requestedExecutionId || rootId];
+  if (!execution) return { found: false, reason: "execution_not_found" };
   return {
     found: true,
-    execution: requestedExecutionId
-      ? tree.executions[requestedExecutionId] || null
-      : tree.executions[rootId] || null,
+    execution,
     rootExecutionId: rootId,
     tree,
     generatedAt,

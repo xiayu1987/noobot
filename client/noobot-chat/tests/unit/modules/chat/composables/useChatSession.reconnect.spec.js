@@ -27,31 +27,26 @@ import {
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { confirmTurnRuntimeDeletion } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { executionTurnKey } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistryIdentity.js";
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
-import { EXECUTION_SNAPSHOT_WIRE_EVENT, EXECUTION_TREE_WIRE_EVENT } from "@noobot/session-protocol";
+import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
+import {
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_SNAPSHOT_WIRE_EVENT,
+  EXECUTION_TREE_WIRE_EVENT,
+} from "@noobot/session-protocol";
 
-function canonicalExecutionQueryEvent({ family, eventType, commandId, sequence, payload }) {
-  return createEventEnvelope({
-    family,
-    identity: {
-      eventId: `${commandId}:${eventType}`,
-      eventType,
-      sessionId: payload.sessionId,
-      turnScopeId: payload.turnScopeId,
-      executionId: payload.executionId,
-    },
-    causality: { commandId },
-    ordering: {
-      domain: "execution",
-      scopeId: payload.rootExecutionId,
-      sequence,
-      revision: payload.revision,
-    },
-    producer: { type: "test", id: "execution-query-fixture" },
-    occurredAt: "2026-01-01T00:00:00.000Z",
-    payload,
-  });
+function executionQueryResponse(wireEvent, commandId, executionId, payload) {
+  return {
+    event: wireEvent,
+    data: createExecutionQueryEnvelope({
+      wireEvent,
+      commandId,
+      executionId,
+      payload,
+      occurredAt: "2026-01-01T00:00:00.000Z",
+    }),
+  };
 }
 const CHILD_AGENT_ID = deriveAgentExecutionId({ turnScopeId: "child-turn" });
 
@@ -581,12 +576,13 @@ describe("useChatSession reconnect replay", () => {
         "workflow-turn": {
           sessionId: "workflow-session",
           turnScopeId: "workflow-turn",
-          executionId: "workflow-root",
           state: FrontendRunState.PROCESSING,
         },
       },
     };
-    store.turnRuntimeRegistry.executionIdByTurnScopeId["workflow-turn"] = "workflow-root";
+    store.turnRuntimeRegistry.executionIdByTurnScopeId[
+      executionTurnKey("workflow-session", "workflow-turn")
+    ] = "workflow-root";
     store.turnRuntimeRegistry.executions["workflow-root"] = {
       executionId: "workflow-root",
       executionKind: "workflow",
@@ -613,15 +609,13 @@ describe("useChatSession reconnect replay", () => {
     const requestOrder = [];
     wsClientMock.requestJson.mockImplementation(async (payload) => {
       requestOrder.push(payload.commandType);
-      if (payload.commandType === "execution.tree.get") {
-        return canonicalExecutionQueryEvent({
-          family: EVENT_FAMILY.EXECUTION_TREE,
-          eventType: EXECUTION_TREE_WIRE_EVENT,
-          commandId: payload.commandId,
-          sequence: 2,
-          payload: {
-            ...store.turnRuntimeRegistry.executions["workflow-root"],
-            commandId: payload.commandId,
+      if (payload.commandType === EXECUTION_QUERY_COMMAND.TREE_GET) {
+        return executionQueryResponse(
+          EXECUTION_TREE_WIRE_EVENT,
+          payload.commandId,
+          "workflow-root",
+          {
+            rootExecutionId: "workflow-root",
             tree: {
               executions: {
                 "workflow-root": store.turnRuntimeRegistry.executions["workflow-root"],
@@ -629,20 +623,19 @@ describe("useChatSession reconnect replay", () => {
               },
             },
           },
-        });
+        );
       }
       const execution = {
         ...store.turnRuntimeRegistry.executions["workflow-root"],
         revision: 2,
         sequence: 3,
       };
-      return canonicalExecutionQueryEvent({
-        family: EVENT_FAMILY.EXECUTION_SNAPSHOT,
-        eventType: EXECUTION_SNAPSHOT_WIRE_EVENT,
-        commandId: payload.commandId,
-        sequence: 3,
-        payload: { ...execution, commandId: payload.commandId, execution },
-      });
+      return executionQueryResponse(
+        EXECUTION_SNAPSHOT_WIRE_EVENT,
+        payload.commandId,
+        "workflow-root",
+        { execution },
+      );
     });
     const authFetch = vi.fn(async () => ({
       ok: true,
@@ -652,11 +645,14 @@ describe("useChatSession reconnect replay", () => {
 
     await session.handleReconnect();
 
-    expect(requestOrder).toEqual(["execution.tree.get", "execution.snapshot.get"]);
+    expect(requestOrder).toEqual([
+      EXECUTION_QUERY_COMMAND.TREE_GET,
+      EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
+    ]);
     expect(wsClientMock.requestJson).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        commandType: "execution.tree.get",
+        commandType: EXECUTION_QUERY_COMMAND.TREE_GET,
       }),
       expect.any(Object),
     );

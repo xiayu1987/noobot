@@ -239,7 +239,7 @@ export function createChatWebSocketClient({
             transport.markReady(ws, { nextServerInstanceId: data?.serverInstanceId });
             return;
           }
-          commandRequests.settle(event, lifecycleData);
+          commandRequests.settle(event, data);
           const reconnectControlEvent =
             event === StreamEventEnum.RECONNECT_DATA ||
             event === StreamEventEnum.RECONNECT_COMPLETE;

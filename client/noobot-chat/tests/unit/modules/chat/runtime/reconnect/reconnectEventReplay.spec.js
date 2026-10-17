@@ -78,6 +78,7 @@ describe("applyReconnectEventReplay", () => {
     const lifecycle = {
       protocolVersion: 1,
       eventId: "event-1",
+      commandId: "command-1",
       messageId: "message-1",
       presentationMessageId: "presentation-1",
       eventType: "turn.processing_started",
@@ -96,7 +97,7 @@ describe("applyReconnectEventReplay", () => {
         sessionId: lifecycle.sessionId,
         turnScopeId: lifecycle.turnScopeId,
       },
-      causality: {},
+      causality: { commandId: lifecycle.commandId },
       ordering: {
         domain: "session",
         scopeId: lifecycle.sessionId,

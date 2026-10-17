@@ -72,11 +72,16 @@ export function emitReconnectComplete(socket, totalSessions) {
   );
 }
 
-export function streamCommand(identity = {}) {
+export function streamCommand(identity) {
   return createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
     identity,
     input: { message: "test", attachments: [] },
+    presentation: {
+      userMessageId: `user-message:${identity.turnScopeId}`,
+      assistantMessageId: `assistant-message:${identity.turnScopeId}`,
+    },
+    concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 0 },
   });
 }
 

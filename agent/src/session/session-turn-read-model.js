@@ -44,13 +44,13 @@ function collectSessionPresentationTurnScopeIds(session = {}) {
 }
 
 export function createSessionTurnLifecycleSnapshot({
-  session = {},
+  session,
   commandId = "",
   userId = "",
   knownSequence,
-  terminalLimit = 10,
+  terminalLimit,
   generatedAt,
-} = {}) {
+}) {
   return createAuthoritativeTurnSnapshot({
     lifecycle: session.turnLifecycle,
     turnTimings: session.turnTimings,

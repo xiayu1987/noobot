@@ -5,11 +5,10 @@
  */
 import { TURN_SNAPSHOT_WIRE_EVENT, validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createTurnSnapshotEnvelope } from "@noobot/event-protocol/turn-snapshot";
+import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
 import {
   EXECUTION_QUERY_COMMAND,
   EXECUTION_QUERY_CONTRACT,
-  isExecutionQueryTargetValid,
-  validateExecutionIdentity,
 } from "@noobot/session-protocol/execution-lifecycle";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
 import { findPendingInteraction } from "./pending-interaction-registry.js";
@@ -18,15 +17,15 @@ import { text } from "@noobot/shared/value";
 const EXECUTION_QUERY_READERS = Object.freeze({
   [EXECUTION_QUERY_COMMAND.SNAPSHOT_GET]: Object.freeze({
     method: "getExecution",
-    candidates: (result) => [result.execution],
+    payload: ({ execution }) => ({ execution }),
   }),
   [EXECUTION_QUERY_COMMAND.CHILDREN_GET]: Object.freeze({
     method: "getExecutionChildren",
-    candidates: (result) => [result.execution, ...(result.children || [])],
+    payload: ({ execution, children }) => ({ execution, children }),
   }),
   [EXECUTION_QUERY_COMMAND.TREE_GET]: Object.freeze({
     method: "getExecutionTree",
-    candidates: (result) => Object.values(result.tree?.executions || {}),
+    payload: ({ rootExecutionId, tree }) => ({ rootExecutionId, tree }),
   }),
 });
 
@@ -42,17 +41,18 @@ function sendAuthoritativeTurnSnapshot(sendEvent, command, snapshot) {
   sendEvent(TURN_SNAPSHOT_WIRE_EVENT, createTurnSnapshotEnvelope(snapshot));
 }
 
-const trimText = (value) => text(value);
-
 function resolveTurnCommandIdentity(authInfo, command) {
   const identity = {
-    userId: trimText(authInfo?.userId),
+    userId: text(authInfo?.userId),
     sessionId: command.identity.sessionId,
     parentSessionId: command.identity.parentSessionId,
   };
-  const commandId = trimText(command.commandId);
-  const valid = Boolean(identity.userId && identity.sessionId && commandId);
-  return { identity, commandId, terminalLimit: command.options?.terminalLimit, valid };
+  return {
+    identity,
+    commandId: command.commandId,
+    terminalLimit: command.options.terminalLimit,
+    valid: Boolean(identity.userId),
+  };
 }
 
 export function createMessageQueryHandlers({
@@ -89,7 +89,7 @@ export function createMessageQueryHandlers({
     const result = await turnRecovery.readSnapshot({
       ...identity,
       commandId,
-      knownSequence: command.options?.knownSequence,
+      knownSequence: command.options.knownSequence,
       terminalLimit,
     });
     if (!result?.found) {
@@ -103,17 +103,11 @@ export function createMessageQueryHandlers({
 
   const handleExecutionQuery = async (command, commandType) => {
     const userId = text(authInfo?.userId);
-    const executionId = text(command.query?.executionId);
-    const rootExecutionId = text(command.query?.rootExecutionId);
-    const commandId = text(command.commandId);
+    const { executionId, rootExecutionId } = command.query;
+    const { commandId } = command;
     const contract = EXECUTION_QUERY_CONTRACT[commandType];
     const readerSpec = EXECUTION_QUERY_READERS[commandType];
-    if (
-      !userId ||
-      !commandId ||
-      !readerSpec ||
-      !isExecutionQueryTargetValid(commandType, { executionId, rootExecutionId })
-    ) {
+    if (!userId) {
       sendFailedCommandReceipt(sendEvent, command, { code: "invalid_execution_query" });
       return;
     }
@@ -130,13 +124,23 @@ export function createMessageQueryHandlers({
       });
       return;
     }
-    const candidates = readerSpec.candidates(result);
-    const invalid = candidates.find((item) => !validateExecutionIdentity(item).valid);
-    if (invalid) {
-      sendFailedCommandReceipt(sendEvent, command, { code: "invalid_authoritative_execution" });
+    let envelope;
+    try {
+      envelope = createExecutionQueryEnvelope({
+        wireEvent: contract.wireEvent,
+        commandId,
+        executionId: result.execution?.executionId,
+        payload: readerSpec.payload(result),
+        occurredAt: result.generatedAt,
+      });
+    } catch (error) {
+      sendFailedCommandReceipt(sendEvent, command, {
+        code: "invalid_authoritative_execution",
+        message: error.message,
+      });
       return;
     }
-    sendEvent(contract.wireEvent, { ...result, commandId });
+    sendEvent(contract.wireEvent, envelope);
   };
 
   const handleFinalize = async (command) => {

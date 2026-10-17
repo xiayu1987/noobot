@@ -89,6 +89,7 @@ describe("useChatEngine.resend replace turn", () => {
           role: RoleEnum.USER,
           content: "edited question",
         },
+        replacementDialogProcessId: "dialog:client-turn:replacement",
       }),
     );
 
@@ -120,6 +121,7 @@ describe("useChatEngine.resend replace turn", () => {
         aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
+        replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         session: { messageCount: 1 },
       });
     });
@@ -267,6 +269,7 @@ describe("useChatEngine.resend replace turn", () => {
           aggregateVersion: 4,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -371,6 +374,7 @@ describe("useChatEngine.resend replace turn", () => {
           aggregateVersion: 2,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -446,6 +450,7 @@ describe("useChatEngine.resend replace turn", () => {
           aggregateVersion: 4,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -551,6 +556,7 @@ describe("useChatEngine.resend replace turn", () => {
           aggregateVersion: 4,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );
@@ -639,6 +645,7 @@ describe("useChatEngine.resend replace turn", () => {
           aggregateVersion: 4,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
+          replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
         });
       },
     );

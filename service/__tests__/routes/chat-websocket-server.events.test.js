@@ -15,7 +15,6 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   const envelope = createCommittedTurnLifecycleEnvelope({
     eventId: "child-event",
     event: {
-      commandId: "child-command",
       eventType: "turn.processing_started",
       userId: "u1",
       sessionId: "child-session",
@@ -23,6 +22,7 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
       turnScopeId: "child-turn",
     },
     turn: {
+      commandId: "child-command",
       sessionId: "child-session",
       parentSessionId: "parent-session",
       turnScopeId: "child-turn",

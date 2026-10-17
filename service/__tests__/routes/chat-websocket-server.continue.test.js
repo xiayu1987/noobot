@@ -9,6 +9,7 @@ import {
   startServerWithWs,
   closeServer,
   callChatWs,
+  createProtocolTestCommand,
   stopChatWs,
 } from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
@@ -204,13 +205,20 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
     const { port } = server.address();
     const events = await callChatWs({
       port,
-      payload: {
-        action: "continue",
-        userId: "u1",
-        sessionId: "s1",
-        message: "continue",
-        turnScopeId: "turn-new",
-        config: { locale: "zh-CN" },
+      frame: {
+        ...createProtocolTestCommand({
+          action: "continue",
+          userId: "u1",
+          sessionId: "s1",
+          message: "continue",
+          turnScopeId: "turn-new",
+          config: {
+            locale: "zh-CN",
+            resumeDialogProcessId: "dp-stopped",
+            resumeTurnScopeId: "turn-stopped",
+          },
+        }),
+        continuation: { dialogProcessId: "", turnScopeId: "" },
       },
     });
     const receipt = events.find(
@@ -243,14 +251,21 @@ test("chat-websocket-server: continue action does not fallback to current dialog
     const { port } = server.address();
     const events = await callChatWs({
       port,
-      payload: {
-        action: "continue",
-        userId: "u1",
-        sessionId: "s1",
-        dialogProcessId: "dp-current",
-        message: "continue",
-        turnScopeId: "turn-new",
-        config: { locale: "zh-CN", resumeTurnScopeId: "turn-stopped" },
+      frame: {
+        ...createProtocolTestCommand({
+          action: "continue",
+          userId: "u1",
+          sessionId: "s1",
+          dialogProcessId: "dp-current",
+          message: "continue",
+          turnScopeId: "turn-new",
+          config: {
+            locale: "zh-CN",
+            resumeDialogProcessId: "dp-stopped",
+            resumeTurnScopeId: "turn-stopped",
+          },
+        }),
+        continuation: { dialogProcessId: "", turnScopeId: "turn-stopped" },
       },
     });
     const receipt = events.find(
