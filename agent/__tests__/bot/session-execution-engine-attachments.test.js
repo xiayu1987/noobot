@@ -24,7 +24,7 @@ async function createAttachmentWorkspaceService() {
   };
 }
 
-test("_prepareAgentTurnExecution uses canonical payload attachments when prepared runtime has none", async () => {
+test("_prepareAgentTurnExecution takes canonical payload attachments as the single source", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.workspaceService = await createAttachmentWorkspaceService();
   engine.agentRuntimeFacade = {

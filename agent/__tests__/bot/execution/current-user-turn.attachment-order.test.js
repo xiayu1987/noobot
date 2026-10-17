@@ -103,6 +103,11 @@ test("accepted user message binds canonical attachments before Context construct
   const bound = { ...committed, attachments: [attachment] };
   const result = await prepareCurrentUserTurn(
     createInput({
+      buildContextBuilder: (payload) => {
+        calls.push("builder");
+        assert.deepEqual(payload.userMessageAttachments, [attachment]);
+        return { kind: "context-builder" };
+      },
       turnAcceptance: {
         commandId: "command-1",
         sessionId: "s1",
@@ -133,8 +138,46 @@ test("accepted user message binds canonical attachments before Context construct
     }),
   );
 
-  assert.deepEqual(calls, ["assert", "prepare", "bind"]);
+  assert.deepEqual(calls, ["assert", "prepare", "bind", "builder"]);
   assert.deepEqual(result.currentUserMessage, bound);
   assert.deepEqual(result.buildContextPayload.currentUserMessage, bound);
   assert.deepEqual(result.buildContextPayload.userMessageAttachments, [attachment]);
+});
+
+test("reused user turn canonicalizes attachments once before Context construction", async () => {
+  const calls = [];
+  const attachment = {
+    attachmentId: "att_1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    name: "report.pdf",
+    path: "/workspace/report.pdf",
+  };
+  const userMessage = { ...committedUserMessage(), attachments: [attachment] };
+  const result = await prepareCurrentUserTurn(
+    createInput({
+      attachments: [attachment],
+      resolvedRunConfig: { reuseExistingUserTurn: true },
+      buildContextBuilder: (payload) => {
+        calls.push("builder");
+        assert.deepEqual(payload.userMessageAttachments, [attachment]);
+        return { kind: "context-builder" };
+      },
+      prepareTurnInput: async () => {
+        calls.push("prepare");
+        return { userMessageAttachments: [attachment] };
+      },
+      assertReusedUserTurnIdentity: async (payload) => {
+        calls.push("assert");
+        assert.deepEqual(payload.attachments, [attachment]);
+        return { session: { sessionId: "s1" }, aggregateVersion: 3, userMessage };
+      },
+      bindSessionTurnAttachments: async () => {
+        calls.push("bind");
+      },
+    }),
+  );
+
+  assert.deepEqual(calls, ["prepare", "assert", "builder"]);
+  assert.deepEqual(result.buildContextPayload.contextBuilder, { kind: "context-builder" });
 });

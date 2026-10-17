@@ -12,7 +12,6 @@ import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { isConfiguredSuperUser } from "../../shared/utils/super-user.js";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "../formatters/system-prompt-formatter.js";
-import { resolveAttachments } from "../providers/attachment-resolver.js";
 import { resolveConnectorStatusSection } from "../providers/connector-status-provider.js";
 import {
   buildDynamicInfo,
@@ -87,7 +86,6 @@ export async function buildSystemContext({
   runtimeBasePath = "",
   longMemory = null,
   sessionManager = null,
-  attachmentService = null,
   skillService = null,
   botManager = null,
   userMessageAttachments = [],
@@ -114,14 +112,7 @@ export async function buildSystemContext({
       enabled("skills")
         ? resolveSkills({ skillService, runtimeBasePath, userId: identity.userId })
         : [],
-      attachmentsAvailableToRuntime
-        ? resolveAttachments({
-            attachmentService,
-            userMessageAttachments,
-            userId: identity.userId,
-            sessionId: identity.sessionId,
-          })
-        : [],
+      attachmentsAvailableToRuntime ? userMessageAttachments : [],
       enabled("system_runtime") ? resolveWorkspaceDirectories(runtimeBasePath) : [],
       includeConnectors
         ? resolveConnectorStatusSection({

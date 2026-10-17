@@ -119,7 +119,6 @@ export async function prepareCurrentUserTurn({
     persistenceContext,
     persistenceScope,
   };
-  buildContextPayload.contextBuilder = buildContextBuilder(buildContextPayload);
   emitPreparedTurnDebug({
     eventListener,
     requestRunConfig,
@@ -187,39 +186,37 @@ export async function prepareCurrentUserTurn({
       );
     }
   }
-  if (!reuseExistingUserTurn) {
-    await prepareCanonicalAttachments();
-    if (canonicalAttachments.length > 0) {
-      const attachmentBinding = await bindSessionTurnAttachments({
-        userId,
+  if (precommittedUserTurn) await prepareCanonicalAttachments();
+  if (!reuseExistingUserTurn && canonicalAttachments.length > 0) {
+    const attachmentBinding = await bindSessionTurnAttachments({
+      userId,
+      sessionId,
+      parentSessionId,
+      turnScopeId,
+      messageUid: text(currentUserMessage?.messageUid),
+      attachments: canonicalAttachments,
+      expectedAggregateVersion: committedTurnResult?.aggregateVersion,
+      commandId: deriveAttachmentBindCommandId(turnScopeId),
+      persistenceContext,
+    });
+    currentUserMessage = attachmentBinding?.userMessage;
+    committedTurnResult = {
+      ...committedTurnResult,
+      aggregateVersion: attachmentBinding?.aggregateVersion,
+      attachments: attachmentBinding?.attachments || [],
+      userMessage: currentUserMessage,
+    };
+    emitEvent(
+      eventListener,
+      AGENT_RUN_EVENT.TURN_ATTACHMENTS_BOUND,
+      assertTurnAttachmentsBoundEventData({
         sessionId,
-        parentSessionId,
-        turnScopeId,
-        messageUid: text(currentUserMessage?.messageUid),
-        attachments: canonicalAttachments,
-        expectedAggregateVersion: committedTurnResult?.aggregateVersion,
-        commandId: deriveAttachmentBindCommandId(turnScopeId),
-        persistenceContext,
-      });
-      currentUserMessage = attachmentBinding?.userMessage;
-      committedTurnResult = {
-        ...committedTurnResult,
         aggregateVersion: attachmentBinding?.aggregateVersion,
-        attachments: attachmentBinding?.attachments || [],
+        dialogProcessId,
+        turnScopeId,
         userMessage: currentUserMessage,
-      };
-      emitEvent(
-        eventListener,
-        AGENT_RUN_EVENT.TURN_ATTACHMENTS_BOUND,
-        assertTurnAttachmentsBoundEventData({
-          sessionId,
-          aggregateVersion: attachmentBinding?.aggregateVersion,
-          dialogProcessId,
-          turnScopeId,
-          userMessage: currentUserMessage,
-        }),
-      );
-    }
+      }),
+    );
   }
   const persistedMessageUid = text(currentUserMessage?.messageUid);
   if (!persistedMessageUid) {
@@ -236,6 +233,7 @@ export async function prepareCurrentUserTurn({
     committedTurnResult,
   });
   buildContextPayload.currentUserMessage = currentUserMessage;
+  buildContextPayload.contextBuilder = buildContextBuilder(buildContextPayload);
   return projectPreparedCurrentUserTurn({
     buildContextPayload,
     canonicalAttachments,

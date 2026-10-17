@@ -12,7 +12,7 @@ import fs from "node:fs/promises";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import {
   prepareStoppedSnapshotResumeTurnExecution,
-  resolvePayloadAttachments,
+  prepareTurnInput,
 } from "../../src/bot/session/turn-execution-preparer.js";
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { persistSession } from "../helpers/runtime-events-env.js";
@@ -241,43 +241,44 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   }
 });
 
-test("resolvePayloadAttachments ingests raw attachments into the current session", async () => {
+test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-is", async () => {
   const ingestCalls = [];
-  const contextBuilder = {
-    attachmentService: {
-      async ingest(payload) {
-        ingestCalls.push(payload);
-        return [
-          {
-            attachmentId: "att-1",
-            sessionId: payload.sessionId,
-            name: "resume.docx",
-            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            path: "/workspace/resume.docx",
-          },
-        ];
-      },
+  const attachmentService = {
+    async ingest(payload) {
+      ingestCalls.push(payload);
+      return [
+        {
+          attachmentId: "att-1",
+          sessionId: payload.sessionId,
+          attachmentSource: "user",
+          name: "resume.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          path: "/workspace/resume.docx",
+        },
+      ];
     },
   };
 
-  const attachments = await resolvePayloadAttachments({
-    contextBuilder,
-    userId: "u1",
-    sessionId: "s1",
-    userMessageAttachments: [{ name: "resume.docx", type: "application/octet-stream" }],
+  const { userMessageAttachments: attachments } = await prepareTurnInput({
+    attachmentService,
+    buildContextPayload: {
+      userId: "u1",
+      sessionId: "s1",
+      userMessageAttachments: [{ name: "resume.docx", type: "application/octet-stream" }],
+    },
   });
 
   assert.equal(ingestCalls.length, 1);
   assert.equal(ingestCalls[0].sessionId, "s1");
-  assert.deepEqual(attachments, [
-    {
-      attachmentId: "att-1",
-      sessionId: "s1",
-      name: "resume.docx",
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      path: "/workspace/resume.docx",
-    },
-  ]);
+  assert.equal(attachments.length, 1);
+  assert.equal(attachments[0].attachmentId, "att-1");
+
+  const { userMessageAttachments: again } = await prepareTurnInput({
+    attachmentService,
+    buildContextPayload: { userId: "u1", sessionId: "s1", userMessageAttachments: attachments },
+  });
+  assert.equal(ingestCalls.length, 1, "canonical attachments must not be re-ingested");
+  assert.equal(again[0].attachmentId, "att-1");
 });
 
 test("stopped snapshot resume restores turn progress onto the live system runtime", async () => {

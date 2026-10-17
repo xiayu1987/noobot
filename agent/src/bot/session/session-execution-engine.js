@@ -147,7 +147,8 @@ export class SessionExecutionEngine {
         this._resolveScenarioRunConfig(runConfig, userConfig),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
       buildContextBuilder: (payload = {}) => this._buildContextBuilder(payload),
-      prepareTurnInput: (payload = {}) => this._prepareTurnInput(payload),
+      prepareTurnInput: ({ buildContextPayload }) =>
+        prepareTurnInput({ attachmentService: this.attach, buildContextPayload }),
       prepareAgentTurnExecution: (payload = {}) => this._prepareAgentTurnExecution(payload),
       commitSummaryCheckpoint: (payload = {}) =>
         commitSummaryCheckpoint({
@@ -352,7 +353,6 @@ export class SessionExecutionEngine {
     parentSessionId,
     userConfig,
     userMessageAttachments = [],
-    attachments,
     systemMessages = [],
     eventListener,
     userInteractionBridge = null,
@@ -370,7 +370,6 @@ export class SessionExecutionEngine {
       parentSessionId,
       userConfig,
       userMessageAttachments,
-      attachments,
       systemMessages,
       eventListener,
       userInteractionBridge,
@@ -381,10 +380,6 @@ export class SessionExecutionEngine {
       persistenceContext,
       persistenceScope,
     });
-  }
-
-  async _prepareTurnInput({ buildContextPayload = {} } = {}) {
-    return prepareTurnInput({ buildContextPayload });
   }
 
   async _prepareAgentTurnExecution({ buildContextPayload = {}, abortSignal = null } = {}) {

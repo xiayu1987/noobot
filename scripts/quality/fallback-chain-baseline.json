@@ -456,7 +456,6 @@
     "agent/src/runtime/capabilities/runtime-capability-initializer.js": 3,
     "agent/src/runtime/capability-runner/tool-turns.js": 1,
     "agent/src/runtime/engine.js": 2,
-    "agent/src/runtime/facade/agent-runtime-facade.js": 1,
     "agent/src/runtime/lifecycle/state-machine.js": 5,
     "agent/src/runtime/loop-control.js": 2,
     "agent/src/runtime/message-context/message-store.js": 1,

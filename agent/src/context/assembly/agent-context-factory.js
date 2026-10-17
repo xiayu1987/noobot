@@ -40,7 +40,6 @@ export class AgentContextFactory {
     parentSessionId,
     userConfig,
     userMessageAttachments = [],
-    attachments,
     systemMessages = [],
     eventListener,
     userInteractionBridge = null,
@@ -71,7 +70,6 @@ export class AgentContextFactory {
         caller,
         parentSessionId,
         userMessageAttachments: Array.isArray(userMessageAttachments) ? userMessageAttachments : [],
-        ...(Array.isArray(attachments) ? { attachments } : {}),
         systemMessages,
         runConfig,
         abortSignal,
@@ -79,55 +77,6 @@ export class AgentContextFactory {
         persistenceContext,
         persistenceScope,
       },
-    });
-  }
-
-  async buildAgentContext({
-    mode,
-    userId,
-    sessionId,
-    caller,
-    parentSessionId,
-    userConfig,
-    userMessageAttachments = [],
-    attachments,
-    systemMessages = [],
-    eventListener,
-    dialogProcessId = "",
-    userInteractionBridge = null,
-    runConfig = {},
-    abortSignal = null,
-    parentAsyncResultContainer = null,
-    persistenceContext = null,
-    persistenceScope = null,
-  }) {
-    const contextBuilder = this.buildContextBuilder({
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      userConfig,
-      userMessageAttachments,
-      attachments,
-      systemMessages,
-      eventListener,
-      userInteractionBridge,
-      runConfig,
-      abortSignal,
-      parentAsyncResultContainer,
-      persistenceContext,
-      persistenceScope,
-    });
-    return this.buildAgentContextFromBuilder({
-      mode,
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      eventListener,
-      dialogProcessId,
-      runConfig,
-      contextBuilder,
     });
   }
 

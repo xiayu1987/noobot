@@ -30,19 +30,14 @@ async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, message
   );
 }
 
-export function resolvePayloadAttachments(payload = {}) {
-  return resolveAttachments({
-    attachmentService: payload.contextBuilder.attachmentService,
-    userMessageAttachments: Array.isArray(payload.userMessageAttachments)
-      ? payload.userMessageAttachments
-      : [],
-    userId: text(payload.userId),
-    sessionId: text(payload.sessionId),
+export async function prepareTurnInput({ attachmentService, buildContextPayload }) {
+  const userMessageAttachments = await resolveAttachments({
+    attachmentService,
+    userMessageAttachments: buildContextPayload.userMessageAttachments,
+    userId: text(buildContextPayload.userId),
+    sessionId: text(buildContextPayload.sessionId),
   });
-}
-
-export async function prepareTurnInput({ buildContextPayload = {} } = {}) {
-  return { userMessageAttachments: await resolvePayloadAttachments(buildContextPayload) };
+  return { userMessageAttachments };
 }
 
 export async function prepareAgentTurnExecution(
@@ -57,17 +52,7 @@ export async function prepareAgentTurnExecution(
           buildContextPayload: payload,
           abortSignal,
         });
-  const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
-  const preparedRuntimeAttachments = Array.isArray(preparedRuntime?.userMessageAttachments)
-    ? preparedRuntime.userMessageAttachments
-    : null;
-  const payloadUserMessageAttachments = Array.isArray(payload?.userMessageAttachments)
-    ? payload.userMessageAttachments
-    : [];
-  const runtimeAttachments =
-    Array.isArray(preparedRuntimeAttachments) && preparedRuntimeAttachments.length > 0
-      ? preparedRuntimeAttachments
-      : payloadUserMessageAttachments;
+  const runtimeAttachments = payload.userMessageAttachments;
   const existingSessionAttachments = await engine._resolveExistingUserMessageAttachments({
     userId: text(payload?.userId),
     sessionId: text(payload?.sessionId),
@@ -186,7 +171,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
   if (!snapshot) {
     return prepareWithoutStoppedSnapshot(engine, { payload, abortSignal });
   }
-  const userMessageAttachments = await resolvePayloadAttachments(payload);
+  const { userMessageAttachments } = payload;
   const hydratedMessageBlocks = await restoreSnapshotUserAttachmentFacts(
     engine,
     identity,

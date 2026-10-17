@@ -276,7 +276,6 @@ export class ContextBuilder {
       runtimeBasePath,
       longMemory,
       sessionManager: this.sessionManager,
-      attachmentService: this.attachmentService,
       skillService: this.skillService,
       botManager: this.botManager,
       userMessageAttachments: this.userMessageAttachments,

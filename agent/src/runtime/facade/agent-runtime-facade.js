@@ -4,84 +4,48 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { runAgentTurn } from "../engine.js";
+import { isFunction } from "@noobot/shared/value";
 
 export class AgentRuntimeFacade {
-  constructor({ contextFactory = null, turnRunner = runAgentTurn } = {}) {
+  constructor({ contextFactory, turnRunner } = {}) {
+    if (!isFunction(contextFactory?.buildAgentContextFromBuilder)) {
+      throw new TypeError(
+        "AgentRuntimeFacade requires contextFactory.buildAgentContextFromBuilder",
+      );
+    }
+    if (!isFunction(contextFactory?.buildRunTurnAgentContext)) {
+      throw new TypeError("AgentRuntimeFacade requires contextFactory.buildRunTurnAgentContext");
+    }
+    if (!isFunction(turnRunner)) {
+      throw new TypeError("AgentRuntimeFacade requires turnRunner");
+    }
     this.contextFactory = contextFactory;
-    this.turnRunner = typeof turnRunner === "function" ? turnRunner : runAgentTurn;
+    this.turnRunner = turnRunner;
   }
 
-  async buildContext({
-    mode,
-    userId,
-    sessionId,
-    caller,
-    parentSessionId,
-    userConfig,
-    userMessageAttachments = [],
-    attachments,
-    eventListener,
-    dialogProcessId = "",
-    userInteractionBridge = null,
-    runConfig = {},
-    abortSignal = null,
-    parentAsyncResultContainer = null,
-    contextBuilder = null,
-  } = {}) {
-    if (!this.contextFactory) {
-      throw new Error("agent contextFactory is required");
-    }
-    if (contextBuilder) {
-      return this.contextFactory.buildAgentContextFromBuilder({
-        mode,
-        userId,
-        sessionId,
-        caller,
-        parentSessionId,
-        eventListener,
-        dialogProcessId,
-        runConfig,
-        contextBuilder,
-      });
-    }
-    return this.contextFactory.buildAgentContext({
+  buildRunTurnContext(agentContext, abortSignal = null) {
+    return this.contextFactory.buildRunTurnAgentContext(agentContext, abortSignal);
+  }
+
+  async prepareTurnExecution({ buildContextPayload, abortSignal = null }) {
+    const { mode, userId, sessionId, caller, parentSessionId } = buildContextPayload;
+    const { eventListener, dialogProcessId, runConfig, contextBuilder } = buildContextPayload;
+    const agentContext = await this.contextFactory.buildAgentContextFromBuilder({
       mode,
       userId,
       sessionId,
       caller,
       parentSessionId,
-      userConfig,
-      userMessageAttachments,
-      attachments,
       eventListener,
       dialogProcessId,
-      userInteractionBridge,
       runConfig,
-      abortSignal,
-      parentAsyncResultContainer,
+      contextBuilder,
     });
-  }
-
-  buildRunTurnContext(agentContext = {}, abortSignal = null) {
-    if (!this.contextFactory) return agentContext;
-    return this.contextFactory.buildRunTurnAgentContext(agentContext, abortSignal);
-  }
-
-  async prepareTurnExecution({ buildContextPayload = {}, abortSignal = null } = {}) {
-    const agentContext = await this.buildContext(buildContextPayload);
     const runtimeAgentContext = this.buildRunTurnContext(agentContext, abortSignal);
-    return {
-      agentContext,
-      runtimeAgentContext,
-    };
+    return { agentContext, runtimeAgentContext };
   }
 
   async runTurn({ agentContext, currentUserMessage, errorLogger = null } = {}) {
-    return this.turnRunner({
-      agentContext,
-      currentUserMessage,
-      errorLogger,
-    });
+    return this.turnRunner({ agentContext, currentUserMessage, errorLogger });
   }
 }
