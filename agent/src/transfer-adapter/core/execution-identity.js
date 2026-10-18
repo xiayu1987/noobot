@@ -5,13 +5,10 @@
  */
 import { isPlainObject } from "@noobot/shared/value";
 import { createTransferIdentity } from "@noobot/semantic-transfer-protocol";
-import { currentAssistantMessageId } from "../../events/message-event-stream.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
 export function resolveRuntimeTransferIdentity({
-  runtime = {},
-  agentContext = null,
-  sessionId = "",
+  runtime,
   producer = null,
   direction = "output",
   strategy = "semantic_transfer",
@@ -19,29 +16,12 @@ export function resolveRuntimeTransferIdentity({
 } = {}) {
   if (!isPlainObject(producer)) throw new Error("semantic_transfer_producer_required");
   const producerType = safeStr(producer.type);
-  const producerId = safeStr(producer.id || producer.name);
-  const runConfig = isPlainObject(runtime?.runConfig) ? runtime.runConfig : {};
-  const contextIdentity = isPlainObject(agentContext?.context?.identity)
-    ? agentContext.context.identity
-    : {};
-  const messageId = safeStr(
-    runConfig.messageId ||
-      runtime?.systemRuntime?.messageId ||
-      contextIdentity.messageId ||
-      currentAssistantMessageId(runtime),
-  );
-  const resolvedSessionId = safeStr(
-    sessionId ||
-      runConfig.sessionId ||
-      runtime?.systemRuntime?.sessionId ||
-      contextIdentity.sessionId,
-  );
-  const turnScopeId = safeStr(
-    runConfig.turnScopeId || runtime?.systemRuntime?.turnScopeId || contextIdentity.turnScopeId,
-  );
-  const runId = safeStr(
-    runConfig.executionId || runtime?.systemRuntime?.executionId || contextIdentity.runId,
-  );
+  const producerId = safeStr(producer.id);
+  const { runConfig, systemRuntime } = runtime;
+  const messageId = safeStr(runConfig.messageId);
+  const resolvedSessionId = safeStr(systemRuntime.sessionId);
+  const turnScopeId = safeStr(runConfig.turnScopeId);
+  const runId = safeStr(runConfig.executionId);
   if (!messageId || !resolvedSessionId || !turnScopeId || !runId || !producerType || !producerId) {
     throw new Error("semantic_transfer_execution_identity_incomplete");
   }

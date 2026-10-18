@@ -20,11 +20,13 @@ import {
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
+import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { TOOL_CALL_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
@@ -224,7 +226,7 @@ function buildImageGenerationRequest({ modelSpec, generationContent, imageSize, 
     },
     options: {
       signal: runtime?.abortSignal || undefined,
-      locale: runtime?.systemRuntime?.config?.locale || runtime?.locale || "zh-CN",
+      locale: resolveLocaleFromRuntime(runtime),
     },
     invocation: {
       flow: MULTIMODAL_FLOW_NAME,
@@ -303,10 +305,7 @@ async function generateImages(input, deps, state) {
   state.resolvedModelSpec = selection.resolvedModelSpec;
   assertGenerationModelSupported(state, runtime);
   state.effectiveImageSize = trimmedText(input.size || input.image_size);
-  const modelPort = runtime?.modelPort;
-  if (!modelPort || !isFunction(modelPort.invoke)) {
-    throw new TypeError("multimodal generation requires runtime.modelPort");
-  }
+  const { modelPort } = requireRuntimeModelHost(runtime);
   const response = await modelPort.invoke(
     buildImageGenerationRequest({
       modelSpec: state.resolvedModelSpec,
@@ -395,12 +394,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
 
   const globalConfig = runtime?.globalConfig || {};
   const userConfig = runtime?.userConfig || {};
-  const sharedFetch =
-    typeof runtime?.sharedTools?.fetch === "function"
-      ? runtime.sharedTools.fetch
-      : typeof globalThis.fetch === "function"
-        ? globalThis.fetch.bind(globalThis)
-        : null;
+  const sharedFetch = runtime.sharedTools.fetch;
 
   const multimodalGenerateTool = new DynamicStructuredTool({
     name: TOOL_NAME.MULTIMODAL_GENERATE,

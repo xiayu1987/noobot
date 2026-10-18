@@ -15,11 +15,11 @@ test("createRuntimeContext keeps sharedTools passthrough and creates turn stores
   const hookManager = { emit() {} };
   const runtime = createRuntimeContext({
     basePath: " /workspace/u1 ",
+    sharedTools: {
+      customFetch: true,
+    },
     runConfig: {
       streaming: false,
-      sharedTools: {
-        customFetch: true,
-      },
       hookManager,
       hooks: {
         manager: hookManager,

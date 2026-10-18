@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import {
   AGENT_LIFECYCLE_BRANCH_STATE,
   AGENT_LIFECYCLE_STATE,
-  bindLifecycleToRuntime,
   createAgentLifecycleMachine,
   resolveInitialLifecycleState,
   syncLifecycleRuntimeState,
@@ -64,15 +63,14 @@ test("agent lifecycle helpers resolve initial state and sync runtime fields", ()
   machine.enterInitializing({ resumeFromStoppedSnapshot: true });
   const runtime = {};
 
-  bindLifecycleToRuntime(runtime, machine);
+  syncLifecycleRuntimeState(runtime, machine);
   assert.equal(runtime.agentLifecycle, machine);
-  assert.equal(runtime.agentLifecycleState, AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING);
-  assert.equal(runtime.agentLifecycleInitialState, AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING);
+  assert.equal(runtime.agentLifecycle.state, AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING);
 
   machine.enterRunning();
   syncLifecycleRuntimeState(runtime, machine);
-  assert.equal(runtime.agentLifecycleState, AGENT_LIFECYCLE_STATE.RUNNING);
-  assert.equal(runtime.agentLifecycleInitialState, AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING);
+  assert.equal(runtime.agentLifecycle.state, AGENT_LIFECYCLE_STATE.RUNNING);
+  assert.equal(Object.hasOwn(runtime, "agentLifecycleState"), false);
 });
 
 test("agent lifecycle phase methods and terminal branch payloads are standardized", () => {

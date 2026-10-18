@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import {
   assert,
   createRunner,
@@ -173,10 +174,9 @@ test("runSession keeps resume snapshot identity separate from current run identi
     },
     prepareAgentTurnExecution: async ({ buildContextPayload }) => {
       captured.buildContextPayload = buildContextPayload;
-      const runtime = {
-        attachmentMetas: [],
+      const runtime = Object.assign(createRuntimeContext(), {
         currentTurnMessages: createCurrentTurnMessagesStore([]),
-      };
+      });
       const agentContext = createTestAgentExecutionScope(runtime);
       return { agentContext, runtimeAgentContext: agentContext };
     },

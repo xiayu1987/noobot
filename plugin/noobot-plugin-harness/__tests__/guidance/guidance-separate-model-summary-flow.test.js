@@ -20,10 +20,8 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
       summary: true,
     },
   });
-  agentContext.execution = {
-    dialogProcessId: "dp-1",
-    controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-  };
+  agentContext.execution = { dialogProcessId: "dp-1" };
+  agentContext.bindings.runtime = { systemRuntime: { turnScopeId: "turn-1" } };
   const meta = {
     harness: {
       planningGuidanceMode: "separate_model",
@@ -64,7 +62,7 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
   assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
   assert.deepEqual(
     new Set(
-      agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+      agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
         .summarizedMessageIds,
     ),
     new Set(
@@ -78,10 +76,8 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
 test("failed separate-model summary remains pending until a checkpoint succeeds", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({ pending: { summary: true } });
-  agentContext.execution = {
-    dialogProcessId: "dp-1",
-    controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-  };
+  agentContext.execution = { dialogProcessId: "dp-1" };
+  agentContext.bindings.runtime = { systemRuntime: { turnScopeId: "turn-1" } };
   const ctx = {
     messages: [
       {
@@ -111,10 +107,14 @@ test("failed separate-model summary remains pending until a checkpoint succeeds"
 
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
-  assert.ok(Array.isArray(agentContext.payload.harness.state.pending.summaryCheckpointMessageIds));
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
+  assert.ok(
+    Array.isArray(
+      agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds,
+    ),
+  );
   assert.equal(
-    agentContext.payload.harness.logs.guidance.some(
+    agentContext.bindings.extensions.harness.logs.guidance.some(
       (entry = {}) => entry.event === "guidance_separate_model_call_failed",
     ),
     true,
@@ -128,9 +128,9 @@ test("separate_model summary request includes previous summary after complete pl
     planText: "1. 当前完整计划\n1.1 子计划A",
     pending: { summary: true },
   });
-  agentContext.payload.harness.summaryText =
+  agentContext.bindings.extensions.harness.summaryText =
     "1. [plan=1][status=done] 上一轮概要\n2. [plan=1.1][status=done] 上一轮概要二";
-  agentContext.payload.harness.summaryFullText = [
+  agentContext.bindings.extensions.harness.summaryFullText = [
     "[SUMMARY_OVERVIEW]",
     "1. [plan=1][status=done] 上一轮概要",
     "2. [plan=1.1][status=done] 上一轮概要二",
@@ -200,8 +200,8 @@ test("separate_model summary request extracts previous summary relay into standa
     planText: "1. 当前完整计划\n1.1 子计划A",
     pending: { summary: true },
   });
-  agentContext.payload.harness.summaryText = "";
-  agentContext.payload.harness.summaryFullText = "";
+  agentContext.bindings.extensions.harness.summaryText = "";
+  agentContext.bindings.extensions.harness.summaryFullText = "";
   const previousSummaryRelay = [
     "[来自harness外部模型输出/summary]",
     "[SUMMARY_OVERVIEW]",
@@ -278,9 +278,9 @@ test("separate_model summary no longer auto-triggers revision", async () => {
     invocations.map((item = {}) => item.purpose),
     ["summary"],
   );
-  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
-  assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 0);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planRevisionAttempts, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planRefinementAttempts, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
 });

@@ -13,8 +13,10 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS, WEB_SEARCH_MODE } from "../constants/index.js";
-import { isPlainObject, text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 const WEB_SEARCH_FLOW_NAME = "agent.do_search_web";
 const WEB_SEARCH_PURPOSE_NAME = "do_search_web";
@@ -141,7 +143,7 @@ export async function searchWithSearchEngine({ runtime = {}, toolCfg = {}, query
 }
 
 export function createWebSearchTool({ agentContext }) {
-  const runtime = agentContext?.bindings?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const toolCfg = resolveWebSearchToolConfig(runtime);
   const toolEnabled = toolCfg?.enabled !== false;
   if (!toolEnabled) return [];
@@ -191,10 +193,7 @@ export function createWebSearchTool({ agentContext }) {
             globalConfig,
             userConfig,
           });
-          const modelPort = runtime?.modelPort;
-          if (!modelPort || !isFunction(modelPort.invoke)) {
-            throw new TypeError("web search requires runtime.modelPort");
-          }
+          const { modelPort } = requireRuntimeModelHost(runtime);
           const response = await modelPort.invoke({
             model: resolvedModelSpec,
             messages: [],

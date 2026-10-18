@@ -44,7 +44,11 @@ test("tool result transfer envelopes project onto the canonical assistant turn",
       toolTimeline: [],
     },
   ]);
-  const runtime = { currentTurnMessages: store, systemRuntime: {} };
+  const runtime = {
+    currentTurnMessages: store,
+    systemRuntime: {},
+    persistCurrentTurnMessages: async () => {},
+  };
   initializeCurrentTurnMessageEventProjection(runtime);
   const transferEnvelope = {
     protocol: "noobot.semantic-transfer",
@@ -178,7 +182,11 @@ test("a completed activity attaches to its own model message, not the latest ass
       activityTimeline: [],
     },
   ]);
-  const runtime = { currentTurnMessages: store, systemRuntime: {} };
+  const runtime = {
+    currentTurnMessages: store,
+    systemRuntime: {},
+    persistCurrentTurnMessages: async () => {},
+  };
   initializeCurrentTurnMessageEventProjection(runtime);
 
   await runtime.projectCurrentTurnMessageEvent(
@@ -197,7 +205,11 @@ test("a completed activity attaches to its own model message, not the latest ass
 
 test("pending materialization keeps events owned by another invocation pending", async () => {
   const store = createCurrentTurnMessagesStore([]);
-  const runtime = { currentTurnMessages: store, systemRuntime: {} };
+  const runtime = {
+    currentTurnMessages: store,
+    systemRuntime: {},
+    persistCurrentTurnMessages: async () => {},
+  };
   initializeCurrentTurnMessageEventProjection(runtime);
 
   await runtime.projectCurrentTurnMessageEvent(

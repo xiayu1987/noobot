@@ -56,11 +56,9 @@ export function schedulePlanUpdateByInject(
   if (!holder) return false;
   const { bucket, state } = holder;
   const normalizedStage = normalizePlanUpdateStage(stage);
-  const normalizedPreferredTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
-    ? targetMainStepIndexes
-        .map((item) => Number(item))
-        .filter((item) => Number.isFinite(item) && item > 0)
-    : [];
+  const normalizedPreferredTargetMainStepIndexes = targetMainStepIndexes
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item > 0);
   const targetMainSteps =
     normalizedStage === "refinement"
       ? resolveRefinementTargetMainSteps(bucket, state, {
@@ -83,7 +81,7 @@ export function schedulePlanUpdateByInject(
       normalizedStage === "revision"
         ? GUIDANCE_EVENTS.revisionScheduledByInject
         : GUIDANCE_EVENTS.refinementScheduledByInject,
-    setPendingData: ({ state }) => {
+    setPendingData: ({ bucket, state }) => {
       const normalizedTargetMainStepIndexes =
         normalizedStage === "refinement" ? targetMainSteps.map((item) => item.index) : [];
       setPendingPlanUpdate(state, {
@@ -96,16 +94,12 @@ export function schedulePlanUpdateByInject(
         normalizedStage === "revision" ? "planRevision" : "planRefinement",
         true,
       );
-      return true;
+      return {
+        stage: normalizedStage,
+        refinementTargetMainStepIndexes: normalizedTargetMainStepIndexes,
+        checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
+      };
     },
-    buildScheduledDetail: ({ bucket }) => ({
-      stage: normalizedStage,
-      refinementTargetMainStepIndexes:
-        normalizedStage === "refinement"
-          ? targetMainSteps.map((item = {}) => Number(item?.index))
-          : [],
-      checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
-    }),
   });
 }
 
@@ -114,7 +108,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   if (!holder) return false;
   const { bucket, state } = holder;
   const pendingData = resolvePendingPlanUpdate(state);
-  if (!pendingData?.active) return false;
+  if (!pendingData.active) return false;
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -210,16 +204,14 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
       if (!canAttemptPlanUpdate(currentCtx, state, { increment: true, stage })) {
         return { applied: false, detail: { stage, reason: "max_revision_attempts" } };
       }
-      applyDynamicPolicyPromptFromText(currentCtx, responseText, {
+      applyDynamicPolicyPromptFromText(bucket, responseText, {
         source: stage === "revision" ? "planning_revision_inject" : "planning_refinement_inject",
         stage,
       });
       const applied = applyRevisedPlanFromText(currentCtx, responseText, {
         source: stage === "revision" ? "planning_revision_inject" : "planning_refinement_inject",
         stage,
-        targetMainStepIndexes: Array.isArray(captureMeta?.targetMainStepIndexes)
-          ? captureMeta.targetMainStepIndexes
-          : [],
+        targetMainStepIndexes: captureMeta.targetMainStepIndexes,
       });
       const locale = state?.locale || LOCALE.ZH_CN;
       if (applied) {
@@ -269,9 +261,7 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
         applied,
         detail: {
           stage,
-          refinementTargetMainStepIndexes: Array.isArray(captureMeta?.targetMainStepIndexes)
-            ? captureMeta.targetMainStepIndexes
-            : [],
+          refinementTargetMainStepIndexes: captureMeta.targetMainStepIndexes,
           checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
         },
       };

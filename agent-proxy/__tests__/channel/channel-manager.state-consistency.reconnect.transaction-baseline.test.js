@@ -40,7 +40,7 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
   const reconnectPromise = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       knownLifecycleSequenceMap: { [sessionId]: 1 },
     }),
   );
@@ -128,7 +128,7 @@ test("reconnect sends the authoritative baseline before channel state snapshots"
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
+  manager.handleReconnect(client, reconnectControl({ sessionId }));
 
   const eventNames = client.sentEvents.map((item) => item.event);
   assert.ok(eventNames.indexOf("reconnect_data") >= 0);
@@ -162,7 +162,7 @@ test("reconnect buffers live events until after the authoritative baseline", asy
   const reconnectPromise = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       knownLifecycleSequenceMap: { [sessionId]: 1 },
     }),
   );
@@ -245,7 +245,7 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
   const reconnectPromise = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       knownLifecycleSequenceMap: { [sessionId]: 1 },
     }),
   );
@@ -299,7 +299,7 @@ test("reconnect removes a channel whose Session is authoritatively deleted", asy
   const reconnectPromise = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       knownLifecycleSequenceMap: { [sessionId]: 1 },
     }),
   );
@@ -344,7 +344,7 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
   const staleReconnect = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       requestId: "reconnect-stale",
       knownLifecycleSequenceMap: { [sessionId]: 1 },
     }),
@@ -353,7 +353,7 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
   const currentReconnect = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       requestId: "reconnect-current",
       knownLifecycleSequenceMap: { [sessionId]: 3 },
     }),
@@ -424,7 +424,7 @@ function setupRecoveryReconnect(sessionId) {
   const reconnectPromise = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       knownLifecycleSequenceMap: { [sessionId]: 1 },
     }),
   );
@@ -562,7 +562,7 @@ test("cancelling reconnect during recovery finalize clears both pending command 
   const superseding = manager.handleReconnect(
     client,
     reconnectControl({
-      sessionId: sessionId,
+      sessionId,
       requestId: "reconnect-superseding",
       knownLifecycleSequenceMap: { [sessionId]: 3 },
     }),

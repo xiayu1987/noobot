@@ -18,7 +18,6 @@ import {
 
 export async function materializeOutputResult({
   runtime = {},
-  agentContext = null,
   content = "",
   maxDirectChars,
   policy = {},
@@ -29,8 +28,6 @@ export async function materializeOutputResult({
   meta = {},
   attachmentSource = "model",
   generationSource = "",
-  storage = null,
-  producer = null,
   identity = null,
 } = {}) {
   const text = String(content || "");
@@ -68,7 +65,6 @@ export async function materializeOutputResult({
 
   const persisted = await persistTransferFile({
     runtime,
-    agentContext,
     content: text,
     name,
     mimeType,
@@ -82,8 +78,6 @@ export async function materializeOutputResult({
     },
     attachmentSource,
     generationSource,
-    storage,
-    producer,
     identity,
     meta: outputMeta,
   });

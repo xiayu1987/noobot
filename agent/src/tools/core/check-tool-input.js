@@ -42,7 +42,7 @@ function tCheckInput(agentContext = {}, key = "") {
     pathOutOfScope: "common.pathOutOfScope",
     fileNotFound: "common.fileNotFound",
   };
-  return tTool(agentContext, keyMap[text(key)] || "");
+  return tTool(getRuntimeFromAgentContext(agentContext), keyMap[text(key)] || "");
 }
 
 function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName = "filePath") {
@@ -59,7 +59,7 @@ function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName 
   };
   const key = keyMap[resolution?.error];
   return key
-    ? tTool(agentContext, key, {
+    ? tTool(getRuntimeFromAgentContext(agentContext), key, {
         field: fieldName,
         virtualRoot: String(resolution?.virtualRoot || ""),
         suggestedPath: String(resolution?.candidateWorkspaceRelativePath || ""),
@@ -116,33 +116,43 @@ export function projectToolPathRef(pathRef = {}) {
   });
 }
 
-function assertValidSimpleFileName({ fileName = "", fieldName = "fileName" }) {
+function assertValidSimpleFileName({ fileName = "", fieldName = "fileName", agentContext }) {
   const normalizedFileName = text(fileName);
   if (!normalizedFileName) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fieldRequired")}`, {
+    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
       code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       details: { field: fieldName },
     });
   }
   if (normalizedFileName.includes("/") || normalizedFileName.includes("\\")) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "pathSeparatorsNotAllowed")}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
-      details: { field: fieldName, value: normalizedFileName },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput(agentContext, "pathSeparatorsNotAllowed")}`,
+      {
+        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
+        details: { field: fieldName, value: normalizedFileName },
+      },
+    );
   }
   if (/[\0-\x1F\x7F]/.test(normalizedFileName)) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "controlCharsNotAllowed")}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
-      details: { field: fieldName, value: normalizedFileName },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput(agentContext, "controlCharsNotAllowed")}`,
+      {
+        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
+        details: { field: fieldName, value: normalizedFileName },
+      },
+    );
   }
   return normalizedFileName;
 }
 
-export function assertValidFileNameFromPath({ filePath = "", fieldName = "filePath" }) {
+export function assertValidFileNameFromPath({
+  filePath = "",
+  fieldName = "filePath",
+  agentContext,
+}) {
   const normalizedPath = text(filePath);
   if (!normalizedPath) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fieldRequired")}`, {
+    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
       code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       details: { field: fieldName },
     });
@@ -150,14 +160,18 @@ export function assertValidFileNameFromPath({ filePath = "", fieldName = "filePa
   const normalizedPathForName = normalizePathForPlatform(normalizedPath);
   const parsedName = path.basename(path.normalize(normalizedPathForName));
   if (!parsedName || parsedName === "." || parsedName === path.sep) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fileNameIncludedRequired")}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
-      details: { field: fieldName, value: normalizedPath },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput(agentContext, "fileNameIncludedRequired")}`,
+      {
+        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
+        details: { field: fieldName, value: normalizedPath },
+      },
+    );
   }
   return assertValidSimpleFileName({
     fileName: parsedName,
     fieldName,
+    agentContext,
   });
 }
 

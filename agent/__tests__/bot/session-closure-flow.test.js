@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -16,7 +17,6 @@ import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
-import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
@@ -254,8 +254,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           ? effectiveAttachments[0] || {}
           : {};
         return createTestAgentExecutionScope(
-          {
-            currentTurnMessages: createCurrentTurnMessagesStore(),
+          createRuntimeContext({
             sessionManager,
             runtimeModel: String(runConfig?.runtimeModel || ""),
             userMessageAttachments: [
@@ -270,11 +269,10 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
                 relativePath: "input.png",
               },
             ],
-            attachments: [],
             systemRuntime: {
               dialogProcessId,
             },
-          },
+          }),
           {
             identity: {
               sessionId,
@@ -521,13 +519,11 @@ test("continue mode closed-loop: should build continue context and persist paren
     attachmentService: engine.attach,
     async buildNewSessionContext({ dialogProcessId = "" } = {}) {
       return createTestAgentExecutionScope(
-        {
-          currentTurnMessages: createCurrentTurnMessagesStore(),
+        createRuntimeContext({
           sessionManager,
           runtimeModel: String(runConfig?.runtimeModel || ""),
-          attachmentMetas: [],
           systemRuntime: { dialogProcessId },
-        },
+        }),
         {
           identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
           messageBlocks: { system: ["initial"], history: [] },
@@ -538,13 +534,10 @@ test("continue mode closed-loop: should build continue context and persist paren
       continueContextBuilt = true;
       capturedRunConfig = { ...runConfig };
       return createTestAgentExecutionScope(
-        {
-          currentTurnMessages: createCurrentTurnMessagesStore(),
+        createRuntimeContext({
           sessionManager,
-          runtimeModel: "",
-          attachmentMetas: [],
           systemRuntime: { dialogProcessId, sessionId },
-        },
+        }),
         {
           identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
           messageBlocks: {

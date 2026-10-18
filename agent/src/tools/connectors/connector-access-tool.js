@@ -11,7 +11,10 @@ import {
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/meta-ops.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  resolveRuntimeUserId,
+} from "../../context/agent-context-accessor.js";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -61,7 +64,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   if (effectiveConfig?.tools?.[TOOL_NAME.ACCESS_CONNECTOR]?.enabled === false) return [];
-  const userId = text(runtime?.systemRuntime?.userId || agentContext?.userId);
+  const userId = resolveRuntimeUserId(runtime);
   const selectedConnectorIds = normalizeSelectedConnectorIds(
     runtime?.systemRuntime?.config?.selectedConnectorIds,
   );

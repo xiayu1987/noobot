@@ -16,12 +16,12 @@ test("summarizeExecutionMetrics aggregates model calls, retries and switches", (
     log("llm_call_start", 0, { modelLoopRound: 1 }),
     log("model.invocation.started", 0, { model: { alias: "m1", model: "m-1" } }),
     log("model.invocation.completed", 1, { attemptCount: 3 }),
-    log("llm_call_end", 1, { hasToolCalls: true }),
+    log("llm_call_end", 1, { mode: "with_tools", toolCallCount: 2 }),
     log("model_switched", 2, { alias: "m2" }),
     log("llm_call_start", 2, { modelLoopRound: 4 }),
     log("model.invocation.started", 2, { model: { model: "m-2" } }),
     log("model.invocation.completed", 3, { attemptCount: 1 }),
-    log("llm_call_end", 3, { hasToolCalls: false }),
+    log("llm_call_end", 3, { mode: "with_tools", toolCallCount: 0 }),
   ]);
   assert.deepEqual(metrics.model, {
     llmCalls: 2,

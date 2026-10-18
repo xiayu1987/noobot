@@ -16,6 +16,7 @@ import {
 test("persistTransferArtifacts maps storage records to canonical attachment references", async () => {
   const result = await persistTransferArtifacts({
     runtime: {
+      systemRuntime: { userId: "u1" },
       attachmentService: {
         async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
           return artifacts.map((artifact, index) => ({
@@ -31,7 +32,6 @@ test("persistTransferArtifacts maps storage records to canonical attachment refe
         },
       },
     },
-    userId: "u1",
     sessionId: "session-test-1",
     attachmentSource: "model",
     identity: identity(),
@@ -56,7 +56,7 @@ test("persistence requires an attachment service instead of returning a direct f
   await assert.rejects(
     () =>
       persistTransferArtifacts({
-        userId: "u1",
+        runtime: { systemRuntime: { userId: "u1" } },
         sessionId: "session-test-1",
         identity: identity(),
         intent: {
@@ -76,6 +76,7 @@ test("persistence rejects any attachment cardinality drift", async () => {
     () =>
       persistTransferArtifacts({
         runtime: {
+          systemRuntime: { userId: "u1" },
           attachmentService: {
             async ingestGeneratedArtifacts() {
               return [
@@ -91,7 +92,6 @@ test("persistence rejects any attachment cardinality drift", async () => {
             },
           },
         },
-        userId: "u1",
         identity: identity(),
         artifacts: [
           { name: "a.txt", mimeType: "text/plain", contentBase64: "YQ==" },

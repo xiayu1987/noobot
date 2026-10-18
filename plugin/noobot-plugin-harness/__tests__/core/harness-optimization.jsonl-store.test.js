@@ -26,11 +26,11 @@ test("appendJsonlBuffered supports adaptive flush by reason", async () => {
   const filePath = path.join(base, "events.jsonl");
   const strategy = { maxSize: 100, maxTime: 60000, onTerminal: true, onError: true };
 
-  await appendJsonlBuffered(filePath, { id: 1 }, strategy, 0, { reason: "terminal" });
+  await appendJsonlBuffered(filePath, { id: 1 }, strategy, { reason: "terminal" });
   const first = await fs.readFile(filePath, "utf8");
   assert.match(first, /"id":1/);
 
-  await appendJsonlBuffered(filePath, { id: 2 }, strategy, 0, { reason: "error" });
+  await appendJsonlBuffered(filePath, { id: 2 }, strategy, { reason: "error" });
   const second = await fs.readFile(filePath, "utf8");
   assert.match(second, /"id":2/);
 
@@ -49,10 +49,10 @@ test("appendJsonlBuffered rotates active JSONL and prunes old archives", async (
     maxFiles: 2,
   };
 
-  await appendJsonlBuffered(filePath, { id: 1, payload: "x".repeat(120) }, strategy, 0, {
+  await appendJsonlBuffered(filePath, { id: 1, payload: "x".repeat(120) }, strategy, {
     reason: "terminal",
   });
-  await appendJsonlBuffered(filePath, { id: 2, payload: "y".repeat(120) }, strategy, 0, {
+  await appendJsonlBuffered(filePath, { id: 2, payload: "y".repeat(120) }, strategy, {
     reason: "terminal",
   });
 
@@ -66,10 +66,10 @@ test("appendJsonlBuffered rotates active JSONL and prunes old archives", async (
   assert.match(activeAfterSecond, /"id":2/);
   assert.doesNotMatch(activeAfterSecond, /"id":1/);
 
-  await appendJsonlBuffered(filePath, { id: 3, payload: "z".repeat(120) }, strategy, 0, {
+  await appendJsonlBuffered(filePath, { id: 3, payload: "z".repeat(120) }, strategy, {
     reason: "terminal",
   });
-  await appendJsonlBuffered(filePath, { id: 4, payload: "w".repeat(120) }, strategy, 0, {
+  await appendJsonlBuffered(filePath, { id: 4, payload: "w".repeat(120) }, strategy, {
     reason: "terminal",
   });
 

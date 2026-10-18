@@ -9,39 +9,47 @@ import { createModelRequestExecutor } from "@noobot/model-runtime";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 import { createMultimodalGenerateTool } from "../../src/tools/ai-models/multimodal-generate-tool.js";
+import { createTestModelHost } from "../helpers/test-model-host.js";
 
 const IMAGE_PROVIDER_BASE_URL = "https://image-provider.example.test";
 
-function getMultimodalGenerateTool(runtime = {}) {
-  if (!runtime.modelPort) {
-    const executor = createModelRequestExecutor({
-      credentialPort: { resolve: ({ modelSpec }) => modelSpec.api_key },
-      providerRuntime: {
-        fetchImpl: runtime?.sharedTools?.fetch,
-      },
-      clock: { sleep: async () => {} },
-    });
-    runtime.modelPort = {
-      invoke(request) {
-        return executor.invoke({
-          ...request,
-          invocation: {
-            requestId: "multimodal-test-request",
-            invocationId: "multimodal-test-invocation",
-            sessionId: "multimodal-test-session",
-            parentSessionId: "",
-            dialogProcessId: "multimodal-test-process",
-            turnScopeId: "multimodal-test-turn",
-            runId: "multimodal-test-run",
-            flow: request.invocation.flow,
-            purpose: request.invocation.purpose,
-            domain: request.invocation.domain,
-            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-          },
-        });
-      },
-    };
-  }
+async function rejectUnexpectedFetch() {
+  throw new Error("multimodal_generate must not fetch when modelPort is injected");
+}
+
+function withExecutorModelHost(runtime) {
+  const executor = createModelRequestExecutor({
+    credentialPort: { resolve: ({ modelSpec }) => modelSpec.api_key },
+    providerRuntime: {
+      fetchImpl: runtime.sharedTools.fetch,
+    },
+    clock: { sleep: async () => {} },
+  });
+  const modelPort = {
+    invoke(request) {
+      return executor.invoke({
+        ...request,
+        invocation: {
+          requestId: "multimodal-test-request",
+          invocationId: "multimodal-test-invocation",
+          sessionId: "multimodal-test-session",
+          parentSessionId: "",
+          dialogProcessId: "multimodal-test-process",
+          turnScopeId: "multimodal-test-turn",
+          runId: "multimodal-test-run",
+          flow: request.invocation.flow,
+          purpose: request.invocation.purpose,
+          domain: request.invocation.domain,
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        },
+      });
+    },
+  };
+  runtime.modelHost = createTestModelHost({ modelPort, modelSpec: null });
+  return runtime;
+}
+
+function getMultimodalGenerateTool(runtime) {
   const tools = createMultimodalGenerateTool({
     agentContext: { bindings: { runtime } },
   });
@@ -89,7 +97,7 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
       },
     },
   };
-  const tool = getMultimodalGenerateTool(runtime);
+  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
 
   try {
     await assert.rejects(
@@ -143,18 +151,22 @@ test("multimodal_generate: model configuration is the only image API type author
       },
     },
     userConfig: {},
-    modelPort: {
-      async invoke(request) {
-        modelRequest = request;
-        return {
-          result: {
-            rawText: "",
-            imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
-            output: [],
-          },
-        };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke(request) {
+          modelRequest = request;
+          return {
+            result: {
+              rawText: "",
+              imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
+              output: [],
+            },
+          };
+        },
       },
-    },
+      modelSpec: null,
+    }),
+    sharedTools: { fetch: rejectUnexpectedFetch },
   };
   const tool = getMultimodalGenerateTool(runtime);
 
@@ -197,7 +209,11 @@ test("multimodal_generate: an unknown requested model is rejected before capabil
       },
     },
     userConfig: {},
-    modelPort: { invoke: async () => ({ result: {} }) },
+    modelHost: createTestModelHost({
+      modelPort: { invoke: async () => ({ result: {} }) },
+      modelSpec: null,
+    }),
+    sharedTools: { fetch: rejectUnexpectedFetch },
   };
   const tool = getMultimodalGenerateTool(runtime);
 
@@ -249,18 +265,22 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
         },
       },
     },
-    modelPort: {
-      async invoke(request) {
-        modelRequest = request;
-        return {
-          result: {
-            rawText: "",
-            imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
-            output: [],
-          },
-        };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke(request) {
+          modelRequest = request;
+          return {
+            result: {
+              rawText: "",
+              imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
+              output: [],
+            },
+          };
+        },
       },
-    },
+      modelSpec: null,
+    }),
+    sharedTools: { fetch: rejectUnexpectedFetch },
   };
   const tool = getMultimodalGenerateTool(runtime);
 
@@ -310,11 +330,15 @@ test("multimodal_generate: Responses completion without an image artifact is a f
       },
     },
     userConfig: {},
-    modelPort: {
-      async invoke() {
-        return { result: { rawText: "prompt only", imageArtifacts: [], output: [] } };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke() {
+          return { result: { rawText: "prompt only", imageArtifacts: [], output: [] } };
+        },
       },
-    },
+      modelSpec: null,
+    }),
+    sharedTools: { fetch: rejectUnexpectedFetch },
   };
   const tool = getMultimodalGenerateTool(runtime);
   await assert.rejects(
@@ -389,7 +413,7 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
       },
     },
   };
-  const tool = getMultimodalGenerateTool(runtime);
+  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
 
   const payload = JSON.parse(
     await tool.invoke({
@@ -490,7 +514,7 @@ test("multimodal_generate: images_async uses the configured provider base URL", 
       },
     },
   };
-  const tool = getMultimodalGenerateTool(runtime);
+  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
 
   const payload = JSON.parse(
     await tool.invoke({
@@ -572,7 +596,7 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
       },
     },
   };
-  const tool = getMultimodalGenerateTool(runtime);
+  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
 
   await assert.rejects(
     tool.invoke({
@@ -643,7 +667,7 @@ test("multimodal_generate: images_async applies official parameter defaults and 
       },
     },
   };
-  const tool = getMultimodalGenerateTool(runtime);
+  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
 
   await tool.invoke({
     generation_content: "draw a landscape",
@@ -712,7 +736,7 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
       },
     },
   };
-  const tool = getMultimodalGenerateTool(runtime);
+  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
 
   await assert.rejects(
     tool.invoke({

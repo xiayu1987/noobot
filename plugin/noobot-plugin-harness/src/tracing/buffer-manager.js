@@ -24,6 +24,7 @@ import {
   buildTracePromptRecord,
 } from "./event-builder.js";
 import { normalizeFsmState } from "../fsm/transitions.js";
+import { readHarnessBucket } from "../capabilities/handlers/shared/bucket-utils.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import {
   HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD,
@@ -41,21 +42,16 @@ import {
   buildDynamicPolicyPromptSignature,
   resolveActiveDynamicPolicyPromptFromContext,
 } from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 export { resolvePolicyPromptSelection } from "./policy-prompt-matrix.js";
 
-function resolveHarnessBucket(ctx = {}) {
-  const bucket = ctx?.agentContext?.bindings?.extensions?.harness;
-  return bucket && typeof bucket === "object" ? bucket : null;
-}
-
 function resolvePolicyPromptScopeId(ctx = {}) {
-  return text(ctx?.turnScopeId || ctx?.agentContext?.context?.identity?.turnScopeId);
+  return text(ctx?.turnScopeId);
 }
 
 function resolvePolicyPromptState(ctx = {}) {
-  const bucket = resolveHarnessBucket(ctx);
+  const bucket = readHarnessBucket(ctx);
   if (!bucket) return null;
   const scopeId = resolvePolicyPromptScopeId(ctx);
   const current =
@@ -96,23 +92,8 @@ export function lockPolicyPromptForMainFlow(ctx = {}) {
   return true;
 }
 
-function resolveAgentRuntimeFromContext(ctx = {}) {
-  return ctx?.agentContext?.bindings?.runtime || null;
-}
-
-function isStoppedSnapshotResumeInitializingFirstLlmCall(ctx = {}) {
-  const runtime = resolveAgentRuntimeFromContext(ctx);
-  if (!runtime || runtime.resumeFromStoppedSnapshot !== true) return false;
-  if (isObjectLike(runtime.resumedStoppedSnapshotIdentity)) {
-    return true;
-  }
-  const lifecycleState = text(
-    runtime.agentLifecycleState ||
-      runtime.agentLifecycleInitialState ||
-      runtime.agentLifecycle?.state,
-  );
-  if (lifecycleState && lifecycleState !== "resume_initializing") return false;
-  return Number(ctx?.turn) === 1;
+function isStoppedSnapshotResumeTurn(ctx = {}) {
+  return ctx.resumeFromStoppedSnapshot === true;
 }
 
 function resolveFlushReasonByPoint(point = "") {
@@ -133,49 +114,32 @@ function resolveFlushReasonByPoint(point = "") {
   return HARNESS_FLUSH_REASONS.NONE;
 }
 
-function resolveManifestDialogProcessId(ctx = {}, current = {}) {
-  const fromContext = resolveDialogProcessIdFromContext(ctx);
-  if (fromContext) return fromContext;
-  const fromCurrent = resolveDialogProcessIdFromContext({
-    dialogProcessId: current?.dialogProcessId,
-  });
-  if (fromCurrent) return fromCurrent;
-  return text(current?.harnessRunId);
-}
-
-function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = null, plugin = {}) {
-  const resolvedPaths =
-    current?.paths && typeof current.paths === "object" && Object.keys(current.paths).length > 0
-      ? current.paths
-      : paths && typeof paths === "object"
-        ? {
-            runDir: paths.runDir,
-            contextSnapshot: paths.contextSnapshot,
-            events: paths.events,
-            prompts: paths.prompts,
-            policyChecks: paths.policyChecks,
-            capabilityTraces: paths.capabilityTraces,
-          }
-        : {};
+function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths, plugin = {}) {
   const next = {
     plugin: plugin.name,
     version: plugin.version,
-    harnessRunId: current.harnessRunId || "",
-    userId: ctx.userId || current.userId || "",
-    sessionId: ctx.sessionId || current.sessionId || "",
-    parentSessionId: ctx.parentSessionId || current.parentSessionId || "",
-    dialogProcessId: resolveManifestDialogProcessId(ctx, current),
-    caller: ctx.caller || current.caller || "",
-    status: current.status || HARNESS_RUN_STATUS.RUNNING,
+    userId: text(ctx.userId),
+    sessionId: text(ctx.sessionId),
+    parentSessionId: text(ctx.parentSessionId),
+    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
+    caller: text(ctx.caller),
+    status: HARNESS_RUN_STATUS.RUNNING,
     fsmStatus: normalizeFsmState(current.fsmStatus),
-    startedAt: current.startedAt || ctx.startedAt || nowIso(),
+    startedAt: nowIso(),
     updatedAt: nowIso(),
-    capabilities: current.capabilities || {
+    capabilities: {
       domains: HARNESS_ENGINEERING_CAPABILITIES,
       profile: resolveCapabilityProfile(options.capabilityProfile),
       hookMap: capabilityRuntime?.hookMap || {},
     },
-    paths: resolvedPaths,
+    paths: {
+      runDir: paths.runDir,
+      contextSnapshot: paths.contextSnapshot,
+      events: paths.events,
+      prompts: paths.prompts,
+      policyChecks: paths.policyChecks,
+      capabilityTraces: paths.capabilityTraces,
+    },
     ...current,
     ...patch,
   };
@@ -208,10 +172,7 @@ async function updateManifest(
 
 export async function injectPrompt(point, ctx, options) {
   if (!options.enabled || !options.promptPolicy) return;
-  if (
-    point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
-    isStoppedSnapshotResumeInitializingFirstLlmCall(ctx)
-  ) {
+  if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL && isStoppedSnapshotResumeTurn(ctx)) {
     return;
   }
   const id =
@@ -282,8 +243,7 @@ export async function injectPrompt(point, ctx, options) {
       content,
       maxPreviewChars: options.maxPreviewChars,
     }),
-    options.jsonlFlushStrategy || options.jsonlBatchSize,
-    options.jsonlFlushIntervalMs,
+    options.jsonlFlushStrategy,
   );
 }
 
@@ -296,13 +256,9 @@ export async function traceHook(point, ctx, options, plugin = {}) {
   const event = buildTraceEvent({ point, ctx, options });
   const flushReason = resolveFlushReasonByPoint(point);
 
-  await appendJsonlBuffered(
-    paths.events,
-    event,
-    options.jsonlFlushStrategy || options.jsonlBatchSize,
-    options.jsonlFlushIntervalMs,
-    { reason: flushReason },
-  );
+  await appendJsonlBuffered(paths.events, event, options.jsonlFlushStrategy, {
+    reason: flushReason,
+  });
   const capabilityTraceLogs = (
     Array.isArray(event.capabilityLogs) ? event.capabilityLogs : []
   ).filter((log) => log?.event === "capability_model_trace");
@@ -320,8 +276,7 @@ export async function traceHook(point, ctx, options, plugin = {}) {
         }),
         ...log,
       },
-      options.jsonlFlushStrategy || options.jsonlBatchSize,
-      options.jsonlFlushIntervalMs,
+      options.jsonlFlushStrategy,
       { reason: flushReason },
     );
   }

@@ -38,7 +38,6 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
     if (normalizedPoint !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
       state.flags.acceptanceRequested = false;
       state.flags.acceptanceReviewing = false;
-      state.flags.acceptanceCompleted = false;
       state.flags.planRefinementRequested = false;
       state.flags.checklistArtifactsAttached = false;
     }

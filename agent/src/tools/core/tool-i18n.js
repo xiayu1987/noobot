@@ -6,12 +6,8 @@
 import { pickLocaleText, resolveLocaleFromRuntime } from "noobot-i18n/shared";
 import { BACKEND_I18N } from "noobot-i18n/agent/backend-messages";
 
-export function resolveToolLocale(runtimeOrContext = {}, fallback = "zh-CN") {
-  const runtime =
-    runtimeOrContext?.runtime && typeof runtimeOrContext.runtime === "object"
-      ? runtimeOrContext.runtime
-      : runtimeOrContext;
-  return resolveLocaleFromRuntime(runtime, fallback);
+export function resolveToolLocale(runtime = {}) {
+  return resolveLocaleFromRuntime(runtime);
 }
 
 function pickToolText({
@@ -24,8 +20,8 @@ function pickToolText({
   return pickLocaleText({ locale, dict, key, fallbackLocale, params });
 }
 
-export function tTool(runtimeOrContext = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtimeOrContext);
+export function tTool(runtime = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(runtime);
   return pickToolText({
     locale,
     dict: BACKEND_I18N,

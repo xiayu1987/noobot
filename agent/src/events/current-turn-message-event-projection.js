@@ -90,7 +90,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     store.updateWhere(patch, (_item, index) => index === ownerIndex);
 
     if (isToolEvent || isDurableActivityMessageEvent(envelope)) {
-      await runtime.persistCurrentTurnMessages?.();
+      await runtime.persistCurrentTurnMessages();
     }
     return envelope;
   };

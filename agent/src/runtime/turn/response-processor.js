@@ -10,10 +10,7 @@ import { TOOL_NAME } from "../../tools/constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
-import {
-  getSessionIdsFromAgentContext,
-  getSystemRuntimeFromRuntime,
-} from "../../context/agent-context-accessor.js";
+import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { resolveControlToolOutcome } from "../control-tool-outcome.js";
 import { text } from "@noobot/shared/value";
 
@@ -40,7 +37,6 @@ export async function processToolResults({
   const { errorLogger } = loopState;
   const { eventListener, runtime } = modelState;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
   await runAgentRuntimeHook({
     runtime,
@@ -64,12 +60,6 @@ export async function processToolResults({
         eventListener,
         turn,
         errorLogger,
-        userId: executionIdentity.userId,
-        sessionId: executionIdentity.sessionId,
-        parentSessionId: executionIdentity.parentSessionId,
-        dialogProcessId: executionIdentity.dialogProcessId,
-        turnScopeId: executionIdentity.turnScopeId,
-        executionId: runtime?.systemRuntime?.executionId || "",
         runtime,
         agentContext: modelState?.agentContext || null,
       });

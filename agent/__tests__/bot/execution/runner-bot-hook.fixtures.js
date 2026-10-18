@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 
 import { SessionExecutionRunner } from "../../../src/bot/execution/runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
@@ -92,8 +93,8 @@ export function createRunner({
     turnTasks: [],
   }),
   prepareAgentTurnExecution = async () => ({
-    agentContext: createTestAgentExecutionScope({ attachmentMetas: [] }),
-    runtimeAgentContext: createTestAgentExecutionScope({ attachmentMetas: [] }),
+    agentContext: createTestAgentExecutionScope(createRuntimeContext()),
+    runtimeAgentContext: createTestAgentExecutionScope(createRuntimeContext()),
   }),
   initializeRunSessionRuntime = async ({ eventListener = null } = {}) => ({
     usedSessionId: "s1",

@@ -24,10 +24,10 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
 
   const firstCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: firstCtx, meta });
-  const decisionLog = agentContext.payload.harness.logs.guidance.find(
+  const decisionLog = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_priority_decision",
   );
-  const executionLog = agentContext.payload.harness.logs.guidance.find(
+  const executionLog = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_execution_result",
   );
   assert.equal(Boolean(decisionLog), true);
@@ -51,9 +51,9 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
     ),
     true,
   );
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
 
   const secondCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: secondCtx, meta });
@@ -74,7 +74,7 @@ test("inject mode: revision keeps higher priority than overflow summary for cach
       planRevisionContext: { targetMainStepIndexes: [] },
     },
   });
-  agentContext.payload.harness.state.flags.summaryByCharsPrompted = true;
+  agentContext.bindings.extensions.harness.state.flags.summaryByCharsPrompted = true;
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };

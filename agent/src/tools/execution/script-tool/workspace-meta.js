@@ -26,54 +26,23 @@ function compactObject(value = {}) {
   );
 }
 
-export function buildExecutionWorkspaceMeta({
-  executionPolicy = {},
-  workspace = "",
-  runtime = {},
-  agentContext = null,
-  docker = {},
-  pathContext = {},
-} = {}) {
-  void runtime;
-  void agentContext;
+export function buildExecutionWorkspaceMeta({ executionPolicy = {} } = {}) {
   assertToolExecutionPolicy(executionPolicy);
-  void workspace;
-  void docker;
-  void pathContext;
   return {
     view: "workspace",
     path: ".",
   };
 }
 
-function buildExecutionMeta({ executionPolicy = {}, docker = {} } = {}) {
-  void docker;
+function buildExecutionMeta({ executionPolicy = {} } = {}) {
   return compactObject(projectToolExecutionMeta({ policy: executionPolicy }));
 }
 
-export function buildScriptExecutionMeta({
-  executionPolicy = {},
-  workspace = "",
-  runtime = {},
-  agentContext = null,
-  docker = {},
-  pathContext = {},
-} = {}) {
+export function buildScriptExecutionMeta({ executionPolicy = {} } = {}) {
   return compactObject({
-    execution: buildExecutionMeta({ executionPolicy, docker }),
-    workspace: buildExecutionWorkspaceMeta({
-      executionPolicy,
-      workspace,
-      runtime,
-      agentContext,
-      docker,
-      pathContext,
-    }),
+    execution: buildExecutionMeta({ executionPolicy }),
+    workspace: buildExecutionWorkspaceMeta({ executionPolicy }),
   });
-}
-
-function resolveRuntimeUserId(runtime = {}, agentContext = null) {
-  return text(runtime?.systemRuntime?.userId || agentContext?.context?.identity?.userId);
 }
 
 async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = "" } = {}) {
@@ -87,13 +56,7 @@ async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = 
   };
 }
 
-async function persistBackgroundScriptOutput({
-  runtime = {},
-  agentContext = null,
-  result = {},
-  identity = null,
-} = {}) {
-  const userId = resolveRuntimeUserId(runtime, agentContext);
+async function persistBackgroundScriptOutput({ runtime = {}, result = {}, identity = null } = {}) {
   const artifacts = [
     await buildBackgroundOutputArtifact({
       filePath: result.stdoutPath,
@@ -109,8 +72,6 @@ async function persistBackgroundScriptOutput({
   if (!artifacts.length) return null;
   return persistTransferArtifacts({
     runtime,
-    agentContext,
-    userId,
     artifacts,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_BACKGROUND,
@@ -128,11 +89,9 @@ async function persistBackgroundScriptOutput({
 }
 
 export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options = {}) {
-  const runtime = options?.runtime || {};
-  const agentContext = options?.agentContext || null;
+  const { runtime } = options;
   const persisted = await persistBackgroundScriptOutput({
     runtime,
-    agentContext,
     result: r,
     identity: options?.identity,
   });

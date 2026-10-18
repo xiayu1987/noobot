@@ -18,14 +18,12 @@ const connectorAccess = {
 
 function createScope(selectedConnectorIds = ["con_selected"]) {
   return {
-    userId: "u1",
     bindings: {
       runtime: {
-        userId: "u1",
         globalConfig: {},
         userConfig: {},
         sharedTools: { connectorAccess },
-        systemRuntime: { sessionId: "s1", config: { selectedConnectorIds } },
+        systemRuntime: { userId: "u1", sessionId: "s1", config: { selectedConnectorIds } },
       },
     },
   };

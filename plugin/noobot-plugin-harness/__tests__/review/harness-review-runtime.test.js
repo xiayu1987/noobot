@@ -23,10 +23,7 @@ test("harness review keeps its report internal by default", async () => {
   );
 
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {},
-    },
+    bindings: { extensions: { harness: {} } },
   };
   const result = { output: "done" };
 
@@ -40,26 +37,31 @@ test("harness review keeps its report internal by default", async () => {
 
   assert.equal(String(result.output), "done");
   assert.doesNotMatch(String(result.output), /Harness-Review/);
-  assert.equal(Array.isArray(agentContext.payload.harness.reviewReports), true);
-  assert.equal(agentContext.payload.harness.reviewReports.length, 1);
-  assert.equal(agentContext.payload.harness.lastReviewReport.point, "agent.before_final_output");
+  assert.equal(Array.isArray(agentContext.bindings.extensions.harness.reviewReports), true);
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports.length, 1);
   assert.equal(
-    agentContext.payload.harness.lastReviewReport.summary.issues.includes("planning_not_captured"),
+    agentContext.bindings.extensions.harness.lastReviewReport.point,
+    "agent.before_final_output",
+  );
+  assert.equal(
+    agentContext.bindings.extensions.harness.lastReviewReport.summary.issues.includes(
+      "planning_not_captured",
+    ),
     true,
   );
   assert.equal(
-    agentContext.payload.harness.logs.review.some(
+    agentContext.bindings.extensions.harness.logs.review.some(
       (item = {}) => item?.event === "workflow_priority_decision",
     ),
     true,
   );
   assert.equal(
-    agentContext.payload.harness.logs.review.some(
+    agentContext.bindings.extensions.harness.logs.review.some(
       (item = {}) => item?.event === "workflow_execution_result",
     ),
     true,
   );
-  const reviewDecision = agentContext.payload.harness.logs.review.find(
+  const reviewDecision = agentContext.bindings.extensions.harness.logs.review.find(
     (item = {}) => item?.event === "workflow_priority_decision",
   );
   assert.match(
@@ -80,7 +82,7 @@ test("harness review attaches to final output only when explicitly enabled", asy
     },
   );
   const result = { output: "done" };
-  const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
+  const agentContext = { bindings: { extensions: { harness: {} } } };
 
   await hookManager.emit("agent.before_final_output", {
     userId: "u12-opt-in",
@@ -91,7 +93,7 @@ test("harness review attaches to final output only when explicitly enabled", asy
   });
 
   assert.match(String(result.output), /Harness-Review/);
-  assert.equal(agentContext.payload.harness.reviewReports.length, 1);
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports.length, 1);
 });
 
 test("harness before_final_output capability runtime runs once", async () => {
@@ -127,7 +129,7 @@ test("harness before_final_output capability runtime runs once", async () => {
     sessionId: "s13",
     dialogProcessId: "dp13",
     result,
-    agentContext: { payload: { messages: { system: [], history: [] }, harness: {} } },
+    agentContext: { bindings: { extensions: { harness: {} } } },
   });
 
   assert.equal(count, 1);
@@ -163,39 +165,24 @@ test("acceptance checklist attachments are bound to final assistant turn output"
       turnMessages: [{ role: "assistant", content: "done", type: "message" }],
     },
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        harness: {
-          planText: "1. 保留计划文本",
-          state: {
-            flags: { acceptanceRequested: true },
-          },
-        },
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            attachmentService: {
-              ingestGeneratedArtifacts: async (payload = {}) => {
-                assert.equal(payload.userId, "u-attach");
-                assert.equal(payload.sessionId, "s-attach");
-                assert.equal(payload.owner?.type, "plugin");
-                assert.equal(payload.owner?.id, "harness-plugin");
-                return records.map((record) => ({
-                  ...record,
-                  owner: payload.owner,
-                }));
-              },
-            },
-            systemRuntime: {
-              userId: "u-attach",
-              sessionId: "s-attach",
-            },
-          },
-        },
-      },
       bindings: {
         runtime: {
+          attachmentService: {
+            ingestGeneratedArtifacts: async (payload = {}) => {
+              assert.equal(payload.userId, "u-attach");
+              assert.equal(payload.sessionId, "s-attach");
+              assert.equal(payload.owner?.type, "plugin");
+              assert.equal(payload.owner?.id, "harness-plugin");
+              return records.map((record) => ({
+                ...record,
+                owner: payload.owner,
+              }));
+            },
+          },
+          systemRuntime: {
+            userId: "u-attach",
+            sessionId: "s-attach",
+          },
           sharedTools: {
             semanticTransfer: {
               async transferSemanticContent(payload = {}) {
@@ -240,6 +227,14 @@ test("acceptance checklist attachments are bound to final assistant turn output"
             },
           },
         },
+        extensions: {
+          harness: {
+            planText: "1. 保留计划文本",
+            state: {
+              flags: { acceptanceRequested: true },
+            },
+          },
+        },
       },
     },
   };
@@ -266,7 +261,7 @@ test("acceptance checklist attachments are bound to final assistant turn output"
   ).map((envelope = {}) => envelope?.identity?.producer?.type);
   assert.deepEqual(transferProducers, ["plugin", "plugin"]);
   assert.equal(finalAssistant.attachments, undefined);
-  const acceptanceLogs = ctx.agentContext.payload.harness.logs.acceptance;
+  const acceptanceLogs = ctx.agentContext.bindings.extensions.harness.logs.acceptance;
   assert.equal(
     acceptanceLogs.some((item = {}) => item?.event === "workflow_priority_decision"),
     true,
@@ -285,7 +280,7 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
   );
 
   const result = { output: "done" };
-  const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
+  const agentContext = { bindings: { extensions: { harness: {} } } };
   await hookManager.emit("agent.before_final_output", {
     userId: "u14",
     sessionId: "s14",
@@ -296,8 +291,11 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
 
   assert.doesNotMatch(String(result.output), /noobot-harness-final-response/);
   assert.doesNotMatch(String(result.output), /Harness-Review/);
-  assert.equal(agentContext.payload.harness.reviewReports.length, 1);
-  assert.equal(agentContext.payload.harness.lastReviewReport.point, "agent.before_final_output");
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports.length, 1);
+  assert.equal(
+    agentContext.bindings.extensions.harness.lastReviewReport.point,
+    "agent.before_final_output",
+  );
 });
 
 test("harness promptPolicy false still traces before_llm_call", async () => {
@@ -342,7 +340,7 @@ test("harness review records reports on error and abort hooks", async () => {
     { hookManager },
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
-  const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
+  const agentContext = { bindings: { extensions: { harness: {} } } };
 
   await hookManager.emit("agent.on_error", {
     userId: "u16",
@@ -358,11 +356,11 @@ test("harness review records reports on error and abort hooks", async () => {
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.reviewReports.length, 2);
-  assert.equal(agentContext.payload.harness.reviewReports[0].status, "error");
-  assert.equal(agentContext.payload.harness.reviewReports[1].status, "abort");
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports.length, 2);
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports[0].status, "error");
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports[1].status, "abort");
   assert.equal(
-    agentContext.payload.harness.logs.review.filter(
+    agentContext.bindings.extensions.harness.logs.review.filter(
       (item = {}) => item?.event === "review_report_generated",
     ).length,
     2,
@@ -377,11 +375,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   );
 
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      tools: { registry: [] },
-      harness: {},
-    },
+    bindings: { tools: [], extensions: { harness: {} } },
   };
   const messages = [{ role: "user", content: "请处理附件并验收" }];
 
@@ -393,7 +387,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   });
 
   assert.equal(
-    agentContext.payload.tools.registry.some((tool) => tool?.name === "request_task_acceptance"),
+    agentContext.bindings.tools.some((tool) => tool?.name === "request_task_acceptance"),
     true,
   );
 
@@ -414,12 +408,11 @@ test("harness full engineering capability flow plans, guides, accepts and review
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
-    ai: {
-      content: "1. 解析附件\n2. 执行核心任务",
-    },
+    modelResponse: { text: "1. 解析附件\n2. 执行核心任务" },
+    calls: [],
     agentContext,
   });
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
 
   for (let i = 0; i < 3; i += 1) {
     await hookManager.emit("agent.after_tool_call", {
@@ -432,7 +425,10 @@ test("harness full engineering capability flow plans, guides, accepts and review
       agentContext,
     });
   }
-  assert.equal(agentContext.payload.harness.state.pending.guidance, "consecutive_failures");
+  assert.equal(
+    agentContext.bindings.extensions.harness.state.pending.guidance,
+    "consecutive_failures",
+  );
 
   await hookManager.emit("agent.before_llm_call", {
     userId: "flow-user",
@@ -445,7 +441,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   assert.equal(String(guidancePromptMessage?.role || ""), "user");
   assert.match(String(guidancePromptMessage?.content || ""), /harness-guidance/);
   assert.match(String(guidancePromptMessage?.content || ""), /工具失败达到阈值/);
-  assert.equal(agentContext.payload.harness.state.pending.guidance, null);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.guidance, null);
 
   await hookManager.emit("agent.after_tool_call", {
     userId: "flow-user",
@@ -456,14 +452,14 @@ test("harness full engineering capability flow plans, guides, accepts and review
     success: true,
     agentContext,
   });
-  assert.equal(agentContext.payload.harness.state.signals.parsedAttachment, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.signals.parsedAttachment, true);
 
-  const acceptanceTool = agentContext.payload.tools.registry.find(
+  const acceptanceTool = agentContext.bindings.tools.find(
     (tool) => tool?.name === "request_task_acceptance",
   );
   const acceptanceResult = await acceptanceTool.func({ mode: "active" });
   assert.equal(acceptanceResult.ok, true);
-  assert.equal(agentContext.payload.harness.state.flags.acceptanceRequested, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.acceptanceRequested, true);
 
   const result = { output: "任务完成" };
   await hookManager.emit("agent.before_final_output", {
@@ -476,10 +472,15 @@ test("harness full engineering capability flow plans, guides, accepts and review
 
   assert.doesNotMatch(String(result.output), /Harness-Forced-Acceptance/);
   assert.doesNotMatch(String(result.output), /Harness-Review/);
-  assert.equal(agentContext.payload.harness.reviewReports.length, 1);
-  assert.equal(agentContext.payload.harness.lastReviewReport.summary.planningCaptured, true);
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports.length, 1);
   assert.equal(
-    agentContext.payload.harness.lastReviewReport.summary.issues.includes("planning_not_captured"),
+    agentContext.bindings.extensions.harness.lastReviewReport.summary.planningCaptured,
+    true,
+  );
+  assert.equal(
+    agentContext.bindings.extensions.harness.lastReviewReport.summary.issues.includes(
+      "planning_not_captured",
+    ),
     false,
   );
 });
@@ -496,7 +497,7 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
     },
   );
 
-  const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
+  const agentContext = { bindings: { extensions: { harness: {} } } };
   const result = { output: "done" };
   await hookManager.emit("agent.before_final_output", {
     userId: "u17",
@@ -508,10 +509,10 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
 
   assert.doesNotMatch(String(result.output), /Harness-Review/);
   assert.equal(String(result.output), "done");
-  assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
-  assert.equal(agentContext.payload.harness.reviewReports.length, 1);
+  assert.equal(agentContext.bindings.extensions.harness.acceptanceReports.length, 1);
+  assert.equal(agentContext.bindings.extensions.harness.reviewReports.length, 1);
   assert.equal(
-    agentContext.payload.harness.logs.review.filter(
+    agentContext.bindings.extensions.harness.logs.review.filter(
       (item = {}) => item?.event === "review_report_generated",
     ).length,
     1,
@@ -526,25 +527,25 @@ test("harness resets acceptance lifecycle and checklist artifacts on next turn s
   );
 
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        state: {
-          flags: {
-            planningCaptured: true,
-            acceptanceRequested: true,
-            acceptanceReviewing: true,
-            acceptanceCompleted: true,
-            checklistArtifactsAttached: true,
+    bindings: {
+      extensions: {
+        harness: {
+          state: {
+            flags: {
+              planningCaptured: true,
+              acceptanceRequested: true,
+              acceptanceReviewing: true,
+              checklistArtifactsAttached: true,
+            },
+            counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
+            signals: {
+              parsedAttachment: false,
+              successfulToolCount: 0,
+            },
+            pending: { guidance: null, summary: false },
           },
-          counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: {
-            parsedAttachment: false,
-            successfulToolCount: 0,
-          },
-          pending: { guidance: null, summary: false },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -556,10 +557,12 @@ test("harness resets acceptance lifecycle and checklist artifacts on next turn s
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.acceptanceRequested, false);
-  assert.equal(agentContext.payload.harness.state.flags.acceptanceReviewing, false);
-  assert.equal(agentContext.payload.harness.state.flags.acceptanceCompleted, false);
-  assert.equal(agentContext.payload.harness.state.flags.checklistArtifactsAttached, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.acceptanceRequested, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.acceptanceReviewing, false);
+  assert.equal(
+    agentContext.bindings.extensions.harness.state.flags.checklistArtifactsAttached,
+    false,
+  );
 });
 
 test("harness forced acceptance is owned by acceptance without appending to final output", async () => {
@@ -570,19 +573,20 @@ test("harness forced acceptance is owned by acceptance without appending to fina
   );
 
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: {
-            parsedAttachment: false,
-            successfulToolCount: 1,
+    bindings: {
+      extensions: {
+        harness: {
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
+            signals: {
+              parsedAttachment: false,
+              successfulToolCount: 1,
+            },
+            pending: { guidance: null, summary: false },
           },
-          pending: { guidance: null, summary: false },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -600,15 +604,15 @@ test("harness forced acceptance is owned by acceptance without appending to fina
   assert.doesNotMatch(String(result.output), /\[Harness-验收\]/);
   assert.doesNotMatch(String(result.output), /NOOBOT_HARNESS_COLLAPSE/);
   assert.doesNotMatch(String(result.output), /acceptanceReport|完整计划清单/);
-  assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
+  assert.equal(agentContext.bindings.extensions.harness.acceptanceReports.length, 1);
   assert.equal(
-    agentContext.payload.harness.logs.acceptance.some(
+    agentContext.bindings.extensions.harness.logs.acceptance.some(
       (log) => log.event === "forced_acceptance_triggered",
     ),
     true,
   );
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (log) => log.event === "forced_acceptance_triggered",
     ),
     false,

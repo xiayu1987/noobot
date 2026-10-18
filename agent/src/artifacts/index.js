@@ -20,7 +20,6 @@ export {
 export { resolveCanonicalSourceAttachment } from "./source-attachment-resolver.js";
 export {
   applyRuntimeUserMessageAttachments,
-  resolveRuntimeUserMessageAttachments,
   runtimeHasExplicitUserMessageAttachments,
   updateRuntimeUserMessageAttachment,
 } from "./runtime-user-message-attachments.js";

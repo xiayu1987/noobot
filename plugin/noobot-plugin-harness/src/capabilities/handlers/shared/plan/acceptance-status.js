@@ -135,27 +135,19 @@ function buildPlanContentMapFromText(planText = "") {
   );
 }
 
-function ensureStatusMap(bucket = {}) {
-  if (!isObjectLike(bucket)) return {};
-  if (!isPlainObject(bucket.planAcceptanceStatusByPlanId)) {
-    bucket.planAcceptanceStatusByPlanId = {};
+export function getPlanAcceptanceStatusMap(bucket) {
+  const map = bucket.planAcceptanceStatusByPlanId;
+  if (!isPlainObject(map)) {
+    throw new TypeError("harness bucket planAcceptanceStatusByPlanId must be a plain object");
   }
-  return bucket.planAcceptanceStatusByPlanId;
-}
-
-export function getPlanAcceptanceStatusMap(bucket = {}) {
-  const source =
-    bucket?.planAcceptanceStatusByPlanId && typeof bucket.planAcceptanceStatusByPlanId === "object"
-      ? bucket.planAcceptanceStatusByPlanId
-      : {};
-  return source;
+  return map;
 }
 
 export function applyPhaseAcceptanceReportToPlanStatus(bucket = {}, report = null) {
   if (!isObjectLike(bucket) || !report) return { applied: false, count: 0 };
   const items = parsePlanAcceptanceItemsFromText(report?.content);
   if (!items.length) return { applied: false, count: 0 };
-  const map = ensureStatusMap(bucket);
+  const map = getPlanAcceptanceStatusMap(bucket);
   const planContentById = buildPlanContentMapFromText(report?.planText || bucket?.planText || "");
   const acceptedAt = text(report?.acceptedAt) || nowIsoTimestamp();
   let count = 0;
@@ -163,7 +155,7 @@ export function applyPhaseAcceptanceReportToPlanStatus(bucket = {}, report = nul
     const planId = normalizePlanId(item?.planId);
     if (!planId) continue;
     map[planId] = {
-      ...(map[planId] && typeof map[planId] === "object" ? map[planId] : {}),
+      ...map[planId],
       planId,
       status: item.status,
       taskStatus:
@@ -190,7 +182,7 @@ export function resetPlanAcceptanceStatusForPlanChange(
   { stage = "revision", reason = "plan_changed" } = {},
 ) {
   if (!isObjectLike(bucket)) return { resetCount: 0, removedCount: 0 };
-  const map = ensureStatusMap(bucket);
+  const map = getPlanAcceptanceStatusMap(bucket);
   const keys = Object.keys(map);
   if (!keys.length) return { resetCount: 0, removedCount: 0 };
   const before = buildPlanContentMapFromText(previousPlanText);
@@ -208,7 +200,7 @@ export function resetPlanAcceptanceStatusForPlanChange(
     const previousContent = before.get(normalizedPlanId) || "";
     const nextContent = after.get(normalizedPlanId) || "";
     if (previousContent && previousContent === nextContent) continue;
-    const previous = map[planId] && typeof map[planId] === "object" ? map[planId] : {};
+    const previous = map[planId];
     map[planId] = {
       ...previous,
       planId: normalizedPlanId,
@@ -230,9 +222,7 @@ function resolvePlanAcceptanceForPlanId(bucket = {}, planId = "") {
   const normalizedPlanId = normalizePlanId(planId);
   if (!normalizedPlanId) return null;
   const map = getPlanAcceptanceStatusMap(bucket);
-  return map[normalizedPlanId] && typeof map[normalizedPlanId] === "object"
-    ? map[normalizedPlanId]
-    : null;
+  return map[normalizedPlanId] || null;
 }
 
 export function resolvePlanAcceptanceForChecklistItem(bucket = {}, item = {}) {

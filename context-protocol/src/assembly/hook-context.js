@@ -135,6 +135,8 @@ export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
         warnings.push("modelContext.messageBlocks should be object");
     }
   }
+  if (typeof context?.resumeFromStoppedSnapshot !== "boolean")
+    warnings.push("resumeFromStoppedSnapshot must be boolean");
   const normalizedPoint = text(point || context?.point);
   if (!normalizedPoint) warnings.push("point should be present");
   return { success: warnings.length === 0, warnings };

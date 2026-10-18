@@ -36,19 +36,18 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
       dialogProcessId: "dp1",
       flags: { allowUserInteraction: true },
       models: { runtimeModel: "m1" },
-      controllers: {
-        runtime: {
-          basePath,
-          userId: "u1",
-          systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
-        },
-      },
     },
     session: {
       current: { id: "s1", attachments: [], connectors: {} },
       parent: { id: "", caller: "user" },
     },
-    payload: {},
+    bindings: {
+      runtime: {
+        basePath,
+        userId: "u1",
+        systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
+      },
+    },
   };
 
   await hookManager.emit(

@@ -55,12 +55,6 @@ function createDefaultTextCleaner() {
   };
 }
 
-function ensureSharedTools(runtimeContext = {}) {
-  const sharedTools = isPlainObject(runtimeContext.sharedTools) ? runtimeContext.sharedTools : {};
-  runtimeContext.sharedTools = sharedTools;
-  return sharedTools;
-}
-
 function initializeSharedFetch(sharedTools = {}) {
   if (!isFunction(sharedTools.fetch)) {
     sharedTools.fetch = defaultSharedFetch;
@@ -89,20 +83,18 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
 
 function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
   sharedTools.semanticTransfer = {
-    transferSemanticContent: (payload = {}) => {
+    transferSemanticContent: (payload) => {
       const identity = resolveRuntimeTransferIdentity({
         runtime: runtimeContext,
-        sessionId: payload?.sessionId,
-        producer: payload?.producer,
-        direction: payload?.direction,
-        strategy: payload?.strategy,
-        transferKey: payload?.transferKey,
+        producer: payload.producer,
+        direction: payload.direction,
+        strategy: payload.strategy,
+        transferKey: payload.transferKey,
       });
       return transferSemanticContent({
-        ...(payload && typeof payload === "object" ? payload : {}),
+        ...payload,
         identity,
         runtime: runtimeContext,
-        agentContext: null,
       });
     },
   };
@@ -135,7 +127,7 @@ function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools 
 
 export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   if (!isPlainObject(runtimeContext)) return;
-  const sharedTools = ensureSharedTools(runtimeContext);
+  const { sharedTools } = runtimeContext;
   const sessionId = text(runtimeContext?.systemRuntime?.sessionId);
 
   initializeSharedFetch(sharedTools);

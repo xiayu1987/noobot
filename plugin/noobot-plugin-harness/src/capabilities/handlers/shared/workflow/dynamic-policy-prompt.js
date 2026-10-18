@@ -6,6 +6,7 @@
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { readHarnessBucket } from "../bucket-utils.js";
 
 export const DYNAMIC_POLICY_PROMPT_BLOCK = "HARNESS_DYNAMIC_POLICY_PROMPT";
 const MAX_DYNAMIC_POLICY_PROMPT_CHARS =
@@ -88,15 +89,9 @@ export function buildDynamicPolicyPromptSignature(record = null) {
   });
 }
 
-export function applyDynamicPolicyPromptFromText(ctx = {}, inputText = "", meta = {}) {
+export function applyDynamicPolicyPromptFromText(bucket, inputText = "", meta = {}) {
   const parsed = parseDynamicPolicyPromptProtocol(inputText);
   if (!parsed) return null;
-  const bucket =
-    ctx?.agentContext?.bindings?.extensions?.harness &&
-    typeof ctx.agentContext.bindings.extensions.harness === "object"
-      ? ctx.agentContext.bindings.extensions.harness
-      : null;
-  if (!bucket) return null;
   const record = {
     ...parsed,
     source: normalizeText(meta?.source) || "unknown",
@@ -108,7 +103,7 @@ export function applyDynamicPolicyPromptFromText(ctx = {}, inputText = "", meta 
 }
 
 export function resolveActiveDynamicPolicyPromptFromContext(ctx = {}) {
-  const record = ctx?.agentContext?.bindings?.extensions?.harness?.dynamicPolicyPrompt;
+  const record = readHarnessBucket(ctx)?.dynamicPolicyPrompt;
   if (!isObjectLike(record)) return null;
   const prompt = clipPrompt(record.prompt);
   if (!prompt) return null;

@@ -63,7 +63,7 @@ export async function commitNoToolsTurnState({
       turnMessageStore,
     }),
   });
-  emitEvent(eventListener, "llm_call_end", { turn, hasToolCalls: false, mode: "no_tools" });
+  emitEvent(eventListener, "llm_call_end", { turn, mode: "no_tools", toolCallCount: 0 });
 
   return { turnMessageStore, turnTaskStore };
 }

@@ -10,6 +10,7 @@ import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
 
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 import {
   TASK_SUMMARY_PROTOCOL_VERSION,
   createTaskSummaryReceipt,
@@ -22,52 +23,49 @@ import {
 
 test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
   const messages = buildContextMessages(
-    createTestAgentExecutionScope(
-      {},
-      {
-        messageBlocks: {
-          system: [],
-          history: [
-            {
-              role: "user",
-              content: "q-1",
-              dialogProcessId: "dlg-tool",
-            },
-            {
-              role: "assistant",
-              content: "",
-              dialogProcessId: "dlg-tool",
-              tool_calls: [
-                {
-                  id: "call_ok_1",
-                  function: {
-                    name: "task_summary",
-                    arguments: "{}",
-                  },
+    createTestAgentExecutionScope(createRuntimeContext(), {
+      messageBlocks: {
+        system: [],
+        history: [
+          {
+            role: "user",
+            content: "q-1",
+            dialogProcessId: "dlg-tool",
+          },
+          {
+            role: "assistant",
+            content: "",
+            dialogProcessId: "dlg-tool",
+            tool_calls: [
+              {
+                id: "call_ok_1",
+                function: {
+                  name: "task_summary",
+                  arguments: "{}",
                 },
-              ],
-            },
-            {
-              role: "tool",
-              content: '{"ok":true}',
-              tool_call_id: "call_ok_1",
-              dialogProcessId: "dlg-tool",
-            },
-            {
-              role: "tool",
-              content: '{"ok":true}',
-              tool_call_id: "call_orphan_1",
-              dialogProcessId: "dlg-tool",
-            },
-            {
-              role: "assistant",
-              content: "final",
-              dialogProcessId: "dlg-tool",
-            },
-          ],
-        },
+              },
+            ],
+          },
+          {
+            role: "tool",
+            content: '{"ok":true}',
+            tool_call_id: "call_ok_1",
+            dialogProcessId: "dlg-tool",
+          },
+          {
+            role: "tool",
+            content: '{"ok":true}',
+            tool_call_id: "call_orphan_1",
+            dialogProcessId: "dlg-tool",
+          },
+          {
+            role: "assistant",
+            content: "final",
+            dialogProcessId: "dlg-tool",
+          },
+        ],
       },
-    ),
+    }),
     { currentUserMessage: null },
   );
 
@@ -91,39 +89,36 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
   const summary = createTaskSummaryReceipt(parseTaskSummaryContent(summaryContent));
   const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
   const messages = buildContextMessages(
-    createTestAgentExecutionScope(
-      {},
-      {
-        messageBlocks: {
-          system: [],
-          history: [
-            {
-              role: "user",
-              content: "q-summary",
-              dialogProcessId: "dlg-summary",
-            },
-            {
-              role: "tool",
-              content: JSON.stringify({
-                toolName: "task_summary",
-                ok: true,
-                protocolVersion: TASK_SUMMARY_PROTOCOL_VERSION,
-                summary,
-              }),
-              tool_call_id: "call_orphan_summary",
-              contextPolicy,
-              dialogProcessId: "dlg-summary",
-              turnScopeId: "turn-summary",
-            },
-            {
-              role: "assistant",
-              content: "done",
-              dialogProcessId: "dlg-summary",
-            },
-          ],
-        },
+    createTestAgentExecutionScope(createRuntimeContext(), {
+      messageBlocks: {
+        system: [],
+        history: [
+          {
+            role: "user",
+            content: "q-summary",
+            dialogProcessId: "dlg-summary",
+          },
+          {
+            role: "tool",
+            content: JSON.stringify({
+              toolName: "task_summary",
+              ok: true,
+              protocolVersion: TASK_SUMMARY_PROTOCOL_VERSION,
+              summary,
+            }),
+            tool_call_id: "call_orphan_summary",
+            contextPolicy,
+            dialogProcessId: "dlg-summary",
+            turnScopeId: "turn-summary",
+          },
+          {
+            role: "assistant",
+            content: "done",
+            dialogProcessId: "dlg-summary",
+          },
+        ],
       },
-    ),
+    }),
     { currentUserMessage: null },
   );
 

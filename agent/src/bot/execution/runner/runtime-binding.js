@@ -12,7 +12,7 @@ import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { initializeCurrentTurnMessageEventProjection } from "../../../events/current-turn-message-event-projection.js";
 import { applyRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
-import { bindLifecycleToRuntime } from "../../../runtime/lifecycle/state-machine.js";
+import { syncLifecycleRuntimeState } from "../../../runtime/lifecycle/state-machine.js";
 import { initializeAgentModelHost } from "../../../runtime/model-port-host.js";
 import { buildAgentTransportConsumption } from "./agent-transport-consumption.js";
 import { bindCurrentTurnPersistence } from "./current-turn-persistence.js";
@@ -55,7 +55,6 @@ function projectUserPresentationMessage({
 
 export async function bindAgentDispatchRuntime({
   runtimeAgentContext,
-  botHookRuntime,
   lifecycle,
   messageId,
   presentationMessageId,
@@ -80,13 +79,12 @@ export async function bindAgentDispatchRuntime({
   committedTurnResult,
 }) {
   const dispatchRuntime = runtimeAgentContext?.bindings?.runtime;
-  if (!isObjectLike(dispatchRuntime)) return dispatchRuntime;
+  if (!isObjectLike(dispatchRuntime)) {
+    throw new TypeError("agent dispatch binding requires runtimeAgentContext.bindings.runtime");
+  }
 
   dispatchRuntime.eventListener = eventListener;
-  const systemRuntime =
-    dispatchRuntime.systemRuntime && typeof dispatchRuntime.systemRuntime === "object"
-      ? dispatchRuntime.systemRuntime
-      : (dispatchRuntime.systemRuntime = {});
+  const { systemRuntime } = dispatchRuntime;
   systemRuntime.sessionId = sessionId;
   systemRuntime.dialogProcessId = dialogProcessId;
   systemRuntime.turnScopeId = turnScopeId;
@@ -95,13 +93,10 @@ export async function bindAgentDispatchRuntime({
   dispatchRuntime.currentUserMessageOrigin = text(currentUserMessage?.messageOrigin).toLowerCase();
   dispatchRuntime.userInterjectionPort = userInterjectionPort;
 
-  const modelHost = initializeAgentModelHost({
+  initializeAgentModelHost({
     runtime: dispatchRuntime,
     invocationIdentity: getAgentContextEnvelope(runtimeAgentContext).identity,
   });
-  botHookRuntime.modelHost = modelHost;
-  botHookRuntime.modelPort = modelHost.modelPort;
-  botHookRuntime.modelSpec = modelHost.modelSpec;
   bindAssistantMessageEventStream(dispatchRuntime, {
     messageId,
     presentationMessageId,
@@ -112,8 +107,8 @@ export async function bindAgentDispatchRuntime({
     ),
   });
   applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
-  bindLifecycleToRuntime(dispatchRuntime, lifecycle);
-  initializeCurrentTurnMessageEventProjection(dispatchRuntime, { sequenceScopeId: turnScopeId });
+  syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
+  initializeCurrentTurnMessageEventProjection(dispatchRuntime);
   await emitMessageEvent(
     eventListener,
     dispatchRuntime,

@@ -139,6 +139,23 @@ function removeDeadStateFlags(state = {}) {
   delete flags.planUpdateCaptureSummaryText;
 }
 
+function removeAcceptanceCompletedFlag(state = {}) {
+  delete objectField(state, "flags").acceptanceCompleted;
+}
+
+function dropMalformedLastAcceptanceReport(bucket = {}) {
+  if (bucket.lastAcceptanceReport != null && !isPlainObject(bucket.lastAcceptanceReport)) {
+    delete bucket.lastAcceptanceReport;
+  }
+}
+
+function ensurePlanAcceptanceStatusMap(bucket = {}) {
+  const map = objectField(bucket, "planAcceptanceStatusByPlanId");
+  for (const [planId, entry] of Object.entries(map)) {
+    if (!isPlainObject(entry)) delete map[planId];
+  }
+}
+
 const MIGRATION_STEPS = Object.freeze([
   { toVersion: 4, migrate: ({ state }) => migratePlanUpdateState(state) },
   { toVersion: 5, migrate: ({ bucket }) => removeTaskChecklistFields(bucket) },
@@ -146,6 +163,14 @@ const MIGRATION_STEPS = Object.freeze([
   { toVersion: 7, migrate: ({ bucket }) => removeChecklistItemDeadFields(bucket) },
   { toVersion: 8, migrate: ({ bucket }) => removePlanDocumentCache(bucket) },
   { toVersion: 9, migrate: ({ state }) => removeDeadStateFlags(state) },
+  {
+    toVersion: 10,
+    migrate: ({ bucket, state }) => {
+      ensurePlanAcceptanceStatusMap(bucket);
+      removeAcceptanceCompletedFlag(state);
+      dropMalformedLastAcceptanceReport(bucket);
+    },
+  },
 ]);
 
 export function migrateHarnessBucket(ctx = {}) {

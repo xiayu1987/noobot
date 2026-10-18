@@ -21,6 +21,7 @@ function createFixture() {
   const logs = [];
   const ctx = {
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: ORIGINAL_PLAN_TEXT,
       globalRevisionCount: 0,
       lastRevisionChangedMainStepIndexes: [],
@@ -88,7 +89,10 @@ test("plan checklist context renders explicit planText and ignores a stale planD
   const content = buildPlanChecklistSystemContent({
     locale: "zh-CN",
     planText: "1. 当前主计划",
-    bucket: { planDocument: { mainPlans: [{ id: 1, content: "过期主计划" }] } },
+    bucket: {
+      planAcceptanceStatusByPlanId: {},
+      planDocument: { mainPlans: [{ id: 1, content: "过期主计划" }] },
+    },
   });
   assert.match(String(content), /^1\. 当前主计划$/m);
   assert.doesNotMatch(String(content), /过期主计划/);

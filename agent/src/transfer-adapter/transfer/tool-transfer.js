@@ -105,7 +105,6 @@ async function buildTransferResponse({ transferEnvelopes = [] } = {}) {
 
 export async function transferToolOutput({
   runtime = {},
-  agentContext = null,
   text: inputText = "",
   name = "tool-result.txt",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
@@ -113,8 +112,6 @@ export async function transferToolOutput({
   generationSource = "semantic_transfer_tool_output",
   source = "tool",
   reason = "semantic_transfer_tool_output",
-  storage = null,
-  producer = null,
   meta = {},
   forceAttachment = false,
   inlineMaxChars = null,
@@ -135,7 +132,6 @@ export async function transferToolOutput({
       : toSafePositiveInt(inlineMaxChars, resolveToolResultInlineTextLimit(runtime), 0);
   const materialized = await materializeTextForToolResult({
     runtime,
-    agentContext,
     text: normalizedText,
     name,
     mimeType,
@@ -143,8 +139,6 @@ export async function transferToolOutput({
     generationSource,
     source: intent.source,
     reason: intent.reason,
-    storage,
-    producer,
     identity,
     meta,
     scenario: "tool",
@@ -167,7 +161,6 @@ export async function transferToolOutput({
 
 export async function transferToolInput({
   runtime = {},
-  agentContext = null,
   call = null,
   text: inputText = "",
   name = "tool-input.txt",
@@ -176,8 +169,6 @@ export async function transferToolInput({
   generationSource = "semantic_transfer_tool_input",
   source = "tool",
   reason = "semantic_transfer_tool_input",
-  storage = null,
-  producer = null,
   meta = {},
   forceAttachment = false,
   inlineMaxChars = null,
@@ -248,7 +239,6 @@ export async function transferToolInput({
 
   const persisted = await persistTransferFile({
     runtime,
-    agentContext,
     content: normalizedText,
     name: firstText(resolvedName, "tool-input.txt"),
     mimeType: firstText(resolvedMimeType, DEFAULT_TRANSFER_MIME_TYPE),
@@ -256,8 +246,6 @@ export async function transferToolInput({
     generationSource,
     source: intent.source,
     reason: intent.reason,
-    storage,
-    producer,
     identity,
     direction: TRANSFER_DIRECTION.INPUT,
     intent: {

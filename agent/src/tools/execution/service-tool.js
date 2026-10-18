@@ -6,7 +6,10 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  resolveRuntimeUserId,
+} from "../../context/agent-context-accessor.js";
 import { invokeServiceHandler } from "../../integrations/services/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -23,8 +26,8 @@ function getServices(agentContext) {
   return effectiveConfig?.services || {};
 }
 
-function tService(agentContext = {}, key = "", params = {}) {
-  return tTool(agentContext, `tools.service.${text(key)}`, params);
+function tService(runtime = {}, key = "", params = {}) {
+  return tTool(runtime, `tools.service.${text(key)}`, params);
 }
 
 function isServiceEnabled(serviceCfg) {
@@ -35,26 +38,26 @@ function normalizeName(value = "") {
   return text(value);
 }
 
-function validateInput({ serviceName, endpointName, queryString, agentContext }) {
+function validateInput({ serviceName, endpointName, queryString, runtime }) {
   const normalizedServiceName = normalizeName(serviceName);
   const normalizedEndpointName = normalizeName(endpointName);
-  if (!normalizedServiceName) return tService(agentContext, "serviceNameRequired");
-  if (!normalizedEndpointName) return tService(agentContext, "endpointNameRequired");
+  if (!normalizedServiceName) return tService(runtime, "serviceNameRequired");
+  if (!normalizedEndpointName) return tService(runtime, "endpointNameRequired");
   if (
     queryString !== undefined &&
     (typeof queryString !== "object" || Array.isArray(queryString))
   ) {
-    return tService(agentContext, "queryStringMustBeObject");
+    return tService(runtime, "queryStringMustBeObject");
   }
   return "";
 }
 
-function validateCustomParam(customParam, agentContext) {
+function validateCustomParam(customParam, runtime) {
   if (customParam === undefined || customParam === null) return "";
   if (typeof customParam !== "string") {
-    return tService(agentContext, "customParamMustBeString");
+    return tService(runtime, "customParamMustBeString");
   }
-  if (!String(customParam).trim()) return tService(agentContext, "customParamMustNotBeEmpty");
+  if (!String(customParam).trim()) return tService(runtime, "customParamMustNotBeEmpty");
   return "";
 }
 
@@ -62,42 +65,42 @@ export function createServiceTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const callServiceTool = new DynamicStructuredTool({
     name: TOOL_NAME.CALL_SERVICE,
-    description: tTool(agentContext, "tools.service.description"),
+    description: tTool(runtime, "tools.service.description"),
     schema: z.object({
-      serviceName: z.string().describe(tTool(agentContext, "tools.service.fieldServiceName")),
-      endpointName: z.string().describe(tTool(agentContext, "tools.service.fieldEndpointName")),
+      serviceName: z.string().describe(tTool(runtime, "tools.service.fieldServiceName")),
+      endpointName: z.string().describe(tTool(runtime, "tools.service.fieldEndpointName")),
       custom_param: z
         .string()
         .optional()
-        .describe(tTool(agentContext, "tools.service.fieldCustomParam")),
+        .describe(tTool(runtime, "tools.service.fieldCustomParam")),
       queryString: z
         .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
         .optional()
-        .describe(tTool(agentContext, "tools.service.fieldQueryString")),
-      body: z.unknown().optional().describe(tTool(agentContext, "tools.service.fieldBody")),
+        .describe(tTool(runtime, "tools.service.fieldQueryString")),
+      body: z.unknown().optional().describe(tTool(runtime, "tools.service.fieldBody")),
     }),
     func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
       const globalConfig = runtime?.globalConfig || {};
-      const userId = text(agentContext?.userId || runtime?.systemRuntime?.userId);
+      const userId = resolveRuntimeUserId(runtime);
       const inputErr = validateInput({
         serviceName,
         endpointName,
         queryString,
-        agentContext,
+        runtime,
       });
       if (inputErr) {
         throw recoverableToolError(inputErr, {
           code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
         });
       }
-      const customParamErr = validateCustomParam(custom_param, agentContext);
+      const customParamErr = validateCustomParam(custom_param, runtime);
       if (customParamErr) {
         throw recoverableToolError(customParamErr, {
           code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
         });
       }
       if (!userId) {
-        throw recoverableToolError(tService(agentContext, "userIdMissing"), {
+        throw recoverableToolError(tService(runtime, "userIdMissing"), {
           code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
         });
       }
@@ -108,7 +111,7 @@ export function createServiceTool({ agentContext }) {
       const serviceCfg = services?.[normalizedServiceName];
       if (!serviceCfg) {
         throw recoverableToolError(
-          tService(agentContext, "serviceNotFound", {
+          tService(runtime, "serviceNotFound", {
             serviceName: normalizedServiceName,
           }),
           { code: ERROR_CODE.RECOVERABLE_SERVICE_NOT_FOUND },
@@ -116,7 +119,7 @@ export function createServiceTool({ agentContext }) {
       }
       if (!isServiceEnabled(serviceCfg)) {
         throw recoverableToolError(
-          tService(agentContext, "serviceDisabled", {
+          tService(runtime, "serviceDisabled", {
             serviceName: normalizedServiceName,
           }),
           { code: ERROR_CODE.RECOVERABLE_SERVICE_DISABLED },
@@ -125,7 +128,7 @@ export function createServiceTool({ agentContext }) {
       const endpointCfg = serviceCfg?.endpoints?.[normalizedEndpointName];
       if (!endpointCfg) {
         throw recoverableToolError(
-          tService(agentContext, "endpointNotFound", {
+          tService(runtime, "endpointNotFound", {
             serviceName: normalizedServiceName,
             endpointName: normalizedEndpointName,
           }),
@@ -135,7 +138,7 @@ export function createServiceTool({ agentContext }) {
       const endpointUrl = text(endpointCfg.url);
       if (!endpointUrl) {
         throw recoverableToolError(
-          tService(agentContext, "endpointUrlMissing", {
+          tService(runtime, "endpointUrlMissing", {
             serviceName: normalizedServiceName,
             endpointName: normalizedEndpointName,
           }),

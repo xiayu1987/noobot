@@ -36,38 +36,35 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
   return new DynamicStructuredTool({
     name: TOOL_NAME.READ_FILE,
     metadata: { pathContract: TOOL_PATH_CONTRACTS.fileRead },
-    description: buildFileToolDescription(
-      agentContext,
-      "tools.file.readDescriptionWithLineNumbers",
-    ),
+    description: buildFileToolDescription(runtime, "tools.file.readDescriptionWithLineNumbers"),
     schema: z.object({
       filePath: createFileSourceSchema({
-        filePathDescription: tTool(agentContext, "tools.file.readFilePathField"),
+        filePathDescription: tTool(runtime, "tools.file.readFilePathField"),
       }),
       startLine: z
         .number()
         .int()
         .min(1)
         .optional()
-        .describe(tTool(agentContext, "tools.file.readStartLineField")),
+        .describe(tTool(runtime, "tools.file.readStartLineField")),
       endLine: z
         .number()
         .int()
         .min(1)
         .optional()
-        .describe(tTool(agentContext, "tools.file.readEndLineField")),
+        .describe(tTool(runtime, "tools.file.readEndLineField")),
       includeLineNumbers: z
         .boolean()
         .optional()
         .default(true)
-        .describe(tTool(agentContext, "tools.file.readIncludeLineNumbersField")),
+        .describe(tTool(runtime, "tools.file.readIncludeLineNumbersField")),
       maxLines: z
         .number()
         .int()
         .optional()
         .default(DEFAULT_READ_MAX_LINES)
-        .describe(tTool(agentContext, "tools.file.readMaxLinesField")),
-      riskLevel: createRiskLevelSchema(agentContext, "tools.file.readRiskLevelField"),
+        .describe(tTool(runtime, "tools.file.readMaxLinesField")),
+      riskLevel: createRiskLevelSchema(runtime, "tools.file.readRiskLevelField"),
     }),
     func: async ({
       filePath,
@@ -78,7 +75,7 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
       riskLevel,
     }) => {
       if (typeof filePath === "string")
-        assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
+        assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
       const resolvedInput = await resolveFileInput({
         source: filePath,
         agentContext,
@@ -111,7 +108,7 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
       });
       const targetStat = await workspaceIo.stat(resolvedPath);
       if (targetStat?.isDirectory?.()) {
-        throw recoverableToolError(tTool(agentContext, "common.pathIsNotFile"), {
+        throw recoverableToolError(tTool(runtime, "common.pathIsNotFile"), {
           code: ERROR_CODE.RECOVERABLE_PATH_NOT_FILE,
           details: { field: "filePath", path: projectToolPathRef(pathRef) },
         });
@@ -131,7 +128,7 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
             : null;
       if (rangeError) {
         throw recoverableToolError(
-          tTool(agentContext, "tools.file.readLineRangeOutOfBounds", {
+          tTool(runtime, "tools.file.readLineRangeOutOfBounds", {
             startLine: requestedStart,
             endLine: requestedEnd,
             totalLines,

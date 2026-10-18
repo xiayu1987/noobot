@@ -81,9 +81,11 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
       sessionId: "s-resume",
       dialogProcessId: "dp-resume",
       agentContext: {
-        payload: {
-          harness: {
-            planText: "1. t1",
+        bindings: {
+          extensions: {
+            harness: {
+              planText: "1. t1",
+            },
           },
         },
       },
@@ -119,8 +121,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
       basePath,
       promptPolicy: false,
       manifestDebounceMs: 0,
-      jsonlBatchSize: 1,
-      jsonlFlushIntervalMs: 0,
+      jsonlFlushStrategy: { maxSize: 1, maxTime: 0 },
     },
   );
   const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", runId);
@@ -140,7 +141,6 @@ test("harness FSM transition matrix (table-driven)", async () => {
       name: "planning -> planned from LLM tool calls",
       point: "agent.after_llm_call",
       ctx: {
-        hasToolCalls: true,
         calls: [{ id: "call-1", name: "read_file", args: {} }],
       },
       expectedState: "planned",
@@ -224,8 +224,7 @@ test("harness FSM remains planning when checklist is absent", async () => {
       basePath,
       promptPolicy: false,
       manifestDebounceMs: 0,
-      jsonlBatchSize: 1,
-      jsonlFlushIntervalMs: 0,
+      jsonlFlushStrategy: { maxSize: 1, maxTime: 0 },
     },
   );
   const runId = "dp-fsm-stay";
@@ -240,11 +239,10 @@ test("harness FSM remains planning when checklist is absent", async () => {
     userId: "u-fsm-stay",
     sessionId: "s-fsm-stay",
     dialogProcessId: runId,
-    ai: { content: "先读取上下文" },
+    modelResponse: { text: "先读取上下文" },
+    calls: [],
     agentContext: {
-      payload: {
-        harness: {},
-      },
+      bindings: { extensions: { harness: {} } },
     },
   });
 

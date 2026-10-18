@@ -94,7 +94,6 @@ export const TIME_THRESHOLDS = deepFreeze({
     manifestDebounceMs: TIME_TIERS.fastProbeMs,
     manifestCacheMaxAgeMs: 10 * MINUTE_MS,
     manifestCleanupIntervalMs: TIME_TIERS.fiveMinutesMs,
-    jsonlFlushIntervalMs: TIME_TIERS.flushMs,
     jsonlFlushMaxTimeMs: TIME_TIERS.flushMs,
     jsonlRetryBaseDelayMs: 200,
     jsonlRetryMaxDelayMs: TIME_TIERS.fiveSecondsMs,

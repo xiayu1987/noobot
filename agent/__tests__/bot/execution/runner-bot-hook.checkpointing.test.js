@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 import assert from "node:assert/strict";
 import {
   createRunner,
@@ -21,8 +22,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     relativeDir: "runtime/agent/session/s1",
     allowedRoot: "runtime/agent/session",
   };
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     currentTurnMessages: {
       items: [
         {
@@ -40,7 +40,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
         return this.items.slice();
       },
     },
-  };
+  });
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
@@ -109,8 +109,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
 test("SessionExecutionRunner checkpoints only new or changed current-turn messages", async () => {
   const checkpointPayloads = [];
   const events = [];
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     currentTurnMessages: createCurrentTurnMessagesStore([
       {
         messageUid: "sm_assistant",
@@ -127,7 +126,7 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
         tool_call_id: "call-1",
       },
     ]),
-  };
+  });
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
@@ -190,10 +189,9 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
 
 test("SessionExecutionRunner coalesces persistence requests inside one tool-result batch", async () => {
   const checkpointPayloads = [];
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     currentTurnMessages: createCurrentTurnMessagesStore([]),
-  };
+  });
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
@@ -239,12 +237,11 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
 
 test("SessionExecutionRunner retries an incremental checkpoint after persistence failure", async () => {
   const attempts = [];
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     currentTurnMessages: createCurrentTurnMessagesStore([
       { messageUid: "sm_retry", role: "tool", type: "tool_result", content: "retry" },
     ]),
-  };
+  });
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async ({ messages = [] } = {}) => {

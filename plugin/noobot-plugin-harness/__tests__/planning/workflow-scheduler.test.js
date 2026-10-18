@@ -73,6 +73,7 @@ test("workflow scheduler hard overflow forced acceptance overrides normal action
       summary: true,
       guidance: { reason: "tool_failures" },
       planRevision: true,
+      planRevisionContext: { targetMainStepIndexes: [] },
       phaseAcceptance: true,
     },
     flags: {

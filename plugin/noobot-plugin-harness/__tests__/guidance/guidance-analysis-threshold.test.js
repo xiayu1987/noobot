@@ -32,9 +32,9 @@ test("guidance schedules analysis by full-mode turn threshold", async () => {
 
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
 
-  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
-  assert.equal(agentContext.payload.harness.state.counters.analysisTurns, 0);
-  const decisionLog = agentContext.payload.harness.logs.guidance.find(
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.analysis, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.analysisTurns, 0);
+  const decisionLog = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_priority_decision",
   );
   assert.equal(decisionLog?.detail?.pending?.analysis?.active, true);
@@ -57,9 +57,9 @@ test("planning does not schedule guidance analysis", async () => {
 
   await handler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
 
-  assert.notEqual(agentContext.payload.harness.state.pending.analysis, true);
+  assert.notEqual(agentContext.bindings.extensions.harness.state.pending.analysis, true);
   assert.equal(
-    agentContext.payload.harness.state.counters.analysisTurns,
+    agentContext.bindings.extensions.harness.state.counters.analysisTurns,
     FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
   );
 });
@@ -87,7 +87,7 @@ test("planning counters consume skipped agent turns without owning analysis turn
     meta: {},
   });
 
-  const counters = agentContext.payload.harness.state.counters;
+  const counters = agentContext.bindings.extensions.harness.state.counters;
   assert.equal(counters.llmTurns, 4);
   assert.equal(counters.analysisTurns, 1);
   assert.equal(counters.planUpdateTurns, 4);
@@ -108,7 +108,7 @@ test("guidance analysis counter consumes skipped turns and ignores same-turn ree
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
 
-  const counters = agentContext.payload.harness.state.counters;
+  const counters = agentContext.bindings.extensions.harness.state.counters;
   assert.equal(counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
   assert.equal(counters.lastGuidanceAnalysisCounterTurn, 2);
 });
@@ -122,7 +122,7 @@ test("guidance analysis waits for captured main plan before scheduling", async (
       lastGuidanceAnalysisCounterTurn: 1,
     },
   });
-  agentContext.payload.harness.state.flags.planningCaptured = false;
+  agentContext.bindings.extensions.harness.state.flags.planningCaptured = false;
 
   await handler({
     capability: "guidance",
@@ -135,7 +135,7 @@ test("guidance analysis waits for captured main plan before scheduling", async (
     meta: {},
   });
 
-  const state = agentContext.payload.harness.state;
+  const state = agentContext.bindings.extensions.harness.state;
   assert.notEqual(state.pending.analysis, true);
   assert.equal(state.counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
   assert.equal(state.counters.lastGuidanceAnalysisCounterTurn, 1);
@@ -150,7 +150,7 @@ test("guidance analysis does not require captured main plan when planning is dis
       lastGuidanceAnalysisCounterTurn: 1,
     },
   });
-  agentContext.payload.harness.state.flags.planningCaptured = false;
+  agentContext.bindings.extensions.harness.state.flags.planningCaptured = false;
 
   await handler({
     capability: "guidance",
@@ -170,7 +170,7 @@ test("guidance analysis does not require captured main plan when planning is dis
     },
   });
 
-  const state = agentContext.payload.harness.state;
+  const state = agentContext.bindings.extensions.harness.state;
   assert.equal(state.pending.analysis, true);
   assert.equal(state.counters.analysisTurns, 0);
   assert.equal(state.counters.lastGuidanceAnalysisCounterTurn, 2);
@@ -195,9 +195,12 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
     },
     meta: {},
   });
-  assert.equal(beforeProgrammingThreshold.payload.harness.state.pending.analysis, false);
   assert.equal(
-    beforeProgrammingThreshold.payload.harness.state.counters.analysisTurns,
+    beforeProgrammingThreshold.bindings.extensions.harness.state.pending.analysis,
+    false,
+  );
+  assert.equal(
+    beforeProgrammingThreshold.bindings.extensions.harness.state.counters.analysisTurns,
     PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
   );
 
@@ -218,8 +221,8 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
     },
     meta: {},
   });
-  assert.equal(atProgrammingThreshold.payload.harness.state.pending.analysis, true);
-  assert.equal(atProgrammingThreshold.payload.harness.state.counters.analysisTurns, 0);
+  assert.equal(atProgrammingThreshold.bindings.extensions.harness.state.pending.analysis, true);
+  assert.equal(atProgrammingThreshold.bindings.extensions.harness.state.counters.analysisTurns, 0);
 });
 
 test("guidance analysis runtime threshold overrides scenario workflow params without E2E threshold mode", async () => {
@@ -247,8 +250,8 @@ test("guidance analysis runtime threshold overrides scenario workflow params wit
     },
   });
 
-  assert.equal(beforeRuntimeThreshold.payload.harness.state.pending.analysis, false);
-  assert.equal(beforeRuntimeThreshold.payload.harness.state.counters.analysisTurns, 3);
+  assert.equal(beforeRuntimeThreshold.bindings.extensions.harness.state.pending.analysis, false);
+  assert.equal(beforeRuntimeThreshold.bindings.extensions.harness.state.counters.analysisTurns, 3);
 
   const atRuntimeThreshold = createAgentContext({
     counters: {
@@ -273,8 +276,8 @@ test("guidance analysis runtime threshold overrides scenario workflow params wit
     },
   });
 
-  assert.equal(atRuntimeThreshold.payload.harness.state.pending.analysis, true);
-  assert.equal(atRuntimeThreshold.payload.harness.state.counters.analysisTurns, 0);
+  assert.equal(atRuntimeThreshold.bindings.extensions.harness.state.pending.analysis, true);
+  assert.equal(atRuntimeThreshold.bindings.extensions.harness.state.counters.analysisTurns, 0);
 });
 
 test("guidance analysis runtime threshold uses persisted intensity mapping 10 to 1 turn", async () => {
@@ -302,9 +305,9 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 10 to
     },
   });
 
-  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
-  assert.equal(agentContext.payload.harness.state.counters.analysisTurns, 0);
-  const scheduledLog = agentContext.payload.harness.logs.guidance.find(
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.analysis, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.analysisTurns, 0);
+  const scheduledLog = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "guidance_analysis_scheduled_by_turn_threshold",
   );
   assert.equal(scheduledLog?.detail?.triggerTurns, 1);
@@ -336,8 +339,8 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     },
   });
 
-  assert.equal(beforeThreshold.payload.harness.state.pending.analysis, false);
-  assert.equal(beforeThreshold.payload.harness.state.counters.analysisTurns, 1);
+  assert.equal(beforeThreshold.bindings.extensions.harness.state.pending.analysis, false);
+  assert.equal(beforeThreshold.bindings.extensions.harness.state.counters.analysisTurns, 1);
 
   const atThreshold = createAgentContext({
     counters: {
@@ -362,9 +365,9 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     },
   });
 
-  assert.equal(atThreshold.payload.harness.state.pending.analysis, true);
-  assert.equal(atThreshold.payload.harness.state.counters.analysisTurns, 0);
-  const scheduledLog = atThreshold.payload.harness.logs.guidance.find(
+  assert.equal(atThreshold.bindings.extensions.harness.state.pending.analysis, true);
+  assert.equal(atThreshold.bindings.extensions.harness.state.counters.analysisTurns, 0);
+  const scheduledLog = atThreshold.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "guidance_analysis_scheduled_by_turn_threshold",
   );
   assert.equal(scheduledLog?.detail?.triggerTurns, 2);

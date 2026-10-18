@@ -42,25 +42,31 @@ export const TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
 
 export function createAgentContext({ planText = "1. 主任务\n", pending = {}, counters = {} } = {}) {
   return {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        planText,
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0, ...counters },
-          signals: { successfulToolCount: 1 },
-          pending: {
-            summary: false,
-            guidance: null,
-            planRevision: false,
-            planRevisionContext: null,
-            planRefinement: false,
-            planRefinementContext: null,
-            ...pending,
+    bindings: {
+      extensions: {
+        harness: {
+          planText,
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: {
+              llmTurns: 0,
+              consecutiveToolFailures: 0,
+              totalToolFailures: 0,
+              ...counters,
+            },
+            signals: { successfulToolCount: 1 },
+            pending: {
+              summary: false,
+              guidance: null,
+              planRevision: false,
+              planRevisionContext: null,
+              planRefinement: false,
+              planRefinementContext: null,
+              ...pending,
+            },
           },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -68,27 +74,24 @@ export function createAgentContext({ planText = "1. 主任务\n", pending = {}, 
 
 export function createPlanningAgentContext({ counters = {}, scenario = "full" } = {}) {
   return {
-    execution: {
-      controllers: {
-        runtime: {
-          runConfig: { scenario },
-        },
+    bindings: {
+      runtime: {
+        runConfig: { scenario },
       },
-    },
-    payload: {
-      messages: { system: [], history: [] },
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      harness: {
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
-        state: {
-          counters: { llmTurns: 0, planUpdateAttempts: 0, ...counters },
-          pending: {
-            summary: false,
-            guidance: null,
-            planRevision: false,
-            planRevisionContext: null,
-            planRefinement: false,
-            planRefinementContext: null,
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: {
+        harness: {
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          state: {
+            counters: { llmTurns: 0, planUpdateAttempts: 0, ...counters },
+            pending: {
+              summary: false,
+              guidance: null,
+              planRevision: false,
+              planRevisionContext: null,
+              planRefinement: false,
+              planRefinementContext: null,
+            },
           },
         },
       },

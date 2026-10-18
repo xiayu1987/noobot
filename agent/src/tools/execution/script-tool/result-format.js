@@ -11,7 +11,6 @@ import { EXECUTE_SCRIPT_TOOL_NAME } from "./constants.js";
 import { buildOutputTransferDeclaration } from "./output-transfer-declaration.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { readFile } from "node:fs/promises";
-import { text } from "@noobot/shared/value";
 
 function formatCommandOutputWithLineNumbers(value = "") {
   const inputText = String(value || "");
@@ -41,8 +40,7 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     ...publicResult
   } = r || {};
   const normalizedResult = normalizeExecOutput(publicResult, { includeLineNumbers });
-  const runtime = options?.runtime || {};
-  const agentContext = options?.agentContext || null;
+  const { runtime } = options;
   const overflowFiles =
     r?.outputOverflow === true
       ? [
@@ -63,8 +61,6 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     );
     const persisted = await persistTransferArtifacts({
       runtime,
-      agentContext,
-      userId: text(runtime?.systemRuntime?.userId),
       artifacts,
       attachmentSource: ATTACHMENT_SOURCE.MODEL,
       generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,

@@ -45,12 +45,7 @@ export function createRuntimeContext({
     runConfig: normalizedRunConfig,
     allEnabledProviders:
       allEnabledProviders && typeof allEnabledProviders === "object" ? allEnabledProviders : {},
-    sharedTools:
-      sharedTools && typeof sharedTools === "object"
-        ? sharedTools
-        : normalizedRunConfig.sharedTools && typeof normalizedRunConfig.sharedTools === "object"
-          ? normalizedRunConfig.sharedTools
-          : {},
+    sharedTools: isPlainObject(sharedTools) ? sharedTools : {},
     hookManager:
       normalizedRunConfig.hookManager && typeof normalizedRunConfig.hookManager === "object"
         ? normalizedRunConfig.hookManager

@@ -18,36 +18,34 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   });
   const ctx = {
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            runConfig: { scenario: "programming" },
-          },
+      bindings: {
+        runtime: {
+          runConfig: { scenario: "programming" },
         },
-      },
-      payload: {
-        harness: {
-          state: {
-            counters: {},
-            flags: {
-              planUpdateCapturePending: true,
-              acceptanceSemanticValidationCapturePending: true,
-              acceptanceSemanticValidationCaptureReportIndex: 3,
+        extensions: {
+          harness: {
+            state: {
+              counters: {},
+              flags: {
+                planUpdateCapturePending: true,
+                acceptanceSemanticValidationCapturePending: true,
+                acceptanceSemanticValidationCaptureReportIndex: 3,
+              },
+              signals: {},
+              pending: {
+                guidance: "consecutive_failures",
+                summary: true,
+                planRevision: true,
+                planRevisionContext: { targetMainStepIndexes: [] },
+                acceptanceSemanticValidation: { reportIndex: 3 },
+              },
             },
-            signals: {},
-            pending: {
-              guidance: "consecutive_failures",
-              summary: true,
-              planRevision: true,
-              planRevisionContext: { targetMainStepIndexes: [] },
-              acceptanceSemanticValidation: { reportIndex: 3 },
-            },
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            lastPlanningRawOutput: null,
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          lastPlanningRawOutput: null,
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -56,41 +54,60 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   createTestHookContext(ctx);
 
   await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
-  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, true);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.flags.planUpdateCapturePending,
+    true,
+  );
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.counters.hookTurns, 1);
 
   await runtime.runHook(HOOK_POINT.AGENT.BEFORE_TURN, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
-
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
-  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 2);
-
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
-  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
-
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.summary, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.counters.hookTurns, 1);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, true);
   assert.equal(
-    ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending,
+    ctx.agentContext.bindings.extensions.harness.state.flags.planUpdateCapturePending,
+    true,
+  );
+
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, true);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.flags.planUpdateCapturePending,
+    true,
+  );
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.counters.hookTurns, 2);
+
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.flags.planUpdateCapturePending,
+    false,
+  );
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.counters.hookTurns, 3);
+
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.guidance, null);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.summary, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.pending.acceptanceSemanticValidation,
+    null,
+  );
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.flags.planUpdateCapturePending,
+    false,
+  );
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.flags
+      .acceptanceSemanticValidationCapturePending,
     false,
   );
   assert.equal(
     "acceptanceSemanticValidationCaptureReportIndex" in
-      ctx.agentContext.payload.harness.state.flags,
+      ctx.agentContext.bindings.extensions.harness.state.flags,
     false,
   );
-  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 4);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.counters.hookTurns, 4);
 });
 
 test("takeover priority pipeline keeps higher priority takeover effective", async () => {
@@ -232,7 +249,7 @@ test("resolveFsmTargetByHook uses rule table consistently", () => {
   );
   const toolCallsToPlanned = resolveFsmTargetByHook(
     HOOK_POINT.AGENT.AFTER_LLM_CALL,
-    { hasToolCalls: true, calls: [{ name: "read_file" }] },
+    { calls: [{ name: "read_file" }] },
     HARNESS_FSM_STATES.PLANNING,
   );
   const toFailed = resolveFsmTargetByHook(

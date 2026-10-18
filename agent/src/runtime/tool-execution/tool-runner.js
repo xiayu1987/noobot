@@ -27,6 +27,7 @@ import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveExecutionAbortMessage } from "@noobot/session-protocol/execution-abort";
 import {
   resolveRuntimeTransferIdentity,
@@ -131,7 +132,6 @@ async function materializeToolOutputArtifacts({
   toolResultText = "",
   call = {},
   runtime = {},
-  agentContext = null,
   identity = null,
 } = {}) {
   const rawArtifacts = parseToolOutputArtifacts(rawResult);
@@ -155,8 +155,6 @@ async function materializeToolOutputArtifacts({
   });
   const persisted = await persistTransferArtifacts({
     runtime,
-    agentContext,
-    userId: text(runtime?.systemRuntime?.userId),
     artifacts,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: `${toolName}_output`,
@@ -241,12 +239,7 @@ function createToolCallExecutionState(options = {}) {
     turn: optionValue(options.turn, 1),
     executionScope: optionValue(options.executionScope, "primary"),
     errorLogger: optionValue(options.errorLogger, null),
-    userId: optionValue(options.userId, ""),
-    sessionId: optionValue(options.sessionId, ""),
-    parentSessionId: optionValue(options.parentSessionId, ""),
-    dialogProcessId: optionValue(options.dialogProcessId, ""),
-    turnScopeId: optionValue(options.turnScopeId, ""),
-    executionId: optionValue(options.executionId, ""),
+    identity: getSessionIdsFromAgentContext(options.agentContext),
     runtime: optionValue(options.runtime, {}),
     agentContext: optionValue(options.agentContext, null),
     toolStartedAtMs,
@@ -357,13 +350,8 @@ async function prepareToolInputTransfer(state) {
     strategy: "tool_input",
     call: state.call,
     runtime: state.runtime,
-    agentContext: state.agentContext,
-    sessionId: state.sessionId,
-    producer,
     identity: resolveRuntimeTransferIdentity({
       runtime: state.runtime,
-      agentContext: state.agentContext,
-      sessionId: state.sessionId,
       producer,
       direction: "input",
       strategy: "tool_input",
@@ -380,8 +368,6 @@ function toolInvocationConfig(state) {
     configurable: {
       transferIdentity: resolveRuntimeTransferIdentity({
         runtime: state.runtime,
-        agentContext: state.agentContext,
-        sessionId: state.sessionId,
         producer,
         direction: "output",
         strategy: text(state.call?.name) || "tool_output",
@@ -414,11 +400,8 @@ async function materializeToolInvocationResult(state) {
     toolResultText: state.toolResultText,
     call: state.call,
     runtime: state.runtime,
-    agentContext: state.agentContext,
     identity: resolveRuntimeTransferIdentity({
       runtime: state.runtime,
-      agentContext: state.agentContext,
-      sessionId: state.sessionId,
       producer,
       direction: "output",
       strategy: "tool_output_artifact",
@@ -440,17 +423,17 @@ function logRecoverableToolError(state, error) {
   const normalizedCause =
     typeof error?.cause === "string" ? error.cause : error?.cause?.message || "";
   void state.errorLogger.log({
-    userId: state.userId,
-    sessionId: state.sessionId,
-    parentSessionId: state.parentSessionId,
+    userId: state.identity.userId,
+    sessionId: state.identity.sessionId,
+    parentSessionId: state.identity.parentSessionId,
     source: "tool-runner",
     event: "tool_invoke_error",
     error,
     extra: {
       toolName: state.call?.name || "",
-      dialogProcessId: state.dialogProcessId,
-      turnScopeId: state.turnScopeId,
-      executionId: state.executionId,
+      dialogProcessId: state.identity.dialogProcessId,
+      turnScopeId: state.identity.turnScopeId,
+      executionId: state.identity.runId,
       toolCallId: text(state.call?.id),
       ...(normalizedCause ? { cause: normalizedCause } : {}),
     },
@@ -468,8 +451,8 @@ function reportToolInvocationError(state, error) {
       turn: state.turn,
       tool: text(state.call?.name),
       toolCallId: text(state.call?.id),
-      sessionId: text(state.sessionId),
-      parentSessionId: normalizeParentSessionId(state.parentSessionId),
+      sessionId: state.identity.sessionId,
+      parentSessionId: normalizeParentSessionId(state.identity.parentSessionId),
     },
   });
 }
@@ -537,13 +520,8 @@ async function finalizeToolExecution(state) {
     call: state.call,
     toolResultText: state.toolResultText,
     runtime: state.runtime,
-    agentContext: state.agentContext,
-    sessionId: state.sessionId,
-    producer,
     identity: resolveRuntimeTransferIdentity({
       runtime: state.runtime,
-      agentContext: state.agentContext,
-      sessionId: state.sessionId,
       producer,
       direction: "output",
       strategy: "tool_result_text",
@@ -571,7 +549,6 @@ async function finalizeToolExecution(state) {
       ...registerTransferAttachmentResources({
         agentContext: state.agentContext,
         runtime: state.runtime,
-        owner: state.userId,
         transferEnvelopes,
       }),
     ],

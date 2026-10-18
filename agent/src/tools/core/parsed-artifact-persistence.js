@@ -37,7 +37,6 @@ function sanitizeArtifactBaseName(input = "", fallback = "multimodal-parse") {
 
 export async function persistParsedTextAttachment({
   runtime = {},
-  agentContext = null,
   inputFile = "",
   text: sourceText = "",
   mode = "",
@@ -49,7 +48,6 @@ export async function persistParsedTextAttachment({
   const modeSuffix = sanitizeArtifactBaseName(mode || "result", "result");
   const materialized = await materializeTextForToolResult({
     runtime,
-    agentContext,
     text: sourceText,
     name: `${inputBaseName}.multimodal-parse.${modeSuffix}.md`,
     mimeType: MIME_TYPE.TEXT_MARKDOWN,
@@ -58,7 +56,6 @@ export async function persistParsedTextAttachment({
     source: TRANSFER_SOURCE.TOOL,
     reason: TRANSFER_REASON.MULTIMODAL_PARSE_ARTIFACT,
     alwaysPersist: true,
-    producer: { type: "tool", name: TOOL_NAME.MULTIMODAL_PARSE },
     identity,
     meta: { mode },
   });

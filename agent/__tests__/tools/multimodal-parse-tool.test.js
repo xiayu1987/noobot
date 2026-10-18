@@ -14,6 +14,7 @@ import {
 } from "../../src/tools/ai-models/multimodal-parse-tool.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createEventEnvelope } from "@noobot/event-protocol";
+import { createTestModelHost } from "../helpers/test-model-host.js";
 
 const TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:multimodal-parse:output",
@@ -139,12 +140,15 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
         relativePath: modelRelativePath,
       },
     ],
-    modelPort: {
-      async invoke(request) {
-        modelRequest = request;
-        return { result: { rawText: "# Parsed\n\ninvoice data", output: [] } };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke(request) {
+          modelRequest = request;
+          return { result: { rawText: "# Parsed\n\ninvoice data", output: [] } };
+        },
       },
-    },
+      modelSpec: null,
+    }),
     attachmentService: {
       async getAttachmentById(request) {
         return runtime.userMessageAttachments.find(
@@ -295,12 +299,15 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
     userConfig: {},
     systemRuntime: { userId: "admin", sessionId: "session-1", rootSessionId: "session-1" },
     userMessageAttachments: [],
-    modelPort: {
-      async invoke() {
-        modelCalled = true;
-        return { result: { rawText: "parsed ordinary file", output: [] } };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke() {
+          modelCalled = true;
+          return { result: { rawText: "parsed ordinary file", output: [] } };
+        },
       },
-    },
+      modelSpec: null,
+    }),
     attachmentService: {
       async ingestGeneratedArtifacts(request) {
         return [
@@ -344,11 +351,14 @@ test("multimodal_parse rejects directly readable text before invoking a model", 
     basePath,
     systemRuntime: { userId: "admin" },
     userMessageAttachments: [],
-    modelPort: {
-      async invoke() {
-        modelCalled = true;
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke() {
+          modelCalled = true;
+        },
       },
-    },
+      modelSpec: null,
+    }),
   });
   const [tool] = createMultimodalParseTool({ agentContext });
 
@@ -384,12 +394,15 @@ test("multimodal_parse passes audio and video files to the configured model", as
     userConfig: {},
     systemRuntime: { userId: "admin", sessionId: "session-1", rootSessionId: "session-1" },
     userMessageAttachments: [],
-    modelPort: {
-      async invoke(request) {
-        modelRequest = request;
-        return { result: { rawText: "parsed media", output: [] } };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke(request) {
+          modelRequest = request;
+          return { result: { rawText: "parsed media", output: [] } };
+        },
       },
-    },
+      modelSpec: null,
+    }),
     attachmentService: {
       async ingestGeneratedArtifacts(request) {
         return [
@@ -445,11 +458,14 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
     basePath,
     systemRuntime: { userId: "admin" },
     userMessageAttachments: [],
-    modelPort: {
-      async invoke() {
-        modelCalled = true;
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke() {
+          modelCalled = true;
+        },
       },
-    },
+      modelSpec: null,
+    }),
   });
   const [tool] = createMultimodalParseTool({ agentContext });
 
@@ -528,12 +544,15 @@ test("multimodal_parse uses the configured modality default instead of the runti
     },
     userConfig: {},
     userMessageAttachments: [],
-    modelPort: {
-      async invoke(request) {
-        invokedModel = request.model;
-        return { result: { rawText: "parsed", output: [] } };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke(request) {
+          invokedModel = request.model;
+          return { result: { rawText: "parsed", output: [] } };
+        },
       },
-    },
+      modelSpec: null,
+    }),
     attachmentService: {
       async ingestGeneratedArtifacts(request) {
         return [

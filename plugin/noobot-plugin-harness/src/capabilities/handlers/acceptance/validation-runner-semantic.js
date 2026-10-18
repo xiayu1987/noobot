@@ -45,7 +45,7 @@ import {
   getAcceptanceSemanticValidationMarker,
 } from "../shared/workflow/prompts.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -56,9 +56,7 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
     scheduledEvent: ACCEPTANCE_EVENTS.semanticValidationScheduledByInject,
     setPendingData: ({ bucket, state }) => {
       const finalOutput = text(ctx?.result?.output);
-      const reportIndex = Array.isArray(bucket.acceptanceReports)
-        ? bucket.acceptanceReports.lastIndexOf(baseReport)
-        : -1;
+      const reportIndex = bucket.acceptanceReports.lastIndexOf(baseReport);
       setPendingStateWithMeta(state, "acceptanceSemanticValidation", {
         reportIndex,
         payload: buildSemanticValidationPromptPayload({
@@ -70,10 +68,6 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
       });
       return { reportIndex, hasFinalOutput: Boolean(finalOutput) };
     },
-    buildScheduledDetail: ({ result }) => ({
-      reportIndex: Number(result?.reportIndex ?? -1),
-      hasFinalOutput: result?.hasFinalOutput === true,
-    }),
   });
 }
 
@@ -81,21 +75,16 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const pendingData =
-    state.pending.acceptanceSemanticValidation &&
-    typeof state.pending.acceptanceSemanticValidation === "object"
-      ? state.pending.acceptanceSemanticValidation
-      : null;
+  const pendingData = state.pending.acceptanceSemanticValidation;
   if (!pendingData) return false;
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
-  const locale = state?.locale || LOCALE.ZH_CN;
+  const locale = state.locale || LOCALE.ZH_CN;
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
     ctx,
     meta,
   );
-  const promptPayload =
-    pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
+  const promptPayload = pendingData.payload;
   const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
   const systemContent = buildAcceptanceMainPlanContextPromptText({
@@ -106,7 +95,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   const phaseReportsContents = buildAllPhaseAcceptanceReportSystemContents({
     locale,
     marker: getAllPhaseAcceptanceReportsMarker(locale),
-    data: { phaseAcceptanceReports: bucket?.phaseAcceptanceReports || [] },
+    data: { phaseAcceptanceReports: bucket.phaseAcceptanceReports },
   });
   const requestContent = buildAcceptanceValidationRequestPromptText({
     locale,
@@ -179,14 +168,9 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
       return { reportIndex };
     },
     applyCaptureResult: ({ bucket, responseText, captureMeta }) => {
-      const reportIndex = Number(captureMeta?.reportIndex);
-      const targetReport =
-        (Array.isArray(bucket.acceptanceReports) && reportIndex >= 0
-          ? bucket.acceptanceReports[reportIndex]
-          : null) ||
-        bucket.lastAcceptanceReport ||
-        null;
-      if (!isObjectLike(targetReport)) {
+      const { reportIndex } = captureMeta;
+      const targetReport = bucket.acceptanceReports[reportIndex];
+      if (!targetReport) {
         return { applied: false, detail: { reportIndex, reason: "missing_target_report" } };
       }
       const parsed = buildTextAcceptanceValidationResult(responseText);
@@ -200,14 +184,11 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
         applied: true,
         detail: {
           reportIndex,
-          status: targetReport.semanticValidation?.status,
-          consistent: targetReport.semanticValidation?.consistent,
+          status: parsed.status,
+          consistent: parsed.consistent,
         },
       };
     },
-    buildCompletedDetail: ({ result }) => result?.detail || {},
-    buildFailedDetail: ({ result, captureMeta }) =>
-      result?.detail || { reportIndex: Number(captureMeta?.reportIndex) },
   });
 }
 
@@ -228,7 +209,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     return scheduleAcceptanceSemanticValidationByInject(ctx, baseReport);
   }
   const invoker = readCapabilityModelInvoker(meta);
-  const locale = state?.locale || LOCALE.ZH_CN;
+  const locale = state.locale || LOCALE.ZH_CN;
   const finalOutput = text(ctx?.result?.output);
   const promptPayload = buildSemanticValidationPromptPayload({
     bucket,
@@ -256,7 +237,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   const phaseReportsPrompts = buildAllPhaseAcceptanceReportSystemContents({
     locale,
     marker: getAllPhaseAcceptanceReportsMarker(locale),
-    data: { phaseAcceptanceReports: bucket?.phaseAcceptanceReports || [] },
+    data: { phaseAcceptanceReports: bucket.phaseAcceptanceReports },
   });
   const semanticValidationMessages = buildFinalAcceptanceSemanticValidationMessages({
     locale,

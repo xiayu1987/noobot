@@ -61,10 +61,8 @@ function assessToolOperation({ toolName, declaredRiskLevel, serverEvidence }) {
   return assessment;
 }
 
-export function createRiskLevelSchema(runtimeOrContext, descriptionKey) {
-  return z
-    .enum(Object.values(SECURITY_RISK_LEVEL))
-    .describe(tTool(runtimeOrContext, descriptionKey));
+export function createRiskLevelSchema(runtime, descriptionKey) {
+  return z.enum(Object.values(SECURITY_RISK_LEVEL)).describe(tTool(runtime, descriptionKey));
 }
 
 function confirmationContent(

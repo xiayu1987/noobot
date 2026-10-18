@@ -9,7 +9,7 @@ import { parsePlanDocumentFromText, renderPlanDocument } from "./text-protocol.j
 import { getPlanAcceptanceStatusMap } from "./acceptance-status.js";
 import { text } from "@noobot/shared/value";
 
-function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
+function appendAcceptanceStatusToPlanText(planText, bucket) {
   const statusMap = getPlanAcceptanceStatusMap(bucket);
   if (!Object.keys(statusMap).length) return text(planText);
   return String(planText || "")
@@ -20,8 +20,7 @@ function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
       const match = textValue.match(/^\s*(\d+(?:\.\d+)?)(?:\.|\s)\s+(.+?)\s*$/);
       if (!match) return textValue;
       const planId = text(match[1]);
-      const acceptance =
-        statusMap[planId] && typeof statusMap[planId] === "object" ? statusMap[planId] : null;
+      const acceptance = statusMap[planId];
       if (!acceptance) return textValue;
       const taskStatus = text(acceptance.taskStatus) || "pending";
       const source = text(acceptance.source);
@@ -30,12 +29,6 @@ function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
     })
     .join("\n")
     .trim();
-}
-
-export function resolveCurrentTaskGoalText({ bucket = {}, currentTaskGoal = "" } = {}) {
-  const explicit = text(currentTaskGoal);
-  if (explicit) return explicit;
-  return text(bucket?.currentTaskGoal);
 }
 
 function prependCurrentTaskGoalToPlanText({
@@ -74,26 +67,23 @@ function resolveChecklistPlanText(planText = "") {
 
 export function resolveCompletePlanChecklistText({
   planText = "",
-  bucket = {},
   currentTaskGoal = "",
   locale = LOCALE.ZH_CN,
 } = {}) {
-  const taskGoal = resolveCurrentTaskGoalText({ bucket, currentTaskGoal });
   return prependCurrentTaskGoalToPlanText({
     locale,
     planText: resolveChecklistPlanText(planText),
-    currentTaskGoal: taskGoal,
+    currentTaskGoal,
   });
 }
 
 export function buildPlanChecklistSystemContent({
   locale = LOCALE.ZH_CN,
   planText = "",
-  bucket = {},
-  currentTaskGoal = "",
+  bucket,
 } = {}) {
   const resolvedPlanText = appendAcceptanceStatusToPlanText(
-    resolveCompletePlanChecklistText({ planText, bucket, currentTaskGoal, locale }),
+    resolveCompletePlanChecklistText({ planText, currentTaskGoal: bucket.currentTaskGoal, locale }),
     bucket,
   );
   if (!resolvedPlanText) return "";

@@ -85,12 +85,17 @@ export function canAttemptPlanUpdate(
   return true;
 }
 
+function requireTargetMainStepIndexes(owner, targetMainStepIndexes) {
+  if (!Array.isArray(targetMainStepIndexes)) {
+    throw new TypeError(`${owner} requires targetMainStepIndexes array`);
+  }
+  return targetMainStepIndexes;
+}
+
 export function setPendingPlanUpdate(
-  state = {},
+  state,
   { active = false, stage = "revision", targetMainStepIndexes = [] } = {},
 ) {
-  if (!isObjectLike(state)) return false;
-  if (!isObjectLike(state.pending)) state.pending = {};
   const pending = state.pending;
   if (active !== true) {
     const stageText = text(stage).toLowerCase();
@@ -109,11 +114,11 @@ export function setPendingPlanUpdate(
     return true;
   }
   const normalizedStage = normalizePlanUpdateStage(stage);
-  const normalizedTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
-    ? targetMainStepIndexes
-    : [];
   const normalizedContext = {
-    targetMainStepIndexes: normalizedTargetMainStepIndexes,
+    targetMainStepIndexes: requireTargetMainStepIndexes(
+      "setPendingPlanUpdate",
+      targetMainStepIndexes,
+    ),
   };
   if (normalizedStage === "revision") {
     pending.planRevision = true;
@@ -129,26 +134,21 @@ export function setPendingPlanUpdate(
   return true;
 }
 
-export function writePlanUpdateCaptureContext(
-  state = {},
-  { stage = "revision", targetMainStepIndexes = [] } = {},
-) {
-  if (!isObjectLike(state)) return false;
-  if (!isObjectLike(state.flags)) state.flags = {};
-  const normalizedStage = normalizePlanUpdateStage(stage);
-  const normalizedTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
-    ? targetMainStepIndexes
-    : [];
-  state.flags.planUpdateCaptureStage = normalizedStage;
-  state.flags.planUpdateCaptureTargetMainStepIndexes = normalizedTargetMainStepIndexes;
-  return true;
+export function writePlanUpdateCaptureContext(state, { stage, targetMainStepIndexes }) {
+  state.flags.planUpdateCaptureStage = normalizePlanUpdateStage(stage);
+  state.flags.planUpdateCaptureTargetMainStepIndexes = requireTargetMainStepIndexes(
+    "writePlanUpdateCaptureContext",
+    targetMainStepIndexes,
+  );
 }
 
-export function readPlanUpdateCaptureContext(state = {}) {
-  const flags = state?.flags && typeof state.flags === "object" ? state.flags : {};
-  const stage = normalizePlanUpdateStage(flags.planUpdateCaptureStage);
-  const targetMainStepIndexes = Array.isArray(flags.planUpdateCaptureTargetMainStepIndexes)
-    ? flags.planUpdateCaptureTargetMainStepIndexes
-    : [];
-  return { stage, targetMainStepIndexes };
+export function readPlanUpdateCaptureContext(state) {
+  const { planUpdateCaptureStage, planUpdateCaptureTargetMainStepIndexes } = state.flags;
+  return {
+    stage: normalizePlanUpdateStage(planUpdateCaptureStage),
+    targetMainStepIndexes: requireTargetMainStepIndexes(
+      "readPlanUpdateCaptureContext",
+      planUpdateCaptureTargetMainStepIndexes,
+    ),
+  };
 }

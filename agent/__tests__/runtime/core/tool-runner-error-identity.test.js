@@ -18,12 +18,15 @@ test("recoverable tool errors retain the complete execution identity", async () 
         throw error;
       },
     },
-    userId: "user-1",
-    sessionId: "session-1",
-    parentSessionId: "parent-1",
-    dialogProcessId: "dialog-1",
-    turnScopeId: "turn-1",
-    executionId: "agent:turn-1",
+    runtime: {
+      systemRuntime: {
+        userId: "user-1",
+        sessionId: "session-1",
+        parentSessionId: "parent-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+      },
+    },
     errorLogger: {
       async log(entry) {
         logs.push(entry);

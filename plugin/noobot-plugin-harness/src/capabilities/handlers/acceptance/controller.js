@@ -38,6 +38,7 @@ import {
   ACCEPTANCE_PHASE_BLOCKER_KEYS,
   hasAcceptancePhaseBlockers,
 } from "../shared/workflow/policy.js";
+import { resolvePendingPlanUpdateForWorkflow } from "../shared/workflow/scheduler.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { hasFinalNoToolsMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
@@ -85,41 +86,6 @@ function resolveAcceptanceBlockedReasonLabel(locale = "zh-CN", reason = "") {
 
 function hasHigherPriorityPendingForPhaseAcceptance(state = {}) {
   return hasAcceptancePhaseBlockers(state);
-}
-
-function resolvePendingPlanUpdateSnapshot(state = {}) {
-  const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
-  if (pending.planRevision === true) {
-    const context =
-      pending.planRevisionContext && typeof pending.planRevisionContext === "object"
-        ? pending.planRevisionContext
-        : {};
-    return {
-      active: true,
-      stage: "revision",
-      context: {
-        targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
-          ? context.targetMainStepIndexes
-          : [],
-      },
-    };
-  }
-  if (pending.planRefinement === true) {
-    const context =
-      pending.planRefinementContext && typeof pending.planRefinementContext === "object"
-        ? pending.planRefinementContext
-        : {};
-    return {
-      active: true,
-      stage: "refinement",
-      context: {
-        targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
-          ? context.targetMainStepIndexes
-          : [],
-      },
-    };
-  }
-  return { active: false, stage: "", context: {} };
 }
 
 function resolveAcceptanceDecision({
@@ -195,7 +161,7 @@ function resolveAcceptanceDecision({
     chosenAction = ACCEPTANCE_DECISION.action.acceptanceCapture;
     chosenReason = ACCEPTANCE_DECISION.reason.afterLlmCapture;
   }
-  const planUpdateSnapshot = resolvePendingPlanUpdateSnapshot(state);
+  const planUpdate = resolvePendingPlanUpdateForWorkflow(state);
   const locale = resolveAcceptanceLocale(state);
   return {
     category,
@@ -224,9 +190,9 @@ function resolveAcceptanceDecision({
         payload: pending.guidance || null,
       },
       planUpdate: {
-        active: planUpdateSnapshot.active === true,
-        stage: planUpdateSnapshot.stage,
-        context: planUpdateSnapshot.context,
+        active: planUpdate.active,
+        stage: planUpdate.stage,
+        context: { targetMainStepIndexes: planUpdate.targetMainStepIndexes },
       },
       phaseAcceptance: {
         active: pending.phaseAcceptance === true,

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runAgentTurn } from "../../../src/runtime/engine.js";
@@ -28,9 +29,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
   hookManager.on("agent.on_error", (context) => errorHookContexts.push(context), {
     id: "test.engine-stop.on-error",
   });
-  const runtime = {
-    userId: "admin",
-    sessionId: "session-engine-stop",
+  const runtime = createRuntimeContext({
     globalConfig: {
       defaultProvider: "test_model",
       providers: {
@@ -46,9 +45,8 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       },
     },
     userConfig: {},
-    runConfig: { turnScopeId: "turn-engine-stop" },
+    runConfig: { turnScopeId: "turn-engine-stop", hookManager },
     abortSignal: stopController.signal,
-    hookManager,
     eventListener: {
       onEvent(event) {
         events.push(event);
@@ -63,8 +61,16 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
     },
-  };
-  const agentContext = createTestAgentExecutionScope(runtime);
+  });
+  const agentContext = createTestAgentExecutionScope(runtime, {
+    identity: {
+      userId: "admin",
+      sessionId: "session-engine-stop",
+      parentSessionId: "parent-session-engine-stop",
+      dialogProcessId: "dialog-engine-stop",
+      turnScopeId: "turn-engine-stop",
+    },
+  });
 
   await assert.rejects(
     () =>

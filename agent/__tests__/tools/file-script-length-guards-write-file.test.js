@@ -13,6 +13,7 @@ import {
   executeToolCall,
   LENGTH_THRESHOLDS,
   buildAgentContext,
+  toolCallScope,
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
@@ -32,15 +33,15 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   const runnerResult = await executeToolCall({
     call: { id: "call_long_write", name: "write_file", args: { filePath, content } },
     tool,
-    runtime: {
-      basePath,
-      systemRuntime: { userId: "u-test", sessionId: "s-write" },
-      globalConfig: {},
-      userConfig: {},
-      attachmentService: buildAttachmentService(),
-    },
-    agentContext: buildAgentContext(basePath, "u-test"),
-    sessionId: "s-write",
+    ...toolCallScope(
+      buildAgentContext(basePath, "u-test", {
+        runtime: {
+          systemRuntime: { sessionId: "s-write" },
+          globalConfig: {},
+          attachmentService: buildAttachmentService(),
+        },
+      }),
+    ),
   });
   const result = parseToolResult(runnerResult.toolResultText);
 

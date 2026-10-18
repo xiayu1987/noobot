@@ -21,6 +21,7 @@ import { bindAssistantMessageEventStream } from "../../../../src/events/message-
 import { createCanonicalMessageEventSessionManager } from "../../../helpers/canonical-message-event-session-manager.js";
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 import { reduceCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
+import { createTestModelHost } from "../../../helpers/test-model-host.js";
 
 const modelSpec = Object.freeze(
   normalizeRuntimeModelSpec({
@@ -91,7 +92,7 @@ function createContext({ modelPort, tools = [], eventListener = null } = {}) {
   const runtime = {
     globalConfig: {},
     userConfig: {},
-    modelPort,
+    modelHost: createTestModelHost({ modelPort, modelSpec }),
     eventListener,
     systemRuntime: { turnScopeId: "turn-test" },
   };
@@ -274,7 +275,7 @@ test("mini-runner requires the authoritative host ModelPort", async () => {
   const { ctx } = createContext({ modelPort: null });
   await assert.rejects(
     createInvoker({ enableToolBinding: false })({ messages: [], ctx }),
-    /requires the host ModelPort/,
+    /model port\.invoke is required/,
   );
 });
 

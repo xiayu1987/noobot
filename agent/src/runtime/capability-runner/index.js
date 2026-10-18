@@ -9,6 +9,7 @@ import {
   adaptToolsForBinding,
 } from "../../models/index.js";
 import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
+import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { validateConfigSnapshot } from "@noobot/agent-config-protocol";
@@ -73,7 +74,7 @@ export function createAgentCapabilityModelInvoker({
       headerNamespace,
       flowPrefixOverride,
       flowPrefix,
-      sessionMeta: execution,
+      sessionId: getSessionIdsFromAgentContext(ctx.agentContext).sessionId,
     });
     const normalizedModelName = text(modelName);
     const modelSpec = normalizedModelName

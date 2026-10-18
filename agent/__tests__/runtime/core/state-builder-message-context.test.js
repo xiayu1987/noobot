@@ -4,13 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateBuilder } from "../../../src/runtime/state-builder.js";
 
-function createRuntime() {
-  return {
+function createRuntime({ eventListener }) {
+  return createRuntimeContext({
+    eventListener,
     globalConfig: {},
     userConfig: {},
     runConfig: { turnScopeId: "turn-1" },
@@ -22,7 +24,7 @@ function createRuntime() {
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
     },
-  };
+  });
 }
 
 test("state-builder canonicalizes model messages and block views through one store", () => {
@@ -53,12 +55,14 @@ test("state-builder canonicalizes model messages and block views through one sto
     resolvePhaseSummaryLoopTurnsFn: () => 0,
   });
 
-  const runtime = createRuntime();
-  runtime.eventListener = {
-    onEvent: (event) => identityEvents.push(event),
-  };
+  const runtime = createRuntime({
+    eventListener: { onEvent: (event) => identityEvents.push(event) },
+  });
   const agentContext = createTestAgentExecutionScope(runtime, {
     identity: {
+      userId: "admin",
+      sessionId: "s1",
+      parentSessionId: "parent-s1",
       dialogProcessId: "dlg-1",
       turnScopeId: "turn-1",
     },

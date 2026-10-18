@@ -187,7 +187,7 @@ test("reconnect projects a pending interaction without mutating its strict paylo
   channel.pendingInteractionRequests.set("interaction-strict-1", pendingInteraction);
   const reconnect = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  await manager.handleReconnect(reconnect, reconnectControl({ sessionId: sessionId }));
+  await manager.handleReconnect(reconnect, reconnectControl({ sessionId }));
 
   const replay = getEvent(reconnect, "reconnect_data")?.data?.sessions?.[0]?.replayBatch;
   assert.deepEqual(replay?.pendingInteractions, [pendingInteraction]);

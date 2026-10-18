@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import { createModelContext } from "@noobot/context-protocol";
 import {
   assert,
@@ -106,8 +107,7 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   const events = [];
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-runner-stop-snapshot-"));
   await persistSession(workspaceRoot, "u1", "session-used");
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
@@ -126,7 +126,7 @@ test("runSession persists stopped model message snapshot from runtime candidate 
         ],
       },
     },
-  };
+  });
   const eventListener = {
     onEvent(event) {
       events.push(event);
@@ -197,8 +197,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
     path.join(os.tmpdir(), "noobot-runner-plain-user-stop-snapshot-"),
   );
   await persistSession(workspaceRoot, "u1", "session-used");
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
@@ -213,7 +212,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
         incremental: [{ type: "human", content: "second stop snapshot" }],
       },
     },
-  };
+  });
   const eventListener = {
     onEvent(event) {
       events.push(event);
@@ -269,8 +268,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   );
   await persistSession(workspaceRoot, "u1", "session-used");
   const abortController = new AbortController();
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
@@ -285,7 +283,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
         incremental: [{ type: "human", content: "hello before signal" }],
       },
     },
-  };
+  });
   const eventListener = {
     onEvent(event) {
       events.push(event);
@@ -362,8 +360,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
       incremental: [{ type: "human", content: "hello" }],
     },
   });
-  const runtime = {
-    attachmentMetas: [],
+  const runtime = Object.assign(createRuntimeContext(), {
     globalConfig: { workspaceRoot },
     activeMessageContext: modelContext,
     stoppedModelMessageSnapshotCandidate: {
@@ -375,7 +372,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
       messages: modelContext.messages,
       messageBlocks: modelContext.messageBlocks,
     },
-  };
+  });
   const abortError = new Error("stopped with interjections");
   abortError.name = "AbortError";
   abortError.reason = { type: "user_stop" };
@@ -456,8 +453,7 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
   const runner = createRunner({
     callOrder,
     eventListener,
-    runtime: {
-      attachmentMetas: [],
+    runtime: Object.assign(createRuntimeContext(), {
       stoppedModelMessageSnapshotCandidate: {
         userId: "u1",
         sessionId: "session-used",
@@ -466,7 +462,7 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
         messages: [],
         messageBlocks: { system: [], history: [], incremental: [] },
       },
-    },
+    }),
     agentRunner: async () => {
       throw abortError;
     },

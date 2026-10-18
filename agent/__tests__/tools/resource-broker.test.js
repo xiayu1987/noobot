@@ -18,10 +18,9 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 function runtime(basePath) {
   return {
     basePath,
-    userId: "admin",
     globalConfig: {},
     userConfig: {},
-    systemRuntime: { sessionId: "s-1", rootSessionId: "s-1" },
+    systemRuntime: { userId: "admin", sessionId: "s-1", rootSessionId: "s-1" },
   };
 }
 

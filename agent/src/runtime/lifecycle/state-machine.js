@@ -60,15 +60,6 @@ export function resolveInitialLifecycleState(runConfig = {}) {
 export function syncLifecycleRuntimeState(runtime = null, lifecycle = null) {
   if (!isObjectLike(runtime) || !lifecycle) return runtime;
   runtime.agentLifecycle = lifecycle;
-  runtime.agentLifecycleState = lifecycle.state;
-  return runtime;
-}
-
-export function bindLifecycleToRuntime(runtime = null, lifecycle = null) {
-  syncLifecycleRuntimeState(runtime, lifecycle);
-  if (isObjectLike(runtime) && lifecycle) {
-    runtime.agentLifecycleInitialState = lifecycle.state;
-  }
   return runtime;
 }
 

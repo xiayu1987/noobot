@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 import assert from "node:assert/strict";
 import {
   createRunner,
@@ -95,8 +96,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
         },
       };
       const runtimeAgentContext = createTestAgentExecutionScope(
-        {
-          attachmentMetas: [],
+        Object.assign(createRuntimeContext(), {
           eventListener: buildContextPayload.eventListener,
           modelHost: {
             modelSpec: { alias: "test", model: "test", format: "openai_compatible" },
@@ -104,8 +104,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
             modelState: {},
             invocationIdentity,
           },
-          modelPort,
-        },
+        }),
         { identity: invocationIdentity },
       );
       return { agentContext: runtimeAgentContext, runtimeAgentContext };

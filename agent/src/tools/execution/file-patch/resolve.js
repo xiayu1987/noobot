@@ -28,7 +28,10 @@ import {
   normalizeSlash,
   toWorkspaceRelativePath,
 } from "../file-utils.js";
-import { getBasePathFromAgentContext } from "../../../context/agent-context-accessor.js";
+import {
+  getBasePathFromAgentContext,
+  getRuntimeFromAgentContext,
+} from "../../../context/agent-context-accessor.js";
 import { text } from "@noobot/shared/value";
 
 function normalizePatchPathInput(rawPath = "") {
@@ -43,8 +46,8 @@ function resolvePatchDefaultRoot(agentContext = {}) {
 
 function resolvePatchRootInvalidHint(agentContext = {}) {
   return canUseHostPathsForWorkspaceTools(agentContext)
-    ? tTool(agentContext, "tools.patch_file.rootInvalidHintSuperHost")
-    : tTool(agentContext, "tools.patch_file.rootInvalidHintHost");
+    ? tTool(getRuntimeFromAgentContext(agentContext), "tools.patch_file.rootInvalidHintSuperHost")
+    : tTool(getRuntimeFromAgentContext(agentContext), "tools.patch_file.rootInvalidHintHost");
 }
 
 function formatDisplayPath({
@@ -111,7 +114,7 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
       details: { field: "root", root: normalizedRoot },
     });
   }
-  assertValidFileNameFromPath({ filePath: normalizedRoot, fieldName: "root" });
+  assertValidFileNameFromPath({ filePath: normalizedRoot, fieldName: "root", agentContext });
   const resolution = await resolveAuthorizedUserWorkspaceFilePath({
     filePath: normalizedRoot,
     agentContext,
@@ -252,7 +255,7 @@ export async function resolvePatchTargetsWithOptions({
     const newPath = normalizePatchPathInput(item.newPath);
     const normalizedItem = { ...item, oldPath, newPath };
     const targetPath = newPath && newPath !== "/dev/null" ? newPath : oldPath;
-    assertValidFileNameFromPath({ filePath: targetPath, fieldName: "patch.path" });
+    assertValidFileNameFromPath({ filePath: targetPath, fieldName: "patch.path", agentContext });
     if (isForbiddenWorkspaceRelativePath(targetPath)) {
       throw recoverableToolError(`patch path is not allowed: ${targetPath}`, {
         code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,

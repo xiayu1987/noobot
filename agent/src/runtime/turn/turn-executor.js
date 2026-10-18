@@ -228,8 +228,8 @@ export async function invokeNoToolsTurn({
       startedAt: llmStartedAt,
       endedAt: new Date(llmEndedAtMs).toISOString(),
       durationMs: llmEndedAtMs - llmStartedAtMs,
-      hasToolCalls: false,
       modelResponse,
+      calls: [],
       modelContext,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState.agentContext,
@@ -328,7 +328,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     mode: "with_tools",
   });
 
-  const mainFlowFinalNoToolsInstruction = peekMainFlowFinalNoToolsTurnInstruction(systemRuntime);
+  const mainFlowFinalNoToolsInstruction = peekMainFlowFinalNoToolsTurnInstruction(runtime);
   if (mainFlowFinalNoToolsInstruction) {
     emitEvent(eventListener, "with_tools_llm_call_skipped_for_main_flow_instruction", {
       turn,
@@ -438,9 +438,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       startedAt: llmStartedAt,
       endedAt: new Date(Date.now()).toISOString(),
       durationMs: Date.now() - llmStartedAtMs,
-      hasToolCalls: Boolean(calls.length),
       toolChoice: configuredToolChoice || "",
-      ai,
+      modelResponse: ai,
       calls,
       modelContext,
       maxTurns: Number(loopState?.maxTurns || 0),
@@ -509,7 +508,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   emitEvent(eventListener, "llm_call_end", {
     turn,
     modelLoopRound,
-    hasToolCalls: Boolean(calls.length),
+    mode: "with_tools",
+    toolCallCount: calls.length,
   });
   handleRequiredToolChoiceNotFollowed({
     rawCalls,

@@ -9,11 +9,12 @@ import assert from "node:assert/strict";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createAgentDetachedSubSessionStrategy } from "../../src/bot/session/detached-subsession-strategy.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import { DETACHED_REQUEST_METADATA } from "./detached-subsession-runner.test-helpers.js";
 
 test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for tool/model switch consistency", () => {
   const engine = new SessionExecutionEngine({});
-  const runtime = { runtimeModel: "" };
+  const runtime = createRuntimeContext();
   const agentContext = createTestAgentExecutionScope(runtime);
 
   const abortSignal = { aborted: false };
@@ -181,7 +182,9 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
 
   const runner = engine._createDetachedSubSessionRunner();
   await runner({
-    parentExecutionScope: createTestAgentExecutionScope({ userInteractionBridge: bridge }),
+    parentExecutionScope: createTestAgentExecutionScope(
+      createRuntimeContext({ userInteractionBridge: bridge }),
+    ),
     message: "node task",
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createAgentDetachedSubSessionStrategy({

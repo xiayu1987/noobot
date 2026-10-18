@@ -11,9 +11,10 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 
 function createMessageBuilderScope({ runtime = {}, history = [] } = {}) {
-  return createTestAgentExecutionScope(runtime, {
+  return createTestAgentExecutionScope(createRuntimeContext(runtime), {
     messageBlocks: { system: [], history },
   });
 }

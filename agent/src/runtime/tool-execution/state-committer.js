@@ -41,6 +41,12 @@ export function createStateCommitter({
   runtime = {},
   agentContext = null,
 } = {}) {
+  if (!isFunction(turnMessageStore?.push)) {
+    throw new TypeError("state committer requires the current Turn message store");
+  }
+  if (!isFunction(runtime?.persistCurrentTurnMessages)) {
+    throw new TypeError("state committer requires runtime.persistCurrentTurnMessages");
+  }
   const ownership = resolveTurnOwnership(runtime, dialogProcessId);
 
   return {
@@ -60,7 +66,6 @@ export function createStateCommitter({
       transferEnvelopes = [],
       attachments = [],
     } = {}) {
-      if (!turnMessageStore?.push) return;
       if (!isFunction(runtime?.materializePendingCurrentTurnMessageEvents)) {
         throw new Error("Turn message event materializer is required");
       }
@@ -129,7 +134,7 @@ export function createStateCommitter({
       }
       turnMessageStore.push(assistantMessage);
 
-      await runtime?.persistCurrentTurnMessages?.();
+      await runtime.persistCurrentTurnMessages();
       await runAgentRuntimeHook({
         runtime,
         point: HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
@@ -193,10 +198,8 @@ export function createStateCommitter({
         messageUid,
         contextPolicy,
       });
-      if (turnMessageStore?.push) {
-        turnMessageStore.push(toolResultPayload);
-      }
-      await runtime?.persistCurrentTurnMessages?.();
+      turnMessageStore.push(toolResultPayload);
+      await runtime.persistCurrentTurnMessages();
       await runAgentRuntimeHook({
         runtime,
         point: HOOK_POINT.AGENT.AFTER_STATE_COMMIT,

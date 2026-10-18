@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { resolveEffectiveModelSpec } from "../../src/runtime/run-config/config-resolver.js";
 import { createStateBuilder } from "../../src/runtime/state-builder.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 
 const globalConfig = {
   providers: {
@@ -126,16 +127,25 @@ function buildStateWithRunConfig(runConfig) {
   });
 
   builder({
-    agentContext: createTestAgentExecutionScope({
-      globalConfig,
-      userConfig: {},
-      runConfig,
-      systemRuntime: {
-        sessionId: "s1",
-        dialogProcessId: "dialog-model-selection",
-        turnScopeId: "turn-model-selection",
+    agentContext: createTestAgentExecutionScope(
+      createRuntimeContext({
+        globalConfig,
+        userConfig: {},
+        runConfig,
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dialog-model-selection",
+          turnScopeId: "turn-model-selection",
+        },
+      }),
+      {
+        identity: {
+          sessionId: "s1",
+          dialogProcessId: "dialog-model-selection",
+          turnScopeId: "turn-model-selection",
+        },
       },
-    }),
+    ),
     currentUserMessage: {
       messageUid: "sm_model_selection",
       role: "user",

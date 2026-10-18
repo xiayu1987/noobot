@@ -70,7 +70,7 @@ export const GUIDANCE_WEB_TOOL_NAMES = [...WORKFLOW_PARAMS.guidance.web.toolName
 export const TASK_ACCEPTANCE_TOOL_NAME = WORKFLOW_PARAMS.acceptance.tools.taskAcceptanceToolName;
 export const PLAN_REFINEMENT_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.planRefinementToolName;
 
-export const HARNESS_BUCKET_VERSION = 9;
+export const HARNESS_BUCKET_VERSION = 10;
 
 export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   llmTurns: 0,
@@ -94,7 +94,6 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   agentTurnEnded: false,
   acceptanceRequested: false,
   acceptanceReviewing: false,
-  acceptanceCompleted: false,
   planRefinementRequested: false,
   checklistArtifactsAttached: false,
   planningForceToolTemporarilyEnabled: false,

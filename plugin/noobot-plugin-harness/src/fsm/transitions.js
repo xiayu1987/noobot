@@ -5,6 +5,7 @@
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { text } from "@noobot/shared/value";
+import { readHarnessBucket } from "../capabilities/handlers/shared/bucket-utils.js";
 
 export const HARNESS_FSM_STATES = Object.freeze({
   IDLE: "idle",
@@ -64,12 +65,11 @@ function isAllowedFsmTransition(from, to) {
 }
 
 function hasPlanText(ctx = {}) {
-  return Boolean(text(ctx?.agentContext?.bindings?.extensions?.harness?.planText));
+  return Boolean(text(readHarnessBucket(ctx)?.planText));
 }
 
-function hasToolCalls(ctx = {}) {
-  if (Array.isArray(ctx?.calls) && ctx.calls.length > 0) return true;
-  return ctx?.hasToolCalls === true;
+function hasToolCalls(ctx) {
+  return ctx.calls.length > 0;
 }
 
 const FSM_TARGET_RULES = Object.freeze([

@@ -29,7 +29,6 @@ function normalizeSubAgentMessages(messages = []) {
 
 export async function transferBotPluginSubagentResult({
   runtime = {},
-  agentContext = null,
   messages = [],
   forceAttachment = true,
   attachmentSource = "model",
@@ -38,7 +37,6 @@ export async function transferBotPluginSubagentResult({
   reason = "workflow_subagent",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
   identity = null,
-  userId = "",
 } = {}) {
   if (!isObjectLike(identity)) {
     throw new Error("semantic_transfer_subagent_identity_required");
@@ -89,12 +87,10 @@ export async function transferBotPluginSubagentResult({
       .join("-");
     const persisted = await persistTransferFile({
       runtime,
-      agentContext,
       content: itemContent,
       name,
       mimeType,
       attachmentSource,
-      userId,
       identity: itemIdentity,
       generationSource,
       source: intent.source,

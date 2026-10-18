@@ -10,7 +10,7 @@ function cloneAttachmentList(value) {
   return Array.isArray(value) ? value : [];
 }
 
-export function resolveRuntimeUserMessageAttachments(runtime = {}) {
+function resolveRuntimeUserMessageAttachments(runtime = {}) {
   if (!isObjectLike(runtime)) return [];
   if (Array.isArray(runtime.userMessageAttachments)) {
     return runtime.userMessageAttachments;

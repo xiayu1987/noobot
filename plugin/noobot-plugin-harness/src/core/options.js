@@ -11,7 +11,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { z } from "zod";
-import { isFunction, isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import { isFunction, isPlainObject, text } from "@noobot/shared/value";
 
 export function resolveHarnessDenyToolNames(input = null) {
   if (!Array.isArray(input)) return [];
@@ -36,7 +36,6 @@ export const DEFAULT_OPTIONS = Object.freeze({
   planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL,
   summaryOnToolBurstThreshold: false,
   summaryDetailSaveToAttachment: false,
-  clipNonMainModelContextMessages: false,
   capabilityModelInvoker: null,
   capabilityModelByPurpose: Object.freeze({}),
   stepModels: Object.freeze({}),
@@ -53,8 +52,6 @@ export const DEFAULT_OPTIONS = Object.freeze({
   }),
   pendingTtlHookTurns: TURN_THRESHOLDS.harness.pendingTtlHookTurns,
   manifestDebounceMs: TIME_THRESHOLDS.harness.manifestDebounceMs,
-  jsonlBatchSize: QUANTITY_THRESHOLDS.harness.jsonlBatchSize,
-  jsonlFlushIntervalMs: TIME_THRESHOLDS.harness.jsonlFlushIntervalMs,
   flushHookPriority: 5,
   flushHookTimeoutMs: TIME_THRESHOLDS.harness.flushHookTimeoutMs,
   jsonlFlushStrategy: Object.freeze({
@@ -88,17 +85,10 @@ const HarnessOptionsSchema = z
       .enum(Object.values(HARNESS_PLANNING_GUIDANCE_MODE))
       .default(DEFAULT_OPTIONS.planningGuidanceMode),
     planRefinementEnabled: z.boolean().optional(),
-    enablePlanRefinement: z.boolean().optional(),
     summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
-    enableToolBurstSummary: z.boolean().optional(),
     summaryDetailSaveToAttachment: z
       .boolean()
       .default(DEFAULT_OPTIONS.summaryDetailSaveToAttachment),
-    saveSummaryDetailToAttachment: z.boolean().optional(),
-    clipNonMainModelContextMessages: z
-      .boolean()
-      .default(DEFAULT_OPTIONS.clipNonMainModelContextMessages),
-    clipNonMainModelContext: z.boolean().optional(),
     capabilityModelInvoker: z.custom(isFunction).nullable().default(null),
     capabilityModelByPurpose: z.record(z.any()).default({}),
     stepModels: z.record(z.any()).default({}),
@@ -116,11 +106,6 @@ const HarnessOptionsSchema = z
       .nonnegative()
       .default(DEFAULT_OPTIONS.pendingTtlHookTurns),
     manifestDebounceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
-    jsonlBatchSize: z.coerce.number().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
-    jsonlFlushIntervalMs: z.coerce
-      .number()
-      .nonnegative()
-      .default(DEFAULT_OPTIONS.jsonlFlushIntervalMs),
     flushHookPriority: z.coerce.number().default(DEFAULT_OPTIONS.flushHookPriority),
     flushHookTimeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.flushHookTimeoutMs),
     jsonlFlushStrategy: z
@@ -184,22 +169,6 @@ function normalizeModelByPurpose(...items) {
   return out;
 }
 
-function resolveExplicitPlanRefinementEnabledOption(source = {}) {
-  if (!isObjectLike(source)) return undefined;
-  const candidates = [
-    source.planRefinementEnabled,
-    source.enablePlanRefinement,
-    source.planRefinement?.enabled,
-    source.refinement?.enabled,
-    source.planning?.refinement?.enabled,
-    source.planning?.planRefinement?.enabled,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "boolean") return candidate;
-  }
-  return undefined;
-}
-
 export function assertHarnessAgentHostCapabilities(options) {
   if (
     options.planningGuidanceMode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL &&
@@ -211,16 +180,6 @@ export function assertHarnessAgentHostCapabilities(options) {
 
 export function normalizeOptions(userOptions = {}, api = {}) {
   const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
-  const planRefinementEnabled = resolveExplicitPlanRefinementEnabledOption(merged);
-  const hasCustomFlushStrategy =
-    (userOptions &&
-      typeof userOptions === "object" &&
-      userOptions.jsonlFlushStrategy &&
-      typeof userOptions.jsonlFlushStrategy === "object") ||
-    (api?.options?.harness &&
-      typeof api.options.harness === "object" &&
-      api.options.harness.jsonlFlushStrategy &&
-      typeof api.options.harness.jsonlFlushStrategy === "object");
   const safe = HarnessOptionsSchema.parse(merged);
   if (
     safe.capabilityModelTimeoutMs + TIME_THRESHOLDS.harness.capabilityModelHookGraceMs >
@@ -249,15 +208,6 @@ export function normalizeOptions(userOptions = {}, api = {}) {
   const normalizedOptions = {
     ...merged,
     ...safe,
-    summaryOnToolBurstThreshold:
-      safe.enableToolBurstSummary === true || safe.summaryOnToolBurstThreshold === true,
-    summaryDetailSaveToAttachment:
-      safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
-    saveSummaryDetailToAttachment:
-      safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
-    clipNonMainModelContextMessages:
-      safe.clipNonMainModelContextMessages === true || safe.clipNonMainModelContext === true,
-    planRefinementEnabled,
     capabilityModelByPurpose,
     stepModels: capabilityModelByPurpose,
     guidance:
@@ -279,13 +229,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     pendingTtlHookTurns: safe.pendingTtlHookTurns,
     jsonlFlushStrategy: {
       ...DEFAULT_OPTIONS.jsonlFlushStrategy,
-      maxSize: safe.jsonlBatchSize,
-      maxTime: safe.jsonlFlushIntervalMs,
-      ...(hasCustomFlushStrategy &&
-      safe.jsonlFlushStrategy &&
-      typeof safe.jsonlFlushStrategy === "object"
-        ? safe.jsonlFlushStrategy
-        : {}),
+      ...safe.jsonlFlushStrategy,
     },
     capabilityProfile: resolveCapabilityProfile(safe.capabilityProfile),
     capabilityHandlers:
@@ -293,8 +237,6 @@ export function normalizeOptions(userOptions = {}, api = {}) {
         ? safe.capabilityHandlers
         : {},
     manifestDebounceMs: safe.manifestDebounceMs,
-    jsonlBatchSize: safe.jsonlBatchSize,
-    jsonlFlushIntervalMs: safe.jsonlFlushIntervalMs,
     flushHookPriority: safe.flushHookPriority,
     flushHookTimeoutMs: safe.flushHookTimeoutMs,
     maxRuns: safe.maxRuns,

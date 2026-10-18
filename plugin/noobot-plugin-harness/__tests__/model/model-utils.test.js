@@ -349,7 +349,7 @@ test("Harness turn completion releases every auxiliary purpose snapshot for the 
     dialogProcessId: "dialog-1",
     modelContext: { checkpointRevision: 0 },
     agentContext: {
-      payload: { harness: { state: { flags: {}, signals: {} } } },
+      bindings: { extensions: { harness: { state: { flags: {}, signals: {} } } } },
     },
   };
   const invoker = async ({ messages = [] } = {}) => {
@@ -514,7 +514,7 @@ test("resolveCapabilityModelMessages does not filter resolver output or use payl
         {
           ctx: {
             agentContext: {
-              payload: { messages: { history: [{ role: "user", content: "payload" }] } },
+              bindings: {},
             },
           },
           purpose: "phase_acceptance",

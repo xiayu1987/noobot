@@ -64,8 +64,7 @@ function mapModelAcceptanceStatusToTaskStatus(status = "") {
   return mapPlanAcceptanceStatusToTaskStatus(normalized);
 }
 
-function resolveAcceptanceStatusForChecklistItem(item = {}, byPlan = {}) {
-  const map = byPlan && typeof byPlan === "object" ? byPlan : {};
+function resolveAcceptanceStatusForChecklistItem(item, map) {
   const exactKey = text(item?.index);
   if (exactKey && map[exactKey]) return map[exactKey];
   const isMainStep = item?.isMainStep !== false;
@@ -127,28 +126,18 @@ function buildAcceptanceSummary(items = []) {
   });
 }
 
-function buildAcceptanceValidationState(report = null) {
-  const source = report && typeof report === "object" ? report : null;
-  if (!source) return null;
+function buildAcceptanceValidationState(report) {
   return {
-    mode: text(source.mode),
-    forcedReason: text(source.forcedReason),
-    acceptedAt: text(source.acceptedAt),
-    summary: source.summary && typeof source.summary === "object" ? source.summary : {},
-    planAcceptanceStatusByPlanId:
-      source.planAcceptanceStatusByPlanId && typeof source.planAcceptanceStatusByPlanId === "object"
-        ? source.planAcceptanceStatusByPlanId
-        : {},
+    mode: text(report.mode),
+    forcedReason: text(report.forcedReason),
+    acceptedAt: text(report.acceptedAt),
+    summary: report.summary,
+    planAcceptanceStatusByPlanId: report.planAcceptanceStatusByPlanId,
   };
 }
 
-function buildChecklistFromParsedPlan(parsedPlan = null) {
-  const source = parsedPlan && typeof parsedPlan === "object" ? parsedPlan : {};
-  const mainPlans = Array.isArray(source?.mainPlans) ? source.mainPlans : [];
-  const subPlansByMainId =
-    source?.subPlansByMainId && typeof source.subPlansByMainId === "object"
-      ? source.subPlansByMainId
-      : {};
+function buildChecklistFromParsedPlan(parsedPlan) {
+  const { mainPlans, subPlansByMainId } = parsedPlan;
   const checklist = [];
   for (const main of mainPlans) {
     const mainId = Number(main?.id);
@@ -182,10 +171,7 @@ export function buildAcceptanceReport({
     ? checklistFromPlanText
     : defaultTaskChecklist(locale);
   const latestModelAcceptance = resolveLatestModelAcceptance(bucket);
-  const modelAcceptanceByPlan =
-    latestModelAcceptance?.byPlan && typeof latestModelAcceptance.byPlan === "object"
-      ? latestModelAcceptance.byPlan
-      : {};
+  const modelAcceptanceByPlan = latestModelAcceptance.byPlan;
   const items = checklist.map((item) => {
     const persistedAcceptance = resolvePlanAcceptanceForChecklistItem(bucket, item);
     const modelAcceptance = resolveAcceptanceStatusForChecklistItem(item, modelAcceptanceByPlan);
@@ -250,14 +236,8 @@ export function buildAcceptanceReport({
   };
 }
 
-export function applySemanticAcceptanceToReport(report = {}) {
-  const data = report && typeof report === "object" ? report : null;
-  if (!data) return false;
-  const semanticValidation =
-    data.semanticValidation && typeof data.semanticValidation === "object"
-      ? data.semanticValidation
-      : null;
-  const semanticRaw = text(semanticValidation?.content);
+export function applySemanticAcceptanceToReport(data) {
+  const semanticRaw = text(data.semanticValidation.content);
   if (!semanticRaw) return false;
   const semanticItems = parseSemanticAcceptanceItemsFromText(semanticRaw);
   if (!semanticItems.length) return false;
@@ -310,13 +290,8 @@ export function applySemanticAcceptanceToReport(report = {}) {
   return true;
 }
 
-export function buildSemanticValidationPromptPayload({
-  bucket = {},
-  state = {},
-  baseReport = null,
-  finalOutput = "",
-} = {}) {
-  const planText = text(bucket?.planText);
+export function buildSemanticValidationPromptPayload({ bucket, state, baseReport, finalOutput }) {
+  const planText = text(bucket.planText);
   return {
     expectedSchema: {
       status: "pass|warn|fail",
@@ -330,7 +305,7 @@ export function buildSemanticValidationPromptPayload({
     },
     planText,
     acceptanceState: buildAcceptanceValidationState(baseReport),
-    toolSignals: state.signals || {},
+    toolSignals: state.signals,
     finalOutput,
   };
 }

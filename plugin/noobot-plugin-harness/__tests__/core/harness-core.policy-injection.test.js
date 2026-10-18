@@ -133,17 +133,7 @@ test("harness policy prompt is not reinjected during stopped snapshot resume ini
   const ctx = createTestHookContext(
     {
       turn: 1,
-      agentContext: {
-        execution: {
-          controllers: {
-            runtime: {
-              resumeFromStoppedSnapshot: true,
-              agentLifecycleState: "resume_initializing",
-              agentLifecycleInitialState: "resume_initializing",
-            },
-          },
-        },
-      },
+      resumeFromStoppedSnapshot: true,
     },
     {
       messages: [
@@ -178,20 +168,7 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
   const ctx = createTestHookContext(
     {
       turn: 2,
-      agentContext: {
-        execution: {
-          controllers: {
-            runtime: {
-              resumeFromStoppedSnapshot: true,
-              agentLifecycleState: "running",
-              resumedStoppedSnapshotIdentity: {
-                dialogProcessId: "dp-stopped",
-                turnScopeId: "turn-stopped",
-              },
-            },
-          },
-        },
-      },
+      resumeFromStoppedSnapshot: true,
     },
     {
       messages: [
@@ -220,16 +197,7 @@ test("harness policy prompt is injected for normal first llm call", async () => 
   const ctx = createTestHookContext(
     {
       turn: 1,
-      agentContext: {
-        execution: {
-          controllers: {
-            runtime: {
-              resumeFromStoppedSnapshot: false,
-              agentLifecycleState: "initializing",
-            },
-          },
-        },
-      },
+      resumeFromStoppedSnapshot: false,
     },
     { messages: [{ role: "user", content: "hello" }] },
   );

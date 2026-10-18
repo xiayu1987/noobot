@@ -18,10 +18,9 @@ test("harness planning captures checklist and forces acceptance at final output"
   );
 
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
   const messages = [{ role: "user", content: "开始任务" }];
@@ -43,18 +42,20 @@ test("harness planning captures checklist and forces acceptance at final output"
     userId: "u11",
     sessionId: "s11",
     dialogProcessId: "dp11",
-    ai: {
-      content: "1. 解析附件\n2. 等待子任务结果",
-    },
+    modelResponse: { text: "1. 解析附件\n2. 等待子任务结果" },
+    calls: [],
     agentContext,
   });
 
-  assert.equal("taskChecklist" in agentContext.payload.harness, false);
-  assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, true);
-  assert.equal(Array.isArray(agentContext.payload.harness.planningRawOutputs), true);
-  assert.equal(agentContext.payload.harness.planningRawOutputs.length >= 1, true);
+  assert.equal("taskChecklist" in agentContext.bindings.extensions.harness, false);
+  assert.equal(
+    String(agentContext.bindings.extensions.harness.planText || "").trim().length > 0,
+    true,
+  );
+  assert.equal(Array.isArray(agentContext.bindings.extensions.harness.planningRawOutputs), true);
+  assert.equal(agentContext.bindings.extensions.harness.planningRawOutputs.length >= 1, true);
   assert.match(
-    String(agentContext.payload.harness.lastPlanningRawOutput?.content || ""),
+    String(agentContext.bindings.extensions.harness.lastPlanningRawOutput?.content || ""),
     /解析附件/,
   );
 
@@ -71,8 +72,8 @@ test("harness planning captures checklist and forces acceptance at final output"
     String(result.output),
     /Harness-验收|NOOBOT_HARNESS_COLLAPSE|acceptanceReport|完整计划清单/,
   );
-  assert.equal(Array.isArray(agentContext.payload.harness.acceptanceReports), true);
-  assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
+  assert.equal(Array.isArray(agentContext.bindings.extensions.harness.acceptanceReports), true);
+  assert.equal(agentContext.bindings.extensions.harness.acceptanceReports.length, 1);
 });
 
 test("harness planning retries injection when first response has no checklist", async () => {
@@ -82,27 +83,24 @@ test("harness planning retries injection when first response has no checklist", 
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      runtime: { systemRuntime: { config: {} } },
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
-    execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
   };
 
   const firstMessages = [{ role: "user", content: "执行任务" }];
   await hookManager.emit("agent.before_llm_call", { messages: firstMessages, agentContext });
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: "先读取上下文后再规划。" },
+    modelResponse: { text: "先读取上下文后再规划。" },
+    calls: [],
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
-  assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
-  assert.equal(
-    agentContext.execution.controllers.runtime.systemRuntime.config.forceTool,
-    undefined,
-  );
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningPromptInjected, false);
+  assert.equal(agentContext.bindings.runtime.systemRuntime.config.forceTool, undefined);
 
   const secondMessages = [{ role: "user", content: "继续" }];
   await hookManager.emit("agent.before_llm_call", { messages: secondMessages, agentContext });
@@ -114,12 +112,16 @@ test("harness planning retries injection when first response has no checklist", 
   );
 
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: "1. 解析附件\n2. 执行核心任务" },
+    modelResponse: { text: "1. 解析附件\n2. 执行核心任务" },
+    calls: [],
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
+  assert.equal(
+    String(agentContext.bindings.extensions.harness.planText || "").trim().length > 0,
+    true,
+  );
 });
 
 test("harness planning does not mutate runtime forceTool config", async () => {
@@ -130,12 +132,11 @@ test("harness planning does not mutate runtime forceTool config", async () => {
   );
   const runtimeConfig = { forceTool: true };
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      runtime: { systemRuntime: { config: runtimeConfig } },
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
-    execution: { controllers: { runtime: { systemRuntime: { config: runtimeConfig } } } },
   };
 
   await hookManager.emit("agent.before_llm_call", {
@@ -143,7 +144,8 @@ test("harness planning does not mutate runtime forceTool config", async () => {
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: "" },
+    modelResponse: { text: "" },
+    calls: [],
     agentContext,
   });
 
@@ -154,10 +156,11 @@ test("harness planning does not mutate runtime forceTool config", async () => {
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: "1. 执行核心任务" },
+    modelResponse: { text: "1. 执行核心任务" },
+    calls: [],
     agentContext,
   });
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
   assert.equal(runtimeConfig.forceTool, true);
 
   await hookManager.emit("agent.before_final_output", {
@@ -174,10 +177,9 @@ test("harness planning blocks tool-call turn without assistant text and schedule
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
 
@@ -186,19 +188,19 @@ test("harness planning blocks tool-call turn without assistant text and schedule
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: {
-      content: "",
-      tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }],
-    },
-    modelResponse: { finish_reason: "tool_calls" },
+    modelResponse: { text: "" },
+    calls: [{ id: "c1", name: "read_file", args: {} }],
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
-  assert.equal(agentContext.payload.harness.state.counters.planningCaptureAttempts || 0, 1);
-  assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.state.counters.planningCaptureAttempts || 0,
+    1,
+  );
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningPromptInjected, false);
+  assert.equal(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item) => item.event === "planning_capture_blocked_for_tool_call_turn",
     ),
     true,

@@ -87,7 +87,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
     "format:check": "node scripts/check-format.mjs",
-    "check:quality": "npm run lint && npm run test:quality-config && npm run check:source-comments && npm run format:check && npm run check:file-effective-lines && npm run check:empty-promise-catches && npm run check:duplication && npm run check:complexity-baseline && npm run check:fallback-chain-baseline && npm run check:source-cycles && npm run check:parent-sessionid-unification",
+    "check:quality": "npm run lint && npm run test:quality-config && npm run check:source-license-headers && npm run check:source-comments && npm run format:check && npm run check:file-effective-lines && npm run check:empty-promise-catches && npm run check:duplication && npm run check:complexity-baseline && npm run check:fallback-chain-baseline && npm run check:source-cycles && npm run check:parent-sessionid-unification",
     "test:quality-config": "node --test scripts/quality/unused-code-config.test.mjs scripts/check-source-comments.test.mjs scripts/bump-version.test.mjs scripts/check-commit-message.test.mjs scripts/check-fallback-chain-baseline.test.mjs scripts/quality/baseline-ratchet.test.mjs scripts/quality/eslint-local-rules.test.mjs",
     "install:all": "npm install --workspaces",
     "build": "npm run -w client/startup build && npm run -w client/noobot-chat build",

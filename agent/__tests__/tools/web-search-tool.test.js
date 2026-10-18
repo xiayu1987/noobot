@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createTestModelHost } from "../helpers/test-model-host.js";
 
 import {
   buildSearchEngineRequest,
@@ -36,18 +37,21 @@ test("do_search_web: model_web_search 模式只通过 canonical ModelPort 发起
       },
     },
     userConfig: {},
-    modelPort: {
-      async invoke(request) {
-        capturedRequest = request;
-        return {
-          execution: { provider: { operatorId: "openai", adapterId: "openai-compatible" } },
-          result: {
-            rawText: "search result",
-            sources: [{ title: "Noobot", url: "https://example.test/noobot" }],
-          },
-        };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke(request) {
+          capturedRequest = request;
+          return {
+            execution: { provider: { operatorId: "openai", adapterId: "openai-compatible" } },
+            result: {
+              rawText: "search result",
+              sources: [{ title: "Noobot", url: "https://example.test/noobot" }],
+            },
+          };
+        },
       },
-    },
+      modelSpec: null,
+    }),
   };
   const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
   const result = JSON.parse(await tool.invoke({ query: "latest noobot news" }));
@@ -84,14 +88,17 @@ test("do_search_web: Claude 家族透传 Anthropic Messages 执行协议身份",
       },
     },
     userConfig: {},
-    modelPort: {
-      async invoke() {
-        return {
-          execution: { provider: { operatorId: "anthropic", adapterId: "anthropic-messages" } },
-          result: { rawText: "anthropic search result", sources: [] },
-        };
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke() {
+          return {
+            execution: { provider: { operatorId: "anthropic", adapterId: "anthropic-messages" } },
+            result: { rawText: "anthropic search result", sources: [] },
+          };
+        },
       },
-    },
+      modelSpec: null,
+    }),
   };
   const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
   const result = JSON.parse(await tool.invoke({ query: "latest noobot news" }));
@@ -205,12 +212,15 @@ test("do_search_web: model_web_search 未显式声明模型时失败，不回退
       },
     },
     userConfig: {},
-    modelPort: {
-      async invoke() {
-        invoked = true;
-        return {};
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke() {
+          invoked = true;
+          return {};
+        },
       },
-    },
+      modelSpec: null,
+    }),
   };
   const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
   const output = await tool.invoke({ query: "q" }).then(

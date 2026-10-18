@@ -9,6 +9,7 @@ import path from "node:path";
 import { WORKSPACE_ASSET_SECTIONS, WORKSPACE_SECTIONS } from "../workspace-protocol/src/index.js";
 import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
 import { createGuardViolations } from "./lib/guard-violations.mjs";
+import { PROTOCOL_LEAF_IMPORT_PREFIXES } from "./lib/protocol-leaf-imports.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PROTOCOL_DIR = "memory-protocol";
@@ -21,8 +22,8 @@ const sourceFiles = createRelativeSourceCollector({
 });
 
 const PACKAGE_IMPORT_ALLOWLIST = Object.freeze({
-  [PROTOCOL_DIR]: ["@noobot/context-protocol/", "@noobot/shared/"],
-  [REPAIR_DIR]: ["@noobot/memory-protocol/"],
+  [PROTOCOL_DIR]: ["@noobot/context-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
+  [REPAIR_DIR]: ["@noobot/memory-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
 });
 
 for (const [packageDir, allowedImports] of Object.entries(PACKAGE_IMPORT_ALLOWLIST)) {

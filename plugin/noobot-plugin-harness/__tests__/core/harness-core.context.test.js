@@ -17,26 +17,29 @@ import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/c
 test("ensureHarnessBucket fast-path keeps initialized references stable", async () => {
   const ctx = {
     agentContext: {
-      payload: {
-        harness: {
-          state: {
-            counters: { llmTurns: 9 },
-            flags: { planningCaptured: true },
-            signals: { successfulToolCount: 3 },
-            pending: { guidance: null, summary: false },
+      bindings: {
+        extensions: {
+          harness: {
+            state: {
+              counters: { llmTurns: 9 },
+              flags: { planningCaptured: true },
+              signals: { successfulToolCount: 3 },
+              pending: { guidance: null, summary: false },
+            },
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            lastPlanningRawOutput: null,
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+            __harnessBucketVersion: HARNESS_BUCKET_VERSION,
           },
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          lastPlanningRawOutput: null,
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
-          __harnessBucketVersion: HARNESS_BUCKET_VERSION,
         },
       },
     },
   };
   ensureTestAgentExecutionScope(ctx);
-  ctx.agentContext.payload.harness.state.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
+  ctx.agentContext.bindings.extensions.harness.state.__harnessBucketVersion =
+    HARNESS_BUCKET_VERSION;
 
   const first = ensureHarnessBucket(ctx);
   assert.ok(first);
@@ -68,13 +71,7 @@ test("hook context uses explicit modelContext instead of agent payload messages"
   const ctx = createTestHookContext(
     {
       agentContext: {
-        payload: {
-          messages: {
-            system: [{ role: "system", content: "ignored payload system" }],
-            history: [],
-            incremental: [],
-          },
-        },
+        bindings: {},
       },
     },
     {

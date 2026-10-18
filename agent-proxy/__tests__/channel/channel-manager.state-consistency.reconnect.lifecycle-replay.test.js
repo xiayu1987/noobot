@@ -157,10 +157,7 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
   channel.upstreamSocket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  const reconnectPromise = manager.handleReconnect(
-    client,
-    reconnectControl({ sessionId: sessionId }),
-  );
+  const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
   assert.equal(getEvent(client, "reconnect_data"), null);
   const commandId = forwarded[0]?.commandId;
   channel.pendingSnapshotRequests.get(commandId).resolve({
@@ -224,10 +221,7 @@ test("reconnect opens a query transport without replaying the stale run command"
   );
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  const reconnectPromise = manager.handleReconnect(
-    client,
-    reconnectControl({ sessionId: sessionId }),
-  );
+  const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   assert.ok(upstream);
   upstream.emit("open");
@@ -296,10 +290,7 @@ test("snapshot query completion cannot close a connection claimed by a concurren
   );
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  const reconnectPromise = manager.handleReconnect(
-    client,
-    reconnectControl({ sessionId: sessionId }),
-  );
+  const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   const snapshotCommand = JSON.parse(upstream.sent[0]);
@@ -388,7 +379,7 @@ test("terminal lifecycle removes the reconnect active-run projection", () => {
   }
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
+  manager.handleReconnect(client, reconnectControl({ sessionId }));
 
   const session = getEvent(client, "reconnect_data").data.sessions[0];
   assert.equal("hasRunningTask" in session, false);
@@ -449,10 +440,7 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
   secondChannel.upstreamSocket = upstreamSocket;
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  const reconnectPromise = manager.handleReconnect(
-    client,
-    reconnectControl({ sessionId: sessionId }),
-  );
+  const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
   const commandId = forwarded[0]?.commandId;
   const snapshotRequest =
     firstChannel.pendingSnapshotRequests.get(commandId) ||
@@ -540,7 +528,7 @@ test("latest terminal lifecycle wins across channels of the same session", () =>
   }
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
+  manager.handleReconnect(client, reconnectControl({ sessionId }));
 
   const session = getEvent(client, "reconnect_data").data.sessions[0];
   assert.equal("hasRunningTask" in session, false);

@@ -32,22 +32,22 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
   return new DynamicStructuredTool({
     name: TOOL_NAME.WRITE_FILE,
     metadata: { pathContract: TOOL_PATH_CONTRACTS.fileWrite },
-    description: buildFileToolDescription(agentContext, "tools.file.writeDescription"),
+    description: buildFileToolDescription(runtime, "tools.file.writeDescription"),
     schema: z.object({
       filePath: createFileSourceSchema({
-        filePathDescription: tTool(agentContext, "tools.file.writeFilePathField"),
+        filePathDescription: tTool(runtime, "tools.file.writeFilePathField"),
       }),
-      content: z.string().describe(tTool(agentContext, "tools.file.writeContentField")),
+      content: z.string().describe(tTool(runtime, "tools.file.writeContentField")),
       overwrite: z
         .boolean()
         .optional()
         .default(true)
-        .describe(tTool(agentContext, "tools.file.writeOverwriteField")),
-      riskLevel: createRiskLevelSchema(agentContext, "tools.file.writeRiskLevelField"),
+        .describe(tTool(runtime, "tools.file.writeOverwriteField")),
+      riskLevel: createRiskLevelSchema(runtime, "tools.file.writeRiskLevelField"),
     }),
     func: async ({ filePath, content, overwrite = true, riskLevel }) => {
       if (typeof filePath === "string")
-        assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
+        assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
       const resolvedInput = await resolveFileInput({
         source: filePath,
         agentContext,
@@ -79,7 +79,7 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
         reason: "The final normalized resource requires confirmation under the server path policy.",
       });
       if (overwrite === false && (await workspaceIo.exists(resolvedPath))) {
-        const message = tTool(agentContext, "tools.file.writeAlreadyExists");
+        const message = tTool(runtime, "tools.file.writeAlreadyExists");
         return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
           ok: false,
           code: ERROR_CODE.RECOVERABLE_FILE_ALREADY_EXISTS,

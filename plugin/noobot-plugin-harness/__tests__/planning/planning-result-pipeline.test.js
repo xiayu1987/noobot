@@ -17,9 +17,7 @@ const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttemp
 function createCtx() {
   return createTestHookContext({
     agentContext: {
-      payload: {
-        harness: {},
-      },
+      bindings: { extensions: { harness: {} } },
     },
   });
 }
@@ -45,12 +43,13 @@ test("planning result pipeline captures plan text directly", async () => {
   assert.equal(result.captured, true);
   assert.equal(result.sourceType, "plan_text");
   assert.equal(result.checklistCount, 2);
-  assert.equal("taskChecklistSource" in ctx.agentContext.payload.harness, false);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.equal("taskChecklistSource" in ctx.agentContext.bindings.extensions.harness, false);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRefinement, true);
   assert.deepEqual(
-    ctx.agentContext.payload.harness.state.pending.planRefinementContext.targetMainStepIndexes,
+    ctx.agentContext.bindings.extensions.harness.state.pending.planRefinementContext
+      .targetMainStepIndexes,
     [1, 2],
   );
 });
@@ -74,10 +73,13 @@ test("planning result pipeline disables plan refinement by default in programmin
   );
 
   assert.equal(result.captured, true);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
-  assert.notEqual(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinementContext, null);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.notEqual(ctx.agentContext.bindings.extensions.harness.state.pending.planRefinement, true);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.pending.planRefinementContext,
+    null,
+  );
 });
 
 test("planning result pipeline allows explicit plan refinement enablement in programming scenario", async () => {
@@ -97,9 +99,10 @@ test("planning result pipeline allows explicit plan refinement enablement in pro
   );
 
   assert.equal(result.captured, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRefinement, true);
   assert.deepEqual(
-    ctx.agentContext.payload.harness.state.pending.planRefinementContext.targetMainStepIndexes,
+    ctx.agentContext.bindings.extensions.harness.state.pending.planRefinementContext
+      .targetMainStepIndexes,
     [1, 2],
   );
 });
@@ -117,8 +120,11 @@ test("planning result pipeline honors explicit plan refinement disablement outsi
   );
 
   assert.equal(result.captured, true);
-  assert.notEqual(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinementContext, null);
+  assert.notEqual(ctx.agentContext.bindings.extensions.harness.state.pending.planRefinement, true);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.pending.planRefinementContext,
+    null,
+  );
 });
 
 test("planning result pipeline enables plan refinement by default in text scenario", async () => {
@@ -139,9 +145,10 @@ test("planning result pipeline enables plan refinement by default in text scenar
   );
 
   assert.equal(result.captured, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRefinement, true);
   assert.deepEqual(
-    ctx.agentContext.payload.harness.state.pending.planRefinementContext.targetMainStepIndexes,
+    ctx.agentContext.bindings.extensions.harness.state.pending.planRefinementContext
+      .targetMainStepIndexes,
     [1, 2],
   );
 });
@@ -161,8 +168,14 @@ test("planning result pipeline supports ID+PATCH main plan text", async () => {
   assert.equal(result.captured, true);
   assert.equal(result.sourceType, "plan_text");
   assert.equal(result.checklistCount, 2);
-  assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^1\. 解析附件/m);
-  assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^2\. 执行核心任务/m);
+  assert.match(
+    String(ctx.agentContext.bindings.extensions.harness.planText || ""),
+    /^1\. 解析附件/m,
+  );
+  assert.match(
+    String(ctx.agentContext.bindings.extensions.harness.planText || ""),
+    /^2\. 执行核心任务/m,
+  );
 });
 
 test("planning result pipeline extracts current task goal from planning text protocol", async () => {
@@ -174,14 +187,10 @@ test("planning result pipeline extracts current task goal from planning text pro
   };
   replaceMessages(ctx, [{ role: "user", content: "开始任务" }]);
   const persisted = [];
-  ctx.agentContext.execution = {
-    controllers: {
-      runtime: {
-        currentTurnMessages: {
-          push(message) {
-            persisted.push(message);
-          },
-        },
+  ctx.agentContext.bindings.runtime = {
+    currentTurnMessages: {
+      push(message) {
+        persisted.push(message);
       },
     },
   };
@@ -202,7 +211,10 @@ test("planning result pipeline extracts current task goal from planning text pro
   );
 
   assert.equal(result.captured, true);
-  assert.equal(ctx.agentContext.payload.harness.currentTaskGoal, "由计划模型确认的当前任务目标");
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.currentTaskGoal,
+    "由计划模型确认的当前任务目标",
+  );
   const injectedGoalMessage = ctx.modelContext.messages.find(
     (item = {}) => String(item?.injectedMessageType || "") === "planning_current_task_goal",
   );
@@ -221,8 +233,14 @@ test("planning result pipeline extracts current task goal from planning text pro
     ),
     false,
   );
-  assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^1\. 解析附件/m);
-  assert.doesNotMatch(String(ctx.agentContext.payload.harness.planText || ""), /CURRENT_TASK_GOAL/);
+  assert.match(
+    String(ctx.agentContext.bindings.extensions.harness.planText || ""),
+    /^1\. 解析附件/m,
+  );
+  assert.doesNotMatch(
+    String(ctx.agentContext.bindings.extensions.harness.planText || ""),
+    /CURRENT_TASK_GOAL/,
+  );
 });
 
 test("planning result pipeline schedules retry when payload has no main plan", async () => {
@@ -261,7 +279,7 @@ test("planning result pipeline rejects sub-plan-only patch payload", async () =>
 
 test("planning result pipeline applies default checklist when retry exhausted", async () => {
   const ctx = createCtx();
-  ctx.agentContext.payload.harness.state = {
+  ctx.agentContext.bindings.extensions.harness.state = {
     counters: { planningCaptureAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS - 1 },
     flags: {},
   };
@@ -279,10 +297,10 @@ test("planning result pipeline applies default checklist when retry exhausted", 
   assert.equal(result.captured, true);
   assert.equal(result.retryScheduled, false);
   assert.equal(result.sourceType, "default");
-  assert.equal("taskChecklistSource" in ctx.agentContext.payload.harness, false);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
-  const logs = Array.isArray(ctx.agentContext.payload.harness.logs?.planning)
-    ? ctx.agentContext.payload.harness.logs.planning
+  assert.equal("taskChecklistSource" in ctx.agentContext.bindings.extensions.harness, false);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
+  const logs = Array.isArray(ctx.agentContext.bindings.extensions.harness.logs?.planning)
+    ? ctx.agentContext.bindings.extensions.harness.logs.planning
     : [];
   const event = logs.find((item = {}) => item?.event === "planning_default_checklist_applied");
   assert.equal(event?.detail?.reason, "planning_retry_exhausted");
@@ -307,7 +325,7 @@ test("planning result pipeline keeps waiting when malformed payload is non-empty
 
 test("planning result pipeline records english fallback reason label", async () => {
   const ctx = createCtx();
-  ctx.agentContext.payload.harness.state = {
+  ctx.agentContext.bindings.extensions.harness.state = {
     counters: { planningCaptureAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS - 1 },
     flags: {},
   };
@@ -324,8 +342,8 @@ test("planning result pipeline records english fallback reason label", async () 
 
   assert.equal(result.captured, true);
   assert.equal(result.sourceType, "default");
-  const logs = Array.isArray(ctx.agentContext.payload.harness.logs?.planning)
-    ? ctx.agentContext.payload.harness.logs.planning
+  const logs = Array.isArray(ctx.agentContext.bindings.extensions.harness.logs?.planning)
+    ? ctx.agentContext.bindings.extensions.harness.logs.planning
     : [];
   const event = logs.find((item = {}) => item?.event === "planning_default_checklist_applied");
   assert.equal(event?.detail?.reason, "planning_invalid_nonempty_response");

@@ -56,6 +56,11 @@ function bindStateVersionAlias(bucket = {}, state = {}) {
   });
 }
 
+export function readHarnessBucket(ctx = {}) {
+  const bucket = ctx?.agentContext?.bindings?.extensions?.harness;
+  return isPlainObject(bucket) ? bucket : null;
+}
+
 export function ensureHarnessBucket(ctx = {}) {
   const agentContext =
     ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
@@ -82,14 +87,20 @@ export function ensureHarnessBucket(ctx = {}) {
     bucket.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
     typeof bucket.planText === "string" &&
     Array.isArray(bucket.acceptanceReports) &&
+    Array.isArray(bucket.phaseAcceptanceReports) &&
     Array.isArray(bucket.reviewReports) &&
     Array.isArray(bucket.planningRawOutputs) &&
+    isPlainObject(bucket.planAcceptanceStatusByPlanId) &&
     bucket.logs &&
     typeof bucket.logs === "object" &&
     Array.isArray(bucket.logs.planning) &&
     Array.isArray(bucket.logs.guidance) &&
     Array.isArray(bucket.logs.acceptance) &&
-    Array.isArray(bucket.logs.review);
+    Array.isArray(bucket.logs.review) &&
+    isPlainObject(state.counters) &&
+    isPlainObject(state.flags) &&
+    isPlainObject(state.signals) &&
+    isPlainObject(state.pending);
 
   if (!isFastPathReady) {
     const counters = ensureObjectField(state, "counters");
@@ -105,6 +116,7 @@ export function ensureHarnessBucket(ctx = {}) {
     ensureArrayField(bucket, "reviewReports");
     ensureArrayField(bucket, "planningRawOutputs");
     ensureArrayField(bucket, "completedDialogProcessIds");
+    ensureObjectField(bucket, "planAcceptanceStatusByPlanId");
     if (typeof bucket.summaryText !== "string") bucket.summaryText = "";
     if (typeof bucket.summaryFullText !== "string") bucket.summaryFullText = "";
     if (typeof bucket.planText !== "string") bucket.planText = "";

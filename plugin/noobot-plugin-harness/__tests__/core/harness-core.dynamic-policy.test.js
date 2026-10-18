@@ -89,15 +89,18 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
   const ctx = createTestHookContext(
     {
       agentContext: {
-        payload: {
-          harness: {
-            dynamicPolicyPrompt: {
-              scenario: "text",
-              source: "planning",
-              stage: "planning",
-              reason: "task-specific text delivery policy",
-              prompt: "Dynamic output policy: produce deliverable batches and preserve citations.",
-              updatedAt: "2026-06-19T00:00:00.000Z",
+        bindings: {
+          extensions: {
+            harness: {
+              dynamicPolicyPrompt: {
+                scenario: "text",
+                source: "planning",
+                stage: "planning",
+                reason: "task-specific text delivery policy",
+                prompt:
+                  "Dynamic output policy: produce deliverable batches and preserve citations.",
+                updatedAt: "2026-06-19T00:00:00.000Z",
+              },
             },
           },
         },
@@ -141,13 +144,13 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
 test("dynamic policy changes cannot rewrite the main-flow system prefix after first response", async () => {
   const ctx = createTestHookContext(
     {
-      agentContext: { payload: { harness: {} } },
+      agentContext: { bindings: { extensions: { harness: {} } } },
     },
     { messages: [{ role: "user", content: "continue" }] },
   );
 
   applyDynamicPolicyPromptFromText(
-    ctx,
+    ctx.agentContext.bindings.extensions.harness,
     [
       "[HARNESS_DYNAMIC_POLICY_PROMPT]",
       "scenario = text",
@@ -176,7 +179,7 @@ test("dynamic policy changes cannot rewrite the main-flow system prefix after fi
   assert.equal(lockPolicyPromptForMainFlow(ctx), true);
 
   applyDynamicPolicyPromptFromText(
-    ctx,
+    ctx.agentContext.bindings.extensions.harness,
     [
       "[HARNESS_DYNAMIC_POLICY_PROMPT]",
       "scenario = programming",
@@ -202,8 +205,11 @@ test("dynamic policy changes cannot rewrite the main-flow system prefix after fi
   assert.match(String(policyMessages[0]?.content || ""), /scenario = text/);
   assert.match(String(policyMessages[0]?.content || ""), /Dynamic policy one/);
   assert.doesNotMatch(String(policyMessages[0]?.content || ""), /Dynamic policy two/);
-  assert.equal(ctx.agentContext.payload.harness.dynamicPolicyPrompt.scenario, "programming");
-  assert.equal(ctx.agentContext.payload.harness.policyPromptState.phase, "locked");
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.dynamicPolicyPrompt.scenario,
+    "programming",
+  );
+  assert.equal(ctx.agentContext.bindings.extensions.harness.policyPromptState.phase, "locked");
 });
 
 test("harness policy prompt survives agent-side system message compaction", async () => {

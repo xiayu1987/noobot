@@ -160,50 +160,25 @@ export function createScriptTool({ agentContext }) {
           return toolFileBackedExecResult(
             "local",
             runResult,
-            buildScriptExecutionMeta({
-              executionPolicy,
-              workspace,
-              runtime,
-              agentContext,
-              pathContext,
-            }),
-            { runtime, agentContext, basePath, identity },
+            buildScriptExecutionMeta({ executionPolicy }),
+            { runtime, identity },
           );
         }
-        return toolExecResult(
-          "local",
-          runResult,
-          buildScriptExecutionMeta({
-            executionPolicy,
-            workspace,
-            runtime,
-            agentContext,
-            pathContext,
-          }),
-          {
-            includeLineNumbers: shouldIncludeLineNumbers,
-            runtime,
-            agentContext,
-            basePath,
-            identity,
-          },
-        );
+        return toolExecResult("local", runResult, buildScriptExecutionMeta({ executionPolicy }), {
+          includeLineNumbers: shouldIncludeLineNumbers,
+          runtime,
+          identity,
+        });
       }
 
       const mode = SANDBOX_PROVIDER_NAME.DOCKER;
-      let extra = buildScriptExecutionMeta({
-        executionPolicy,
-        workspace,
-        runtime,
-        agentContext,
-        pathContext,
-      });
+      const extra = buildScriptExecutionMeta({ executionPolicy });
       const sandboxExecutable = resolveSandboxProviderExecutable(sandboxProvider);
       const dockerInstalled = await hasCommand(sandboxExecutable);
       if (!dockerInstalled) {
         throw missingCommandError(SANDBOX_PROVIDER_NAME.DOCKER, sandboxExecutable, runtime);
       }
-      const { result: runResult, docker: built } = await runDockerCommand({
+      const runResult = await runDockerCommand({
         userRoot,
         userId,
         command: normalizedCommand,
@@ -216,30 +191,12 @@ export function createScriptTool({ agentContext }) {
         runnerOptions: { generatedDataRoot },
         runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
       });
-      extra = {
-        ...extra,
-        ...buildScriptExecutionMeta({
-          executionPolicy,
-          docker: built,
-          workspace,
-          runtime,
-          agentContext,
-          pathContext,
-        }),
-      };
       if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
-        return toolFileBackedExecResult(mode, runResult, extra, {
-          runtime,
-          agentContext,
-          basePath,
-          identity,
-        });
+        return toolFileBackedExecResult(mode, runResult, extra, { runtime, identity });
       }
       return toolExecResult(mode, runResult, extra, {
         includeLineNumbers: shouldIncludeLineNumbers,
         runtime,
-        agentContext,
-        basePath,
         identity,
       });
     },

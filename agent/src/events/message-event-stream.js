@@ -25,12 +25,13 @@ import { firstText, text, isObjectLike } from "@noobot/shared/value";
 
 export { assertMessageEventPayload };
 
-function runtimeState(runtime = {}) {
-  if (!isObjectLike(runtime)) return {};
-  const systemRuntime =
-    runtime.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : (runtime.systemRuntime = {});
+function runtimeState(runtime) {
+  const systemRuntime = runtime?.systemRuntime;
+  if (!isObjectLike(systemRuntime)) {
+    throw new TypeError(
+      "message event stream requires runtime.systemRuntime from createRuntimeContext",
+    );
+  }
   if (!isObjectLike(systemRuntime.messageEventStream)) {
     systemRuntime.messageEventStream = { activeMessageId: "" };
   }
@@ -134,10 +135,6 @@ export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}
   stream.activeModelMessageId = modelMessageId;
   state.messageEventStream.activeTurn = Number(turn || 0);
   return modelMessageId;
-}
-
-export function currentAssistantMessageId(runtime = {}) {
-  return text(runtimeState(runtime)?.messageEventStream?.activeMessageId);
 }
 
 export function currentAssistantPresentationMessageId(runtime = {}) {

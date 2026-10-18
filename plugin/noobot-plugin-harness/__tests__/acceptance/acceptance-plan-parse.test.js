@@ -17,6 +17,7 @@ import { createChecklistItem } from "../../src/capabilities/handlers/shared/chec
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: ["1. 主计划一", "1.1 子计划一", "1.2 子计划二", "2. 主计划二"].join("\n"),
     },
     state: { locale: "zh-CN", signals: {} },
@@ -44,6 +45,7 @@ test("summary checklist context preserves complete plan sub-plans from planText"
   const content = buildPlanChecklistSystemContent({
     locale: "zh-CN",
     planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二", "2.1 子计划二一"].join("\n"),
+    bucket: { planAcceptanceStatusByPlanId: {} },
   });
   assert.match(String(content), /当前完整计划清单/);
   assert.match(String(content), /^1\.1 子计划一/m);
@@ -54,7 +56,7 @@ test("plan checklist context includes planning-model current task goal from buck
   const content = buildPlanChecklistSystemContent({
     locale: "zh-CN",
     planText: "1. 分析需求\n1.1 梳理约束",
-    bucket: { currentTaskGoal: "计划模型提炼的当前任务目标" },
+    bucket: { planAcceptanceStatusByPlanId: {}, currentTaskGoal: "计划模型提炼的当前任务目标" },
   });
   assert.match(String(content), /当前任务目标/);
   assert.match(String(content), /计划模型提炼的当前任务目标/);
@@ -64,6 +66,7 @@ test("plan checklist context includes planning-model current task goal from buck
 
 test("phase acceptance status is written back to complete plan checklist context", () => {
   const bucket = {
+    planAcceptanceStatusByPlanId: {},
     planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二"].join("\n"),
   };
   const reportEntry = {
@@ -118,4 +121,21 @@ test("sub-plan 1.10 keeps its own planId and never collides with 1.1", () => {
   assert.equal(sub1.status, "pending");
   assert.equal(sub10.status, "completed");
   assert.equal(sub10.statusSource, "plan_acceptance_status");
+});
+
+test("plan acceptance status reader rejects a bucket without a plain status map", () => {
+  assert.throws(
+    () => resolvePlanAcceptanceForChecklistItem({}, { index: "1" }),
+    /planAcceptanceStatusByPlanId must be a plain object/,
+  );
+});
+
+test("plan checklist reads the current task goal only from the bucket", () => {
+  const content = buildPlanChecklistSystemContent({
+    planText: "1. 第一步",
+    bucket: { planAcceptanceStatusByPlanId: {} },
+    currentTaskGoal: "调用方传入的目标",
+  });
+  assert.equal(content.includes("调用方传入的目标"), false);
+  assert.throws(() => buildPlanChecklistSystemContent({ planText: "1. 第一步" }), TypeError);
 });

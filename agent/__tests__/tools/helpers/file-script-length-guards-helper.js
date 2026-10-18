@@ -19,47 +19,50 @@ import {
   createScriptTool,
 } from "../../../src/tools/execution/script-tool.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+
+const TEST_RUN_IDENTITY = Object.freeze({
+  turnScopeId: "t-1",
+  executionId: "r-1",
+  messageId: "m-1",
+});
 
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
     overrides?.runtime && typeof overrides.runtime === "object" ? overrides.runtime : {};
-  const sharedTools =
-    runtimeOverrides?.sharedTools && typeof runtimeOverrides.sharedTools === "object"
-      ? runtimeOverrides.sharedTools
-      : {};
-  return createTestAgentExecutionScope(
-    {
-      basePath,
-      userId,
-      globalConfig: {
-        security: {
-          executionIsolation: {
-            mode: "host",
-            sandbox: { provider: "docker", scope: "user" },
-          },
+  const { turnScopeId, executionId, messageId } = TEST_RUN_IDENTITY;
+  const systemRuntimeOverrides = runtimeOverrides.systemRuntime || {};
+  const sessionId = String(systemRuntimeOverrides.sessionId || "s-1");
+  const runtime = createRuntimeContext({
+    basePath,
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          mode: "host",
+          sandbox: { provider: "docker", scope: "user" },
         },
       },
-      userConfig: {},
-      sharedTools,
-      ...runtimeOverrides,
-      systemRuntime: {
-        userId,
-        sessionId: "s-1",
-        rootSessionId: "s-1",
-        config: {},
-        ...(runtimeOverrides.systemRuntime || {}),
-        sessionDir:
-          runtimeOverrides.systemRuntime?.sessionDir ||
-          path.join(
-            basePath,
-            "runtime",
-            "session",
-            runtimeOverrides.systemRuntime?.sessionId || "s-1",
-          ),
-      },
     },
-    { identity: { userId } },
-  );
+    userConfig: {},
+    sharedTools: {},
+    ...runtimeOverrides,
+    runConfig: { turnScopeId, executionId, messageId },
+    systemRuntime: {
+      userId,
+      rootSessionId: sessionId,
+      config: {},
+      sessionDir: path.join(basePath, "runtime", "session", sessionId),
+      ...systemRuntimeOverrides,
+      sessionId,
+    },
+  });
+  return createTestAgentExecutionScope(runtime, {
+    identity: { userId, sessionId, turnScopeId, runId: executionId, messageId },
+  });
+}
+
+function toolCallScope(agentContext) {
+  return { agentContext, runtime: agentContext.bindings.runtime };
 }
 
 function parseToolResult(raw = "") {
@@ -101,6 +104,7 @@ export {
   buildScriptExecutionMeta,
   createScriptTool,
   buildAgentContext,
+  toolCallScope,
   parseToolResult,
   buildAttachmentService,
 };

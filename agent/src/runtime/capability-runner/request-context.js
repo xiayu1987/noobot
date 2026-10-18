@@ -5,7 +5,6 @@
  */
 import {
   getRuntimeFromAgentContext,
-  getSessionIdsFromAgentContext,
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
@@ -31,7 +30,6 @@ function compactToolMessagesForMiniRunner(messages = []) {
 
 export function resolveCapabilityExecution(ctx = {}, signal = null) {
   const runtime = getRuntimeFromAgentContext(ctx.agentContext || {});
-  const identity = getSessionIdsFromAgentContext(ctx.agentContext);
   return {
     runtime,
     executionScope: "auxiliary",
@@ -39,9 +37,6 @@ export function resolveCapabilityExecution(ctx = {}, signal = null) {
     eventListener: runtime?.eventListener || null,
     errorLogger: null,
     agentContext: ctx.agentContext || null,
-    userId: identity.userId,
-    sessionId: identity.sessionId,
-    parentSessionId: identity.parentSessionId,
   };
 }
 
@@ -87,7 +82,7 @@ export function createCapabilityRequestIdentity({
   headerNamespace,
   flowPrefixOverride,
   flowPrefix,
-  sessionMeta,
+  sessionId,
 }) {
   const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
   const normalizedDomain = normalizeHeaderValue(domain || "unknown");
@@ -113,7 +108,7 @@ export function createCapabilityRequestIdentity({
   const customDomainHeaderKey = namespaceHeaderKeys.DOMAIN;
   const customSessionHeaderKey = namespaceHeaderKeys.SESSION_ID;
   const flowValue = `${resolvedFlowPrefix}.${normalizedFlowName}`;
-  const resolvedSessionId = text(sessionMeta?.sessionId);
+  const resolvedSessionId = text(sessionId);
   const additionalHeaders = {
     [customFlowHeaderKey]: flowValue,
     [customPurposeHeaderKey]: normalizedPurpose,

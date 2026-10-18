@@ -93,19 +93,19 @@ async function preparePatchExecution({
   return { ...protocol, root: normalizedRoot, parsed, targets };
 }
 
-function buildPatchSchema(agentContext) {
+function buildPatchSchema(agentContext, runtime) {
   return z.object({
     format: z
       .enum(["unified_diff", "apply_patch"])
       .optional()
-      .describe(tTool(agentContext, "tools.patch_file.fieldFormat")),
+      .describe(tTool(runtime, "tools.patch_file.fieldFormat")),
     patch: z.string().describe(buildPatchFieldDescription(agentContext, "fieldPatch")),
     strip: z
       .number()
       .int()
       .optional()
       .default(1)
-      .describe(tTool(agentContext, "tools.patch_file.fieldStrip")),
+      .describe(tTool(runtime, "tools.patch_file.fieldStrip")),
     root: z
       .string()
       .optional()
@@ -115,8 +115,8 @@ function buildPatchSchema(agentContext) {
       .boolean()
       .optional()
       .default(false)
-      .describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
-    riskLevel: createRiskLevelSchema(agentContext, "tools.patch_file.fieldRiskLevel"),
+      .describe(tTool(runtime, "tools.patch_file.fieldDryRun")),
+    riskLevel: createRiskLevelSchema(runtime, "tools.patch_file.fieldRiskLevel"),
   });
 }
 
@@ -420,8 +420,8 @@ export function createPatchFileTool({ agentContext, runtime, workspaceIo, mutati
   return new DynamicStructuredTool({
     name: TOOL_NAME.PATCH_FILE,
     metadata: { pathContract: TOOL_PATH_CONTRACTS.filePatch },
-    description: buildFileToolDescription(agentContext, "tools.patch_file.description"),
-    schema: buildPatchSchema(agentContext),
+    description: buildFileToolDescription(runtime, "tools.patch_file.description"),
+    schema: buildPatchSchema(agentContext, runtime),
     func: (args) => runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeId, args }),
   });
 }

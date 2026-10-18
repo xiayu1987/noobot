@@ -131,8 +131,6 @@ export async function flushAllManifests() {
 const jsonlBuffers = new Map();
 const jsonlFlushTimers = new Map();
 
-const DEFAULT_JSONL_BATCH_SIZE = DEFAULT_OPTIONS.jsonlBatchSize;
-const DEFAULT_JSONL_FLUSH_INTERVAL_MS = DEFAULT_OPTIONS.jsonlFlushIntervalMs;
 const DEFAULT_JSONL_FLUSH_STRATEGY = DEFAULT_OPTIONS.jsonlFlushStrategy;
 const JSONL_RETRY_BASE_DELAY_MS = TIME_THRESHOLDS.harness.jsonlRetryBaseDelayMs;
 const JSONL_RETRY_MAX_DELAY_MS = TIME_THRESHOLDS.harness.jsonlRetryMaxDelayMs;
@@ -187,67 +185,48 @@ async function withRunWriteLock(targetPath = "", operation = async () => undefin
   }
 }
 
-function normalizeFlushStrategy(batchSize, flushIntervalMs) {
-  if (isPlainObject(batchSize)) {
-    const input = batchSize;
-    const maxSize = Number(input?.maxSize);
-    const maxTime = Number(input?.maxTime);
-    const maxRetry = Number(input?.maxRetry);
-    const maxBufferEntries = Number(input?.maxBufferEntries);
-    const maxBufferBytes = Number(input?.maxBufferBytes);
-    const maxFileBytes = Number(input?.maxFileBytes);
-    const maxFiles = Number(input?.maxFiles);
-    return {
-      maxSize:
-        Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
-      maxTime:
-        Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
-      onTerminal:
-        typeof input?.onTerminal === "boolean"
-          ? input.onTerminal
-          : DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
-      onError:
-        typeof input?.onError === "boolean" ? input.onError : DEFAULT_JSONL_FLUSH_STRATEGY.onError,
-      maxRetry:
-        Number.isFinite(maxRetry) && maxRetry >= 0
-          ? Math.trunc(maxRetry)
-          : DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
-      maxBufferEntries:
-        Number.isFinite(maxBufferEntries) && maxBufferEntries > 0
-          ? Math.trunc(maxBufferEntries)
-          : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
-      maxBufferBytes:
-        Number.isFinite(maxBufferBytes) && maxBufferBytes > 0
-          ? Math.trunc(maxBufferBytes)
-          : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
-      maxFileBytes:
-        Number.isFinite(maxFileBytes) && maxFileBytes >= 0
-          ? Math.trunc(maxFileBytes)
-          : DEFAULT_JSONL_FLUSH_STRATEGY.maxFileBytes,
-      maxFiles:
-        Number.isFinite(maxFiles) && maxFiles >= 0
-          ? Math.trunc(maxFiles)
-          : DEFAULT_JSONL_FLUSH_STRATEGY.maxFiles,
-    };
+function normalizeFlushStrategy(input) {
+  if (!isPlainObject(input)) {
+    throw new TypeError("harness appendJsonlBuffered requires a jsonlFlushStrategy object");
   }
-  const resolvedBatch = Number(batchSize);
-  const resolvedInterval = Number(flushIntervalMs);
+  const maxSize = Number(input.maxSize);
+  const maxTime = Number(input.maxTime);
+  const maxRetry = Number(input.maxRetry);
+  const maxBufferEntries = Number(input.maxBufferEntries);
+  const maxBufferBytes = Number(input.maxBufferBytes);
+  const maxFileBytes = Number(input.maxFileBytes);
+  const maxFiles = Number(input.maxFiles);
   return {
     maxSize:
-      Number.isFinite(resolvedBatch) && resolvedBatch > 0
-        ? resolvedBatch
-        : DEFAULT_JSONL_BATCH_SIZE,
+      Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
     maxTime:
-      Number.isFinite(resolvedInterval) && resolvedInterval >= 0
-        ? resolvedInterval
-        : DEFAULT_JSONL_FLUSH_INTERVAL_MS,
-    onTerminal: DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
-    onError: DEFAULT_JSONL_FLUSH_STRATEGY.onError,
-    maxRetry: DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
-    maxBufferEntries: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
-    maxBufferBytes: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
-    maxFileBytes: DEFAULT_JSONL_FLUSH_STRATEGY.maxFileBytes,
-    maxFiles: DEFAULT_JSONL_FLUSH_STRATEGY.maxFiles,
+      Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
+    onTerminal:
+      typeof input.onTerminal === "boolean"
+        ? input.onTerminal
+        : DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
+    onError:
+      typeof input.onError === "boolean" ? input.onError : DEFAULT_JSONL_FLUSH_STRATEGY.onError,
+    maxRetry:
+      Number.isFinite(maxRetry) && maxRetry >= 0
+        ? Math.trunc(maxRetry)
+        : DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
+    maxBufferEntries:
+      Number.isFinite(maxBufferEntries) && maxBufferEntries > 0
+        ? Math.trunc(maxBufferEntries)
+        : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
+    maxBufferBytes:
+      Number.isFinite(maxBufferBytes) && maxBufferBytes > 0
+        ? Math.trunc(maxBufferBytes)
+        : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
+    maxFileBytes:
+      Number.isFinite(maxFileBytes) && maxFileBytes >= 0
+        ? Math.trunc(maxFileBytes)
+        : DEFAULT_JSONL_FLUSH_STRATEGY.maxFileBytes,
+    maxFiles:
+      Number.isFinite(maxFiles) && maxFiles >= 0
+        ? Math.trunc(maxFiles)
+        : DEFAULT_JSONL_FLUSH_STRATEGY.maxFiles,
   };
 }
 
@@ -259,7 +238,7 @@ function clearJsonlFlushTimer(filePath = "") {
 
 function scheduleJsonlFlush(
   filePath = "",
-  maxTime = DEFAULT_JSONL_FLUSH_INTERVAL_MS,
+  maxTime = DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
   strategy = DEFAULT_JSONL_FLUSH_STRATEGY,
 ) {
   if (!filePath || jsonlFlushTimers.has(filePath) || maxTime <= 0) return;
@@ -373,15 +352,9 @@ async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = 
   return removed;
 }
 
-export async function appendJsonlBuffered(
-  filePath,
-  record,
-  batchSize = DEFAULT_JSONL_BATCH_SIZE,
-  flushIntervalMs = DEFAULT_JSONL_FLUSH_INTERVAL_MS,
-  flushHint = {},
-) {
+export async function appendJsonlBuffered(filePath, record, flushStrategy, flushHint = {}) {
   if (!filePath || !record) return;
-  const strategy = normalizeFlushStrategy(batchSize, flushIntervalMs);
+  const strategy = normalizeFlushStrategy(flushStrategy);
   jsonlFlushStrategies.set(filePath, strategy);
 
   let buffer = jsonlBuffers.get(filePath);

@@ -178,5 +178,5 @@ export async function runDockerCommand({
     }
     throw error;
   }
-  return { result, docker: built };
+  return result;
 }

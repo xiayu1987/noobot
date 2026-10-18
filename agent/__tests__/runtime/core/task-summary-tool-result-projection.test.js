@@ -46,7 +46,6 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
       },
     },
     runtime,
-    sessionId: "s1",
     turn: 1,
   });
 

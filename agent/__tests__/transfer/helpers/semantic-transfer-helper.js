@@ -59,22 +59,6 @@ export function firstTransferAttachment(value = {}) {
 
 export const firstTransferFile = firstTransferAttachment;
 
-export function buildSandboxRuntime(enabled = true, overrides = {}) {
-  return {
-    userId: "primary-user",
-    globalConfig: {
-      security: {
-        executionIsolation: {
-          mode: enabled ? "sandbox" : "host",
-          sandbox: { provider: "docker", scope: "user" },
-        },
-      },
-    },
-    userConfig: {},
-    ...overrides,
-  };
-}
-
 export function isValidTransferEnvelope(value) {
   return validateTransferEnvelope(value).ok;
 }

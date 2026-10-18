@@ -20,7 +20,8 @@ async function finishGuidanceSummaryRound(
     point: "agent.after_llm_call",
     ctx: {
       messages,
-      ai: { content },
+      modelResponse: { text: content },
+      calls: [],
       agentContext,
     },
     meta: {},
@@ -45,10 +46,9 @@ test("guidance summary capture leaves tool-call pair unchanged until checkpoint 
     shouldProcessPrimaryToolHooks: () => true,
   });
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      harness: {},
+    bindings: {
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
   const messages = [
@@ -67,15 +67,18 @@ test("guidance summary capture leaves tool-call pair unchanged until checkpoint 
     ctx: { messages, agentContext },
     meta: {},
   });
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.flags.summaryByCharsPrompted, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.summaryByCharsPrompted, true);
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
 
   await finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext });
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
-  assert.equal(agentContext.payload.harness.state.flags.overflowForceAcceptancePending, false);
+  assert.equal(
+    agentContext.bindings.extensions.harness.state.flags.overflowForceAcceptancePending,
+    false,
+  );
 });
 
 test("overflow after harness summary schedules the harness summary flow again without marking messages", async () => {
@@ -83,17 +86,12 @@ test("overflow after harness summary schedules the harness summary flow again wi
     shouldProcessPrimaryToolHooks: () => true,
   });
   const agentContext = {
-    execution: {
-      controllers: {
-        runtime: {
-          systemRuntime: {},
-        },
+    bindings: {
+      runtime: {
+        systemRuntime: {},
       },
-    },
-    payload: {
-      messages: { system: [], history: [] },
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      harness: {},
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
   const messages = [
@@ -113,14 +111,20 @@ test("overflow after harness summary schedules the harness summary flow again wi
     ctx: { messages, agentContext },
     meta: {},
   });
-  assert.equal(agentContext.payload.harness.state.flags.overflowForceAcceptancePending, false);
-  assert.equal(agentContext.payload.harness.state.flags.mainFlowFinalNoToolsPending, false);
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.flags.guidanceSummaryMarkPending, true);
   assert.equal(
-    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction,
-    undefined,
+    agentContext.bindings.extensions.harness.state.flags.overflowForceAcceptancePending,
+    false,
   );
+  assert.equal(
+    agentContext.bindings.extensions.harness.state.flags.mainFlowFinalNoToolsPending,
+    false,
+  );
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(
+    agentContext.bindings.extensions.harness.state.flags.guidanceSummaryMarkPending,
+    true,
+  );
+  assert.equal(agentContext.bindings.runtime.systemRuntime.mainFlowControlInstruction, undefined);
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
 });

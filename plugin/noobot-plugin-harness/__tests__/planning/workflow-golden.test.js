@@ -15,29 +15,30 @@ import {
 
 function createAgentContext({ pending = {}, flags = {} } = {}) {
   return {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        state: {
-          pending: {
-            summary: false,
-            guidance: null,
-            planRevision: false,
-            planRevisionContext: null,
-            planRefinement: false,
-            planRefinementContext: null,
-            phaseAcceptance: false,
-            acceptanceSemanticValidation: null,
-            ...pending,
+    bindings: {
+      extensions: {
+        harness: {
+          state: {
+            pending: {
+              summary: false,
+              guidance: null,
+              planRevision: false,
+              planRevisionContext: null,
+              planRefinement: false,
+              planRefinementContext: null,
+              phaseAcceptance: false,
+              acceptanceSemanticValidation: null,
+              ...pending,
+            },
+            flags: {
+              planningCaptured: true,
+              summaryByCharsPrompted: false,
+              overflowForceAcceptancePending: false,
+              ...flags,
+            },
+            counters: {},
+            signals: {},
           },
-          flags: {
-            planningCaptured: true,
-            summaryByCharsPrompted: false,
-            overflowForceAcceptancePending: false,
-            ...flags,
-          },
-          counters: {},
-          signals: {},
         },
       },
     },
@@ -246,7 +247,7 @@ test("golden: phase_acceptance can run when only summary is pending", async () =
   });
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
-  const decisionLog = agentContext.payload.harness.logs.acceptance.find(
+  const decisionLog = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) =>
       item?.event === "workflow_priority_decision" &&
       item?.detail?.point === "agent.before_llm_call",
@@ -267,7 +268,7 @@ test("golden: overflow force acceptance wins priority at before_llm_call", async
   });
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
-  const decisionLog = agentContext.payload.harness.logs.acceptance.find(
+  const decisionLog = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) =>
       item?.event === "workflow_priority_decision" &&
       item?.detail?.point === "agent.before_llm_call",
@@ -288,12 +289,12 @@ test("golden: planningCaptured=false blocks phase_acceptance execution", async (
   });
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
-  const decisionLog = agentContext.payload.harness.logs.acceptance.find(
+  const decisionLog = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) =>
       item?.event === "workflow_priority_decision" &&
       item?.detail?.point === "agent.before_llm_call",
   );
-  const executionLog = agentContext.payload.harness.logs.acceptance.find(
+  const executionLog = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) =>
       item?.event === "workflow_execution_result" &&
       item?.detail?.point === "agent.before_llm_call",

@@ -7,7 +7,6 @@ import { SystemMessage } from "@langchain/core/messages";
 import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/policy/block";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { resolveRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
 import {
   getAgentContextEnvelope,
   getRuntimeFromAgentContext,
@@ -20,29 +19,14 @@ import { text } from "@noobot/shared/value";
 export function buildContextMessageBlocks(agentContext, { currentUserMessage = null } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const context = getAgentContextEnvelope(agentContext);
-  const systemRuntime = runtime?.systemRuntime || {};
-  const runtimeParentSessionId = context.identity.parentSessionId;
-  const currentUserMessageAttachments = resolveRuntimeUserMessageAttachments(runtime);
-  const fallbackUserMeta = {
-    userName: text(runtime?.systemRuntime?.userId),
-    sessionId: context.identity.sessionId,
-    parentSessionId: runtimeParentSessionId,
-    dialogProcessId: "",
-    parentDialogProcessId: text(systemRuntime?.parentDialogProcessId),
-    attachments: currentUserMessageAttachments,
-    userMessageAttachments: currentUserMessageAttachments,
-  };
   const messageBlocks = context.modelContext.messageBlocks;
   const systemMessages = Array.isArray(messageBlocks?.system) ? messageBlocks.system : [];
   const rawHistoryMessages = Array.isArray(messageBlocks?.history) ? messageBlocks.history : [];
   const restoredIncrementalMessages = Array.isArray(messageBlocks?.incremental)
     ? messageBlocks.incremental
     : [];
-  const currentTurnScopeId = context.identity.turnScopeId;
-  fallbackUserMeta.turnScopeId = currentTurnScopeId;
   const historyMessages = rawHistoryMessages;
   const resolvedDialogProcessId = context.identity.dialogProcessId;
-  fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
   const currentCanonicalId = resolveContextMessageId(currentUserMessage);
   emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", {
     messageUid: text(currentUserMessage?.messageUid),
@@ -86,13 +70,10 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   const history = buildHistoryMessages({
     effectiveHistoryMessages: resolvedMainBlocks.history,
     runtime,
-    fallbackUserMeta,
   });
   const incremental = buildHistoryMessages({
     effectiveHistoryMessages: resolvedMainBlocks.incremental,
     runtime,
-    fallbackUserMeta,
-    allowMessageAttachments: true,
   });
   const projectedIds = incremental.map(resolveContextMessageId).filter(Boolean);
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {

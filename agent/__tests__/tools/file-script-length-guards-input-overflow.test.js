@@ -12,6 +12,7 @@ import {
   executeToolCall,
   LENGTH_THRESHOLDS,
   buildAgentContext,
+  toolCallScope,
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
@@ -37,15 +38,15 @@ test("search: text 输入超过上限时由 semantic-transfer 保存附件并直
       },
     },
     tool,
-    runtime: {
-      basePath,
-      systemRuntime: { userId: "u-test", sessionId: "s-search" },
-      globalConfig: {},
-      userConfig: {},
-      attachmentService: buildAttachmentService(),
-    },
-    agentContext: buildAgentContext(basePath, "u-test"),
-    sessionId: "s-search",
+    ...toolCallScope(
+      buildAgentContext(basePath, "u-test", {
+        runtime: {
+          systemRuntime: { sessionId: "s-search" },
+          globalConfig: {},
+          attachmentService: buildAttachmentService(),
+        },
+      }),
+    ),
   });
   const result = parseToolResult(runnerResult.toolResultText);
 
@@ -89,15 +90,15 @@ test("patch_file: patch 超过 semantic-transfer 阈值时保存附件并直接�
       },
     },
     tool,
-    runtime: {
-      basePath,
-      systemRuntime: { userId: "u-test", sessionId: "s-patch" },
-      globalConfig: {},
-      userConfig: {},
-      attachmentService: buildAttachmentService(),
-    },
-    agentContext: buildAgentContext(basePath, "u-test"),
-    sessionId: "s-patch",
+    ...toolCallScope(
+      buildAgentContext(basePath, "u-test", {
+        runtime: {
+          systemRuntime: { sessionId: "s-patch" },
+          globalConfig: {},
+          attachmentService: buildAttachmentService(),
+        },
+      }),
+    ),
   });
   const result = parseToolResult(runnerResult.toolResultText);
 

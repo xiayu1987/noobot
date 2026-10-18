@@ -7,8 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { dispatchAgentTurn } from "../../../src/bot/execution/runner/agent-dispatch.js";
-import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 
 test("dispatchAgentTurn accepts completed-turn summary state into the canonical store", async () => {
   const events = [];
@@ -17,18 +17,17 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
       events.push(event);
     },
   };
-  const dispatchRuntime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([
-      {
-        messageId: "sm_tool",
-        messageUid: "sm_tool",
-        role: "tool",
-        type: "tool_result",
-        content: "result",
-        summarized: false,
-      },
-    ]),
-  };
+  const dispatchRuntime = createRuntimeContext();
+  dispatchRuntime.currentTurnMessages.replaceAll([
+    {
+      messageId: "sm_tool",
+      messageUid: "sm_tool",
+      role: "tool",
+      type: "tool_result",
+      content: "result",
+      summarized: false,
+    },
+  ]);
 
   const result = await dispatchAgentTurn({
     agentRunner: async () => ({

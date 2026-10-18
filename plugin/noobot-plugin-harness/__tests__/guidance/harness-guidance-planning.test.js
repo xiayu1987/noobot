@@ -54,30 +54,27 @@ test("harness summary relay without captured plan keeps final acceptance on defa
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-summary-opdir-"));
   const messages = [{ role: "user", content: "继续" }];
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: {
-            llmTurns: 16,
-            planUpdateTurns: -100,
-            consecutiveToolFailures: 0,
-            totalToolFailures: 0,
-          },
-          signals: { successfulToolCount: 1 },
-          pending: { summary: true, guidance: null },
-        },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+    bindings: {
+      runtime: {
+        basePath,
+        userId: "summary-user",
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
+        systemRuntime: { userId: "summary-user", sessionId: "summary-session" },
       },
-    },
-    execution: {
-      controllers: {
-        runtime: {
-          basePath,
-          userId: "summary-user",
-          globalConfig: { security: { executionIsolation: { mode: "host" } } },
-          systemRuntime: { userId: "summary-user", sessionId: "summary-session" },
+      extensions: {
+        harness: {
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: {
+              llmTurns: 16,
+              planUpdateTurns: -100,
+              consecutiveToolFailures: 0,
+              totalToolFailures: 0,
+            },
+            signals: { successfulToolCount: 1 },
+            pending: { summary: true, guidance: null },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -104,17 +101,20 @@ test("harness summary relay without captured plan keeps final acceptance on defa
       summaryRelayText.indexOf("已完成：完成初始检查"),
     true,
   );
-  assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, false);
+  assert.equal(
+    String(agentContext.bindings.extensions.harness.planText || "").trim().length > 0,
+    false,
+  );
 
   const result = { output: "done" };
   await hookManager.emit("agent.before_final_output", { agentContext, result });
 
   assert.equal(
-    agentContext.payload.harness.lastAcceptanceReport.finalPlanChecklist.length >= 1,
+    agentContext.bindings.extensions.harness.lastAcceptanceReport.finalPlanChecklist.length >= 1,
     true,
   );
   assert.equal(
-    Number(agentContext.payload.harness.lastAcceptanceReport.plan.revisionCount || 0),
+    Number(agentContext.bindings.extensions.harness.lastAcceptanceReport.plan.revisionCount || 0),
     0,
   );
 });
@@ -153,17 +153,18 @@ test("summary separate_model invocation uses flat structured_v1 messages", async
     { role: "user", content: "non-history" },
   ];
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        planText: "1. 初始计划",
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: { successfulToolCount: 1 },
-          pending: { summary: true, guidance: null },
+    bindings: {
+      extensions: {
+        harness: {
+          planText: "1. 初始计划",
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+            signals: { successfulToolCount: 1 },
+            pending: { summary: true, guidance: null },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -215,22 +216,23 @@ test("planning_refinement is scheduled independently after revision main-plan ch
     { role: "assistant", content: "history-assistant" },
   ];
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        planText: "1. 初始计划",
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: {
-            llmTurns: 16,
-            planUpdateTurns: -100,
-            consecutiveToolFailures: 0,
-            totalToolFailures: 0,
+    bindings: {
+      extensions: {
+        harness: {
+          planText: "1. 初始计划",
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: {
+              llmTurns: 16,
+              planUpdateTurns: -100,
+              consecutiveToolFailures: 0,
+              totalToolFailures: 0,
+            },
+            signals: { successfulToolCount: 1 },
+            pending: { summary: true, guidance: null },
           },
-          signals: { successfulToolCount: 1 },
-          pending: { summary: true, guidance: null },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -241,8 +243,8 @@ test("planning_refinement is scheduled independently after revision main-plan ch
     invocations.map((item = {}) => item.purpose),
     ["summary"],
   );
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
 });
 
 test("harness summary without completion marker still triggers planning revision", async () => {
@@ -267,16 +269,17 @@ test("harness summary without completion marker still triggers planning revision
 
   const messages = [{ role: "user", content: "继续" }];
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: { successfulToolCount: 1 },
-          pending: { summary: true, guidance: null },
+    bindings: {
+      extensions: {
+        harness: {
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+            signals: { successfulToolCount: 1 },
+            pending: { summary: true, guidance: null },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -288,13 +291,13 @@ test("harness summary without completion marker still triggers planning revision
     ["summary"],
   );
   assert.equal(
-    agentContext.payload.harness.logs.guidance.some(
+    agentContext.bindings.extensions.harness.logs.guidance.some(
       (item) => item.event === "summary_completion_marker_missing",
     ),
     false,
   );
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item) => item.event === "planning_checklist_revised_after_summary",
     ),
     false,
@@ -304,17 +307,18 @@ test("harness summary without completion marker still triggers planning revision
 test("guidance handler inject mode does not schedule planning revision without captured plan", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        totalGoal: "初始目标",
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: { successfulToolCount: 1 },
-          pending: { summary: true, guidance: null },
+    bindings: {
+      extensions: {
+        harness: {
+          totalGoal: "初始目标",
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+            signals: { successfulToolCount: 1 },
+            pending: { summary: true, guidance: null },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -339,14 +343,15 @@ test("guidance handler inject mode does not schedule planning revision without c
 
   const summaryCtx = {
     messages: firstCtx.modelContext.messages,
-    ai: { content: "已完成：完成初始检查\n小结完成" },
+    modelResponse: { text: "已完成：完成初始检查\n小结完成" },
+    calls: [],
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx: summaryCtx, meta });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item) => item.event === "planning_revision_scheduled_by_inject",
     ),
     false,
@@ -366,23 +371,25 @@ test("guidance handler inject mode does not schedule planning revision without c
 
   const revisionCtx = {
     messages: secondCtx.modelContext.messages,
-    ai: {
-      content: "已完成：完成初始检查",
-    },
+    modelResponse: { text: "已完成：完成初始检查" },
+    calls: [],
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx: revisionCtx, meta });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item) => item.event === "planning_refinement_converged_no_target_main_step",
     ),
     false,
   );
-  assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    String(agentContext.bindings.extensions.harness.planText || "").trim().length > 0,
+    false,
+  );
+  assert.equal(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item) => item.event === "planning_checklist_revised_after_summary",
     ),
     false,

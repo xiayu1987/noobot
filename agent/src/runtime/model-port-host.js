@@ -126,6 +126,13 @@ export function createAgentAuxiliaryModelPort({ modelSpec, modelState }) {
   return createModelPort({ modelState, resolveTurnModelSpec: () => auxiliaryModelSpec });
 }
 
+export function requireRuntimeModelHost(runtime) {
+  const host = runtime?.modelHost;
+  if (!isObjectLike(host)) throw new TypeError("runtime.modelHost is required");
+  requireModelPort(host.modelPort);
+  return host;
+}
+
 export function initializeAgentModelHost({
   runtime,
   invocationIdentity,
@@ -155,9 +162,7 @@ export function initializeAgentModelHost({
     return existing;
   }
 
-  const globalConfig = runtime.globalConfig || {};
-  const userConfig = runtime.userConfig || {};
-  const runConfig = runtime.runConfig || {};
+  const { globalConfig, userConfig, runConfig } = runtime;
   const modelSpec = resolveModelSpec({
     globalConfig,
     userConfig,
@@ -167,11 +172,11 @@ export function initializeAgentModelHost({
   const modelState = {
     activeModelSpec: modelSpec,
     defaultModelSpec: modelSpec,
-    eventListener: runtime.eventListener || null,
+    eventListener: runtime.eventListener,
     runtime,
     globalConfig,
     userConfig,
-    abortSignal: runtime.abortSignal || null,
+    abortSignal: runtime.abortSignal,
     invocationIdentity: identity,
   };
   const modelPort = createAgentModelPort(modelState);
@@ -183,8 +188,6 @@ export function initializeAgentModelHost({
     invocationIdentity: identity,
   });
   runtime.modelHost = host;
-  runtime.modelPort = modelPort;
-  runtime.modelSpec = modelSpec;
   emitEvent(runtime.eventListener, "model_selected", {
     alias: modelSpec?.alias || "",
     model: modelSpec?.model || "",

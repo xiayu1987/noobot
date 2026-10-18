@@ -13,6 +13,7 @@ import { applyMemoryTakeover } from "./takeover/memory-takeover.js";
 import { resolveTakeoverPriority, sortTakeovers } from "./takeover/priority.js";
 import { cleanupExpiredPendingOnHook } from "./pending-cleanup.js";
 import { markHarnessTurnLifecycle } from "./handlers/shared/runtime/lifecycle-utils.js";
+import { readHarnessBucket } from "./handlers/shared/bucket-utils.js";
 import {
   appendCapabilityLog,
   consumeDeferredCapabilityLogs,
@@ -26,11 +27,6 @@ async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
   const bootstrap = meta?.harness?.globalBootstrap;
   if (typeof bootstrap !== "function") return null;
   return await bootstrap({ point, ctx, meta });
-}
-
-function resolveHarnessBucket(ctx = {}) {
-  const bucket = ctx?.agentContext?.bindings?.extensions?.harness;
-  return bucket && typeof bucket === "object" ? bucket : null;
 }
 
 function isMainPlanReady(bucket = null) {
@@ -51,7 +47,7 @@ function markPlanningCapturedIfPlanReady(bucket = null) {
 function prepareMainPlanningState(point = "", ctx = {}, capabilities = []) {
   if (String(point || "") !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return capabilities;
   if (!Array.isArray(capabilities) || !capabilities.includes("planning")) return capabilities;
-  const bucket = resolveHarnessBucket(ctx);
+  const bucket = readHarnessBucket(ctx);
   markPlanningCapturedIfPlanReady(bucket);
   return capabilities;
 }

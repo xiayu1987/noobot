@@ -83,8 +83,6 @@ export async function normalizeToolResultOverflow({
   call = {},
   toolResultText = "",
   runtime = {},
-  agentContext = null,
-  sessionId = "",
   identity = null,
 } = {}) {
   const rawText = String(toolResultText || "");
@@ -99,9 +97,6 @@ export async function normalizeToolResultOverflow({
   }
 
   const ids = transferIdentityRequired(identity);
-  if (text(sessionId) && String(sessionId).trim() !== ids.sessionId) {
-    throw new Error("semantic_transfer_overflow_session_identity_conflict");
-  }
   const parsed = parseJsonObject(rawText);
   if (text(call?.name) === "read_file") {
     const referenceEnvelope = buildReadFileSourceReference({ parsed, identity: ids });
@@ -124,7 +119,6 @@ export async function normalizeToolResultOverflow({
   }
   const persisted = await materializeTextForToolResult({
     runtime,
-    agentContext,
     text: rawText,
     name: overflowArtifactName(call),
     mimeType: "text/plain",

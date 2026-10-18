@@ -56,7 +56,6 @@ function buildPayloadPreview(point, ctx = {}, options = {}) {
         ? ctx.modelContext.messages.length
         : undefined,
       toolChoice: ctx.toolChoice,
-      hasToolCalls: ctx.hasToolCalls,
       callCount: Array.isArray(ctx.calls) ? ctx.calls.length : undefined,
     };
   }

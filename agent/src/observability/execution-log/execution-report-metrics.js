@@ -62,7 +62,7 @@ const EVENT_HANDLERS = {
     acc.maxLoopRound = Math.max(acc.maxLoopRound, Number(data.modelLoopRound) || 0);
   },
   llm_call_end(acc, { data }) {
-    if (data.hasToolCalls === true) acc.llmCallsWithTools += 1;
+    if (data.toolCallCount > 0) acc.llmCallsWithTools += 1;
   },
   "model.invocation.started"(acc, { data }) {
     acc.invocations += 1;

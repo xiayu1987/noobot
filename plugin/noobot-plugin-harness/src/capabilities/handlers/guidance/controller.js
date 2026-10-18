@@ -14,6 +14,7 @@ import {
   saveCapabilityOutputAsTransferArtifacts,
   ensureHarnessBucket,
   extractRawTextContent,
+  readAfterLlmCallText,
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
@@ -152,10 +153,7 @@ function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
 }
 
 function isSummaryOnToolBurstThresholdEnabled(meta = {}) {
-  return (
-    meta?.harness?.summaryOnToolBurstThreshold === true ||
-    meta?.harness?.enableToolBurstSummary === true
-  );
+  return meta?.harness?.summaryOnToolBurstThreshold === true;
 }
 
 function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
@@ -366,8 +364,7 @@ async function applyPendingGuidanceSummary(ctx, meta, holder) {
     event: GUIDANCE_EVENTS.summaryMessagesMarked,
     detail: { markedCount },
   });
-  const rawSummaryText =
-    extractRawTextContent(ctx.ai?.content) || extractRawTextContent(ctx.modelResponse?.content);
+  const rawSummaryText = readAfterLlmCallText(ctx);
   const { locale } = holder.state;
   await relayGuidanceSummary(ctx, { meta, locale, rawSummaryText });
   recordLatestSummaryFullText(ctx, rawSummaryText);

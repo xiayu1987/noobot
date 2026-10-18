@@ -29,29 +29,28 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
       { role: "user", content: "继续任务" },
       { role: "assistant", content: "收到" },
     ],
-    ai: { content: fullSummary },
+    modelResponse: { text: fullSummary },
+    calls: [],
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            attachmentService: {
-              async ingestGeneratedArtifacts() {
-                ingestCalled += 1;
-                return [];
-              },
+      bindings: {
+        runtime: {
+          attachmentService: {
+            async ingestGeneratedArtifacts() {
+              ingestCalled += 1;
+              return [];
             },
           },
         },
-      },
-      payload: {
-        harness: {
-          state: {
-            flags: { guidanceSummaryMarkPending: true },
-            counters: {},
-            signals: {},
-            pending: {},
+        extensions: {
+          harness: {
+            state: {
+              flags: { guidanceSummaryMarkPending: true },
+              counters: {},
+              signals: {},
+              pending: {},
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -59,7 +58,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
 
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta: {} });
 
-  const harnessBucket = ctx?.agentContext?.payload?.harness || {};
+  const harnessBucket = ctx?.agentContext?.bindings?.extensions?.harness || {};
   assert.match(
     String(harnessBucket.summaryText || ""),
     /^1\. \[plan=2\]\[status=done\] 完成模块分析/m,
@@ -94,8 +93,8 @@ test("inject-mode summary persists and injects the same complete Harness summary
       { role: "user", content: "继续任务" },
       { role: "assistant", content: "收到" },
     ],
-    ai: {
-      content: [
+    modelResponse: {
+      text: [
         "[SUMMARY_OVERVIEW]",
         "1. [plan=2][status=done] 完成模块分析",
         "2. [plan=8][status=todo][risk=高] 文档缺口风险，影响后续交付，建议优先补齐",
@@ -112,6 +111,7 @@ test("inject-mode summary persists and injects the same complete Harness summary
         "[SUMMARY_END]",
       ].join("\n"),
     },
+    calls: [],
     agentContext: {
       bindings: {
         runtime: {
@@ -158,16 +158,16 @@ test("inject-mode summary persists and injects the same complete Harness summary
             },
           },
         },
-      },
-      payload: {
-        harness: {
-          state: {
-            flags: { guidanceSummaryMarkPending: true },
-            counters: {},
-            signals: {},
-            pending: {},
+        extensions: {
+          harness: {
+            state: {
+              flags: { guidanceSummaryMarkPending: true },
+              counters: {},
+              signals: {},
+              pending: {},
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -176,7 +176,7 @@ test("inject-mode summary persists and injects the same complete Harness summary
 
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta });
 
-  const harnessBucket = ctx?.agentContext?.payload?.harness || {};
+  const harnessBucket = ctx?.agentContext?.bindings?.extensions?.harness || {};
   assert.match(
     String(harnessBucket.summaryText || ""),
     /^1\. \[plan=2\]\[status=done\] 完成模块分析/m,
@@ -197,7 +197,7 @@ test("inject-mode summary persists and injects the same complete Harness summary
   assert.match(String(injectedSummaryMessage?.content || ""), /- 执行了命令A/);
   assert.match(String(injectedSummaryMessage?.content || ""), /\[NEXT_EXECUTION_SUGGESTION\]/);
   assert.match(String(injectedSummaryMessage?.content || ""), /target = step5/);
-  assert.equal(persistedSummaryPayload?.detail, ctx.ai.content);
+  assert.equal(persistedSummaryPayload?.detail, ctx.modelResponse.text);
   assert.equal(Array.isArray(injectedSummaryMessage?.transferEnvelopes), true);
   assert.equal(injectedSummaryMessage?.transferEnvelopes?.[0]?.version, 2);
   assert.equal(

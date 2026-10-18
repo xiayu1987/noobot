@@ -250,23 +250,10 @@ test("buildContextMessages projects only model attachment metadata", () => {
   });
 });
 
-test("buildContextMessages does not copy current-turn attachments into historical user metadata", () => {
-  const fallbackMeta = {
-    userName: "admin",
-    sessionId: "session-a",
-    turnScopeId: "turn-latest",
-    userMessageAttachments: [
-      userAttachment("latest-only", "session-a", {
-        name: "latest.docx",
-        mimeType: "application/docx",
-      }),
-    ],
-  };
+test("buildHumanMessagesForUser projects user metadata attachments only from the message itself", () => {
   const attachmentFreeHistory = buildHumanMessagesForUser(
     {},
     { role: "user", content: "first", turnScopeId: "turn-1", attachments: [] },
-    fallbackMeta,
-    { allowFallbackAttachments: false },
   );
   const attachedHistory = buildHumanMessagesForUser(
     {},
@@ -281,8 +268,6 @@ test("buildContextMessages does not copy current-turn attachments into historica
         }),
       ],
     },
-    fallbackMeta,
-    { allowFallbackAttachments: false },
   );
 
   const emptyMeta = parseUserMeta(attachmentFreeHistory[1].content);

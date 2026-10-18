@@ -122,7 +122,7 @@ test("reconnect does not manufacture an error when a transport socket disappears
   channel.upstreamClosed = true;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
+  manager.handleReconnect(client, reconnectControl({ sessionId }));
 
   const reconnectData = getEvent(client, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -151,7 +151,7 @@ test("reconnect keeps transport status separate from authoritative running state
   channel.upstreamClosed = false;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, reconnectControl({ sessionId: sessionId }));
+  manager.handleReconnect(client, reconnectControl({ sessionId }));
 
   const reconnectData = getEvent(client, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(

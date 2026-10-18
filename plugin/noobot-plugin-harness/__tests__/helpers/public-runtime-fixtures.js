@@ -160,25 +160,10 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
     agentContext.bindings && typeof agentContext.bindings === "object"
       ? agentContext.bindings
       : (agentContext.bindings = {});
-  const legacyRuntime = agentContext?.execution?.controllers?.runtime;
-  if (!isObjectLike(bindings.runtime)) {
-    bindings.runtime = legacyRuntime && typeof legacyRuntime === "object" ? legacyRuntime : {};
-  }
-  if (!Array.isArray(bindings.tools)) {
-    bindings.tools = Array.isArray(agentContext?.payload?.tools?.registry)
-      ? agentContext.payload.tools.registry
-      : [];
-  }
-  const extensions =
-    bindings.extensions && typeof bindings.extensions === "object"
-      ? bindings.extensions
-      : (bindings.extensions = {});
-  if (!isObjectLike(extensions.harness)) {
-    extensions.harness =
-      agentContext?.payload?.harness && typeof agentContext.payload.harness === "object"
-        ? agentContext.payload.harness
-        : {};
-  }
+  bindings.runtime ??= {};
+  bindings.tools ??= [];
+  bindings.extensions ??= {};
+  bindings.extensions.harness ??= {};
   if (!isObjectLike(agentContext.context)) {
     testScopeSequence += 1;
     const scopeSuffix = String(testScopeSequence);
@@ -214,11 +199,9 @@ export function ensureTestHookContext(ctx = {}) {
       ? ctx.activeTurnIdentity
       : null;
   const dialogProcessId =
-    resolveDialogProcessId(ctx) || text(explicitIdentity?.dialogProcessId) || "test-dialog";
+    text(ctx.dialogProcessId) || text(explicitIdentity?.dialogProcessId) || "test-dialog";
   const turnScopeId =
-    resolveTurnScopeId(ctx) ||
-    text(explicitIdentity?.turnScopeId) ||
-    `test-turn:${dialogProcessId}`;
+    text(ctx.turnScopeId) || text(explicitIdentity?.turnScopeId) || `test-turn:${dialogProcessId}`;
   const activeTurnIdentity = { dialogProcessId, turnScopeId };
   const stampRoundIdentity = (messages = []) => {
     for (const message of Array.isArray(messages) ? messages : []) {
@@ -289,22 +272,6 @@ export function getTestContextMessageBlocks(ctx = {}) {
       incremental: [],
     }
   );
-}
-
-function resolveDialogProcessId(ctx = {}) {
-  return String(
-    ctx?.dialogProcessId || ctx?.agentContext?.context?.identity?.dialogProcessId || "",
-  ).trim();
-}
-
-function resolveTurnScopeId(ctx = {}) {
-  return String(
-    ctx?.turnScopeId ||
-      ctx?.runtime?.turnScopeId ||
-      ctx?.runtime?.systemRuntime?.turnScopeId ||
-      ctx?.agentContext?.context?.identity?.turnScopeId ||
-      "",
-  ).trim();
 }
 
 export function createTestHookManager() {

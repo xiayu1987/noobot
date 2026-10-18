@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 import assert from "node:assert/strict";
 import {
   createRunner,
@@ -41,7 +42,7 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
   const runner = createRunner({
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
+      const runtimeAgentContext = createTestAgentExecutionScope(createRuntimeContext());
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });
@@ -135,7 +136,7 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       calls.push({ type: "prepare" });
       capturedBuildContextPayload = buildContextPayload;
-      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
+      const runtimeAgentContext = createTestAgentExecutionScope(createRuntimeContext());
       return {
         agentContext: runtimeAgentContext,
         runtimeAgentContext,

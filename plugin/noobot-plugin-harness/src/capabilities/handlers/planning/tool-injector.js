@@ -77,9 +77,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
       synchronizePlanRefinementTool(toolCtx, toolMeta);
       const refinementResult = await runPlanningRefinementBySeparateModel(toolCtx, toolMeta, {
         source: "planning_refinement_tool",
-        targetMainStepIndexes: Array.isArray(args?.targetMainStepIndexes)
-          ? args.targetMainStepIndexes
-          : [],
+        targetMainStepIndexes: args.targetMainStepIndexes ?? [],
       });
       if (refinementResult?.status === "converged") {
         return {
@@ -105,9 +103,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
         status: "completed",
         tool: PLAN_REFINEMENT_TOOL_NAME,
         stage: "refinement",
-        targetMainStepIndexes: Array.isArray(refinementResult?.targetMainStepIndexes)
-          ? refinementResult.targetMainStepIndexes
-          : [],
+        targetMainStepIndexes: refinementResult.targetMainStepIndexes,
       };
     },
   });

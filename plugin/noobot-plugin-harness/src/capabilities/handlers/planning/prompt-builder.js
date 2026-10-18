@@ -220,14 +220,10 @@ export function buildPlanningMessagePlan(
     includeWorkflowPolicy = false,
   } = {},
 ) {
-  const bucket =
-    ctx?.agentContext?.bindings?.extensions?.harness &&
-    typeof ctx.agentContext.bindings.extensions.harness === "object"
-      ? ctx.agentContext.bindings.extensions.harness
-      : {};
+  const { bucket } = ensureHarnessBucket(ctx);
   const planChecklistContent = buildPlanChecklistSystemContent({
     locale,
-    planText: bucket?.planText,
+    planText: bucket.planText,
     bucket,
   });
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(

@@ -44,9 +44,9 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
     invocations.some((item = {}) => item.purpose === "summary"),
     true,
   );
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
   assert.equal(
     ctx.modelContext.messages.some((msg = {}) =>
       String(msg?.content || "").includes("harness-planning-revision"),
@@ -87,8 +87,8 @@ test("separate_model mode: pending revision runs by separate model without promp
     ),
     false,
   );
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
 });
 
 test("separate_model simultaneous plan update follows up with summary before analysis", async () => {
@@ -102,7 +102,7 @@ test("separate_model simultaneous plan update follows up with summary before ana
       planRevisionContext: { targetMainStepIndexes: [] },
     },
   });
-  agentContext.payload.harness.state.flags.planRefinementEnabled = false;
+  agentContext.bindings.extensions.harness.state.flags.planRefinementEnabled = false;
   const meta = {
     harness: {
       planningGuidanceMode: "separate_model",
@@ -126,9 +126,9 @@ test("separate_model simultaneous plan update follows up with summary before ana
     invocations.map((item = {}) => item.pluginFlow || item.purpose),
     ["planning_revision", "summary"],
   );
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.analysis, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
@@ -143,7 +143,7 @@ test("separate_model simultaneous plan update follows up with summary before ana
     ),
     true,
   );
-  const executionLog = agentContext.payload.harness.logs.guidance.find(
+  const executionLog = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_execution_result",
   );
   assert.equal(executionLog?.detail?.chosenAction, "plan_update_revision");
@@ -171,7 +171,7 @@ test("workflow_execution_result captures errorCode when separate_model guidance 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
-  const executionLog = agentContext.payload.harness.logs.guidance.find(
+  const executionLog = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_execution_result",
   );
   assert.equal(Boolean(executionLog), true);

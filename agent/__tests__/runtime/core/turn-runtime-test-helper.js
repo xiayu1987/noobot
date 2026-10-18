@@ -68,20 +68,25 @@ export function createTestModelPort(providerModel = {}) {
   };
 }
 
-export function bindTestTurnMessageEventDomain(runtime = {}, identity = "test-turn") {
-  const suffix = String(identity || "test-turn");
-  const systemRuntime =
-    runtime.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : (runtime.systemRuntime = {});
-  systemRuntime.sessionId = String(systemRuntime.sessionId || `session-${suffix}`);
-  systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || `dialog-${suffix}`);
-  systemRuntime.turnScopeId = String(systemRuntime.turnScopeId || `turn-${suffix}`);
+function bindTestTurnIdentity(runtime, identity) {
+  const { systemRuntime } = runtime;
+  if (!isObjectLike(systemRuntime)) {
+    throw new Error("test Turn execution requires runtime.systemRuntime");
+  }
+  const runIdentity = {
+    turnScopeId: String(systemRuntime.turnScopeId || `turn-${identity}`),
+    messageId: `message-${identity}`,
+    executionId: String(runtime.runConfig?.executionId || `run-${identity}`),
+  };
+  runtime.runConfig = { ...runtime.runConfig, ...runIdentity };
+  systemRuntime.sessionId = String(systemRuntime.sessionId || `session-${identity}`);
+  systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || `dialog-${identity}`);
+  systemRuntime.turnScopeId = runIdentity.turnScopeId;
   bindAssistantMessageEventStream(runtime, {
-    messageId: `message-${suffix}`,
-    presentationMessageId: `presentation-${suffix}`,
+    messageId: runIdentity.messageId,
+    presentationMessageId: `presentation-${identity}`,
   });
-  return runtime;
+  return runIdentity;
 }
 
 export function prepareTestTurnExecution(modelState = {}, loopState = {}, identity = "test-turn") {
@@ -111,17 +116,13 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
   );
   runtime.currentTurnMessages = loopState.currentTurnMessages;
   runtime.currentTurnTasks = loopState.currentTurnTasks;
-  runtime.runConfig = {
-    ...(runtime.runConfig && typeof runtime.runConfig === "object" ? runtime.runConfig : {}),
-    executionId: String(runtime?.runConfig?.executionId || `run-${identity}`),
-  };
   runtime.sessionManager =
     runtime.sessionManager || createCanonicalMessageEventSessionManager({ producerId: identity });
-  bindTestTurnMessageEventDomain(runtime, identity);
+  const runIdentity = bindTestTurnIdentity(runtime, String(identity || "test-turn"));
   if (!text(loopState.modelContext?.activeTurnIdentity?.turnScopeId)) {
     loopState.modelContext.activeTurnIdentity = {
       dialogProcessId: String(loopState.dialogProcessId || runtime.systemRuntime.dialogProcessId),
-      turnScopeId: String(runtime.systemRuntime.turnScopeId),
+      turnScopeId: runIdentity.turnScopeId,
     };
   }
   modelState.agentContext = createTestAgentExecutionScope(runtime, {
@@ -131,13 +132,14 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
       rootSessionId: runtime.systemRuntime.rootSessionId,
       parentSessionId: runtime.systemRuntime.parentSessionId,
       dialogProcessId: runtime.systemRuntime.dialogProcessId,
-      turnScopeId: runtime.systemRuntime.turnScopeId,
-      runId: runtime.runConfig.executionId,
-      messageId: runtime.systemRuntime.messageId || `message-${identity}`,
+      turnScopeId: runIdentity.turnScopeId,
+      runId: runIdentity.executionId,
+      messageId: runIdentity.messageId,
     },
     messageBlocks: loopState.modelContext.messageBlocks,
     tools: loopState.tools,
   });
-  initializeCurrentTurnMessageEventProjection(runtime, { sequenceScopeId: identity });
+  runtime.persistCurrentTurnMessages = async () => {};
+  initializeCurrentTurnMessageEventProjection(runtime);
   return { modelState, loopState };
 }

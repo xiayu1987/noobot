@@ -30,21 +30,18 @@ test("harness planning disables blocked tools (except help) and injects request_
     sessionId: "s10",
     dialogProcessId: "dp10",
     agentContext: {
-      payload: {
-        tools: {
-          registry: [
-            { name: "task_summary", invoke: async () => ({ ok: true }) },
-            { name: "help", invoke: async () => ({ ok: true }) },
-            { name: "read_file", invoke: async () => ({ ok: true }) },
-          ],
-        },
-        messages: { system: [], history: [] },
+      bindings: {
+        tools: [
+          { name: "task_summary", invoke: async () => ({ ok: true }) },
+          { name: "help", invoke: async () => ({ ok: true }) },
+          { name: "read_file", invoke: async () => ({ ok: true }) },
+        ],
       },
     },
   };
 
   await hookManager.emit("agent.before_turn", ctx);
-  const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
+  const names = ctx.agentContext.bindings.tools.map((tool) => tool.name);
   assert.equal(names.includes("task_summary"), false);
   assert.equal(names.includes("help"), true);
   assert.equal(names.includes("read_file"), true);
@@ -63,10 +60,9 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
     executionScope: "auxiliary",
     messages,
     agentContext: {
-      payload: {
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-        messages: { system: [], history: [] },
-        harness: {},
+      bindings: {
+        tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
     },
   };
@@ -76,7 +72,7 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
     messages.some((item = {}) => /harness-planning-bootstrap/.test(String(item?.content || ""))),
     false,
   );
-  const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
+  const names = ctx.agentContext.bindings.tools.map((tool) => tool.name);
   assert.equal(names.includes("request_task_acceptance"), false);
 });
 
@@ -105,20 +101,15 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
 
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-refinement-opdir-"));
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
-    },
-    execution: {
-      controllers: {
-        runtime: {
-          basePath,
-          userId: "u11-r",
-          globalConfig: { security: { executionIsolation: { mode: "host" } } },
-          systemRuntime: { userId: "u11-r", sessionId: "s11-r" },
-        },
+    bindings: {
+      runtime: {
+        basePath,
+        userId: "u11-r",
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
+        systemRuntime: { userId: "u11-r", sessionId: "s11-r" },
       },
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
 
@@ -133,12 +124,11 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
     userId: "u11-r",
     sessionId: "s11-r",
     dialogProcessId: "dp11-r",
-    ai: {
-      content: "1. 解析附件\n2. 执行核心任务",
-    },
+    modelResponse: { text: "1. 解析附件\n2. 执行核心任务" },
+    calls: [],
     agentContext,
   });
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
 
   const messages = [{ role: "user", content: "继续处理" }];
   const currentHookContext = {
@@ -149,7 +139,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
     agentContext,
   };
   await hookManager.emit("agent.before_llm_call", currentHookContext);
-  const refinementTool = agentContext.payload.tools.registry.find(
+  const refinementTool = agentContext.bindings.tools.find(
     (tool) => tool?.name === "request_plan_refinement",
   );
   assert.ok(refinementTool, "request_plan_refinement 工具应注入");
@@ -160,19 +150,19 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   );
   assert.equal(toolResult?.ok, true);
   assert.equal(toolResult?.status, "completed");
-  assert.equal(agentContext.payload.harness.state.flags.planRefinementRequested, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planRefinementRequested, true);
   assert.equal(
-    agentContext.payload.tools.registry.some((tool) => tool?.name === "request_plan_refinement"),
+    agentContext.bindings.tools.some((tool) => tool?.name === "request_plan_refinement"),
     false,
   );
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
   assert.equal(
     invocations.some((item = {}) => item.purpose === "planning_refinement"),
     true,
   );
-  assert.equal(Array.isArray(agentContext.payload.harness.planRefinementRecords), true);
-  assert.equal(agentContext.payload.harness.planRefinementRecords.length >= 1, true);
+  assert.equal(Array.isArray(agentContext.bindings.extensions.harness.planRefinementRecords), true);
+  assert.equal(agentContext.bindings.extensions.harness.planRefinementRecords.length >= 1, true);
   const followupMessage = messages.find((item = {}) =>
     /next_phase_plan_refinement_followup/.test(String(item?.content || "")),
   );
@@ -194,22 +184,17 @@ test("harness planning does not inject refinement tool by default in programming
   );
 
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
-    },
-    execution: {
-      controllers: {
-        runtime: {
+    bindings: {
+      runtime: {
+        runConfig: { scenarioProfile: { key: "programming" } },
+        systemRuntime: {
+          userId: "u11-rp",
+          sessionId: "s11-rp",
           runConfig: { scenarioProfile: { key: "programming" } },
-          systemRuntime: {
-            userId: "u11-rp",
-            sessionId: "s11-rp",
-            runConfig: { scenarioProfile: { key: "programming" } },
-          },
         },
       },
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
 
@@ -224,11 +209,12 @@ test("harness planning does not inject refinement tool by default in programming
     userId: "u11-rp",
     sessionId: "s11-rp",
     dialogProcessId: "dp11-rp",
-    ai: { content: "1. 解析附件\n2. 执行核心任务" },
+    modelResponse: { text: "1. 解析附件\n2. 执行核心任务" },
+    calls: [],
     agentContext,
   });
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.notEqual(agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
+  assert.notEqual(agentContext.bindings.extensions.harness.state.pending.planRefinement, true);
 
   await hookManager.emit("agent.before_llm_call", {
     userId: "u11-rp",
@@ -237,7 +223,7 @@ test("harness planning does not inject refinement tool by default in programming
     messages: [{ role: "user", content: "继续处理" }],
     agentContext,
   });
-  const refinementTool = agentContext.payload.tools.registry.find(
+  const refinementTool = agentContext.bindings.tools.find(
     (tool) => tool?.name === "request_plan_refinement",
   );
   assert.equal(refinementTool, undefined);
@@ -255,11 +241,7 @@ test("harness exposes plan refinement before capture and the tool owns its not-r
     },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [] },
-      messages: { system: [], history: [] },
-      harness: {},
-    },
+    bindings: { tools: [], extensions: { harness: {} } },
   };
 
   await hookManager.emit("agent.before_llm_call", {
@@ -269,11 +251,11 @@ test("harness exposes plan refinement before capture and the tool owns its not-r
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  const refinementTool = agentContext.payload.tools.registry.find(
+  const refinementTool = agentContext.bindings.tools.find(
     (tool) => tool?.name === "request_plan_refinement",
   );
   assert.ok(refinementTool);
-  agentContext.payload.harness.state.flags.planningCaptured = false;
+  agentContext.bindings.extensions.harness.state.flags.planningCaptured = false;
   const result = await refinementTool.invoke({ targetMainStepIndexes: [1] });
   assert.equal(result.ok, false);
   assert.equal(result.status, "not_ready");
@@ -303,10 +285,9 @@ test("harness request_plan_refinement falls back to closure meta when configurab
   );
 
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
 
@@ -321,7 +302,8 @@ test("harness request_plan_refinement falls back to closure meta when configurab
     userId: "u11-r2",
     sessionId: "s11-r2",
     dialogProcessId: "dp11-r2",
-    ai: { content: "1. 解析附件\n2. 执行核心任务" },
+    modelResponse: { text: "1. 解析附件\n2. 执行核心任务" },
+    calls: [],
     agentContext,
   });
   await hookManager.emit("agent.before_llm_call", {
@@ -331,7 +313,7 @@ test("harness request_plan_refinement falls back to closure meta when configurab
     messages: [{ role: "user", content: "继续处理" }],
     agentContext,
   });
-  const refinementTool = agentContext.payload.tools.registry.find(
+  const refinementTool = agentContext.bindings.tools.find(
     (tool) => tool?.name === "request_plan_refinement",
   );
   assert.ok(refinementTool, "request_plan_refinement 工具应注入");
@@ -367,10 +349,9 @@ test("harness planning allows tool-call turn without assistant text when plannin
     },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
 
@@ -379,18 +360,18 @@ test("harness planning allows tool-call turn without assistant text when plannin
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: {
-      content: "",
-      tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }],
-    },
-    modelResponse: { finish_reason: "tool_calls" },
+    modelResponse: { text: "" },
+    calls: [{ id: "c1", name: "read_file", args: {} }],
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
-  assert.equal(agentContext.payload.harness.state.counters.planningCaptureAttempts || 0, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.state.counters.planningCaptureAttempts || 0,
+    0,
+  );
+  assert.equal(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item) => item.event === "planning_capture_skipped_for_tool_call_turn",
     ),
     true,
@@ -423,11 +404,10 @@ test("harness planning separate model uses resolved planning tool allowlist", as
     caller: "user",
     messages: [{ role: "user", content: "开始任务" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "execute_script", invoke: async () => ({ ok: true }) }] },
+      bindings: {
+        runtime: { systemRuntime: { config: {} } },
+        tools: [{ name: "execute_script", invoke: async () => ({ ok: true }) }],
       },
-      execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
     },
   };
 

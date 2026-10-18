@@ -129,10 +129,12 @@ test("planning preserves typed base system context while adding harness prompts"
   const ctx = createTestHookContext(
     {
       agentContext: {
-        payload: {
-          tools: { registry: [] },
-          harness: {
-            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        bindings: {
+          tools: [],
+          extensions: {
+            harness: {
+              logs: { planning: [], guidance: [], acceptance: [], review: [] },
+            },
           },
         },
       },

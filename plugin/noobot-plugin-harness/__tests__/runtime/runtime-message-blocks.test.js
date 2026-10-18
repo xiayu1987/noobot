@@ -35,11 +35,13 @@ test("before_llm_call reopens the active harness turn after stale terminal state
   const ctx = withModelContext({
     dialogProcessId: "dialog-1",
     agentContext: {
-      payload: {
-        harness: {
-          state: {
-            flags: { agentTurnEnded: true },
-            signals: { activeDialogProcessId: "dialog-1" },
+      bindings: {
+        extensions: {
+          harness: {
+            state: {
+              flags: { agentTurnEnded: true },
+              signals: { activeDialogProcessId: "dialog-1" },
+            },
           },
         },
       },
@@ -127,10 +129,12 @@ test("capability runtime keeps planning first without blocking later before_llm_
   });
   const ctx = withModelContext({
     agentContext: {
-      payload: {
-        harness: {
-          state: {
-            flags: { planningCaptured: false },
+      bindings: {
+        extensions: {
+          harness: {
+            state: {
+              flags: { planningCaptured: false },
+            },
           },
         },
       },
@@ -170,11 +174,13 @@ test("capability runtime does not block guidance when plan text exists but captu
   });
   const ctx = withModelContext({
     agentContext: {
-      payload: {
-        harness: {
-          planText: "1. 已有主计划",
-          state: {
-            flags: { planningCaptured: false },
+      bindings: {
+        extensions: {
+          harness: {
+            planText: "1. 已有主计划",
+            state: {
+              flags: { planningCaptured: false },
+            },
           },
         },
       },
@@ -185,7 +191,7 @@ test("capability runtime does not block guidance when plan text exists but captu
   await runtime.runHook("agent.before_llm_call", ctx, {});
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
 });
 
 test("capability runtime delegates before_llm_call messages to agent resolver", async () => {
@@ -334,11 +340,7 @@ test("capability runtime applies message blocks only once per runtime turn conte
       incremental: [{ role: "user", content: "u1" }],
     },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {},
-        },
-      },
+      bindings: { runtime: {} },
     },
   });
   const originalMessageBlocks = ctx.modelContext.messageBlocks;
@@ -487,11 +489,7 @@ test("capability runtime preserves history and incremental user messages in bloc
       ],
     },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {},
-        },
-      },
+      bindings: { runtime: {} },
     },
   });
 
@@ -550,11 +548,7 @@ test("capability runtime does not remove same-text user from a different turn", 
       ],
     },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {},
-        },
-      },
+      bindings: { runtime: {} },
     },
   });
 
@@ -592,10 +586,12 @@ test("capability runtime keeps later flows running when one flow fails", async (
     },
   });
   const agentContext = {
-    payload: {
-      harness: {
-        state: {
-          flags: { planningCaptured: true },
+    bindings: {
+      extensions: {
+        harness: {
+          state: {
+            flags: { planningCaptured: true },
+          },
         },
       },
     },
@@ -612,7 +608,7 @@ test("capability runtime keeps later flows running when one flow fails", async (
   assert.equal(results[1]?.capability, "guidance");
   assert.equal(results[2]?.capability, "acceptance");
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item = {}) => item.event === "capability_flow_failed",
     ),
     true,

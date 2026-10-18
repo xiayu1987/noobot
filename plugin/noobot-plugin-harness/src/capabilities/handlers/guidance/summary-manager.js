@@ -34,10 +34,7 @@ export function recordLatestSummaryFullText(ctx = {}, summaryFullText = "") {
 }
 
 export function shouldSaveSummaryToAttachment(meta = {}) {
-  return (
-    meta?.harness?.summaryDetailSaveToAttachment === true ||
-    meta?.harness?.saveSummaryDetailToAttachment === true
-  );
+  return meta?.harness?.summaryDetailSaveToAttachment === true;
 }
 
 export async function transferSummaryInjectionMessage(

@@ -22,10 +22,7 @@ import { assertNotAborted } from "../../shared/utils/error-utils.js";
 import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
-import {
-  getSessionIdsFromAgentContext,
-  getSystemRuntimeFromRuntime,
-} from "../../context/agent-context-accessor.js";
+import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
 import { removeContextMessagesByIds } from "@noobot/context-protocol/mutation/context";
 import { getMessageId } from "@noobot/context-protocol/message/store";
 import {
@@ -140,8 +137,7 @@ export function createTurnOrchestrator({
       instruction = null,
       eventName = "main_flow_final_no_tools_turn_enforced",
     } = {}) {
-      const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-      markMainFlowFinalNoToolsTurnActive(systemRuntime, true);
+      markMainFlowFinalNoToolsTurnActive(runtime, true);
       emitEvent(eventListener, eventName, {
         turn: finalTurn,
         reason: text(instruction?.reason),
@@ -166,8 +162,8 @@ export function createTurnOrchestrator({
           modelMessages: noToolsResult.modelMessages,
         });
       } finally {
-        markMainFlowFinalNoToolsTurnActive(systemRuntime, false);
-        clearMainFlowFinalNoToolsTurnInstruction(systemRuntime);
+        markMainFlowFinalNoToolsTurnActive(runtime, false);
+        clearMainFlowFinalNoToolsTurnInstruction(runtime);
       }
     }
 
@@ -216,10 +212,8 @@ export function createTurnOrchestrator({
 
       resolveLlmForTurnFn(modelState);
 
-      const systemRuntime = getSystemRuntimeFromRuntime(runtime);
       maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn({ modelState, loopState });
-      const mainFlowFinalNoToolsInstruction =
-        consumeMainFlowFinalNoToolsTurnInstruction(systemRuntime);
+      const mainFlowFinalNoToolsInstruction = consumeMainFlowFinalNoToolsTurnInstruction(runtime);
       if (mainFlowFinalNoToolsInstruction) {
         return invokeFinalNoToolsTurn({
           finalTurn: turn,
@@ -247,7 +241,7 @@ export function createTurnOrchestrator({
       await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
       if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
         const instruction =
-          consumeMainFlowFinalNoToolsTurnInstruction(systemRuntime) ||
+          consumeMainFlowFinalNoToolsTurnInstruction(runtime) ||
           withToolsResult.mainFlowFinalNoToolsInstruction ||
           null;
         return invokeFinalNoToolsTurn({

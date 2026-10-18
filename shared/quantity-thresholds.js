@@ -49,8 +49,6 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
   },
 
   harness: {
-    jsonlBatchSize: QUANTITY_TIERS.standardBatch,
-
     jsonlFlushMaxSize: QUANTITY_TIERS.standardBatch,
 
     jsonlMaxBufferEntries: 5000,

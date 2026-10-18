@@ -100,9 +100,10 @@ function resolveHookRuntimeMeta(runtime = {}) {
     userId: text(systemRuntime?.userId),
     sessionId: text(systemRuntime?.sessionId),
     parentSessionId: normalizeParentSessionId(systemRuntime?.parentSessionId),
-    dialogProcessId: text(runtime?.systemRuntime?.dialogProcessId),
+    dialogProcessId: text(systemRuntime?.dialogProcessId),
     turnScopeId: text(systemRuntime?.turnScopeId),
     caller: text(systemRuntime?.caller),
+    resumeFromStoppedSnapshot: runtime?.resumeFromStoppedSnapshot === true,
   };
 }
 

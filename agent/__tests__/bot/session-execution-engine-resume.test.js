@@ -17,6 +17,7 @@ import {
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { persistSession } from "../helpers/runtime-events-env.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 
 test("prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
@@ -99,7 +100,7 @@ test("stopped snapshot resume preserves history and incremental block boundaries
   const contextBuilder = {
     async buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
-      return createTestAgentExecutionScope({});
+      return createTestAgentExecutionScope(createRuntimeContext());
     },
   };
   const history = [{ type: "human", content: "history", dialogProcessId: "old" }];
@@ -190,7 +191,7 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     },
     async buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
-      return createTestAgentExecutionScope({});
+      return createTestAgentExecutionScope(createRuntimeContext());
     },
   };
 
@@ -325,7 +326,7 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
       },
     },
     async buildAgentContext() {
-      return createTestAgentExecutionScope({ systemRuntime });
+      return createTestAgentExecutionScope(createRuntimeContext({ systemRuntime }));
     },
   };
 

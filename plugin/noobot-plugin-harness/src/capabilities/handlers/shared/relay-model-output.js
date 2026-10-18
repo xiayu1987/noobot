@@ -18,6 +18,7 @@ import {
   normalizeTransferPayload,
 } from "./attachment-log-utils.js";
 import { text } from "@noobot/shared/value";
+import { readHarnessBucket } from "./bucket-utils.js";
 
 function optionalText(value) {
   return text(value) || undefined;
@@ -48,7 +49,7 @@ function buildRelayContent(locale, purposeLabel, inputText) {
 }
 
 function buildTurnEndedDetail(ctx, purposeLabel) {
-  const harnessState = ctx?.agentContext?.bindings?.extensions?.harness?.state;
+  const harnessState = readHarnessBucket(ctx)?.state;
   return {
     purpose: purposeLabel,
     dialogProcessId: optionalText(ctx?.dialogProcessId),

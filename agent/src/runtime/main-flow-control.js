@@ -21,18 +21,14 @@ function asObject(value) {
   return isPlainObject(value) ? value : null;
 }
 
-function resolveSystemRuntimeHolder(runtimeOrSystemRuntime = {}) {
-  const input = asObject(runtimeOrSystemRuntime);
-  if (!input) return null;
-  if (asObject(input.systemRuntime)) return input.systemRuntime;
-  return input;
-}
-
-function ensureSystemRuntime(runtime = {}) {
-  const holder = asObject(runtime);
-  if (!holder) return null;
-  if (!asObject(holder.systemRuntime)) holder.systemRuntime = {};
-  return holder.systemRuntime;
+function requireSystemRuntime(runtime) {
+  const systemRuntime = asObject(runtime?.systemRuntime);
+  if (!systemRuntime) {
+    throw new TypeError(
+      "main flow control requires runtime.systemRuntime from createRuntimeContext",
+    );
+  }
+  return systemRuntime;
 }
 
 function normalizeFinalNoToolsInstruction(instruction = null) {
@@ -67,11 +63,10 @@ function normalizeSummaryCheckpointInstruction(instruction = null) {
 }
 
 export function requestMainFlowSummaryCheckpoint(
-  runtime = {},
+  runtime,
   { source = "", summarizedMessageIds = [] } = {},
 ) {
-  const systemRuntime = ensureSystemRuntime(runtime);
-  if (!systemRuntime) return null;
+  const systemRuntime = requireSystemRuntime(runtime);
   const instruction = normalizeSummaryCheckpointInstruction({
     action: MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
     source,
@@ -86,9 +81,8 @@ export function requestMainFlowSummaryCheckpoint(
   return instruction;
 }
 
-export function peekMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
-  const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
-  if (!systemRuntime) return null;
+export function peekMainFlowSummaryCheckpoint(runtime) {
+  const systemRuntime = requireSystemRuntime(runtime);
   const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
     ? systemRuntime.mainFlowControlInstructions
     : [];
@@ -100,9 +94,8 @@ export function peekMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
   return instruction;
 }
 
-export function acknowledgeMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
-  const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
-  if (!systemRuntime) return false;
+export function acknowledgeMainFlowSummaryCheckpoint(runtime) {
+  const systemRuntime = requireSystemRuntime(runtime);
   const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
     ? systemRuntime.mainFlowControlInstructions
     : [];
@@ -115,15 +108,14 @@ export function acknowledgeMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}
 }
 
 export function requestMainFlowFinalNoToolsTurn(
-  runtime = {},
+  runtime,
   {
     reason = MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
     source = "agent",
     detail = {},
   } = {},
 ) {
-  const systemRuntime = ensureSystemRuntime(runtime);
-  if (!systemRuntime) return null;
+  const systemRuntime = requireSystemRuntime(runtime);
   const instruction = {
     action: MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN,
     reason: text(reason) || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
@@ -135,15 +127,13 @@ export function requestMainFlowFinalNoToolsTurn(
   return instruction;
 }
 
-export function peekMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime = {}) {
-  const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
-  if (!systemRuntime) return null;
+export function peekMainFlowFinalNoToolsTurnInstruction(runtime) {
+  const systemRuntime = requireSystemRuntime(runtime);
   return normalizeFinalNoToolsInstruction(systemRuntime.mainFlowControlInstruction);
 }
 
-export function clearMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime = {}) {
-  const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
-  if (!systemRuntime) return false;
+export function clearMainFlowFinalNoToolsTurnInstruction(runtime) {
+  const systemRuntime = requireSystemRuntime(runtime);
   if (normalizeFinalNoToolsInstruction(systemRuntime.mainFlowControlInstruction)) {
     delete systemRuntime.mainFlowControlInstruction;
     return true;
@@ -151,16 +141,15 @@ export function clearMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime 
   return false;
 }
 
-export function consumeMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime = {}) {
-  const instruction = peekMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime);
+export function consumeMainFlowFinalNoToolsTurnInstruction(runtime) {
+  const instruction = peekMainFlowFinalNoToolsTurnInstruction(runtime);
   if (!instruction) return null;
-  clearMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime);
+  clearMainFlowFinalNoToolsTurnInstruction(runtime);
   return instruction;
 }
 
-export function markMainFlowFinalNoToolsTurnActive(runtimeOrSystemRuntime = {}, active = true) {
-  const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
-  if (!systemRuntime) return false;
+export function markMainFlowFinalNoToolsTurnActive(runtime, active = true) {
+  const systemRuntime = requireSystemRuntime(runtime);
   systemRuntime.mainFlowFinalNoToolsTurnActive = active === true;
   return true;
 }

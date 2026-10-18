@@ -37,7 +37,7 @@ import {
   buildScenarioPolicyPromptText,
   resolveScenarioPolicyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -48,7 +48,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
   if (state.pending.phaseAcceptance !== true) return false;
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
-  const locale = state?.locale || LOCALE.ZH_CN;
+  const locale = state.locale || LOCALE.ZH_CN;
   const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
     ctx,
     meta,
@@ -110,17 +110,11 @@ export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
       const normalizedText = text(responseText);
       if (!normalizedText)
         return { applied: false, detail: { reason: "empty_phase_acceptance_output" } };
-      const report = appendPhaseAcceptanceReport(bucket, normalizedText);
-      if (report && isObjectLike(state?.flags)) {
-        state.flags.phaseAcceptanceTriggeredThisTurn = true;
-      }
+      appendPhaseAcceptanceReport(bucket, normalizedText);
+      state.flags.phaseAcceptanceTriggeredThisTurn = true;
       return {
-        applied: Boolean(report),
-        detail: {
-          phaseAcceptanceCount: Array.isArray(bucket.phaseAcceptanceReports)
-            ? bucket.phaseAcceptanceReports.length
-            : 0,
-        },
+        applied: true,
+        detail: { phaseAcceptanceCount: bucket.phaseAcceptanceReports.length },
       };
     },
   });
@@ -141,7 +135,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx, meta);
   }
   const invoker = readCapabilityModelInvoker(meta);
-  const locale = state?.locale || LOCALE.ZH_CN;
+  const locale = state.locale || LOCALE.ZH_CN;
   const {
     summaryReportsContents,
     planContextContent,
@@ -222,9 +216,7 @@ export async function runPhaseAcceptanceBySeparateModel(
   const responseText = text(response?.output?.text);
   if (!responseText) return false;
   appendPhaseAcceptanceReport(bucket, responseText);
-  if (isObjectLike(state?.flags)) {
-    state.flags.phaseAcceptanceTriggeredThisTurn = true;
-  }
+  state.flags.phaseAcceptanceTriggeredThisTurn = true;
   const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "phase_acceptance",
     content: responseText,
@@ -250,20 +242,18 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  if (state?.flags?.phaseAcceptanceTriggeredThisTurn === true) {
+  if (state.flags.phaseAcceptanceTriggeredThisTurn === true) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       event: ACCEPTANCE_EVENTS.phaseAcceptanceSkippedBeforeFinalOutputSameTurn,
       detail: {
         reason: "phase_acceptance_already_triggered_this_turn",
-        phaseAcceptanceCount: Array.isArray(bucket?.phaseAcceptanceReports)
-          ? bucket.phaseAcceptanceReports.length
-          : 0,
+        phaseAcceptanceCount: bucket.phaseAcceptanceReports.length,
       },
     });
     return false;
   }
-  const locale = state?.locale || LOCALE.ZH_CN;
+  const locale = state.locale || LOCALE.ZH_CN;
   const requestPayload = buildPhaseAcceptanceRequestPayload({ bucket, state });
   const {
     summaryReportsContents,
@@ -282,11 +272,8 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   });
   if (!shouldUseSeparateModel(meta)) {
     const fallbackText = buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
-    const report = appendPhaseAcceptanceReport(bucket, fallbackText);
-    if (!report) return false;
-    if (isObjectLike(state?.flags)) {
-      state.flags.phaseAcceptanceTriggeredThisTurn = true;
-    }
+    appendPhaseAcceptanceReport(bucket, fallbackText);
+    state.flags.phaseAcceptanceTriggeredThisTurn = true;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       event: ACCEPTANCE_EVENTS.phaseAcceptanceGeneratedBeforeFinalOutputFallback,
@@ -356,11 +343,8 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   const responseText = text(response?.output?.text);
   const reportText =
     responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
-  const report = appendPhaseAcceptanceReport(bucket, reportText);
-  if (!report) return false;
-  if (isObjectLike(state?.flags)) {
-    state.flags.phaseAcceptanceTriggeredThisTurn = true;
-  }
+  appendPhaseAcceptanceReport(bucket, reportText);
+  state.flags.phaseAcceptanceTriggeredThisTurn = true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     event: ACCEPTANCE_EVENTS.phaseAcceptanceGeneratedBeforeFinalOutput,

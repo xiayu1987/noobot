@@ -32,38 +32,30 @@ import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
-function buildAcceptanceReceipt(report = {}) {
-  const summary = report?.summary && typeof report.summary === "object" ? report.summary : {};
-  const semanticValidation =
-    report?.semanticValidation && typeof report.semanticValidation === "object"
-      ? report.semanticValidation
-      : null;
+function buildAcceptanceReceipt(report) {
+  const { summary, semanticValidation } = report;
   const receipt = {
-    mode: text(report?.mode),
-    acceptedAt: text(report?.acceptedAt),
+    mode: report.mode,
+    acceptedAt: report.acceptedAt,
     summary: {
-      total: Number(summary.total || 0),
-      completed: Number(summary.completed || 0),
-      inProgress: Number(summary.inProgress || 0),
-      pending: Number(summary.pending || 0),
+      total: summary.total,
+      completed: summary.completed,
+      inProgress: summary.inProgress,
+      pending: summary.pending,
     },
   };
-  const statusAuthority = text(report?.statusAuthority);
-  if (statusAuthority) receipt.statusAuthority = statusAuthority;
+  if (report.statusAuthority) receipt.statusAuthority = report.statusAuthority;
   if (semanticValidation) {
-    const validationReceipt = {};
-    const validationStatus = text(semanticValidation.status);
-    if (validationStatus) validationReceipt.status = validationStatus;
-    if (typeof semanticValidation.consistent === "boolean") {
-      validationReceipt.consistent = semanticValidation.consistent;
-    }
-    receipt.semanticValidation = validationReceipt;
+    receipt.semanticValidation = {
+      status: semanticValidation.status,
+      consistent: semanticValidation.consistent,
+    };
   }
   return receipt;
 }
 
-function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, meta = {} } = {}) {
-  const locale = state?.locale || LOCALE.ZH_CN;
+function createRequestTaskAcceptanceTool({ bucket, state, ctx, meta }) {
+  const locale = state.locale || LOCALE.ZH_CN;
   return new DynamicStructuredTool({
     name: TASK_ACCEPTANCE_TOOL_NAME,
     description: translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.DESCRIPTION),
@@ -95,7 +87,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
       try {
         const forcedReason =
           mode === ACCEPTANCE_MODE.FORCED
-            ? state?.flags?.overflowForceAcceptancePending === true
+            ? state.flags.overflowForceAcceptancePending === true
               ? [
                   translateI18nText(
                     locale,
@@ -130,16 +122,6 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         bucket.lastAcceptanceReport = report;
         bucket.acceptanceReports.push(report);
         await runAcceptanceBySeparateModel(toolCtx, toolMeta, report);
-        const summary = report?.summary && typeof report.summary === "object" ? report.summary : {};
-        const semanticValidation =
-          report?.semanticValidation && typeof report.semanticValidation === "object"
-            ? report.semanticValidation
-            : {};
-        state.flags.acceptanceCompleted =
-          Number(summary.pending || 0) === 0 &&
-          Number(summary.inProgress || 0) === 0 &&
-          text(semanticValidation.status).toLowerCase() !== "fail" &&
-          semanticValidation.consistent !== false;
         deferCapabilityLogs(
           toolCtx,
           (Array.isArray(toolCtx.harnessCapabilityLogs) ? toolCtx.harnessCapabilityLogs : []).slice(

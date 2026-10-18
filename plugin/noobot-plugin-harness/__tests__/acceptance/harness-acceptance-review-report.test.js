@@ -18,10 +18,12 @@ test("harness summary selection does not mutate canonical messages before commit
   const ctx = createTestHookContext(
     {
       agentContext: {
-        payload: {
-          harness: {
-            state: { flags: {}, counters: {}, signals: {}, pending: {} },
-            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        bindings: {
+          extensions: {
+            harness: {
+              state: { flags: {}, counters: {}, signals: {}, pending: {} },
+              logs: { planning: [], guidance: [], acceptance: [], review: [] },
+            },
           },
         },
       },
@@ -69,22 +71,27 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
   const agentContext = {
-    payload: {
-      messages: { system: [], history: [] },
-      harness: {
-        lastAcceptanceReport: {
-          mode: "active",
-          summary: { total: 1, completed: 1, inProgress: 0, pending: 0 },
-          finalPlanChecklist: [{ index: 1, task: "执行核心任务", status: "completed" }],
-          semanticValidation: { status: "fail", consistent: false, missingItems: ["执行核心任务"] },
+    bindings: {
+      extensions: {
+        harness: {
+          lastAcceptanceReport: {
+            mode: "active",
+            summary: { total: 1, completed: 1, inProgress: 0, pending: 0 },
+            finalPlanChecklist: [{ index: 1, task: "执行核心任务", status: "completed" }],
+            semanticValidation: {
+              status: "fail",
+              consistent: false,
+              missingItems: ["执行核心任务"],
+            },
+          },
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: true },
+            counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
+            signals: { successfulToolCount: 1 },
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        state: {
-          flags: { planningCaptured: true, acceptanceRequested: true },
-          counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: { successfulToolCount: 1 },
-          pending: {},
-        },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
@@ -92,7 +99,7 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
 
   await hookManager.emit("agent.before_final_output", { agentContext, result });
 
-  const report = agentContext.payload.harness.lastReviewReport;
+  const report = agentContext.bindings.extensions.harness.lastReviewReport;
   assert.equal(report.summary.semanticValidationStatus, null);
   assert.equal(report.summary.semanticValidationConsistent, null);
   assert.equal(

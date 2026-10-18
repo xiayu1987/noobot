@@ -10,6 +10,7 @@ import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capabili
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
+import { createTestModelHost } from "../../helpers/test-model-host.js";
 
 test("capability mini-runner requires and uses the host ModelPort", async () => {
   const calls = [];
@@ -35,47 +36,50 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
     globalConfig: {},
     userConfig: {},
     systemRuntime: {},
-    modelPort: {
-      async invoke(request) {
-        calls.push(request);
-        const output = {
-          text: "ok",
-          reasoning: "",
-          toolCalls: [],
-          finishReason: "stop",
-          usage: {},
-        };
-        return createModelResponse({
-          invocation: {
-            requestId: "request-1",
-            invocationId: "invocation-1",
-            sessionId: "session-1",
-            parentSessionId: "",
-            dialogProcessId: "dialog-1",
-            turnScopeId: "turn-1",
-            runId: "agent:turn-1",
-            flow: request.invocation.flow,
-            purpose: request.invocation.purpose,
-            domain: request.invocation.domain,
-            contextSequencePolicy:
-              request.invocation.contextSequencePolicy ||
-              MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-          },
-          output,
-          attempts: [
-            {
-              attempt: 1,
-              status: "completed",
-              kind: "response",
-              streaming: false,
-              output,
+    modelHost: createTestModelHost({
+      modelPort: {
+        async invoke(request) {
+          calls.push(request);
+          const output = {
+            text: "ok",
+            reasoning: "",
+            toolCalls: [],
+            finishReason: "stop",
+            usage: {},
+          };
+          return createModelResponse({
+            invocation: {
+              requestId: "request-1",
+              invocationId: "invocation-1",
+              sessionId: "session-1",
+              parentSessionId: "",
+              dialogProcessId: "dialog-1",
+              turnScopeId: "turn-1",
+              runId: "agent:turn-1",
+              flow: request.invocation.flow,
+              purpose: request.invocation.purpose,
+              domain: request.invocation.domain,
+              contextSequencePolicy:
+                request.invocation.contextSequencePolicy ||
+                MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
             },
-          ],
-          model: request.model,
-          provider: { operatorId: "zhipu", adapterId: "openai-compatible" },
-        });
+            output,
+            attempts: [
+              {
+                attempt: 1,
+                status: "completed",
+                kind: "response",
+                streaming: false,
+                output,
+              },
+            ],
+            model: request.model,
+            provider: { operatorId: "zhipu", adapterId: "openai-compatible" },
+          });
+        },
       },
-    },
+      modelSpec: null,
+    }),
   };
 
   const result = await invoker({
@@ -107,6 +111,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
   });
   assert.equal(calls[0]?.invocation?.purpose, "workflow_semantic");
   assert.equal(calls[0]?.options?.signal, invocationAbortController.signal);
+  assert.equal(calls[0]?.options?.headers?.["X-Plugin-Session-Id"], "session-1");
 });
 
 test("capability mini-runner fails closed without a versioned config snapshot", () => {

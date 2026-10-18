@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
 import { tToolManual } from "../../src/tools/core/tool-schema-i18n.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import { isNativeScriptExecutionResult } from "../../src/tools/execution/native-script-ipc.js";
 import {
   NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
@@ -111,11 +112,23 @@ test("execute_native_script rejects typeof process before any script statement r
 
 test("execute_native_script manuals expose the authoritative static policy", () => {
   const manuals = [
-    tToolManual({ locale: "en-US" }, "execute_native_script"),
-    tToolManual({ locale: "zh-CN" }, "execute_native_script"),
+    [
+      tToolManual(
+        createRuntimeContext({ runConfig: { locale: "en-US" } }),
+        "execute_native_script",
+      ),
+      /zero execution/,
+    ],
+    [
+      tToolManual(
+        createRuntimeContext({ runConfig: { locale: "zh-CN" } }),
+        "execute_native_script",
+      ),
+      /零执行/,
+    ],
   ];
-  for (const manual of manuals) {
-    assert.match(manual.validation.timing, /zero execution|零执行/);
+  for (const [manual, timingPattern] of manuals) {
+    assert.match(manual.validation.timing, timingPattern);
     for (const identifier of NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS) {
       assert.match(manual.validation.forbiddenIdentifiers, new RegExp(`\\b${identifier}\\b`));
     }

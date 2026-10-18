@@ -19,6 +19,7 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
@@ -26,26 +27,25 @@ const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-tool-batch-"
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
 
 function createRuntime(abortSignal = null) {
-  const runtime = {
+  const runtime = createRuntimeContext({
     abortSignal,
-    userId: "admin",
     basePath: workspaceRoot,
     globalConfig: { workspaceRoot },
     attachmentService: new AttachmentService({ workspaceRoot }),
+    sessionManager: createCanonicalMessageEventSessionManager(),
     runConfig: {
       executionId: "run-tool-batch",
       turnScopeId: "turn-tool-batch",
+      messageId: "message-tool-batch",
     },
     systemRuntime: {
       userId: "admin",
       sessionId: "session-tool-batch",
       rootSessionId: "session-tool-batch",
       dialogProcessId: "dialog-tool-batch",
-      turnScopeId: "turn-tool-batch",
       messageEventStream: { sequence: 0 },
     },
-    sessionManager: createCanonicalMessageEventSessionManager(),
-  };
+  });
   bindAssistantMessageEventStream(runtime, {
     messageId: "message-tool-batch",
     presentationMessageId: "presentation-tool-batch",

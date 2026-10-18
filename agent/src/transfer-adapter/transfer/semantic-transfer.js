@@ -58,40 +58,28 @@ function createDirectTextTransfer({
   };
 }
 
-async function transferToolStrategy({
-  strategy = "",
-  runtime = {},
-  agentContext = null,
-  ...options
-} = {}) {
+async function transferToolStrategy({ strategy = "", runtime = {}, ...options } = {}) {
   if (strategy === TOOL_STRATEGY.RESULT_TEXT) {
     return normalizeToolResultOverflow({
       ...options,
       runtime,
-      agentContext,
       identity: options.identity,
     });
   }
   if (strategy === TOOL_STRATEGY.INPUT) {
-    return transferToolInput({ ...options, runtime, agentContext });
+    return transferToolInput({ ...options, runtime });
   }
   if (strategy === TOOL_STRATEGY.OUTPUT) {
-    return transferToolOutput({ ...options, runtime, agentContext });
+    return transferToolOutput({ ...options, runtime });
   }
   throw new Error(`semantic_transfer_strategy_unhandled:tool:${strategy}`);
 }
 
-async function transferBotPluginStrategy({
-  strategy = "",
-  runtime = {},
-  agentContext = null,
-  ...options
-} = {}) {
+async function transferBotPluginStrategy({ strategy = "", runtime = {}, ...options } = {}) {
   if (strategy === WORKFLOW_STRATEGY.SUB_AGENT || strategy === WORKFLOW_STRATEGY.FINAL_PLAN) {
     return transferBotPluginSubagentResult({
       ...options,
       runtime,
-      agentContext,
     });
   }
   throw new Error(`semantic_transfer_strategy_unhandled:workflow:${strategy}`);
@@ -100,7 +88,6 @@ async function transferBotPluginStrategy({
 async function transferAgentPluginSummaryInjection({
   strategy = "",
   runtime = {},
-  agentContext = null,
   ...options
 } = {}) {
   const injectMode = text(options?.injectMode).toLowerCase() === "summary" ? "summary" : "full";
@@ -124,7 +111,6 @@ async function transferAgentPluginSummaryInjection({
   if (detailText && options?.saveDetailToAttachment === true) {
     detailTransfer = await transferAgentPluginStageMessage({
       runtime,
-      agentContext,
       summary: summaryText,
       detail: detailText,
       name: options?.name || "agent-plugin-summary-detail.md",
@@ -159,12 +145,7 @@ async function transferAgentPluginSummaryInjection({
   return { transferEnvelopes };
 }
 
-async function transferAgentPluginStrategy({
-  strategy = "",
-  runtime = {},
-  agentContext = null,
-  ...options
-} = {}) {
+async function transferAgentPluginStrategy({ strategy = "", runtime = {}, ...options } = {}) {
   if (
     Object.values(HARNESS_STRATEGY).includes(strategy) &&
     options.detail !== undefined &&
@@ -177,7 +158,6 @@ async function transferAgentPluginStrategy({
       category: options.category,
       businessPoint: options.businessPoint,
       runtime,
-      agentContext,
     });
   }
   if (
@@ -187,7 +167,6 @@ async function transferAgentPluginStrategy({
     return transferAgentPluginSummaryInjection({
       ...options,
       runtime,
-      agentContext,
       strategy,
     });
   }
@@ -216,7 +195,6 @@ export async function transferSemanticContent({
   scenario = "",
   strategy = "",
   runtime = {},
-  agentContext = null,
   ...options
 } = {}) {
   const normalizedScenario = normalizeScenario(scenario);
@@ -231,7 +209,6 @@ export async function transferSemanticContent({
       ...options,
       strategy: normalizedStrategy,
       runtime,
-      agentContext,
     });
   }
   if (normalizedScenario === SEMANTIC_TRANSFER_SCENARIO.WORKFLOW) {
@@ -239,7 +216,6 @@ export async function transferSemanticContent({
       ...options,
       strategy: normalizedStrategy,
       runtime,
-      agentContext,
     });
   }
   if (normalizedScenario === SEMANTIC_TRANSFER_SCENARIO.HARNESS) {
@@ -247,7 +223,6 @@ export async function transferSemanticContent({
       ...options,
       strategy: normalizedStrategy,
       runtime,
-      agentContext,
     });
   }
   throw new Error(`semantic_transfer_scenario_unhandled:${normalizedScenario}`);

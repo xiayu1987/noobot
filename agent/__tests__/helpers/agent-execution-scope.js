@@ -6,7 +6,6 @@
 
 import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
-import { text } from "@noobot/shared/value";
 
 export function createTestAgentExecutionScope(
   runtime = {},
@@ -19,32 +18,27 @@ export function createTestAgentExecutionScope(
     extensions = {},
   } = {},
 ) {
-  const systemRuntime = runtime?.systemRuntime || {};
+  const { systemRuntime } = runtime;
   const resolvedIdentity = {
-    userId: String(identity.userId || systemRuntime?.userId || "u-test").trim(),
-    sessionId: String(identity.sessionId || systemRuntime?.sessionId || "s-1").trim(),
-    rootSessionId: String(
-      identity.rootSessionId || systemRuntime?.rootSessionId || systemRuntime?.sessionId || "s-1",
-    ).trim(),
-    parentSessionId: String(
-      identity.parentSessionId || systemRuntime?.parentSessionId || "",
-    ).trim(),
-    dialogProcessId: String(
-      identity.dialogProcessId || systemRuntime?.dialogProcessId || "d-1",
-    ).trim(),
-    turnScopeId: String(identity.turnScopeId || systemRuntime?.turnScopeId || "t-1").trim(),
-    runId: text(identity.runId) || "r-1",
-    messageId: String(identity.messageId || systemRuntime?.messageId || "m-1").trim(),
+    userId: "u-test",
+    sessionId: "s-1",
+    rootSessionId: identity.sessionId || "s-1",
+    parentSessionId: "",
+    dialogProcessId: "d-1",
+    turnScopeId: "t-1",
+    runId: "r-1",
+    messageId: "m-1",
+    ...identity,
   };
   const context = createAgentContextBuildEnvelope({
     identity: resolvedIdentity,
     environment: {
       os: { platform: process.platform, arch: process.arch },
-      workspace: { basePath: text(runtime?.basePath) },
-      permissions: { isSuperUser: runtime?.systemRuntime?.isSuperUser === true },
+      workspace: { basePath: runtime.basePath },
+      permissions: { isSuperUser: systemRuntime.isSuperUser === true },
       ...environment,
     },
-    execution: { caller: String(systemRuntime?.caller || "user"), ...execution },
+    execution: { caller: "user", ...execution },
     messageBlocks,
     contextBuild: { mode: "test" },
   });

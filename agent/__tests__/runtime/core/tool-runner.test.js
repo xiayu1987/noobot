@@ -571,9 +571,9 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
     call: { id: "call_overflow", name: "demo_tool", args: {} },
     tool,
     turn: 1,
-    sessionId: "session-overflow-1",
     runtime: withAttachmentService({
       basePath,
+      systemRuntime: { sessionId: "session-overflow-1" },
       globalConfig: {
         tools: {
           maxToolResultChars: 120,
@@ -587,11 +587,6 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
       },
       userConfig: {},
     }),
-    agentContext: {
-      environment: {
-        workspace: { basePath },
-      },
-    },
   });
 
   const payload = JSON.parse(result.toolResultText);
@@ -643,11 +638,6 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
       globalConfig: { tools: { maxToolResultChars: 1000 } },
       userConfig: {},
     },
-    agentContext: {
-      environment: {
-        workspace: { basePath },
-      },
-    },
   });
 
   const payload = JSON.parse(result.toolResultText);
@@ -694,11 +684,6 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
       globalConfig: { tools: { maxToolResultChars: 120 } },
       userConfig: {},
     }),
-    agentContext: {
-      environment: {
-        workspace: { basePath },
-      },
-    },
   });
 
   const payload = JSON.parse(result.toolResultText);
@@ -831,11 +816,6 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
         },
       },
     }),
-    agentContext: {
-      environment: {
-        workspace: { basePath },
-      },
-    },
   });
 
   const payload = JSON.parse(result.toolResultText);

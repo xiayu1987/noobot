@@ -45,14 +45,8 @@ function resolveBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
 }
 
 export function resolvePendingPlanUpdate(state = {}) {
-  const pendingPlanUpdate = resolvePendingPlanUpdateForWorkflow(state);
-  return {
-    active: pendingPlanUpdate.active === true,
-    stage: pendingPlanUpdate.stage || "",
-    targetMainStepIndexes: Array.isArray(pendingPlanUpdate.targetMainStepIndexes)
-      ? pendingPlanUpdate.targetMainStepIndexes
-      : [],
-  };
+  const { active, stage, targetMainStepIndexes } = resolvePendingPlanUpdateForWorkflow(state);
+  return { active, stage, targetMainStepIndexes };
 }
 
 function guidanceActionFromDecision(decision = {}) {
@@ -144,13 +138,9 @@ function toPendingSnapshot(state = {}) {
       active: pending.analysis === true,
     },
     planUpdate: {
-      active: planUpdate.active === true,
-      stage: planUpdate.stage || "",
-      context: {
-        targetMainStepIndexes: Array.isArray(planUpdate.targetMainStepIndexes)
-          ? planUpdate.targetMainStepIndexes
-          : [],
-      },
+      active: planUpdate.active,
+      stage: planUpdate.stage,
+      context: { targetMainStepIndexes: planUpdate.targetMainStepIndexes },
     },
     phaseAcceptance: {
       active: phaseAcceptanceActive,

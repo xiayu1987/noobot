@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -132,7 +133,9 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
     sessionId: "s1",
     dialogProcessId: "d1",
     contextProtocolVersion: 2,
-    agentContext: createTestAgentExecutionScope({ eventListener: { onEvent() {} } }),
+    agentContext: createTestAgentExecutionScope(
+      createRuntimeContext({ eventListener: { onEvent() {} } }),
+    ),
     modelContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: messages },
     }),
@@ -553,12 +556,15 @@ test("harness records tool call and state commit hook artifacts", async () => {
       },
     },
   });
-  const runtime = {
-    ...prepared,
-    userId: "u1",
+  const runtime = createRuntimeContext({
     basePath: path.join(tempRoot, "u1"),
+    runConfig: {
+      ...prepared,
+      turnScopeId: "turn-tool-state-smoke",
+      ...createAcceptedRunIdentity("turn-tool-state-smoke"),
+    },
     systemRuntime: { userId: "u1", sessionId, dialogProcessId },
-  };
+  });
   const agentContext = createTestAgentExecutionScope(runtime);
 
   const successCall = { id: "call_ok", name: "demo_tool", args: { x: 1 } };
@@ -571,8 +577,6 @@ test("harness records tool call and state commit hook artifacts", async () => {
     },
     runtime,
     agentContext,
-    userId: "u1",
-    sessionId,
     turn: 1,
   });
   assert.equal(successResult.success, true);
@@ -587,8 +591,6 @@ test("harness records tool call and state commit hook artifacts", async () => {
     },
     runtime,
     agentContext,
-    userId: "u1",
-    sessionId,
     turn: 1,
   });
   assert.equal(errorResult.success, false);
@@ -604,6 +606,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
     activityTimeline: [],
     toolTimeline: [],
   });
+  runtime.persistCurrentTurnMessages = async () => {};
   const committer = createStateCommitter({
     modelContext: createModelContext({
       activeTurnIdentity: { dialogProcessId, turnScopeId: "turn-tool-hook" },

@@ -69,7 +69,6 @@ function buildTextResultFields({
 
 export async function materializeTextForToolResult({
   runtime = {},
-  agentContext = null,
   text = "",
   name = "tool-result.txt",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
@@ -77,8 +76,6 @@ export async function materializeTextForToolResult({
   generationSource = "semantic_transfer_tool_result",
   source = "tool",
   reason = "semantic_transfer_tool_result",
-  storage = null,
-  producer = null,
   meta = {},
   alwaysPersist = false,
   inlineMaxChars = null,
@@ -108,7 +105,6 @@ export async function materializeTextForToolResult({
   if (decision.mode === TRANSFER_MODE.ATTACHMENT) {
     persisted = await persistTransferFile({
       runtime,
-      agentContext,
       content: normalizedText,
       name: firstText(name, "tool-result.txt"),
       mimeType: firstText(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
@@ -117,9 +113,7 @@ export async function materializeTextForToolResult({
       source: intent.source,
       reason: intent.reason,
       intent: { source: intent.source, reason: intent.reason, scenario, strategy },
-      storage,
       identity,
-      producer,
       meta: {
         ...(Object.keys(meta || {}).length ? { attributes: meta } : {}),
         originalLength: normalizedText.length,

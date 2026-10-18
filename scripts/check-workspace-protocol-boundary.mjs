@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
 import { createGuardViolations } from "./lib/guard-violations.mjs";
+import { isProtocolLeafImport } from "./lib/protocol-leaf-imports.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PROTOCOL_DIR = "workspace-protocol";
@@ -21,8 +22,10 @@ const sourceFiles = createRelativeSourceCollector({
 for (const file of await sourceFiles(`${PROTOCOL_DIR}/src`)) {
   const text = await readFile(path.join(ROOT, file), "utf8");
   for (const [, specifier] of text.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (!specifier.startsWith(".")) {
-      violations.push(`${file}: workspace-protocol must stay dependency free, found ${specifier}`);
+    if (!specifier.startsWith(".") && !isProtocolLeafImport(specifier)) {
+      violations.push(
+        `${file}: workspace-protocol may only import protocol leaf packages, found ${specifier}`,
+      );
     }
   }
 }

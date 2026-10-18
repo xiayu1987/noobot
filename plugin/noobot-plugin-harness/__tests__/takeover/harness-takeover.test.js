@@ -140,11 +140,13 @@ test("harness capability hook can take over and remove agent internal forced mes
       sessionId: "s6",
       dialogProcessId: "dp6",
       agentContext: {
-        payload: {
-          harness: {
-            planText: "1. 已有主计划",
-            state: {
-              flags: { planningCaptured: true, planningPromptInjected: true },
+        bindings: {
+          extensions: {
+            harness: {
+              planText: "1. 已有主计划",
+              state: {
+                flags: { planningCaptured: true, planningPromptInjected: true },
+              },
             },
           },
         },
@@ -206,11 +208,13 @@ test("harness message takeover keeps system context before injected ctx messages
       sessionId: "s7",
       dialogProcessId: "dp7",
       agentContext: {
-        payload: {
-          harness: {
-            planText: "1. 已有主计划",
-            state: {
-              flags: { planningCaptured: true, planningPromptInjected: true },
+        bindings: {
+          extensions: {
+            harness: {
+              planText: "1. 已有主计划",
+              state: {
+                flags: { planningCaptured: true, planningPromptInjected: true },
+              },
             },
           },
         },
@@ -260,11 +264,13 @@ test("harness ctx message takeover writes through message store views", async ()
       sessionId: "s8",
       dialogProcessId: "dp8",
       agentContext: {
-        payload: {
-          harness: {
-            planText: "1. 已有主计划",
-            state: {
-              flags: { planningCaptured: true, planningPromptInjected: true },
+        bindings: {
+          extensions: {
+            harness: {
+              planText: "1. 已有主计划",
+              state: {
+                flags: { planningCaptured: true, planningPromptInjected: true },
+              },
             },
           },
         },
@@ -465,10 +471,12 @@ test("harness ctx message takeover ignores id markers echoed in tool results", a
       sessionId: "s11",
       dialogProcessId: "dp11",
       agentContext: {
-        payload: {
-          harness: {
-            planText: "1. 已有主计划",
-            state: { flags: { planningCaptured: true, planningPromptInjected: true } },
+        bindings: {
+          extensions: {
+            harness: {
+              planText: "1. 已有主计划",
+              state: { flags: { planningCaptured: true, planningPromptInjected: true } },
+            },
           },
         },
       },

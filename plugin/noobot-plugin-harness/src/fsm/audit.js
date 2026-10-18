@@ -27,8 +27,7 @@ async function appendFsmAudit(paths, payload = {}, options = {}) {
       to: payload.to,
       reason: payload.reason,
     },
-    options.jsonlFlushStrategy || options.jsonlBatchSize,
-    options.jsonlFlushIntervalMs,
+    options.jsonlFlushStrategy,
     { reason: flushReason },
   );
 }

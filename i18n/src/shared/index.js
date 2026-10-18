@@ -31,11 +31,8 @@ export function resolveLocaleFromAcceptLanguage(
   return normalizeLocale(first, fallbackLocale);
 }
 
-export function resolveLocaleFromRuntime(runtime = {}, fallbackLocale = DEFAULT_LOCALE) {
-  return normalizeLocale(
-    runtime?.systemRuntime?.config?.locale || runtime?.locale || "",
-    fallbackLocale,
-  );
+export function resolveLocaleFromRuntime(runtime = {}) {
+  return normalizeLocale(runtime?.runConfig?.locale);
 }
 
 export function pickLocaleText({

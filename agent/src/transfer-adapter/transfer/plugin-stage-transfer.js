@@ -17,7 +17,6 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 
 export async function transferAgentPluginStageMessage({
   runtime = {},
-  agentContext = null,
   summary = "",
   detail = "",
   name = "agent-plugin-stage-detail.md",
@@ -31,7 +30,6 @@ export async function transferAgentPluginStageMessage({
   businessPoint = "",
   meta = {},
   identity = null,
-  userId = "",
 } = {}) {
   const normalizedSummary = text(summary);
   const normalizedDetail = text(detail);
@@ -63,12 +61,10 @@ export async function transferAgentPluginStageMessage({
 
   const persisted = await persistTransferFile({
     runtime,
-    agentContext,
     content: normalizedDetail,
     name: firstText(name, "agent-plugin-stage-detail.md"),
     mimeType: firstText(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
-    userId,
     identity,
     generationSource,
     source: intent.source,

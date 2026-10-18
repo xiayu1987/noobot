@@ -13,7 +13,8 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
+import { text } from "@noobot/shared/value";
 
 export async function createMcpAgentTools({
   globalConfig = {},
@@ -78,11 +79,7 @@ export async function executeMcpTask({
     };
   }
 
-  const modelPort = runtime?.modelPort;
-  const modelSpec = runtime?.modelSpec;
-  if (!modelPort || !isFunction(modelPort.invoke) || !modelSpec) {
-    throw new TypeError("MCP model execution requires the host ModelPort and resolved modelSpec");
-  }
+  const { modelPort, modelSpec } = requireRuntimeModelHost(runtime);
   const toolMap = new Map(langchainTools.map((tool) => [tool.name, tool]));
 
   const messages = [

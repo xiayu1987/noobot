@@ -36,40 +36,40 @@ import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-tool-shared.js";
 import { text } from "@noobot/shared/value";
 
-function buildSearchSchema(agentContext) {
+function buildSearchSchema(runtime) {
   return z.object({
     source: z
       .enum(["files", "text"])
       .optional()
       .default("files")
-      .describe(tTool(agentContext, "tools.search.fieldSource")),
-    query: z.string().min(1).describe(tTool(agentContext, "tools.search.fieldQuery")),
+      .describe(tTool(runtime, "tools.search.fieldSource")),
+    query: z.string().min(1).describe(tTool(runtime, "tools.search.fieldQuery")),
     isRegex: z
       .boolean()
       .optional()
       .default(false)
-      .describe(tTool(agentContext, "tools.search.fieldIsRegex")),
+      .describe(tTool(runtime, "tools.search.fieldIsRegex")),
     caseSensitive: z
       .boolean()
       .optional()
       .default(false)
-      .describe(tTool(agentContext, "tools.search.fieldCaseSensitive")),
-    path: z.string().optional().describe(tTool(agentContext, "tools.search.fieldPath")),
-    glob: z.string().optional().describe(tTool(agentContext, "tools.search.fieldGlob")),
-    text: z.string().optional().describe(tTool(agentContext, "tools.search.fieldText")),
+      .describe(tTool(runtime, "tools.search.fieldCaseSensitive")),
+    path: z.string().optional().describe(tTool(runtime, "tools.search.fieldPath")),
+    glob: z.string().optional().describe(tTool(runtime, "tools.search.fieldGlob")),
+    text: z.string().optional().describe(tTool(runtime, "tools.search.fieldText")),
     contextLines: z
       .number()
       .int()
       .optional()
       .default(DEFAULT_SEARCH_CONTEXT_LINES)
-      .describe(tTool(agentContext, "tools.search.fieldContextLines")),
+      .describe(tTool(runtime, "tools.search.fieldContextLines")),
     maxResults: z
       .number()
       .int()
       .optional()
       .default(DEFAULT_SEARCH_MAX_RESULTS)
-      .describe(tTool(agentContext, "tools.search.fieldMaxResults")),
-    riskLevel: createRiskLevelSchema(agentContext, "tools.search.fieldRiskLevel"),
+      .describe(tTool(runtime, "tools.search.fieldMaxResults")),
+    riskLevel: createRiskLevelSchema(runtime, "tools.search.fieldRiskLevel"),
   });
 }
 
@@ -313,14 +313,14 @@ async function runSearch({ agentContext, runtime, workspaceIo, args }) {
   if (!normalizedQuery) {
     return toToolJsonResult(TOOL_NAME.SEARCH, {
       ok: false,
-      message: tTool(agentContext, "tools.search.queryRequired"),
+      message: tTool(runtime, "tools.search.queryRequired"),
     });
   }
   if (normalizedSource === "text") {
     if (!String(inputText || "")) {
       return toToolJsonResult(TOOL_NAME.SEARCH, {
         ok: false,
-        message: tTool(agentContext, "tools.search.textRequired"),
+        message: tTool(runtime, "tools.search.textRequired"),
       });
     }
     return searchTextSource({
@@ -355,8 +355,8 @@ export function createSearchTool({ agentContext, runtime, workspaceIo }) {
   return new DynamicStructuredTool({
     name: TOOL_NAME.SEARCH,
     metadata: { pathContract: TOOL_PATH_CONTRACTS.fileSearch },
-    description: buildFileToolDescription(agentContext, "tools.search.description"),
-    schema: buildSearchSchema(agentContext),
+    description: buildFileToolDescription(runtime, "tools.search.description"),
+    schema: buildSearchSchema(runtime),
     func: (args) => runSearch({ agentContext, runtime, workspaceIo, args }),
   });
 }

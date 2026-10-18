@@ -15,6 +15,7 @@ import {
 test("acceptance report does not project semantic-transfer storage paths", () => {
   const report = buildAcceptanceReport({
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: "1. 主计划一",
     },
     state: { locale: "zh-CN", signals: {} },
@@ -50,6 +51,7 @@ test("renderAcceptanceReportText falls back to raw text when recognition fails",
 test("acceptance report maps latest model phase acceptance to checklist status and appends model result", () => {
   const report = buildAcceptanceReport({
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: "1. 确认用户意图与需求\n2. 提供相应的帮助与回应",
       phaseAcceptanceReports: [
         {
@@ -77,6 +79,7 @@ test("acceptance report maps latest model phase acceptance to checklist status a
 test("acceptance report inherits main-plan model status to sub-plans when sub-plan status missing", () => {
   const report = buildAcceptanceReport({
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: ["1. 主计划一", "1.1 子计划一", "1.2 子计划二"].join("\n"),
       phaseAcceptanceReports: [
         {
@@ -97,6 +100,7 @@ test("acceptance report inherits main-plan model status to sub-plans when sub-pl
 test("acceptance report accepts bracketed plan id in model acceptance text", () => {
   const report = buildAcceptanceReport({
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: ["1. 主计划一", "1.1 子计划一"].join("\n"),
       phaseAcceptanceReports: [
         {
@@ -116,6 +120,7 @@ test("acceptance report accepts bracketed plan id in model acceptance text", () 
 test("semantic acceptance overrides phase checklist status and updates summary", () => {
   const report = buildAcceptanceReport({
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二"].join("\n"),
       phaseAcceptanceReports: [
         {
@@ -169,6 +174,7 @@ test("semantic acceptance overrides phase checklist status and updates summary",
 test("semantic acceptance fallback keeps phase/signal status when semantic text has no patch lines", () => {
   const report = buildAcceptanceReport({
     bucket: {
+      planAcceptanceStatusByPlanId: {},
       planText: "1. 主计划一",
       phaseAcceptanceReports: [
         {

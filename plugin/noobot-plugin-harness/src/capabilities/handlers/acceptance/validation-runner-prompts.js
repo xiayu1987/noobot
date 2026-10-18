@@ -29,10 +29,9 @@ import {
 } from "../shared/workflow/prompts.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptance-status.js";
-import { resolveCurrentTaskGoalText } from "../shared/plan/checklist-context.js";
 import { parseMainPlansFromPlanText } from "../shared/plan/text-protocol.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 export function buildTextAcceptanceValidationResult(sourceText = "") {
   const raw = text(sourceText);
@@ -69,20 +68,19 @@ export function filterHistoricalSummaryRelayMessages(messages = []) {
   );
 }
 
-export function resolveAcceptanceMainPlanContext(promptPayload = {}, bucket = {}) {
+export function resolveAcceptanceMainPlanContext(promptPayload, bucket) {
   return {
-    planText: text(promptPayload?.planText),
-    currentTaskGoal: resolveCurrentTaskGoalText({ bucket }),
+    planText: text(promptPayload.planText),
+    currentTaskGoal: text(bucket.currentTaskGoal),
   };
 }
 
-export function resolveAcceptanceValidationRequestPayload(promptPayload = {}) {
-  const source = promptPayload && typeof promptPayload === "object" ? promptPayload : {};
+export function resolveAcceptanceValidationRequestPayload(promptPayload) {
   return {
-    expectedSchema: source.expectedSchema || {},
-    acceptanceState: source.acceptanceState || null,
-    toolSignals: source.toolSignals || {},
-    finalOutput: text(source.finalOutput),
+    expectedSchema: promptPayload.expectedSchema,
+    acceptanceState: promptPayload.acceptanceState,
+    toolSignals: promptPayload.toolSignals,
+    finalOutput: text(promptPayload.finalOutput),
   };
 }
 
@@ -117,19 +115,15 @@ export function buildFinalAcceptanceSemanticValidationMessages({
   });
 }
 
-export function buildPhaseAcceptanceRequestPayload({ bucket = {}, state = {} } = {}) {
+export function buildPhaseAcceptanceRequestPayload({ bucket, state }) {
   return {
     acceptanceType: "phase",
-    phaseIndex: Array.isArray(bucket?.phaseAcceptanceReports)
-      ? bucket.phaseAcceptanceReports.length + 1
-      : 1,
-    toolSignals: state?.signals || {},
+    phaseIndex: bucket.phaseAcceptanceReports.length + 1,
+    toolSignals: state.signals,
   };
 }
 
-export function appendPhaseAcceptanceReport(bucket = {}, content = "") {
-  if (!isObjectLike(bucket)) return null;
-  if (!Array.isArray(bucket.phaseAcceptanceReports)) bucket.phaseAcceptanceReports = [];
+export function appendPhaseAcceptanceReport(bucket, content) {
   const report = {
     type: "phase",
     acceptedAt: new Date().toISOString(),
@@ -145,13 +139,9 @@ export function appendPhaseAcceptanceReport(bucket = {}, content = "") {
   return report;
 }
 
-export function buildFinalOutputFallbackPhaseAcceptanceText(
-  locale = LOCALE.ZH_CN,
-  bucket = {},
-  state = {},
-) {
-  const checklistCount = parseMainPlansFromPlanText(bucket?.planText).length;
-  const signalCount = Number(state?.signals?.successfulToolCount || 0);
+export function buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state) {
+  const checklistCount = parseMainPlansFromPlanText(bucket.planText).length;
+  const signalCount = Number(state.signals.successfulToolCount || 0);
   return translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.ACCEPTANCE_VALIDATION.PHASE_FINAL_OUTPUT_FALLBACK,
@@ -188,7 +178,7 @@ export function buildAcceptancePromptParts({
   includeWorkflowPolicy = true,
 } = {}) {
   const mainPlanContext = resolveAcceptanceMainPlanContext(
-    { planText: text(bucket?.planText) },
+    { planText: text(bucket.planText) },
     bucket,
   );
   const planContextContent = buildAcceptanceMainPlanContextPromptText({
@@ -199,7 +189,7 @@ export function buildAcceptancePromptParts({
   const phaseReportsContents = buildAllPhaseAcceptanceReportSystemContents({
     locale,
     marker: getAllPhaseAcceptanceReportsMarker(locale),
-    data: { phaseAcceptanceReports: bucket?.phaseAcceptanceReports || [] },
+    data: { phaseAcceptanceReports: bucket.phaseAcceptanceReports },
   });
   const summaryReportsContents = phase
     ? buildAllSummaryReportSystemContents({

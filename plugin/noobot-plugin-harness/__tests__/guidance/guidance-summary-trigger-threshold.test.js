@@ -26,16 +26,16 @@ test("guidance summary threshold by turns is independent from plan update attemp
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(
-    agentContext.payload.harness.logs.guidance.some(
+    agentContext.bindings.extensions.harness.logs.guidance.some(
       (item = {}) => item?.event === "summary_scheduled_by_turn_threshold",
     ),
     true,
   );
-  agentContext.payload.harness.state.pending.summary = false;
+  agentContext.bindings.extensions.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
-  const planningLogs = agentContext.payload.harness.logs.planning;
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 0);
+  const planningLogs = agentContext.bindings.extensions.harness.logs.planning;
   assert.equal(
     planningLogs.some((item = {}) => item?.event === "workflow_priority_decision"),
     true,
@@ -56,30 +56,29 @@ test("task acceptance pauses planning and guidance only while its review is runn
       phaseAcceptanceTurns: FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
     },
   });
-  agentContext.payload.harness.state.flags = {
+  agentContext.bindings.extensions.harness.state.flags = {
     planningCaptured: true,
     acceptanceRequested: true,
     acceptanceReviewing: true,
-    acceptanceCompleted: false,
   };
   const ctx = { messages: [{ role: "tool", content: "acceptance completed" }], agentContext };
 
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
 
-  const state = agentContext.payload.harness.state;
+  const state = agentContext.bindings.extensions.harness.state;
   assert.equal(state.pending.summary, false);
   assert.equal(state.pending.planRevision, false);
   assert.equal(state.pending.phaseAcceptance, false);
   assert.equal(state.pending.analysis, false);
   assert.equal(
-    agentContext.payload.harness.logs.guidance.some((item = {}) =>
+    agentContext.bindings.extensions.harness.logs.guidance.some((item = {}) =>
       String(item?.event || "").includes("scheduled_by_turn_threshold"),
     ),
     false,
   );
   assert.equal(
-    agentContext.payload.harness.logs.planning.some((item = {}) =>
+    agentContext.bindings.extensions.harness.logs.planning.some((item = {}) =>
       String(item?.event || "").includes("scheduled_by_turn_threshold"),
     ),
     false,
@@ -90,8 +89,8 @@ test("task acceptance pauses planning and guidance only while its review is runn
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(
     [
-      ...agentContext.payload.harness.logs.guidance,
-      ...agentContext.payload.harness.logs.planning,
+      ...agentContext.bindings.extensions.harness.logs.guidance,
+      ...agentContext.bindings.extensions.harness.logs.planning,
     ].some((item = {}) => String(item?.event || "").includes("scheduled_by_turn_threshold")),
     true,
   );
@@ -114,7 +113,7 @@ test("guidance summary uses the canonical per-run threshold and records its sour
     },
   });
 
-  const event = agentContext.payload.harness.logs.guidance.find(
+  const event = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "summary_scheduled_by_turn_threshold",
   );
   assert.equal(event?.detail?.triggerTurns, 1);
@@ -131,15 +130,15 @@ test("guidance summary threshold by chars is independent from plan update attemp
   };
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(
-    agentContext.payload.harness.logs.guidance.some(
+    agentContext.bindings.extensions.harness.logs.guidance.some(
       (item = {}) => item?.event === "summary_scheduled_by_char_threshold",
     ),
     true,
   );
-  agentContext.payload.harness.state.pending.summary = false;
+  agentContext.bindings.extensions.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 0);
 });
 
 test("guidance schedules summary after a single model tool burst reaches summary threshold when enabled", async () => {
@@ -164,7 +163,7 @@ test("guidance schedules summary after a single model tool burst reaches summary
     },
     meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
 
   await guidanceHandler({
     capability: "guidance",
@@ -177,10 +176,10 @@ test("guidance schedules summary after a single model tool burst reaches summary
     meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
 
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
-  assert.equal(agentContext.payload.harness.state.flags.summaryByCharsPrompted, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.summaryByCharsPrompted, false);
   assert.equal(
-    agentContext.payload.harness.logs.guidance.some(
+    agentContext.bindings.extensions.harness.logs.guidance.some(
       (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
     ),
     true,
@@ -205,7 +204,7 @@ test("guidance schedules summary after a single model tool burst reaches summary
     meta: { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } },
   });
 
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(
     nextCtx.modelContext.messages.some((msg = {}) =>
       String(msg?.content || "").includes("harness-guidance-summary"),
@@ -236,9 +235,9 @@ test("planning does not schedule tool-burst summary by default", async () => {
     meta: {},
   });
 
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.bindings.extensions.harness.logs.planning.some(
       (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
     ),
     false,
@@ -250,7 +249,7 @@ test("planning does not schedule tool-burst summary when summary is already pend
   const alreadyPendingContext = createPlanningAgentContext({
     counters: { llmTurns: LLM_SUMMARY_THRESHOLD },
   });
-  alreadyPendingContext.payload.harness.state.pending.summary = true;
+  alreadyPendingContext.bindings.extensions.harness.state.pending.summary = true;
   const burstCalls = Array.from({ length: LLM_SUMMARY_THRESHOLD }, (_item, index) => ({
     id: `call_pending_${index}`,
     name: `tool_${index}`,
@@ -268,7 +267,7 @@ test("planning does not schedule tool-burst summary when summary is already pend
     meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
   assert.equal(
-    alreadyPendingContext.payload.harness.logs.planning.some(
+    alreadyPendingContext.bindings.extensions.harness.logs.planning.some(
       (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
     ),
     false,
@@ -287,9 +286,9 @@ test("planning does not schedule tool-burst summary when summary is already pend
     },
     meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
-  assert.equal(taskSummaryContext.payload.harness.state.pending.summary, false);
+  assert.equal(taskSummaryContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(
-    taskSummaryContext.payload.harness.logs.planning.some(
+    taskSummaryContext.bindings.extensions.harness.logs.planning.some(
       (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
     ),
     false,

@@ -13,6 +13,7 @@ import {
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
 import { safeStr } from "../../shared/utils/shared-utils.js";
+import { resolveRuntimeUserId } from "../../context/agent-context-accessor.js";
 
 function requireIdentity(identity = {}) {
   if (!isPlainObject(identity)) {
@@ -61,8 +62,8 @@ function serviceFrom(runtime) {
   return service;
 }
 
-function resolveAttachmentUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
-  const resolved = safeStr(runtime?.systemRuntime?.userId || agentContext?.userId || userId);
+function resolveAttachmentUserId(runtime = {}) {
+  const resolved = resolveRuntimeUserId(runtime);
   if (!resolved) throw new Error("semantic_transfer_user_id_required");
   return resolved;
 }
@@ -92,8 +93,6 @@ export function createDirectTransferEnvelope({
 
 export async function persistTransferArtifacts({
   runtime = {},
-  agentContext = null,
-  userId = "",
   artifacts = [],
   attachmentSource = "model",
   generationSource = "semantic_transfer_output",
@@ -105,7 +104,7 @@ export async function persistTransferArtifacts({
   meta = {},
 } = {}) {
   const ids = requireIdentity(identity);
-  const resolvedUserId = resolveAttachmentUserId({ runtime, agentContext, userId });
+  const resolvedUserId = resolveAttachmentUserId(runtime);
   if (!Array.isArray(artifacts) || artifacts.length === 0)
     throw new Error("semantic_transfer_artifacts_required");
   const service = serviceFrom(runtime);
@@ -154,8 +153,6 @@ export async function persistTransferArtifacts({
 
 export async function persistTransferFile({
   runtime = {},
-  agentContext = null,
-  userId = "",
   content = "",
   contentBase64: encodedContent = "",
   bytes = null,
@@ -175,8 +172,6 @@ export async function persistTransferFile({
   if (!encoded) throw new Error("semantic_transfer_content_required");
   return persistTransferArtifacts({
     runtime,
-    agentContext,
-    userId,
     identity,
     direction,
     attachmentSource,

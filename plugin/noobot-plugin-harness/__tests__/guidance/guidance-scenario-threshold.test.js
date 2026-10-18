@@ -59,17 +59,17 @@ test("guidance summary and planning plan-update thresholds use full-mode default
 
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(
-    agentContext.payload.harness.logs.guidance.some(
+    agentContext.bindings.extensions.harness.logs.guidance.some(
       (item = {}) => item?.event === "summary_scheduled_by_turn_threshold",
     ),
     true,
   );
-  agentContext.payload.harness.state.pending.summary = false;
+  agentContext.bindings.extensions.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
 
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateTurns, 0);
 });
 
 test("guidance summary and planning plan-update thresholds use programming-mode overrides", async () => {
@@ -88,8 +88,14 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
     },
     meta: {},
   });
-  assert.equal(beforeProgrammingThresholds.payload.harness.state.pending.summary, false);
-  assert.equal(beforeProgrammingThresholds.payload.harness.state.pending.planRevision, false);
+  assert.equal(
+    beforeProgrammingThresholds.bindings.extensions.harness.state.pending.summary,
+    false,
+  );
+  assert.equal(
+    beforeProgrammingThresholds.bindings.extensions.harness.state.pending.planRevision,
+    false,
+  );
 
   const atProgrammingThresholds = createPlanningAgentContext({
     scenario: "programming",
@@ -108,12 +114,12 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
     meta: {},
   });
   assert.equal(
-    atProgrammingThresholds.payload.harness.logs.guidance.some(
+    atProgrammingThresholds.bindings.extensions.harness.logs.guidance.some(
       (item = {}) => item?.event === "summary_scheduled_by_turn_threshold",
     ),
     true,
   );
-  atProgrammingThresholds.payload.harness.state.pending.summary = false;
+  atProgrammingThresholds.bindings.extensions.harness.state.pending.summary = false;
   await planningHandler({
     capability: "planning",
     point: "agent.before_llm_call",
@@ -123,9 +129,15 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
     },
     meta: {},
   });
-  assert.equal(atProgrammingThresholds.payload.harness.state.pending.summary, false);
-  assert.equal(atProgrammingThresholds.payload.harness.state.pending.planRevision, true);
-  assert.equal(atProgrammingThresholds.payload.harness.state.counters.planUpdateTurns, 0);
+  assert.equal(atProgrammingThresholds.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(
+    atProgrammingThresholds.bindings.extensions.harness.state.pending.planRevision,
+    true,
+  );
+  assert.equal(
+    atProgrammingThresholds.bindings.extensions.harness.state.counters.planUpdateTurns,
+    0,
+  );
 });
 
 test("phase acceptance threshold uses programming-mode override", async () => {
@@ -138,7 +150,7 @@ test("phase acceptance threshold uses programming-mode override", async () => {
       phaseAcceptanceTurns: FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
-  beforeProgrammingPhaseAcceptance.payload.harness.state.flags = {
+  beforeProgrammingPhaseAcceptance.bindings.extensions.harness.state.flags = {
     planningCaptured: true,
   };
   await planningHandler({
@@ -151,7 +163,7 @@ test("phase acceptance threshold uses programming-mode override", async () => {
     meta: {},
   });
   assert.equal(
-    beforeProgrammingPhaseAcceptance.payload.harness.state.pending.phaseAcceptance,
+    beforeProgrammingPhaseAcceptance.bindings.extensions.harness.state.pending.phaseAcceptance,
     false,
   );
 
@@ -163,7 +175,7 @@ test("phase acceptance threshold uses programming-mode override", async () => {
       phaseAcceptanceTurns: PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
-  atProgrammingPhaseAcceptance.payload.harness.state.flags = {
+  atProgrammingPhaseAcceptance.bindings.extensions.harness.state.flags = {
     planningCaptured: true,
   };
   await planningHandler({
@@ -175,11 +187,18 @@ test("phase acceptance threshold uses programming-mode override", async () => {
     },
     meta: {},
   });
-  assert.equal(atProgrammingPhaseAcceptance.payload.harness.state.pending.phaseAcceptance, true);
-  assert.equal(atProgrammingPhaseAcceptance.payload.harness.state.counters.phaseAcceptanceTurns, 0);
-  const acceptanceLog = atProgrammingPhaseAcceptance.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "phase_acceptance_scheduled_by_turn_threshold",
+  assert.equal(
+    atProgrammingPhaseAcceptance.bindings.extensions.harness.state.pending.phaseAcceptance,
+    true,
   );
+  assert.equal(
+    atProgrammingPhaseAcceptance.bindings.extensions.harness.state.counters.phaseAcceptanceTurns,
+    0,
+  );
+  const acceptanceLog =
+    atProgrammingPhaseAcceptance.bindings.extensions.harness.logs.acceptance.find(
+      (item = {}) => item?.event === "phase_acceptance_scheduled_by_turn_threshold",
+    );
   assert.equal(
     acceptanceLog?.detail?.triggerTurns,
     PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
@@ -203,8 +222,8 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeTextThresholds },
     meta: {},
   });
-  assert.equal(beforeTextThresholds.payload.harness.state.pending.summary, false);
-  assert.equal(beforeTextThresholds.payload.harness.state.pending.planRevision, false);
+  assert.equal(beforeTextThresholds.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(beforeTextThresholds.bindings.extensions.harness.state.pending.planRevision, false);
 
   const atTextThresholds = createPlanningAgentContext({
     scenario: "text",
@@ -220,21 +239,21 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
     meta: {},
   });
   assert.equal(
-    atTextThresholds.payload.harness.logs.guidance.some(
+    atTextThresholds.bindings.extensions.harness.logs.guidance.some(
       (item = {}) => item?.event === "summary_scheduled_by_turn_threshold",
     ),
     true,
   );
-  atTextThresholds.payload.harness.state.pending.summary = false;
+  atTextThresholds.bindings.extensions.harness.state.pending.summary = false;
   await planningHandler({
     capability: "planning",
     point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
     meta: {},
   });
-  assert.equal(atTextThresholds.payload.harness.state.pending.summary, false);
-  assert.equal(atTextThresholds.payload.harness.state.pending.planRevision, true);
-  assert.equal(atTextThresholds.payload.harness.state.counters.planUpdateTurns, 0);
+  assert.equal(atTextThresholds.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(atTextThresholds.bindings.extensions.harness.state.pending.planRevision, true);
+  assert.equal(atTextThresholds.bindings.extensions.harness.state.counters.planUpdateTurns, 0);
 });
 
 test("phase acceptance threshold uses text-mode override", async () => {
@@ -247,7 +266,7 @@ test("phase acceptance threshold uses text-mode override", async () => {
       phaseAcceptanceTurns: TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
-  atTextPhaseAcceptance.payload.harness.state.flags = {
+  atTextPhaseAcceptance.bindings.extensions.harness.state.flags = {
     planningCaptured: true,
   };
   await planningHandler({
@@ -259,9 +278,15 @@ test("phase acceptance threshold uses text-mode override", async () => {
     },
     meta: {},
   });
-  assert.equal(atTextPhaseAcceptance.payload.harness.state.pending.phaseAcceptance, true);
-  assert.equal(atTextPhaseAcceptance.payload.harness.state.counters.phaseAcceptanceTurns, 0);
-  const acceptanceLog = atTextPhaseAcceptance.payload.harness.logs.acceptance.find(
+  assert.equal(
+    atTextPhaseAcceptance.bindings.extensions.harness.state.pending.phaseAcceptance,
+    true,
+  );
+  assert.equal(
+    atTextPhaseAcceptance.bindings.extensions.harness.state.counters.phaseAcceptanceTurns,
+    0,
+  );
+  const acceptanceLog = atTextPhaseAcceptance.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) => item?.event === "phase_acceptance_scheduled_by_turn_threshold",
   );
   assert.equal(acceptanceLog?.detail?.triggerTurns, TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD);
@@ -273,8 +298,8 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   const agentContext = createPlanningAgentContext({
     counters: { planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1 },
   });
-  agentContext.payload.harness.state.pending.planRevision = true;
-  agentContext.payload.harness.state.pending.planRevisionContext = {
+  agentContext.bindings.extensions.harness.state.pending.planRevision = true;
+  agentContext.bindings.extensions.harness.state.pending.planRevisionContext = {
     targetMainStepIndexes: [],
   };
 
@@ -286,12 +311,12 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
     meta: {},
   });
   assert.equal(
-    agentContext.payload.harness.state.counters.planUpdateTurns,
+    agentContext.bindings.extensions.harness.state.counters.planUpdateTurns,
     FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   );
 
-  agentContext.payload.harness.state.pending.planRevision = false;
-  agentContext.payload.harness.state.pending.planRevisionContext = null;
+  agentContext.bindings.extensions.harness.state.pending.planRevision = false;
+  agentContext.bindings.extensions.harness.state.pending.planRevisionContext = null;
   const unblockedCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({
     capability: "planning",
@@ -299,6 +324,6 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
     ctx: unblockedCtx,
     meta: {},
   });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateTurns, 0);
 });

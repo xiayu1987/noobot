@@ -17,17 +17,18 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   const ctx = {
     messages: [{ role: "user", content: "阶段上下文：已完成核心实现" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        harness: {
-          planText: "1. 核心实现\n2. 验证交付",
-          state: {
-            flags: { planningCaptured: true },
-            counters: {},
-            signals: {},
-            pending: { phaseAcceptance: true },
+      bindings: {
+        extensions: {
+          harness: {
+            planText: "1. 核心实现\n2. 验证交付",
+            state: {
+              flags: { planningCaptured: true },
+              counters: {},
+              signals: {},
+              pending: { phaseAcceptance: true },
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -80,18 +81,24 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
     planContextIndex > -1 && requestIndex > planContextIndex && responsibilityIndex > requestIndex,
     true,
   );
-  assert.equal(ctx.agentContext.payload.harness.state.pending.phaseAcceptance, false);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.phaseAcceptanceCapturePending, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.phaseAcceptance, false);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.flags.phaseAcceptanceCapturePending,
+    true,
+  );
 
   const after = await handler({
     capability: "acceptance",
     point: "agent.after_llm_call",
-    ctx: { ...ctx, ai: { content: "阶段验收：pass" } },
+    ctx: { ...ctx, modelResponse: { text: "阶段验收：pass" }, calls: [] },
     meta: { harness: { planningGuidanceMode: "inject" } },
   });
   assert.equal(after.changed, true);
-  assert.equal(ctx.agentContext.payload.harness.phaseAcceptanceReports.length, 1);
-  assert.match(ctx.agentContext.payload.harness.phaseAcceptanceReports[0].content, /pass/);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.phaseAcceptanceReports.length, 1);
+  assert.match(
+    ctx.agentContext.bindings.extensions.harness.phaseAcceptanceReports[0].content,
+    /pass/,
+  );
 });
 
 test("phase acceptance separate model receives context, summaries, revised plan, phase checklists, then phase request", async () => {
@@ -100,29 +107,30 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   const ctx = {
     messages: [{ role: "user", content: "阶段上下文：继续审查" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        harness: {
-          planText: "1. 核心实现\n1.1 子任务A\n2. 验证交付",
-          summaryText: "1. 旧小结：已完成基础结构审查\n2. 旧小结：正在补齐验收流程",
-          summaryFullText: [
-            "[SUMMARY_OVERVIEW]",
-            "1. 最新小结概要：阶段验收只应看到这一条",
-            "[SUMMARY_DETAIL]",
-            "## 详细明细",
-            "- 详细内容不应作为小结清单传入阶段验收",
-            "[SUMMARY_END]",
-          ].join("\n"),
-          phaseAcceptanceReports: [
-            { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：warn" },
-          ],
-          state: {
-            flags: { planningCaptured: true },
-            counters: {},
-            signals: {},
-            pending: { phaseAcceptance: true },
+      bindings: {
+        extensions: {
+          harness: {
+            planText: "1. 核心实现\n1.1 子任务A\n2. 验证交付",
+            summaryText: "1. 旧小结：已完成基础结构审查\n2. 旧小结：正在补齐验收流程",
+            summaryFullText: [
+              "[SUMMARY_OVERVIEW]",
+              "1. 最新小结概要：阶段验收只应看到这一条",
+              "[SUMMARY_DETAIL]",
+              "## 详细明细",
+              "- 详细内容不应作为小结清单传入阶段验收",
+              "[SUMMARY_END]",
+            ].join("\n"),
+            phaseAcceptanceReports: [
+              { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：warn" },
+            ],
+            state: {
+              flags: { planningCaptured: true },
+              counters: {},
+              signals: {},
+              pending: { phaseAcceptance: true },
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -234,27 +242,28 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
       ],
     },
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        harness: {
-          planText: "1. 核心实现\n2. 验证交付",
-          summaryFullText: [
-            "[SUMMARY_OVERVIEW]",
-            "1. 最后一次完整小结：用于阶段验收",
-            "[SUMMARY_DETAIL]",
-            "- 明细不应被拆成历史多次小结",
-            "[SUMMARY_END]",
-          ].join("\n"),
-          phaseAcceptanceReports: [
-            { acceptedAt: "2026-06-01T00:00:00.000Z", content: "上一阶段验收：warn" },
-          ],
-          state: {
-            flags: { planningCaptured: true },
-            counters: {},
-            signals: {},
-            pending: { phaseAcceptance: true },
+      bindings: {
+        extensions: {
+          harness: {
+            planText: "1. 核心实现\n2. 验证交付",
+            summaryFullText: [
+              "[SUMMARY_OVERVIEW]",
+              "1. 最后一次完整小结：用于阶段验收",
+              "[SUMMARY_DETAIL]",
+              "- 明细不应被拆成历史多次小结",
+              "[SUMMARY_END]",
+            ].join("\n"),
+            phaseAcceptanceReports: [
+              { acceptedAt: "2026-06-01T00:00:00.000Z", content: "上一阶段验收：warn" },
+            ],
+            state: {
+              flags: { planningCaptured: true },
+              counters: {},
+              signals: {},
+              pending: { phaseAcceptance: true },
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -372,27 +381,28 @@ test("phase acceptance separate model drops historical summary relays and passes
     },
     dialogProcessId: "dlg_current",
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        harness: {
-          planText: "1. 核心实现\n2. 验证交付",
-          summaryText: "旧合并小结：不应作为阶段验收小结上下文",
-          summaryFullText: [
-            "[SUMMARY_OVERVIEW]",
-            "1. 最后一次完整小结 item-1：只应作为同一份小结传入",
-            "2. 最后一次完整小结 item-2：不能拆成第二份 summary report",
-            "3. 最后一次完整小结 item-3：不能拆成第三份 summary report",
-            "[SUMMARY_DETAIL]",
-            "- 最后一次完整小结的明细",
-            "[SUMMARY_END]",
-          ].join("\n"),
-          state: {
-            flags: { planningCaptured: true },
-            counters: {},
-            signals: {},
-            pending: { phaseAcceptance: true },
+      bindings: {
+        extensions: {
+          harness: {
+            planText: "1. 核心实现\n2. 验证交付",
+            summaryText: "旧合并小结：不应作为阶段验收小结上下文",
+            summaryFullText: [
+              "[SUMMARY_OVERVIEW]",
+              "1. 最后一次完整小结 item-1：只应作为同一份小结传入",
+              "2. 最后一次完整小结 item-2：不能拆成第二份 summary report",
+              "3. 最后一次完整小结 item-3：不能拆成第三份 summary report",
+              "[SUMMARY_DETAIL]",
+              "- 最后一次完整小结的明细",
+              "[SUMMARY_END]",
+            ].join("\n"),
+            state: {
+              flags: { planningCaptured: true },
+              counters: {},
+              signals: {},
+              pending: { phaseAcceptance: true },
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -468,17 +478,18 @@ test("phase acceptance separate model uses messageBlocks incremental when ctx.mo
     },
     dialogProcessId: "dlg_current",
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        harness: {
-          planText: "1. 核心实现\n2. 验证交付",
-          state: {
-            flags: { planningCaptured: true },
-            counters: {},
-            signals: {},
-            pending: { phaseAcceptance: true },
+      bindings: {
+        extensions: {
+          harness: {
+            planText: "1. 核心实现\n2. 验证交付",
+            state: {
+              flags: { planningCaptured: true },
+              counters: {},
+              signals: {},
+              pending: { phaseAcceptance: true },
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },

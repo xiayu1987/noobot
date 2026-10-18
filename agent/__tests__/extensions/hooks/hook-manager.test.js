@@ -160,8 +160,22 @@ test("withHookRuntimeMeta projects the canonical runtime identity", () => {
     dialogProcessId: "d1",
     turnScopeId: "t1",
     caller: "user",
+    resumeFromStoppedSnapshot: false,
     phase: "turn",
   });
+});
+
+test("withHookRuntimeMeta projects resumeFromStoppedSnapshot from its single runtime writer", () => {
+  assert.equal(
+    withHookRuntimeMeta({ systemRuntime: {}, resumeFromStoppedSnapshot: true })
+      .resumeFromStoppedSnapshot,
+    true,
+  );
+  assert.equal(
+    withHookRuntimeMeta({ systemRuntime: { resumeFromStoppedSnapshot: true } })
+      .resumeFromStoppedSnapshot,
+    false,
+  );
 });
 
 test("withHookRuntimeMeta reads identity only from systemRuntime", () => {

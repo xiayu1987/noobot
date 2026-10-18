@@ -38,7 +38,7 @@ test("materializeOutputResult does not silently fall back when attachment persis
         content: "abcdef",
         policy: { preference: "attachment", allowAttachment: false },
         identity: identity(),
-        runtime: { userId: "u1" },
+        runtime: { systemRuntime: { userId: "u1" } },
       }),
     /attachment_persistence_required/,
   );
@@ -47,6 +47,7 @@ test("materializeOutputResult does not silently fall back when attachment persis
 test("persistTransferFile returns only V2 transfer envelopes", async () => {
   const result = await persistTransferFile({
     runtime: {
+      systemRuntime: { userId: "u1" },
       attachmentService: {
         async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
           return artifacts.map((artifact) => ({
@@ -60,7 +61,6 @@ test("persistTransferFile returns only V2 transfer envelopes", async () => {
         },
       },
     },
-    userId: "u1",
     sessionId: "session-test-1",
     name: "a.bin",
     mimeType: "application/octet-stream",

@@ -33,8 +33,8 @@ test("unified attempts no longer block revision scheduling in planning handler",
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateTurns, 0);
 });
 
 test("inject refinement-only flow consumes refinement attempts", async () => {
@@ -54,12 +54,13 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   const afterCtx = {
     modelContext: beforeCtx.modelContext,
     contextProtocolVersion: 3,
-    ai: { content: "ADD 1.1 细化步骤A" },
+    modelResponse: { text: "ADD 1.1 细化步骤A" },
+    calls: [],
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx: afterCtx, meta });
-  assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 1);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planRefinementAttempts, 1);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 1);
 });
 
 test("separate_model refinement-only flow runs planning_refinement then guidance followup", async () => {
@@ -96,24 +97,20 @@ test("separate_model refinement-only flow runs planning_refinement then guidance
     invocations.map((item = {}) => item.purpose),
     ["planning_refinement", "guidance"],
   );
-  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
-  assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
-  assert.equal(agentContext.payload.harness.state.pending.guidance, null);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planRevisionAttempts, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planRefinementAttempts, 1);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.guidance, null);
 });
 
 test("planning revision followup uses dynamic programming scenario over initial text scenario", async () => {
   const agentContext = createAgentContext({
     counters: { llmTurns: 16, planUpdateTurns: -100 },
   });
-  agentContext.execution = {
-    controllers: {
-      runtime: {
-        runConfig: { scenario: "text" },
-        systemRuntime: { runConfig: { scenario: "text" } },
-      },
-    },
+  agentContext.bindings.runtime = {
+    runConfig: { scenario: "text" },
+    systemRuntime: { runConfig: { scenario: "text" } },
   };
   const ctx = createTestHookContext({
     agentContext,
@@ -143,7 +140,10 @@ test("planning revision followup uses dynamic programming scenario over initial 
 
   const changed = await runPlanUpdateAfterSummary(ctx, meta);
   assert.equal(changed, true);
-  assert.equal(agentContext.payload.harness.dynamicPolicyPrompt?.scenario, "programming");
+  assert.equal(
+    agentContext.bindings.extensions.harness.dynamicPolicyPrompt?.scenario,
+    "programming",
+  );
 
   const followupMessage = ctx.modelContext.messages.find((item = {}) =>
     /next_phase_plan_followup/.test(String(item?.content || "")),
@@ -186,8 +186,8 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
     invocations.map((item = {}) => item.purpose),
     [],
   );
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRefinement, true);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, false);
 });
 
 test("separate_model skips planning_revision when revision attempts already reached max", async () => {
@@ -254,12 +254,12 @@ test("separate_model summary does not consume refinement attempts", async () => 
     invocations.map((item = {}) => item.purpose),
     ["summary"],
   );
-  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.planRevisionAttempts, 0);
   assert.equal(
-    agentContext.payload.harness.state.counters.planRefinementAttempts,
+    agentContext.bindings.extensions.harness.state.counters.planRefinementAttempts,
     MAX_PLAN_UPDATE_ATTEMPTS,
   );
-  assert.equal(agentContext.payload.harness.logs.planning.length >= 0, true);
+  assert.equal(agentContext.bindings.extensions.harness.logs.planning.length >= 0, true);
 });
 
 test("separate_model does not auto-run refinement when revision has no main-plan diff", async () => {

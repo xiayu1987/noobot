@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { AgentContextFactory } from "../../src/context/assembly/agent-context-factory.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 
 test("buildAgentContextFromBuilder triggers before/after context build hooks", async () => {
   const hookManager = createHookManager();
@@ -32,17 +33,14 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
 
   const contextBuilder = {
     async buildNewSessionContext() {
-      return createTestAgentExecutionScope(
-        { hookManager },
-        {
-          messageBlocks: {
-            history: [
-              { role: "user", content: "a" },
-              { role: "assistant", content: "b" },
-            ],
-          },
+      return createTestAgentExecutionScope(createRuntimeContext({ runConfig: { hookManager } }), {
+        messageBlocks: {
+          history: [
+            { role: "user", content: "a" },
+            { role: "assistant", content: "b" },
+          ],
         },
-      );
+      });
     },
     async buildExistingSessionContext() {
       throw new Error("should not be called");

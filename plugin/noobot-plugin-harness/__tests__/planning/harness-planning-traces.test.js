@@ -39,8 +39,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
     caller: "user",
     messages: [{ role: "user", content: "hello" }],
     agentContext: {
-      payload: { messages: { system: [], history: [] } },
-      execution: { controllers: { runtime: { basePath } } },
+      bindings: { runtime: { basePath } },
     },
   };
   await hookManager.emit("agent.before_llm_call", ctx);

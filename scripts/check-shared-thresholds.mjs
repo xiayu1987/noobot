@@ -50,7 +50,7 @@ const CATEGORY_RULES = [
     symbol: "QUANTITY_THRESHOLDS",
     namePattern: /(ITEMS?|COUNT|LIMIT|LINES?|RESULTS?|FILES?|ENTRIES|CONCURRENCY|DEPTH|SIZE)$/i,
     propPattern:
-      /^(?:maxItems|maxFileCount|maxSubAgentDepth|maxLines|maxResults|maxFiles|maxEntries|maxBufferEntries|maxSize|limit|concurrency|jsonlBatchSize|maxRuns)$/i,
+      /^(?:maxItems|maxFileCount|maxSubAgentDepth|maxLines|maxResults|maxFiles|maxEntries|maxBufferEntries|maxSize|limit|concurrency|maxRuns)$/i,
   },
   {
     category: "time",

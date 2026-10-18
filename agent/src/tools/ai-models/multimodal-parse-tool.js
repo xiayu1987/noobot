@@ -27,6 +27,7 @@ import {
 } from "@noobot/attachment-protocol";
 import { MIME_TYPE, resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { createFileInputSchema, isUserAttachment, resolveFileInput } from "../core/file-input.js";
 import { registerTransferAttachmentResources } from "../core/resource-broker.js";
@@ -45,7 +46,7 @@ import {
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
 const require = createRequire(import.meta.url);
@@ -247,10 +248,7 @@ export function createMultimodalParseTool({ agentContext }) {
           code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
         });
       }
-      const modelPort = runtime?.modelPort;
-      if (!modelPort || !isFunction(modelPort.invoke)) {
-        throw new TypeError("multimodal_parse requires runtime.modelPort");
-      }
+      const { modelPort } = requireRuntimeModelHost(runtime);
       const inputAttachments = await Promise.all(
         inputFiles.map(async (inputFile, index) => {
           const mimeType = inputMimeTypes[index];
@@ -284,7 +282,6 @@ export function createMultimodalParseTool({ agentContext }) {
       const textValue = String(response?.output?.text || response?.result?.rawText || "");
       const persistedOutput = await persistParsedTextAttachment({
         runtime,
-        agentContext,
         inputFile: inputFiles[0],
         text: textValue,
         mode: TOOL_DATA_MODE.MULTIMODAL_MODEL,

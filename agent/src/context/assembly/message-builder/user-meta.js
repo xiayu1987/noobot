@@ -5,7 +5,7 @@
  */
 import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { HumanMessage } from "@langchain/core/messages";
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
@@ -22,7 +22,7 @@ import {
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import { text, isPlainObject } from "@noobot/shared/value";
 
-export function resolveAttachments(msg = {}, fallbackAttachments = []) {
+export function resolveAttachments(msg = {}) {
   const transferAttachments = getTransferAttachments(
     [
       ...(Array.isArray(msg?.transferEnvelopes) ? msg.transferEnvelopes : []),
@@ -35,11 +35,6 @@ export function resolveAttachments(msg = {}, fallbackAttachments = []) {
   if (Array.isArray(msg?.lc_kwargs?.additional_kwargs?.attachments)) {
     return msg.lc_kwargs.additional_kwargs.attachments;
   }
-  return Array.isArray(fallbackAttachments) ? fallbackAttachments : [];
-}
-
-function resolveFallbackAttachments(meta = {}) {
-  if (Array.isArray(meta?.userMessageAttachments)) return meta.userMessageAttachments;
   return [];
 }
 
@@ -51,76 +46,32 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
   return projectAttachmentMetaForModel(attachmentItem);
 }
 
-function buildUserMetaInfoContent(
-  runtime = {},
-  msg = {},
-  fallbackMeta = {},
-  {
-    allowFallbackAttachments = true,
-    allowFallbackIdentity = true,
-    allowMessageAttachments = true,
-    allowFallbackRoundIdentity = true,
-  } = {},
-) {
-  const identityFallback = allowFallbackIdentity ? fallbackMeta : {};
-  const fallbackAttachments = allowFallbackAttachments
-    ? resolveFallbackAttachments(fallbackMeta)
-    : [];
-  const attachments = allowMessageAttachments ? resolveAttachments(msg, fallbackAttachments) : [];
-  const fallbackParentSessionId = normalizeParentSessionId(identityFallback?.parentSessionId);
-  const messageParentSessionId = normalizeParentSessionId(msg?.parentSessionId);
+function buildUserMetaInfoContent(runtime = {}, msg = {}) {
   const payload = {
-    userName: text(msg?.userName || identityFallback?.userName),
-    sessionId: text(msg?.sessionId || identityFallback?.sessionId),
-    parentSessionId: messageParentSessionId ? messageParentSessionId : fallbackParentSessionId,
-    dialogProcessId:
-      resolveContextMessageDialogProcessId(msg) ||
-      (allowFallbackRoundIdentity
-        ? normalizeDialogProcessId(identityFallback?.dialogProcessId)
-        : ""),
-    parentDialogProcessId: text(
-      msg?.parentDialogProcessId || identityFallback?.parentDialogProcessId,
+    userName: text(msg?.userName),
+    sessionId: text(msg?.sessionId),
+    parentSessionId: normalizeParentSessionId(msg?.parentSessionId),
+    dialogProcessId: resolveContextMessageDialogProcessId(msg),
+    parentDialogProcessId: text(msg?.parentDialogProcessId),
+    turnScopeId: resolveMessageTurnScopeId(msg),
+    attachments: resolveAttachments(msg).map((attachmentItem) =>
+      buildUserMetaAttachmentInfo(attachmentItem),
     ),
-    turnScopeId:
-      resolveMessageTurnScopeId(msg) ||
-      String(allowFallbackRoundIdentity ? identityFallback?.turnScopeId || "" : "").trim(),
-    attachments: attachments.map((attachmentItem) => buildUserMetaAttachmentInfo(attachmentItem)),
   };
   const userMetaTag = tEngine(runtime, "agent.userMetaTag");
   return `[${userMetaTag}]\n${JSON.stringify(payload, null, 2)}\n[/${userMetaTag}]`;
 }
 
-export function buildHumanMessagesForUser(
-  runtime = {},
-  msg = {},
-  fallbackMeta = {},
-  {
-    allowFallbackAttachments = true,
-    allowFallbackIdentity = true,
-    allowMessageAttachments = true,
-    allowFallbackRoundIdentity = true,
-  } = {},
-) {
+export function buildHumanMessagesForUser(runtime = {}, msg = {}) {
   const contentText = buildHumanMessageContent(msg);
-  const isNaturalUserMessage = resolveContextMessageOrigin(msg) === "natural";
   const identityKwargs = projectContextMessageIdentityMetadata(msg);
   const userMetaMessageId = deriveMessageProjectionId(identityKwargs.noobotMessageId, "user_meta");
-  const contentMessage = isNaturalUserMessage
-    ? new HumanMessage({
-        content: contentText,
-        additional_kwargs: identityKwargs,
-      })
-    : new HumanMessage({
-        content: contentText,
-        additional_kwargs: identityKwargs,
-      });
+  const contentMessage = new HumanMessage({
+    content: contentText,
+    additional_kwargs: identityKwargs,
+  });
   const metaMessage = new HumanMessage({
-    content: buildUserMetaInfoContent(runtime, msg, fallbackMeta, {
-      allowFallbackAttachments,
-      allowFallbackIdentity,
-      allowMessageAttachments,
-      allowFallbackRoundIdentity,
-    }),
+    content: buildUserMetaInfoContent(runtime, msg),
     additional_kwargs: {
       ...identityKwargs,
       ...(userMetaMessageId ? { noobotMessageId: userMetaMessageId } : {}),

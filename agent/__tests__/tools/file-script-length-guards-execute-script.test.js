@@ -15,6 +15,7 @@ import {
   buildScriptExecutionMeta,
   createScriptTool,
   buildAgentContext,
+  toolCallScope,
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
@@ -96,15 +97,15 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
   const runnerResult = await executeToolCall({
     call: { id: "call_long_script", name: "execute_script", args: { command } },
     tool,
-    runtime: {
-      basePath,
-      systemRuntime: { userId: "u-test", sessionId: "s-script" },
-      globalConfig: {},
-      userConfig: {},
-      attachmentService: buildAttachmentService(),
-    },
-    agentContext: buildAgentContext(basePath, "u-test"),
-    sessionId: "s-script",
+    ...toolCallScope(
+      buildAgentContext(basePath, "u-test", {
+        runtime: {
+          systemRuntime: { sessionId: "s-script" },
+          globalConfig: {},
+          attachmentService: buildAttachmentService(),
+        },
+      }),
+    ),
   });
   const result = parseToolResult(runnerResult.toolResultText);
 
@@ -387,6 +388,7 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
   };
   const agentContext = buildHostScriptAgentContext(basePath, "primary-user", {
     runtime: {
+      systemRuntime: { sessionId: "s-script-large-output" },
       globalConfig: { security: { executionIsolation: { mode: "host" } } },
       attachmentService,
     },
@@ -404,15 +406,7 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
       },
     },
     tool,
-    runtime: {
-      basePath,
-      systemRuntime: { userId: "primary-user", sessionId: "s-script-large-output" },
-      globalConfig: { security: { executionIsolation: { mode: "host" } } },
-      userConfig: {},
-      attachmentService,
-    },
-    agentContext,
-    sessionId: "s-script-large-output",
+    ...toolCallScope(agentContext),
   });
   const result = parseToolResult(runnerResult.toolResultText);
   const stdoutFile = runnerResult.transferEnvelopes[0].payload.attachments.find(
@@ -555,16 +549,12 @@ test("execute_script: aborted Docker queue entry never starts after lock release
   assert.equal(secondInvoked, false);
 });
 
-test("execute_script: sandbox 返回统一 workspace 根执行路径", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-sandbox-view-"));
+test("execute_script: sandbox 返回统一 workspace 根执行路径", () => {
   const meta = buildExecutionWorkspaceMeta({
     executionPolicy: resolveToolExecutionPolicy({
       toolName: "execute_script",
       globalConfig: { security: { executionIsolation: { mode: "sandbox" } } },
     }),
-    workspace: basePath,
-    runtime: { userId: "primary-user" },
-    pathContext: { currentDirectory: "/workspace/primary-user" },
   });
 
   assert.deepEqual(meta, { path: ".", view: "workspace" });
@@ -576,14 +566,6 @@ test("execute_script: Docker 返回仅保留镜像名和当前 workspace 视角"
       toolName: "execute_script",
       globalConfig: { security: { executionIsolation: { mode: "sandbox" } } },
     }),
-    workspace: "/host/primary-user",
-    docker: {
-      image: "example/script:latest",
-      containerName: "noobot-script-sandbox",
-      scope: "global",
-      workdir: "/workspace/primary-user",
-      mounts: [{ source: "/host/project", target: "/project" }],
-    },
   });
 
   assert.equal(meta.execution.image, "nikolaik/python-nodejs:python3.12-nodejs26-bookworm");

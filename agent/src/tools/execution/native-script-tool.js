@@ -20,7 +20,10 @@ import {
 } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  resolveRuntimeUserId,
+} from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { createFileInputSchema, resolveFileInput } from "../core/file-input.js";
@@ -272,10 +275,6 @@ async function collectOutputFiles(root, relative = "") {
   return files;
 }
 
-function resolveNativeScriptOwner(runtime, agentContext) {
-  return text(runtime?.systemRuntime?.userId || agentContext?.userId);
-}
-
 function createNativeScriptIpcHandlers({
   runtime,
   agentContext,
@@ -283,7 +282,7 @@ function createNativeScriptIpcHandlers({
   browserProfileRoot,
   interactionId,
 }) {
-  const userId = resolveNativeScriptOwner(runtime, agentContext);
+  const userId = resolveRuntimeUserId(runtime);
   const interactionAuthority = resolveUserInteractionAuthority(agentContext);
   return {
     [NATIVE_SCRIPT_IPC_CHANNEL.BROWSER_SESSION_REQUEST]: async ({ headed, profile } = {}) => {
@@ -386,8 +385,6 @@ async function persistNativeOutputs({ runtime, agentContext, identity, outputRoo
   );
   const { transferEnvelopes } = await persistTransferArtifacts({
     runtime,
-    agentContext,
-    userId: text(runtime?.systemRuntime?.userId),
     artifacts,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: "execute_native_script",

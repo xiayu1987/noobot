@@ -12,6 +12,14 @@ import {
 import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
 import { text, isObjectLike } from "@noobot/shared/value";
 
+export function readAfterLlmCallText(ctx) {
+  const modelResponse = ctx.modelResponse;
+  if (!isObjectLike(modelResponse)) {
+    throw new TypeError("after_llm_call context requires modelResponse");
+  }
+  return text(modelResponse.text);
+}
+
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
   const expectedRole = text(role);
   const expectedType = text(type);

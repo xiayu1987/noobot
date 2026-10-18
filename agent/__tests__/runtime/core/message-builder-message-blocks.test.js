@@ -8,26 +8,19 @@ import assert from "node:assert/strict";
 
 import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
-function createMessageBlockScope(runtime, messageBlocks) {
-  return createTestAgentExecutionScope(runtime, {
-    identity: {
-      userId: runtime.userId,
-      sessionId: runtime.systemRuntime.sessionId,
-      parentSessionId: runtime.systemRuntime.parentSessionId,
-      dialogProcessId: runtime.systemRuntime.dialogProcessId,
-      turnScopeId: runtime.systemRuntime.turnScopeId,
-    },
-    messageBlocks,
-  });
+function createMessageBlockScope(identity, runtime, messageBlocks) {
+  return createTestAgentExecutionScope(createRuntimeContext(runtime), { identity, messageBlocks });
 }
 
 test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {
   const blocks = buildContextMessageBlocks(
     createMessageBlockScope(
-      { userId: "u1", systemRuntime: { sessionId: "s1", dialogProcessId: "dlg1" } },
+      { userId: "u1", sessionId: "s1", dialogProcessId: "dlg1" },
+      { systemRuntime: { sessionId: "s1", dialogProcessId: "dlg1" } },
       {
         system: ["sys-1"],
         history: [
@@ -63,6 +56,12 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
     createMessageBlockScope(
       {
         userId: "admin",
+        sessionId: "s1",
+        parentSessionId: "parent-s1",
+        dialogProcessId: "dlg-resume-new",
+        turnScopeId: "turn-resume-new",
+      },
+      {
         userMessageAttachments: [
           {
             attachmentId: "att-1",
@@ -76,7 +75,6 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
           sessionId: "s1",
           parentSessionId: "parent-s1",
           dialogProcessId: "dlg-resume-new",
-          parentDialogProcessId: "dlg-stopped",
           turnScopeId: "turn-resume-new",
         },
       },
@@ -150,7 +148,11 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
     createMessageBlockScope(
       {
         userId: "admin",
-        resumeFromStoppedSnapshot: true,
+        sessionId: "s1",
+        dialogProcessId: "dlg-current",
+        turnScopeId: "turn-current",
+      },
+      {
         userMessageAttachments: [
           {
             attachmentId: "att-resume",
@@ -163,7 +165,6 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
         systemRuntime: {
           sessionId: "s1",
           dialogProcessId: "dlg-current",
-          parentDialogProcessId: "dlg-stopped",
           turnScopeId: "turn-current",
         },
       },
@@ -233,12 +234,15 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
     createMessageBlockScope(
       {
         userId: "admin",
-        resumeFromStoppedSnapshot: true,
+        sessionId: "s1",
+        dialogProcessId: "dlg-current",
+        turnScopeId: "turn-current",
+      },
+      {
         userMessageAttachments: [],
         systemRuntime: {
           sessionId: "s1",
           dialogProcessId: "dlg-current",
-          parentDialogProcessId: "dlg-stopped",
           turnScopeId: "turn-current",
         },
       },
@@ -283,6 +287,11 @@ test("buildContextMessageBlocks removes current turn user residue from history",
     createMessageBlockScope(
       {
         userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dlg-current",
+        turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+      },
+      {
         systemRuntime: {
           sessionId: "s1",
           dialogProcessId: "dlg-current",
@@ -347,6 +356,11 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
     createMessageBlockScope(
       {
         userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dlg-current",
+        turnScopeId: "client-turn:current",
+      },
+      {
         systemRuntime: {
           sessionId: "s1",
           dialogProcessId: "dlg-current",

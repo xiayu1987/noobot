@@ -84,14 +84,14 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 699 处 / 291 个文件；内联 trim 兜底 115 处 / 73 个文件；内联类型判断 2 处 / 2 个文件；原始 typeof 判断 766 处 / 374 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 672 处 / 281 个文件；内联 trim 兜底 106 处 / 72 个文件；内联类型判断 2 处 / 2 个文件；原始 typeof 判断 700 处 / 364 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 原始 typeof 判断 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ------------ | ---------------- | ----------- |
 | `client/noobot-chat`             | 270    | 31             | 1            | 115              | 0           |
-| `agent`                          | 118    | 30             | 0            | 210              | 0           |
-| `plugin/noobot-plugin-harness`   | 46     | 10             | 0            | 141              | 0           |
+| `agent`                          | 103    | 23             | 0            | 195              | 0           |
 | `plugin/noobot-plugin-workflow`  | 99     | 11             | 0            | 50               | 0           |
+| `plugin/noobot-plugin-harness`   | 35     | 8              | 0            | 90               | 0           |
 | `service`                        | 38     | 5              | 0            | 60               | 0           |
 | `agent-proxy`                    | 11     | 2              | 0            | 23               | 0           |
 | `context-protocol`               | 5      | 1              | 0            | 30               | 0           |
@@ -105,8 +105,8 @@
 | `event-protocol`                 | 10     | 0              | 0            | 3                | 0           |
 | `plugin-runtime`                 | 0      | 0              | 0            | 13               | 0           |
 | `connector-instances`            | 4      | 0              | 0            | 7                | 0           |
-| `i18n`                           | 3      | 1              | 0            | 7                | 0           |
 | `scripts`                        | 4      | 1              | 0            | 6                | 0           |
+| `i18n`                           | 2      | 1              | 0            | 7                | 0           |
 | `model-protocol`                 | 3      | 0              | 0            | 7                | 0           |
 | `shared`                         | 6      | 0              | 0            | 4                | 0           |
 | `memory-protocol`                | 2      | 0              | 0            | 6                | 0           |

@@ -97,18 +97,20 @@ async function recordSessionRunFailure({
   const userStopped = aborted && isUserStopAbort(error, abortSignal);
   if (aborted) {
     if (userStopped) {
-      await lifecycleRuntime?.consumeUserInterjections?.();
-      await lifecycleRuntime?.persistCurrentTurnMessages?.();
+      if (lifecycleRuntime) {
+        await lifecycleRuntime.consumeUserInterjections();
+        await lifecycleRuntime.persistCurrentTurnMessages();
+      }
       const stoppedSnapshotPersistence =
         await persistStoppedSnapshotFromRuntime("runner_user_stop_catch");
-      await lifecycle?.userStop?.({
+      await lifecycle?.userStop({
         reason: tSystem("ws.dialogStoppedByUser"),
         stoppedSnapshotPersistence,
       });
-      await lifecycleRuntime?.persistCurrentTurnMessages?.();
+      if (lifecycleRuntime) await lifecycleRuntime.persistCurrentTurnMessages();
     } else {
       const interruptionReason = resolveExecutionAbortMessage({ error, abortSignal });
-      lifecycle?.interrupt?.({
+      lifecycle?.interrupt({
         reason: interruptionReason,
         stopType: resolveExecutionAbortType({ error, abortSignal }),
         stoppedSnapshotPersistence: {
@@ -123,7 +125,7 @@ async function recordSessionRunFailure({
       });
     }
   } else {
-    lifecycle?.fail?.({ error });
+    lifecycle?.fail({ error });
   }
   syncLifecycleRuntimeState(lifecycleRuntime, lifecycle);
   const executionFailure = createExecutionFailure(error, lifecycle?.snapshot || null);

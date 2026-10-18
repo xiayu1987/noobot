@@ -36,21 +36,22 @@ test("final acceptance separate model receives revised plan, all phase checklist
     messages: [{ role: "assistant", content: "最终输出：done" }],
     result: { output: "最终输出：done" },
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        harness: {
-          planText: "1. 核心实现\n2. 验证交付",
-          phaseAcceptanceReports: [
-            { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：pass" },
-            { acceptedAt: "2026-05-27T00:10:00.000Z", content: "阶段验收清单二：warn" },
-          ],
-          state: {
-            flags: { planningCaptured: true, acceptanceRequested: false },
-            counters: {},
-            signals: { successfulToolCount: 1 },
-            pending: {},
+      bindings: {
+        extensions: {
+          harness: {
+            planText: "1. 核心实现\n2. 验证交付",
+            phaseAcceptanceReports: [
+              { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：pass" },
+              { acceptedAt: "2026-05-27T00:10:00.000Z", content: "阶段验收清单二：warn" },
+            ],
+            state: {
+              flags: { planningCaptured: true, acceptanceRequested: false },
+              counters: {},
+              signals: { successfulToolCount: 1 },
+              pending: {},
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
@@ -144,23 +145,23 @@ test("harness active request_task_acceptance semantic validation receives agent 
     },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [] },
-      harness: {
-        state: {
-          flags: {},
-          counters: {},
-          signals: { successfulToolCount: 1 },
-          pending: {},
+    bindings: {
+      tools: [],
+      extensions: {
+        harness: {
+          state: {
+            flags: {},
+            counters: {},
+            signals: { successfulToolCount: 1 },
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
   await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
-  const tool = agentContext.payload.tools.registry.find(
-    (item) => item.name === "request_task_acceptance",
-  );
+  const tool = agentContext.bindings.tools.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke(
     { mode: "active" },
     {
@@ -182,10 +183,10 @@ test("harness active request_task_acceptance semantic validation receives agent 
   assert.equal(result.acceptance.semanticValidation.consistent, true);
   assert.equal(
     result.acceptance.statusAuthority,
-    agentContext.payload.harness.lastAcceptanceReport.statusAuthority,
+    agentContext.bindings.extensions.harness.lastAcceptanceReport.statusAuthority,
   );
   assert.equal(
-    agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent,
+    agentContext.bindings.extensions.harness.lastAcceptanceReport.semanticValidation.consistent,
     true,
   );
 });
@@ -204,7 +205,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         acceptanceReviewingStates.push(
-          agentContext.payload.harness.state.flags.acceptanceReviewing,
+          agentContext.bindings.extensions.harness.state.flags.acceptanceReviewing,
         );
         return createTestModelResponse(
           payload.purpose === "acceptance_semantic_validation"
@@ -231,11 +232,13 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     },
   };
   const agentContext = {
-    payload: {
-      tools: { registry: [] },
-      harness: {
-        state,
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+    bindings: {
+      tools: [],
+      extensions: {
+        harness: {
+          state,
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
       },
     },
   };
@@ -243,9 +246,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
   state.pending.summary = true;
   state.pending.summaryCheckpointMessageIds = ["stale-checkpoint-message"];
   state.flags.summaryByCharsPrompted = true;
-  const tool = agentContext.payload.tools.registry.find(
-    (item) => item.name === "request_task_acceptance",
-  );
+  const tool = agentContext.bindings.tools.find((item) => item.name === "request_task_acceptance");
   const toolCtx = createTestHookContext({
     agentContext,
     result: { output: "work is not complete" },
@@ -254,12 +255,11 @@ test("task acceptance clears queued summary, pauses only during review, and is e
 
   assert.equal(state.flags.acceptanceRequested, true);
   assert.equal(state.flags.acceptanceReviewing, false);
-  assert.equal(state.flags.acceptanceCompleted, false);
   assert.equal(state.pending.summary, false);
   assert.equal(state.pending.summaryCheckpointMessageIds, null);
   assert.equal(state.flags.summaryByCharsPrompted, false);
   assert.equal(
-    agentContext.payload.tools.registry.some((item) => item.name === "request_task_acceptance"),
+    agentContext.bindings.tools.some((item) => item.name === "request_task_acceptance"),
     false,
   );
   assert.deepEqual(acceptanceReviewingStates, [true, true]);
@@ -280,7 +280,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     summaryInvocationCountAfterAcceptance,
   );
   assert.equal(
-    agentContext.payload.tools.registry.some((item) => item.name === "request_task_acceptance"),
+    agentContext.bindings.tools.some((item) => item.name === "request_task_acceptance"),
     false,
   );
 });
@@ -311,23 +311,23 @@ test("harness active request_task_acceptance falls back to closure meta when con
     },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [] },
-      harness: {
-        state: {
-          flags: {},
-          counters: {},
-          signals: { successfulToolCount: 1 },
-          pending: {},
+    bindings: {
+      tools: [],
+      extensions: {
+        harness: {
+          state: {
+            flags: {},
+            counters: {},
+            signals: { successfulToolCount: 1 },
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
-        logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
   };
   await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
-  const tool = agentContext.payload.tools.registry.find(
-    (item) => item.name === "request_task_acceptance",
-  );
+  const tool = agentContext.bindings.tools.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke(
     { mode: "active" },
     {
@@ -344,5 +344,8 @@ test("harness active request_task_acceptance falls back to closure meta when con
   assert.equal(result.phaseAcceptanceTriggered, true);
   assert.equal(result.report, undefined);
   assert.equal(result.acceptance.semanticValidation.status, "pass");
-  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
+  assert.equal(
+    agentContext.bindings.extensions.harness.lastAcceptanceReport.semanticValidation.status,
+    "pass",
+  );
 });

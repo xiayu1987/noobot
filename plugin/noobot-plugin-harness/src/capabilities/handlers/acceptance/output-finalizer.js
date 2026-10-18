@@ -46,27 +46,26 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const { bucket, state } = holder;
   if (state.flags.checklistArtifactsAttached === true) return false;
 
-  const locale = state?.locale || LOCALE.ZH_CN;
+  const locale = state.locale || LOCALE.ZH_CN;
   const acceptanceReport =
-    bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
-      ? bucket.lastAcceptanceReport
-      : buildAcceptanceReport({
-          bucket,
-          state,
-          mode: ACCEPTANCE_MODE.FORCED,
-          forcedReason: [
-            translateI18nText(
-              locale,
-              HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
-            ),
-            translateI18nText(
-              LOCALE.EN_US,
-              HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
-            ),
-          ]
-            .filter(Boolean)
-            .join(" | "),
-        });
+    bucket.lastAcceptanceReport ||
+    buildAcceptanceReport({
+      bucket,
+      state,
+      mode: ACCEPTANCE_MODE.FORCED,
+      forcedReason: [
+        translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
+        ),
+        translateI18nText(
+          LOCALE.EN_US,
+          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
+        ),
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    });
 
   let transferPayload = { transferEnvelopes: [] };
   try {
@@ -78,7 +77,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         mimeType: "text/plain",
         generationSource: "harness_checklist",
         domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-        content: [generatedAt, "[planText]", text(bucket?.planText)].filter(Boolean).join("\n"),
+        content: [generatedAt, "[planText]", text(bucket.planText)].filter(Boolean).join("\n"),
       }),
       saveCapabilityOutputAsTransferArtifacts(ctx, {
         purpose: "acceptance_report",
@@ -135,9 +134,9 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   if (!holder) return false;
   const { bucket, state } = holder;
   if (state.flags.acceptanceRequested === true) return false;
-  const locale = state?.locale || LOCALE.ZH_CN;
+  const locale = state.locale || LOCALE.ZH_CN;
   const forcedReason =
-    state?.flags?.overflowForceAcceptancePending === true
+    state.flags.overflowForceAcceptancePending === true
       ? [
           translateI18nText(
             locale,
@@ -190,18 +189,13 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  if (state?.flags?.acceptanceRequested !== true) return false;
-  const lastReport =
-    bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
-      ? bucket.lastAcceptanceReport
-      : null;
+  if (state.flags.acceptanceRequested !== true) return false;
+  const lastReport = bucket.lastAcceptanceReport;
   if (!lastReport) return false;
 
-  const latestPhaseReport = Array.isArray(bucket?.phaseAcceptanceReports)
-    ? bucket.phaseAcceptanceReports[bucket.phaseAcceptanceReports.length - 1] || null
-    : null;
+  const latestPhaseReport = bucket.phaseAcceptanceReports.at(-1);
   const latestPhaseAcceptedAt = text(latestPhaseReport?.acceptedAt);
-  const reportPhaseAcceptedAt = text(lastReport?.modelAcceptance?.acceptedAt);
+  const reportPhaseAcceptedAt = text(lastReport.modelAcceptance?.acceptedAt);
   const shouldRefresh =
     phaseAcceptanceChanged === true ||
     (latestPhaseAcceptedAt && latestPhaseAcceptedAt !== reportPhaseAcceptedAt);
@@ -210,11 +204,11 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
   const refreshedReport = buildAcceptanceReport({
     bucket,
     state,
-    mode: lastReport?.mode || ACCEPTANCE_MODE.ACTIVE,
-    forcedReason: text(lastReport?.forcedReason),
+    mode: lastReport.mode || ACCEPTANCE_MODE.ACTIVE,
+    forcedReason: text(lastReport.forcedReason),
   });
   bucket.lastAcceptanceReport = refreshedReport;
-  if (Array.isArray(bucket.acceptanceReports) && bucket.acceptanceReports.length) {
+  if (bucket.acceptanceReports.length) {
     bucket.acceptanceReports[bucket.acceptanceReports.length - 1] = refreshedReport;
   } else {
     bucket.acceptanceReports = [refreshedReport];

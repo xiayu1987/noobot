@@ -83,11 +83,9 @@ export async function runPlanningRefinementBySeparateModel(
     ctx,
     meta,
   );
-  const explicitTargetIndexes = Array.isArray(targetMainStepIndexes)
-    ? targetMainStepIndexes
-        .map((item) => Number(item))
-        .filter((item) => Number.isFinite(item) && item > 0)
-    : [];
+  const explicitTargetIndexes = targetMainStepIndexes
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item > 0);
   const refinementTargetMainSteps = resolveRefinementTargetMainSteps(bucket, state, {
     preferredTargetMainStepIndexes: explicitTargetIndexes,
   });

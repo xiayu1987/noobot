@@ -22,8 +22,8 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
       phaseAcceptanceTurns: FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
-  agentContext.payload.harness.state.flags = {
-    ...agentContext.payload.harness.state.flags,
+  agentContext.bindings.extensions.harness.state.flags = {
+    ...agentContext.bindings.extensions.harness.state.flags,
     planningCaptured: true,
   };
 
@@ -34,15 +34,15 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
     ctx: firstCtx,
     meta: {},
   });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
-  assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.phaseAcceptance, false);
   assert.equal(
-    agentContext.payload.harness.state.counters.phaseAcceptanceTurns,
+    agentContext.bindings.extensions.harness.state.counters.phaseAcceptanceTurns,
     FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   );
 
-  agentContext.payload.harness.state.pending.planRevision = false;
-  agentContext.payload.harness.state.pending.planRevisionContext = null;
+  agentContext.bindings.extensions.harness.state.pending.planRevision = false;
+  agentContext.bindings.extensions.harness.state.pending.planRevisionContext = null;
   const secondCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({
     capability: "planning",
@@ -50,8 +50,8 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
     ctx: secondCtx,
     meta: {},
   });
-  assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, true);
-  assert.equal(agentContext.payload.harness.state.counters.phaseAcceptanceTurns, 0);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.phaseAcceptance, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.phaseAcceptanceTurns, 0);
 });
 
 test("planning and phase acceptance use canonical per-run thresholds", async () => {
@@ -59,8 +59,8 @@ test("planning and phase acceptance use canonical per-run thresholds", async () 
   const agentContext = createPlanningAgentContext({
     counters: { llmTurns: 0, planUpdateTurns: 0, phaseAcceptanceTurns: 0 },
   });
-  agentContext.payload.harness.state.flags = {
-    ...agentContext.payload.harness.state.flags,
+  agentContext.bindings.extensions.harness.state.flags = {
+    ...agentContext.bindings.extensions.harness.state.flags,
     planningCaptured: true,
   };
 
@@ -77,15 +77,15 @@ test("planning and phase acceptance use canonical per-run thresholds", async () 
     },
   });
 
-  const planningEvent = agentContext.payload.harness.logs.planning.find(
+  const planningEvent = agentContext.bindings.extensions.harness.logs.planning.find(
     (item = {}) => item?.event === "planning_revision_scheduled_by_turn_threshold",
   );
   assert.equal(planningEvent?.detail?.triggerTurns, 1);
   assert.equal(planningEvent?.detail?.thresholdSource, "runtime");
-  assert.equal(agentContext.payload.harness.state.counters.phaseAcceptanceTurns, 1);
+  assert.equal(agentContext.bindings.extensions.harness.state.counters.phaseAcceptanceTurns, 1);
 
-  agentContext.payload.harness.state.pending.planRevision = false;
-  agentContext.payload.harness.state.pending.planRevisionContext = null;
+  agentContext.bindings.extensions.harness.state.pending.planRevision = false;
+  agentContext.bindings.extensions.harness.state.pending.planRevisionContext = null;
   await handler({
     capability: "planning",
     point: "agent.before_llm_call",
@@ -98,7 +98,7 @@ test("planning and phase acceptance use canonical per-run thresholds", async () 
       },
     },
   });
-  const acceptanceEvent = agentContext.payload.harness.logs.acceptance.find(
+  const acceptanceEvent = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) => item?.event === "phase_acceptance_scheduled_by_turn_threshold",
   );
   assert.equal(acceptanceEvent?.detail?.triggerTurns, 1);

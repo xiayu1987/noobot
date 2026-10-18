@@ -6,11 +6,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
+import { executeToolCall } from "./core/tool-runner.test-helpers.js";
 import { isAbortError } from "../../src/shared/utils/error-utils.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 
 function runtime(abortSignal = null) {
-  return {
+  return createRuntimeContext({
     abortSignal,
     runConfig: {
       messageId: "message-abort-responsiveness",
@@ -21,32 +22,35 @@ function runtime(abortSignal = null) {
       sessionId: "session-abort-responsiveness",
       config: { sanitizeOutput: false },
     },
-  };
+  });
 }
 
 test("tool runner aborts a tool that never observes the signal", async () => {
   const controller = new AbortController();
   let settled = false;
+  let invoked = false;
   const tool = {
-    invoke: async () =>
-      new Promise((resolve) => {
+    invoke: async () => {
+      invoked = true;
+      return new Promise((resolve) => {
         setTimeout(() => {
           settled = true;
           resolve("late result");
         }, 60000).unref?.();
-      }),
+      });
+    },
   };
 
   const pending = executeToolCall({
     call: { id: "call-abort", name: "demo" },
     tool,
-    sessionId: "session-abort-responsiveness",
     runtime: runtime(controller.signal),
   });
 
   controller.abort();
 
   await assert.rejects(pending, (error) => isAbortError(error, controller.signal));
+  assert.equal(invoked, true);
   assert.equal(settled, false);
 });
 
@@ -65,7 +69,6 @@ test("tool runner rejects immediately when the signal is already aborted", async
     executeToolCall({
       call: { id: "call-pre-aborted", name: "demo" },
       tool,
-      sessionId: "session-abort-responsiveness",
       runtime: runtime(controller.signal),
     }),
     (error) => isAbortError(error, controller.signal),
@@ -78,7 +81,6 @@ test("tool runner still returns normal results when a signal is present but not 
   const result = await executeToolCall({
     call: { id: "call-not-aborted", name: "demo" },
     tool: { invoke: async () => "ok" },
-    sessionId: "session-abort-responsiveness",
     runtime: runtime(controller.signal),
   });
 

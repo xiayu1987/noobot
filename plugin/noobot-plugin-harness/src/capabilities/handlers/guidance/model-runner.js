@@ -78,7 +78,7 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   if (!holder) return false;
   const { state } = holder;
   const pendingData = resolvePendingPlanUpdate(state);
-  if (!pendingData?.active) return false;
+  if (!pendingData.active) return false;
 
   if (pendingData.stage === GUIDANCE_DECISION.stage.revision) {
     setPendingStateWithMeta(state, "planRevision", false);
@@ -93,18 +93,14 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
         domain: CAPABILITY_DOMAIN.PLANNING,
         event: GUIDANCE_EVENTS.refinementSkippedByMaxAttempts,
         detail: {
-          refinementTargetMainStepIndexes: Array.isArray(pendingData.targetMainStepIndexes)
-            ? pendingData.targetMainStepIndexes
-            : [],
+          refinementTargetMainStepIndexes: pendingData.targetMainStepIndexes,
         },
       });
       return false;
     }
     const refinementResult = await runPlanningRefinementBySeparateModel(ctx, meta, {
       source: "planning_refinement",
-      targetMainStepIndexes: Array.isArray(pendingData.targetMainStepIndexes)
-        ? pendingData.targetMainStepIndexes
-        : [],
+      targetMainStepIndexes: pendingData.targetMainStepIndexes,
     });
     return refinementResult.applied === true;
   }
@@ -210,7 +206,7 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     return changed;
   }
   const revisionText = text(revisionResponse?.output?.text);
-  applyDynamicPolicyPromptFromText(ctx, revisionText, {
+  applyDynamicPolicyPromptFromText(bucket, revisionText, {
     source: "planning_revision",
     stage: "revision",
   });

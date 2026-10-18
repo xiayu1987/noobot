@@ -19,10 +19,9 @@ test("harness planning accepts numbered plain-text plan output", async () => {
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
 
@@ -31,14 +30,13 @@ test("harness planning accepts numbered plain-text plan output", async () => {
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: {
-      content: "1. 解析附件\n2. 执行核心任务\n3. 启动子任务",
-    },
+    modelResponse: { text: "1. 解析附件\n2. 执行核心任务\n3. 启动子任务" },
+    calls: [],
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.match(String(agentContext.payload.harness.planText || ""), /1\. 解析附件/);
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
+  assert.match(String(agentContext.bindings.extensions.harness.planText || ""), /1\. 解析附件/);
 });
 
 test("harness planning ignores wrapped non-plan payload even when non-empty", async () => {
@@ -48,10 +46,9 @@ test("harness planning ignores wrapped non-plan payload even when non-empty", as
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
   };
 
@@ -60,8 +57,8 @@ test("harness planning ignores wrapped non-plan payload even when non-empty", as
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: {
-      content: JSON.stringify({
+    modelResponse: {
+      text: JSON.stringify({
         toolName: "execute_script",
         ok: true,
         stdout: JSON.stringify({
@@ -87,11 +84,12 @@ test("harness planning ignores wrapped non-plan payload even when non-empty", as
         }),
       }),
     },
+    calls: [],
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
-  assert.equal(String(agentContext.payload.harness.planText || "").trim(), "");
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, false);
+  assert.equal(String(agentContext.bindings.extensions.harness.planText || "").trim(), "");
 });
 
 test("harness planning rejects malformed non-plan json text", async () => {
@@ -101,12 +99,11 @@ test("harness planning rejects malformed non-plan json text", async () => {
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
   const agentContext = {
-    payload: {
-      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      messages: { system: [], history: [] },
-      harness: {},
+    bindings: {
+      runtime: { systemRuntime: { config: {} } },
+      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+      extensions: { harness: {} },
     },
-    execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
   };
 
   await hookManager.emit("agent.before_llm_call", {
@@ -114,12 +111,13 @@ test("harness planning rejects malformed non-plan json text", async () => {
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: '{"taskChecklist":[{index:1,task:"解析附件"}]}' },
+    modelResponse: { text: '{"taskChecklist":[{index:1,task:"解析附件"}]}' },
+    calls: [],
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
-  assert.equal(String(agentContext.payload.harness.planText || "").trim(), "");
+  assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, false);
+  assert.equal(String(agentContext.bindings.extensions.harness.planText || "").trim(), "");
 });
 
 test("harness planning uses plan text flow without json repair", async () => {
@@ -142,12 +140,11 @@ test("harness planning uses plan text flow without json repair", async () => {
   const ctx = {
     messages: [{ role: "user", content: "开始任务" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-        harness: {},
+      bindings: {
+        runtime: { systemRuntime: { config: {} } },
+        tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
-      execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
     },
   };
 
@@ -155,8 +152,11 @@ test("harness planning uses plan text flow without json repair", async () => {
 
   assert.equal(purposes.includes("planning"), true);
   assert.equal(purposes.includes("planning_json_repair"), false);
-  assert.equal("taskChecklistSource" in ctx.agentContext.payload.harness, false);
-  assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, true);
+  assert.equal("taskChecklistSource" in ctx.agentContext.bindings.extensions.harness, false);
+  assert.equal(
+    String(ctx.agentContext.bindings.extensions.harness.planText || "").trim().length > 0,
+    true,
+  );
 });
 
 test("harness planning requires parseable main plan payload", async () => {
@@ -180,10 +180,9 @@ test("harness planning requires parseable main plan payload", async () => {
   const ctx = {
     messages: [{ role: "user", content: "开始任务" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "execute_script", invoke: async () => ({ ok: true }) }] },
-        harness: {},
+      bindings: {
+        tools: [{ name: "execute_script", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
     },
   };
@@ -192,7 +191,10 @@ test("harness planning requires parseable main plan payload", async () => {
   assert.equal(invocations.length >= 1, true);
   assertFlatCapabilityMessages(invocations[0].messages);
 
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, false);
-  assert.equal("taskChecklist" in ctx.agentContext.payload.harness, false);
-  assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, false);
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.flags.planningCaptured, false);
+  assert.equal("taskChecklist" in ctx.agentContext.bindings.extensions.harness, false);
+  assert.equal(
+    String(ctx.agentContext.bindings.extensions.harness.planText || "").trim().length > 0,
+    false,
+  );
 });

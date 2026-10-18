@@ -49,36 +49,24 @@ function normalizePending(state = {}) {
 export function resolvePendingPlanUpdateForWorkflow(state = {}) {
   const pending = normalizePending(state);
   if (pending.planRevision === true) {
-    const context =
-      pending.planRevisionContext && typeof pending.planRevisionContext === "object"
-        ? pending.planRevisionContext
-        : {};
     return {
       active: true,
       stage: GUIDANCE_DECISION.stage.revision,
       action: GUIDANCE_DECISION.label.planUpdateRevision,
       reason: GUIDANCE_DECISION.reason.pendingRevision,
-      targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
-        ? context.targetMainStepIndexes
-        : [],
+      targetMainStepIndexes: pending.planRevisionContext.targetMainStepIndexes,
     };
   }
   if (state?.flags?.planRefinementEnabled === false) {
     return { active: false, stage: "", action: "", reason: "", targetMainStepIndexes: [] };
   }
   if (pending.planRefinement === true) {
-    const context =
-      pending.planRefinementContext && typeof pending.planRefinementContext === "object"
-        ? pending.planRefinementContext
-        : {};
     return {
       active: true,
       stage: GUIDANCE_DECISION.stage.refinement,
       action: GUIDANCE_DECISION.label.planUpdateRefinement,
       reason: GUIDANCE_DECISION.reason.pendingRefinement,
-      targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
-        ? context.targetMainStepIndexes
-        : [],
+      targetMainStepIndexes: pending.planRefinementContext.targetMainStepIndexes,
     };
   }
   return { active: false, stage: "", action: "", reason: "", targetMainStepIndexes: [] };

@@ -286,7 +286,7 @@ function resolveSummaryPendingReason(pendingSnapshotRaw) {
 }
 
 function normalizePlanningPendingSnapshot(pendingSnapshotRaw, state, blockedActions) {
-  const planUpdateSnapshot = resolvePendingPlanUpdate(state || {});
+  const planUpdateSnapshot = resolvePendingPlanUpdate(state);
   return {
     summary: {
       active: pendingSnapshotRaw.summary === true,
@@ -300,13 +300,9 @@ function normalizePlanningPendingSnapshot(pendingSnapshotRaw, state, blockedActi
       active: pendingSnapshotRaw.analysis === true,
     },
     planUpdate: {
-      active: planUpdateSnapshot.active === true,
-      stage: planUpdateSnapshot.stage || "",
-      context: {
-        targetMainStepIndexes: Array.isArray(planUpdateSnapshot.targetMainStepIndexes)
-          ? planUpdateSnapshot.targetMainStepIndexes
-          : [],
-      },
+      active: planUpdateSnapshot.active,
+      stage: planUpdateSnapshot.stage,
+      context: { targetMainStepIndexes: planUpdateSnapshot.targetMainStepIndexes },
     },
     phaseAcceptance: {
       active: pendingSnapshotRaw.phaseAcceptance === true,

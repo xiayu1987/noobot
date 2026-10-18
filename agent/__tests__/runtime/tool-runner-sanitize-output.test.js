@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
+import { executeToolCall } from "./core/tool-runner.test-helpers.js";
 
 const email = "alice@example.com";
 
@@ -29,13 +29,11 @@ test("tool runner sanitizes successful output by default and preserves it when d
   const sanitized = await executeToolCall({
     call: { id: "call-sanitized", name: "demo" },
     tool,
-    sessionId: "session-sanitize-output",
     runtime: runtime(undefined),
   });
   const raw = await executeToolCall({
     call: { id: "call-raw", name: "demo" },
     tool,
-    sessionId: "session-sanitize-output",
     runtime: runtime(false),
   });
 
@@ -52,13 +50,11 @@ test("tool runner applies the output sanitization preference to recoverable erro
   const sanitized = await executeToolCall({
     call: { id: "call-error-sanitized", name: "demo" },
     tool,
-    sessionId: "session-sanitize-output",
     runtime: runtime(true),
   });
   const raw = await executeToolCall({
     call: { id: "call-error-raw", name: "demo" },
     tool,
-    sessionId: "session-sanitize-output",
     runtime: runtime(false),
   });
 

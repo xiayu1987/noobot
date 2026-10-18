@@ -133,12 +133,7 @@ export async function persistModelGeneratedArtifacts({
   const attachmentService = runtime?.attachmentService || null;
   const userId = text(runtime?.systemRuntime?.userId);
   if (!attachmentService || !userId) return [];
-  const fetchImpl =
-    typeof runtime?.sharedTools?.fetch === "function"
-      ? runtime.sharedTools.fetch
-      : typeof globalThis.fetch === "function"
-        ? globalThis.fetch.bind(globalThis)
-        : null;
+  const fetchImpl = runtime.sharedTools.fetch;
   const localMediaCandidates = extractGeneratedMediaCandidates(aiContent);
   const remoteMediaCandidates = [];
   if (Array.isArray(aiContent)) {

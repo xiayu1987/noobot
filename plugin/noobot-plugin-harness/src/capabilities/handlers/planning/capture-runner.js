@@ -16,6 +16,7 @@ import {
   appendCapabilityModelTraceLog,
   ensureHarnessBucket,
   extractRawTextContent,
+  readAfterLlmCallText,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeCapabilityModel,
@@ -174,22 +175,8 @@ function extractPlanningResponseText(response = null) {
   return text(response?.output?.text);
 }
 
-function extractAfterCallContent(ctx = {}) {
-  return (
-    extractRawTextContent(ctx?.ai?.content) ||
-    extractRawTextContent(ctx?.modelResponse?.content) ||
-    ""
-  );
-}
-
-function hasToolCallOnlyWithoutText(ctx = {}, sourceContent = "") {
-  const hasToolCalls =
-    Array.isArray(ctx?.ai?.tool_calls) ||
-    Array.isArray(ctx?.ai?.toolCalls) ||
-    Array.isArray(ctx?.modelResponse?.tool_calls) ||
-    Array.isArray(ctx?.modelResponse?.toolCalls) ||
-    text(ctx?.modelResponse?.finish_reason) === "tool_calls";
-  return hasToolCalls && !text(sourceContent);
+function hasToolCallOnlyWithoutText(ctx, sourceContent) {
+  return ctx.calls.length > 0 && !sourceContent;
 }
 
 function shouldBlockToolCallOnlyTurn(meta = {}) {
@@ -249,14 +236,15 @@ function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {
   return true;
 }
 
-async function handleSeparateModelPlanningProcessResult(
-  ctx = {},
-  processed = {},
-  locale = LOCALE.ZH_CN,
-  responseText = "",
-) {
+async function handleSeparateModelPlanningProcessResult({
+  ctx,
+  bucket,
+  processed,
+  locale,
+  responseText,
+}) {
   const operationDirectory = resolveOperationDirectoryContext(ctx);
-  applyDynamicPolicyPromptFromText(ctx, responseText, {
+  applyDynamicPolicyPromptFromText(bucket, responseText, {
     source: "planning",
     stage: "planning",
   });
@@ -378,7 +366,13 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       locale,
       appendCapabilityModelTraceLog,
     });
-    return await handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText);
+    return await handleSeparateModelPlanningProcessResult({
+      ctx,
+      bucket,
+      processed,
+      locale,
+      responseText,
+    });
   } finally {
     state.flags.planningSeparateModelInFlight = false;
   }
@@ -390,7 +384,7 @@ export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
   const { state } = holder;
   if (state.flags.planningCaptured === true) return false;
   if (state.flags.planningPromptInjected !== true) return false;
-  const sourceContent = extractAfterCallContent(ctx);
+  const sourceContent = readAfterLlmCallText(ctx);
   if (hasToolCallOnlyWithoutText(ctx, sourceContent)) {
     if (!shouldBlockToolCallOnlyTurn(meta)) {
       appendCapabilityLog(ctx, {

@@ -49,12 +49,7 @@ function hasMaterializedUserMeta(messages = [], index = 0, sourceMessage = {}) {
   return metaId === deriveContextMessageProjectionId(sourceId, "user_meta");
 }
 
-export function buildHistoryMessages({
-  effectiveHistoryMessages = [],
-  runtime = {},
-  fallbackUserMeta = {},
-  allowMessageAttachments = true,
-} = {}) {
+export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = {} } = {}) {
   const history = [];
   const consumedMetaIndexes = new Set();
   const knownHistoryToolCallIds = new Set();
@@ -149,14 +144,7 @@ export function buildHistoryMessages({
     }
     const materializedMeta = hasMaterializedUserMeta(effectiveHistoryMessages, messageIndex, msg);
     if (shouldBuildUserMetaForHistoryMessage(msg) && !materializedMeta) {
-      history.push(
-        ...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
-          allowFallbackAttachments: false,
-          allowFallbackIdentity: false,
-          allowMessageAttachments,
-          allowFallbackRoundIdentity: false,
-        }),
-      );
+      history.push(...buildHumanMessagesForUser(runtime, msg));
     } else if (materializedMeta) {
       const metaIndex = messageIndex + 1;
       const meta = effectiveHistoryMessages[metaIndex];

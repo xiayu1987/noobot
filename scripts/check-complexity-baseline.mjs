@@ -10,12 +10,12 @@ import { collectRatchet, ratchetViolations } from "./quality/baseline-ratchet.mj
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 301,
-  longFunctionCount: 66,
+  complexityCount: 282,
+  longFunctionCount: 65,
   maxComplexity: 48,
-  nestedTernaryCount: 129,
+  nestedTernaryCount: 125,
   deepNestingCount: 22,
-  longParameterListCount: 78,
+  longParameterListCount: 77,
   hotspots: Object.freeze({
     "event-protocol/src/event-registry-validators.js": [0, 0, 0],
     "agent/src/runtime/state-builder.js": [0, 0, 0],

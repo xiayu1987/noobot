@@ -22,19 +22,16 @@ test("harness planning prompt includes current tool names and descriptions", asy
   const ctx = {
     messages,
     agentContext: {
-      payload: {
-        tools: {
-          registry: [
-            { name: "read_file", description: "读取文件内容", invoke: async () => ({ ok: true }) },
-            {
-              name: "execute_native_script",
-              description: "使用 Playwright 浏览网页并提取信息",
-              invoke: async () => ({ ok: true }),
-            },
-          ],
-        },
-        messages: { system: [], history: [] },
-        harness: {},
+      bindings: {
+        tools: [
+          { name: "read_file", description: "读取文件内容", invoke: async () => ({ ok: true }) },
+          {
+            name: "execute_native_script",
+            description: "使用 Playwright 浏览网页并提取信息",
+            invoke: async () => ({ ok: true }),
+          },
+        ],
+        extensions: { harness: {} },
       },
     },
   };
@@ -69,17 +66,14 @@ test("harness initial planning keeps scenario policy out of text protocol and re
   const ctx = {
     messages,
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-        harness: { dynamicPolicyPrompt: { prompt: "Dynamic test scenario policy" } },
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            runConfig: { scenario: "text" },
-            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
-          },
+      bindings: {
+        runtime: {
+          runConfig: { scenario: "text" },
+          systemRuntime: { config: {}, runConfig: { scenario: "text" } },
+        },
+        tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+        extensions: {
+          harness: { dynamicPolicyPrompt: { prompt: "Dynamic test scenario policy" } },
         },
       },
     },
@@ -129,18 +123,13 @@ test("harness planning followup uses text deliverable-batch policy in text scena
   const ctx = {
     messages: [{ role: "user", content: "整理这些文本资料" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-        harness: {},
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            runConfig: { scenario: "text" },
-            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
-          },
+      bindings: {
+        runtime: {
+          runConfig: { scenario: "text" },
+          systemRuntime: { config: {}, runConfig: { scenario: "text" } },
         },
+        tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
     },
   };
@@ -183,25 +172,21 @@ test("harness planning captures dynamic policy prompt protocol from separate mod
   const ctx = {
     messages: [{ role: "user", content: "整理资料" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-        harness: {},
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            runConfig: { scenario: "text" },
-            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
-          },
+      bindings: {
+        runtime: {
+          runConfig: { scenario: "text" },
+          systemRuntime: { config: {}, runConfig: { scenario: "text" } },
         },
+        tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
     },
   };
 
   await hookManager.emit("agent.before_llm_call", ctx);
 
-  const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
+  const dynamicPolicyPrompt =
+    ctx.agentContext.bindings.extensions.harness.dynamicPolicyPrompt || {};
   assert.equal(dynamicPolicyPrompt.scenario, "text");
   assert.match(
     String(dynamicPolicyPrompt.prompt || ""),
@@ -236,25 +221,21 @@ test("harness planning followup uses dynamic programming scenario over initial t
   const ctx = {
     messages: [{ role: "user", content: "修一下 harness 插件里的代码" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-        harness: {},
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            runConfig: { scenario: "text" },
-            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
-          },
+      bindings: {
+        runtime: {
+          runConfig: { scenario: "text" },
+          systemRuntime: { config: {}, runConfig: { scenario: "text" } },
         },
+        tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
     },
   };
 
   await hookManager.emit("agent.before_llm_call", ctx);
 
-  const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
+  const dynamicPolicyPrompt =
+    ctx.agentContext.bindings.extensions.harness.dynamicPolicyPrompt || {};
   assert.equal(dynamicPolicyPrompt.scenario, "programming");
 
   const followupMessage = ctx.modelContext.messages.find((item = {}) =>
@@ -289,17 +270,7 @@ test("harness planning separate model keeps latest user goal in planning context
     messages: [],
     userMessage: "查找最适合组织的人",
     agentContext: {
-      payload: {
-        messages: {
-          system: [],
-          history: [
-            { role: "user", content: "重新查找最适合AI开发的人" },
-            { role: "assistant", content: "已给出AI开发TOP榜单" },
-            { role: "user", content: "查找最适合组织的人" },
-          ],
-        },
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-      },
+      bindings: { tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
     },
   };
 
@@ -329,30 +300,21 @@ test("harness planning operation directory uses sandbox view without losing host
         workspace: { basePath: sandboxBasePath },
         staticInfo: { defaultWorkdir: `${sandboxBasePath}/runtime/ops_workdir` },
       },
-      payload: {
-        tools: {
-          registry: [
-            { name: "read_file", description: "读取文件", invoke: async () => ({ ok: true }) },
-          ],
-        },
-        messages: { system: [], history: [] },
-        harness: {},
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            basePath: hostBasePath,
-            systemRuntime: { userId: "user-a" },
-            globalConfig: {
-              security: {
-                executionIsolation: {
-                  mode: "sandbox",
-                  sandbox: { provider: "docker", scope: "global" },
-                },
+      bindings: {
+        runtime: {
+          basePath: hostBasePath,
+          systemRuntime: { userId: "user-a" },
+          globalConfig: {
+            security: {
+              executionIsolation: {
+                mode: "sandbox",
+                sandbox: { provider: "docker", scope: "global" },
               },
             },
           },
         },
+        tools: [{ name: "read_file", description: "读取文件", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
     },
   };
@@ -389,20 +351,15 @@ test("harness separate-model plan relay includes operation directory for main ag
     sessionId: "s-user-b",
     messages: [{ role: "user", content: "开始任务" }],
     agentContext: {
-      payload: {
-        messages: { system: [], history: [] },
-        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
-        harness: {},
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            basePath,
-            userId: "user-b",
-            systemRuntime: { userId: "user-b", sessionId: "s-user-b" },
-            globalConfig: { security: { executionIsolation: { mode: "host" } } },
-          },
+      bindings: {
+        runtime: {
+          basePath,
+          userId: "user-b",
+          systemRuntime: { userId: "user-b", sessionId: "s-user-b" },
+          globalConfig: { security: { executionIsolation: { mode: "host" } } },
         },
+        tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
+        extensions: { harness: {} },
       },
     },
   };
@@ -418,7 +375,7 @@ test("harness separate-model plan relay includes operation directory for main ag
   assert.doesNotMatch(relayText, /Sandbox:/);
   assert.match(relayText, /1\. 解析附件/);
   assert.equal(
-    ctx.agentContext.payload.harness.operationDirectory.absolutePath,
+    ctx.agentContext.bindings.extensions.harness.operationDirectory.absolutePath,
     `${basePath}/runtime/ops_workdir`,
   );
 });

@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
+import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext } from "@noobot/context-protocol";
 import {
@@ -55,7 +56,13 @@ function createUpdatableTurnStore() {
   };
 }
 
-function installEmptyMessageEventMaterializer(runtime = {}) {
+function createTestRuntime({ persistCurrentTurnMessages = async () => {}, ...factoryInput } = {}) {
+  const runtime = createRuntimeContext(factoryInput);
+  runtime.persistCurrentTurnMessages = persistCurrentTurnMessages;
+  return runtime;
+}
+
+function installEmptyMessageEventMaterializer(runtime) {
   runtime.materializePendingCurrentTurnMessageEvents = () => ({
     activityTimeline: [],
     toolTimeline: [],
@@ -73,7 +80,9 @@ function createTestModelContext(dialogProcessId = "d-test", turnScopeId = "t-tes
 test("state-committer emits before/after hooks for assistant message commit", async () => {
   const hookCalls = [];
   const hookManager = createHookManager();
-  const runtime = installEmptyMessageEventMaterializer({ hookManager });
+  const runtime = installEmptyMessageEventMaterializer(
+    createTestRuntime({ runConfig: { hookManager } }),
+  );
   const turnMessageStore = createInMemoryTurnStore();
 
   hookManager.on(
@@ -116,10 +125,12 @@ test("state-committer emits before/after hooks for assistant message commit", as
 
 test("state-committer keeps one canonical assistant presentation per Turn", async () => {
   const turnMessageStore = createUpdatableTurnStore();
-  const runtime = installEmptyMessageEventMaterializer({
-    systemRuntime: { turnScopeId: "turn-canonical" },
-    persistCurrentTurnMessages: async () => {},
-  });
+  const runtime = installEmptyMessageEventMaterializer(
+    createTestRuntime({
+      systemRuntime: { turnScopeId: "turn-canonical" },
+      persistCurrentTurnMessages: async () => {},
+    }),
+  );
   const committer = createStateCommitter({
     turnMessageStore,
     dialogProcessId: "dialog-canonical",
@@ -148,7 +159,7 @@ test("state-committer keeps one canonical assistant presentation per Turn", asyn
 test("state-committer emits before/after hooks for tool result commit", async () => {
   const hookCalls = [];
   const hookManager = createHookManager();
-  const runtime = { hookManager };
+  const runtime = createTestRuntime({ runConfig: { hookManager } });
   const turnMessageStore = createInMemoryTurnStore();
   const traces = [];
   const modelContext = createTestModelContext("dp_2", "turn-dp-2");
@@ -206,7 +217,10 @@ test("state-committer completes tool result hooks and commit after the parent Tu
   const hookManager = createHookManager();
   const abortController = new AbortController();
   abortController.abort({ type: "user_stop", reason: "user stop action" });
-  const runtime = { hookManager, abortSignal: abortController.signal };
+  const runtime = createTestRuntime({
+    runConfig: { hookManager },
+    abortSignal: abortController.signal,
+  });
   const turnMessageStore = createInMemoryTurnStore();
   const modelContext = createTestModelContext("dp_stopped", "turn-stopped");
 
@@ -246,15 +260,16 @@ test("state-committer completes tool result hooks and commit after the parent Tu
 test("state-committer checkpoints assistant and tool records with presentation identity", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   let checkpointCount = 0;
-  const runtime = {
-    systemRuntime: {
-      messageEventStream: { activePresentationMessageId: "msg_chat_checkpoint" },
-    },
-    persistCurrentTurnMessages: async () => {
-      checkpointCount += 1;
-    },
-  };
-  installEmptyMessageEventMaterializer(runtime);
+  const runtime = installEmptyMessageEventMaterializer(
+    createTestRuntime({
+      systemRuntime: {
+        messageEventStream: { activePresentationMessageId: "msg_chat_checkpoint" },
+      },
+      persistCurrentTurnMessages: async () => {
+        checkpointCount += 1;
+      },
+    }),
+  );
   const committer = createStateCommitter({
     modelContext: createTestModelContext("dp_checkpoint", "turn-checkpoint"),
     traces: [],
@@ -296,7 +311,7 @@ test("state-committer writes tool result through message store when holder is pr
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_store_tool",
-    runtime: {},
+    runtime: createTestRuntime(),
   });
 
   await committer.pushToolResult({
@@ -362,7 +377,7 @@ test("state-committer stores compact LLM-facing tool result content", async () =
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_compact",
-    runtime: {},
+    runtime: createTestRuntime(),
   });
 
   await committer.pushToolResult({
@@ -408,7 +423,7 @@ test("state-committer persists transferEnvelopes only", async () => {
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_legacy_transfer",
-    runtime: {},
+    runtime: createTestRuntime(),
   });
 
   await committer.pushToolResult({
