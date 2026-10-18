@@ -227,15 +227,10 @@ function withHookClientEmitter(context = {}, emitHookClientEvent = null) {
   return safeContext;
 }
 
-export async function runAgentRuntimeHook({
-  runtime = {},
-  point = "",
-  context = {},
-  eventListener = null,
-} = {}) {
+export async function runAgentRuntimeHook({ runtime, point, context = {} }) {
   const descriptor = requireHookPointDescriptor(point);
   const normalizedPoint = descriptor.point;
-  const listener = eventListener || runtime?.eventListener || null;
+  const listener = runtime.eventListener;
   const manager = resolveRuntimeHookManager(runtime);
   if (!manager) {
     return createEmptyHookResult(normalizedPoint, context);
@@ -248,9 +243,7 @@ export async function runAgentRuntimeHook({
   const hookedContext = withHookClientEmitter(context, emitHookClientEvent);
   const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled();
   const invocationSignal =
-    descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
-      ? null
-      : runtime?.abortSignal || null;
+    descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED ? null : runtime.abortSignal;
   const startedAt = Date.now();
 
   if (verboseHookRuntimeEvents) {

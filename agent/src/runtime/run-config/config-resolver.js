@@ -38,7 +38,7 @@ export function resolveEffectiveModelSpec({
   const selection = selectModelAlias({ selectedModel, scenario, effectiveConfig });
   if (selection.source === "requested") {
     const selectedOrDefaultModelSpec = resolveModelSpecOrConfiguredDefault({
-      name: selection.alias,
+      modelName: selection.alias,
       globalConfig,
       userConfig,
     });
@@ -48,7 +48,7 @@ export function resolveEffectiveModelSpec({
     return selectedOrDefaultModelSpec;
   }
   return resolveModelSpecByName({
-    name: selection.alias,
+    modelName: selection.alias,
     globalConfig,
     userConfig,
   });

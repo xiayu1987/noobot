@@ -31,8 +31,8 @@ test("task check prompt is periodic and independent from phase summary state", (
     messageBlocks: { system: [], history: [], incremental: [] },
   });
   const modelState = {
-    eventListener: { onEvent: (event) => events.push(event) },
     runtime: {
+      eventListener: { onEvent: (event) => events.push(event) },
       systemRuntime: { taskCheckLoopCount: 0, modelLoopRound: 10, needsPhaseSummary: true },
     },
   };
@@ -99,10 +99,10 @@ test("a task_check call starts the next periodic slice without adding a prompt",
 test("maybePromptHelpToolByFailure injects prompt and resets failure counter", () => {
   const events = [];
   const modelState = {
-    eventListener: {
-      onEvent: (payload = {}) => events.push(payload),
-    },
     runtime: {
+      eventListener: {
+        onEvent: (payload = {}) => events.push(payload),
+      },
       systemRuntime: {
         toolConsecutiveFailureCount: 3,
       },
@@ -140,10 +140,10 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
 test("maybePromptHelpToolByLoop injects prompt through message store", () => {
   const events = [];
   const modelState = {
-    eventListener: {
-      onEvent: (payload = {}) => events.push(payload),
-    },
     runtime: {
+      eventListener: {
+        onEvent: (payload = {}) => events.push(payload),
+      },
       systemRuntime: {
         helpPromptLoopCount: 1,
       },
@@ -178,10 +178,10 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
 test("maybeRequestPhaseSummary injects summary prompt when threshold reached", () => {
   const events = [];
   const modelState = {
-    eventListener: {
-      onEvent: (payload = {}) => events.push(payload),
-    },
     runtime: {
+      eventListener: {
+        onEvent: (payload = {}) => events.push(payload),
+      },
       systemRuntime: {
         phaseSummaryLoopCount: 2,
       },
@@ -256,10 +256,10 @@ test("failed task_summary attempt preserves the pending summary state", () => {
 test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars exceed threshold", () => {
   const events = [];
   const modelState = {
-    eventListener: {
-      onEvent: (payload = {}) => events.push(payload),
-    },
     runtime: {
+      eventListener: {
+        onEvent: (payload = {}) => events.push(payload),
+      },
       systemRuntime: {
         phaseSummaryLoopCount: 0,
       },
@@ -300,10 +300,10 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
 test("maybeRequestPhaseSummary marks no-tools when overflow remains after the requested summary", () => {
   const events = [];
   const modelState = {
-    eventListener: {
-      onEvent: (payload = {}) => events.push(payload),
-    },
     runtime: {
+      eventListener: {
+        onEvent: (payload = {}) => events.push(payload),
+      },
       systemRuntime: {
         phaseSummaryLoopCount: 0,
         phaseSummaryByCharsPrompted: true,
@@ -351,10 +351,10 @@ test("maybeFinalizeNoToolsAfterPhaseSummaryOverflow catches post-summary overflo
   const events = [];
   const longUserMessage = { role: "user", content: "0123456789012345", summarized: false };
   const modelState = {
-    eventListener: {
-      onEvent: (payload = {}) => events.push(payload),
-    },
     runtime: {
+      eventListener: {
+        onEvent: (payload = {}) => events.push(payload),
+      },
       systemRuntime: {
         needsPhaseSummary: false,
         phaseSummaryByCharsPrompted: true,

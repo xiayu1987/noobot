@@ -68,7 +68,7 @@ export class ContextBuilder {
       userInteractionBridge = null,
       runConfig = {},
       systemMessages = [],
-      abortSignal = null,
+      abortSignal,
       parentAsyncResultContainer = null,
       persistenceContext = null,
       persistenceScope = null,

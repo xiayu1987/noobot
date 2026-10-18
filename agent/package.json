@@ -40,8 +40,7 @@
     "test:tools": "node --test __tests__/tools/*.test.js",
     "test:utils": "node --test __tests__/shared/utils/*.test.js __tests__/shared/utils/**/*.test.js",
     "test:connectors": "node --test __tests__/integrations/connectors/*.test.js __tests__/integrations/connectors/**/*.test.js",
-    "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=agent",
-    "pretest": "npm run -s check:i18n-imports && npm run -s check:directory-boundaries",
+    "pretest": "npm run -s check:directory-boundaries",
     "check:directory-boundaries": "node scripts/check-directory-boundaries.js",
     "check:plugin-decoupling": "node ../scripts/check-agent-plugin-decoupling.mjs",
     "check:model-context-convergence": "node ../scripts/check-model-context-convergence.mjs"

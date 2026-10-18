@@ -10,20 +10,18 @@ import {
   getSystemRuntimeFromAgentContext,
   getToolsFromAgentContext,
 } from "../../../context/agent-context-accessor.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
-export function normalizePreparedAgentTurnExecution(prepared = {}) {
-  const source = prepared && typeof prepared === "object" ? prepared : {};
-  const agentContext =
-    source?.agentContext && typeof source.agentContext === "object" ? source.agentContext : {};
+export function requirePreparedAgentTurnExecution(prepared) {
+  if (!isPlainObject(prepared?.agentContext)) {
+    throw new TypeError("prepared agent turn execution requires agentContext");
+  }
+  if (!Array.isArray(prepared.userMessageAttachments)) {
+    throw new TypeError("prepared agent turn execution requires userMessageAttachments");
+  }
   return {
-    runtimeAgentContext:
-      source?.runtimeAgentContext && typeof source.runtimeAgentContext === "object"
-        ? source.runtimeAgentContext
-        : agentContext,
-    userMessageAttachments: Array.isArray(source?.userMessageAttachments)
-      ? source.userMessageAttachments
-      : [],
+    agentContext: prepared.agentContext,
+    userMessageAttachments: prepared.userMessageAttachments,
   };
 }
 

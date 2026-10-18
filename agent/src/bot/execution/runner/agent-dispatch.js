@@ -202,7 +202,6 @@ async function runRootAgent({
       runtime: hookArgs.botHookRuntime,
       point: HOOK_POINT.BOT.AGENT_DISPATCH_ERROR,
       context: { ...hookArgs.baseContext, error },
-      eventListener: hookArgs.runtimeEventListener,
     });
     throw error;
   }
@@ -246,7 +245,6 @@ export async function dispatchAgentTurn({
   lifecycle,
   dispatchRuntime,
   runtimeAgentContext,
-  abortSignal,
   normalizedMessage,
   currentUserMessage,
   userMessageAttachments,
@@ -281,14 +279,12 @@ export async function dispatchAgentTurn({
     context: {
       ...baseContext,
       agentContext: runtimeAgentContext,
-      abortSignal,
       modelContext: dispatchModelContext,
       attachments: userMessageAttachments,
       userMessageAttachments,
       eventListener: runtimeEventListener,
       claimAgentDispatch: claim,
     },
-    eventListener: runtimeEventListener,
   });
   const dispatchOutcome = resolveBotDispatchOutcome(beforeAgentDispatchResult);
   assertDispatchOwnership(beforeAgentDispatchResult, dispatchOutcome, claimState);
@@ -302,7 +298,7 @@ export async function dispatchAgentTurn({
           errorLogger,
           runtimeAgentContext,
           currentUserMessage,
-          hookArgs: { botHookRuntime, baseContext, runtimeEventListener },
+          hookArgs: { botHookRuntime, baseContext },
         });
   acceptAgentResultMessages({
     agentResult,
@@ -314,7 +310,6 @@ export async function dispatchAgentTurn({
     runtime: botHookRuntime,
     point: HOOK_POINT.BOT.AFTER_AGENT_DISPATCH,
     context: { ...baseContext, agentResult },
-    eventListener: runtimeEventListener,
   });
   return agentResult;
 }

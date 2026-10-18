@@ -5,165 +5,110 @@
  */
 import path from "node:path";
 import { ESLint } from "eslint";
+import {
+  addHit,
+  defineCheck,
+  emptyMeasurement,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
 import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
-import { collectRatchet, ratchetViolations } from "./quality/baseline-ratchet.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const baseline = Object.freeze({
-  complexityCount: 282,
-  longFunctionCount: 65,
-  maxComplexity: 48,
-  nestedTernaryCount: 125,
-  deepNestingCount: 22,
-  longParameterListCount: 77,
-  hotspots: Object.freeze({
-    "event-protocol/src/event-registry-validators.js": [0, 0, 0],
-    "agent/src/runtime/state-builder.js": [0, 0, 0],
-    "service/ws/chat-websocket/message-stop-handler.js": [0, 0, 0],
-    "agent/src/runtime/capability-runner/index.js": [0, 0, 0],
-    "agent/src/runtime/capability-runner/model-step.js": [0, 0, 0],
-    "agent/src/runtime/capability-runner/request-context.js": [0, 0, 0],
-    "agent/src/runtime/capability-runner/tool-turns.js": [0, 0, 0],
-    "agent/src/bot/session/detached-subsession-runner.js": [0, 0, 0],
-    "agent/src/session/entities/session-entity.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/src/core/hooks/node-agent.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/useWorkflowNodeSessionViewer.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/live-projection-controller.js":
-      [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/node-session-opening.js":
-      [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/runtime-rebound.js":
-      [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/snapshot-controller.js":
-      [0, 0, 0],
-    "client/noobot-chat/src/modules/chat/composables/message/useMessagePreview.js": [0, 0, 0],
-    "service/ws/chat-websocket/message-run-handler.js": [0, 0, 0],
-    "service/ws/chat-websocket/message-run/active-run-stage.js": [0, 0, 0],
-    "service/ws/chat-websocket/message-run/command-stage.js": [0, 0, 0],
-    "service/ws/chat-websocket/message-run/event-listener-stage.js": [0, 0, 0],
-    "service/ws/chat-websocket/message-run/terminal-stage.js": [0, 0, 0],
-    "authoritative-state/src/domain/turn-lifecycle-entity.js": [0, 0, 0],
-    "authoritative-state/src/domain/turn-lifecycle-transition.js": [0, 0, 0],
-    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnReducer.js": [0, 0, 0],
-    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnRuntimeEventReducer.js": [
-      0, 0, 0,
-    ],
-    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/authoritativeTurnRuntime.js": [
-      0, 0, 0,
-    ],
-    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnLifecycleSnapshotProjection.js":
-      [0, 0, 0],
-    "agent/src/session/services/session-message-service/append-turn.js": [0, 0, 0],
-    "agent/src/session/services/session-message-service/turn-upsert.js": [0, 0, 0],
-    "agent/src/bot/execution/turn-persister.js": [0, 0, 0],
-    "agent/src/runtime/tool-execution/tool-runner.js": [0, 0, 0],
-    "agent/src/session/session-summary-builders/session-display-summary.js": [0, 0, 0],
-    "agent/src/session/session-summary-builders/display-message-list.js": [0, 0, 0],
-    "agent/src/session/session-summary-builders/display-tool-artifacts.js": [0, 0, 0],
-    "agent/src/session/session-summary-builders/display-summary-stats.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/runtime/workflowNodeSessionDetail.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/runtime/workflowUnifiedSessionDetail.js": [0, 0, 0],
-    "agent-proxy/src/channel/manager/reconnect.js": [0, 0, 0],
-    "agent-proxy/src/channel/manager/reconnect/session-replay.js": [0, 0, 0],
-    "agent-proxy/src/channel/manager/reconnect/snapshot-transaction.js": [0, 0, 0],
-    "agent-proxy/src/channel/manager/reconnect/reconnect-publisher.js": [0, 0, 0],
-    "service/ws/chat-websocket-server.js": [0, 0, 0],
-    "service/ws/chat-websocket/connection-handler.js": [0, 0, 0],
-    "service/ws/chat-websocket/outbound-event-sender.js": [0, 0, 0],
-    "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/relay-model-output.js": [
-      0, 0, 0,
-    ],
-    "plugin/noobot-plugin-harness/src/data/record-builders.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/src/core/orchestrator/payload-enrichment.js": [0, 0, 0],
-    "client/noobot-chat/src/modules/debug/loggers/workflowDiagnosticsLogger.js": [0, 0, 0],
-    "plugin/noobot-plugin-harness/src/capabilities/handlers/planning/controller.js": [0, 0, 0],
-    "client/noobot-chat/src/modules/chat/runtime/reconnect/reconnectDataReplay.js": [0, 0, 0],
-  }),
+const COMPLEXITY_LIMIT = 20;
+const LINT_RULES = Object.freeze({
+  complexity: ["error", COMPLEXITY_LIMIT],
+  "max-lines-per-function": ["error", { max: 150, skipBlankLines: true, skipComments: true }],
+  "no-nested-ternary": "error",
+  "max-depth": ["error", 4],
+  "max-params": ["error", 4],
+});
+const COUNTED_RULES = Object.freeze({
+  complexityCount: "complexity",
+  longFunctionCount: "max-lines-per-function",
+  nestedTernaryCount: "no-nested-ternary",
+  deepNestingCount: "max-depth",
+  longParameterListCount: "max-params",
 });
 
-function summarize(messages = []) {
-  let complexityCount = 0;
-  let longFunctionCount = 0;
-  let maxComplexity = 0;
-  let nestedTernaryCount = 0;
-  let deepNestingCount = 0;
-  let longParameterListCount = 0;
-  for (const message of messages) {
-    if (message.ruleId === "complexity") {
-      complexityCount += 1;
-      const measured = Number(message.message.match(/complexity of (\d+)/)?.[1] || 0);
-      maxComplexity = Math.max(maxComplexity, measured);
+function measuredComplexity(message) {
+  const value = Number(/complexity of (\d+)/.exec(message.message)?.[1]);
+  if (!Number.isInteger(value))
+    throw new TypeError(`unexpected complexity message: ${message.message}`);
+  return value;
+}
+
+export function measureLintResults(results, repositoryRoot = root) {
+  const measured = Object.fromEntries(
+    [...Object.keys(COUNTED_RULES), "maxComplexity"].map((name) => [name, emptyMeasurement()]),
+  );
+  for (const result of results) {
+    const file = path.relative(repositoryRoot, result.filePath);
+    for (const [name, ruleId] of Object.entries(COUNTED_RULES)) {
+      for (const message of result.messages) {
+        if (message.ruleId === ruleId)
+          addHit(measured[name], { file, line: message.line, message: message.message });
+      }
     }
-    if (message.ruleId === "max-lines-per-function") longFunctionCount += 1;
-    if (message.ruleId === "no-nested-ternary") nestedTernaryCount += 1;
-    if (message.ruleId === "max-depth") deepNestingCount += 1;
-    if (message.ruleId === "max-params") longParameterListCount += 1;
+    const values = result.messages
+      .filter(({ ruleId }) => ruleId === "complexity")
+      .map(measuredComplexity);
+    if (!values.length) continue;
+    const fileMax = Math.max(...values);
+    measured.maxComplexity.files[file] = fileMax;
+    measured.maxComplexity.total = Math.max(measured.maxComplexity.total, fileMax);
   }
-  return {
-    complexityCount,
-    maxComplexity,
-    longFunctionCount,
-    nestedTernaryCount,
-    deepNestingCount,
-    longParameterListCount,
-  };
+  return measured;
 }
 
-const lint = new ESLint({
-  cwd: root,
-  overrideConfig: [
-    {
-      files: ["**/*.{js,mjs,cjs,vue}"],
-      rules: {
-        complexity: ["error", 20],
-        "max-lines-per-function": ["error", { max: 150, skipBlankLines: true, skipComments: true }],
-        "no-nested-ternary": "error",
-        "max-depth": ["error", 4],
-        "max-params": ["error", 4],
-      },
+async function measure() {
+  const lint = new ESLint({
+    cwd: root,
+    overrideConfig: [{ files: ["**/*.{js,mjs,cjs,vue}"], rules: LINT_RULES }],
+  });
+  const files = await getFirstPartyProductionFiles({ repositoryRoot: root });
+  return measureLintResults(await lint.lintFiles(files));
+}
+
+export const CHECK = defineCheck({
+  id: "complexity",
+  description: "function complexity, length, nesting and parameter-count limits",
+  rules: {
+    complexityCount: {
+      description: `functions with cyclomatic complexity above ${COMPLEXITY_LIMIT}`,
+      hint: "split the function by responsibility instead of adding branches",
     },
-  ],
+    longFunctionCount: {
+      description: "functions longer than 150 effective lines",
+      hint: "extract cohesive steps into named functions",
+    },
+    maxComplexity: {
+      description: "highest cyclomatic complexity of any single function",
+      hint: "reduce the most complex function listed below",
+    },
+    nestedTernaryCount: {
+      description: "nested conditional expressions",
+      hint: "replace nested ternaries with a lookup table or early returns",
+    },
+    deepNestingCount: {
+      description: "blocks nested deeper than 4 levels",
+      hint: "flatten with early returns or extracted helpers",
+    },
+    longParameterListCount: {
+      description: "functions with more than 4 positional parameters",
+      hint: "pass a single named options object defined by the caller protocol",
+    },
+  },
+  exemptions: [],
+  baseline: {
+    complexityCount: 277,
+    longFunctionCount: 65,
+    maxComplexity: 48,
+    nestedTernaryCount: 125,
+    deepNestingCount: 20,
+    longParameterListCount: 77,
+    exemptions: 0,
+  },
+  measure,
 });
-const productionFiles = await getFirstPartyProductionFiles({ repositoryRoot: root });
-const results = await lint.lintFiles(productionFiles);
-const totals = summarize(results.flatMap(({ messages }) => messages));
-const byRelativePath = new Map(
-  results.map((result) => [path.relative(root, result.filePath), summarize(result.messages)]),
-);
-const entries = [
-  ["complexity violations", totals.complexityCount, baseline.complexityCount],
-  ["long-function violations", totals.longFunctionCount, baseline.longFunctionCount],
-  ["maximum complexity", totals.maxComplexity, baseline.maxComplexity],
-  ["nested ternary violations", totals.nestedTernaryCount, baseline.nestedTernaryCount],
-  ["deep nesting (max-depth 4) violations", totals.deepNestingCount, baseline.deepNestingCount],
-  [
-    "long parameter list (max-params 4) violations",
-    totals.longParameterListCount,
-    baseline.longParameterListCount,
-  ],
-];
-for (const [relativePath, limits] of Object.entries(baseline.hotspots)) {
-  const measured = byRelativePath.get(relativePath) || {
-    complexityCount: 0,
-    maxComplexity: 0,
-    longFunctionCount: 0,
-  };
-  entries.push(
-    [`${relativePath} complexity count`, measured.complexityCount, limits[0]],
-    [`${relativePath} maximum complexity`, measured.maxComplexity, limits[1]],
-    [`${relativePath} long-function count`, measured.longFunctionCount, limits[2]],
-  );
-}
-const violations = ratchetViolations(
-  collectRatchet(entries),
-  "lower the baseline in scripts/check-complexity-baseline.mjs",
-);
 
-if (violations.length) {
-  console.error(violations.join("\n"));
-  process.exitCode = 1;
-} else {
-  console.log(
-    `Complexity baseline passed (${totals.complexityCount} complex, ${totals.longFunctionCount} long, max ${totals.maxComplexity}, ${totals.nestedTernaryCount} nested ternary, ${totals.deepNestingCount} deep nesting, ${totals.longParameterListCount} long params)`,
-  );
-}
+await runCheckWhenMain(CHECK, import.meta.url);

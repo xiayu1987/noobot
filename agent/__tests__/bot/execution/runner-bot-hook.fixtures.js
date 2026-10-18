@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 import { SessionExecutionRunner } from "../../../src/bot/execution/runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
@@ -93,8 +93,8 @@ export function createRunner({
     turnTasks: [],
   }),
   prepareAgentTurnExecution = async () => ({
-    agentContext: createTestAgentExecutionScope(createRuntimeContext()),
-    runtimeAgentContext: createTestAgentExecutionScope(createRuntimeContext()),
+    agentContext: createTestAgentExecutionScope(createTestRuntimeContext()),
+    userMessageAttachments: [],
   }),
   initializeRunSessionRuntime = async ({ eventListener = null } = {}) => ({
     usedSessionId: "s1",
@@ -208,7 +208,7 @@ export function createRunner({
   };
   const prepareCanonicalAgentTurnExecution = async (payload = {}) => {
     const prepared = await prepareAgentTurnExecution(payload);
-    const runtime = prepared?.runtimeAgentContext?.bindings?.runtime;
+    const runtime = prepared.agentContext.bindings.runtime;
     if (isObjectLike(runtime)) {
       runtime.sessionManager = runtime.sessionManager || sessionManager;
       const currentStore = runtime.currentTurnMessages;

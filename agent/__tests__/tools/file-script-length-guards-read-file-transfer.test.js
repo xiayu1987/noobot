@@ -27,7 +27,10 @@ test("read_file: 具体工具不判断大文件，原始内容交由 semantic-tr
   assert.ok(tool);
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", filePath: "large.txt", includeLineNumbers: false }),
+    await tool.invoke(
+      { riskLevel: "low", filePath: "large.txt", includeLineNumbers: false },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.toolName, "read_file");
@@ -59,12 +62,15 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const rawToolResultText = await tool.invoke({
-    riskLevel: "low",
-    filePath: "runtime/ops_workdir/large_test_file.txt",
-    includeLineNumbers: true,
-    maxLines: 500,
-  });
+  const rawToolResultText = await tool.invoke(
+    {
+      riskLevel: "low",
+      filePath: "runtime/ops_workdir/large_test_file.txt",
+      includeLineNumbers: true,
+      maxLines: 500,
+    },
+    { signal: new AbortController().signal },
+  );
   const rawResult = parseToolResult(rawToolResultText);
 
   assert.equal(rawResult.toolName, "read_file");

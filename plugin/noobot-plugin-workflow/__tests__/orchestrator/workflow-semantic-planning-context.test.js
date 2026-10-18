@@ -12,6 +12,7 @@ import {
   createMockBotHookManager,
   getBeforeDispatch,
   registerWorkflowAgentHooks,
+  createTestHookInvocation,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 function assertSystemBlockPrecedesConversation(messages = []) {
@@ -102,25 +103,28 @@ test("workflow semantic planning passes conversation context before current user
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "d1",
-    userMessage: "请基于前文生成工作流",
-    runConfig: { locale: "zh-CN" },
-    modelContext: createModelContext({
-      messages: [
-        { role: "user", content: "前文：我要处理报销审批" },
-        { role: "assistant", content: "已记录报销审批背景" },
-        {
-          role: "user",
-          content: "请基于前文生成工作流",
-          messageOrigin: "natural",
-          userMetaMaterialized: true,
-        },
-      ],
-    }),
-  });
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      userMessage: "请基于前文生成工作流",
+      runConfig: { locale: "zh-CN" },
+      modelContext: createModelContext({
+        messages: [
+          { role: "user", content: "前文：我要处理报销审批" },
+          { role: "assistant", content: "已记录报销审批背景" },
+          {
+            role: "user",
+            content: "请基于前文生成工作流",
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
+          },
+        ],
+      }),
+    },
+    createTestHookInvocation(),
+  );
 
   assert.equal(invokerCalls.length, 1);
   assert.deepEqual(invokerCalls[0].activity, { activityKind: "workflow_semantic" });
@@ -187,24 +191,27 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "d1",
-    userMessage: "请根据上下文继续生成工作流",
-    runConfig: { locale: "zh-CN" },
-    modelContext: createModelContext({
-      messages: [],
-      messageBlocks: {
-        system: [{ role: "system", content: "你是流程专家" }],
-        history: [
-          { role: "user", content: "背景：这是采购审批流程" },
-          { role: "assistant", content: "收到采购审批背景" },
-        ],
-        incremental: [{ role: "user", content: "请继续" }],
-      },
-    }),
-  });
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      userMessage: "请根据上下文继续生成工作流",
+      runConfig: { locale: "zh-CN" },
+      modelContext: createModelContext({
+        messages: [],
+        messageBlocks: {
+          system: [{ role: "system", content: "你是流程专家" }],
+          history: [
+            { role: "user", content: "背景：这是采购审批流程" },
+            { role: "assistant", content: "收到采购审批背景" },
+          ],
+          incremental: [{ role: "user", content: "请继续" }],
+        },
+      }),
+    },
+    createTestHookInvocation(),
+  );
 
   assert.equal(invokerCalls.length, 1);
   const semanticMessages = invokerCalls[0]?.messages || [];
@@ -265,23 +272,26 @@ test("workflow semantic planning includes current available tools like harness p
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "d1",
-    userMessage: "查资料并生成报告",
-    runConfig: { locale: "zh-CN" },
-    agentContext: {
-      payload: {
-        tools: {
-          registry: [
-            { name: "search_docs", description: "检索项目文档和知识库" },
-            { name: "write_file", description: "写入文件到工作区" },
-          ],
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      userMessage: "查资料并生成报告",
+      runConfig: { locale: "zh-CN" },
+      agentContext: {
+        payload: {
+          tools: {
+            registry: [
+              { name: "search_docs", description: "检索项目文档和知识库" },
+              { name: "write_file", description: "写入文件到工作区" },
+            ],
+          },
         },
       },
     },
-  });
+    createTestHookInvocation(),
+  );
 
   assert.equal(invokerCalls.length, 1);
   assert.deepEqual(invokerCalls[0]?.toolAllowlist, ["search_docs", "write_file"]);
@@ -343,23 +353,26 @@ test("workflow semantic planning reads available tools from the canonical agentC
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "d1",
-    userMessage: "查资料并生成报告",
-    runConfig: { locale: "zh-CN" },
-    agentContext: {
-      payload: {
-        tools: {
-          registry: [
-            { name: "search_docs", description: "检索项目文档和知识库" },
-            { name: "write_file", description: "写入文件到工作区" },
-          ],
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      userMessage: "查资料并生成报告",
+      runConfig: { locale: "zh-CN" },
+      agentContext: {
+        payload: {
+          tools: {
+            registry: [
+              { name: "search_docs", description: "检索项目文档和知识库" },
+              { name: "write_file", description: "写入文件到工作区" },
+            ],
+          },
         },
       },
     },
-  });
+    createTestHookInvocation(),
+  );
 
   assert.equal(invokerCalls.length, 1);
   assert.deepEqual(invokerCalls[0]?.toolAllowlist, ["search_docs", "write_file"]);
@@ -416,39 +429,42 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "d1",
-    userMessage: "请结合上下文生成工作流",
-    runConfig: { locale: "zh-CN" },
-    contextProtocolVersion: 3,
-    modelContext: {
-      protocolVersion: 3,
-      messages: [
-        { role: "user", content: "历史背景：审批流程包含财务复核" },
-        { role: "assistant", content: "已记录财务复核约束" },
-      ],
-      messageBlocks: {
-        system: [],
-        history: [
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      userMessage: "请结合上下文生成工作流",
+      runConfig: { locale: "zh-CN" },
+      contextProtocolVersion: 3,
+      modelContext: {
+        protocolVersion: 3,
+        messages: [
           { role: "user", content: "历史背景：审批流程包含财务复核" },
           { role: "assistant", content: "已记录财务复核约束" },
         ],
-        incremental: [],
-      },
-    },
-    agentContext: {
-      payload: {
-        messages: {
+        messageBlocks: {
+          system: [],
           history: [
             { role: "user", content: "历史背景：审批流程包含财务复核" },
             { role: "assistant", content: "已记录财务复核约束" },
           ],
+          incremental: [],
+        },
+      },
+      agentContext: {
+        payload: {
+          messages: {
+            history: [
+              { role: "user", content: "历史背景：审批流程包含财务复核" },
+              { role: "assistant", content: "已记录财务复核约束" },
+            ],
+          },
         },
       },
     },
-  });
+    createTestHookInvocation(),
+  );
 
   assert.equal(invokerCalls.length, 1);
   const semanticMessages = invokerCalls[0]?.messages || [];

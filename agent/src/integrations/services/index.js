@@ -70,6 +70,7 @@ export async function invokeServiceHandler({
   customParam = "",
   queryString = {},
   body,
+  abortSignal,
 }) {
   const basePath = resolveBasePath({ globalConfig, userId });
   const handlerName = normalizeName(serviceCfg?.handler || "");
@@ -113,6 +114,6 @@ export async function invokeServiceHandler({
     custom_param: text(customParam),
     queryString,
     body,
-    abortSignal: runtime?.abortSignal || null,
+    abortSignal,
   });
 }

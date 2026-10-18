@@ -40,7 +40,8 @@ export function resetNoFinalResponseRetryStreak(runtime = {}) {
 }
 
 export function recoverMainFlowNoFinalResponse({ error, modelState, loopState, turn }) {
-  const { runtime, eventListener } = modelState;
+  const { runtime } = modelState;
+  const { eventListener } = runtime;
   if (!isRecoverableNoFinalResponse(error, runtime)) return false;
   const systemRuntime = runtime?.systemRuntime;
   if (!isObjectLike(systemRuntime)) {

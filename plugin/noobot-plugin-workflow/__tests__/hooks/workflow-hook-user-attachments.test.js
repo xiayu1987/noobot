@@ -10,6 +10,7 @@ import {
   createMockBotHookManager,
   getBeforeDispatch,
   registerWorkflowAgentHooks,
+  createTestHookInvocation,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook passes planned user attachments to node sub-session", async () => {
@@ -64,27 +65,30 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s-input-att",
-    dialogProcessId: "d-input-att",
-    userMessage: "请基于附件规划并执行",
-    attachments: [
-      {
-        attachmentId: "att-user-1",
-        sessionId: "s-input-att",
-        attachmentSource: "user",
-        name: "合同.pdf",
-        mimeType: "application/pdf",
-      },
-    ],
-    runConfig: { locale: "zh-CN" },
-    agentContext: {
-      bindings: {
-        runtime: {},
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s-input-att",
+      dialogProcessId: "d-input-att",
+      userMessage: "请基于附件规划并执行",
+      attachments: [
+        {
+          attachmentId: "att-user-1",
+          sessionId: "s-input-att",
+          attachmentSource: "user",
+          name: "合同.pdf",
+          mimeType: "application/pdf",
+        },
+      ],
+      runConfig: { locale: "zh-CN" },
+      agentContext: {
+        bindings: {
+          runtime: {},
+        },
       },
     },
-  });
+    createTestHookInvocation(),
+  );
 
   assert.equal(subSessionCalls.length, 1);
   assert.equal(subSessionCalls[0]?.metadata?.inputAttachmentRefs, undefined);

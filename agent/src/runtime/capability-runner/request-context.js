@@ -16,6 +16,7 @@ import {
 import { PLUGIN_MODEL_HEADER_KEY } from "../../models/headers/plugin-headers.js";
 import { requireModelContextSequencePolicy } from "@noobot/model-protocol";
 import { text } from "@noobot/shared/value";
+import { requireAbortSignal } from "@noobot/session-protocol/execution-abort";
 
 function compactToolMessagesForMiniRunner(messages = []) {
   return (Array.isArray(messages) ? messages : []).map((messageItem = {}) => {
@@ -28,15 +29,15 @@ function compactToolMessagesForMiniRunner(messages = []) {
   });
 }
 
-export function resolveCapabilityExecution(ctx = {}, signal = null) {
-  const runtime = getRuntimeFromAgentContext(ctx.agentContext || {});
+export function resolveCapabilityExecution(ctx, signal) {
+  requireAbortSignal(signal, "capability model invocation");
+  const runtime = getRuntimeFromAgentContext(ctx.agentContext);
   return {
     runtime,
     executionScope: "auxiliary",
-    abortSignal: signal || runtime?.abortSignal || null,
-    eventListener: runtime?.eventListener || null,
+    abortSignal: signal,
     errorLogger: null,
-    agentContext: ctx.agentContext || null,
+    agentContext: ctx.agentContext,
   };
 }
 
@@ -67,6 +68,12 @@ function normalizeHeaderValue(input = "") {
     .slice(0, 120);
 }
 
+export function requireCapabilityFlowPrefix(pluginId) {
+  const flowPrefix = normalizeHeaderValue(pluginId);
+  if (!flowPrefix) throw new TypeError("capability model invoker requires pluginId");
+  return flowPrefix;
+}
+
 export function prepareCapabilityMessages(messages, prompt) {
   const result = compactToolMessagesForMiniRunner(filterForModelContext(messages));
   if (prompt) result.unshift({ role: "system", content: String(prompt) });
@@ -78,9 +85,6 @@ export function createCapabilityRequestIdentity({
   domain,
   pluginFlow,
   contextSequencePolicy,
-  headerNamespaceOverride,
-  headerNamespace,
-  flowPrefixOverride,
   flowPrefix,
   sessionId,
 }) {
@@ -88,32 +92,13 @@ export function createCapabilityRequestIdentity({
   const normalizedDomain = normalizeHeaderValue(domain || "unknown");
   const normalizedContextSequencePolicy = requireModelContextSequencePolicy(contextSequencePolicy);
   const normalizedFlowName = normalizeHeaderValue(pluginFlow || purpose || "unknown");
-  const resolvedHeaderNamespace =
-    normalizeHeaderValue(headerNamespaceOverride || headerNamespace || "plugin").toLowerCase() ||
-    "plugin";
-  const resolvedFlowPrefix =
-    normalizeHeaderValue(flowPrefixOverride || flowPrefix || resolvedHeaderNamespace) ||
-    resolvedHeaderNamespace;
-  const isCanonicalPluginNamespace = resolvedHeaderNamespace === "plugin";
-  const namespaceHeaderKeys = isCanonicalPluginNamespace
-    ? PLUGIN_MODEL_HEADER_KEY
-    : {
-        FLOW: `X-${resolvedHeaderNamespace}-Flow`,
-        PURPOSE: `X-${resolvedHeaderNamespace}-Purpose`,
-        DOMAIN: `X-${resolvedHeaderNamespace}-Domain`,
-        SESSION_ID: `X-${resolvedHeaderNamespace}-Session-Id`,
-      };
-  const customFlowHeaderKey = namespaceHeaderKeys.FLOW;
-  const customPurposeHeaderKey = namespaceHeaderKeys.PURPOSE;
-  const customDomainHeaderKey = namespaceHeaderKeys.DOMAIN;
-  const customSessionHeaderKey = namespaceHeaderKeys.SESSION_ID;
-  const flowValue = `${resolvedFlowPrefix}.${normalizedFlowName}`;
+  const flowValue = `${flowPrefix}.${normalizedFlowName}`;
   const resolvedSessionId = text(sessionId);
   const additionalHeaders = {
-    [customFlowHeaderKey]: flowValue,
-    [customPurposeHeaderKey]: normalizedPurpose,
-    [customDomainHeaderKey]: normalizedDomain,
-    ...(resolvedSessionId ? { [customSessionHeaderKey]: resolvedSessionId } : {}),
+    [PLUGIN_MODEL_HEADER_KEY.FLOW]: flowValue,
+    [PLUGIN_MODEL_HEADER_KEY.PURPOSE]: normalizedPurpose,
+    [PLUGIN_MODEL_HEADER_KEY.DOMAIN]: normalizedDomain,
+    ...(resolvedSessionId ? { [PLUGIN_MODEL_HEADER_KEY.SESSION_ID]: resolvedSessionId } : {}),
   };
   return {
     headers: additionalHeaders,

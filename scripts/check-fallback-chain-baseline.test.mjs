@@ -6,16 +6,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  compareWithBaseline,
-  findRebaseIncreases,
+  CHECK,
   findFallbackChains,
   findInlineTypeChecks,
   findInlineTrimFallbacks,
   findRawTypeofChecks,
+  findRuleHits,
   findTextShadowing,
-  RULES,
-  renderModuleSection,
-  replaceModuleSection,
+  includesFile,
 } from "./check-fallback-chain-baseline.mjs";
 
 test("detects cross-field and cross-source fallback chains in value position", () => {
@@ -42,14 +40,14 @@ test("exempts vendor wire fields and caught error objects", () => {
   assert.equal(findFallbackChains("const r = m?.role || m?.lc_kwargs?.role;").length, 0);
   assert.equal(findFallbackChains("const v = error?.stack || error?.message;").length, 0);
   assert.equal(findFallbackChains("const v = error?.code || input.code;").length, 1);
-  assert.equal(RULES.fallbackChain.includeFile("model-runtime/src/adapters/a.js"), false);
-  assert.equal(RULES.inlineTrim.includeFile("shared/value.js"), false);
+  assert.equal(includesFile("fallbackChain", "model-runtime/src/adapters/a.js"), false);
+  assert.equal(includesFile("inlineTrim", "shared/value.js"), false);
 });
 
 test("inline trim does not recount field chains already counted as fallback chains", () => {
   const source = "const v = text(a.x || b.x); const w = text(name || alias);";
-  assert.equal(RULES.inlineTrim.find(source, "agent/src/a.js").length, 1);
-  assert.equal(RULES.inlineTrim.find(source, "agent/__tests__/helpers/fixture.js").length, 2);
+  assert.equal(findRuleHits("inlineTrim", source, "agent/src/a.js").length, 1);
+  assert.equal(findRuleHits("inlineTrim", source, "agent/__tests__/helpers/fixture.js").length, 2);
 });
 
 test("detects raw typeof object/function comparisons in both polarities", () => {
@@ -59,9 +57,9 @@ test("detects raw typeof object/function comparisons in both polarities", () => 
   assert.equal(findRawTypeofChecks('const ok = v && typeof v.x == "object";').length, 1);
   assert.equal(findRawTypeofChecks('const ok = typeof v === "string";').length, 0);
   assert.equal(findRawTypeofChecks("const ok = isFunction(fn) && isObjectLike(v);").length, 0);
-  assert.equal(RULES.rawTypeof.includeFile("shared/value.js"), false);
-  assert.equal(RULES.rawTypeof.includeFile("agent/__tests__/a.test.js"), false);
-  assert.equal(RULES.rawTypeof.includeFile("agent/src/a.js"), true);
+  assert.equal(includesFile("rawTypeof", "shared/value.js"), false);
+  assert.equal(includesFile("rawTypeof", "agent/__tests__/a.test.js"), false);
+  assert.equal(includesFile("rawTypeof", "agent/src/a.js"), true);
 });
 
 test("detects local object type checks that duplicate shared isPlainObject", () => {
@@ -73,21 +71,7 @@ test("detects local object type checks that duplicate shared isPlainObject", () 
   assert.equal(findInlineTypeChecks("const isRecord = (v) => isObj(v);").length, 1);
   assert.equal(findInlineTypeChecks('const ok = typeof v === "object";').length, 0);
   assert.equal(findInlineTypeChecks("const ok = isPlainObject(v);").length, 0);
-  assert.equal(RULES.typeCheck.includeFile("shared/value.js"), false);
-});
-
-test("rebase may add new rules but never raises an existing rule total", () => {
-  const previous = { fallbackChain: { "a.js": 3 } };
-  assert.deepEqual(
-    findRebaseIncreases(previous, {
-      fallbackChain: { "a.js": 1, "b.js": 2 },
-      typeCheck: { "c.js": 9 },
-    }),
-    [],
-  );
-  assert.deepEqual(findRebaseIncreases(previous, { fallbackChain: { "a.js": 4 } }), [
-    "rebase raises fallbackChain from 3 to 4",
-  ]);
+  assert.equal(includesFile("typeCheck", "shared/value.js"), false);
 });
 
 test("scans vue script blocks", () => {
@@ -117,37 +101,10 @@ test("ignores text(), plain String().trim() and non-fallback arguments", () => {
 });
 
 test("rules share the source-inventory test path predicate", () => {
-  assert.equal(RULES.fallbackChain.includeFile("agent/__tests__/helpers/fixture.js"), false);
-  assert.equal(RULES.inlineTrim.includeFile("agent/__tests__/helpers/fixture.js"), true);
-  assert.equal(RULES.inlineTrim.includeFile("agent/src/a.test.ts"), false);
-  assert.equal(RULES.fallbackChain.includeFile("agent/src/a.js"), true);
-});
-
-test("baseline only allows decreases and flags stale entries", () => {
-  const { increases, decreases } = compareWithBaseline(
-    { "a.js": 3, "c.js": 1 },
-    { "a.js": 2, "b.js": 4 },
-  );
-  assert.deepEqual(increases, ["a.js: 3 exceeds baseline 2", "c.js: 1 exceeds baseline 0"]);
-  assert.deepEqual(decreases, ["b.js: 0 below baseline 4"]);
-});
-
-test("module table is generated from the grouped baseline", () => {
-  const baseline = {
-    fallbackChain: { "agent/src/a.js": 2, "plugin/noobot-plugin-workflow/src/b.js": 1 },
-    inlineTrim: { "agent/src/a.js": 4 },
-  };
-  const section = renderModuleSection(baseline);
-  assert.match(
-    section,
-    /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件；内联类型判断 0 处 \/ 0 个文件；原始 typeof 判断 0 处 \/ 0 个文件；遮蔽 text\(\) 0 处 \/ 0 个文件。/,
-  );
-  assert.match(section, /\| `agent` \| 2 \| 4 \| 0 \| 0 \| 0 \|/);
-  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \| 0 \| 0 \| 0 \|/);
-  const doc =
-    "head\n<!-- fallback-chain-modules:start -->\nold\n<!-- fallback-chain-modules:end -->\ntail";
-  assert.equal(replaceModuleSection(doc, baseline), `head\n${section}\ntail`);
-  assert.throws(() => replaceModuleSection("no markers", baseline), /missing module markers/);
+  assert.equal(includesFile("fallbackChain", "agent/__tests__/helpers/fixture.js"), false);
+  assert.equal(includesFile("inlineTrim", "agent/__tests__/helpers/fixture.js"), true);
+  assert.equal(includesFile("inlineTrim", "agent/src/a.test.ts"), false);
+  assert.equal(includesFile("fallbackChain", "agent/src/a.js"), true);
 });
 
 test("files importing text() must not rebind text in a local scope", () => {
@@ -169,4 +126,16 @@ test("files importing text() must not rebind text in a local scope", () => {
   assert.equal(findTextShadowing("function f(text) { return text; }").length, 0);
   const vue = `<template><div /></template>\n<script setup>\n${imported}function f(text) { return text; }\n</script>\n`;
   assert.equal(findTextShadowing(vue, "Component.vue").length, 1);
+});
+
+test("strict plain-object exemption covers exactly the listed files", () => {
+  assert.equal(includesFile("typeCheck", "attachment-protocol/src/protocol-utils.js"), false);
+  assert.equal(includesFile("typeCheck", "attachment-protocol/src/protocol-utils-extra.js"), true);
+  assert.equal(includesFile("rawTypeof", "attachment-protocol/src/protocol-utils.js"), true);
+});
+
+test("every exemption declares a reason and the exemption total matches the baseline", () => {
+  const total = CHECK.exemptions.reduce((sum, exemption) => sum + exemption.match.length, 0);
+  assert.equal(total, CHECK.baseline.exemptions);
+  for (const exemption of CHECK.exemptions) assert.ok(exemption.reason.length > 0);
 });

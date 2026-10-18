@@ -23,7 +23,8 @@ export async function commitNoToolsTurnState({
   presentationMessageId = "",
 } = {}) {
   const { currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
-  const { eventListener, runtime } = modelState;
+  const { runtime } = modelState;
+  const { eventListener } = runtime;
 
   const turnMessageStore = requireCurrentTurnMessagesStore(currentTurnMessages);
   const currentModelInfo = resolveCurrentModelInfo(modelState);

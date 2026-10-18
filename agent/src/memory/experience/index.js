@@ -181,7 +181,7 @@ export class ExperienceManager {
     basePath = "",
     invokeModel = null,
     promptI18n = {},
-    abortSignal = null,
+    abortSignal,
   } = {}) {
     const fields = await this.readExperienceFields(basePath);
     return runWeeklySummaryIfNeeded({
@@ -222,7 +222,7 @@ export class ExperienceManager {
     basePath = "",
     invokeModel = null,
     promptI18n = {},
-    abortSignal = null,
+    abortSignal,
   } = {}) {
     const fields = await this.readExperienceFields(basePath);
     return runMonthlySummaryIfNeeded({
@@ -261,7 +261,7 @@ export class ExperienceManager {
     basePath = "",
     invokeModel = null,
     promptI18n = {},
-    abortSignal = null,
+    abortSignal,
   } = {}) {
     const fields = await this.readExperienceFields(basePath);
     return runYearlySummaryIfNeeded({

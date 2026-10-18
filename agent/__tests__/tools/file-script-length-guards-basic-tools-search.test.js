@@ -24,14 +24,17 @@ test("search: 支持搜索文件和文本", async () => {
   assert.ok(tool);
 
   const fileResult = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      source: "files",
-      query: "alpha",
-      path: "src",
-      glob: "*.js",
-      maxResults: 5,
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        source: "files",
+        query: "alpha",
+        path: "src",
+        glob: "*.js",
+        maxResults: 5,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(fileResult.ok, true);
   assert.equal(fileResult.matches.length, 2);
@@ -40,13 +43,16 @@ test("search: 支持搜索文件和文本", async () => {
   assert.equal(fileResult.matches[1].line, 3);
 
   const textResult = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      source: "text",
-      query: "b.t",
-      isRegex: true,
-      text: "aa\nbet\ncc",
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        source: "text",
+        query: "b.t",
+        isRegex: true,
+        text: "aa\nbet\ncc",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(textResult.ok, true);
   assert.equal(textResult.matches.length, 1);
@@ -65,12 +71,15 @@ test("search: super admin can search an external host directory", async () => {
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "search");
   const result = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      source: "files",
-      query: "external-search-token",
-      path: externalRoot,
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        source: "files",
+        query: "external-search-token",
+        path: externalRoot,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.ok, true);
@@ -101,12 +110,15 @@ test("search: global sandbox mount is searched through its logical target", asyn
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "search");
   const result = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      source: "files",
-      query: "mounted-search-token",
-      path: "/shared-code",
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        source: "files",
+        query: "mounted-search-token",
+        path: "/shared-code",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.ok, true);
@@ -137,16 +149,17 @@ test("search: files search rejects promptly when runtime abort signal is already
   const abortController = new AbortController();
   abortController.abort(new DOMException("stop requested", "AbortError"));
   const tools = createFileTool({
-    agentContext: buildAgentContext(basePath, "u-test", {
-      runtime: { abortSignal: abortController.signal },
-    }),
+    agentContext: buildAgentContext(basePath, "u-test"),
   });
   const tool = tools.find((item) => item?.name === "search");
   assert.ok(tool);
 
   await assert.rejects(
     () =>
-      tool.invoke({ riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js" }),
+      tool.invoke(
+        { riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js" },
+        { signal: abortController.signal },
+      ),
     (error) =>
       error?.name === "AbortError" ||
       /stop requested|aborted/i.test(String(error?.message || error)),

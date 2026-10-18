@@ -11,9 +11,10 @@ import {
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 export function executeToolCall(options = {}) {
-  const runtime = options.runtime && typeof options.runtime === "object" ? options.runtime : {};
+  const runtime = options.runtime || createTestRuntimeContext();
   runtime.globalConfig =
     runtime.globalConfig && typeof runtime.globalConfig === "object" ? runtime.globalConfig : {};
   runtime.globalConfig.workspaceRoot = String(
@@ -46,7 +47,7 @@ export function executeToolCall(options = {}) {
       presentationMessageId: String(options.presentationMessageId || `presentation-${identity}`),
     });
   }
-  if (options.eventListener && !runtime.sessionManager) {
+  if (runtime.eventListener && !runtime.sessionManager) {
     runtime.sessionManager = createCanonicalMessageEventSessionManager();
   }
   const agentContext = createTestAgentExecutionScope(runtime, {
@@ -61,8 +62,8 @@ export function executeToolCall(options = {}) {
       messageId: runtime.runConfig.messageId,
     },
   });
-  const execution = { ...options, runtime, agentContext };
-  return options.eventListener
+  const execution = { abortSignal: runtime.abortSignal, ...options, runtime, agentContext };
+  return runtime.eventListener
     ? executeToolCallInTurn(execution)
     : executeToolCallWithoutTurn(execution);
 }

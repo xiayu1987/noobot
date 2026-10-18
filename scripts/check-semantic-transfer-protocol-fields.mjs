@@ -4,11 +4,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveRepoRoot } from "./lib/repo-root.mjs";
-import { ignorePathParts, runForbiddenLineGuard } from "./lib/guard-scan.mjs";
+import {
+  defineCheck,
+  emptyRuleMeasurements,
+  EXEMPTION_KINDS,
+  exemptsPath,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addPatternLineHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = resolveRepoRoot();
-const TARGET_DIRS = [
+const PRODUCTION_ROOTS = Object.freeze([
   "agent/src",
   "semantic-transfer-protocol/src",
   "service",
@@ -17,39 +24,68 @@ const TARGET_DIRS = [
   "plugin/noobot-plugin-harness/src",
   "plugin/noobot-plugin-workflow/src",
   "plugin/noobot-plugin-workflow/frontend",
-];
-const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "generated", "__tests__", "tests"]);
-const FORBIDDEN_FIELDS = [
-  { field: "transferResult", regex: /\btransferResult\b/ },
-  { field: "nodeResultTransferResult", regex: /\bnodeResultTransferResult\b/ },
-  { field: "allowCustom", regex: /\ballowCustom\b/ },
-  { field: "defaultGenerationSource", regex: /\bdefaultGenerationSource\b/ },
-];
-const ATTACHMENT_LEGACY_FIELDS = [
-  { field: "attachmentMetas", regex: /\battachmentMetas\b/ },
-  { field: "inputAttachmentMetas", regex: /\binputAttachmentMetas\b/ },
-  { field: "attachment_metas", regex: /\battachment_metas\b/ },
-  { field: "AttachmentMetas", regex: /\bAttachmentMetas\b/ },
-];
-const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = ["agent/src/artifacts/"];
-
-function isAttachmentLegacyAllowed(relPath) {
-  return ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
-}
-
-runForbiddenLineGuard({
-  label: "check-semantic-transfer-protocol-fields",
-  root: ROOT,
-  directories: TARGET_DIRS,
-  scan: { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS },
-  rulesFor: (relPath) =>
-    isAttachmentLegacyAllowed(relPath)
-      ? FORBIDDEN_FIELDS
-      : [...FORBIDDEN_FIELDS, ...ATTACHMENT_LEGACY_FIELDS],
-  guidance: [
-    "semantic-transfer protocol fields must use transferEnvelopes only.",
-    "Remove legacy transferResult/nodeResultTransferResult and attachmentMetas compatibility from source chains.",
-    "attachmentMetas/inputAttachmentMetas may only exist inside attach/semantic-transfer adapter boundaries.",
+]);
+const CODE_EXTENSIONS = Object.freeze([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
+const RULE_FIELDS = Object.freeze({
+  legacyTransferField: [
+    "transferResult",
+    "nodeResultTransferResult",
+    "allowCustom",
+    "defaultGenerationSource",
+  ],
+  legacyAttachmentMetas: [
+    "attachmentMetas",
+    "inputAttachmentMetas",
+    "attachment_metas",
+    "AttachmentMetas",
   ],
 });
+
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  const files = await getFirstPartyFilesUnder(PRODUCTION_ROOTS, {
+    repositoryRoot,
+    extensions: CODE_EXTENSIONS,
+    includeTests: false,
+  });
+  for (const file of files) {
+    const source = await readRepositoryText(file);
+    for (const [rule, fields] of Object.entries(RULE_FIELDS)) {
+      if (exemptsPath(CHECK, rule, file)) continue;
+      for (const field of fields) {
+        const pattern = new RegExp(`\\b${field}\\b`);
+        const message = `legacy field ${field}`;
+        addPatternLineHits({ measurement: measured[rule], file, source, pattern, message });
+      }
+    }
+  }
+  return measured;
+}
+
+export const CHECK = defineCheck({
+  id: "semantic-transfer-protocol-fields",
+  description: "Semantic transfer payloads use transferEnvelopes and canonical attachment fields",
+  rules: {
+    legacyTransferField: {
+      description: "Source chains never carry removed semantic-transfer result fields",
+      hint: "carry results through transferEnvelopes only",
+    },
+    legacyAttachmentMetas: {
+      description: "attachmentMetas aliases exist only at the artifact adapter boundary",
+      hint: "pass canonical attachments; convert attachmentMetas only inside agent/src/artifacts",
+    },
+  },
+  exemptions: [
+    {
+      id: "artifact-adapter-boundary",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["legacyAttachmentMetas"],
+      reason: "artifact adapters translate the external attachmentMetas wire shape",
+      match: ["agent/src/artifacts/"],
+    },
+  ],
+  baseline: { legacyTransferField: 0, legacyAttachmentMetas: 0, exemptions: 1 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

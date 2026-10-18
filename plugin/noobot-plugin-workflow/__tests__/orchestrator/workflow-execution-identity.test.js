@@ -100,6 +100,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
     },
   });
   const result = await runWorkflowExecution({
+    signal: new AbortController().signal,
     hookManager: { emit: async () => ({ outcomes: [] }) },
     options,
     ctx,
@@ -180,6 +181,7 @@ test("runWorkflowExecution resolves each node task by nodeId even when node name
     },
   });
   await runWorkflowExecution({
+    signal: new AbortController().signal,
     hookManager: { emit: async () => ({ outcomes: [] }) },
     options,
     ctx,
@@ -217,6 +219,7 @@ test("runWorkflowExecution commits a failed child lifecycle to node state and re
   options.workflowNodeStateRepository = repository;
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options,
       ctx,
@@ -244,6 +247,7 @@ test("runWorkflowExecution rejects duplicate planning identities for the same no
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
@@ -265,6 +269,7 @@ test("runWorkflowExecution rejects missing planning identity in new protocol pat
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
@@ -286,6 +291,7 @@ test("runWorkflowExecution rejects incomplete planning identity", async () => {
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
@@ -302,6 +308,7 @@ test("runWorkflowExecution rejects missing workflow and planning identities", as
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
@@ -323,6 +330,7 @@ test("runWorkflowExecution rejects planning identity without nodeName", async ()
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
@@ -348,6 +356,7 @@ test("runWorkflowExecution commits FAILED with a boundary code when a child thro
   options.workflowNodeStateRepository = repository;
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options,
       ctx,
@@ -390,6 +399,7 @@ test("runWorkflowExecution commits FAILED when the child terminal receipt is rej
   options.workflowNodeStateRepository = repository;
   await assert.rejects(
     runWorkflowExecution({
+      signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options,
       ctx,

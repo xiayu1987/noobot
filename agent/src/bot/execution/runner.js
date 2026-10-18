@@ -14,7 +14,7 @@ import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import { dispatchAgentTurn } from "./runner/agent-dispatch.js";
 import {
   buildAgentContextSummary,
-  normalizePreparedAgentTurnExecution,
+  requirePreparedAgentTurnExecution,
 } from "./runner/agent-context-projection.js";
 import { prepareCurrentUserTurn } from "./runner/current-user-turn.js";
 import { bindAgentDispatchRuntime } from "./runner/runtime-binding.js";
@@ -99,7 +99,7 @@ export class SessionExecutionRunner {
     parentSessionId = "",
     parentDialogProcessId = "",
     dialogProcessId: requestedDialogProcessId = "",
-    abortSignal = null,
+    abortSignal,
     userInteractionBridge = null,
     userInterjectionPort = null,
     runConfig = {},
@@ -236,12 +236,9 @@ export class SessionExecutionRunner {
       }
       const preparedAgentTurnExecution = await this.prepareAgentTurnExecution({
         buildContextPayload,
-        abortSignal,
-        persistenceContext,
       });
-      const { runtimeAgentContext, userMessageAttachments } = normalizePreparedAgentTurnExecution(
-        preparedAgentTurnExecution,
-      );
+      const { agentContext: runtimeAgentContext, userMessageAttachments } =
+        requirePreparedAgentTurnExecution(preparedAgentTurnExecution);
       const dispatchRuntime = await bindAgentDispatchRuntime({
         runtimeAgentContext,
         lifecycle,
@@ -289,7 +286,6 @@ export class SessionExecutionRunner {
         lifecycle,
         dispatchRuntime,
         runtimeAgentContext,
-        abortSignal,
         normalizedMessage,
         currentUserMessage,
         userMessageAttachments,

@@ -3,14 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { Linter } from "eslint";
 import * as espree from "espree";
-import * as prettier from "prettier";
 import vueParser, { parse as parseVue } from "vue-eslint-parser";
-import { collectRatchet } from "./quality/baseline-ratchet.mjs";
+import {
+  EXEMPTION_KINDS,
+  addHit,
+  defineCheck,
+  emptyMeasurement,
+  exemptMatches,
+  exemptsPath,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
 import {
   getFirstPartyCodeFiles,
   isFirstPartyProductionPath,
@@ -18,8 +24,6 @@ import {
 } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-export const BASELINE_PATH = path.join(root, "scripts/quality/fallback-chain-baseline.json");
-export const INVENTORY_DOC_PATH = path.join(root, "docs/fallback-chain-inventory.md");
 const FALLBACK_OPERATORS = new Set(["||", "??"]);
 const CONDITION_PARENTS = new Set([
   "IfStatement",
@@ -30,35 +34,104 @@ const CONDITION_PARENTS = new Set([
 const CONSTANT_TABLE_NAME = /^[A-Z][A-Z0-9_]*$/;
 const SKIPPED_KEYS = new Set(["parent", "loc", "range", "tokens", "comments", "templateBody"]);
 
-export const EXEMPTIONS = Object.freeze({
-  externalFields: Object.freeze({
-    reason: "wire fields owned by LangChain or model vendors; aliases cannot be converged locally",
-    names: Object.freeze([
-      "lc_kwargs",
-      "lc_name",
-      "additional_kwargs",
-      "response_metadata",
-      "usage_metadata",
-      "tool_calls",
-      "tool_call_id",
-      "tool_use_id",
-      "call_id",
-      "tool_name",
-      "tool_choice",
-      "input_schema",
-      "image_url",
-      "b64_json",
-    ]),
-  }),
-  errorObjects: Object.freeze({
-    reason: "caught errors have no fixed shape; every operand reads the same error object",
-    roots: Object.freeze(["error", "err", "cause"]),
-  }),
-  boundaryFiles: Object.freeze([
-    Object.freeze({ prefix: "model-runtime/src/adapters/", reason: "vendor wire format adapters" }),
-    Object.freeze({ prefix: "context-protocol/src/message/", reason: "LangChain message codec" }),
-    Object.freeze({ prefix: "shared/value.js", reason: "implementation of text() itself" }),
-  ]),
+export const CHECK = defineCheck({
+  id: "fallback-chain",
+  description: "fallback chains, inline text() re-implementations and raw type checks",
+  rules: {
+    fallbackChain: {
+      description: "value-position || / ?? chains reading two or more fields or sources",
+      hint: "read the single writer field instead",
+    },
+    inlineTrim: {
+      description: "String(x || d).trim() or text(x || d) re-implementing text() defaults",
+      hint: 'use text(x) from "@noobot/shared/value" instead of String(x || d).trim()',
+    },
+    typeCheck: {
+      description: "local plain-object checks duplicating shared isPlainObject",
+      hint: 'use isPlainObject from "@noobot/shared/value" instead of local object type checks',
+    },
+    rawTypeof: {
+      description: 'raw typeof x ===/!== "object"/"function" comparisons',
+      hint: 'use isFunction/isObjectLike/isPlainObject from "@noobot/shared/value" instead of typeof x ===/!== "object"/"function"',
+    },
+    textShadow: {
+      description: "local bindings shadowing an imported text()",
+      hint: "rename the local binding; files importing text() must not rebind text",
+    },
+  },
+  exemptions: [
+    {
+      id: "vendor-wire-fields",
+      kind: EXEMPTION_KINDS.PROPERTY_NAME,
+      rules: ["fallbackChain"],
+      reason:
+        "wire fields owned by LangChain or model vendors; aliases cannot be converged locally",
+      match: [
+        "lc_kwargs",
+        "lc_name",
+        "additional_kwargs",
+        "response_metadata",
+        "usage_metadata",
+        "tool_calls",
+        "tool_call_id",
+        "tool_use_id",
+        "call_id",
+        "tool_name",
+        "tool_choice",
+        "input_schema",
+        "image_url",
+        "b64_json",
+      ],
+    },
+    {
+      id: "caught-error-objects",
+      kind: EXEMPTION_KINDS.ROOT_IDENTIFIER,
+      rules: ["fallbackChain"],
+      reason: "caught errors have no fixed shape; every operand reads the same error object",
+      match: ["error", "err", "cause"],
+    },
+    {
+      id: "vendor-adapters",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["fallbackChain", "inlineTrim"],
+      reason: "vendor wire format adapters",
+      match: ["model-runtime/src/adapters/"],
+    },
+    {
+      id: "langchain-message-codec",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["fallbackChain", "inlineTrim"],
+      reason: "LangChain message codec",
+      match: ["context-protocol/src/message/"],
+    },
+    {
+      id: "shared-value-implementation",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["fallbackChain", "inlineTrim", "typeCheck", "rawTypeof"],
+      reason: "implements text(), isPlainObject, isObjectLike and isFunction themselves",
+      match: ["shared/value.js"],
+    },
+    {
+      id: "strict-plain-object",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["typeCheck"],
+      reason:
+        "requires Object.prototype or null prototype; shared isPlainObject would relax validation",
+      match: [
+        "attachment-protocol/src/protocol-utils.js",
+        "client/noobot-chat/tests/e2e/protocol/helpers/snapshot-assertions.js",
+      ],
+    },
+  ],
+  baseline: {
+    fallbackChain: 672,
+    inlineTrim: 104,
+    typeCheck: 0,
+    rawTypeof: 692,
+    textShadow: 0,
+    exemptions: 22,
+  },
+  measure: () => measureRules(),
 });
 
 const PLAIN_OBJECT_HELPER_NAMES = new Set([
@@ -68,12 +141,8 @@ const PLAIN_OBJECT_HELPER_NAMES = new Set([
   "isObjectLike",
 ]);
 
-const EXTERNAL_FIELD_SET = new Set(EXEMPTIONS.externalFields.names);
-const ERROR_ROOT_SET = new Set(EXEMPTIONS.errorObjects.roots);
-
-export function isBoundaryFile(file) {
-  return EXEMPTIONS.boundaryFiles.some(({ prefix }) => file.startsWith(prefix));
-}
+const EXTERNAL_FIELD_SET = exemptMatches(CHECK, "fallbackChain", EXEMPTION_KINDS.PROPERTY_NAME);
+const ERROR_ROOT_SET = exemptMatches(CHECK, "fallbackChain", EXEMPTION_KINDS.ROOT_IDENTIFIER);
 
 function flattenChain(node, operator, output = []) {
   if (node.type === "LogicalExpression" && node.operator === operator) {
@@ -278,8 +347,6 @@ export function findInlineTypeChecks(source, filename = "source.js") {
   return hits;
 }
 
-const isSharedValueModule = (file) => file === "shared/value.js";
-
 const RAW_TYPEOF_KINDS = new Set(["object", "function"]);
 const EQUALITY_OPERATORS = new Set(["===", "!==", "==", "!="]);
 
@@ -303,203 +370,51 @@ export function findRawTypeofChecks(source, filename = "source.js") {
   return hits;
 }
 
-export const RULES = Object.freeze({
-  fallbackChain: {
-    title: "回退链",
-    find: findFallbackChains,
-    includeFile: (file) => isFirstPartyProductionPath(file) && !isBoundaryFile(file),
-    hint: "read the single writer field instead",
-  },
-  inlineTrim: {
-    title: "内联 trim 兜底",
-    find: (source, file) =>
-      findInlineTrimFallbacks(source, file, { skipFieldChains: isFirstPartyProductionPath(file) }),
-    includeFile: (file) => !isTestFilePath(file) && !isBoundaryFile(file),
-    hint: 'use text(x) from "@noobot/shared/value" instead of String(x || d).trim()',
-  },
-  typeCheck: {
-    title: "内联类型判断",
-    find: findInlineTypeChecks,
-    includeFile: (file) => !isTestFilePath(file) && !isSharedValueModule(file),
-    hint: 'use isPlainObject from "@noobot/shared/value" instead of local object type checks',
-  },
-  rawTypeof: {
-    title: "原始 typeof 判断",
-    find: findRawTypeofChecks,
-    includeFile: (file) => !isTestFilePath(file) && !isSharedValueModule(file),
-    hint: 'use isFunction/isObjectLike/isPlainObject from "@noobot/shared/value" instead of typeof x ===/!== "object"/"function"',
-  },
-  textShadow: {
-    title: "遮蔽 text()",
-    find: findTextShadowing,
-    includeFile: () => true,
-    hint: "rename the local binding; files importing text() must not rebind text",
-  },
+const RULE_SCOPES = Object.freeze({
+  fallbackChain: isFirstPartyProductionPath,
+  inlineTrim: (file) => !isTestFilePath(file),
+  typeCheck: (file) => !isTestFilePath(file),
+  rawTypeof: (file) => !isTestFilePath(file),
+  textShadow: () => true,
 });
 
-export async function measureRules({ repositoryRoot = root } = {}) {
+const RULE_FINDERS = Object.freeze({
+  fallbackChain: findFallbackChains,
+  inlineTrim: (source, file) =>
+    findInlineTrimFallbacks(source, file, { skipFieldChains: isFirstPartyProductionPath(file) }),
+  typeCheck: findInlineTypeChecks,
+  rawTypeof: findRawTypeofChecks,
+  textShadow: findTextShadowing,
+});
+
+export function includesFile(rule, file) {
+  return RULE_SCOPES[rule](file) && !exemptsPath(CHECK, rule, file);
+}
+
+export function findRuleHits(rule, source, file) {
+  return RULE_FINDERS[rule](source, file);
+}
+
+async function measureRules() {
   const files = await getFirstPartyCodeFiles({
-    repositoryRoot,
+    repositoryRoot: root,
     extensions: [".js", ".mjs", ".cjs", ".jsx", ".vue"],
     includeTests: true,
   });
-  const measured = Object.fromEntries(Object.keys(RULES).map((name) => [name, {}]));
+  const names = Object.keys(CHECK.rules);
+  const measured = Object.fromEntries(names.map((name) => [name, emptyMeasurement()]));
   for (const relativePath of files) {
     const file = relativePath.replaceAll("\\", "/");
-    const rules = Object.entries(RULES).filter(([, rule]) => rule.includeFile(file));
-    if (!rules.length) continue;
-    const source = await readFile(path.join(repositoryRoot, relativePath), "utf8");
-    for (const [name, rule] of rules) {
-      const total = rule.find(source, file).length;
-      if (total) measured[name][file] = total;
+    const included = names.filter((name) => includesFile(name, file));
+    if (!included.length) continue;
+    const source = await readFile(path.join(root, relativePath), "utf8");
+    for (const name of included) {
+      for (const { line, code } of findRuleHits(name, source, file)) {
+        addHit(measured[name], { file, line, message: code });
+      }
     }
   }
   return measured;
 }
 
-export function compareWithBaseline(measured, baseline) {
-  const files = new Set([...Object.keys(measured), ...Object.keys(baseline)]);
-  return collectRatchet([...files].map((file) => [file, measured[file] ?? 0, baseline[file] ?? 0]));
-}
-
-export function sumCounts(counts) {
-  return Object.values(counts).reduce((total, count) => total + count, 0);
-}
-
-const MODULE_SECTION_START = "<!-- fallback-chain-modules:start -->";
-const MODULE_SECTION_END = "<!-- fallback-chain-modules:end -->";
-
-export function moduleOf(file) {
-  const segments = file.split("/");
-  return ["plugin", "client"].includes(segments[0]) ? segments.slice(0, 2).join("/") : segments[0];
-}
-
-export function renderModuleSection(baseline) {
-  const ruleNames = Object.keys(RULES);
-  const modules = {};
-  for (const name of ruleNames) {
-    for (const [file, count] of Object.entries(baseline[name] ?? {})) {
-      const row = (modules[moduleOf(file)] ??= Object.fromEntries(ruleNames.map((n) => [n, 0])));
-      row[name] += count;
-    }
-  }
-  const total = (row) => ruleNames.reduce((sum, name) => sum + row[name], 0);
-  const rows = Object.entries(modules)
-    .sort(
-      ([leftName, left], [rightName, right]) =>
-        total(right) - total(left) || leftName.localeCompare(rightName),
-    )
-    .map(
-      ([module, row]) => `| \`${module}\` | ${ruleNames.map((name) => row[name]).join(" | ")} |`,
-    );
-  const totals = ruleNames.map((name) => {
-    const counts = baseline[name] ?? {};
-    return `${RULES[name].title} ${sumCounts(counts)} 处 / ${Object.keys(counts).length} 个文件`;
-  });
-  return [
-    MODULE_SECTION_START,
-    "",
-    `总计：${totals.join("；")}。`,
-    "",
-    `| 模块 | ${ruleNames.map((name) => RULES[name].title).join(" | ")} |`,
-    `| --- | ${ruleNames.map(() => "---").join(" | ")} |`,
-    ...rows,
-    "",
-    MODULE_SECTION_END,
-  ].join("\n");
-}
-
-export function replaceModuleSection(markdown, baseline) {
-  const begin = markdown.indexOf(MODULE_SECTION_START);
-  const end = markdown.indexOf(MODULE_SECTION_END);
-  if (begin < 0 || end < begin)
-    throw new Error("fallback chain inventory doc is missing module markers");
-  return (
-    markdown.slice(0, begin) +
-    renderModuleSection(baseline) +
-    markdown.slice(end + MODULE_SECTION_END.length)
-  );
-}
-
-async function renderInventoryDoc(markdown, baseline) {
-  const config = await prettier.resolveConfig(INVENTORY_DOC_PATH);
-  return prettier.format(replaceModuleSection(markdown, baseline), {
-    ...config,
-    filepath: INVENTORY_DOC_PATH,
-  });
-}
-
-function sortCounts(counts) {
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
-  );
-}
-
-function describeTotals(counts) {
-  return Object.keys(RULES)
-    .map((name) => `${name}=${sumCounts(counts[name] ?? {})}`)
-    .join(", ");
-}
-
-export function findRebaseIncreases(previous, next) {
-  return Object.keys(RULES)
-    .filter((name) => previous[name])
-    .map((name) => ({
-      name,
-      before: sumCounts(previous[name]),
-      after: sumCounts(next[name] ?? {}),
-    }))
-    .filter(({ before, after }) => after > before)
-    .map(({ name, before, after }) => `rebase raises ${name} from ${before} to ${after}`);
-}
-
-async function writeBaseline(markdown, measured) {
-  const lowered = Object.fromEntries(
-    Object.keys(RULES).map((name) => [name, sortCounts(measured[name])]),
-  );
-  await writeFile(BASELINE_PATH, `${JSON.stringify(lowered, null, 2)}\n`);
-  await writeFile(INVENTORY_DOC_PATH, await renderInventoryDoc(markdown, lowered));
-  return lowered;
-}
-
-function fail(lines) {
-  console.error(lines.join("\n"));
-  process.exitCode = 1;
-}
-
-async function main(argv) {
-  const measured = await measureRules();
-  const baseline = JSON.parse(await readFile(BASELINE_PATH, "utf8"));
-  const markdown = await readFile(INVENTORY_DOC_PATH, "utf8");
-  if (argv.includes("--rebase")) {
-    const violations = findRebaseIncreases(baseline, measured);
-    if (violations.length) return fail(violations);
-    const lowered = await writeBaseline(markdown, measured);
-    console.log(`Fallback baseline rebased to ${describeTotals(lowered)}`);
-    return;
-  }
-  const increases = [];
-  const decreases = [];
-  for (const [name, rule] of Object.entries(RULES)) {
-    const result = compareWithBaseline(measured[name], baseline[name] ?? {});
-    if (result.increases.length) {
-      increases.push(`[${name}] ${rule.hint}:`, ...result.increases);
-    }
-    decreases.push(...result.decreases.map((line) => `[${name}] ${line}`));
-  }
-  if (increases.length) return fail(["New fallback patterns are not allowed:", ...increases]);
-  if (argv.includes("--update")) {
-    const lowered = await writeBaseline(markdown, measured);
-    console.log(`Fallback baseline lowered to ${describeTotals(lowered)}`);
-    return;
-  }
-  const violations = decreases.map((line) => `stale baseline, run with --update: ${line}`);
-  if ((await renderInventoryDoc(markdown, baseline)) !== markdown) {
-    violations.push("docs/fallback-chain-inventory.md module table is stale, run with --update");
-  }
-  if (violations.length) return fail(violations);
-  console.log(`Fallback baseline passed (${describeTotals(measured)})`);
-}
-
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href)
-  await main(process.argv.slice(2));
+await runCheckWhenMain(CHECK, import.meta.url);

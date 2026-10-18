@@ -267,12 +267,13 @@ async function commitWaveNodeFailure({
   nodeState,
   nodeIdentity,
   ctx,
+  signal,
   action,
   runningFact,
   activeChildExecutionId,
 } = {}) {
   if (!shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFact })) return;
-  const stopped = isWorkflowAbortError(error, ctx);
+  const stopped = isWorkflowAbortError(error, signal);
   await commitWaveNodeState({
     nodeState,
     nodeIdentity,
@@ -292,6 +293,7 @@ async function runWaveStep({
   hookManager,
   options,
   ctx,
+  signal,
   semantic,
   instanceId,
   planningNodeSessions,
@@ -299,7 +301,7 @@ async function runWaveStep({
   nodeState,
   transitions,
 } = {}) {
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
   const upstreamActionSteps = resolveWorkflowUpstreamActionSteps({
     instanceId,
     pendingStep: step,
@@ -335,6 +337,7 @@ async function runWaveStep({
       hookManager,
       options,
       ctx,
+      signal,
       instanceId,
       pendingStep: step,
       semantic,
@@ -342,7 +345,7 @@ async function runWaveStep({
       transition: transitions + idx + 1,
       upstreamNodeResults,
     });
-    throwIfWorkflowAborted(ctx);
+    throwIfWorkflowAborted(signal);
     if (trackState) {
       await commitWaveChildTerminal({
         nodeState,
@@ -359,6 +362,7 @@ async function runWaveStep({
       nodeState,
       nodeIdentity,
       ctx,
+      signal,
       action,
       runningFact,
       activeChildExecutionId,
@@ -380,6 +384,7 @@ export async function runWorkflowExecution({
   hookManager,
   options = {},
   ctx = {},
+  signal,
   semantic = {},
   workflowRunId = "",
   planningNodeSessions = [],
@@ -415,7 +420,7 @@ export async function runWorkflowExecution({
 
   try {
     while (snapshot && snapshot.completed !== true && transitions < maxTransitions) {
-      throwIfWorkflowAborted(ctx);
+      throwIfWorkflowAborted(signal);
       const pending = Array.isArray(snapshot.pendingSteps) ? snapshot.pendingSteps : [];
       if (!pending.length) break;
       const waveSize = parallelEnabled ? Math.min(maxParallelNodeAgents, pending.length) : 1;
@@ -428,6 +433,7 @@ export async function runWorkflowExecution({
             hookManager,
             options,
             ctx,
+            signal,
             semantic,
             instanceId,
             planningNodeSessions,
@@ -440,12 +446,12 @@ export async function runWorkflowExecution({
       const rejectedWaveResult = settledWaveResults.find((item) => item.status === "rejected");
       if (rejectedWaveResult) throw rejectedWaveResult.reason;
       const waveResults = settledWaveResults.map((item) => item.value);
-      throwIfWorkflowAborted(ctx);
+      throwIfWorkflowAborted(signal);
       const actionQueue = waveResults
         .slice()
         .sort((a, b) => Number(b?.step?.index || 0) - Number(a?.step?.index || 0));
       for (const item of actionQueue) {
-        throwIfWorkflowAborted(ctx);
+        throwIfWorkflowAborted(signal);
         if (!snapshot || snapshot.completed === true || transitions >= maxTransitions) break;
         const resolvedStepIndex = resolveStepIndexForAction({
           snapshot,
@@ -479,7 +485,7 @@ export async function runWorkflowExecution({
         });
       }
     }
-    throwIfWorkflowAborted(ctx);
+    throwIfWorkflowAborted(signal);
     const execution = {
       started: true,
       autoTransitions: transitions,
@@ -499,7 +505,7 @@ export async function runWorkflowExecution({
     };
   } catch (error) {
     if (nodeStateRepository && nodeState.snapshot) {
-      const stopped = isWorkflowAbortError(error, ctx);
+      const stopped = isWorkflowAbortError(error, signal);
       nodeState.snapshot = await settleUnstartedWorkflowNodes({
         repository: nodeStateRepository,
         snapshot: nodeState.snapshot,

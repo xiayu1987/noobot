@@ -43,23 +43,16 @@ export function withBotHookRuntimeMeta(meta = {}, context = {}) {
   };
 }
 
-export async function runBotRuntimeHook({
-  runtime = {},
-  point = "",
-  context = {},
-  eventListener = null,
-} = {}) {
+export async function runBotRuntimeHook({ runtime, point, context = {} }) {
   const descriptor = requireHookPointDescriptor(point);
   const normalizedPoint = descriptor.point;
   const manager = resolveBotRuntimeHookManager(runtime);
   if (!manager) {
     return createEmptyHookResult(normalizedPoint, context);
   }
-  const listener = eventListener || runtime?.eventListener || null;
+  const listener = runtime.eventListener;
   const invocationSignal =
-    descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
-      ? null
-      : runtime?.abortSignal || null;
+    descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED ? null : runtime.abortSignal;
   emitEvent(listener, "bot_hook_start", { point: normalizedPoint });
   try {
     const result = await manager.emit(normalizedPoint, context, {

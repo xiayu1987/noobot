@@ -14,7 +14,7 @@ export const MEMORY_SUMMARY_STAGE = Object.freeze({
   EXPERIENCE_YEARLY: "experience_yearly",
 });
 
-export async function runMemorySummaryStage(stage, run, { abortSignal = null, onStageError }) {
+export async function runMemorySummaryStage(stage, run, { abortSignal, onStageError }) {
   if (!isFunction(onStageError)) {
     throw new TypeError("memory summary stage requires onStageError");
   }

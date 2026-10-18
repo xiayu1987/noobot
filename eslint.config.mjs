@@ -8,6 +8,7 @@ import unusedImports from "eslint-plugin-unused-imports";
 import globals from "globals";
 import vue from "eslint-plugin-vue";
 import { noobotLocalRules } from "./scripts/quality/eslint-local-rules.mjs";
+import { UNUSED_VARS_OPTIONS, UNUSED_VARS_RULE_ID } from "./scripts/quality/unused-code-config.mjs";
 
 const testGlobals = {
   afterAll: "readonly",
@@ -93,16 +94,7 @@ export default [
       "object-shorthand": ["error", "always"],
       "prefer-const": "error",
       "unused-imports/no-unused-imports": "error",
-      "unused-imports/no-unused-vars": [
-        "error",
-        {
-          vars: "all",
-          args: "all",
-          argsIgnorePattern: "^_",
-          ignoreRestSiblings: true,
-          caughtErrors: "none",
-        },
-      ],
+      [UNUSED_VARS_RULE_ID]: ["error", UNUSED_VARS_OPTIONS],
       "valid-typeof": "error",
     },
   },

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runAgentTurn } from "../../../src/runtime/engine.js";
@@ -29,7 +29,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
   hookManager.on("agent.on_error", (context) => errorHookContexts.push(context), {
     id: "test.engine-stop.on-error",
   });
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     globalConfig: {
       defaultProvider: "test_model",
       providers: {

@@ -4,21 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isFunction } from "@noobot/shared/value";
-function isAbortSignalLike(value) {
-  return Boolean(value) && isFunction(value.addEventListener);
-}
+import { requireAbortSignal } from "./execution-abort.js";
 
-function normalizeDisposer(disposer) {
-  return typeof disposer === "function" ? disposer : null;
-}
-
-export function createExecutionCancellationScope({ abortSignal = null, onDisposeError } = {}) {
+export function createExecutionCancellationScope({ abortSignal, onDisposeError }) {
+  requireAbortSignal(abortSignal, "createExecutionCancellationScope");
   const disposers = new Set();
   const reportDisposeError = typeof onDisposeError === "function" ? onDisposeError : () => {};
   const scope = {
     get abortSignal() {
-      return abortSignal || null;
+      return abortSignal;
     },
     get disposed() {
       return disposed;
@@ -43,8 +37,10 @@ export function createExecutionCancellationScope({ abortSignal = null, onDispose
   }
 
   function register(disposer) {
-    const normalized = normalizeDisposer(disposer);
-    if (!normalized) return () => {};
+    if (typeof disposer !== "function") {
+      throw new TypeError("cancellation scope disposer must be a function");
+    }
+    const normalized = disposer;
     if (disposed) {
       runDisposer(normalized);
       return () => {};
@@ -63,15 +59,8 @@ export function createExecutionCancellationScope({ abortSignal = null, onDispose
     for (const disposer of pending) runDisposer(disposer);
   }
 
-  if (isAbortSignalLike(abortSignal)) {
-    if (abortSignal.aborted) disposed = true;
-    else abortSignal.addEventListener("abort", dispose, { once: true });
-  }
+  if (abortSignal.aborted) disposed = true;
+  else abortSignal.addEventListener("abort", dispose, { once: true });
 
   return scope;
-}
-
-export function resolveExecutionCancellationScope(scope = null) {
-  if (scope && typeof scope.register === "function") return scope;
-  return createExecutionCancellationScope();
 }

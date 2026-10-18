@@ -123,7 +123,7 @@ export function createScriptTool({ agentContext }) {
       const requestedExecutionMode = normalizeExecutionMode(executionMode);
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
-      const abortSignal = toolConfig?.signal || null;
+      const abortSignal = toolConfig.signal;
       const generatedDataRoot = text(runtime?.systemRuntime?.sessionDir);
       if (!generatedDataRoot) throw new Error("session directory is required for script output");
       const identity = toolConfig?.configurable?.transferIdentity;

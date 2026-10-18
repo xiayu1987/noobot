@@ -13,7 +13,7 @@ export async function runYearlySummaryIfNeeded({
   invokeModel = null,
   promptI18n = {},
   fields,
-  abortSignal = null,
+  abortSignal,
   basePath = "",
   listMonthDirs,
   mergeDomainText,

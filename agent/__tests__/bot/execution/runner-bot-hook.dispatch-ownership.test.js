@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import {
   createRunner,
@@ -69,14 +69,16 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const events = [];
   const capabilityModelInvoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
+    pluginId: "noobot-plugin-test",
     configSnapshot: createConfigSnapshot(),
   });
-  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx, invocation) => {
     await capabilityModelInvoker({
       purpose: "workflow_semantic",
       activity: { activityKind: "workflow_semantic" },
       domain: "workflow",
       ctx,
+      signal: invocation.signal,
     });
   });
   const runner = createRunner({
@@ -96,7 +98,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
         },
       };
       const runtimeAgentContext = createTestAgentExecutionScope(
-        Object.assign(createRuntimeContext(), {
+        Object.assign(createTestRuntimeContext(), {
           eventListener: buildContextPayload.eventListener,
           modelHost: {
             modelSpec: { alias: "test", model: "test", format: "openai_compatible" },
@@ -107,7 +109,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
         }),
         { identity: invocationIdentity },
       );
-      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+      return { agentContext: runtimeAgentContext, userMessageAttachments: [] };
     },
   });
 

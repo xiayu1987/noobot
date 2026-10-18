@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import {
   assert,
   createRunner,
@@ -24,7 +24,7 @@ test("runSession does not persist stopped snapshot for non-abort errors", async 
   const runner = createRunner({
     callOrder,
     eventListener,
-    runtime: Object.assign(createRuntimeContext(), {
+    runtime: Object.assign(createTestRuntimeContext(), {
       stoppedModelMessageSnapshotCandidate: {
         userId: "u1",
         sessionId: "session-used",

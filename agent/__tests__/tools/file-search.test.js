@@ -34,6 +34,7 @@ test("ripgrep file search drops matches outside the workspace", async (t) => {
     await writeFile(path.join(workspacePath, "inside.txt"), "OUTSIDE_MARKER\n", "utf8");
 
     const result = await searchFilesWithRipgrep({
+      abortSignal: new AbortController().signal,
       rootPath,
       workspacePath,
       query: "OUTSIDE_MARKER",
@@ -63,6 +64,7 @@ test("ripgrep file search treats a leading-dash query as a literal pattern", asy
     );
 
     const result = await searchFilesWithRipgrep({
+      abortSignal: new AbortController().signal,
       rootPath,
       workspacePath: rootPath,
       query: "--",
@@ -93,6 +95,7 @@ test("ripgrep file search scans files larger than the former per-file threshold"
     await writeFile(path.join(rootPath, "large.txt"), content, "utf8");
 
     const result = await searchFilesWithRipgrep({
+      abortSignal: new AbortController().signal,
       rootPath,
       workspacePath: rootPath,
       query: marker,
@@ -122,6 +125,7 @@ test("ripgrep file search enforces maxResults across files", async (t) => {
     );
 
     const result = await searchFilesWithRipgrep({
+      abortSignal: new AbortController().signal,
       rootPath,
       workspacePath: rootPath,
       query: "GLOBAL_SEARCH_MARKER",

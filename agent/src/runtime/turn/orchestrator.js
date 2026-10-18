@@ -111,16 +111,16 @@ export function createTurnOrchestrator({
 
   async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     const { tools, traces, maxTurns } = loopState;
-    const { abortSignal, runtime, eventListener } = modelState;
+    const { runtime } = modelState;
+    const { abortSignal, eventListener } = runtime;
     const overMaxTurnsCount = Math.max(0, Number(turn || 0) - Number(maxTurns || 0));
     const loopLimitBufferTurns = DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS;
     const isOverMaxTurns = overMaxTurnsCount > 0;
     const isBeyondLoopLimitBuffer = overMaxTurnsCount > loopLimitBufferTurns;
 
     async function continueForAcceptedUserInterjections(nextTurn = turn + 1) {
-      if (typeof runtime?.sealUserInterjectionQueueIfEmpty !== "function") return null;
       if (runtime.sealUserInterjectionQueueIfEmpty()) return null;
-      const consumed = await runtime.consumeUserInterjections?.();
+      const consumed = await runtime.consumeUserInterjections();
       if (!Array.isArray(consumed) || consumed.length === 0) {
         if (runtime.sealUserInterjectionQueueIfEmpty()) return null;
       }

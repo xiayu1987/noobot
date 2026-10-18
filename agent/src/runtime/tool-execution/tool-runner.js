@@ -221,27 +221,27 @@ function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = n
   return { success: true, reason: "" };
 }
 
-function optionValue(value, fallback) {
-  return value === undefined ? fallback : value;
-}
-
-function toolAbortSignal(source = {}) {
-  return source?.runtime?.abortSignal || null;
-}
-
-function createToolCallExecutionState(options = {}) {
+function createToolCallExecutionState({
+  call,
+  tool,
+  turn,
+  executionScope,
+  errorLogger,
+  runtime,
+  agentContext,
+  abortSignal,
+}) {
   const toolStartedAtMs = Date.now();
-  const call = optionValue(options.call, {});
   return {
     call,
-    tool: optionValue(options.tool, null),
-    eventListener: optionValue(options.eventListener, null),
-    turn: optionValue(options.turn, 1),
-    executionScope: optionValue(options.executionScope, "primary"),
-    errorLogger: optionValue(options.errorLogger, null),
-    identity: getSessionIdsFromAgentContext(options.agentContext),
-    runtime: optionValue(options.runtime, {}),
-    agentContext: optionValue(options.agentContext, null),
+    tool,
+    turn,
+    executionScope,
+    errorLogger,
+    identity: getSessionIdsFromAgentContext(agentContext),
+    runtime,
+    agentContext,
+    abortSignal,
     toolStartedAtMs,
     toolStartedAt: new Date(toolStartedAtMs).toISOString(),
     riskAssessment: createToolRiskAssessment(call),
@@ -378,6 +378,7 @@ function toolInvocationConfig(state) {
       }),
       noobotHookMeta: resolveToolHookMeta(state.runtime),
     },
+    signal: state.abortSignal,
   };
 }
 
@@ -443,8 +444,8 @@ function logRecoverableToolError(state, error) {
 function reportToolInvocationError(state, error) {
   handleEngineError({
     error,
-    abortSignal: state.runtime?.abortSignal || null,
-    eventListener: state.eventListener,
+    abortSignal: state.abortSignal,
+    eventListener: state.runtime.eventListener,
     event: "tool_call_error",
     metadata: {
       source: "tool-runner",
@@ -495,7 +496,7 @@ async function invokeConfiguredTool(state) {
         );
         await materializeToolInvocationResult(state);
       })(),
-      toolAbortSignal(state),
+      state.abortSignal,
     );
   } catch (error) {
     await handleToolInvocationError(state, error);
@@ -548,7 +549,6 @@ async function finalizeToolExecution(state) {
       ...resourceRefsFromResult(state.rawToolResultText || state.toolResultText),
       ...registerTransferAttachmentResources({
         agentContext: state.agentContext,
-        runtime: state.runtime,
         transferEnvelopes,
       }),
     ],
@@ -572,7 +572,7 @@ async function finalizeToolExecution(state) {
   });
 }
 
-export async function executeToolCall(options = {}) {
+export async function executeToolCall(options) {
   const state = createToolCallExecutionState(options);
   if (!state.tool) return completeMissingTool(state);
   await runToolHook(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
@@ -585,20 +585,14 @@ export async function executeToolCall(options = {}) {
   return finalizeToolExecution(state);
 }
 
-function recordOrEmpty(value) {
-  return isPlainObject(value) ? value : {};
-}
-
-function createTurnToolExecutionContext(options = {}) {
-  const call = recordOrEmpty(options.call);
-  const runtime = recordOrEmpty(options.runtime);
+function createTurnToolExecutionContext({ call, runtime, turn, abortSignal }) {
   return {
     call,
     runtime,
-    eventListener: options.eventListener || null,
-    turn: Number(options.turn || 1),
+    eventListener: runtime.eventListener,
+    turn,
     toolCallId: text(call.id),
-    abortSignal: toolAbortSignal({ runtime }),
+    abortSignal,
   };
 }
 
@@ -607,7 +601,7 @@ function transferEnvelopeEventFields(result = {}) {
   return transferEnvelopes.length ? { transferEnvelopes } : {};
 }
 
-export async function executeToolCallInTurn(options = {}) {
+export async function executeToolCallInTurn(options) {
   const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
     createTurnToolExecutionContext(options);
   const initialRiskAssessment = createToolRiskAssessment(call);
@@ -635,7 +629,7 @@ export async function executeToolCallInTurn(options = {}) {
   return result;
 }
 
-function rejectedToolCallResult({ call = {}, error = null, abortSignal = null } = {}) {
+function rejectedToolCallResult({ call, error, abortSignal }) {
   const riskAssessment = createToolRiskAssessment(call);
   const aborted = isAbortError(error, abortSignal);
   const stopType = aborted ? resolveAbortStopType(error, abortSignal) : "";
@@ -662,7 +656,7 @@ function rejectedToolCallResult({ call = {}, error = null, abortSignal = null } 
   };
 }
 
-export async function settleToolCallInTurn(options = {}) {
+export async function settleToolCallInTurn(options) {
   const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
     createTurnToolExecutionContext(options);
   try {

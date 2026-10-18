@@ -12,6 +12,7 @@ const email = "alice@example.com";
 
 function runtime(sanitizeOutput) {
   return {
+    abortSignal: new AbortController().signal,
     runConfig: {
       messageId: "message-sanitize-output",
       turnScopeId: "turn-sanitize-output",

@@ -35,7 +35,7 @@ export function createMockBotHookManager() {
       listeners.set(text(point), { handler, options });
       return () => listeners.delete(text(point));
     },
-    async emit(point, payload) {
+    async emit(point, payload, invocation) {
       emits.push({ point: text(point), payload });
       if (text(point) === HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE) {
         return {
@@ -51,7 +51,7 @@ export function createMockBotHookManager() {
       if (!record || typeof record.handler !== "function") {
         return { outcomes: [], failures: [] };
       }
-      const result = await record.handler(payload || {});
+      const result = await record.handler(payload || {}, invocation);
       return { outcomes: [{ status: "ok", value: result }], failures: [] };
     },
   };
@@ -375,13 +375,17 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   return target;
 }
 
+export function createTestHookInvocation() {
+  return { signal: new AbortController().signal };
+}
+
 export function getBeforeDispatch(hookManager) {
   const beforeDispatch = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(beforeDispatch?.handler);
   return {
     ...beforeDispatch,
-    handler(context = {}) {
-      return beforeDispatch.handler(installTurnMessageEventRuntimeFixture(context));
+    handler(context, invocation) {
+      return beforeDispatch.handler(installTurnMessageEventRuntimeFixture(context), invocation);
     },
   };
 }
@@ -393,7 +397,10 @@ export async function runWorkflowHook({ options = {}, context = {} } = {}) {
     config: { enabled: true, mode: "on", ...options },
   });
   const ctx = createBaseContext(context);
-  const dispatchOutcome = await getBeforeDispatch(hookManager).handler(ctx);
+  const dispatchOutcome = await getBeforeDispatch(hookManager).handler(
+    ctx,
+    createTestHookInvocation(),
+  );
   return { hookManager, ctx, dispatchOutcome, agentResult: dispatchOutcome?.result };
 }
 

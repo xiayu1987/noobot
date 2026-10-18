@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
 import { tToolManual } from "../../src/tools/core/tool-schema-i18n.js";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { isNativeScriptExecutionResult } from "../../src/tools/execution/native-script-ipc.js";
 import {
   NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
@@ -114,14 +114,14 @@ test("execute_native_script manuals expose the authoritative static policy", () 
   const manuals = [
     [
       tToolManual(
-        createRuntimeContext({ runConfig: { locale: "en-US" } }),
+        createTestRuntimeContext({ runConfig: { locale: "en-US" } }),
         "execute_native_script",
       ),
       /zero execution/,
     ],
     [
       tToolManual(
-        createRuntimeContext({ runConfig: { locale: "zh-CN" } }),
+        createTestRuntimeContext({ runConfig: { locale: "zh-CN" } }),
         "execute_native_script",
       ),
       /零执行/,

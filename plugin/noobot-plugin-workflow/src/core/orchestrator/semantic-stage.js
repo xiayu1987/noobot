@@ -13,6 +13,7 @@ import { text } from "@noobot/shared/value";
 export async function runSemanticResolutionStage({
   options = {},
   ctx = {},
+  signal,
   sourceText = "",
   phaseTracker,
 } = {}) {
@@ -23,10 +24,10 @@ export async function runSemanticResolutionStage({
     ctx,
     event: "workflow_semantic_resolution_started",
   });
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
 
-  const semanticResolution = await resolveSemanticText({ options, ctx, sourceText });
-  throwIfWorkflowAborted(ctx);
+  const semanticResolution = await resolveSemanticText({ options, ctx, signal, sourceText });
+  throwIfWorkflowAborted(signal);
 
   const semanticResolutionMeta = {
     traceCount: Number(semanticResolution?.traceCount || 0),

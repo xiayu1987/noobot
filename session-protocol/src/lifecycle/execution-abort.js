@@ -17,6 +17,13 @@ const EXECUTION_ABORT_TYPES = new Set(Object.values(EXECUTION_ABORT_TYPE));
 
 const EXECUTION_ABORTED = "execution_aborted";
 
+export function requireAbortSignal(value, consumer) {
+  if (!(value instanceof AbortSignal)) {
+    throw new TypeError(`${consumer} requires an AbortSignal`);
+  }
+  return value;
+}
+
 function structuredAbortReason(value) {
   if (!isObjectLike(value)) return null;
   const type = clean(value.type);
@@ -95,7 +102,7 @@ export function resolveUserStopPayload({ abortSignal = null } = {}) {
   return stopPayload;
 }
 
-function createExecutionAbortError({ abortSignal = null } = {}) {
+function createExecutionAbortError({ abortSignal }) {
   const reason = resolveExecutionAbortReason({ abortSignal });
   const error = new Error(clean(reason?.reason) || clean(reason?.type) || EXECUTION_ABORTED);
   error.name = "AbortError";
@@ -104,22 +111,21 @@ function createExecutionAbortError({ abortSignal = null } = {}) {
   return error;
 }
 
-export function assertExecutionNotAborted({ abortSignal = null } = {}) {
-  if (!abortSignal?.aborted) return;
+export function assertExecutionNotAborted({ abortSignal }) {
+  if (!requireAbortSignal(abortSignal, "assertExecutionNotAborted").aborted) return;
   throw createExecutionAbortError({ abortSignal });
 }
 
-export function raceExecutionAbort(promise, { abortSignal = null } = {}) {
-  if (!abortSignal || typeof abortSignal.addEventListener !== "function") return promise;
-  if (abortSignal.aborted) {
+export function raceExecutionAbort(promise, { abortSignal }) {
+  if (requireAbortSignal(abortSignal, "raceExecutionAbort").aborted) {
     return Promise.reject(createExecutionAbortError({ abortSignal }));
   }
-  let onAbort = null;
+  let onAbort;
   const abortPromise = new Promise((_, reject) => {
     onAbort = () => reject(createExecutionAbortError({ abortSignal }));
     abortSignal.addEventListener("abort", onAbort, { once: true });
   });
   return Promise.race([promise, abortPromise]).finally(() => {
-    if (onAbort) abortSignal.removeEventListener?.("abort", onAbort);
+    abortSignal.removeEventListener("abort", onAbort);
   });
 }

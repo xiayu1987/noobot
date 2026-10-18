@@ -523,11 +523,19 @@ test("file tools reject direct and nested symbolic-link escapes", async () => {
   );
 
   await assert.rejects(
-    () => readTool.invoke({ filePath: "direct.txt", riskLevel: "low" }),
+    () =>
+      readTool.invoke(
+        { filePath: "direct.txt", riskLevel: "low" },
+        { signal: new AbortController().signal },
+      ),
     /scope|范围|允许|path/i,
   );
   await assert.rejects(
-    () => readTool.invoke({ filePath: "nested/escape/secret.txt", riskLevel: "low" }),
+    () =>
+      readTool.invoke(
+        { filePath: "nested/escape/secret.txt", riskLevel: "low" },
+        { signal: new AbortController().signal },
+      ),
     /scope|范围|允许|path/i,
   );
 });
@@ -543,7 +551,11 @@ test("file tools classify a broken symbolic link as out of scope", async () => {
   );
 
   await assert.rejects(
-    () => readTool.invoke({ filePath: "broken-link.txt", riskLevel: "low" }),
+    () =>
+      readTool.invoke(
+        { filePath: "broken-link.txt", riskLevel: "low" },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error?.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error?.details?.reason, "symbolic_link_not_allowed");
@@ -565,7 +577,10 @@ test("write_file rejects a symbolic-link parent escape", async () => {
 
   await assert.rejects(
     () =>
-      writeTool.invoke({ filePath: "escape/created.txt", content: "blocked", riskLevel: "low" }),
+      writeTool.invoke(
+        { filePath: "escape/created.txt", content: "blocked", riskLevel: "low" },
+        { signal: new AbortController().signal },
+      ),
     /scope|范围|允许|path/i,
   );
   await assert.rejects(() => fs.access(path.join(outsidePath, "created.txt")));
@@ -579,20 +594,26 @@ test("read_file: 默认返回行号且可关闭行号", async () => {
   assert.ok(tool);
 
   const withLines = parseToolResult(
-    await tool.invoke({ riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3 }),
+    await tool.invoke(
+      { riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3 },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(withLines.ok, true);
   assert.equal(withLines.content, "2 | b\n3 | c");
   assert.equal(withLines.includeLineNumbers, true);
 
   const withoutLines = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      filePath: "lines.txt",
-      startLine: 2,
-      endLine: 3,
-      includeLineNumbers: false,
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        filePath: "lines.txt",
+        startLine: 2,
+        endLine: 3,
+        includeLineNumbers: false,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(withoutLines.ok, true);
   assert.equal(withoutLines.content, "b\nc");
@@ -608,12 +629,15 @@ test("read_file: 起始行超过 EOF 时返回明确范围错误而不是最后�
 
   await assert.rejects(
     () =>
-      tool.invoke({
-        riskLevel: "low",
-        filePath: "lines.txt",
-        startLine: 20,
-        endLine: 20,
-      }),
+      tool.invoke(
+        {
+          riskLevel: "low",
+          filePath: "lines.txt",
+          startLine: 20,
+          endLine: 20,
+        },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error?.code, "RECOVERABLE_LINE_RANGE_OUT_OF_BOUNDS");
       assert.deepEqual(error?.details, {
@@ -630,12 +654,15 @@ test("read_file: 起始行超过 EOF 时返回明确范围错误而不是最后�
 
   await assert.rejects(
     () =>
-      tool.invoke({
-        riskLevel: "low",
-        filePath: "lines.txt",
-        startLine: 3,
-        endLine: 2,
-      }),
+      tool.invoke(
+        {
+          riskLevel: "low",
+          filePath: "lines.txt",
+          startLine: 3,
+          endLine: 2,
+        },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error?.code, "RECOVERABLE_LINE_RANGE_OUT_OF_BOUNDS");
       assert.equal(error?.details?.field, "endLine");
@@ -654,7 +681,10 @@ test("read_file: 默认读取行数阈值为 1000", async () => {
   assert.ok(tool);
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", filePath: "long.txt", includeLineNumbers: false }),
+    await tool.invoke(
+      { riskLevel: "low", filePath: "long.txt", includeLineNumbers: false },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.ok, true);
@@ -684,14 +714,17 @@ test("read_file: endLine 超过 EOF 但内容完整时不标记 truncated", asyn
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
 
   const result = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      filePath: "/workspace/short.txt",
-      startLine: 1,
-      endLine: 10,
-      maxLines: 10,
-      includeLineNumbers: false,
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        filePath: "/workspace/short.txt",
+        startLine: 1,
+        endLine: 10,
+        maxLines: 10,
+        includeLineNumbers: false,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.content, "line01\nline02\nline03");

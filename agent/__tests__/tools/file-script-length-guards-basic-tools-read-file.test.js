@@ -43,11 +43,14 @@ test("read_file: reads a model attachment through its canonical identity", async
   const readTool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
 
   const result = parseToolResult(
-    await readTool.invoke({
-      riskLevel: "low",
-      filePath: "attachment:v1:s-1/model/native-output-1",
-      includeLineNumbers: false,
-    }),
+    await readTool.invoke(
+      {
+        riskLevel: "low",
+        filePath: "attachment:v1:s-1/model/native-output-1",
+        includeLineNumbers: false,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.ok, true);
@@ -74,11 +77,14 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   assert.ok(regularReadTool);
   await assert.rejects(
     () =>
-      regularReadTool.invoke({
-        riskLevel: "low",
-        filePath: outsidePath,
-        includeLineNumbers: false,
-      }),
+      regularReadTool.invoke(
+        {
+          riskLevel: "low",
+          filePath: outsidePath,
+          includeLineNumbers: false,
+        },
+        { signal: new AbortController().signal },
+      ),
     /路径超出允许范围|path out of scope/,
   );
 
@@ -93,11 +99,14 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   const superReadTool = superTools.find((item) => item?.name === "read_file");
   assert.ok(superReadTool);
   const result = parseToolResult(
-    await superReadTool.invoke({
-      riskLevel: "low",
-      filePath: outsidePath,
-      includeLineNumbers: false,
-    }),
+    await superReadTool.invoke(
+      {
+        riskLevel: "low",
+        filePath: outsidePath,
+        includeLineNumbers: false,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(result.content, "outside\ncontent");
@@ -119,7 +128,11 @@ test("read_file: 越界错误不暴露宿主 allowedRoots", async () => {
   assert.ok(readTool);
 
   await assert.rejects(
-    () => readTool.invoke({ riskLevel: "low", filePath: outsidePath, includeLineNumbers: false }),
+    () =>
+      readTool.invoke(
+        { riskLevel: "low", filePath: outsidePath, includeLineNumbers: false },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.scope, "workspace");
@@ -149,7 +162,11 @@ test("read_file: 沙箱内相对路径穿越保留 workspace 视角", async () =
   assert.ok(readTool);
 
   await assert.rejects(
-    () => readTool.invoke({ riskLevel: "low", filePath: "../outside.txt" }),
+    () =>
+      readTool.invoke(
+        { riskLevel: "low", filePath: "../outside.txt" },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.pathView, "workspace-relative");
@@ -160,7 +177,11 @@ test("read_file: 沙箱内相对路径穿越保留 workspace 视角", async () =
   );
 
   await assert.rejects(
-    () => readTool.invoke({ riskLevel: "low", filePath: "/tmp/container-private.txt" }),
+    () =>
+      readTool.invoke(
+        { riskLevel: "low", filePath: "/tmp/container-private.txt" },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.pathView, "sandbox-absolute");
@@ -182,7 +203,11 @@ test("read_file: directory returns the canonical not-a-file error", async () => 
   assert.ok(readTool);
 
   await assert.rejects(
-    () => readTool.invoke({ riskLevel: "low", filePath: "reports" }),
+    () =>
+      readTool.invoke(
+        { riskLevel: "low", filePath: "reports" },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_NOT_FILE");
       assert.deepEqual(error.details?.path, { view: "workspace", path: "reports" });
@@ -222,11 +247,14 @@ test("read_file: 相对路径固定基于用户 workspace", async () => {
   assert.ok(readTool);
 
   const result = parseToolResult(
-    await readTool.invoke({
-      riskLevel: "low",
-      filePath: "noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue",
-      includeLineNumbers: false,
-    }),
+    await readTool.invoke(
+      {
+        riskLevel: "low",
+        filePath: "noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+        includeLineNumbers: false,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(result.content, "navigator");
@@ -264,11 +292,14 @@ test("read_file: host 模式拒绝未配置的 /project 沙箱路径", async () 
 
   await assert.rejects(
     () =>
-      readTool.invoke({
-        riskLevel: "low",
-        filePath: "/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
-        includeLineNumbers: false,
-      }),
+      readTool.invoke(
+        {
+          riskLevel: "low",
+          filePath: "/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+          includeLineNumbers: false,
+        },
+        { signal: new AbortController().signal },
+      ),
     /sandbox|沙箱/i,
   );
 });

@@ -75,8 +75,8 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
           dialogProcessId: "d1",
           userMessage: "请执行一个工作流",
           runConfig: { locale: "zh-CN" },
-          abortSignal: abortController.signal,
         }),
+        { signal: abortController.signal },
       ),
     (error) => {
       assert.equal(error?.name, "AbortError");
@@ -143,10 +143,9 @@ test("workflow waits for every parallel node sub-session to stop before planner 
     dialogProcessId: "d1",
     userMessage: "请并行执行工作流",
     runConfig: { locale: "zh-CN" },
-    abortSignal: abortController.signal,
   });
   await assert.rejects(
-    () => beforeDispatch.handler(context),
+    () => beforeDispatch.handler(context, { signal: abortController.signal }),
     (error) => error?.name === "AbortError",
   );
 

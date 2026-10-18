@@ -12,7 +12,7 @@ export async function runWeeklySummaryIfNeeded({
   invokeModel = null,
   promptI18n = {},
   fields,
-  abortSignal = null,
+  abortSignal,
   basePath = "",
   listDateDirs,
   mergeDomainText,

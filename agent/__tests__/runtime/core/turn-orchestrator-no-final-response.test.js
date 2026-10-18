@@ -41,14 +41,22 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
     activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
   });
   const systemRuntime = { sessionId: "session-1", turnScopeId: "scope-1" };
+  const events = [];
+  const promptedListeners = [];
   const runtime = {
     systemRuntime,
     currentTurnMessages,
     sealUserInterjectionQueueIfEmpty: () => true,
     consumeUserInterjections: async () => [],
+    eventListener: {
+      onEvent: (event) => {
+        events.push(event);
+        if (event?.event === "no_final_response_retry_prompted")
+          promptedListeners.forEach((fn) => fn(event));
+      },
+    },
+    abortSignal: null,
   };
-  const events = [];
-  const promptedListeners = [];
   const observedInputs = [];
   let invocation = 0;
   const run = createTurnOrchestrator({
@@ -97,14 +105,6 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
       modelState: {
         runtime,
         agentContext: createTestAgentExecutionScope(runtime),
-        eventListener: {
-          onEvent: (event) => {
-            events.push(event);
-            if (event?.event === "no_final_response_retry_prompted")
-              promptedListeners.forEach((fn) => fn(event));
-          },
-        },
-        abortSignal: null,
       },
       loopState: {
         tools: [{}],

@@ -17,7 +17,7 @@ import {
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { persistSession } from "../helpers/runtime-events-env.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 test("prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
@@ -91,16 +91,11 @@ test("stopped snapshot resume degrades to a normal turn when the optional snapsh
 test("stopped snapshot resume preserves history and incremental block boundaries", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = {};
-  engine.agentRuntimeFacade = {
-    buildRunTurnContext(context) {
-      return context;
-    },
-  };
   const captured = [];
   const contextBuilder = {
     async buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
-      return createTestAgentExecutionScope(createRuntimeContext());
+      return createTestAgentExecutionScope(createTestRuntimeContext());
     },
   };
   const history = [{ type: "human", content: "history", dialogProcessId: "old" }];
@@ -174,11 +169,6 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
       };
     },
   };
-  engine.agentRuntimeFacade = {
-    buildRunTurnContext(context) {
-      return context;
-    },
-  };
   const captured = [];
   const contextBuilder = {
     attachmentService: {
@@ -191,7 +181,7 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     },
     async buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
-      return createTestAgentExecutionScope(createRuntimeContext());
+      return createTestAgentExecutionScope(createTestRuntimeContext());
     },
   };
 
@@ -314,11 +304,6 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
       return { messages: [] };
     },
   };
-  engine.agentRuntimeFacade = {
-    buildRunTurnContext(context) {
-      return context;
-    },
-  };
   const contextBuilder = {
     attachmentService: {
       async ingest() {
@@ -326,7 +311,7 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
       },
     },
     async buildAgentContext() {
-      return createTestAgentExecutionScope(createRuntimeContext({ systemRuntime }));
+      return createTestAgentExecutionScope(createTestRuntimeContext({ systemRuntime }));
     },
   };
 

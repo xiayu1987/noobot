@@ -10,7 +10,7 @@ import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
 
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import {
   TASK_SUMMARY_PROTOCOL_VERSION,
   createTaskSummaryReceipt,
@@ -23,7 +23,7 @@ import {
 
 test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
   const messages = buildContextMessages(
-    createTestAgentExecutionScope(createRuntimeContext(), {
+    createTestAgentExecutionScope(createTestRuntimeContext(), {
       messageBlocks: {
         system: [],
         history: [
@@ -89,7 +89,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
   const summary = createTaskSummaryReceipt(parseTaskSummaryContent(summaryContent));
   const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
   const messages = buildContextMessages(
-    createTestAgentExecutionScope(createRuntimeContext(), {
+    createTestAgentExecutionScope(createTestRuntimeContext(), {
       messageBlocks: {
         system: [],
         history: [

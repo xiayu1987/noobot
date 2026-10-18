@@ -10,9 +10,9 @@ import { createExecutionAbortReason, EXECUTION_ABORT_TYPE } from "@noobot/sessio
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../../src/core/hooks/runtime.js";
 
 test("plain errors mentioning abort are not workflow aborts", () => {
-  const ctx = { abortSignal: new AbortController().signal };
-  assert.equal(isWorkflowAbortError(new Error("upstream request aborted"), ctx), false);
-  assert.equal(isWorkflowAbortError(new Error("dialog stopped by user"), ctx), false);
+  const { signal } = new AbortController();
+  assert.equal(isWorkflowAbortError(new Error("upstream request aborted"), signal), false);
+  assert.equal(isWorkflowAbortError(new Error("dialog stopped by user"), signal), false);
 });
 
 test("structured abort errors and aborted signals are workflow aborts", () => {
@@ -20,13 +20,10 @@ test("structured abort errors and aborted signals are workflow aborts", () => {
     type: EXECUTION_ABORT_TYPE.USER_STOP,
     reason: "user stop action",
   });
-  assert.equal(isWorkflowAbortError(reason, {}), true);
+  assert.equal(isWorkflowAbortError(reason, new AbortController().signal), true);
   const controller = new AbortController();
   controller.abort(reason);
-  assert.equal(
-    isWorkflowAbortError(new Error("node failed"), { abortSignal: controller.signal }),
-    true,
-  );
+  assert.equal(isWorkflowAbortError(new Error("node failed"), controller.signal), true);
 });
 
 test("throwIfWorkflowAborted uses the structured abort reason text", () => {
@@ -35,7 +32,7 @@ test("throwIfWorkflowAborted uses the structured abort reason text", () => {
     createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT, reason: "run timeout" }),
   );
   assert.throws(
-    () => throwIfWorkflowAborted({ abortSignal: controller.signal }),
+    () => throwIfWorkflowAborted(controller.signal),
     (error) => error.name === "AbortError" && error.message === "run timeout",
   );
 });

@@ -4,52 +4,72 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
-import { createGuardViolations } from "./lib/guard-violations.mjs";
+import { defineCheck, emptyRuleMeasurements, runCheckWhenMain } from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addPatternLineHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-const guard = createGuardViolations({ root: ROOT, label: "agent-transport-protocol-boundary" });
-const { violations } = guard;
-const TARGET_DIRS = [
+const SCAN = Object.freeze({ extensions: [".js", ".mjs", ".vue"], includeTests: true });
+const TRANSPORT_ROOTS = Object.freeze([
   "client/noobot-chat/src/modules/chat",
   "client/noobot-chat/src/infrastructure/websocket",
   "service/services",
   "service/ws",
   "agent-proxy/src",
-  "agent/src",
-];
-const TRANSPORT_DIRS = TARGET_DIRS.filter((directory) => directory !== "agent/src");
-
-const sourceFiles = createRelativeSourceCollector({
-  root: ROOT,
-  extensions: new Set([".js", ".mjs", ".vue"]),
-});
-
-const allFiles = [...new Set((await Promise.all(TARGET_DIRS.map(sourceFiles))).flat())];
-const transportFiles = new Set((await Promise.all(TRANSPORT_DIRS.map(sourceFiles))).flat());
-const commonForbidden = [
+]);
+const RUNTIME_ROOTS = Object.freeze([...TRANSPORT_ROOTS, "agent/src"]);
+const RUN_CONFIG_COMPATIBILITY = Object.freeze([
   [/\bpayload\?*\.config\b/, "payload.config compatibility read"],
   [/\brunConfig\?*\.config\b/, "runConfig.config compatibility read"],
   [/\bnormalizeRunConfig\s*\(/, "normalizeRunConfig compatibility adapter"],
-];
-const legacyAgentActions = /\baction\s*:\s*["'](?:stop|continue|interaction_response)["']/;
+]);
+const LEGACY_AGENT_ACTION = /\baction\s*:\s*["'](?:stop|continue|interaction_response)["']/;
 
-for (const file of allFiles) {
-  const source = await readFile(path.join(ROOT, file), "utf8");
-  const lines = source.split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    for (const [pattern, label] of commonForbidden) {
-      if (pattern.test(line)) violations.push(`${file}:${index + 1}: ${label}`);
+const filesUnder = (directories) =>
+  getFirstPartyFilesUnder(directories, { ...SCAN, repositoryRoot });
+
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  const transportFiles = new Set(await filesUnder(TRANSPORT_ROOTS));
+  for (const file of await filesUnder(RUNTIME_ROOTS)) {
+    const source = await readRepositoryText(file);
+    for (const [pattern, message] of RUN_CONFIG_COMPATIBILITY) {
+      addPatternLineHits({
+        measurement: measured.runConfigCompatibility,
+        file,
+        source,
+        pattern,
+        message,
+      });
     }
-    if (transportFiles.has(file) && legacyAgentActions.test(line)) {
-      violations.push(
-        `${file}:${index + 1}: legacy Agent action; use @noobot/agent-transport-protocol`,
-      );
-    }
+    if (!transportFiles.has(file)) continue;
+    addPatternLineHits({
+      measurement: measured.legacyAgentAction,
+      file,
+      source,
+      pattern: LEGACY_AGENT_ACTION,
+      message: "legacy Agent action literal",
+    });
   }
+  return measured;
 }
 
-guard.report();
+export const CHECK = defineCheck({
+  id: "agent-transport-protocol-boundary",
+  description: "Run configuration and Agent actions travel through agent-transport-protocol",
+  rules: {
+    runConfigCompatibility: {
+      description: "Nested run configuration compatibility reads and adapters stay removed",
+      hint: "read run preferences from the transport protocol message, not payload.config",
+    },
+    legacyAgentAction: {
+      description: "Transport layers send Agent actions through the protocol constants",
+      hint: "use the action constants from @noobot/agent-transport-protocol",
+    },
+  },
+  exemptions: [],
+  baseline: { runConfigCompatibility: 0, legacyAgentAction: 0, exemptions: 0 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

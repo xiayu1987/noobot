@@ -550,7 +550,7 @@ export function createNativeScriptTool({ agentContext }) {
           cwd: taskRoot,
           env: buildRestrictedProcessEnv({ home: taskRoot, temp: roots.tempRoot }),
           timeoutMs: BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs,
-          abortSignal: toolConfig?.signal || null,
+          abortSignal: toolConfig.signal,
           ipcHandlers: createNativeScriptIpcHandlers({
             runtime,
             agentContext,

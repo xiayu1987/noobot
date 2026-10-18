@@ -16,8 +16,8 @@ export function resolveModelSpecByAlias({ alias, globalConfig, userConfig }) {
   return byAliasWithUser(alias, globalConfig, userConfig);
 }
 
-export function resolveModelSpecByName({ name, modelName, globalConfig, userConfig }) {
-  const targetName = text(modelName || name);
+export function resolveModelSpecByName({ modelName, globalConfig, userConfig }) {
+  const targetName = text(modelName);
   if (!targetName) return null;
   return resolveModelSpecByAlias({
     alias: targetName,
@@ -26,8 +26,8 @@ export function resolveModelSpecByName({ name, modelName, globalConfig, userConf
   });
 }
 
-export function resolveModelSpecOrConfiguredDefault({ name, modelName, globalConfig, userConfig }) {
-  const requestedModel = text(modelName || name);
+export function resolveModelSpecOrConfiguredDefault({ modelName, globalConfig, userConfig }) {
+  const requestedModel = text(modelName);
   if (!requestedModel) return resolveDefaultModelSpec({ globalConfig, userConfig });
   const requestedModelSpec = resolveModelSpecByName({
     modelName: requestedModel,

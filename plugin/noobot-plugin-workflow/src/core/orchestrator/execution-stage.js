@@ -13,17 +13,19 @@ export async function runWorkflowExecutionStage({
   hookManager,
   options = {},
   ctx = {},
+  signal,
   semantic = {},
   workflowRunId = "",
   planningNodeSessions = [],
   phaseTracker,
 } = {}) {
   phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
   const { execution, nodeAgentRuns, nodeStateSnapshot, instanceId } = await runWorkflowExecution({
     hookManager,
     options,
     ctx,
+    signal,
     semantic,
     workflowRunId,
     planningNodeSessions,

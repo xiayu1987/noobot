@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -40,7 +40,7 @@ export function createRunner({
   getTurnSummaryCheckpointState = async () => null,
   appendAgentMessages = async () => [],
 }) {
-  const defaultRuntime = runtime || createRuntimeContext();
+  const defaultRuntime = runtime || createTestRuntimeContext();
   let authorityEventSequence = 0;
   const sessionManager = {
     async commitMessageEvent({
@@ -137,9 +137,9 @@ export function createRunner({
             const agentContext = createTestAgentExecutionScope(defaultRuntime, {
               identity: { dialogProcessId: "dialog-1", turnScopeId: "turn-default" },
             });
-            return { agentContext, runtimeAgentContext: agentContext };
+            return { agentContext, userMessageAttachments: [] };
           })();
-      const preparedRuntime = prepared?.runtimeAgentContext?.bindings?.runtime;
+      const preparedRuntime = prepared.agentContext.bindings.runtime;
       if (isObjectLike(preparedRuntime)) {
         preparedRuntime.sessionManager = preparedRuntime.sessionManager || sessionManager;
       }

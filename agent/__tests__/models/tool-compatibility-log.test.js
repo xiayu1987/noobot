@@ -42,11 +42,8 @@ test("appendToolCompatibilityLog writes file under workspace root", async () => 
     modelState: {
       activeModelAlias: "codex",
       activeModelName: "gpt-5.3-codex",
-      globalConfig: {
-        workspaceRoot: root,
-      },
     },
-    runtime: {},
+    runtime: { globalConfig: { workspaceRoot: root } },
     event: "tool_binding_adapter_dropped_tools",
     tools: ["invalid tool"],
   });

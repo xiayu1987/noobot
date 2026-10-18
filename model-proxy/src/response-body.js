@@ -22,7 +22,7 @@ async function decodeBodyByEncoding(buffer, encoding) {
     if (enc.includes("deflate")) return await inflate(buffer);
     if (enc.includes("br")) return await brotliDecompress(buffer);
     return buffer;
-  } catch (_) {
+  } catch {
     return buffer;
   }
 }

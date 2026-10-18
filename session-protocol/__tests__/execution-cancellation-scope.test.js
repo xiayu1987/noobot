@@ -5,10 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  createExecutionCancellationScope,
-  resolveExecutionCancellationScope,
-} from "../src/lifecycle/execution-cancellation-scope.js";
+import { createExecutionCancellationScope } from "../src/lifecycle/execution-cancellation-scope.js";
 
 test("scope runs registered disposers once when the bound signal aborts", () => {
   const controller = new AbortController();
@@ -29,7 +26,10 @@ test("scope exposes the bound signal as its only cancellation source", () => {
   const controller = new AbortController();
   const scope = createExecutionCancellationScope({ abortSignal: controller.signal });
   assert.equal(scope.abortSignal, controller.signal);
-  assert.equal(createExecutionCancellationScope().abortSignal, null);
+  assert.throws(
+    () => createExecutionCancellationScope({}),
+    /createExecutionCancellationScope requires an AbortSignal/,
+  );
 });
 
 test("disposer registered after abort runs immediately so resources never leak", () => {
@@ -89,11 +89,4 @@ test("unregister handle drops the disposer so completed work is not closed twice
   assert.equal(scope.size, 0);
   controller.abort();
   assert.equal(closed, 0);
-});
-
-test("missing scope resolves to a no-op scope so callers need no branching", () => {
-  const scope = resolveExecutionCancellationScope(null);
-  assert.equal(typeof scope.register, "function");
-  assert.equal(scope.abortSignal, null);
-  assert.equal(typeof scope.register(() => {}), "function");
 });

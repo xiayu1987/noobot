@@ -16,7 +16,7 @@ function updateModelState(modelState, spec, shouldSwitch) {
   modelState.activeModelAlias = text(spec?.alias);
   modelState.activeModelSpec = spec && typeof spec === "object" ? { ...spec } : null;
   if (shouldSwitch) {
-    emitEvent(modelState.eventListener, "model_switched", {
+    emitEvent(modelState.runtime.eventListener, "model_switched", {
       alias: spec?.alias || "",
       model: spec?.model || "",
     });
@@ -24,7 +24,8 @@ function updateModelState(modelState, spec, shouldSwitch) {
 }
 
 export function resolveLlmForTurn(modelState) {
-  const { runtime, globalConfig, userConfig, defaultModelSpec } = modelState;
+  const { runtime, defaultModelSpec } = modelState;
+  const { globalConfig, userConfig } = runtime;
   const runtimeModel = text(runtime?.runtimeModel);
 
   let targetSpec = null;

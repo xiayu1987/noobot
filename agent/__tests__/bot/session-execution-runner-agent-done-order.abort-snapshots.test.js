@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createModelContext } from "@noobot/context-protocol";
 import {
   assert,
@@ -107,7 +107,7 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   const events = [];
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-runner-stop-snapshot-"));
   await persistSession(workspaceRoot, "u1", "session-used");
-  const runtime = Object.assign(createRuntimeContext(), {
+  const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
@@ -197,7 +197,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
     path.join(os.tmpdir(), "noobot-runner-plain-user-stop-snapshot-"),
   );
   await persistSession(workspaceRoot, "u1", "session-used");
-  const runtime = Object.assign(createRuntimeContext(), {
+  const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
@@ -268,7 +268,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   );
   await persistSession(workspaceRoot, "u1", "session-used");
   const abortController = new AbortController();
-  const runtime = Object.assign(createRuntimeContext(), {
+  const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
@@ -360,7 +360,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
       incremental: [{ type: "human", content: "hello" }],
     },
   });
-  const runtime = Object.assign(createRuntimeContext(), {
+  const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
     activeMessageContext: modelContext,
     stoppedModelMessageSnapshotCandidate: {
@@ -453,7 +453,7 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
   const runner = createRunner({
     callOrder,
     eventListener,
-    runtime: Object.assign(createRuntimeContext(), {
+    runtime: Object.assign(createTestRuntimeContext(), {
       stoppedModelMessageSnapshotCandidate: {
         userId: "u1",
         sessionId: "session-used",

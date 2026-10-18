@@ -89,14 +89,12 @@ function createModelState(llm, defaultModelSpec = null) {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    eventListener: null,
     runtime: {
+      abortSignal: new AbortController().signal,
       systemRuntime: {
         config: { safeConfirm: true },
       },
     },
-    globalConfig: {},
-    userConfig: {},
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,

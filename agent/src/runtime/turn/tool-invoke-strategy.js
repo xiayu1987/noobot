@@ -19,7 +19,6 @@ export function createBoundLlmToolChoiceInvoker({
   messages,
   modelState,
   runtime,
-  abortSignal,
 }) {
   return async function invokeBoundLlmWithToolChoice(
     toolChoiceOverride = "",
@@ -44,7 +43,7 @@ export function createBoundLlmToolChoiceInvoker({
     );
     const boundToolOverrides = resolveBoundToolModelRequestOverrides(effectiveModelSpec);
     const streaming = runtime?.runConfig?.streaming === true;
-    const modelActivity = createModelActivity(modelState?.eventListener, runtime, {
+    const modelActivity = createModelActivity(runtime.eventListener, runtime, {
       activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
       activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       purpose: invokeMode,
@@ -57,7 +56,7 @@ export function createBoundLlmToolChoiceInvoker({
       options: {
         streaming,
         callbacks: modelActivity.callbacks,
-        signal: abortSignal,
+        signal: runtime.abortSignal,
         invoke: {
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
           ...nonThinkingOverrides,

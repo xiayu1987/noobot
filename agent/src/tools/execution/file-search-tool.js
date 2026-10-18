@@ -35,6 +35,7 @@ import {
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-tool-shared.js";
 import { text } from "@noobot/shared/value";
+import { assertNotAborted, isAbortError } from "../../shared/utils/error-utils.js";
 
 function buildSearchSchema(runtime) {
   return z.object({
@@ -137,8 +138,7 @@ async function collectFallbackMatches({
   });
   const matches = [];
   for (const file of files) {
-    if (abortSignal?.aborted)
-      throw abortSignal.reason || new DOMException("The operation was aborted", "AbortError");
+    assertNotAborted(abortSignal);
     if (matches.length >= maxCount) break;
     let content = "";
     try {
@@ -262,7 +262,8 @@ async function searchFilesSource({
         maxResults: maxCount,
         abortSignal,
       });
-    } catch {
+    } catch (error) {
+      if (isAbortError(error, abortSignal)) throw error;
       result = null;
     }
   }
@@ -295,7 +296,7 @@ async function searchFilesSource({
   });
 }
 
-async function runSearch({ agentContext, runtime, workspaceIo, args }) {
+async function runSearch({ agentContext, runtime, workspaceIo, args, abortSignal }) {
   const {
     source = "files",
     query,
@@ -339,7 +340,7 @@ async function runSearch({ agentContext, runtime, workspaceIo, args }) {
     agentContext,
     runtime,
     workspaceIo,
-    abortSignal: runtime?.abortSignal || null,
+    abortSignal,
     inputPath,
     query: normalizedQuery,
     isRegex,
@@ -357,6 +358,7 @@ export function createSearchTool({ agentContext, runtime, workspaceIo }) {
     metadata: { pathContract: TOOL_PATH_CONTRACTS.fileSearch },
     description: buildFileToolDescription(runtime, "tools.search.description"),
     schema: buildSearchSchema(runtime),
-    func: (args) => runSearch({ agentContext, runtime, workspaceIo, args }),
+    func: (args, _runManager, toolConfig) =>
+      runSearch({ agentContext, runtime, workspaceIo, args, abortSignal: toolConfig.signal }),
   });
 }

@@ -9,6 +9,32 @@ import assert from "node:assert/strict";
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createModelContext } from "@noobot/context-protocol";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
+
+function createSummaryRuntime(currentTurnMessages, commitSummaryCheckpoint) {
+  const runtime = createTestRuntimeContext({
+    runConfig: { turnScopeId: "scope-1" },
+    systemRuntime: { sessionId: "s1", turnScopeId: "scope-1", dialogProcessId: "dialog-1" },
+  });
+  runtime.currentTurnMessages = currentTurnMessages;
+  runtime.commitSummaryCheckpoint = commitSummaryCheckpoint;
+  return bindTestDispatchLifecycle(runtime);
+}
+
+function createSummaryModelState(runtime) {
+  return {
+    runtime,
+    agentContext: createTestAgentExecutionScope(runtime, {
+      identity: {
+        sessionId: runtime.systemRuntime.sessionId,
+        dialogProcessId: runtime.systemRuntime.dialogProcessId,
+        turnScopeId: runtime.runConfig.turnScopeId,
+      },
+    }),
+  };
+}
 
 test("task_summary sends one checkpoint command without mutating messages before commit", async () => {
   const oldSystem = { role: "system", content: "old system" };
@@ -38,19 +64,15 @@ test("task_summary sends one checkpoint command without mutating messages before
   });
   const currentTurnMessages = createCurrentTurnMessagesStore(structuredClone(messages));
   const checkpointCalls = [];
-  const runtime = {
-    systemRuntime: { sessionId: "s1", turnScopeId: "scope-1", dialogProcessId: "dialog-1" },
-    currentTurnMessages,
-    async commitSummaryCheckpoint(payload) {
-      checkpointCalls.push(payload);
-      assert.equal(oldSystem.summarized, undefined);
-      assert.equal(oldCall.summarized, undefined);
-      assert.equal(oldResult.summarized, undefined);
-      assert.equal(summaryCall.summarized, undefined);
-      assert.equal(summaryResult.summarized, undefined);
-      return { committed: true };
-    },
-  };
+  const runtime = createSummaryRuntime(currentTurnMessages, async (payload) => {
+    checkpointCalls.push(payload);
+    assert.equal(oldSystem.summarized, undefined);
+    assert.equal(oldCall.summarized, undefined);
+    assert.equal(oldResult.summarized, undefined);
+    assert.equal(summaryCall.summarized, undefined);
+    assert.equal(summaryResult.summarized, undefined);
+    return { committed: true };
+  });
   let invocation = 0;
   const run = createTurnOrchestrator({
     resolveLlmForTurnFn: () => {},
@@ -84,7 +106,7 @@ test("task_summary sends one checkpoint command without mutating messages before
   });
 
   const result = await run({
-    modelState: { runtime, eventListener: null, abortSignal: null },
+    modelState: createSummaryModelState(runtime),
     loopState: {
       tools: [{}],
       traces: [],
@@ -111,14 +133,10 @@ test("task_summary sends one checkpoint command without mutating messages before
 test("rejected task_summary does not request a checkpoint", async () => {
   const currentTurnMessages = createCurrentTurnMessagesStore([]);
   const checkpointCalls = [];
-  const runtime = {
-    systemRuntime: { sessionId: "s1", turnScopeId: "scope-1", dialogProcessId: "dialog-1" },
-    currentTurnMessages,
-    async commitSummaryCheckpoint(payload) {
-      checkpointCalls.push(payload);
-      return { committed: true };
-    },
-  };
+  const runtime = createSummaryRuntime(currentTurnMessages, async (payload) => {
+    checkpointCalls.push(payload);
+    return { committed: true };
+  });
   let invocation = 0;
   const run = createTurnOrchestrator({
     resolveLlmForTurnFn: () => {},
@@ -152,7 +170,7 @@ test("rejected task_summary does not request a checkpoint", async () => {
   });
 
   const result = await run({
-    modelState: { runtime, eventListener: null, abortSignal: null },
+    modelState: createSummaryModelState(runtime),
     loopState: {
       tools: [{}],
       traces: [],

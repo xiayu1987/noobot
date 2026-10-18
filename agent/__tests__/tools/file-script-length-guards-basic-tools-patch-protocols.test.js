@@ -100,7 +100,10 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
     "",
   ].join("\n");
   const applyResult = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: applyPatch }),
+    await tool.invoke(
+      { riskLevel: "low", format: "apply_patch", patch: applyPatch },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(applyResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
@@ -116,19 +119,25 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
     "",
   ].join("\n");
   const dryRunResult = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      format: "unified_diff",
-      patch: diff,
-      strip: 1,
-      dryRun: true,
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        format: "unified_diff",
+        patch: diff,
+        strip: 1,
+        dryRun: true,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
 
   const diffResult = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    await tool.invoke(
+      { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(diffResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
@@ -154,7 +163,10 @@ test("patch_file: 修改 Windows 文本时保留 BOM、CRLF 和末尾换行", as
     "",
   ].join("\n");
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "apply_patch", patch }),
+    await tool.invoke(
+      { riskLevel: "low", format: "apply_patch", patch },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.ok, true);
@@ -182,7 +194,12 @@ test("patch_file: 默认使用主流 git diff/unified_diff 并兼容 git 元数�
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", patch: gitDiff }));
+  const result = parseToolResult(
+    await tool.invoke(
+      { riskLevel: "low", patch: gitDiff },
+      { signal: new AbortController().signal },
+    ),
+  );
   assert.equal(result.ok, true);
   assert.equal(result.format, "unified_diff");
   assert.equal(
@@ -210,7 +227,10 @@ test("patch_file: unified_diff hunk 行数不准时自动按内容重算", async
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: badCountDiff, strip: 1 }),
+    await tool.invoke(
+      { riskLevel: "low", format: "unified_diff", patch: badCountDiff, strip: 1 },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
@@ -235,7 +255,11 @@ test("patch_file: unified_diff 拒绝 /project 虚拟路径前缀", async () => 
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_INVALID_INPUT");
       assert.equal(error.details?.error, "virtual_relative_path_ambiguous");
@@ -278,7 +302,11 @@ test("patch_file: 超级管理员也不能使用虚拟 project 路径猜测项�
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_INVALID_INPUT");
       assert.equal(error.details?.error, "virtual_relative_path_ambiguous");
@@ -312,14 +340,17 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   ].join("\n");
 
   const dryRunResult = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      format: "unified_diff",
-      patch: diff,
-      strip: 1,
-      root: "noobot",
-      dryRun: true,
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        format: "unified_diff",
+        patch: diff,
+        strip: 1,
+        root: "noobot",
+        dryRun: true,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(dryRunResult.dryRun, true);
@@ -337,13 +368,16 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   );
 
   const result = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      format: "unified_diff",
-      patch: diff,
-      strip: 1,
-      root: "noobot",
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        format: "unified_diff",
+        patch: diff,
+        strip: 1,
+        root: "noobot",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(
@@ -376,13 +410,16 @@ test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async 
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      format: "unified_diff",
-      patch: diff,
-      strip: 1,
-      root: "app\\",
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        format: "unified_diff",
+        patch: diff,
+        strip: 1,
+        root: "app\\",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(result.changes.length, 1);
@@ -422,7 +459,10 @@ test("patch_file: 兼容模型混用 unified 文件头和 apply_patch 风格 @@ 
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: mixedPatch }),
+    await tool.invoke(
+      { riskLevel: "low", format: "unified_diff", patch: mixedPatch },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(result.format, "unified_diff");
@@ -452,7 +492,11 @@ test("patch_file: format 与内容协议不匹配时拒绝", async () => {
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: applyPatch }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: applyPatch },
+        { signal: new AbortController().signal },
+      ),
     /format does not match/i,
   );
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
@@ -477,7 +521,11 @@ test("patch_file: strip 传错时拒绝而不自动猜测", async () => {
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     /not found/i,
   );
   assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "one\ntwo\n");

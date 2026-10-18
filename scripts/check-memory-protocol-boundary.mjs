@@ -1,97 +1,126 @@
+#!/usr/bin/env node
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { WORKSPACE_ASSET_SECTIONS, WORKSPACE_SECTIONS } from "../workspace-protocol/src/index.js";
-import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
-import { createGuardViolations } from "./lib/guard-violations.mjs";
 import { PROTOCOL_LEAF_IMPORT_PREFIXES } from "./lib/protocol-leaf-imports.mjs";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import {
+  escapesDirectory,
+  importReferences,
+  readRepositoryText,
+  repositoryRoot,
+} from "./quality/repository-files.mjs";
+import { addRemovedPathHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-const PROTOCOL_DIR = "memory-protocol";
-const REPAIR_DIR = "memory-repair";
-const guard = createGuardViolations({ root: ROOT, label: "memory-protocol-boundary" });
-const { violations } = guard;
-const sourceFiles = createRelativeSourceCollector({
-  root: ROOT,
-  extensions: new Set([".js", ".mjs"]),
+const SCAN = Object.freeze({ repositoryRoot, extensions: [".js", ".mjs"], includeTests: true });
+const ASSET_PACKAGE_DIR = "user-template/default-user";
+const PURE_PACKAGE_IMPORTS = Object.freeze({
+  "memory-protocol": ["@noobot/context-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
+  "memory-repair": ["@noobot/memory-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
 });
-
-const PACKAGE_IMPORT_ALLOWLIST = Object.freeze({
-  [PROTOCOL_DIR]: ["@noobot/context-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
-  [REPAIR_DIR]: ["@noobot/memory-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
-});
-
-for (const [packageDir, allowedImports] of Object.entries(PACKAGE_IMPORT_ALLOWLIST)) {
-  for (const file of await sourceFiles(`${packageDir}/src`)) {
-    const text = await readFile(path.join(ROOT, file), "utf8");
-    const imports = Array.from(text.matchAll(/from\s+["']([^"']+)["']/g), (match) => match[1]);
-    for (const specifier of imports) {
-      const escapesPackage =
-        specifier.startsWith(".") &&
-        !path.resolve(ROOT, path.dirname(file), specifier).startsWith(path.join(ROOT, packageDir));
-      const isForeignPackage =
-        !specifier.startsWith(".") &&
-        !allowedImports.some((prefix) => specifier.startsWith(prefix));
-      if (escapesPackage || isForeignPackage) {
-        violations.push(`${file}: ${packageDir} must stay pure, forbidden import ${specifier}`);
-      }
-    }
-  }
-}
-
-const assertAbsent = (relativePath) =>
-  guard.assertAbsent(relativePath, "memory protocol logic moved to @noobot/memory-protocol");
-
-for (const relativePath of [
-  "agent/src/memory/utils/text.js",
-  "agent/src/memory/parsers/id-patch-parser.js",
-  "agent/src/memory/long-memory/protocol.js",
-  "agent/src/memory/experience/schema-config.js",
-  "agent/src/memory/experience/patch-utils.js",
-  "agent/src/memory/experience/domain-summary-parser.js",
-  "agent/src/memory/experience/metadata-store.js",
-  "agent/src/memory/experience/model/text-protocol.js",
-  "agent/src/memory/experience/abort-control.js",
-  "agent/src/memory/experience/daily/parser.js",
-  "agent/src/memory/experience/weekly/parser.js",
-  "agent/src/memory/experience/monthly/parser.js",
-  "agent/src/memory/experience/yearly/parser.js",
-  "agent/src/memory/short-memory/reader.js",
-  "agent/src/memory/short-memory/writer.js",
-  "agent/src/memory/short-memory/compactor.js",
-]) {
-  await assertAbsent(relativePath);
-}
-
-const forbiddenAgentDefinitions = [
+const REMOVED_PATHS = Object.freeze(
+  [
+    "utils/text.js",
+    "parsers/id-patch-parser.js",
+    "long-memory/protocol.js",
+    "experience/schema-config.js",
+    "experience/patch-utils.js",
+    "experience/domain-summary-parser.js",
+    "experience/metadata-store.js",
+    "experience/model/text-protocol.js",
+    "experience/abort-control.js",
+    "experience/daily/parser.js",
+    "experience/weekly/parser.js",
+    "experience/monthly/parser.js",
+    "experience/yearly/parser.js",
+    "short-memory/reader.js",
+    "short-memory/writer.js",
+    "short-memory/compactor.js",
+  ].map((file) => `agent/src/memory/${file}`),
+);
+const AGENT_DUPLICATES = Object.freeze([
   [/LONG_MEMORY_METADATA/, "long memory metadata store"],
   [/NOOBOT_(?:LONG_MEMORY|EXPERIENCE)[A-Z_]*\/\d/, "memory document header literal"],
   [/【经验教训字段模型】|# experience metadata \(text protocol\)/, "legacy memory title literal"],
   [/function\s+ensureExperienceModelIfMissing\s*\(/, "read-time template fallback"],
   [/function\s+parseIdPatchCommands\s*\(/, "experience id patch parser"],
-];
-for (const file of await sourceFiles("agent/src")) {
-  const text = await readFile(path.join(ROOT, file), "utf8");
-  for (const [pattern, label] of forbiddenAgentDefinitions) {
-    if (pattern.test(text)) violations.push(`${file}: forbidden duplicate ${label}`);
+]);
+
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const [packageDir, allowed] of Object.entries(PURE_PACKAGE_IMPORTS)) {
+    for (const file of await getFirstPartyFilesUnder([`${packageDir}/src`], SCAN)) {
+      for (const { specifier, line } of importReferences(await readRepositoryText(file))) {
+        const foreign =
+          !specifier.startsWith(".") && !allowed.some((prefix) => specifier.startsWith(prefix));
+        if (foreign || escapesDirectory(file, packageDir, specifier)) {
+          addHit(measured.purePackageImport, { file, line, message: `imports ${specifier}` });
+        }
+      }
+    }
   }
+  await addRemovedPathHits(measured.removedImplementation, REMOVED_PATHS, "must remain removed");
+  for (const file of await getFirstPartyFilesUnder(["agent/src"], SCAN)) {
+    const source = await readRepositoryText(file);
+    for (const [pattern, label] of AGENT_DUPLICATES) {
+      if (pattern.test(source)) addHit(measured.agentDuplicate, { file, message: label });
+    }
+  }
+  const assetRoots = new Set(
+    WORKSPACE_ASSET_SECTIONS.flatMap((section) => WORKSPACE_SECTIONS[section].paths),
+  );
+  for (const name of await readdir(path.join(repositoryRoot, ASSET_PACKAGE_DIR))) {
+    if (!assetRoots.has(name)) {
+      addHit(measured.assetPackageSection, {
+        file: `${ASSET_PACKAGE_DIR}/${name}`,
+        message: "not a workspace asset section",
+      });
+    }
+  }
+  return measured;
 }
 
-const ASSET_PACKAGE_DIR = "user-template/default-user";
-const allowedAssetRoots = new Set(
-  WORKSPACE_ASSET_SECTIONS.flatMap((section) => WORKSPACE_SECTIONS[section].paths),
-);
-for (const name of await readdir(path.join(ROOT, ASSET_PACKAGE_DIR))) {
-  if (!allowedAssetRoots.has(name)) {
-    violations.push(
-      `${ASSET_PACKAGE_DIR}/${name}: asset package only carries workspace asset sections`,
-    );
-  }
-}
+export const CHECK = defineCheck({
+  id: "memory-protocol-boundary",
+  description: "Memory document protocol lives in memory-protocol and stays pure",
+  rules: {
+    purePackageImport: {
+      description: "memory-protocol and memory-repair import only their protocol dependencies",
+      hint: "move runtime concerns to agent and import only protocol leaf packages",
+    },
+    removedImplementation: {
+      description: "Agent memory protocol copies stay deleted",
+      hint: "delete the file and import from @noobot/memory-protocol",
+    },
+    agentDuplicate: {
+      description: "Agent does not redefine memory protocol literals or parsers",
+      hint: "import the definition from @noobot/memory-protocol",
+    },
+    assetPackageSection: {
+      description: "The default user asset package only carries workspace asset sections",
+      hint: "add the section to workspace-protocol or remove the entry",
+    },
+  },
+  exemptions: [],
+  baseline: {
+    purePackageImport: 0,
+    removedImplementation: 0,
+    agentDuplicate: 0,
+    assetPackageSection: 0,
+    exemptions: 0,
+  },
+  measure,
+});
 
-guard.report();
+await runCheckWhenMain(CHECK, import.meta.url);

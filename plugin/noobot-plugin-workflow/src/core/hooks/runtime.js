@@ -17,14 +17,10 @@ export function resolveWorkflowRuntimeFromContext(ctx = {}) {
   return runtime && typeof runtime === "object" ? runtime : null;
 }
 
-export function resolveWorkflowAbortSignal(ctx = {}) {
-  return ctx?.abortSignal || null;
-}
-
-function createWorkflowAbortError(ctx = {}) {
+function createWorkflowAbortError(signal) {
   const error = new Error(
     resolveExecutionAbortMessage({
-      abortSignal: resolveWorkflowAbortSignal(ctx),
+      abortSignal: signal,
       fallback: "workflow aborted",
     }),
   );
@@ -33,13 +29,13 @@ function createWorkflowAbortError(ctx = {}) {
   return error;
 }
 
-export function isWorkflowAbortError(error = null, ctx = {}) {
-  return isExecutionAbortError({ error, abortSignal: resolveWorkflowAbortSignal(ctx) });
+export function isWorkflowAbortError(error, signal) {
+  return isExecutionAbortError({ error, abortSignal: signal });
 }
 
-export function throwIfWorkflowAborted(ctx = {}) {
-  if (!resolveWorkflowAbortSignal(ctx)?.aborted) return;
-  throw createWorkflowAbortError(ctx);
+export function throwIfWorkflowAborted(signal) {
+  if (!signal.aborted) return;
+  throw createWorkflowAbortError(signal);
 }
 
 export function hasOwnObjectKey(source = {}, key = "") {

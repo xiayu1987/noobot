@@ -5,6 +5,7 @@
  */
 
 import { buildAgentState } from "./state-builder.js";
+import { getRuntimeFromAgentContext } from "../context/agent-context-accessor.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
 import { runAgentRuntimeHook } from "../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
@@ -165,7 +166,7 @@ export async function commitAuthoritativeFinalResult({ result = {}, runtime = {}
 }
 
 export async function runAgentTurn({ agentContext, currentUserMessage, errorLogger = null }) {
-  const runtime = agentContext?.bindings?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const userMessage = String(currentUserMessage?.content || "");
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();

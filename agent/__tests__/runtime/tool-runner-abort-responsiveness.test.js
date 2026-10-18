@@ -8,10 +8,10 @@ import test from "node:test";
 
 import { executeToolCall } from "./core/tool-runner.test-helpers.js";
 import { isAbortError } from "../../src/shared/utils/error-utils.js";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 function runtime(abortSignal = null) {
-  return createRuntimeContext({
+  return createTestRuntimeContext({
     abortSignal,
     runConfig: {
       messageId: "message-abort-responsiveness",
@@ -45,6 +45,7 @@ test("tool runner aborts a tool that never observes the signal", async () => {
     call: { id: "call-abort", name: "demo" },
     tool,
     runtime: runtime(controller.signal),
+    abortSignal: controller.signal,
   });
 
   controller.abort();
@@ -70,6 +71,7 @@ test("tool runner rejects immediately when the signal is already aborted", async
       call: { id: "call-pre-aborted", name: "demo" },
       tool,
       runtime: runtime(controller.signal),
+      abortSignal: controller.signal,
     }),
     (error) => isAbortError(error, controller.signal),
   );
@@ -82,6 +84,7 @@ test("tool runner still returns normal results when a signal is present but not 
     call: { id: "call-not-aborted", name: "demo" },
     tool: { invoke: async () => "ok" },
     runtime: runtime(controller.signal),
+    abortSignal: controller.signal,
   });
 
   assert.equal(result.toolResultText, "ok");

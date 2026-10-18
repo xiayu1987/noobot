@@ -25,6 +25,7 @@ import {
   createScopedSubSessionEventListener,
 } from "./detached-subsession-events.js";
 import { createExecutionFailure } from "../../shared/errors/index.js";
+import { assertNotAborted } from "../../shared/utils/error-utils.js";
 import { transferCanonicalAttachmentsToSubSession } from "./detached-subsession-attachments.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
@@ -129,10 +130,10 @@ function resolveDetachedIdentity(request, inheritedRuntime) {
     userId: text(strategy.userId),
     parentSessionId: text(strategy.parentSessionId),
     parentDialogProcessId: text(strategy.parentDialogProcessId),
-    abortSignal: request.abortSignal || null,
+    abortSignal: request.abortSignal,
     userInteractionBridge: inheritedRuntime.userInteractionBridge || null,
   };
-  createAbortGuard(identity.abortSignal)();
+  assertNotAborted(identity.abortSignal);
   if (!identity.userId || !identity.parentSessionId) {
     throw new Error("sub-session runner requires userId and parentSessionId");
   }
@@ -589,16 +590,6 @@ function clearParentTurnTransactionIdentity(runConfig = {}) {
   delete runConfig.presentationMessageId;
   delete runConfig.assistantMessageId;
   return runConfig;
-}
-
-function createAbortGuard(abortSignal = null) {
-  return () => {
-    if (!abortSignal?.aborted) return;
-    const error = new Error("bot plugin sub-session aborted");
-    error.name = "AbortError";
-    error.code = "ABORT_ERR";
-    throw error;
-  };
 }
 
 async function loadSubSessionUserConfig({

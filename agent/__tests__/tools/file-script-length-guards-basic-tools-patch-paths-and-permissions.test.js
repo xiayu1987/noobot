@@ -65,7 +65,11 @@ test("patch_file: strip 不得消除 unified_diff 中的父目录穿越语义", 
   for (const target of ["b/../patch_escape.txt", "b/../../actual_patch_escape.txt"]) {
     const diff = ["--- /dev/null", `+++ ${target}`, "@@ -0,0 +1 @@", "+escape", ""].join("\n");
     await assert.rejects(
-      () => tool.invoke({ riskLevel: "medium", format: "unified_diff", patch: diff, strip: 1 }),
+      () =>
+        tool.invoke(
+          { riskLevel: "medium", format: "unified_diff", patch: diff, strip: 1 },
+          { signal: new AbortController().signal },
+        ),
       (error) => {
         assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
         return true;
@@ -103,7 +107,11 @@ test("patch_file: 普通用户不能修改 workspace 外绝对路径", async () 
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff },
+        { signal: new AbortController().signal },
+      ),
     /路径超出允许范围|path out of scope/i,
   );
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\ntwo\n");
@@ -148,7 +156,10 @@ test("patch_file: super user can patch an absolute file outside workspace root",
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }),
+    await tool.invoke(
+      { riskLevel: "low", format: "unified_diff", patch: diff },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(result.changes.length, 1);
@@ -203,7 +214,11 @@ test("patch_file: sharedTools cannot remap a Windows host path", async () => {
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff },
+        { signal: new AbortController().signal },
+      ),
     /not found|scope|范围/i,
   );
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\ntwo\n");
@@ -257,7 +272,11 @@ test("patch_file: apply_patch also rejects sharedTools host remapping", async ()
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "apply_patch", patch: patchText },
+        { signal: new AbortController().signal },
+      ),
     /not found|scope|范围/i,
   );
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\ntwo\n");
@@ -290,7 +309,11 @@ test("patch_file: 拒绝 root=.. 和 project 虚拟相对前缀", async () => {
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText, root: ".." }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "apply_patch", patch: patchText, root: ".." },
+        { signal: new AbortController().signal },
+      ),
     /workspace-relative|工作区相对/i,
   );
 });
@@ -333,7 +356,11 @@ test("patch_file: 用户配置不能授权 /project 沙箱挂载", async () => {
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "apply_patch", patch: patchText },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.message, "当前执行视角不接受沙箱绝对路径。");
@@ -391,7 +418,10 @@ test("patch_file: 全局 sandbox 挂载可授权 workspace 外项目", async () 
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
+    await tool.invoke(
+      { riskLevel: "low", format: "apply_patch", patch: patchText },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(
@@ -419,7 +449,11 @@ test("patch_file: root 参数拒绝沙箱路径并返回明确提示", async () 
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.field, "root");
@@ -447,7 +481,11 @@ test("patch_file: root 参数 host 错误提示不暗示沙箱路径", async () 
   );
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.field, "root");
@@ -480,7 +518,11 @@ test("patch_file: 路径不存在时诊断使用当前 workspace 执行审计路
   ].join("\n");
 
   await assert.rejects(
-    async () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    async () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
 
@@ -522,7 +564,11 @@ test("patch_file: host 视角下路径不存在时诊断保留真实工作区根
   ].join("\n");
 
   await assert.rejects(
-    async () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    async () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
 
@@ -561,7 +607,11 @@ test("patch_file: sandbox 虚拟相对路径沿用权威路径解析错误", asy
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_INVALID_INPUT");
       assert.equal(error.details?.error, "virtual_relative_path_ambiguous");
@@ -598,7 +648,10 @@ test("patch_file: 普通用户必须显式提供 workspace 子项目路径", asy
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    await tool.invoke(
+      { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(result.ok, true);
   assert.equal(result.changes.length, 1);
@@ -648,7 +701,11 @@ test("patch_file: strip=0 不剥离 git 前缀或虚拟根", async () => {
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 0 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 0 },
+        { signal: new AbortController().signal },
+      ),
     /not found|invalid/i,
   );
 });
@@ -685,7 +742,11 @@ test("patch_file: 不扫描父工作区猜测唯一子项目", async () => {
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     /not found/i,
   );
 });
@@ -738,7 +799,11 @@ test("patch_file: staticInfo rootDirectory 不改变 workspace 相对路径基�
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     /not found/i,
   );
 });
@@ -777,7 +842,11 @@ test("patch_file: 超级管理员也不扫描项目根解析虚拟路径", async
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    () =>
+      tool.invoke(
+        { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_INVALID_INPUT");
       assert.equal(error.details?.error, "virtual_relative_path_ambiguous");

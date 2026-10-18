@@ -1,38 +1,31 @@
+#!/usr/bin/env node
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
-import { createGuardViolations } from "./lib/guard-violations.mjs";
 import { isProtocolLeafImport } from "./lib/protocol-leaf-imports.mjs";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import {
+  importReferences,
+  readRepositoryText,
+  repositoryRoot,
+} from "./quality/repository-files.mjs";
+import { addPatternLineHits, addPatternOffsetHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-const PROTOCOL_DIR = "workspace-protocol";
-const guard = createGuardViolations({ root: ROOT, label: "workspace-protocol-boundary" });
-const { violations } = guard;
-const sourceFiles = createRelativeSourceCollector({
-  root: ROOT,
-  extensions: new Set([".js", ".mjs"]),
-});
-
-for (const file of await sourceFiles(`${PROTOCOL_DIR}/src`)) {
-  const text = await readFile(path.join(ROOT, file), "utf8");
-  for (const [, specifier] of text.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (!specifier.startsWith(".") && !isProtocolLeafImport(specifier)) {
-      violations.push(
-        `${file}: workspace-protocol may only import protocol leaf packages, found ${specifier}`,
-      );
-    }
-  }
-}
-
-const WORKSPACE_RUNTIME_LITERAL =
-  /["'`]runtime\/[A-Za-z0-9_-]+|["']runtime["']\s*,\s*["'][A-Za-z0-9_-]+["']/;
-const SCANNED_SOURCE_ROOTS = Object.freeze([
+const SCAN = Object.freeze({ repositoryRoot, extensions: [".js", ".mjs"], includeTests: true });
+const RUNTIME_LITERAL = /["'`]runtime\/[A-Za-z0-9_-]+|["']runtime["']\s*,\s*["'][A-Za-z0-9_-]+["']/;
+const RUNTIME_SEGMENTS = Object.freeze([
+  /(?:join|resolve)\((?:[^()]|\([^()]*\))*?["'`]runtime["'`]/g,
+  /\[\s*["'`]runtime["'`]\s*,/g,
+]);
+const CONSUMER_ROOTS = Object.freeze([
   "agent/src",
   "service/services",
   "service/routes",
@@ -46,30 +39,54 @@ const SCANNED_SOURCE_ROOTS = Object.freeze([
   "plugin/noobot-plugin-character/src",
   "plugin/noobot-plugin-harness/src",
 ]);
-const WORKSPACE_RUNTIME_PATH_SEGMENTS = Object.freeze([
-  /(?:join|resolve)\((?:[^()]|\([^()]*\))*?["'`]runtime["'`]/g,
-  /\[\s*["'`]runtime["'`]\s*,/g,
-]);
-for (const root of SCANNED_SOURCE_ROOTS) {
-  for (const file of await sourceFiles(root)) {
-    const text = await readFile(path.join(ROOT, file), "utf8");
-    const lines = text.split("\n");
-    lines.forEach((line, index) => {
-      if (WORKSPACE_RUNTIME_LITERAL.test(line)) {
-        violations.push(
-          `${file}:${index + 1}: workspace runtime paths must come from @noobot/workspace-protocol`,
-        );
-      }
-    });
-    for (const pattern of WORKSPACE_RUNTIME_PATH_SEGMENTS) {
-      for (const match of text.matchAll(pattern)) {
-        const line = text.slice(0, match.index).split("\n").length;
-        violations.push(
-          `${file}:${line}: workspace runtime path segments must come from @noobot/workspace-protocol`,
-        );
+
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const file of await getFirstPartyFilesUnder(["workspace-protocol/src"], SCAN)) {
+    for (const { specifier, line } of importReferences(await readRepositoryText(file))) {
+      if (!specifier.startsWith(".") && !isProtocolLeafImport(specifier)) {
+        addHit(measured.purePackageImport, { file, line, message: `imports ${specifier}` });
       }
     }
   }
+  for (const file of await getFirstPartyFilesUnder(CONSUMER_ROOTS, SCAN)) {
+    const source = await readRepositoryText(file);
+    addPatternLineHits({
+      measurement: measured.runtimePath,
+      file,
+      source,
+      pattern: RUNTIME_LITERAL,
+      message: "runtime path literal",
+    });
+    for (const pattern of RUNTIME_SEGMENTS) {
+      addPatternOffsetHits({
+        measurement: measured.runtimePath,
+        file,
+        source,
+        pattern,
+        message: "runtime path segment",
+      });
+    }
+  }
+  return measured;
 }
 
-guard.report();
+export const CHECK = defineCheck({
+  id: "workspace-protocol-boundary",
+  description: "Workspace runtime layout is owned by workspace-protocol",
+  rules: {
+    purePackageImport: {
+      description: "workspace-protocol imports only protocol leaf packages",
+      hint: "move the dependency out of workspace-protocol",
+    },
+    runtimePath: {
+      description: "Consumers never spell workspace runtime paths by hand",
+      hint: "resolve the path through @noobot/workspace-protocol",
+    },
+  },
+  exemptions: [],
+  baseline: { purePackageImport: 0, runtimePath: 0, exemptions: 0 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

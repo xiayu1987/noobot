@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext } from "@noobot/context-protocol";
 import {
@@ -57,7 +57,7 @@ function createUpdatableTurnStore() {
 }
 
 function createTestRuntime({ persistCurrentTurnMessages = async () => {}, ...factoryInput } = {}) {
-  const runtime = createRuntimeContext(factoryInput);
+  const runtime = createTestRuntimeContext(factoryInput);
   runtime.persistCurrentTurnMessages = persistCurrentTurnMessages;
   return runtime;
 }

@@ -69,10 +69,10 @@ export function resolveAbortStopType(error = null, abortSignal = null) {
   return resolveExecutionAbortType({ error, abortSignal });
 }
 
-export function assertNotAborted(abortSignal = null) {
+export function assertNotAborted(abortSignal) {
   assertExecutionNotAborted({ abortSignal });
 }
 
-export function raceWithAbort(promise, abortSignal = null) {
+export function raceWithAbort(promise, abortSignal) {
   return raceExecutionAbort(promise, { abortSignal });
 }

@@ -35,6 +35,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   const events = [];
   const runner = createDetachedSubSessionRunner(deps);
   const result = await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({ runConfig: { runtimeModel: "gpt_5_4" } }),
     message: "hello",
     attachments: [{ name: "a.txt" }],
@@ -182,6 +183,7 @@ test("detached sub-session projects finalizer messages and their transfer envelo
   const runner = createDetachedSubSessionRunner(deps);
 
   const result = await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope(),
     message: "hello",
     metadata: DETACHED_REQUEST_METADATA,
@@ -198,6 +200,7 @@ test("detached sub-session uses the selected parent model over the parent runtim
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
       runConfig: { selectedModel: "gpt_5_4", runtimeModel: "parent_override" },
     }),
@@ -214,6 +217,7 @@ test("detached sub-session explicit model override wins over the selected parent
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({ runConfig: { selectedModel: "gpt_5_4" } }),
     message: "hello",
     runConfigPatch: { runtimeModel: "child_model" },
@@ -229,6 +233,7 @@ test("detached sub-session empty model override preserves the selected parent mo
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({ runConfig: { selectedModel: "gpt_5_4" } }),
     message: "hello",
     runConfigPatch: { runtimeModel: "  " },
@@ -288,6 +293,7 @@ test("detached sub-session transfers canonical parent attachments into child own
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope(),
     message: "read attachment",
     attachments: [
@@ -325,6 +331,7 @@ test("detached sub-session rejects an incomplete persistence and identity strate
 
   await assert.rejects(
     runner({
+      abortSignal: new AbortController().signal,
       parentExecutionScope: createParentExecutionScope(),
       message: "hello",
       strategy: {
@@ -430,6 +437,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   });
 
   await createDetachedSubSessionRunner({ ...deps, now: fixedNow })({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope(),
     message: "hello",
     runConfigPatch: { turnScopeId: "turn-persisted" },
@@ -472,6 +480,7 @@ test("detached sub-session rejects a runner result with a second dialog identity
 
   await assert.rejects(
     runner({
+      abortSignal: new AbortController().signal,
       parentExecutionScope: createParentExecutionScope(),
       message: "hello",
       metadata: DETACHED_REQUEST_METADATA,
@@ -519,6 +528,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
       runConfig: {
         streaming: true,
@@ -582,6 +592,7 @@ test("detached sub-session derives commandId from the strategy turnScopeId and t
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
       runConfig: { expectedAggregateVersion: 7, commandId: "root-command" },
     }),
@@ -619,6 +630,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   await assert.rejects(
     () =>
       runner({
+        abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         eventListener: {
           onEvent: (event) => events.push(event),
@@ -687,6 +699,7 @@ test("detached sub-session failure receipt carries the committed turn failure", 
   await assert.rejects(
     () =>
       runner({
+        abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         metadata: DETACHED_REQUEST_METADATA,
         strategy: createCompleteStrategy(),
@@ -723,6 +736,7 @@ test("createDetachedSubSessionRunner requires userId and parentSessionId", async
   await assert.rejects(
     () =>
       runner({
+        abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         strategy: { userId: "u1" },
       }),
@@ -748,7 +762,7 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
         parentExecutionScope: createParentExecutionScope(),
         abortSignal: controller.signal,
       }),
-    /bot plugin sub-session aborted/,
+    /execution_aborted/,
   );
   assert.equal(runCalled, false);
 });
@@ -765,6 +779,7 @@ test("createDetachedSubSessionRunner propagates user config loading failures", a
   await assert.rejects(
     () =>
       runner({
+        abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         metadata: DETACHED_REQUEST_METADATA,
         strategy: createCompleteStrategy(),

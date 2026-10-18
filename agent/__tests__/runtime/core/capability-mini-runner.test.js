@@ -18,6 +18,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
   let resolvedConfig = null;
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
+    pluginId: "noobot-plugin-test",
     configSnapshot: createConfigSnapshot({ config: { selectedModel: "GLM_5_1" } }),
     resolveModelSpecByNameFn: ({ modelName, globalConfig, userConfig }) => {
       resolvedConfig = { globalConfig, userConfig };
@@ -114,15 +115,34 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
   assert.equal(calls[0]?.options?.headers?.["X-Plugin-Session-Id"], "session-1");
 });
 
+test("capability mini-runner requires a non-empty pluginId flow prefix", () => {
+  for (const pluginId of [undefined, "", "@@@"]) {
+    assert.throws(
+      () =>
+        createAgentCapabilityModelInvoker({
+          enableToolBinding: false,
+          pluginId,
+          configSnapshot: createConfigSnapshot(),
+        }),
+      /capability model invoker requires pluginId/,
+    );
+  }
+});
+
 test("capability mini-runner fails closed without a versioned config snapshot", () => {
   assert.throws(
-    () => createAgentCapabilityModelInvoker({ enableToolBinding: false }),
+    () =>
+      createAgentCapabilityModelInvoker({
+        enableToolBinding: false,
+        pluginId: "noobot-plugin-test",
+      }),
     /agent config snapshot must be an object/,
   );
   assert.throws(
     () =>
       createAgentCapabilityModelInvoker({
         enableToolBinding: false,
+        pluginId: "noobot-plugin-test",
         configSnapshot: { protocol: "noobot.agent-config", version: 2 },
       }),
     /unsupported agent config protocol version/,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import { createRunner, createTestAgentExecutionScope } from "./runner-bot-hook.fixtures.js";
 
@@ -22,8 +22,8 @@ test("SessionExecutionRunner does not let currentSessionModelAlias override sele
     resolveScenarioRunConfig: (runConfig = {}) => runConfig,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = createTestAgentExecutionScope(createRuntimeContext());
-      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+      const runtimeAgentContext = createTestAgentExecutionScope(createTestRuntimeContext());
+      return { agentContext: runtimeAgentContext, userMessageAttachments: [] };
     },
   });
 
@@ -57,8 +57,8 @@ test("SessionExecutionRunner restores currentSessionModelAlias when selectedMode
     resolveScenarioRunConfig: (runConfig = {}) => runConfig,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = createTestAgentExecutionScope(createRuntimeContext());
-      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+      const runtimeAgentContext = createTestAgentExecutionScope(createTestRuntimeContext());
+      return { agentContext: runtimeAgentContext, userMessageAttachments: [] };
     },
   });
 

@@ -16,6 +16,7 @@ import { validateConfigSnapshot } from "@noobot/agent-config-protocol";
 import {
   createCapabilityRequestIdentity,
   prepareCapabilityMessages,
+  requireCapabilityFlowPrefix,
   resolveAllowPolicy,
   resolveCapabilityExecution,
   resolveToolsFromContext,
@@ -30,14 +31,14 @@ export function createAgentCapabilityModelInvoker({
   maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
   enableToolBinding = false,
-  headerNamespace = "plugin",
-  flowPrefix = "",
+  pluginId,
   configSnapshot,
   resolveDefaultModelSpecFn = resolveDefaultModelSpec,
   resolveModelSpecByNameFn = resolveModelSpecByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
   executeToolCallFn = executeToolCallInTurn,
 } = {}) {
+  const flowPrefix = requireCapabilityFlowPrefix(pluginId);
   const effectiveConfig = validateConfigSnapshot(configSnapshot).config;
   const baseAllowPolicy = resolveAllowPolicy(toolAllowlist);
   const maxTurnCount =
@@ -57,9 +58,7 @@ export function createAgentCapabilityModelInvoker({
     messages = [],
     ctx = {},
     toolAllowlist: toolAllowlistOverride,
-    headerNamespace: headerNamespaceOverride,
-    flowPrefix: flowPrefixOverride,
-    signal = null,
+    signal,
     activity = null,
     contextSequencePolicy = MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   } = {}) {
@@ -70,9 +69,6 @@ export function createAgentCapabilityModelInvoker({
       domain,
       pluginFlow,
       contextSequencePolicy,
-      headerNamespaceOverride,
-      headerNamespace,
-      flowPrefixOverride,
       flowPrefix,
       sessionId: getSessionIdsFromAgentContext(ctx.agentContext).sessionId,
     });

@@ -8,7 +8,8 @@ import { runBestEffort } from "@noobot/shared/best-effort";
 import { emitEvent } from "../../events/index.js";
 import { text } from "@noobot/shared/value";
 
-export function prepareToolBinding({ tools, modelState, runtime, eventListener, turn }) {
+export function prepareToolBinding({ tools, modelState, runtime, turn }) {
+  const { eventListener } = runtime;
   const adaptedBinding = adaptToolsForBinding(tools, modelState.activeModelSpec);
   const configuredToolChoice = text(adaptedBinding?.bindOptions?.tool_choice);
   if (configuredToolChoice === "required") {

@@ -22,7 +22,7 @@ export async function buildAgentExecutionContext({
   attachmentService = null,
   botManager = null,
   userInteractionBridge = null,
-  abortSignal = null,
+  abortSignal,
   parentAsyncResultContainer = null,
   runConfig = {},
   runtimeBasePath = "",

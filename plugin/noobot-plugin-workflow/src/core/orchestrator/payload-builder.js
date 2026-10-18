@@ -13,6 +13,7 @@ export async function buildFinalWorkflowPayload({
   workflowRunId = "",
   options = {},
   ctx = {},
+  signal,
   sourceText = "",
   semanticText = "",
   semantic = null,
@@ -24,7 +25,7 @@ export async function buildFinalWorkflowPayload({
   nodeStateSnapshot = null,
 } = {}) {
   phaseTracker.start(WORKFLOW_PHASES.PAYLOAD_BUILD);
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
 
   const workflowPayload = buildWorkflowOrchestrationPayload({
     workflowRunId,

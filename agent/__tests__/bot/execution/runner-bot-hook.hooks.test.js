@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import {
   createRunner,
@@ -31,7 +31,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     botHookManager,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedBuildContextPayload = buildContextPayload;
-      const runtimeAgentContext = createTestAgentExecutionScope(createRuntimeContext(), {
+      const runtimeAgentContext = createTestAgentExecutionScope(createTestRuntimeContext(), {
         messageBlocks: {
           history: [
             { role: "user", content: "history user" },
@@ -39,7 +39,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
           ],
         },
       });
-      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+      return { agentContext: runtimeAgentContext, userMessageAttachments: [] };
     },
   });
 

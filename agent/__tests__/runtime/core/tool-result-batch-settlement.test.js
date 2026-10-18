@@ -19,15 +19,16 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-tool-batch-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
 
-function createRuntime(abortSignal = null) {
-  const runtime = createRuntimeContext({
+function createRuntime(abortSignal = new AbortController().signal) {
+  const runtime = createTestRuntimeContext({
     abortSignal,
     basePath: workspaceRoot,
     globalConfig: { workspaceRoot },
@@ -50,7 +51,7 @@ function createRuntime(abortSignal = null) {
     messageId: "message-tool-batch",
     presentationMessageId: "presentation-tool-batch",
   });
-  return runtime;
+  return bindTestDispatchLifecycle(runtime);
 }
 
 test("processToolResults commits every settled parallel result before propagating user stop", async () => {
@@ -103,8 +104,6 @@ test("processToolResults commits every settled parallel result before propagatin
   const committed = [];
   const modelState = {
     runtime,
-    abortSignal: null,
-    eventListener: null,
   };
   modelState.agentContext = createTestAgentExecutionScope(runtime);
 
@@ -148,8 +147,6 @@ test("processToolResults commits result policy from its authoritative batch call
   const committed = [];
   const modelState = {
     runtime,
-    abortSignal: null,
-    eventListener: null,
     agentContext: createTestAgentExecutionScope(runtime),
   };
   await processToolResults({
@@ -183,8 +180,6 @@ test("processToolResults accepts only a successful task_summary result", async (
   const loopState = { errorLogger: null, toolConsecutiveFailureCount: 0 };
   const modelState = {
     runtime,
-    abortSignal: null,
-    eventListener: null,
     agentContext: createTestAgentExecutionScope(runtime),
   };
   const stateCommitter = {
@@ -308,6 +303,7 @@ test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool",
     eventListener: null,
     turn: 1,
     runtime,
+    abortSignal: abortController.signal,
   });
 
   assert.equal(invocationCount, 0);

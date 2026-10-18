@@ -32,10 +32,9 @@ test("agent adapter executes protocol hooks and emits a summary", async () => {
   );
 
   const result = await runAgentRuntimeHook({
-    runtime: { hookManager },
+    runtime: { hookManager, eventListener: { onEvent: (event) => events.push(event) } },
     point: HOOK_POINT.AGENT.AFTER_TURN,
     context,
-    eventListener: { onEvent: (event) => events.push(event) },
   });
 
   assert.equal(result.executed, true);
@@ -75,10 +74,9 @@ test("agent adapter exposes the sanitized plugin event capability", async () => 
   );
 
   await runAgentRuntimeHook({
-    runtime: { hookManager },
+    runtime: { hookManager, eventListener: { onEvent: (event) => events.push(event) } },
     point: HOOK_POINT.AGENT.AFTER_TURN,
     context: {},
-    eventListener: { onEvent: (event) => events.push(event) },
   });
 
   const pluginEvent = events.find((event) => event?.event === "hook_plugin_progress");

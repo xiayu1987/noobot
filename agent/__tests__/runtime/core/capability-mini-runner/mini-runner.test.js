@@ -22,6 +22,8 @@ import { createCanonicalMessageEventSessionManager } from "../../../helpers/cano
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 import { reduceCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
 import { createTestModelHost } from "../../../helpers/test-model-host.js";
+import { createTestRuntimeContext } from "../../../helpers/test-runtime-context.js";
+import { executeToolCallInTurn } from "../../../../src/runtime/tool-execution/tool-runner.js";
 
 const modelSpec = Object.freeze(
   normalizeRuntimeModelSpec({
@@ -88,26 +90,51 @@ function createModelPort(outputs = []) {
   };
 }
 
-function createContext({ modelPort, tools = [], eventListener = null } = {}) {
-  const runtime = {
-    globalConfig: {},
-    userConfig: {},
-    modelHost: createTestModelHost({ modelPort, modelSpec }),
+function createContext({
+  modelPort,
+  tools = [],
+  eventListener = null,
+  streaming = false,
+  sessionManager = null,
+} = {}) {
+  const runtime = createTestRuntimeContext({
     eventListener,
-    systemRuntime: { turnScopeId: "turn-test" },
-  };
+    sessionManager,
+    runConfig: {
+      streaming,
+      messageId: "message-test",
+      turnScopeId: "turn-test",
+      executionId: "agent:turn-test",
+    },
+    systemRuntime: {
+      userId: "test-user",
+      sessionId: "session-test",
+      dialogProcessId: "dialog-test",
+      turnScopeId: "turn-test",
+    },
+  });
+  runtime.modelHost = createTestModelHost({ modelPort, modelSpec });
   return {
     runtime,
     ctx: {
-      sessionId: "session-test",
-      dialogProcessId: "dialog-test",
-      agentContext: createTestAgentExecutionScope(runtime, { tools }),
+      agentContext: createTestAgentExecutionScope(runtime, {
+        tools,
+        identity: {
+          userId: "test-user",
+          sessionId: "session-test",
+          dialogProcessId: "dialog-test",
+          turnScopeId: "turn-test",
+          runId: "agent:turn-test",
+          messageId: "message-test",
+        },
+      }),
     },
   };
 }
 
 function createInvoker(options = {}) {
   return createAgentCapabilityModelInvoker({
+    pluginId: "noobot-plugin-test",
     configSnapshot: createConfigSnapshot(),
     resolveDefaultModelSpecFn: () => modelSpec,
     resolveModelSpecByNameFn: () => modelSpec,
@@ -123,6 +150,7 @@ test("mini-runner sends canonical requests through the host ModelPort", async ()
     domain: "workflow",
     messages: [{ role: "user", content: "plan" }],
     ctx,
+    signal: new AbortController().signal,
   });
 
   assert.equal(result.output.text, "done");
@@ -138,20 +166,14 @@ test("guidance analysis publishes only the canonical Message Event content field
   const committedEvents = [];
   const { ctx, runtime } = createContext({
     modelPort,
+    sessionManager: createCanonicalMessageEventSessionManager(),
     eventListener: {
       onEvent(event) {
         committedEvents.push(event);
       },
     },
   });
-  runtime.userId = "test-user";
-  runtime.sessionManager = createCanonicalMessageEventSessionManager();
-  runtime.systemRuntime.sessionId = "session-test";
-  runtime.systemRuntime.dialogProcessId = "dialog-test";
-  bindAssistantMessageEventStream(runtime, {
-    messageId: "message-test",
-    presentationMessageId: "presentation-test",
-  });
+  bindPresentation(runtime);
 
   await createInvoker({ enableToolBinding: false })({
     purpose: "guidance",
@@ -161,6 +183,7 @@ test("guidance analysis publishes only the canonical Message Event content field
     chain: "auxiliary",
     messages: [{ role: "user", content: "review" }],
     ctx,
+    signal: new AbortController().signal,
   });
 
   const payload = committedEvents.find((event = {}) => event?.event === "authority_event_committed")
@@ -189,7 +212,7 @@ test("mini-runner appends assistant tool calls and tool results before the next 
       executed.push(call);
       return { toolResultText: "echo:hi" };
     },
-  })({ messages: [{ role: "user", content: "go" }], ctx });
+  })({ messages: [{ role: "user", content: "go" }], ctx, signal: new AbortController().signal });
 
   assert.equal(result.output.text, "done");
   assert.equal(validateModelResponse(result), result);
@@ -229,7 +252,7 @@ test("mini-runner returns rejected and missing tool facts to the final model cal
       executions += 1;
       return { toolResultText: "unexpected" };
     },
-  })({ ctx });
+  })({ ctx, signal: new AbortController().signal });
 
   assert.equal(executions, 0);
   assert.equal(validateModelResponse(result), result);
@@ -244,6 +267,7 @@ test("mini-runner isolates explicit model selection and plugin headers", async (
   let resolvedName = "";
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
+    pluginId: "noobot-plugin-test",
     configSnapshot: createConfigSnapshot(),
     resolveDefaultModelSpecFn: () => {
       throw new Error("default model must not be selected");
@@ -263,10 +287,11 @@ test("mini-runner isolates explicit model selection and plugin headers", async (
     pluginFlow: "plan",
     messages: [],
     ctx,
+    signal: new AbortController().signal,
   });
 
   assert.equal(resolvedName, "planning-model");
-  assert.equal(modelPort.requests[0].options.headers["X-Plugin-Flow"], "plugin.plan");
+  assert.equal(modelPort.requests[0].options.headers["X-Plugin-Flow"], "noobot-plugin-test.plan");
   assert.equal(modelPort.requests[0].options.headers["X-Plugin-Purpose"], "planning");
   assert.equal(modelPort.requests[0].options.headers["X-Plugin-Domain"], "workflow");
 });
@@ -274,7 +299,11 @@ test("mini-runner isolates explicit model selection and plugin headers", async (
 test("mini-runner requires the authoritative host ModelPort", async () => {
   const { ctx } = createContext({ modelPort: null });
   await assert.rejects(
-    createInvoker({ enableToolBinding: false })({ messages: [], ctx }),
+    createInvoker({ enableToolBinding: false })({
+      messages: [],
+      ctx,
+      signal: new AbortController().signal,
+    }),
     /model port\.invoke is required/,
   );
 });
@@ -292,7 +321,7 @@ test("mini-runner enforces the configured tool-turn limit and finalizes through 
     toolAllowlist: ["echo"],
     adaptToolsForBindingFn: () => ({ tools: [tool] }),
     executeToolCallFn: async () => ({ toolResultText: "ok" }),
-  })({ messages: [], ctx });
+  })({ messages: [], ctx, signal: new AbortController().signal });
 
   assert.equal(result.output.text, "finalized");
   assert.equal(validateModelResponse(result), result);
@@ -300,10 +329,6 @@ test("mini-runner enforces the configured tool-turn limit and finalizes through 
 });
 
 function bindPresentation(runtime) {
-  runtime.userId = "test-user";
-  runtime.sessionManager = createCanonicalMessageEventSessionManager();
-  runtime.systemRuntime.sessionId = "session-test";
-  runtime.systemRuntime.dialogProcessId = "dialog-test";
   bindAssistantMessageEventStream(runtime, {
     messageId: "message-test",
     presentationMessageId: "presentation-test",
@@ -324,9 +349,10 @@ for (const streaming of [false, true]) {
       const { ctx, runtime } = createContext({
         modelPort,
         tools: [tool],
+        streaming,
+        sessionManager: createCanonicalMessageEventSessionManager(),
         eventListener: { onEvent: (event) => events.push(event) },
       });
-      runtime.runConfig = { streaming };
       bindPresentation(runtime);
       const response = await createInvoker({
         enableToolBinding: mode !== "unbound",
@@ -334,7 +360,12 @@ for (const streaming of [false, true]) {
         toolAllowlist: ["echo"],
         adaptToolsForBindingFn: () => ({ tools: [tool] }),
         executeToolCallFn: async () => ({ toolResultText: "tool result" }),
-      })({ purpose: "third_party_review", activity: { activityKind: "custom_review" }, ctx });
+      })({
+        purpose: "third_party_review",
+        activity: { activityKind: "custom_review" },
+        ctx,
+        signal: new AbortController().signal,
+      });
       assert.equal(response.output.text, "review result");
       assert.ok(modelPort.requests.every((request) => request.options.streaming === streaming));
       const envelopes = events
@@ -361,11 +392,16 @@ test("a non-streaming provider result completes the explicitly requested streami
   const events = [];
   const { ctx, runtime } = createContext({
     modelPort,
+    streaming: true,
+    sessionManager: createCanonicalMessageEventSessionManager(),
     eventListener: { onEvent: (event) => events.push(event) },
   });
-  runtime.runConfig = { streaming: true };
   bindPresentation(runtime);
-  await createInvoker()({ activity: { activityKind: "custom_review" }, ctx });
+  await createInvoker()({
+    activity: { activityKind: "custom_review" },
+    ctx,
+    signal: new AbortController().signal,
+  });
   const payloads = events
     .filter((event) => event.event === "authority_event_committed")
     .map((event) => event.data.envelope.payload);
@@ -377,12 +413,59 @@ test("a non-streaming provider result completes the explicitly requested streami
 test("plugin purpose names never implicitly enable activity publication", async () => {
   const modelPort = createModelPort([{ text: "internal result", tokens: ["internal result"] }]);
   const events = [];
-  const { ctx, runtime } = createContext({
+  const { ctx } = createContext({
     modelPort,
+    streaming: true,
     eventListener: { onEvent: (event) => events.push(event) },
   });
-  runtime.runConfig = { streaming: true };
-  await createInvoker()({ purpose: "workflow_semantic", domain: "workflow", ctx });
+  await createInvoker()({
+    purpose: "workflow_semantic",
+    domain: "workflow",
+    ctx,
+    signal: new AbortController().signal,
+  });
   assert.equal(modelPort.requests[0].options.callbacks, undefined);
   assert.deepEqual(events, []);
+});
+
+test("capability tool turns cancel the running tool when the plugin signal aborts", async () => {
+  const modelPort = createModelPort([
+    { text: "", toolCalls: [{ id: "c-hang", name: "hang", args: {} }] },
+    { text: "unreachable" },
+  ]);
+  let markStarted;
+  const started = new Promise((resolve) => {
+    markStarted = resolve;
+  });
+  const tool = {
+    name: "hang",
+    invoke() {
+      markStarted();
+      return new Promise(() => {});
+    },
+  };
+  const { ctx, runtime } = createContext({
+    modelPort,
+    tools: [tool],
+    sessionManager: createCanonicalMessageEventSessionManager(),
+  });
+  bindPresentation(runtime);
+  const controller = new AbortController();
+  const invocation = createInvoker({
+    enableToolBinding: true,
+    toolAllowlist: ["hang"],
+    adaptToolsForBindingFn: () => ({ tools: [tool] }),
+    executeToolCallFn: executeToolCallInTurn,
+  })({ messages: [{ role: "user", content: "go" }], ctx, signal: controller.signal });
+  await started;
+  controller.abort(new Error("plugin deadline"));
+  const outcome = await Promise.race([
+    invocation.then(
+      () => "resolved",
+      () => "rejected",
+    ),
+    new Promise((resolve) => setTimeout(() => resolve("still-running"), 500)),
+  ]);
+  assert.equal(outcome, "rejected");
+  assert.equal(modelPort.requests.length, 1);
 });

@@ -142,3 +142,20 @@ export async function getFirstPartyCodeFiles({
   }
   return [...output].sort();
 }
+
+export async function getFirstPartyFilesUnder(
+  directories,
+  { repositoryRoot, extensions, includeTests },
+) {
+  if (!Array.isArray(directories) || !directories.length) {
+    throw new TypeError("getFirstPartyFilesUnder requires a non-empty directory list");
+  }
+  if (typeof includeTests !== "boolean") {
+    throw new TypeError("getFirstPartyFilesUnder requires includeTests as a boolean");
+  }
+  const prefixes = directories.map((directory) => `${directory.replace(/\/+$/, "")}/`);
+  const files = await getFirstPartyCodeFiles({ repositoryRoot, extensions, includeTests });
+  return files
+    .map((file) => file.replaceAll("\\", "/"))
+    .filter((file) => prefixes.some((prefix) => file.startsWith(prefix)));
+}

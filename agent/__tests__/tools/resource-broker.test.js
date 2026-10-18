@@ -14,14 +14,13 @@ import {
   registerResource,
 } from "../../src/tools/core/resource-broker.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 function runtime(basePath) {
-  return {
+  return createTestRuntimeContext({
     basePath,
-    globalConfig: {},
-    userConfig: {},
     systemRuntime: { userId: "admin", sessionId: "s-1", rootSessionId: "s-1" },
-  };
+  });
 }
 
 test("resource broker reuses identity across host tool calls", async () => {

@@ -12,6 +12,7 @@ import { startWorkflowPhase, endWorkflowPhase } from "./phase-events.js";
 export async function receiveWorkflowSource({
   options = {},
   ctx = {},
+  signal,
   sourceAgentResult = {},
   hookPoint = "",
   phaseTracker,
@@ -23,7 +24,7 @@ export async function receiveWorkflowSource({
     ctx,
     event: "workflow_hook_received_started",
   });
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
 
   const sourceText = resolveWorkflowSourceText(ctx, sourceAgentResult, hookPoint);
   if (!sourceText) {
@@ -50,7 +51,7 @@ export async function receiveWorkflowSource({
     event: "workflow_hook_received_succeeded",
     data: { sourceTextLength: sourceText.length },
   });
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
 
   return { sourceText, skipped: false };
 }

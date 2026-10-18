@@ -31,11 +31,12 @@ export function registerWorkflowAgentHooks({
   disposers.push(
     hookManager.on(
       hookPoint,
-      async (ctx = {}) =>
+      async (ctx, invocation) =>
         handleBeforeAgentDispatch({
           hookManager,
           options: runtimeOptions,
           ctx,
+          signal: invocation.signal,
           hookPoint,
         }),
       {

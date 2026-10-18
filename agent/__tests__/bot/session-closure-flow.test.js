@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -254,7 +254,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           ? effectiveAttachments[0] || {}
           : {};
         return createTestAgentExecutionScope(
-          createRuntimeContext({
+          createTestRuntimeContext({
             sessionManager,
             runtimeModel: String(runConfig?.runtimeModel || ""),
             userMessageAttachments: [
@@ -519,7 +519,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     attachmentService: engine.attach,
     async buildNewSessionContext({ dialogProcessId = "" } = {}) {
       return createTestAgentExecutionScope(
-        createRuntimeContext({
+        createTestRuntimeContext({
           sessionManager,
           runtimeModel: String(runConfig?.runtimeModel || ""),
           systemRuntime: { dialogProcessId },
@@ -534,7 +534,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       continueContextBuilt = true;
       capturedRunConfig = { ...runConfig };
       return createTestAgentExecutionScope(
-        createRuntimeContext({
+        createTestRuntimeContext({
           sessionManager,
           systemRuntime: { dialogProcessId, sessionId },
         }),

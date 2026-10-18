@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -134,7 +134,7 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
     dialogProcessId: "d1",
     contextProtocolVersion: 2,
     agentContext: createTestAgentExecutionScope(
-      createRuntimeContext({ eventListener: { onEvent() {} } }),
+      createTestRuntimeContext({ eventListener: { onEvent() {} } }),
     ),
     modelContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: messages },
@@ -461,6 +461,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   };
 
   const result = await engine.runSession({
+    abortSignal: new AbortController().signal,
     userId: "u1",
     sessionId,
     dialogProcessId: "dp-scope-smoke",
@@ -556,7 +557,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
       },
     },
   });
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     basePath: path.join(tempRoot, "u1"),
     runConfig: {
       ...prepared,
@@ -569,6 +570,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
 
   const successCall = { id: "call_ok", name: "demo_tool", args: { x: 1 } };
   const successResult = await executeToolCall({
+    abortSignal: runtime.abortSignal,
     call: successCall,
     tool: {
       async invoke(args) {
@@ -583,6 +585,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
 
   const errorCall = { id: "call_fail", name: "failing_tool", args: { y: 2 } };
   const errorResult = await executeToolCall({
+    abortSignal: runtime.abortSignal,
     call: errorCall,
     tool: {
       async invoke() {

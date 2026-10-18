@@ -17,28 +17,24 @@ import {
   getRuntimeFromAgentContext,
   resolveRuntimeUserId,
 } from "../../context/agent-context-accessor.js";
-import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
+import { TRANSFER_MODE } from "@noobot/semantic-transfer-protocol";
+import { text } from "@noobot/shared/value";
 
 const registries = new WeakMap();
 
-function resolveRuntime(agentContext = null, runtime = null) {
-  if (isPlainObject(runtime)) return runtime;
-  return getRuntimeFromAgentContext(agentContext);
-}
-
-function getRegistry(agentContext = null, runtime = null) {
-  const resolvedRuntime = resolveRuntime(agentContext, runtime);
-  let registry = registries.get(resolvedRuntime);
+function getRegistry(agentContext) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  let registry = registries.get(runtime);
   if (!registry) {
     registry = new Map();
-    registries.set(resolvedRuntime, registry);
+    registries.set(runtime, registry);
   }
   return registry;
 }
 
-function ownerOf(agentContext = null, runtime = null) {
-  return resolveRuntimeUserId(resolveRuntime(agentContext, runtime));
+function ownerOf(agentContext) {
+  return resolveRuntimeUserId(getRuntimeFromAgentContext(agentContext));
 }
 
 function registerCanonicalResource({
@@ -47,16 +43,15 @@ function registerCanonicalResource({
   logical,
   attachment = null,
   size = null,
-  mimeType = DEFAULT_MIME_TYPE,
+  mimeType,
   capabilities,
   executionPath = "",
-  runtime = null,
 }) {
   const resolvedSource = source === "workspace" && logical.view === "host" ? "host" : source;
   const resourceIdentity = attachment ? attachmentIdentityKey(attachment) : logical.path;
-  const resolvedOwner = ownerOf(agentContext, runtime);
+  const resolvedOwner = ownerOf(agentContext);
   const key = `${resolvedSource}:${resolvedOwner}:${resourceIdentity}`;
-  const registry = getRegistry(agentContext, runtime);
+  const registry = getRegistry(agentContext);
   const previous = registry.get(key);
   const ref = createResourceRef({
     resourceId: previous?.ref?.resourceId || undefined,
@@ -109,36 +104,26 @@ export async function registerResource({
 
 export function registerAttachmentResource({
   agentContext,
-  runtime = null,
   attachment,
   capabilities = { read: true, write: false, scriptInput: true },
-} = {}) {
-  const identity = attachment?.identity || attachment;
-  const logicalPath = text(attachment?.name);
-  if (!logicalPath) throw new TypeError("attachment resource name is required");
+}) {
   return registerCanonicalResource({
     agentContext,
     source: "attachment",
-    logical: { view: "attachment", path: logicalPath },
-    attachment: identity,
-    size: attachment?.size,
-    mimeType: text(attachment?.mimeType) || DEFAULT_MIME_TYPE,
+    logical: { view: "attachment", path: attachment.name },
+    attachment: attachment.identity,
+    size: attachment.size,
+    mimeType: attachment.mimeType,
     capabilities,
-    runtime,
   });
 }
 
-export function registerTransferAttachmentResources({
-  agentContext = null,
-  runtime = null,
-  transferEnvelopes = [],
-} = {}) {
-  const attachments = (Array.isArray(transferEnvelopes) ? transferEnvelopes : []).flatMap(
-    (envelope) =>
-      envelope?.payload?.mode === "attachment" ? envelope.payload.attachments || [] : [],
+export function registerTransferAttachmentResources({ agentContext, transferEnvelopes }) {
+  const attachments = transferEnvelopes.flatMap((envelope) =>
+    envelope.payload.mode === TRANSFER_MODE.ATTACHMENT ? envelope.payload.attachments : [],
   );
   const resources = attachments.map((attachment) =>
-    registerAttachmentResource({ agentContext, runtime, attachment }),
+    registerAttachmentResource({ agentContext, attachment }),
   );
   return Array.from(new Map(resources.map((resource) => [resource.resourceId, resource])).values());
 }

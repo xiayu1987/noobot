@@ -19,7 +19,7 @@ export function createRuntimeContext({
   attachmentService = null,
   botManager = null,
   userInteractionBridge = null,
-  abortSignal = null,
+  abortSignal,
   runtimeModel = "",
   allEnabledProviders = {},
   parentAsyncResultContainer = null,
@@ -29,7 +29,6 @@ export function createRuntimeContext({
   sharedTools = null,
 } = {}) {
   const normalizedRunConfig = isPlainObject(runConfig) ? runConfig : {};
-  const normalizedAbortSignal = abortSignal || null;
   return {
     basePath: text(basePath),
     globalConfig,
@@ -39,8 +38,8 @@ export function createRuntimeContext({
     attachmentService,
     botManager,
     userInteractionBridge,
-    abortSignal: normalizedAbortSignal,
-    cancellationScope: createExecutionCancellationScope({ abortSignal: normalizedAbortSignal }),
+    abortSignal,
+    cancellationScope: createExecutionCancellationScope({ abortSignal }),
     runtimeModel: text(runtimeModel),
     runConfig: normalizedRunConfig,
     allEnabledProviders:

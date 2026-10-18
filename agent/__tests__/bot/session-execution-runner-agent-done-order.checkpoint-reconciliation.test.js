@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import {
   assert,
   createRunner,
@@ -13,7 +13,7 @@ import {
 
 test("runSession restores only the checkpoint-persisted agent prefix at finalization", async () => {
   const callOrder = [];
-  const runtime = Object.assign(createRuntimeContext(), {
+  const runtime = Object.assign(createTestRuntimeContext(), {
     summaryCheckpointPersistedCount: 1,
     summaryCheckpointPersistedTotal: 2,
   });
@@ -81,7 +81,7 @@ test("runSession compares the complete durable turn without treating it as a che
   ];
   const runner = createRunner({
     callOrder,
-    runtime: createRuntimeContext(),
+    runtime: createTestRuntimeContext(),
     agentRunner: async () => ({
       output: "done",
       assistantMessageId: "message-assistant",
@@ -145,7 +145,7 @@ test("runSession upserts summarized messages created after a checkpoint", async 
   ];
   const runner = createRunner({
     callOrder,
-    runtime: Object.assign(createRuntimeContext(), {
+    runtime: Object.assign(createTestRuntimeContext(), {
       summaryCheckpointPersistedMessageUids: ["sm_checkpoint-tool"],
       summaryCheckpointPersistedCount: 1,
       summaryCheckpointPersistedTotal: 1,
@@ -190,7 +190,7 @@ test("runSession upserts summarized messages created after a checkpoint", async 
 
 test("runSession restores checkpoint messages by exact persistent UID when available", async () => {
   const callOrder = [];
-  const runtime = Object.assign(createRuntimeContext(), {
+  const runtime = Object.assign(createTestRuntimeContext(), {
     summaryCheckpointPersistedCount: 1,
     summaryCheckpointPersistedTotal: 2,
     summaryCheckpointPersistedMessageUids: ["sm_first", "sm_retained"],
@@ -258,7 +258,7 @@ test("runSession restores checkpoint messages by exact persistent UID when avail
 
 test("runSession recovers checkpoint UIDs and active prefix from the durable receipt", async () => {
   const callOrder = [];
-  const runtime = createRuntimeContext();
+  const runtime = createTestRuntimeContext();
   let capturedFinalizePayload = null;
   const runner = createRunner({
     callOrder,

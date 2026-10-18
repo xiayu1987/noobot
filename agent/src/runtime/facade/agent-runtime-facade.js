@@ -13,9 +13,6 @@ export class AgentRuntimeFacade {
         "AgentRuntimeFacade requires contextFactory.buildAgentContextFromBuilder",
       );
     }
-    if (!isFunction(contextFactory?.buildRunTurnAgentContext)) {
-      throw new TypeError("AgentRuntimeFacade requires contextFactory.buildRunTurnAgentContext");
-    }
     if (!isFunction(turnRunner)) {
       throw new TypeError("AgentRuntimeFacade requires turnRunner");
     }
@@ -23,11 +20,7 @@ export class AgentRuntimeFacade {
     this.turnRunner = turnRunner;
   }
 
-  buildRunTurnContext(agentContext, abortSignal = null) {
-    return this.contextFactory.buildRunTurnAgentContext(agentContext, abortSignal);
-  }
-
-  async prepareTurnExecution({ buildContextPayload, abortSignal = null }) {
+  async prepareTurnExecution({ buildContextPayload }) {
     const { mode, userId, sessionId, caller, parentSessionId } = buildContextPayload;
     const { eventListener, dialogProcessId, runConfig, contextBuilder } = buildContextPayload;
     const agentContext = await this.contextFactory.buildAgentContextFromBuilder({
@@ -41,8 +34,7 @@ export class AgentRuntimeFacade {
       runConfig,
       contextBuilder,
     });
-    const runtimeAgentContext = this.buildRunTurnContext(agentContext, abortSignal);
-    return { agentContext, runtimeAgentContext };
+    return { agentContext };
   }
 
   async runTurn({ agentContext, currentUserMessage, errorLogger = null } = {}) {

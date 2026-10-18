@@ -183,6 +183,7 @@ export class RunConfigPluginPreparer {
       next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
         maxTurns: next.miniRunnerMaxTurns,
         enableToolBinding: false,
+        pluginId: entry.pluginId,
         configSnapshot,
       });
     }
@@ -191,8 +192,7 @@ export class RunConfigPluginPreparer {
       next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
         maxTurns: next.miniRunnerMaxTurns,
         enableToolBinding: false,
-        headerNamespace: "plugin",
-        flowPrefix: entry.pluginId,
+        pluginId: entry.pluginId,
         configSnapshot,
       });
       next.subSessionRunner = this.createDetachedSubSessionRunner();

@@ -94,36 +94,36 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
       llm: { id: "old-llm" },
       activeModelName: "gpt-4o",
       activeModelAlias: "openai",
-      eventListener: {
-        onEvent(payload = {}) {
-          events.push(payload);
-        },
-      },
       runtime: {
+        eventListener: {
+          onEvent(payload = {}) {
+            events.push(payload);
+          },
+        },
+        globalConfig: {
+          defaultProvider: "openai",
+          providers: {
+            openai: {
+              model: "gpt-4o",
+              reasoning_effort_parameter: "reasoning_effort",
+              reasoning_effort_options: ["none", "low", "medium", "high"],
+              providerId: "openai",
+              adapterId: "openai-compatible",
+              enabled: true,
+            },
+            anthropic: {
+              model: "gpt-4.1-mini",
+              reasoning_effort_parameter: "reasoning_effort",
+              reasoning_effort_options: ["none", "low", "medium", "high"],
+              providerId: "anthropic",
+              adapterId: "openai-compatible",
+              enabled: true,
+            },
+          },
+        },
+        userConfig: {},
         runtimeModel: "anthropic",
       },
-      globalConfig: {
-        defaultProvider: "openai",
-        providers: {
-          openai: {
-            model: "gpt-4o",
-            reasoning_effort_parameter: "reasoning_effort",
-            reasoning_effort_options: ["none", "low", "medium", "high"],
-            providerId: "openai",
-            adapterId: "openai-compatible",
-            enabled: true,
-          },
-          anthropic: {
-            model: "gpt-4.1-mini",
-            reasoning_effort_parameter: "reasoning_effort",
-            reasoning_effort_options: ["none", "low", "medium", "high"],
-            providerId: "anthropic",
-            adapterId: "openai-compatible",
-            enabled: true,
-          },
-        },
-      },
-      userConfig: {},
       defaultModelSpec: {
         alias: "openai",
         model: "gpt-4o",
@@ -160,34 +160,35 @@ test("resolveLlmForTurn should select the canonical defaultModelSpec without cre
       llm: { id: "old-llm" },
       activeModelName: "scenario-default-model",
       activeModelAlias: "scenario_default",
-      eventListener: {
-        onEvent(payload = {}) {
-          events.push(payload);
-        },
-      },
-      runtime: {},
-      globalConfig: {
-        defaultProvider: "scenario_default",
-        providers: {
-          scenario_default: {
-            model: "scenario-default-model",
-            reasoning_effort_parameter: "reasoning_effort",
-            reasoning_effort_options: ["none", "low", "medium", "high"],
-            providerId: "scenario_default",
-            adapterId: "openai-compatible",
-            enabled: true,
-          },
-          selected_alias: {
-            model: "selected-model",
-            reasoning_effort_parameter: "reasoning_effort",
-            reasoning_effort_options: ["none", "low", "medium", "high"],
-            providerId: "selected_alias",
-            adapterId: "openai-compatible",
-            enabled: true,
+      runtime: {
+        eventListener: {
+          onEvent(payload = {}) {
+            events.push(payload);
           },
         },
+        globalConfig: {
+          defaultProvider: "scenario_default",
+          providers: {
+            scenario_default: {
+              model: "scenario-default-model",
+              reasoning_effort_parameter: "reasoning_effort",
+              reasoning_effort_options: ["none", "low", "medium", "high"],
+              providerId: "scenario_default",
+              adapterId: "openai-compatible",
+              enabled: true,
+            },
+            selected_alias: {
+              model: "selected-model",
+              reasoning_effort_parameter: "reasoning_effort",
+              reasoning_effort_options: ["none", "low", "medium", "high"],
+              providerId: "selected_alias",
+              adapterId: "openai-compatible",
+              enabled: true,
+            },
+          },
+        },
+        userConfig: {},
       },
-      userConfig: {},
       defaultModelSpec: {
         alias: "selected_alias",
         model: "selected-model",

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { resolveEffectiveModelSpec } from "../../src/runtime/run-config/config-resolver.js";
 import { createStateBuilder } from "../../src/runtime/state-builder.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 const globalConfig = {
   providers: {
@@ -128,7 +128,7 @@ function buildStateWithRunConfig(runConfig) {
 
   builder({
     agentContext: createTestAgentExecutionScope(
-      createRuntimeContext({
+      createTestRuntimeContext({
         globalConfig,
         userConfig: {},
         runConfig,

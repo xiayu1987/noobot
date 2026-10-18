@@ -30,6 +30,7 @@ export async function handleBeforeAgentDispatch({
   hookManager,
   options = {},
   ctx = {},
+  signal,
   hookPoint = "",
 } = {}) {
   const beforeDispatchMode = text(hookPoint) === HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
@@ -44,6 +45,7 @@ export async function handleBeforeAgentDispatch({
   const { sourceText, skipped } = await receiveWorkflowSource({
     options,
     ctx,
+    signal,
     sourceAgentResult,
     hookPoint,
     phaseTracker,
@@ -57,10 +59,11 @@ export async function handleBeforeAgentDispatch({
     const { semanticResolution, semanticText } = await runSemanticResolutionStage({
       options,
       ctx,
+      signal,
       sourceText,
       phaseTracker,
     });
-    throwIfWorkflowAborted(ctx);
+    throwIfWorkflowAborted(signal);
     const { semantic } = executeWorkflowText({
       semanticText,
       options,
@@ -84,6 +87,7 @@ export async function handleBeforeAgentDispatch({
       hookManager,
       options,
       ctx,
+      signal,
       semantic,
       workflowRunId,
       planningNodeSessions,
@@ -94,6 +98,7 @@ export async function handleBeforeAgentDispatch({
       workflowRunId,
       options,
       ctx,
+      signal,
       sourceText,
       semanticText,
       semantic,
@@ -116,7 +121,7 @@ export async function handleBeforeAgentDispatch({
     });
     return createBotDispatchHandled({ owner: "workflow", result: agentResult });
   } catch (error) {
-    if (isWorkflowAbortError(error, ctx)) {
+    if (isWorkflowAbortError(error, signal)) {
       throw error;
     }
     return handleWorkflowFailure({

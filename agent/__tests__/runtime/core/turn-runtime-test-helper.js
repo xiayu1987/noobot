@@ -139,7 +139,15 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
     messageBlocks: loopState.modelContext.messageBlocks,
     tools: loopState.tools,
   });
-  runtime.persistCurrentTurnMessages = async () => {};
+  bindTestDispatchLifecycle(runtime);
   initializeCurrentTurnMessageEventProjection(runtime);
   return { modelState, loopState };
+}
+
+export function bindTestDispatchLifecycle(runtime) {
+  runtime.persistCurrentTurnMessages = async () => {};
+  runtime.withCurrentTurnPersistenceBatch = async (operation) => operation();
+  runtime.consumeUserInterjections = async () => [];
+  runtime.sealUserInterjectionQueueIfEmpty = () => true;
+  return runtime;
 }

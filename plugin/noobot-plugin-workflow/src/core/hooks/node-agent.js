@@ -28,7 +28,6 @@ import {
 import {
   hasOwnObjectKey,
   isWorkflowAbortError,
-  resolveWorkflowAbortSignal,
   throwIfWorkflowAborted,
   withTimeout,
 } from "./runtime.js";
@@ -55,6 +54,7 @@ export async function runNodeAgent({
   hookManager,
   options = {},
   ctx = {},
+  signal,
   instanceId = "",
   pendingStep = {},
   semantic = {},
@@ -62,7 +62,7 @@ export async function runNodeAgent({
   transition = 0,
   upstreamNodeResults = [],
 } = {}) {
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
   const resolvedNodeIdentity = resolveNodeAgentIdentity({ nodeIdentity, ctx });
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
   const nodeInputAttachments = resolveNodeInputAttachments({
@@ -90,6 +90,7 @@ export async function runNodeAgent({
   const { subSession, childFailed } = await runWorkflowNodeSubSession({
     options,
     ctx,
+    signal,
     instanceId,
     pendingStep,
     transition,
@@ -100,10 +101,10 @@ export async function runNodeAgent({
     upstreamAttachmentSystemMessage,
     agentInstruction: hookPayload.agentInstruction,
   });
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
   return resolveNodeAgentResult({
     hookManager,
-    ctx,
+    signal,
     pendingStep,
     hookPayload,
     subSession,
@@ -194,7 +195,7 @@ async function runWorkflowNodeSubSession(params) {
     if (subSession) await persistWorkflowNodeSubSession(params, subSession);
     return { subSession, childFailed: false };
   } catch (error) {
-    if (isWorkflowAbortError(error, params.ctx)) throw error;
+    if (isWorkflowAbortError(error, params.signal)) throw error;
     if (!isObjectLike(error?.lifecycle)) throw error;
     return { subSession: { lifecycle: error.lifecycle }, childFailed: true };
   }
@@ -202,7 +203,7 @@ async function runWorkflowNodeSubSession(params) {
 
 async function executeWorkflowNodeSubSession(params) {
   const request = createWorkflowNodeSubSessionRequest(params);
-  throwIfWorkflowAborted(params.ctx);
+  throwIfWorkflowAborted(params.signal);
   const timeoutMs = resolveNodeAgentTimeout(params.options);
   const runPromise = Promise.resolve(params.options.subSessionRunner(request));
   try {
@@ -210,12 +211,12 @@ async function executeWorkflowNodeSubSession(params) {
       runPromise,
       timeoutMs,
       `workflow node sub-session timeout (${timeoutMs}ms)`,
-      { signal: resolveWorkflowAbortSignal(params.ctx) },
+      { signal: params.signal },
     );
-    throwIfWorkflowAborted(params.ctx);
+    throwIfWorkflowAborted(params.signal);
     return result;
   } catch (error) {
-    if (isWorkflowAbortError(error, params.ctx)) await Promise.allSettled([runPromise]);
+    if (isWorkflowAbortError(error, params.signal)) await Promise.allSettled([runPromise]);
     throw error;
   }
 }
@@ -229,7 +230,7 @@ function createWorkflowNodeSubSessionRequest(params) {
   });
   return {
     parentExecutionScope: ctx?.agentContext || null,
-    abortSignal: resolveWorkflowAbortSignal(ctx),
+    abortSignal: params.signal,
     message: params.agentInstruction,
     attachments: params.nodeInputAttachments,
     runConfigPatch: buildWorkflowNodeRunConfigPatch(ctx, identity),
@@ -329,7 +330,7 @@ function resolveNodeAgentTimeout(options) {
 }
 
 async function persistWorkflowNodeSubSession(params, subSession) {
-  throwIfWorkflowAborted(params.ctx);
+  throwIfWorkflowAborted(params.signal);
   await persistWorkflowNodeResultAttachment({
     ctx: params.ctx,
     subSession,
@@ -343,7 +344,7 @@ async function persistWorkflowNodeSubSession(params, subSession) {
 
 async function resolveNodeAgentResult({
   hookManager,
-  ctx,
+  signal,
   pendingStep,
   hookPayload,
   subSession,
@@ -351,8 +352,10 @@ async function resolveNodeAgentResult({
   resolvedNodeIdentity,
 }) {
   if (childFailed) return createNodeAgentResult(null, subSession, resolvedNodeIdentity);
-  const emitted = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload);
-  throwIfWorkflowAborted(ctx);
+  const emitted = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload, {
+    signal,
+  });
+  throwIfWorkflowAborted(signal);
   const action = emitted.outcomes
     .map((outcome) => outcome?.value?.action)
     .find((value) => value && typeof value === "object");

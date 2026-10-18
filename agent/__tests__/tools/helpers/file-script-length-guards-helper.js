@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { createFileTool } from "../../../src/tools/execution/file-tools.js";
-import { executeToolCall } from "../../../src/runtime/tool-execution/tool-runner.js";
+import { executeToolCall as executeToolCallProduction } from "../../../src/runtime/tool-execution/tool-runner.js";
 import { transferSemanticContent } from "../../../src/transfer-adapter/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
@@ -19,7 +19,7 @@ import {
   createScriptTool,
 } from "../../../src/tools/execution/script-tool.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 const TEST_RUN_IDENTITY = Object.freeze({
   turnScopeId: "t-1",
@@ -33,7 +33,7 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const { turnScopeId, executionId, messageId } = TEST_RUN_IDENTITY;
   const systemRuntimeOverrides = runtimeOverrides.systemRuntime || {};
   const sessionId = String(systemRuntimeOverrides.sessionId || "s-1");
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     basePath,
     globalConfig: {
       security: {
@@ -59,6 +59,10 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   return createTestAgentExecutionScope(runtime, {
     identity: { userId, sessionId, turnScopeId, runId: executionId, messageId },
   });
+}
+
+function executeToolCall(options) {
+  return executeToolCallProduction({ abortSignal: options.runtime.abortSignal, ...options });
 }
 
 function toolCallScope(agentContext) {

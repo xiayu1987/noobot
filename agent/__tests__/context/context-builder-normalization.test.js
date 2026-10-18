@@ -66,6 +66,7 @@ function createBuilderForAttachmentRuntimeTest({
       userInteractionBridge,
     },
     sessionContext: {
+      abortSignal: new AbortController().signal,
       userId: "u1",
       sessionId: "s1",
       caller: "user",
@@ -79,7 +80,6 @@ function createBuilderForAttachmentRuntimeTest({
         },
         selectedConnectorIds,
       }),
-      abortSignal: null,
       parentAsyncResultContainer: null,
       persistenceContext,
       persistenceScope,
@@ -246,6 +246,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
       userInteractionBridge: null,
     },
     sessionContext: {
+      abortSignal: new AbortController().signal,
       userId: configuredSuperUserId,
       sessionId: "s1",
       caller: "user",
@@ -256,7 +257,6 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
           promptSections: ["base_prompt", "system_runtime", "scenario"],
         },
       }),
-      abortSignal: null,
       parentAsyncResultContainer: null,
     },
   });
@@ -293,13 +293,13 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
       userInteractionBridge: null,
     },
     sessionContext: {
+      abortSignal: new AbortController().signal,
       userId: "u1",
       sessionId: "s1",
       caller: "user",
       parentSessionId: "",
       userMessageAttachments: [],
       runConfig: executionRunConfig("turn-runtime-only"),
-      abortSignal: null,
       parentAsyncResultContainer: null,
     },
   });
@@ -340,6 +340,7 @@ test("buildNewSessionContext keeps super user identity in system message when sy
       userInteractionBridge: null,
     },
     sessionContext: {
+      abortSignal: new AbortController().signal,
       userId: configuredSuperUserId,
       sessionId: "s1",
       caller: "user",
@@ -350,7 +351,6 @@ test("buildNewSessionContext keeps super user identity in system message when sy
           promptSections: ["base_prompt"],
         },
       }),
-      abortSignal: null,
       parentAsyncResultContainer: null,
     },
   });
@@ -489,6 +489,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
       userInteractionBridge: null,
     },
     sessionContext: {
+      abortSignal: new AbortController().signal,
       userId: "u1",
       sessionId: "s1",
       caller: "user",
@@ -497,7 +498,6 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
       runConfig: executionRunConfig("client-turn:edited", {
         contextPolicy: { promptSections: ["base_prompt", "system_runtime"] },
       }),
-      abortSignal: null,
       parentAsyncResultContainer: null,
     },
   });
@@ -581,7 +581,7 @@ function createBuilderForLongMemoryTest(
     readLongMemory = async () => "remembered-long-memory",
     errorLogs = [],
     events = [],
-    abortSignal = null,
+    abortSignal = new AbortController().signal,
   } = {},
 ) {
   return new ContextBuilder({
@@ -708,7 +708,11 @@ test("a builder with memoryService requires an error logger", () => {
       new ContextBuilder({
         config: { globalConfig: {}, userConfig: {} },
         serviceContainer: { memoryService: { readLongMemory: async () => "" } },
-        sessionContext: { userId: "u1", runConfig: executionRunConfig("client-turn:no-logger") },
+        sessionContext: {
+          abortSignal: new AbortController().signal,
+          userId: "u1",
+          runConfig: executionRunConfig("client-turn:no-logger"),
+        },
       }),
     TypeError,
   );

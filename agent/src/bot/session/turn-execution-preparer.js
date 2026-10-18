@@ -40,17 +40,13 @@ export async function prepareTurnInput({ attachmentService, buildContextPayload 
   return { userMessageAttachments };
 }
 
-export async function prepareAgentTurnExecution(
-  engine,
-  { buildContextPayload = {}, abortSignal = null } = {},
-) {
+export async function prepareAgentTurnExecution(engine, { buildContextPayload }) {
   const payload = buildContextPayload;
   const prepared =
     payload?.runConfig?.resumeFromStoppedSnapshot === true
-      ? await prepareStoppedSnapshotResumeTurnExecution(engine, { payload, abortSignal })
+      ? await prepareStoppedSnapshotResumeTurnExecution(engine, { payload })
       : await engine.agentRuntimeFacade.prepareTurnExecution({
           buildContextPayload: payload,
-          abortSignal,
         });
   const runtimeAttachments = payload.userMessageAttachments;
   const existingSessionAttachments = await engine._resolveExistingUserMessageAttachments({
@@ -113,7 +109,7 @@ function buildContinuationIdentity(payload) {
   };
 }
 
-function prepareWithoutStoppedSnapshot(engine, { payload, abortSignal }) {
+function prepareWithoutStoppedSnapshot(engine, { payload }) {
   return engine.agentRuntimeFacade.prepareTurnExecution({
     buildContextPayload: {
       ...payload,
@@ -123,7 +119,6 @@ function prepareWithoutStoppedSnapshot(engine, { payload, abortSignal }) {
         resumeSnapshotUnavailable: true,
       },
     },
-    abortSignal,
   });
 }
 
@@ -157,10 +152,7 @@ function markRuntimeResumedFromSnapshot(runtime, { identity, userMetaBackwrites,
   );
 }
 
-export async function prepareStoppedSnapshotResumeTurnExecution(
-  engine,
-  { payload, abortSignal = null },
-) {
+export async function prepareStoppedSnapshotResumeTurnExecution(engine, { payload }) {
   const { contextBuilder, runConfig } = payload;
   const identity = buildStoppedResumeIdentity(payload, runConfig);
   const snapshot = await loadStoppedModelMessageSnapshot({
@@ -169,7 +161,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     allowMissing: true,
   });
   if (!snapshot) {
-    return prepareWithoutStoppedSnapshot(engine, { payload, abortSignal });
+    return prepareWithoutStoppedSnapshot(engine, { payload });
   }
   const { userMessageAttachments } = payload;
   const hydratedMessageBlocks = await restoreSnapshotUserAttachmentFacts(
@@ -192,18 +184,13 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     },
   );
   const scopedAgentContext = scopeResumedAgentContext(agentContext, userMetaBackwrites, runConfig);
-  const runtimeAgentContext = engine.agentRuntimeFacade.buildRunTurnContext(
-    scopedAgentContext,
-    abortSignal,
-  );
-  markRuntimeResumedFromSnapshot(getRuntimeFromAgentContext(runtimeAgentContext), {
+  markRuntimeResumedFromSnapshot(getRuntimeFromAgentContext(scopedAgentContext), {
     identity,
     userMetaBackwrites,
     snapshot,
   });
   return {
     agentContext: scopedAgentContext,
-    runtimeAgentContext,
     userMessageAttachments,
   };
 }

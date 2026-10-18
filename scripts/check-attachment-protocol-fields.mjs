@@ -4,13 +4,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { resolveRepoRoot } from "./lib/repo-root.mjs";
-import { ignorePathParts, runForbiddenLineGuard } from "./lib/guard-scan.mjs";
+import { defineCheck, emptyRuleMeasurements, runCheckWhenMain } from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addPatternLineHits, addRemovedPathHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = resolveRepoRoot();
-const TARGET_DIRS = [
+const PRODUCTION_ROOTS = Object.freeze([
   "agent/src",
   "client/noobot-chat/src",
   "semantic-transfer-protocol/src",
@@ -21,64 +20,89 @@ const TARGET_DIRS = [
   "plugin/noobot-plugin-harness/src",
   "plugin/noobot-plugin-workflow/src",
   "plugin/noobot-plugin-workflow/frontend",
-];
-const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "generated", "__tests__", "tests"]);
+]);
+const CODE_EXTENSIONS = Object.freeze([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
+const REMOVED_MODEL_ENTRIES = Object.freeze(["attachment-protocol/src/attachment-model.js"]);
+const LEGACY_ATTACHMENT_FIELDS = Object.freeze([
+  "attachment_id",
+  "file_id",
+  "client_attachment_id",
+  "content_sha256",
+  "attachment_source",
+  "generation_source",
+  "relative_path",
+  "sandbox_path",
+  "sandbox_view_path",
+  "sandboxViewPath",
+  "parsed_from_attachment_ids",
+]);
+const ATTACHMENT_SOURCE_LITERALS = Object.freeze([
+  /\battachmentSource\b\s*:\s*(["'`])(?:model|user|subtask|email)\1/,
+  /\battachmentSource\b[^\n]*?[=!]==?\s*(["'`])(?:model|user|subtask|email)\1/,
+  /(["'`])(?:model|user|subtask|email)\1\s*[=!]==?\s*[^\n]*?\battachmentSource\b/,
+]);
 
-const LEGACY_ATTACHMENT_FIELD_PATTERNS = [
-  { field: "attachment_id", regex: /\battachment_id\b/ },
-  { field: "file_id", regex: /\bfile_id\b/ },
-  { field: "client_attachment_id", regex: /\bclient_attachment_id\b/ },
-  { field: "content_sha256", regex: /\bcontent_sha256\b/ },
-  { field: "attachment_source", regex: /\battachment_source\b/ },
-  { field: "generation_source", regex: /\bgeneration_source\b/ },
-  { field: "relative_path", regex: /\brelative_path\b/ },
-  { field: "sandbox_path", regex: /\bsandbox_path\b/ },
-  { field: "sandbox_view_path", regex: /\bsandbox_view_path\b/ },
-  { field: "sandboxViewPath", regex: /\bsandboxViewPath\b/ },
-  { field: "parsed_from_attachment_ids", regex: /\bparsed_from_attachment_ids\b/ },
-];
-
-const ATTACHMENT_SOURCE_LITERAL_PATTERNS = [
-  {
-    field: "attachmentSource_literal_assignment",
-    regex: /\battachmentSource\b\s*:\s*(["'`])(?:model|user|subtask|email)\1/,
-  },
-  {
-    field: "attachmentSource_literal_comparison",
-    regex: /\battachmentSource\b[^\n]*?[=!]==?\s*(["'`])(?:model|user|subtask|email)\1/,
-  },
-  {
-    field: "attachmentSource_literal_comparison_reversed",
-    regex: /(["'`])(?:model|user|subtask|email)\1\s*[=!]==?\s*[^\n]*?\battachmentSource\b/,
-  },
-];
-
-const violations = [];
-const FORBIDDEN_PROTOCOL_FILES = ["attachment-protocol/src/attachment-model.js"];
-for (const relativePath of FORBIDDEN_PROTOCOL_FILES) {
-  if (existsSync(path.join(ROOT, relativePath))) {
-    violations.push({
-      field: "duplicate_attachment_model_entry",
-      file: relativePath,
-      line: 1,
-      text: "attachment model must be owned by attachment-protocol/src/model.js",
-    });
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  await addRemovedPathHits(
+    measured.duplicateAttachmentModel,
+    REMOVED_MODEL_ENTRIES,
+    "attachment model is owned by attachment-protocol/src/model.js",
+  );
+  const files = await getFirstPartyFilesUnder(PRODUCTION_ROOTS, {
+    repositoryRoot,
+    extensions: CODE_EXTENSIONS,
+    includeTests: false,
+  });
+  for (const file of files) {
+    const source = await readRepositoryText(file);
+    for (const field of LEGACY_ATTACHMENT_FIELDS) {
+      addPatternLineHits({
+        measurement: measured.legacyAttachmentField,
+        file,
+        source,
+        pattern: new RegExp(`\\b${field}\\b`),
+        message: `legacy attachment field ${field}`,
+      });
+    }
+    for (const pattern of ATTACHMENT_SOURCE_LITERALS) {
+      addPatternLineHits({
+        measurement: measured.attachmentSourceLiteral,
+        file,
+        source,
+        pattern,
+        message: "attachmentSource literal outside the attachment protocol",
+      });
+    }
   }
+  return measured;
 }
-const FORBIDDEN_LINE_PATTERNS = [
-  ...LEGACY_ATTACHMENT_FIELD_PATTERNS,
-  ...ATTACHMENT_SOURCE_LITERAL_PATTERNS,
-];
-runForbiddenLineGuard({
-  label: "check-attachment-protocol-fields",
-  root: ROOT,
-  directories: TARGET_DIRS,
-  scan: { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS },
-  rulesFor: () => FORBIDDEN_LINE_PATTERNS,
-  guidance: [
-    "Attachment metadata aliases are forbidden outside the versioned attachment protocol.",
-    "All producers and consumers must use canonical attachment fields.",
-  ],
-  violations,
+
+export const CHECK = defineCheck({
+  id: "attachment-protocol-fields",
+  description: "Attachment metadata uses only canonical attachment-protocol fields",
+  rules: {
+    duplicateAttachmentModel: {
+      description: "The attachment model has one entry in attachment-protocol",
+      hint: "import attachment-protocol/src/model.js instead of adding a second model entry",
+    },
+    legacyAttachmentField: {
+      description: "Producers and consumers never use snake_case or removed attachment aliases",
+      hint: "use the canonical camelCase attachment field from attachment-protocol",
+    },
+    attachmentSourceLiteral: {
+      description: "attachmentSource values come from the attachment protocol constants",
+      hint: "compare against the attachment-protocol source constants instead of string literals",
+    },
+  },
+  exemptions: [],
+  baseline: {
+    duplicateAttachmentModel: 0,
+    legacyAttachmentField: 0,
+    attachmentSourceLiteral: 0,
+    exemptions: 0,
+  },
+  measure,
 });
+
+await runCheckWhenMain(CHECK, import.meta.url);

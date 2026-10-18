@@ -140,7 +140,7 @@ export class MemoryManager {
     userId,
     sessionId = "",
     userConfig,
-    abortSignal = null,
+    abortSignal,
     eventListener = null,
     onStageError,
   }) {
@@ -168,7 +168,6 @@ export class MemoryManager {
     const modelPort = this.createModelPort({
       modelSpec,
       modelState: {
-        eventListener,
         invocationIdentity: {
           sessionId,
           parentSessionId: "",
@@ -177,6 +176,7 @@ export class MemoryManager {
           runId: `memory-summary:${sessionId}`,
         },
         runtime: {
+          eventListener,
           systemRuntime: { userId, sessionId },
         },
       },

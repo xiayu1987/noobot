@@ -8,12 +8,15 @@ import assert from "node:assert/strict";
 
 import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function createMessageBlockScope(identity, runtime, messageBlocks) {
-  return createTestAgentExecutionScope(createRuntimeContext(runtime), { identity, messageBlocks });
+  return createTestAgentExecutionScope(createTestRuntimeContext(runtime), {
+    identity,
+    messageBlocks,
+  });
 }
 
 test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {

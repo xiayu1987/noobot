@@ -136,7 +136,7 @@ async function recordSessionRunFailure({
         resolvedRunConfig?.botHookManager && typeof resolvedRunConfig.botHookManager === "object"
           ? resolvedRunConfig.botHookManager
           : null,
-      abortSignal: resolvedRunConfig?.abortSignal || null,
+      abortSignal,
     },
     point: HOOK_POINT.BOT.SESSION_RUN_ERROR,
     context: withBotHookRuntimeMeta(
@@ -149,7 +149,6 @@ async function recordSessionRunFailure({
       },
       { message, runConfig: resolvedRunConfig, error: executionFailure },
     ),
-    eventListener: resolvedRuntimeEventListener,
   });
   upsertParentAsyncTask({
     parentAsyncResultContainer: resolvedParentAsyncResultContainer,

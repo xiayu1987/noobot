@@ -6,6 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { RunConfigPluginPreparer } from "../../src/bot/session/run-config-plugin-preparer.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createTestModelHost } from "../helpers/test-model-host.js";
 
 function entry({ id, hooks = [], emits = [], executionIntent, activate } = {}) {
   const ports = ["hooks.register"];
@@ -188,4 +190,53 @@ test("an unavailable plugin cannot be activated by selectedPlugins", () => {
 
   assert.equal(prepared.plugins.demo, undefined);
   assert.equal(prepared.hookManager.list("agent.before_turn").length, 0);
+});
+
+test("agent lifecycle capability invoker prefixes flow with the plugin id", async () => {
+  const demo = entry({
+    id: "demo",
+    hooks: ["agent.before_turn"],
+    activate: activation("demo", (host) =>
+      host.hooks.register("agent.before_turn", () => {}, { id: "before" }),
+    ),
+  });
+  const instance = new RunConfigPluginPreparer({
+    globalConfig: {
+      defaultProvider: "openai",
+      providers: {
+        openai: {
+          enabled: true,
+          model: "gpt-4",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
+        },
+      },
+    },
+    loadedDynamicPlugins: { registry: new Map([["demo", demo]]) },
+    createPluginResolveModelMessages: () => () => [],
+  });
+  const prepared = instance.prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } });
+  const requests = [];
+  const modelPort = {
+    async invoke(request) {
+      requests.push(request);
+      throw new Error("request captured");
+    },
+  };
+  const runtime = {
+    modelHost: createTestModelHost({ modelPort, modelSpec: {} }),
+    systemRuntime: { turnScopeId: "turn-demo" },
+  };
+  await assert.rejects(
+    prepared.plugins.demo.capabilityModelInvoker({
+      purpose: "planning",
+      domain: "workflow",
+      pluginFlow: "plan",
+      ctx: { agentContext: createTestAgentExecutionScope(runtime) },
+      signal: new AbortController().signal,
+    }),
+    /request captured/,
+  );
+  assert.equal(requests[0].options.headers["X-Plugin-Flow"], "demo.plan");
+  assert.equal(requests[0].invocation.flow, "demo.plan");
 });

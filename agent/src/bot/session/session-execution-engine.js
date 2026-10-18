@@ -358,7 +358,7 @@ export class SessionExecutionEngine {
     userInteractionBridge = null,
     userInterjectionPort = null,
     runConfig = {},
-    abortSignal = null,
+    abortSignal,
     parentAsyncResultContainer = null,
     persistenceContext = null,
     persistenceScope = null,
@@ -382,8 +382,8 @@ export class SessionExecutionEngine {
     });
   }
 
-  async _prepareAgentTurnExecution({ buildContextPayload = {}, abortSignal = null } = {}) {
-    return prepareAgentTurnExecution(this, { buildContextPayload, abortSignal });
+  async _prepareAgentTurnExecution({ buildContextPayload }) {
+    return prepareAgentTurnExecution(this, { buildContextPayload });
   }
 
   async _resolveExistingUserMessageAttachments({
@@ -511,7 +511,7 @@ export class SessionExecutionEngine {
     parentSessionId = "",
     parentDialogProcessId = "",
     dialogProcessId = "",
-    abortSignal = null,
+    abortSignal,
     userInteractionBridge = null,
     userInterjectionPort = null,
     runConfig = {},

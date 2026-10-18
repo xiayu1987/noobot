@@ -5,7 +5,7 @@
  */
 
 import { WORKFLOW_PLUGIN_DEFAULTS, WORKFLOW_SEMANTIC } from "../constants.js";
-import { resolveWorkflowAbortSignal, throwIfWorkflowAborted } from "../hooks/runtime.js";
+import { throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { resolveWorkflowInputAttachments } from "../hooks/attachments.js";
 import {
   buildWorkflowAvailableToolsPlanningBlock,
@@ -57,8 +57,13 @@ function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   ].join("\n");
 }
 
-export async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } = {}) {
-  throwIfWorkflowAborted(ctx);
+export async function resolveSemanticText({
+  options = {},
+  ctx = {},
+  signal,
+  sourceText = "",
+} = {}) {
+  throwIfWorkflowAborted(signal);
   const userMessage = text(ctx?.userMessage);
   const locale = text(ctx?.runConfig?.locale) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE;
   const userAttachments = resolveWorkflowInputAttachments(ctx);
@@ -104,10 +109,10 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
     messages: semanticMessages,
     ctx,
     toolAllowlist: availableToolNames,
-    signal: resolveWorkflowAbortSignal(ctx),
+    signal,
     contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   });
-  throwIfWorkflowAborted(ctx);
+  throwIfWorkflowAborted(signal);
   const resolvedText = text(result?.output?.text) || sourceText;
   return {
     text: resolvedText,

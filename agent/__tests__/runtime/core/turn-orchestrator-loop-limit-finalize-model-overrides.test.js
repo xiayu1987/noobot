@@ -85,8 +85,8 @@ function createModelState(modelPort, defaultModelSpec = null) {
     modelPort,
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    eventListener: null,
     runtime: {
+      abortSignal: new AbortController().signal,
       runConfig: {
         executionId: "run-orchestrator-model-overrides",
       },
@@ -94,8 +94,6 @@ function createModelState(modelPort, defaultModelSpec = null) {
         config: { safeConfirm: true },
       },
     },
-    globalConfig: {},
-    userConfig: {},
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,
@@ -252,7 +250,7 @@ test("bound tool invocations remain non-streaming when the run mode is disabled"
   ]);
   const modelState = createModelState(modelPort);
   modelState.runtime.runConfig.streaming = false;
-  modelState.globalConfig.streaming = true;
+  modelState.runtime.globalConfig = { streaming: true };
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding: { bindOptions: { tool_choice: "auto" } },
     boundTools: [{ name: "execute_script" }],
@@ -278,7 +276,7 @@ test("bound tool invocations use streaming when frontend enables streaming", asy
   ]);
   const modelState = createModelState(modelPort);
   modelState.runtime.runConfig.streaming = true;
-  modelState.globalConfig.streaming = true;
+  modelState.runtime.globalConfig = { streaming: true };
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding: { bindOptions: { tool_choice: "auto" } },
     boundTools: [{ name: "execute_script" }],

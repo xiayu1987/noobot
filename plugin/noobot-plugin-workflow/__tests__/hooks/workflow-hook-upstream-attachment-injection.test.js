@@ -13,6 +13,7 @@ import {
   callsByNodeName,
   registerWorkflowAgentHooks,
   WORKFLOW_PLUGIN_DEFAULTS,
+  createTestHookInvocation,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook injects upstream node result attachments into downstream sub-session system messages", async () => {
@@ -83,26 +84,29 @@ test("workflow hook injects upstream node result attachments into downstream sub
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s-upstream",
-    dialogProcessId: "d-upstream",
-    userMessage: "请运行带并发和汇聚的流程",
-    runConfig: { locale: "zh-CN" },
-    agentContext: {
-      bindings: {
-        runtime: {
-          sharedTools: {
-            semanticTransfer: createSemanticTransferTool({
-              prefix: "att",
-              sessionId: "s-upstream",
-              calls: semanticTransferCalls,
-            }),
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s-upstream",
+      dialogProcessId: "d-upstream",
+      userMessage: "请运行带并发和汇聚的流程",
+      runConfig: { locale: "zh-CN" },
+      agentContext: {
+        bindings: {
+          runtime: {
+            sharedTools: {
+              semanticTransfer: createSemanticTransferTool({
+                prefix: "att",
+                sessionId: "s-upstream",
+                calls: semanticTransferCalls,
+              }),
+            },
           },
         },
       },
     },
-  });
+    createTestHookInvocation(),
+  );
 
   const callByNodeName = callsByNodeName(subSessionCalls);
   assert.equal(subSessionCalls.length, 5);
@@ -188,25 +192,28 @@ test("workflow hook injects one upstream action attachments into multiple direct
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
-    userId: "u1",
-    sessionId: "s-fanout",
-    dialogProcessId: "d-fanout",
-    userMessage: "请运行直接多下游流程",
-    runConfig: { locale: "zh-CN" },
-    agentContext: {
-      bindings: {
-        runtime: {
-          sharedTools: {
-            semanticTransfer: createSemanticTransferTool({
-              prefix: "fanout-att",
-              sessionId: "s-fanout",
-            }),
+  await beforeDispatch.handler(
+    {
+      userId: "u1",
+      sessionId: "s-fanout",
+      dialogProcessId: "d-fanout",
+      userMessage: "请运行直接多下游流程",
+      runConfig: { locale: "zh-CN" },
+      agentContext: {
+        bindings: {
+          runtime: {
+            sharedTools: {
+              semanticTransfer: createSemanticTransferTool({
+                prefix: "fanout-att",
+                sessionId: "s-fanout",
+              }),
+            },
           },
         },
       },
     },
-  });
+    createTestHookInvocation(),
+  );
 
   const callByNodeName = callsByNodeName(subSessionCalls);
   assert.equal(subSessionCalls.length, 3);

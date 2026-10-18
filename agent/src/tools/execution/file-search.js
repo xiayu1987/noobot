@@ -25,6 +25,7 @@ import {
   toWorkspaceRelativePath,
 } from "./file-utils.js";
 import { text } from "@noobot/shared/value";
+import { assertNotAborted } from "../../shared/utils/error-utils.js";
 
 const execFile = promisify(execFileCallback);
 let ripgrepPathPromise = null;
@@ -87,21 +88,16 @@ export function searchInText({
   };
 }
 
-function throwIfAborted(abortSignal = null) {
-  if (!abortSignal?.aborted) return;
-  throw abortSignal.reason || new DOMException("The operation was aborted", "AbortError");
-}
-
 export async function collectSearchFiles({
   rootPath = "",
   workspacePath = "",
   glob = "",
   maxFiles = DEFAULT_MAX_SEARCH_FILES,
-  abortSignal = null,
+  abortSignal,
 } = {}) {
   const files = [];
   async function walk(currentPath) {
-    throwIfAborted(abortSignal);
+    assertNotAborted(abortSignal);
     if (files.length >= maxFiles) return;
     let entryStat;
     try {
@@ -174,7 +170,7 @@ function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }
     const child = spawn(ripgrepPath, args, {
       cwd: rootPath,
       windowsHide: true,
-      signal: abortSignal || undefined,
+      signal: abortSignal,
     });
     const lines = [];
     let pending = "";
@@ -208,13 +204,13 @@ function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }
       stderr += chunk;
     });
     child.on("error", (error) => {
-      if (abortSignal?.aborted) reject(abortSignal.reason || error);
+      if (abortSignal.aborted) reject(abortSignal.reason);
       else reject(error);
     });
     child.on("close", (code) => {
       consumeLine(pending);
-      if (abortSignal?.aborted) {
-        reject(abortSignal.reason || new DOMException("The operation was aborted", "AbortError"));
+      if (abortSignal.aborted) {
+        reject(abortSignal.reason);
         return;
       }
       if (!stoppedAtLimit && code !== 0 && code !== 1) {
@@ -361,9 +357,9 @@ export async function searchFilesWithRipgrep({
   glob = "",
   contextLines = DEFAULT_SEARCH_CONTEXT_LINES,
   maxResults = DEFAULT_SEARCH_MAX_RESULTS,
-  abortSignal = null,
+  abortSignal,
 } = {}) {
-  throwIfAborted(abortSignal);
+  assertNotAborted(abortSignal);
   const ripgrepPath = await requireRipgrepPath();
   const contextCount = toPositiveInt(contextLines, DEFAULT_SEARCH_CONTEXT_LINES, 0, 20);
   const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);

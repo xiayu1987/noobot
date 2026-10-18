@@ -9,27 +9,8 @@ import assert from "node:assert/strict";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createAgentDetachedSubSessionStrategy } from "../../src/bot/session/detached-subsession-strategy.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { DETACHED_REQUEST_METADATA } from "./detached-subsession-runner.test-helpers.js";
-
-test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for tool/model switch consistency", () => {
-  const engine = new SessionExecutionEngine({});
-  const runtime = createRuntimeContext();
-  const agentContext = createTestAgentExecutionScope(runtime);
-
-  const abortSignal = { aborted: false };
-  const out = engine.agentRuntimeFacade.buildRunTurnContext(agentContext, abortSignal);
-
-  assert.equal(out.bindings.runtime, runtime, "runtime 引用应保持一致，避免工具侧与模型侧状态分叉");
-  assert.equal(runtime.abortSignal, abortSignal);
-
-  runtime.runtimeModel = "gpt_5_3_codex";
-  assert.equal(
-    out.bindings.runtime.runtimeModel,
-    "gpt_5_3_codex",
-    "同一引用下，工具修改 runtimeModel 后模型侧可见",
-  );
-});
 
 test("SessionExecutionEngine forwards the authoritative dialog identity to runtime initialization", async () => {
   const engine = new SessionExecutionEngine({});
@@ -182,8 +163,9 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
 
   const runner = engine._createDetachedSubSessionRunner();
   await runner({
+    abortSignal: new AbortController().signal,
     parentExecutionScope: createTestAgentExecutionScope(
-      createRuntimeContext({ userInteractionBridge: bridge }),
+      createTestRuntimeContext({ userInteractionBridge: bridge }),
     ),
     message: "node task",
     metadata: DETACHED_REQUEST_METADATA,

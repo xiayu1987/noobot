@@ -126,7 +126,8 @@ export async function invokeNoToolsTurn({
   const modelContext = requireLoopStateModelContext(loopState);
   const messages = modelContext.messages;
   const { traces } = loopState;
-  const { eventListener, runtime, abortSignal } = modelState;
+  const { runtime } = modelState;
+  const { eventListener, abortSignal } = runtime;
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
   const llmStartedAtMs = Date.now();
@@ -270,14 +271,14 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const modelContext = requireLoopStateModelContext(loopState);
   const messages = modelContext.messages;
   const { traces, tools, currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
-  const { eventListener, runtime, abortSignal } = modelState;
+  const { runtime } = modelState;
+  const { eventListener } = runtime;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
 
   const { adaptedBinding, configuredToolChoice, boundTools, toolMap } = prepareToolBinding({
     tools,
     modelState,
     runtime,
-    eventListener,
     turn,
   });
 
@@ -287,7 +288,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     messages,
     modelState,
     runtime,
-    abortSignal,
     turn,
   });
 

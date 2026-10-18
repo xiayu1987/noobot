@@ -294,7 +294,7 @@ export function createMultimodalParseTool({ agentContext }) {
       const [parsedAttachment] = attachments;
       const outputResources = registerTransferAttachmentResources({
         agentContext,
-        transferEnvelopes: persistedOutput?.transferEnvelopes || [],
+        transferEnvelopes: persistedOutput.transferEnvelopes,
       });
       const updatedSourceAttachments = (
         await Promise.all(

@@ -6,14 +6,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { initializeRuntimeEnvironment } from "../../src/runtime/capabilities/runtime-capability-initializer.js";
 import { buildStaticInfo } from "../../src/context/providers/environment-provider.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 test("createRuntimeContext keeps sharedTools passthrough and creates turn stores", () => {
   const hookManager = { emit() {} };
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     basePath: " /workspace/u1 ",
     sharedTools: {
       customFetch: true,
@@ -81,7 +81,7 @@ test("buildStaticInfo exposes only the sandbox workspace view when isolation is 
 });
 
 test("initializeRuntimeEnvironment wires shared tools without connector implementation state", async () => {
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     basePath: "/host/users/u1",
     globalConfig: {
       security: {
@@ -138,7 +138,7 @@ test("initializeRuntimeEnvironment provides fetch independently of the Node glob
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = undefined;
-    const runtime = createRuntimeContext({
+    const runtime = createTestRuntimeContext({
       basePath: "/host/users/u1",
       runConfig: {},
       systemRuntime: { sessionId: "s1", rootSessionId: "s1" },
@@ -154,7 +154,7 @@ test("initializeRuntimeEnvironment provides fetch independently of the Node glob
 
 test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runtime identity", async () => {
   const overflowContent = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1);
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     userId: "primary-user",
     basePath: "/home/xiayu/projects/noobot/workspace/primary-user",
     globalConfig: {
@@ -232,7 +232,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
 });
 
 test("initializeRuntimeEnvironment passes semantic-transfer strict envelope validation config", async () => {
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     globalConfig: {
       semanticTransfer: {
         strictEnvelopeValidation: true,
@@ -253,7 +253,7 @@ test("initializeRuntimeEnvironment passes semantic-transfer strict envelope vali
 });
 
 test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encrypted response", async () => {
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     userInteractionBridge: {
       async requestUserInteraction() {
         return {
@@ -279,7 +279,7 @@ test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encr
 });
 
 test("initializeRuntimeEnvironment encrypted response invalid should throw", async () => {
-  const runtime = createRuntimeContext({
+  const runtime = createTestRuntimeContext({
     userInteractionBridge: {
       async requestUserInteraction() {
         return {

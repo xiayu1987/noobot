@@ -29,7 +29,7 @@ export async function runMonthlySummaryIfNeeded({
   invokeModel = null,
   promptI18n = {},
   fields,
-  abortSignal = null,
+  abortSignal,
   basePath = "",
   listWeekDirs,
   mergeDomainText,

@@ -82,7 +82,7 @@ export function createConnectorAccessTool({ agentContext }) {
         .record(z.string(), z.unknown())
         .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "input")),
     }),
-    func: async ({ connector_id, operation, input }) => {
+    func: async ({ connector_id, operation, input }, _runManager, toolConfig) => {
       const connectorId = assertSelectedConnector(selectedConnectorIds, connector_id);
       if (!userId) {
         throw recoverableToolError("connector owner userId is unavailable", {
@@ -102,7 +102,7 @@ export function createConnectorAccessTool({ agentContext }) {
           context: {
             artifactSink: createArtifactSink(runtime),
             sessionId: text(runtime?.systemRuntime?.sessionId),
-            abortSignal: runtime?.abortSignal || null,
+            abortSignal: toolConfig.signal,
           },
         });
         return toToolJsonResult(

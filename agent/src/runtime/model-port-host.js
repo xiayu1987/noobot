@@ -42,7 +42,7 @@ function createCredentialPort() {
 function createObservationPort({ modelState }) {
   return Object.freeze({
     emit(type, payload = {}) {
-      emitEvent(modelState.eventListener, type, payload);
+      emitEvent(modelState.runtime.eventListener, type, payload);
     },
   });
 }
@@ -172,11 +172,7 @@ export function initializeAgentModelHost({
   const modelState = {
     activeModelSpec: modelSpec,
     defaultModelSpec: modelSpec,
-    eventListener: runtime.eventListener,
     runtime,
-    globalConfig,
-    userConfig,
-    abortSignal: runtime.abortSignal,
     invocationIdentity: identity,
   };
   const modelPort = createAgentModelPort(modelState);

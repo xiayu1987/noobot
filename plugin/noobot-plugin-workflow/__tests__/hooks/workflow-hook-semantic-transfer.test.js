@@ -14,6 +14,7 @@ import {
   getBeforeDispatch,
   workflowTurn,
   registerWorkflowAgentHooks,
+  createTestHookInvocation,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
@@ -124,7 +125,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       onEvent() {},
     },
   };
-  const dispatchOutcome = await beforeDispatch.handler(beforeContext);
+  const dispatchOutcome = await beforeDispatch.handler(beforeContext, createTestHookInvocation());
   const agentResult = dispatchOutcome?.result;
   assert.ok(agentResult);
 
@@ -309,7 +310,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
     },
   };
 
-  const dispatchOutcome = await beforeDispatch.handler(ctx);
+  const dispatchOutcome = await beforeDispatch.handler(ctx, createTestHookInvocation());
   const agentResult = dispatchOutcome?.result;
   assert.ok(agentResult?.workflow);
   assert.equal(fallbackArtifactCalls.length, 0);
@@ -411,7 +412,7 @@ test("workflow hook routes final attachment summary composition through semantic
       },
     },
   });
-  const dispatchOutcome = await beforeDispatch.handler(ctx);
+  const dispatchOutcome = await beforeDispatch.handler(ctx, createTestHookInvocation());
 
   const hasFinalSummaryCall = semanticTransferCalls.some(
     (item = {}) =>

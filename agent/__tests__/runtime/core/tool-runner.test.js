@@ -20,9 +20,13 @@ import {
   getPrimaryTransferAttachment,
 } from "./tool-runner.test-helpers.js";
 import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
-function withAttachmentService(runtime) {
-  return { ...runtime, attachmentService: new AttachmentService(runtime.globalConfig) };
+function withAttachmentService(options) {
+  return createTestRuntimeContext({
+    ...options,
+    attachmentService: new AttachmentService(options.globalConfig),
+  });
 }
 
 test("executeToolCall gives tools an output transfer identity named after the canonical tool", async () => {
@@ -163,6 +167,7 @@ test("executeToolCall extracts strict V2 transfer envelopes from JSON tool resul
 test("executeToolCall materializes outputArtifacts through the single transfer outlet", async () => {
   const call = { id: "call_output_artifact", name: "write_file", args: {} };
   const runtime = {
+    abortSignal: new AbortController().signal,
     systemRuntime: { userId: "test-user" },
     attachmentService: {
       async ingestGeneratedArtifacts(payload = {}) {
@@ -212,6 +217,7 @@ test("executeToolCall rejects output artifact types that differ from the registe
   const result = await executeToolCall({
     call: { id: "call_output_type_mismatch", name: "write_file", args: {} },
     runtime: {
+      abortSignal: new AbortController().signal,
       systemRuntime: { userId: "test-user" },
       attachmentService: {
         async ingestGeneratedArtifacts() {
@@ -244,6 +250,8 @@ test("executeToolCall rejects output artifact types that differ from the registe
 test("executeToolCall does not publish writtenFiles outside semantic transfer", async () => {
   const events = [];
   const runtime = {
+    abortSignal: new AbortController().signal,
+    eventListener: { onEvent: (event) => events.push(event) },
     systemRuntime: {
       userId: "test-user",
       sessionId: "child-session",
@@ -270,7 +278,6 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
     },
     runtime,
     messageId: "message-1",
-    eventListener: { onEvent: (event) => events.push(event) },
   });
 
   const completed = findCommittedMessagePayload(events, "tool_call_end");
@@ -281,6 +288,8 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
 test("canonical tool events publish the server-assessed maximum risk level", async () => {
   const events = [];
   const runtime = {
+    abortSignal: new AbortController().signal,
+    eventListener: { onEvent: (event) => events.push(event) },
     systemRuntime: {
       config: { safeConfirm: false },
     },
@@ -307,7 +316,6 @@ test("canonical tool events publish the server-assessed maximum risk level", asy
       },
     },
     runtime,
-    eventListener: { onEvent: (event) => events.push(event) },
   });
 
   assert.equal(result.riskLevel, "high");
@@ -337,8 +345,11 @@ test("tool operation baseline risk is published even when invocation fails befor
         throw new Error("script_body contains forbidden runtime capability: require");
       },
     },
-    runtime: { systemRuntime: { config: { safeConfirm: false } } },
-    eventListener: { onEvent: (event) => events.push(event) },
+    runtime: {
+      abortSignal: new AbortController().signal,
+      eventListener: { onEvent: (event) => events.push(event) },
+      systemRuntime: { config: { safeConfirm: false } },
+    },
   });
 
   assert.equal(result.success, false);
@@ -365,7 +376,10 @@ test("canonical tool_call_end preserves a complete JSON tool result beyond 200 c
   await executeToolCall({
     call: { id: "call-task-check", name: "task_check", args: {} },
     tool: { invoke: async () => resultPayload },
-    eventListener: { onEvent: (event) => events.push(event) },
+    runtime: {
+      abortSignal: new AbortController().signal,
+      eventListener: { onEvent: (event) => events.push(event) },
+    },
   });
 
   const completed = findCommittedMessagePayload(events, "tool_call_end");
@@ -525,6 +539,7 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
     invoke: async () => ({ ok: true }),
   };
   const runtime = {
+    abortSignal: new AbortController().signal,
     systemRuntime: {
       userId: "runtime_user",
       sessionId: "session_1",
@@ -634,6 +649,7 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
     tool,
     turn: 1,
     runtime: {
+      abortSignal: new AbortController().signal,
       basePath,
       globalConfig: { tools: { maxToolResultChars: 1000 } },
       userConfig: {},
@@ -729,6 +745,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
       }),
   };
   const runtime = {
+    abortSignal: new AbortController().signal,
     attachmentService: {
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact, index) => ({

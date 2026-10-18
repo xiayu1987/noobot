@@ -15,8 +15,7 @@ import { resolveControlToolOutcome } from "../control-tool-outcome.js";
 import { text } from "@noobot/shared/value";
 
 function updateToolFailureState({ modelState, loopState, toolCallResult }) {
-  const runtime = modelState?.runtime || {};
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const systemRuntime = getSystemRuntimeFromRuntime(modelState.runtime);
   const toolName = text(toolCallResult?.call?.name);
   if (!toolName) return;
   const nextFailureCount = toolCallResult?.success
@@ -35,7 +34,8 @@ export async function processToolResults({
   stateCommitter,
 }) {
   const { errorLogger } = loopState;
-  const { eventListener, runtime } = modelState;
+  const { runtime } = modelState;
+  const { eventListener } = runtime;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
   await runAgentRuntimeHook({
@@ -47,7 +47,7 @@ export async function processToolResults({
       turn,
       toolCallCount: calls.length,
       calls,
-      agentContext: modelState?.agentContext || null,
+      agentContext: modelState.agentContext,
     }),
   });
 
@@ -57,11 +57,12 @@ export async function processToolResults({
       return settleToolCallInTurn({
         call,
         tool,
-        eventListener,
         turn,
+        executionScope: "primary",
         errorLogger,
         runtime,
-        agentContext: modelState?.agentContext || null,
+        agentContext: modelState.agentContext,
+        abortSignal: runtime.abortSignal,
       });
     }),
   );
@@ -89,12 +90,8 @@ export async function processToolResults({
       updateToolFailureState({ modelState, loopState, toolCallResult });
     }
   };
-  if (typeof runtime?.withCurrentTurnPersistenceBatch === "function") {
-    await runtime.withCurrentTurnPersistenceBatch(commitToolResults);
-  } else {
-    await commitToolResults();
-  }
-  await runtime?.consumeUserInterjections?.();
+  await runtime.withCurrentTurnPersistenceBatch(commitToolResults);
+  await runtime.consumeUserInterjections();
 
   const rejectedSettlement = toolCallSettlements.find(
     (settlement) => settlement.status === "rejected",
@@ -117,7 +114,7 @@ export async function processToolResults({
       toolCallResults,
       taskSummaryOutcome,
       hasHelpCall,
-      agentContext: modelState?.agentContext || null,
+      agentContext: modelState.agentContext,
     }),
   });
 

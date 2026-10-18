@@ -256,6 +256,7 @@ test("maybeSummarize applies the field patch from ModelPort text output", async 
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
     onStageError: (e) => stageErrors.push(e),
@@ -294,6 +295,7 @@ test("maybeSummarize uses configured memoryModel for long memory and experience 
     ),
   });
   await service.maybeSummarize({
+    abortSignal: new AbortController().signal,
     userId,
     userConfig: { memoryModel: "selected-memory-model" },
     onStageError: ({ error }) => {
@@ -341,6 +343,7 @@ test("maybeSummarize retries an invalid long memory patch once, then continues l
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
     onStageError: (entry) => stageErrors.push(entry),
@@ -378,6 +381,7 @@ test("maybeSummarize writes long memory when the correction retry returns a vali
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
     onStageError: (entry) => stageErrors.push(entry),
@@ -404,6 +408,7 @@ test("maybeSummarize treats NOOP as a successful no-change long memory stage", a
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
     onStageError: (entry) => stageErrors.push(entry),

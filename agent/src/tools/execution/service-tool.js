@@ -79,7 +79,11 @@ export function createServiceTool({ agentContext }) {
         .describe(tTool(runtime, "tools.service.fieldQueryString")),
       body: z.unknown().optional().describe(tTool(runtime, "tools.service.fieldBody")),
     }),
-    func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
+    func: async (
+      { serviceName, endpointName, custom_param, queryString = {}, body },
+      _runManager,
+      toolConfig,
+    ) => {
       const globalConfig = runtime?.globalConfig || {};
       const userId = resolveRuntimeUserId(runtime);
       const inputErr = validateInput({
@@ -157,6 +161,7 @@ export function createServiceTool({ agentContext }) {
         customParam: text(custom_param),
         queryString,
         body,
+        abortSignal: toolConfig.signal,
       });
       const normalizedResult = isPlainObject(result) ? result : { data: result };
       return toToolJsonResult(

@@ -56,7 +56,7 @@ function handlePostSummaryCharsOverflow({
   loopCount = 0,
   source = "agent_phase_summary",
 } = {}) {
-  const runtime = modelState?.runtime || {};
+  const { runtime } = modelState;
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
   if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
@@ -84,7 +84,7 @@ function handlePostSummaryCharsOverflow({
       },
     });
   }
-  emitEvent(modelState?.eventListener || null, "phase_summary_hard_overflow", {
+  emitEvent(runtime.eventListener, "phase_summary_hard_overflow", {
     loopCount,
     charsThreshold,
     unsummarizedChars,
@@ -93,7 +93,7 @@ function handlePostSummaryCharsOverflow({
 }
 
 export function maybeFinalizeNoToolsAfterPhaseSummaryOverflow({ modelState, loopState } = {}) {
-  const runtime = modelState?.runtime || {};
+  const { runtime } = modelState;
   const systemRuntime = getSystemRuntime(runtime);
   const loopCount = Number(systemRuntime?.phaseSummaryLoopCount || 0);
   return handlePostSummaryCharsOverflow({
@@ -105,7 +105,7 @@ export function maybeFinalizeNoToolsAfterPhaseSummaryOverflow({ modelState, loop
 }
 
 export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] }) {
-  const runtime = modelState?.runtime || {};
+  const { runtime } = modelState;
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
 
@@ -153,7 +153,7 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
     content: tEngine(runtime, "phaseSummaryPrompt"),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
   });
-  emitEvent(modelState?.eventListener || null, "phase_summary_required", {
+  emitEvent(runtime.eventListener, "phase_summary_required", {
     loopCount: nextCount,
     loopThreshold,
     charsThreshold,
@@ -169,7 +169,7 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
 }
 
 export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults = [] }) {
-  const runtime = modelState?.runtime || {};
+  const { runtime } = modelState;
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
   if (!hasTool(loopState?.tools || [], TOOL_NAME.TASK_CHECK)) return false;
@@ -193,7 +193,7 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
     content: tEngine(runtime, "taskCheckPrompt"),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
   });
-  emitEvent(modelState?.eventListener || null, "task_check_required", {
+  emitEvent(runtime.eventListener, "task_check_required", {
     loopCount: nextCount,
     threshold,
     modelLoopRound: Number(systemRuntime.modelLoopRound || 0),
@@ -202,7 +202,7 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
 }
 
 export function maybePromptHelpToolByLoop({ modelState, loopState }) {
-  const runtime = modelState?.runtime || {};
+  const { runtime } = modelState;
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
   const threshold = Number(loopState?.helpPromptLoopTurns || 0);
@@ -223,7 +223,7 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
     }),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
   });
-  emitEvent(modelState?.eventListener || null, "help_tool_loop_prompted", {
+  emitEvent(runtime.eventListener, "help_tool_loop_prompted", {
     loopCount: nextCount,
     threshold,
   });
@@ -231,7 +231,7 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
 }
 
 export function maybePromptHelpToolByFailure({ modelState, loopState, hasHelpCall = false }) {
-  const runtime = modelState?.runtime || {};
+  const { runtime } = modelState;
   const systemRuntime = getSystemRuntime(runtime);
   const threshold = Number(loopState?.toolFailureHelpCount || 0);
   if (!systemRuntime) return false;
@@ -252,7 +252,7 @@ export function maybePromptHelpToolByFailure({ modelState, loopState, hasHelpCal
   });
   loopState.toolConsecutiveFailureCount = 0;
   systemRuntime.toolConsecutiveFailureCount = 0;
-  emitEvent(modelState?.eventListener || null, "help_tool_failure_prompted", {
+  emitEvent(runtime.eventListener, "help_tool_failure_prompted", {
     failureCount,
     threshold,
   });

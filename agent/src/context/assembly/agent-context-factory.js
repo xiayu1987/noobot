@@ -44,7 +44,7 @@ export class AgentContextFactory {
     eventListener,
     userInteractionBridge = null,
     runConfig = {},
-    abortSignal = null,
+    abortSignal,
     parentAsyncResultContainer = null,
     persistenceContext = null,
     persistenceScope = null,
@@ -118,7 +118,7 @@ export class AgentContextFactory {
         runConfig?.hookManager && typeof runConfig.hookManager === "object"
           ? runConfig.hookManager
           : null,
-      abortSignal: runConfig?.abortSignal || null,
+      abortSignal: contextBuilder.abortSignal,
     };
 
     const contextHookBase = this._buildContextHookBase({
@@ -139,7 +139,6 @@ export class AgentContextFactory {
         ...contextHookBase,
         startedAt: buildStartedAt,
       },
-      eventListener,
     });
     emitEvent(eventListener, "context_building", { sessionId, mode });
     let agentContext = null;
@@ -171,7 +170,6 @@ export class AgentContextFactory {
           error,
           agentContext: null,
         },
-        eventListener,
       });
       throw error;
     }
@@ -200,18 +198,11 @@ export class AgentContextFactory {
           scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
         agentContext: scopedAgentContext,
       },
-      eventListener,
     });
     emitEvent(eventListener, "context_ready", {
       sessionId,
       messageCount: scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
     });
     return scopedAgentContext;
-  }
-
-  buildRunTurnAgentContext(agentContext = {}, abortSignal = null) {
-    const runtimeRef = getRuntimeFromAgentContext(agentContext);
-    runtimeRef.abortSignal = abortSignal;
-    return agentContext;
   }
 }

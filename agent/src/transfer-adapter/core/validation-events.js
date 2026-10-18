@@ -9,13 +9,11 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { text } from "@noobot/shared/value";
 
 export async function emitSemanticTransferValidation({
-  runtime = {},
-  eventListener = null,
+  runtime,
   scenario = "",
   stats = {},
   transferValidation = {},
 } = {}) {
-  const listener = eventListener || runtime?.eventListener || null;
   const payload = {
     scenario: text(scenario) || "unknown",
     inputCount: Number(stats?.inputCount || transferValidation?.inputCount || 0),
@@ -25,7 +23,7 @@ export async function emitSemanticTransferValidation({
     strict: Boolean(stats?.strict ?? transferValidation?.strict),
     enforceProtocol: Boolean(stats?.enforceProtocol ?? transferValidation?.enforceProtocol),
   };
-  emitEvent(listener, "semantic_transfer_validation", payload);
+  emitEvent(runtime.eventListener, "semantic_transfer_validation", payload);
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.SEMANTIC_TRANSFER_VALIDATION,
@@ -34,7 +32,6 @@ export async function emitSemanticTransferValidation({
       status: payload.invalidCount > 0 ? "warning" : "success",
       ...payload,
     },
-    eventListener: listener,
   });
   return payload;
 }

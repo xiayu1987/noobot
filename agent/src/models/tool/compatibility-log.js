@@ -8,12 +8,7 @@ import { filePath as path, resolveRuntimeWorkspaceRoot } from "@noobot/path-reso
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
-export function buildToolCompatibilityLogLine({
-  modelState = {},
-  runtime = {},
-  event = "",
-  tools = [],
-} = {}) {
+export function buildToolCompatibilityLogLine({ modelState, runtime, event, tools }) {
   return JSON.stringify({
     ts: new Date().toISOString(),
     event: text(event),
@@ -26,16 +21,8 @@ export function buildToolCompatibilityLogLine({
   });
 }
 
-export async function appendToolCompatibilityLog({
-  modelState = {},
-  runtime = {},
-  event = "",
-  tools = [],
-} = {}) {
-  const workspaceRoot = resolveRuntimeWorkspaceRoot({
-    runtime,
-    globalConfig: modelState?.globalConfig || {},
-  });
+export async function appendToolCompatibilityLog({ modelState, runtime, event, tools }) {
+  const workspaceRoot = resolveRuntimeWorkspaceRoot({ runtime });
   if (!workspaceRoot) {
     throw new Error("tool compatibility log requires an authoritative workspace root");
   }

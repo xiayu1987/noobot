@@ -10,6 +10,7 @@ import { executeToolCall } from "./tool-runner.test-helpers.js";
 test("executeToolCall task_summary preserves recovery diagnostics", async () => {
   const summaryContent = "NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE";
   const runtime = {
+    abortSignal: new AbortController().signal,
     attachmentService: {
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact, index) => ({

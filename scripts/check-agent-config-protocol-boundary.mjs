@@ -4,64 +4,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
-import { createGuardViolations } from "./lib/guard-violations.mjs";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import {
+  importReferences,
+  readRepositoryText,
+  repositoryRoot,
+} from "./quality/repository-files.mjs";
+import { addPatternLineHits, addRemovedPathHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-const guard = createGuardViolations({ root: ROOT, label: "agent-config-protocol-boundary" });
-const { violations } = guard;
-const filesUnder = createRelativeSourceCollector({
-  root: ROOT,
-  extensions: new Set([".js", ".mjs"]),
-});
-
-const assertAbsent = (relativePath) =>
-  guard.assertAbsent(relativePath, "obsolete duplicate config implementation must be removed");
-
-const obsoleteProtocolFiles = [
-  "protocol.js",
-  "run-config-resolver.js",
-  "key-normalizer.js",
-  "time-config-normalizer.js",
-  "config-file-migration.js",
-  "config-merge.js",
-  "builtin-scenarios.js",
-  "tool-policy.js",
-  "user-override-policy.js",
-];
-for (const fileName of obsoleteProtocolFiles) {
-  await assertAbsent(`agent-config-protocol/src/${fileName}`);
-}
-
-const protocolFiles = await filesUnder("agent-config-protocol/src");
-for (const file of protocolFiles) {
-  const source = await readFile(path.join(ROOT, file), "utf8");
-  for (const match of source.matchAll(/from\s+["']([^"']+)["']/g)) {
-    const specifier = match[1];
-    if (
-      specifier.startsWith("noobot-agent") ||
-      specifier.startsWith("../agent") ||
-      specifier.includes("agent/src") ||
-      specifier === "node:fs" ||
-      specifier.startsWith("node:fs/") ||
-      specifier === "node:path" ||
-      specifier === "@noobot/model-runtime" ||
-      specifier === "@noobot/plugin-runtime"
-    ) {
-      violations.push(`${file}: protocol must not import Agent runtime module ${specifier}`);
-    }
-  }
-  if (/\btools\.(?:allowed|denied)\b/.test(source)) {
-    violations.push(`${file}: legacy tool policy fields are forbidden`);
-  }
-  if (/const\s+tSystem\s*=/.test(source)) {
-    violations.push(`${file}: protocol localization fallback is forbidden`);
-  }
-}
-
-for (const relativePath of [
+const SCAN = Object.freeze({ extensions: [".js", ".mjs"], includeTests: true });
+const PROTOCOL_ROOT = "agent-config-protocol/src";
+const REMOVED_PATHS = Object.freeze([
+  ...[
+    "protocol.js",
+    "run-config-resolver.js",
+    "key-normalizer.js",
+    "time-config-normalizer.js",
+    "config-file-migration.js",
+    "config-merge.js",
+    "builtin-scenarios.js",
+    "tool-policy.js",
+    "user-override-policy.js",
+  ].map((fileName) => `${PROTOCOL_ROOT}/${fileName}`),
   "agent/src/config/core/builtin-scenarios.js",
   "agent/src/config/core/config-merge.js",
   "agent/src/config/core/key-normalizer.js",
@@ -71,38 +41,120 @@ for (const relativePath of [
   "agent/src/bot/config/run-config-resolver.js",
   "agent/src/bot/config/tool-policy-manager.js",
   "agent/src/bot/session/plugin-policy-api.js",
-])
-  await assertAbsent(relativePath);
+]);
+const CONSUMER_ROOTS = Object.freeze([
+  "agent/src",
+  "agent/scripts",
+  "service/services",
+  "service/scripts/project-launcher",
+  "client/shared/electron/runtime",
+]);
+const FORBIDDEN_PROTOCOL_IMPORTS = Object.freeze({
+  exact: ["node:fs", "node:path", "@noobot/model-runtime", "@noobot/plugin-runtime"],
+  prefixes: ["noobot-agent", "../agent", "node:fs/"],
+  fragments: ["agent/src"],
+});
+const LEGACY_TOOL_POLICY = /\btools\.(?:allowed|denied)\b/;
+const PROTOCOL_LINE_RULES = Object.freeze([
+  ["legacyToolPolicy", LEGACY_TOOL_POLICY, "legacy tools.allowed/denied field"],
+  ["protocolPurity", /const\s+tSystem\s*=/, "protocol localization fallback"],
+]);
+const CONSUMER_LINE_RULES = Object.freeze([
+  [
+    "legacyToolPolicy",
+    /\b(?:ToolPolicyManager|applyRunConfigToolPolicy|_applyRunConfigToolPolicy)\b/,
+    "parallel tool-policy entry",
+  ],
+  ["legacyToolPolicy", LEGACY_TOOL_POLICY, "legacy tools.allowed/denied field"],
+  [
+    "duplicateConfigGrammar",
+    /function\s+normalizeConfigParamKey\b|const\s+normalizeConfigParamKey\b/,
+    "local config param key normalization",
+  ],
+  [
+    "configParamsSource",
+    /\b(?:globalConfig|rawGlobalConfig)\??\.configParams\b/,
+    "configParams read from global configuration",
+  ],
+]);
 
-const agentSourceFiles = await filesUnder("agent/src");
-const agentScriptFiles = await filesUnder("agent/scripts");
-const serviceSourceFiles = await filesUnder("service/services");
-const serviceConfigScriptFiles = await filesUnder("service/scripts/project-launcher");
-const desktopConfigFiles = await filesUnder("client/shared/electron/runtime");
-const protocolConsumerFiles = [
-  ...agentSourceFiles,
-  ...agentScriptFiles,
-  ...serviceSourceFiles,
-  ...serviceConfigScriptFiles,
-  ...desktopConfigFiles,
-];
-for (const file of protocolConsumerFiles) {
-  const source = await readFile(path.join(ROOT, file), "utf8");
-  if (/\b(?:ToolPolicyManager|applyRunConfigToolPolicy|_applyRunConfigToolPolicy)\b/.test(source)) {
-    violations.push(`${file}: obsolete parallel tool-policy entry is forbidden`);
-  }
-  if (/\btools\.(?:allowed|denied)\b/.test(source)) {
-    violations.push(`${file}: legacy tool policy fields are forbidden`);
-  }
-  if (/function\s+normalizeConfigParamKey\b|const\s+normalizeConfigParamKey\b/.test(source)) {
-    violations.push(`${file}: config param key normalization must use the protocol`);
-  }
-  if (source.includes("[A-Z0-9_]+") && source.includes("${")) {
-    violations.push(`${file}: config template grammar must use the protocol`);
-  }
-  if (/\b(?:globalConfig|rawGlobalConfig)\??\.configParams\b/.test(source)) {
-    violations.push(`${file}: configParams must come from the explicit resolution context`);
-  }
+const filesUnder = (directories) =>
+  getFirstPartyFilesUnder(directories, { ...SCAN, repositoryRoot });
+
+function isForbiddenProtocolImport(specifier) {
+  return (
+    FORBIDDEN_PROTOCOL_IMPORTS.exact.includes(specifier) ||
+    FORBIDDEN_PROTOCOL_IMPORTS.prefixes.some((prefix) => specifier.startsWith(prefix)) ||
+    FORBIDDEN_PROTOCOL_IMPORTS.fragments.some((fragment) => specifier.includes(fragment))
+  );
 }
 
-guard.report(`${protocolFiles.length + protocolConsumerFiles.length} files`);
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  await addRemovedPathHits(measured.removedImplementation, REMOVED_PATHS, "must remain removed");
+  for (const file of await filesUnder([PROTOCOL_ROOT])) {
+    const source = await readRepositoryText(file);
+    for (const { specifier, line } of importReferences(source)) {
+      if (isForbiddenProtocolImport(specifier)) {
+        addHit(measured.protocolPurity, {
+          file,
+          line,
+          message: `imports runtime module ${specifier}`,
+        });
+      }
+    }
+    for (const [rule, pattern, message] of PROTOCOL_LINE_RULES) {
+      addPatternLineHits({ measurement: measured[rule], file, source, pattern, message });
+    }
+  }
+  for (const file of await filesUnder(CONSUMER_ROOTS)) {
+    const source = await readRepositoryText(file);
+    for (const [rule, pattern, message] of CONSUMER_LINE_RULES) {
+      addPatternLineHits({ measurement: measured[rule], file, source, pattern, message });
+    }
+    if (source.includes("[A-Z0-9_]+") && source.includes("${")) {
+      addHit(measured.duplicateConfigGrammar, { file, message: "local config template grammar" });
+    }
+  }
+  return measured;
+}
+
+export const CHECK = defineCheck({
+  id: "agent-config-protocol-boundary",
+  description:
+    "Agent configuration grammar, tool policy and parameters are owned by agent-config-protocol",
+  rules: {
+    removedImplementation: {
+      description: "Obsolete duplicate configuration implementations stay deleted",
+      hint: "delete the file and use @noobot/agent-config-protocol",
+    },
+    protocolPurity: {
+      description: "The configuration protocol does not import runtime, filesystem or localization",
+      hint: "move runtime access to the Agent and pass resolved values into the protocol",
+    },
+    legacyToolPolicy: {
+      description: "Tool policy uses the protocol policy fields and a single resolver",
+      hint: "resolve tool policy through @noobot/agent-config-protocol",
+    },
+    duplicateConfigGrammar: {
+      description: "Config param keys and template grammar are parsed only by the protocol",
+      hint: "call the protocol key normalizer and template resolver",
+    },
+    configParamsSource: {
+      description: "configParams come from the explicit resolution context",
+      hint: "pass configParams through the resolution context instead of globalConfig",
+    },
+  },
+  exemptions: [],
+  baseline: {
+    removedImplementation: 0,
+    protocolPurity: 0,
+    legacyToolPolicy: 0,
+    duplicateConfigGrammar: 0,
+    configParamsSource: 0,
+    exemptions: 0,
+  },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

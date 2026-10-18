@@ -19,6 +19,7 @@ test("recoverable tool errors retain the complete execution identity", async () 
       },
     },
     runtime: {
+      abortSignal: new AbortController().signal,
       systemRuntime: {
         userId: "user-1",
         sessionId: "session-1",

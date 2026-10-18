@@ -70,12 +70,15 @@ test("write_file: overwrite=false uses the canonical failed result protocol", as
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "write_file");
 
   const result = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      filePath: "existing.txt",
-      content: "replacement",
-      overwrite: false,
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        filePath: "existing.txt",
+        content: "replacement",
+        overwrite: false,
+      },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(result.ok, false);
@@ -175,17 +178,23 @@ test("file tools retain one internal ResourceRef for repeated logical path input
   const writeTool = tools.find((item) => item?.name === "write_file");
   const readTool = tools.find((item) => item?.name === "read_file");
   const written = parseToolResult(
-    await writeTool.invoke({
-      riskLevel: "low",
-      filePath: "reports/resource.txt",
-      content: "resource-round-trip",
-    }),
+    await writeTool.invoke(
+      {
+        riskLevel: "low",
+        filePath: "reports/resource.txt",
+        content: "resource-round-trip",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
 
   assert.equal(written.ok, true, JSON.stringify(written));
   assert.equal(written.resources.length, 1);
   const read = parseToolResult(
-    await readTool.invoke({ riskLevel: "low", filePath: written.path.path }),
+    await readTool.invoke(
+      { riskLevel: "low", filePath: written.path.path },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(read.ok, true, JSON.stringify(read));
   assert.equal(read.content, "1 | resource-round-trip");
@@ -273,11 +282,14 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
   const filePath = "/workspace/runtime/ops_workdir/sandbox-flow.txt";
 
   const written = parseToolResult(
-    await tools.get("write_file").invoke({
-      filePath,
-      content: "alpha\nbeta\n",
-      riskLevel: "low",
-    }),
+    await tools.get("write_file").invoke(
+      {
+        filePath,
+        content: "alpha\nbeta\n",
+        riskLevel: "low",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(written.ok, true, JSON.stringify(written));
   assert.deepEqual(written.path, {
@@ -286,43 +298,52 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
   });
 
   const firstRead = parseToolResult(
-    await tools.get("read_file").invoke({
-      filePath,
-      includeLineNumbers: false,
-      riskLevel: "low",
-    }),
+    await tools.get("read_file").invoke(
+      {
+        filePath,
+        includeLineNumbers: false,
+        riskLevel: "low",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(firstRead.content, "alpha\nbeta");
   assert.deepEqual(firstRead.path, written.path);
 
   const searched = parseToolResult(
-    await tools.get("search").invoke({
-      source: "files",
-      path: "/workspace/runtime/ops_workdir",
-      query: "beta",
-      glob: "**/*.txt",
-      riskLevel: "low",
-    }),
+    await tools.get("search").invoke(
+      {
+        source: "files",
+        path: "/workspace/runtime/ops_workdir",
+        query: "beta",
+        glob: "**/*.txt",
+        riskLevel: "low",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(searched.ok, true, JSON.stringify(searched));
   assert.equal(searched.matches.length, 1);
   assert.deepEqual(searched.matches[0].path, written.path);
 
   const patched = parseToolResult(
-    await tools.get("patch_file").invoke({
-      format: "apply_patch",
-      patch: [
-        "*** Begin Patch",
-        "*** Update File: runtime/ops_workdir/sandbox-flow.txt",
-        "@@",
-        " alpha",
-        "-beta",
-        "+gamma",
-        "*** End Patch",
-        "",
-      ].join("\n"),
-      riskLevel: "low",
-    }),
+    await tools.get("patch_file").invoke(
+      {
+        format: "apply_patch",
+        patch: [
+          "*** Begin Patch",
+          "*** Update File: runtime/ops_workdir/sandbox-flow.txt",
+          "@@",
+          " alpha",
+          "-beta",
+          "+gamma",
+          "*** End Patch",
+          "",
+        ].join("\n"),
+        riskLevel: "low",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(patched.ok, true, JSON.stringify(patched));
   assert.equal(patched.changes.length, 1);
@@ -334,11 +355,14 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
   assert.equal(patched.mutations[0].id, patched.changes[0].mutation.id);
 
   const finalRead = parseToolResult(
-    await tools.get("read_file").invoke({
-      filePath,
-      includeLineNumbers: false,
-      riskLevel: "low",
-    }),
+    await tools.get("read_file").invoke(
+      {
+        filePath,
+        includeLineNumbers: false,
+        riskLevel: "low",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(finalRead.content, "alpha\ngamma");
   assert.equal(
@@ -418,11 +442,14 @@ test("write_file: global sandbox mounts enforce their protocol readOnly flag", a
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "write_file");
 
   const written = parseToolResult(
-    await tool.invoke({
-      riskLevel: "low",
-      filePath: "/shared-write/result.txt",
-      content: "mounted-write",
-    }),
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        filePath: "/shared-write/result.txt",
+        content: "mounted-write",
+      },
+      { signal: new AbortController().signal },
+    ),
   );
   assert.equal(written.ok, true);
   assert.deepEqual(written.path, { view: "workspace", path: "/shared-write/result.txt" });
@@ -430,11 +457,14 @@ test("write_file: global sandbox mounts enforce their protocol readOnly flag", a
 
   await assert.rejects(
     () =>
-      tool.invoke({
-        riskLevel: "low",
-        filePath: "/shared-readonly/result.txt",
-        content: "blocked",
-      }),
+      tool.invoke(
+        {
+          riskLevel: "low",
+          filePath: "/shared-readonly/result.txt",
+          content: "blocked",
+        },
+        { signal: new AbortController().signal },
+      ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.reason, "sandbox_mount_read_only");

@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
-import { createRuntimeContext } from "../../../src/runtime/runtime-context-factory.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateBuilder } from "../../../src/runtime/state-builder.js";
 
 function createRuntime({ eventListener }) {
-  return createRuntimeContext({
+  return createTestRuntimeContext({
     eventListener,
     globalConfig: {},
     userConfig: {},

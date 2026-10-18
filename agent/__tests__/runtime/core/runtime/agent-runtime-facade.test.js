@@ -16,10 +16,6 @@ function createContextFactory({ buildAgentContextFromBuilder, calls = [] } = {})
         calls.push(["buildAgentContextFromBuilder", payload]);
         return { id: "agent_ctx", payload };
       }),
-    buildRunTurnAgentContext(agentContext, abortSignal) {
-      calls.push(["buildRunTurnAgentContext", { agentContext, abortSignal }]);
-      return { id: "runtime_ctx", agentContext, abortSignal };
-    },
   };
 }
 
@@ -33,19 +29,16 @@ test("AgentRuntimeFacade prepareTurnExecution builds context from the payload co
     turnRunner: noopTurnRunner,
   });
 
-  const abortSignal = { aborted: false };
   const result = await facade.prepareTurnExecution({
     buildContextPayload: { mode: "conversation", sessionId: "s1", contextBuilder },
-    abortSignal,
   });
 
+  assert.deepEqual(Object.keys(result), ["agentContext"]);
   assert.equal(result.agentContext.id, "agent_ctx");
-  assert.equal(result.runtimeAgentContext.id, "runtime_ctx");
+  assert.equal(calls.length, 1);
   assert.equal(calls[0][0], "buildAgentContextFromBuilder");
   assert.equal(calls[0][1].contextBuilder, contextBuilder);
   assert.equal(calls[0][1].sessionId, "s1");
-  assert.equal(calls[1][0], "buildRunTurnAgentContext");
-  assert.equal(calls[1][1].abortSignal, abortSignal);
 });
 
 test("AgentRuntimeFacade prepareTurnExecution forwards context build error", async () => {
@@ -62,7 +55,6 @@ test("AgentRuntimeFacade prepareTurnExecution forwards context build error", asy
     () =>
       facade.prepareTurnExecution({
         buildContextPayload: { sessionId: "s1", contextBuilder: {} },
-        abortSignal: null,
       }),
     /context build failed/,
   );

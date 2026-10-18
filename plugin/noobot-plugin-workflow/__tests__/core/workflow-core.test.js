@@ -18,7 +18,10 @@ import {
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
-import { installTurnMessageEventRuntimeFixture } from "../helpers/workflow-hook-session-strategy-helper.js";
+import {
+  installTurnMessageEventRuntimeFixture,
+  createTestHookInvocation,
+} from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("default semantic prompt documents closed state-node constructs", () => {
   const zh = getWorkflowDefaultSemanticPrompt("zh-CN");
@@ -55,12 +58,12 @@ function createMockBotHookManager() {
       listeners.set(String(point || "").trim(), { handler, options });
       return () => listeners.delete(String(point || "").trim());
     },
-    async emit(point, payload) {
+    async emit(point, payload, invocation) {
       const record = listeners.get(String(point || "").trim());
       if (!record || typeof record.handler !== "function") {
         return { outcomes: [], failures: [] };
       }
-      const result = await record.handler(payload || {});
+      const result = await record.handler(payload || {}, invocation);
       return { outcomes: [{ status: "ok", value: result }], failures: [] };
     },
   };
@@ -370,13 +373,16 @@ test("workflow hook skips when source text is empty", async () => {
   const listener = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
   const agentResult = { output: "", traces: [] };
-  await listener.handler({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "d1",
-    userMessage: "",
-    agentResult,
-  });
+  await listener.handler(
+    {
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      userMessage: "",
+      agentResult,
+    },
+    createTestHookInvocation(),
+  );
   assert.equal(agentResult.workflow, undefined);
   assert.equal(Array.isArray(agentResult.traces), true);
   assert.equal(agentResult.traces.length, 0);
@@ -408,6 +414,7 @@ test("workflow hook owns the turn and never falls back to main agent when semant
   };
   const dispatchOutcome = await listener.handler(
     installTurnMessageEventRuntimeFixture(beforeContext),
+    createTestHookInvocation(),
   );
   assert.equal(dispatchClaims.length, 1);
   assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
@@ -471,6 +478,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
   };
   const dispatchOutcome = await listener.handler(
     installTurnMessageEventRuntimeFixture(beforeContext),
+    createTestHookInvocation(),
   );
   assert.equal(dispatchClaims.length, 1);
   assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
