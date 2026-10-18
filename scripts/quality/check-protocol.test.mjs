@@ -6,11 +6,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createExemptionUsage,
   defineCheck,
   evaluateCheck,
   EXEMPTION_KINDS,
-  exemptMatches,
-  exemptsPath,
   formatCheckResult,
   measurementFromHits,
 } from "./check-protocol.mjs";
@@ -32,6 +31,13 @@ const spec = (overrides = {}) => ({
   measure: async () => ({}),
   ...overrides,
 });
+const usedUsage = (check) => {
+  const usage = createExemptionUsage(check);
+  for (const exemption of check.exemptions)
+    for (const entry of exemption.match) usage.exempts("a", exemption.kind, entry);
+  return usage;
+};
+const evaluate = (check, values) => evaluateCheck(check, values, usedUsage(check));
 const measured = (a, b = 0) => ({
   a: { total: a, files: a ? { "x.js": a } : {}, samples: [] },
   b: { total: b, files: {}, samples: [] },
@@ -55,10 +61,10 @@ test("defineCheck requires description, hint, reason, kind and a complete baseli
 
 test("evaluateCheck fails on increases with hint and top files, and on stale baselines", () => {
   const check = defineCheck(spec());
-  assert.deepEqual(evaluateCheck(check, measured(2)).increases, []);
-  const increased = evaluateCheck(check, measured(3));
+  assert.deepEqual(evaluate(check, measured(2)).increases, []);
+  const increased = evaluate(check, measured(3));
   assert.match(increased.increases[0], /a: 3 exceeds baseline 2; fix it\n {2}x\.js: 3/);
-  const stale = formatCheckResult(check, evaluateCheck(check, measured(1)), "scripts/s.mjs");
+  const stale = formatCheckResult(check, evaluate(check, measured(1)), "scripts/s.mjs");
   assert.equal(stale.ok, false);
   assert.match(stale.text, /stale baseline, lower it in scripts\/s\.mjs: a: 1 below baseline 2/);
 });
@@ -67,33 +73,45 @@ test("exemption entries are counted against the baseline", () => {
   const widened = defineCheck(
     spec({ exemptions: [{ ...exemption, match: [...exemption.match, "more/"] }] }),
   );
-  assert.match(
-    evaluateCheck(widened, measured(2)).increases[0],
-    /exemptions: 3 exceeds baseline 2/,
-  );
+  assert.match(evaluate(widened, measured(2)).increases[0], /exemptions: 3 exceeds baseline 2/);
   const passed = formatCheckResult(
     defineCheck(spec()),
-    evaluateCheck(defineCheck(spec()), measured(2)),
+    evaluate(defineCheck(spec()), measured(2)),
     "s",
   );
-  assert.deepEqual(passed, { ok: true, text: "[sample] passed (a=2, b=0, exemptions=2)" });
+  assert.deepEqual(passed, {
+    ok: true,
+    text: "[sample] passed (a=2, b=0, exemptions=2, staleExemptions=0)",
+  });
 });
 
 test("evaluateCheck rejects missing or malformed measurements", () => {
   const check = defineCheck(spec());
-  assert.throws(() => evaluateCheck(check, { a: measured(1).a }), /missing rule b/);
-  assert.throws(() => evaluateCheck(check, { ...measured(1), c: measured(1).a }), /unknown keys/);
+  assert.throws(() => evaluate(check, { a: measured(1).a }), /missing rule b/);
+  assert.throws(() => evaluate(check, { ...measured(1), c: measured(1).a }), /unknown keys/);
   assert.throws(
-    () => evaluateCheck(check, { ...measured(1), b: { total: -1, files: {}, samples: [] } }),
+    () => evaluate(check, { ...measured(1), b: { total: -1, files: {}, samples: [] } }),
     /non-negative/,
   );
 });
 
-test("exemption lookups are scoped by rule and kind", () => {
+test("exemption usage is scoped by rule and kind and reports unused entries", () => {
   const check = defineCheck(spec());
-  assert.equal(exemptsPath(check, "a", "vendor/y.js"), true);
-  assert.equal(exemptsPath(check, "b", "vendor/y.js"), false);
-  assert.deepEqual([...exemptMatches(check, "a", EXEMPTION_KINDS.PROPERTY_NAME)], []);
+  const usage = createExemptionUsage(check);
+  assert.equal(usage.covers("a", EXEMPTION_KINDS.PATH_PREFIX, "vendor/y.js"), true);
+  assert.deepEqual(usage.staleEntries(), ["vendor a vendor/", "vendor a legacy/x.js"]);
+  assert.equal(usage.exempts("b", EXEMPTION_KINDS.PATH_PREFIX, "vendor/y.js"), false);
+  assert.equal(usage.exempts("a", EXEMPTION_KINDS.PROPERTY_NAME, "vendor/y.js"), false);
+  assert.equal(usage.exempts("a", EXEMPTION_KINDS.PATH_PREFIX, "vendor/y.js"), true);
+  assert.equal(
+    usage.exemptsEvery("a", EXEMPTION_KINDS.PATH_PREFIX, ["legacy/x.js", "z.js"]),
+    false,
+  );
+  assert.deepEqual(usage.staleEntries(), ["vendor a legacy/x.js"]);
+  const stale = evaluateCheck(check, measured(2), usage);
+  assert.equal(stale.totals.staleExemptions, 1);
+  assert.match(stale.increases[0], /staleExemptions: 1 exemption entries suppressed no hit/);
+  assert.throws(() => usage.exempts("z", EXEMPTION_KINDS.PATH_PREFIX, "x"), /no rule z/);
   assert.deepEqual(
     measurementFromHits([
       { file: "x.js", line: 3, message: "m1" },
@@ -112,7 +130,7 @@ test("evaluateCheck reports line samples before top files and truncates them", (
     line: index + 1,
     message: "hit",
   }));
-  const [report] = evaluateCheck(check, {
+  const [report] = evaluate(check, {
     a: measurementFromHits(hits),
     b: measured(0).b,
   }).increases;

@@ -4,109 +4,158 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { resolveRepoRoot } from "./lib/repo-root.mjs";
+import {
+  defineCheck,
+  emptyRuleMeasurements,
+  EXEMPTION_KINDS,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addExemptablePatternLineHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
-const CJK_RE = /[\u4e00-\u9fff]/;
-const SOURCE_EXT_RE = /\.(?:js|mjs|cjs|ts|tsx|vue)$/;
+const CJK_PATTERN = /[\u4e00-\u9fff]/;
+const SOURCE_EXTENSIONS = Object.freeze([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
 
-export const EXEMPT_PATH_RULES = Object.freeze([
-  { pattern: /(^|\/)(?:__tests__|tests?|e2e)\//, reason: "test fixtures" },
-  { pattern: /\.(?:test|spec)\.[cm]?[jt]sx?$/, reason: "test files" },
-  { pattern: /^i18n\//, reason: "shared i18n catalog package" },
-  { pattern: /(^|\/)(?:i18n|locales)\//, reason: "package-local i18n catalogs" },
-  { pattern: /(^|\/)i18n\.js$/, reason: "package-local i18n catalogs" },
-  { pattern: /^(?:agent\/|service\/)?scripts\//, reason: "developer scripts and guard markers" },
-  { pattern: /^workflow\/examples\//, reason: "runnable examples" },
-]);
+function fileExemption(id, file, reason) {
+  return { id, kind: EXEMPTION_KINDS.PATH_PREFIX, rules: ["cjkLiteral"], reason, match: [file] };
+}
 
-export const ALLOWED_FILES = Object.freeze({
-  "agent/src/shared/utils/text-cleaner.js": "matches Chinese web page boilerplate",
-  "agent/src/shared/utils/web/text-cleaner.js": "matches Chinese web page boilerplate",
-  "agent/src/tools/collaboration/user-interaction-tool.js": "matches Chinese secret field names",
-  "client/shared/electron/dependencies/detect.js": "parses localized Windows registry output",
-  "client/shared/electron/dependencies/installer.js": "parses localized installer output",
-  "client/startup/src/components/SuperAdminSetupForm.vue": "language endonym",
-  "memory-protocol/src/experience/fields.js": "default user experience field model",
-  "memory-protocol/src/experience/schema.js": "persisted memory document labels",
-  "memory-protocol/src/long-memory.js": "default long memory field model",
-  "memory-repair/src/document-migration.js": "legacy memory document title for migration",
-  "model-runtime/src/diagnostics/model-access.js": "bilingual diagnostic errors",
-  "sanitize/src/index.js": "matches Chinese PII field names",
-  "service/cli/interaction-prompt.js": "accepts Chinese yes/no replies",
-  "user-template/default-user/services/web-search-service-handler.js":
-    "self-contained bilingual service template",
+export function measureCjkLiterals(check, sources, usage) {
+  const measured = emptyRuleMeasurements(check);
+  for (const [file, source] of Object.entries(sources)) {
+    addExemptablePatternLineHits({
+      usage,
+      rule: "cjkLiteral",
+      measurement: measured.cjkLiteral,
+      file,
+      source,
+      pattern: CJK_PATTERN,
+      message: "CJK literal outside i18n catalogs",
+    });
+  }
+  return measured;
+}
+
+async function measure(usage) {
+  const files = await getFirstPartyCodeFiles({
+    repositoryRoot,
+    extensions: SOURCE_EXTENSIONS,
+    includeTests: false,
+  });
+  const sources = {};
+  for (const file of files) sources[file] = await readRepositoryText(file);
+  return measureCjkLiterals(CHECK, sources, usage);
+}
+
+export const CHECK = defineCheck({
+  id: "source-cjk-literals",
+  description: "User-facing CJK text lives in i18n catalogs",
+  rules: {
+    cjkLiteral: {
+      description: "Production sources never embed CJK literals outside exempted catalogs",
+      hint: "move user-facing text into an i18n catalog",
+    },
+  },
+  exemptions: [
+    {
+      id: "i18n-catalogs",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["cjkLiteral"],
+      reason: "i18n catalogs are the single home of localized text",
+      match: [
+        "i18n/",
+        "client/startup/src/locales/",
+        "plugin/noobot-plugin-character/frontend/i18n/",
+        "plugin/noobot-plugin-harness/frontend/i18n/",
+        "plugin/noobot-plugin-harness/src/i18n/",
+        "plugin/noobot-plugin-workflow/frontend/i18n/",
+        "plugin/noobot-plugin-workflow/src/core/i18n.js",
+      ],
+    },
+    {
+      id: "developer-scripts",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["cjkLiteral"],
+      reason: "developer scripts are not shipped and print operator-facing text",
+      match: ["scripts/", "agent/scripts/", "service/scripts/"],
+    },
+    {
+      id: "runnable-examples",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["cjkLiteral"],
+      reason: "workflow examples demonstrate localized task input",
+      match: ["workflow/examples/"],
+    },
+    fileExemption(
+      "web-boilerplate-cleaner",
+      "agent/src/shared/utils/text-cleaner.js",
+      "matches Chinese web page boilerplate",
+    ),
+    fileExemption(
+      "web-boilerplate-cleaner-web",
+      "agent/src/shared/utils/web/text-cleaner.js",
+      "matches Chinese web page boilerplate",
+    ),
+    fileExemption(
+      "secret-field-names",
+      "agent/src/tools/collaboration/user-interaction-tool.js",
+      "matches Chinese secret field names",
+    ),
+    fileExemption(
+      "windows-registry-output",
+      "client/shared/electron/dependencies/detect.js",
+      "parses localized Windows registry output",
+    ),
+    fileExemption(
+      "installer-output",
+      "client/shared/electron/dependencies/installer.js",
+      "parses localized installer output",
+    ),
+    fileExemption(
+      "language-endonym",
+      "client/startup/src/components/SuperAdminSetupForm.vue",
+      "language endonym",
+    ),
+    fileExemption(
+      "experience-field-model",
+      "memory-protocol/src/experience/fields.js",
+      "default user experience field model",
+    ),
+    fileExemption(
+      "experience-document-labels",
+      "memory-protocol/src/experience/schema.js",
+      "persisted memory document labels",
+    ),
+    fileExemption(
+      "long-memory-field-model",
+      "memory-protocol/src/long-memory.js",
+      "default long memory field model",
+    ),
+    fileExemption(
+      "memory-document-migration",
+      "memory-repair/src/document-migration.js",
+      "legacy memory document title for migration",
+    ),
+    fileExemption(
+      "bilingual-model-diagnostics",
+      "model-runtime/src/diagnostics/model-access.js",
+      "bilingual diagnostic errors",
+    ),
+    fileExemption("pii-field-names", "sanitize/src/index.js", "matches Chinese PII field names"),
+    fileExemption(
+      "cli-yes-no-replies",
+      "service/cli/interaction-prompt.js",
+      "accepts Chinese yes/no replies",
+    ),
+    fileExemption(
+      "self-contained-service-template",
+      "user-template/default-user/services/web-search-service-handler.js",
+      "self-contained bilingual service template",
+    ),
+  ],
+  baseline: { cjkLiteral: 0, exemptions: 25 },
+  measure,
 });
 
-export function isExemptPath(filePath) {
-  return EXEMPT_PATH_RULES.some(({ pattern }) => pattern.test(filePath));
-}
-
-export function findCjkLines(text = "") {
-  const hits = [];
-  String(text)
-    .split(/\r?\n/)
-    .forEach((line, index) => {
-      if (CJK_RE.test(line)) hits.push({ line: index + 1, text: line.trim() });
-    });
-  return hits;
-}
-
-export function evaluateCjkLiterals(files = [], readText, { allowedFiles = ALLOWED_FILES } = {}) {
-  const violations = [];
-  const usedEntries = new Set();
-  for (const filePath of files) {
-    if (!SOURCE_EXT_RE.test(filePath) || isExemptPath(filePath)) continue;
-    const hits = findCjkLines(readText(filePath));
-    if (!hits.length) continue;
-    if (Object.hasOwn(allowedFiles, filePath)) {
-      usedEntries.add(filePath);
-      continue;
-    }
-    violations.push({ file: filePath, hits });
-  }
-  const staleEntries = Object.keys(allowedFiles).filter((entry) => !usedEntries.has(entry));
-  return { violations, staleEntries };
-}
-
-function listTrackedFiles(root) {
-  return execFileSync("git", ["ls-files", "-co", "--exclude-standard"], {
-    cwd: root,
-    encoding: "utf8",
-    maxBuffer: 1 << 28,
-  })
-    .split("\n")
-    .filter(Boolean);
-}
-
-function readExistingText(root, filePath) {
-  try {
-    return readFileSync(path.join(root, filePath), "utf8");
-  } catch (error) {
-    if (error?.code === "ENOENT") return "";
-    throw error;
-  }
-}
-
-function main() {
-  const root = resolveRepoRoot();
-  const { violations, staleEntries } = evaluateCjkLiterals(listTrackedFiles(root), (filePath) =>
-    readExistingText(root, filePath),
-  );
-  for (const { file, hits } of violations) {
-    console.error(`\n- ${file}`);
-    for (const hit of hits.slice(0, 10)) console.error(`  ${hit.line}: ${hit.text}`);
-    if (hits.length > 10) console.error(`  ... and ${hits.length - 10} more`);
-  }
-  for (const entry of staleEntries) console.error(`- stale CJK allowlist entry: ${entry}`);
-  if (violations.length || staleEntries.length) {
-    console.error("❌ Source CJK literal check failed: move user-facing text into i18n catalogs.");
-    process.exit(1);
-  }
-  console.log("✅ source CJK literal check passed.");
-}
-
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+await runCheckWhenMain(CHECK, import.meta.url);

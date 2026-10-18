@@ -63,6 +63,16 @@ test("complete code inventory includes tests but still excludes generated and ex
   );
 });
 
+test("code inventory excludes git-ignored local runtime files", async () => {
+  const files = await getFirstPartyCodeFiles({
+    repositoryRoot,
+    extensions: [".json"],
+    includeTests: false,
+  });
+  assert.ok(files.includes("agent-proxy/agent-proxy.config.example.json"));
+  assert.equal(files.includes("agent-proxy/agent-proxy.config.json"), false);
+});
+
 test("directory-scoped inventory filters by prefix and requires an explicit test policy", async () => {
   const options = { repositoryRoot, extensions: [".js"] };
   const production = await getFirstPartyFilesUnder(["service/"], {

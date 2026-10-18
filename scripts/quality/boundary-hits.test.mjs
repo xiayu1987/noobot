@@ -6,13 +6,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  addExemptablePatternLineHits,
   addMissingConsumerHits,
   addMissingMarkerHits,
   addPatternLineHits,
   addPatternOffsetHits,
   addRemovedPathHits,
 } from "./boundary-hits.mjs";
-import { measurementFromHits } from "./check-protocol.mjs";
+import {
+  createExemptionUsage,
+  defineCheck,
+  EXEMPTION_KINDS,
+  measurementFromHits,
+} from "./check-protocol.mjs";
 
 test("addPatternLineHits records each matching line with its line number", () => {
   const measurement = measurementFromHits([]);
@@ -54,4 +60,26 @@ test("addMissingConsumerHits reports consumers that do not reference their marke
     ["package.json", "zz-missing-consumer"],
   ]);
   assert.deepEqual(measurement.samples, ["package.json must consume zz-missing-consumer"]);
+});
+
+test("addExemptablePatternLineHits records exempt hits on the usage instead of the measurement", () => {
+  const check = defineCheck({
+    id: "s",
+    description: "d",
+    rules: { r: { description: "d", hint: "h" } },
+    exemptions: [
+      { id: "e", kind: EXEMPTION_KINDS.PATH_PREFIX, rules: ["r"], reason: "x", match: ["vendor/"] },
+    ],
+    baseline: { r: 0, exemptions: 1 },
+    measure: async () => ({}),
+  });
+  const usage = createExemptionUsage(check);
+  const measurement = measurementFromHits([]);
+  const args = { usage, rule: "r", measurement, pattern: /bad/, message: "bad" };
+  addExemptablePatternLineHits({ ...args, file: "vendor/a.js", source: "ok" });
+  assert.deepEqual(usage.staleEntries(), ["e r vendor/"]);
+  addExemptablePatternLineHits({ ...args, file: "vendor/a.js", source: "bad" });
+  addExemptablePatternLineHits({ ...args, file: "src/a.js", source: "bad" });
+  assert.deepEqual(usage.staleEntries(), []);
+  assert.deepEqual(measurement.samples, ["src/a.js:1 bad"]);
 });

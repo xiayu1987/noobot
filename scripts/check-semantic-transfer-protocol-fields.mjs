@@ -8,11 +8,10 @@ import {
   defineCheck,
   emptyRuleMeasurements,
   EXEMPTION_KINDS,
-  exemptsPath,
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
 import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
-import { addPatternLineHits } from "./quality/boundary-hits.mjs";
+import { addExemptablePatternLineHits } from "./quality/boundary-hits.mjs";
 import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
 const PRODUCTION_ROOTS = Object.freeze([
@@ -41,7 +40,7 @@ const RULE_FIELDS = Object.freeze({
   ],
 });
 
-async function measure() {
+async function measure(usage) {
   const measured = emptyRuleMeasurements(CHECK);
   const files = await getFirstPartyFilesUnder(PRODUCTION_ROOTS, {
     repositoryRoot,
@@ -51,11 +50,11 @@ async function measure() {
   for (const file of files) {
     const source = await readRepositoryText(file);
     for (const [rule, fields] of Object.entries(RULE_FIELDS)) {
-      if (exemptsPath(CHECK, rule, file)) continue;
       for (const field of fields) {
         const pattern = new RegExp(`\\b${field}\\b`);
         const message = `legacy field ${field}`;
-        addPatternLineHits({ measurement: measured[rule], file, source, pattern, message });
+        const measurement = measured[rule];
+        addExemptablePatternLineHits({ usage, rule, measurement, file, source, pattern, message });
       }
     }
   }

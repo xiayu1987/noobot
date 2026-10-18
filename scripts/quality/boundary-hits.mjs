@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { addHit } from "./check-protocol.mjs";
+import { addHit, EXEMPTION_KINDS } from "./check-protocol.mjs";
 import {
   matchingLineHits,
   offsetLine,
@@ -14,6 +14,20 @@ import {
 export function addPatternLineHits({ measurement, file, source, pattern, message }) {
   for (const hit of matchingLineHits(file, source, (text) => pattern.test(text), message)) {
     addHit(measurement, hit);
+  }
+}
+
+export function addExemptablePatternLineHits({
+  usage,
+  rule,
+  measurement,
+  file,
+  source,
+  pattern,
+  message,
+}) {
+  for (const hit of matchingLineHits(file, source, (text) => pattern.test(text), message)) {
+    if (!usage.exempts(rule, EXEMPTION_KINDS.PATH_PREFIX, file)) addHit(measurement, hit);
   }
 }
 

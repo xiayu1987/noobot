@@ -5,55 +5,42 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evaluateCjkLiterals, isExemptPath } from "./check-source-cjk-literals.mjs";
+import { CHECK, measureCjkLiterals } from "./check-source-cjk-literals.mjs";
+import { createExemptionUsage } from "./quality/check-protocol.mjs";
 
-function run(sources, options) {
-  return evaluateCjkLiterals(Object.keys(sources), (file) => sources[file], options);
+function catalogSources(extra) {
+  const sources = {};
+  for (const exemption of CHECK.exemptions) {
+    for (const prefix of exemption.match)
+      sources[`${prefix}${prefix.endsWith("/") ? "a.js" : ""}`] = '"中"';
+  }
+  return { ...sources, ...extra };
 }
 
-test("reports CJK literals in non-exempt source files", () => {
-  const { violations } = run(
-    { "agent/src/a.js": 'const label = "你好";\nconst ok = 1;', "agent/src/b.js": "const b = 1;" },
-    { allowedFiles: {}, allowedDirs: {} },
+test("reports CJK literals in non-exempt source files with line numbers", () => {
+  const measured = measureCjkLiterals(
+    CHECK,
+    catalogSources({
+      "agent/src/a.js": 'const ok = 1;\nconst label = "你好";',
+      "agent/src/b.js": "1",
+    }),
+    createExemptionUsage(CHECK),
   );
-  assert.deepEqual(
-    violations.map((item) => [item.file, item.hits.map((hit) => hit.line)]),
-    [["agent/src/a.js", [1]]],
-  );
+  assert.equal(measured.cjkLiteral.total, 1);
+  assert.deepEqual(measured.cjkLiteral.samples, [
+    "agent/src/a.js:2 CJK literal outside i18n catalogs",
+  ]);
 });
 
-test("skips catalogs, tests, scripts and non-source files", () => {
-  for (const file of [
-    "i18n/src/client/locales/zh-CN.js",
-    "plugin/x/frontend/i18n/zh.js",
-    "plugin/x/src/i18n.js",
-    "agent/__tests__/a.test.js",
-    "client/noobot-chat/tests/unit/a.spec.js",
-    "scripts/check-a.mjs",
-    "workflow/examples/a.js",
-  ]) {
-    assert.equal(isExemptPath(file), true, file);
-  }
-  const { violations } = run(
-    { "docs/readme.md": "中文", "agent/src/style.css": "/* 中文 */" },
-    { allowedFiles: {}, allowedDirs: {} },
-  );
-  assert.deepEqual(violations, []);
+test("exempted catalogs, scripts and listed files pass and use every exemption", () => {
+  const usage = createExemptionUsage(CHECK);
+  const measured = measureCjkLiterals(CHECK, catalogSources({}), usage);
+  assert.equal(measured.cjkLiteral.total, 0);
+  assert.deepEqual(usage.staleEntries(), []);
 });
 
-test("accepts allowlisted files", () => {
-  const { violations, staleEntries } = run(
-    { "sanitize/src/index.js": '"护照"' },
-    { allowedFiles: { "sanitize/src/index.js": "pii" } },
-  );
-  assert.deepEqual(violations, []);
-  assert.deepEqual(staleEntries, []);
-});
-
-test("fails stale allowlist entries without CJK content", () => {
-  const { staleEntries } = run(
-    { "sanitize/src/index.js": "const a = 1;" },
-    { allowedFiles: { "sanitize/src/index.js": "pii", "gone.js": "removed" } },
-  );
-  assert.deepEqual(staleEntries, ["sanitize/src/index.js", "gone.js"]);
+test("exemptions whose files no longer contain CJK are stale", () => {
+  const usage = createExemptionUsage(CHECK);
+  measureCjkLiterals(CHECK, catalogSources({ "sanitize/src/index.js": "const a = 1;" }), usage);
+  assert.deepEqual(usage.staleEntries(), ["pii-field-names cjkLiteral sanitize/src/index.js"]);
 });

@@ -4,69 +4,69 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
+import {
+  defineCheck,
+  emptyRuleMeasurements,
+  EXEMPTION_KINDS,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addExemptablePatternLineHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = process.cwd();
-const TARGET_ROOT = path.join(ROOT, "agent", "src");
+const RULE_PATTERNS = Object.freeze({
+  inlineNormalization: [
+    /String\(\s*parentSessionId\s*\|\|\s*""\s*\)\.trim\(\)/,
+    /\btext\(\s*parentSessionId\s*\)/,
+    /\(\s*parentSessionId\s*\?\?\s*""\s*\)\.trim\(\)/,
+  ],
+  runtimeFallback: [/systemRuntime\?\.parentSessionId\s*\|\|/, /runtime\?\.parentSessionId\s*\|\|/],
+});
 
-const ALLOW_PATH_PREFIXES = ["agent/src/session/"];
-
-const ALLOW_EXACT_FILES = new Set(["agent/src/bot/session/session-execution-engine.js"]);
-
-const RULES = [
-  /String\(\s*parentSessionId\s*\|\|\s*""\s*\)\.trim\(\)/,
-  /\btext\(\s*parentSessionId\s*\)/,
-  /\(\s*parentSessionId\s*\?\?\s*""\s*\)\.trim\(\)/,
-  /systemRuntime\?\.parentSessionId\s*\|\|/,
-  /runtime\?\.parentSessionId\s*\|\|/,
-];
-
-async function walk(dir) {
-  const out = [];
-  const entries = await readdir(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...(await walk(full)));
-      continue;
-    }
-    if (entry.isFile() && full.endsWith(".js")) out.push(full);
-  }
-  return out;
-}
-
-function isAllowed(relPath = "") {
-  if (ALLOW_EXACT_FILES.has(relPath)) return true;
-  return ALLOW_PATH_PREFIXES.some((prefix) => relPath.startsWith(prefix));
-}
-
-const files = await walk(TARGET_ROOT);
-const violations = [];
-for (const file of files) {
-  const relPath = file.replace(`${ROOT}/`, "");
-  if (isAllowed(relPath)) continue;
-  const text = await readFile(file, "utf8");
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (!line.includes("parentSessionId")) continue;
-    if (RULES.some((rule) => rule.test(line))) {
-      violations.push({
-        relPath,
-        line: i + 1,
-        text: line.trim(),
-      });
+async function measure(usage) {
+  const measured = emptyRuleMeasurements(CHECK);
+  const files = await getFirstPartyFilesUnder(["agent/src"], {
+    repositoryRoot,
+    extensions: [".js"],
+    includeTests: false,
+  });
+  for (const file of files) {
+    const source = await readRepositoryText(file);
+    for (const [rule, patterns] of Object.entries(RULE_PATTERNS)) {
+      for (const pattern of patterns) {
+        const message = `parentSessionId ${rule}`;
+        const measurement = measured[rule];
+        addExemptablePatternLineHits({ usage, rule, measurement, file, source, pattern, message });
+      }
     }
   }
+  return measured;
 }
 
-if (violations.length) {
-  console.error("[check-parent-sessionid-unification] violations found:");
-  for (const item of violations) {
-    console.error(`- ${item.relPath}:${item.line}: ${item.text}`);
-  }
-  process.exit(1);
-}
+export const CHECK = defineCheck({
+  id: "parent-sessionid-unification",
+  description: "parentSessionId is normalized once by the session layer",
+  rules: {
+    inlineNormalization: {
+      description: "Callers never re-normalize parentSessionId with text() or String().trim()",
+      hint: "read the parentSessionId already normalized by agent/src/session",
+    },
+    runtimeFallback: {
+      description: "parentSessionId never falls back between runtime carriers",
+      hint: "read parentSessionId from its single writer instead of chaining runtime sources",
+    },
+  },
+  exemptions: [
+    {
+      id: "session-normalization-layer",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["inlineNormalization"],
+      reason: "agent/src/session is the single layer that normalizes inbound parentSessionId",
+      match: ["agent/src/session/"],
+    },
+  ],
+  baseline: { inlineNormalization: 0, runtimeFallback: 0, exemptions: 1 },
+  measure,
+});
 
-console.log("[check-parent-sessionid-unification] ok");
+await runCheckWhenMain(CHECK, import.meta.url);

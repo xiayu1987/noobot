@@ -13,8 +13,7 @@ import {
   addHit,
   defineCheck,
   emptyMeasurement,
-  exemptMatches,
-  exemptsPath,
+  NO_EXEMPTIONS,
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
 import {
@@ -74,13 +73,8 @@ export const CHECK = defineCheck({
         "usage_metadata",
         "tool_calls",
         "tool_call_id",
-        "tool_use_id",
         "call_id",
         "tool_name",
-        "tool_choice",
-        "input_schema",
-        "image_url",
-        "b64_json",
       ],
     },
     {
@@ -88,7 +82,7 @@ export const CHECK = defineCheck({
       kind: EXEMPTION_KINDS.ROOT_IDENTIFIER,
       rules: ["fallbackChain"],
       reason: "caught errors have no fixed shape; every operand reads the same error object",
-      match: ["error", "err", "cause"],
+      match: ["error"],
     },
     {
       id: "vendor-adapters",
@@ -100,14 +94,14 @@ export const CHECK = defineCheck({
     {
       id: "langchain-message-codec",
       kind: EXEMPTION_KINDS.PATH_PREFIX,
-      rules: ["fallbackChain", "inlineTrim"],
+      rules: ["fallbackChain"],
       reason: "LangChain message codec",
       match: ["context-protocol/src/message/"],
     },
     {
       id: "shared-value-implementation",
       kind: EXEMPTION_KINDS.PATH_PREFIX,
-      rules: ["fallbackChain", "inlineTrim", "typeCheck", "rawTypeof"],
+      rules: ["inlineTrim", "typeCheck", "rawTypeof"],
       reason: "implements text(), isPlainObject, isObjectLike and isFunction themselves",
       match: ["shared/value.js"],
     },
@@ -127,11 +121,11 @@ export const CHECK = defineCheck({
     fallbackChain: 672,
     inlineTrim: 104,
     typeCheck: 0,
-    rawTypeof: 692,
+    rawTypeof: 691,
     textShadow: 0,
-    exemptions: 22,
+    exemptions: 15,
   },
-  measure: () => measureRules(),
+  measure: (usage) => measureRules(usage),
 });
 
 const PLAIN_OBJECT_HELPER_NAMES = new Set([
@@ -140,9 +134,6 @@ const PLAIN_OBJECT_HELPER_NAMES = new Set([
   "isRecord",
   "isObjectLike",
 ]);
-
-const EXTERNAL_FIELD_SET = exemptMatches(CHECK, "fallbackChain", EXEMPTION_KINDS.PROPERTY_NAME);
-const ERROR_ROOT_SET = exemptMatches(CHECK, "fallbackChain", EXEMPTION_KINDS.ROOT_IDENTIFIER);
 
 function flattenChain(node, operator, output = []) {
   if (node.type === "LogicalExpression" && node.operator === operator) {
@@ -181,21 +172,27 @@ function memberPropertyNames(node) {
   return names;
 }
 
-function isExemptChain(fields) {
-  if (
-    fields.some((field) => memberPropertyNames(field).some((name) => EXTERNAL_FIELD_SET.has(name)))
-  )
-    return true;
-  return fields.every((field) => {
-    const base = rootObject(field);
-    return base.type === "Identifier" && ERROR_ROOT_SET.has(base.name);
-  });
+function chainFields(node) {
+  return flattenChain(node, node.operator).filter(isFieldOperand);
 }
 
-function classifyChain(node) {
-  const fields = flattenChain(node, node.operator).filter(isFieldOperand);
-  if (fields.length < 2) return null;
-  return isExemptChain(fields) ? "exempt" : "counted";
+function isFieldChain(node) {
+  return chainFields(node).length >= 2;
+}
+
+function isExemptChain(fields, usage) {
+  const names = fields.flatMap(memberPropertyNames).filter(Boolean);
+  const vendorHits = names.map((name) =>
+    usage.exempts("fallbackChain", EXEMPTION_KINDS.PROPERTY_NAME, name),
+  );
+  if (vendorHits.some(Boolean)) return true;
+  const roots = fields.map(rootObject);
+  if (roots.some((base) => base.type !== "Identifier")) return false;
+  return usage.exemptsEvery(
+    "fallbackChain",
+    EXEMPTION_KINDS.ROOT_IDENTIFIER,
+    roots.map((base) => base.name),
+  );
 }
 
 function isConditionPosition(node, parent) {
@@ -226,7 +223,7 @@ function parseSource(source, filename) {
   return espree.parse(source, { ...options, ecmaFeatures: { jsx: filename.endsWith(".jsx") } });
 }
 
-export function findFallbackChains(source, filename = "source.js") {
+export function findFallbackChains(source, filename, usage) {
   const chains = [];
   walk(parseSource(source, filename), null, (node, parent) => {
     const isChainHead =
@@ -234,7 +231,8 @@ export function findFallbackChains(source, filename = "source.js") {
       FALLBACK_OPERATORS.has(node.operator) &&
       !(parent?.type === "LogicalExpression" && parent.operator === node.operator);
     if (!isChainHead || isConditionPosition(node, parent)) return;
-    if (classifyChain(node) === "counted") chains.push(snippet(source, node));
+    const fields = chainFields(node);
+    if (fields.length >= 2 && !isExemptChain(fields, usage)) chains.push(snippet(source, node));
   });
   return chains;
 }
@@ -258,7 +256,7 @@ export function findInlineTrimFallbacks(
   { skipFieldChains = false } = {},
 ) {
   const isTrimFallback = (node) =>
-    isFallbackExpression(node) && !(skipFieldChains && classifyChain(node));
+    isFallbackExpression(node) && !(skipFieldChains && isFieldChain(node));
   const hits = [];
   walk(parseSource(source, filename), null, (node) => {
     if (isSingleArgumentCall(node, "text")) {
@@ -388,14 +386,20 @@ const RULE_FINDERS = Object.freeze({
 });
 
 export function includesFile(rule, file) {
-  return RULE_SCOPES[rule](file) && !exemptsPath(CHECK, rule, file);
+  return RULE_SCOPES[rule](file);
 }
 
-export function findRuleHits(rule, source, file) {
-  return RULE_FINDERS[rule](source, file);
+export function findRuleHits(rule, source, file, usage) {
+  if (!usage.covers(rule, EXEMPTION_KINDS.PATH_PREFIX, file)) {
+    return RULE_FINDERS[rule](source, file, usage);
+  }
+  if (RULE_FINDERS[rule](source, file, NO_EXEMPTIONS).length) {
+    usage.exempts(rule, EXEMPTION_KINDS.PATH_PREFIX, file);
+  }
+  return [];
 }
 
-async function measureRules() {
+async function measureRules(usage) {
   const files = await getFirstPartyCodeFiles({
     repositoryRoot: root,
     extensions: [".js", ".mjs", ".cjs", ".jsx", ".vue"],
@@ -409,7 +413,7 @@ async function measureRules() {
     if (!included.length) continue;
     const source = await readFile(path.join(root, relativePath), "utf8");
     for (const name of included) {
-      for (const { line, code } of findRuleHits(name, source, file)) {
+      for (const { line, code } of findRuleHits(name, source, file, usage)) {
         addHit(measured[name], { file, line, message: code });
       }
     }

@@ -4,87 +4,70 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync, readdirSync } from "node:fs";
-import path from "node:path";
-import { resolveRepoRoot } from "./lib/repo-root.mjs";
+import {
+  defineCheck,
+  emptyRuleMeasurements,
+  EXEMPTION_KINDS,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addExemptablePatternLineHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
-const ROOT = resolveRepoRoot();
-const SOURCE_OF_TRUTH = "runtime-topology-protocol/src/ports.js";
-
-const ALLOWED_FILES = new Set([SOURCE_OF_TRUTH]);
-
-const SKIPPED_DIRECTORIES = new Set([
-  "node_modules",
-  ".git",
-  "__tests__",
-  "test",
-  "tests",
-  "dist",
-  "build",
-  "coverage",
-  ".cache",
-  "runtime",
-  "vendor",
-  "workspace",
+const SCANNED_EXTENSIONS = Object.freeze([
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".ts",
+  ".vue",
+  ".sh",
+  ".json",
+  ".example",
 ]);
-
-const SCANNED_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".ts", ".vue", ".sh", ".json"]);
-const SCANNED_FILE_NAMES = new Set([".env.example"]);
-const SKIPPED_FILE_NAMES = new Set([
-  "agent-proxy.config.json",
-  "model-proxy.config.json",
-  "global.config.json",
-  "config.json",
-]);
-const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]s$/i;
 const PORT_LITERAL = /\b1006[0-9]\b/;
 
-function collectFiles(directory, results = []) {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (entry.name.startsWith(".") && entry.name !== ".env.example") continue;
-    const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
-      collectFiles(absolute, results);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (SKIPPED_FILE_NAMES.has(entry.name)) continue;
-    if (TEST_FILE.test(entry.name)) continue;
-    if (!SCANNED_EXTENSIONS.has(path.extname(entry.name)) && !SCANNED_FILE_NAMES.has(entry.name)) {
-      continue;
-    }
-    results.push(absolute);
-  }
-  return results;
-}
-
-function scan(absolute) {
-  const relativePath = path.relative(ROOT, absolute).split(path.sep).join("/");
-  if (ALLOWED_FILES.has(relativePath)) return [];
-  const violations = [];
-  readFileSync(absolute, "utf8")
-    .split(/\r?\n/)
-    .forEach((line, index) => {
-      if (PORT_LITERAL.test(line)) {
-        violations.push({ file: relativePath, line: index + 1, text: line.trim() });
-      }
+async function measure(usage) {
+  const measured = emptyRuleMeasurements(CHECK);
+  const files = await getFirstPartyCodeFiles({
+    repositoryRoot,
+    extensions: SCANNED_EXTENSIONS,
+    includeTests: false,
+  });
+  for (const file of files) {
+    const source = await readRepositoryText(file);
+    addExemptablePatternLineHits({
+      usage,
+      rule: "portLiteral",
+      measurement: measured.portLiteral,
+      file,
+      source,
+      pattern: PORT_LITERAL,
+      message: "runtime port literal",
     });
-  return violations;
-}
-
-const files = collectFiles(ROOT);
-const violations = files.flatMap((file) => scan(file));
-
-if (violations.length > 0) {
-  console.error(`Runtime port literals must live only in ${SOURCE_OF_TRUTH}.`);
-  console.error("Derive them from @noobot/runtime-topology-protocol instead.\n");
-  for (const violation of violations) {
-    console.error(`  ${violation.file}:${violation.line}: ${violation.text}`);
   }
-  process.exit(1);
+  return measured;
 }
 
-console.log(
-  `check:runtime-port-literals passed (${files.length} files scanned, source of truth: ${SOURCE_OF_TRUTH})`,
-);
+export const CHECK = defineCheck({
+  id: "runtime-port-literals",
+  description: "Runtime ports are declared once by runtime-topology-protocol",
+  rules: {
+    portLiteral: {
+      description: "Production sources and committed configs never hard-code runtime ports",
+      hint: "derive ports from @noobot/runtime-topology-protocol",
+    },
+  },
+  exemptions: [
+    {
+      id: "runtime-topology-ports",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["portLiteral"],
+      reason: "ports.js is the single source of truth for runtime ports",
+      match: ["runtime-topology-protocol/src/ports.js"],
+    },
+  ],
+  baseline: { portLiteral: 0, exemptions: 1 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

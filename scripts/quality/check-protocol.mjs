@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { isFunction } from "@noobot/shared/value";
 
 export const EXEMPTION_BASELINE_KEY = "exemptions";
+export const STALE_EXEMPTION_KEY = "staleExemptions";
 const SPEC_KEYS = new Set(["id", "description", "rules", "exemptions", "baseline", "measure"]);
 const RULE_KEYS = new Set(["description", "hint"]);
 const EXEMPTION_KEYS = new Set(["id", "kind", "rules", "reason", "match"]);
@@ -107,23 +108,60 @@ export function defineCheck(spec) {
   });
 }
 
-export function exemptionsFor(check, rule) {
-  return check.exemptions.filter((exemption) => exemption.rules.includes(rule));
+function exemptionEntryMatches(kind, entry, value) {
+  return kind === EXEMPTION_KINDS.PATH_PREFIX ? value.startsWith(entry) : value === entry;
 }
 
-export function exemptsPath(check, rule, file) {
-  return exemptionsFor(check, rule)
-    .filter((exemption) => exemption.kind === EXEMPTION_KINDS.PATH_PREFIX)
-    .some((exemption) => exemption.match.some((prefix) => file.startsWith(prefix)));
+function exemptionUseKey(exemption, rule, entry) {
+  return `${exemption.id}\u0000${rule}\u0000${entry}`;
 }
 
-export function exemptMatches(check, rule, kind) {
-  return new Set(
-    exemptionsFor(check, rule)
-      .filter((exemption) => exemption.kind === kind)
-      .flatMap((exemption) => exemption.match),
-  );
+export function createExemptionUsage(check) {
+  const used = new Set();
+  const matchedKeys = (rule, kind, value) => {
+    if (!Object.hasOwn(check.rules, rule)) throw new TypeError(`${check.id} has no rule ${rule}`);
+    if (!EXEMPTION_KIND_SET.has(kind)) throw new TypeError(`${check.id} kind ${kind} unknown`);
+    requireText(value, `${check.id}.exempts(${rule}).value`);
+    return check.exemptions
+      .filter((exemption) => exemption.kind === kind && exemption.rules.includes(rule))
+      .flatMap((exemption) =>
+        exemption.match
+          .filter((entry) => exemptionEntryMatches(kind, entry, value))
+          .map((entry) => exemptionUseKey(exemption, rule, entry)),
+      );
+  };
+  return Object.freeze({
+    covers(rule, kind, value) {
+      return matchedKeys(rule, kind, value).length > 0;
+    },
+    exempts(rule, kind, value) {
+      const keys = matchedKeys(rule, kind, value);
+      for (const key of keys) used.add(key);
+      return keys.length > 0;
+    },
+    exemptsEvery(rule, kind, values) {
+      const keySets = values.map((value) => matchedKeys(rule, kind, value));
+      if (!keySets.length || keySets.some((keys) => !keys.length)) return false;
+      for (const key of keySets.flat()) used.add(key);
+      return true;
+    },
+    staleEntries() {
+      return check.exemptions.flatMap((exemption) =>
+        exemption.rules.flatMap((rule) =>
+          exemption.match
+            .filter((entry) => !used.has(exemptionUseKey(exemption, rule, entry)))
+            .map((entry) => `${exemption.id} ${rule} ${entry}`),
+        ),
+      );
+    },
+  });
 }
+
+export const NO_EXEMPTIONS = Object.freeze({
+  covers: () => false,
+  exempts: () => false,
+  exemptsEvery: () => false,
+});
 
 export function countExemptions(check) {
   return check.exemptions.reduce((total, exemption) => total + exemption.match.length, 0);
@@ -176,7 +214,7 @@ export function topFiles(files, limit = TOP_FILE_LIMIT) {
     .map(([file, count]) => `  ${file}: ${count}`);
 }
 
-export function evaluateCheck(check, measured) {
+export function evaluateCheck(check, measured, usage) {
   rejectUnknownKeys(measured, new Set(Object.keys(check.rules)), `${check.id}.measure()`);
   const totals = {};
   const increases = [];
@@ -210,6 +248,16 @@ export function evaluateCheck(check, measured) {
   if (totals.exemptions < allowedExemptions) {
     decreases.push(`exemptions: ${totals.exemptions} below baseline ${allowedExemptions}`);
   }
+  const stale = usage.staleEntries();
+  totals[STALE_EXEMPTION_KEY] = stale.length;
+  if (stale.length) {
+    increases.push(
+      [
+        `${STALE_EXEMPTION_KEY}: ${stale.length} exemption entries suppressed no hit; delete them`,
+        ...reportedSamples(stale),
+      ].join("\n"),
+    );
+  }
   return { totals, increases, decreases };
 }
 
@@ -231,7 +279,8 @@ export function formatCheckResult(check, result, scriptPath) {
 
 export async function runCheck(check, moduleUrl) {
   const scriptPath = path.relative(repositoryRoot, fileURLToPath(moduleUrl));
-  const result = evaluateCheck(check, await check.measure());
+  const usage = createExemptionUsage(check);
+  const result = evaluateCheck(check, await check.measure(usage), usage);
   const { ok, text } = formatCheckResult(check, result, scriptPath);
   if (ok) {
     process.stdout.write(`${text}\n`);

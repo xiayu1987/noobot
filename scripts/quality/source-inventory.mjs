@@ -3,10 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { execFile } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { text } from "@noobot/shared/value";
 
+const execFileAsync = promisify(execFile);
+const GIT_CHECK_IGNORE_NONE_MATCHED = 1;
 const FIRST_PARTY_AUXILIARY_ROOTS = Object.freeze(["scripts", "user-template"]);
 
 const FIRST_PARTY_IGNORED_DIRECTORIES = Object.freeze([
@@ -115,6 +119,23 @@ async function collectDirectoryFiles({
   }
 }
 
+async function gitIgnoredPaths(repositoryRoot, relativePaths) {
+  if (!relativePaths.length) return new Set();
+  const child = execFileAsync("git", ["check-ignore", "--stdin", "-z"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  child.child.stdin.end(relativePaths.join("\0"));
+  try {
+    const { stdout } = await child;
+    return new Set(stdout.split("\0").filter(Boolean));
+  } catch (error) {
+    if (error?.code === GIT_CHECK_IGNORE_NONE_MATCHED) return new Set();
+    throw error;
+  }
+}
+
 export async function getFirstPartyProductionFiles({
   repositoryRoot,
   extensions = [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
@@ -140,7 +161,9 @@ export async function getFirstPartyCodeFiles({
       includeTests,
     });
   }
-  return [...output].sort();
+  const files = [...output].map((file) => file.replaceAll("\\", "/"));
+  const ignored = await gitIgnoredPaths(normalizedRoot, files);
+  return files.filter((file) => !ignored.has(file)).sort();
 }
 
 export async function getFirstPartyFilesUnder(
