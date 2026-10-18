@@ -7,5 +7,8 @@
   "exports": "./src/index.js",
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test"
+  },
+  "dependencies": {
+    "@noobot/shared": "file:../shared"
   }
 }

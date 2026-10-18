@@ -30,7 +30,23 @@ test("normalizeSessionTree keeps only sessionId and parentSessionId", () => {
     nodes: { " s1 ": { parentSessionId: " p ", extra: 1 }, "": { parentSessionId: "" } },
   });
   assert.deepEqual(normalized, { nodes: { s1: { sessionId: "s1", parentSessionId: "p" } } });
-  assert.deepEqual(normalizeSessionTree(), { nodes: {} });
+});
+
+test("normalizeSessionTree rejects non-object tree, nodes or node", () => {
+  for (const invalid of [
+    undefined,
+    null,
+    [],
+    {},
+    { nodes: null },
+    { nodes: [] },
+    { nodes: { s1: null } },
+  ]) {
+    assert.throws(
+      () => normalizeSessionTree(invalid),
+      (error) => error instanceof TypeError && error.code === SESSION_TREE_ERROR.INVALID_SHAPE,
+    );
+  }
 });
 
 test("normalizeSessionTree rejects legacy schema fields", () => {

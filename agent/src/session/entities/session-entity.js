@@ -200,6 +200,6 @@ export function normalizeSessionEntity(
   return assertSessionAggregateInvariants(normalizedSession);
 }
 
-export function normalizeSessionTreeEntity(tree = {}) {
+export function normalizeSessionTreeEntity(tree) {
   return normalizeSessionTree(tree);
 }

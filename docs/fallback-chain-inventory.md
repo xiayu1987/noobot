@@ -38,7 +38,7 @@
 
 改为导入 `isPlainObject`。范围同 1.2，`shared/value.js` 除外。零依赖包（如 `workspace-protocol`）和无 `package.json` 的目录照常计数，清零时先确认依赖边界。
 
-保留 2 处：`attachment-protocol/src/protocol-utils.js` 和 `client/noobot-chat/tests/e2e/protocol/helpers/snapshot-assertions.js` 的 `isPlainObject` 额外要求原型为 `Object.prototype` 或 `null`，比 shared 版更严，替换会放宽校验；`attachment-protocol` 也不依赖 `@noobot/shared`。
+保留 2 处：`attachment-protocol/src/protocol-utils.js` 和 `client/noobot-chat/tests/e2e/protocol/helpers/snapshot-assertions.js` 的 `isPlainObject` 额外要求原型为 `Object.prototype` 或 `null`，比 shared 版更严，替换会放宽校验，因此保留为协议内的严格判定。
 
 ### 1.4 原始 typeof 判断（`rawTypeof`）
 
@@ -84,7 +84,7 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 699 处 / 291 个文件；内联 trim 兜底 116 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；原始 typeof 判断 773 处 / 380 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 699 处 / 291 个文件；内联 trim 兜底 115 处 / 73 个文件；内联类型判断 2 处 / 2 个文件；原始 typeof 判断 766 处 / 374 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 原始 typeof 判断 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ------------ | ---------------- | ----------- |
@@ -112,20 +112,19 @@
 | `memory-protocol`                | 2      | 0              | 0            | 6                | 0           |
 | `plugin/noobot-plugin-character` | 5      | 1              | 0            | 2                | 0           |
 | `session-repair`                 | 4      | 2              | 0            | 1                | 0           |
-| `workspace-protocol`             | 0      | 3              | 0            | 3                | 0           |
 | `agent-config-protocol`          | 2      | 0              | 0            | 3                | 0           |
 | `model-proxy`                    | 0      | 0              | 0            | 5                | 0           |
 | `plugin-protocol`                | 1      | 0              | 0            | 4                | 0           |
 | `client/startup`                 | 4      | 0              | 0            | 0                | 0           |
 | `connector-protocol`             | 1      | 3              | 0            | 0                | 0           |
 | `runtime-events`                 | 1      | 1              | 0            | 2                | 0           |
-| `sanitize`                       | 1      | 1              | 0            | 2                | 0           |
 | `semantic-transfer-protocol`     | 0      | 1              | 0            | 3                | 0           |
-| `attachment-protocol`            | 0      | 0              | 1            | 2                | 0           |
+| `attachment-protocol`            | 0      | 0              | 1            | 1                | 0           |
 | `hook-protocol`                  | 0      | 0              | 0            | 2                | 0           |
+| `sanitize`                       | 1      | 1              | 0            | 0                | 0           |
+| `workspace-protocol`             | 0      | 2              | 0            | 0                | 0           |
 | `connector-runtime`              | 0      | 0              | 0            | 1                | 0           |
 | `file-mutation-protocol`         | 0      | 0              | 0            | 1                | 0           |
-| `memory-repair`                  | 0      | 0              | 0            | 1                | 0           |
 | `platform-compatibility`         | 1      | 0              | 0            | 0                | 0           |
 
 <!-- fallback-chain-modules:end -->

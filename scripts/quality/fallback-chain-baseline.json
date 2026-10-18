@@ -365,8 +365,7 @@
     "user-template/default-user/services/web-search-service-handler.js": 7,
     "workflow/src/lib/runtime.js": 2,
     "workspace-protocol/src/layout.js": 1,
-    "workspace-protocol/src/sections.js": 1,
-    "workspace-protocol/src/session-tree.js": 1
+    "workspace-protocol/src/sections.js": 1
   },
   "typeCheck": {
     "attachment-protocol/src/protocol-utils.js": 1,
@@ -486,7 +485,6 @@
     "agent/src/tools/execution/tool-risk.js": 1,
     "agent/src/transfer-adapter/transfer/tool-result-overflow.js": 1,
     "agent/src/transfer-adapter/transfer/tool-transfer.js": 1,
-    "attachment-protocol/src/collections/identity-set.js": 1,
     "attachment-protocol/src/protocol-utils.js": 1,
     "authoritative-state/src/application/authority-query-service.js": 2,
     "authoritative-state/src/application/commit-turn-lifecycle.js": 4,
@@ -600,7 +598,6 @@
     "memory-protocol/src/experience/model-text.js": 1,
     "memory-protocol/src/experience/patch-items.js": 3,
     "memory-protocol/src/experience/schema.js": 1,
-    "memory-repair/src/workspace-repair.js": 1,
     "model-protocol/src/model/provider-spec.js": 2,
     "model-protocol/src/policy/retry-policy.js": 2,
     "model-protocol/src/protocol/operation.js": 1,
@@ -694,7 +691,6 @@
     "plugin/noobot-plugin-workflow/src/service/routes.js": 3,
     "runtime-events/src/session-location.js": 1,
     "runtime-events/src/session-log-protocol.js": 1,
-    "sanitize/src/index.js": 2,
     "scripts/check-cross-platform-compat.mjs": 1,
     "scripts/generate-character-animation-demo.mjs": 1,
     "scripts/migrate-attachment-record-v1.mjs": 1,
@@ -749,10 +745,7 @@
     "workflow/src/engine/bizinst/box/modelbox/model-box.js": 2,
     "workflow/src/engine/bizinstcontrolcenter/bizinst-flow-engine.js": 3,
     "workflow/src/engine/bizinstcontrolcenter/flow-listener.js": 1,
-    "workflow/src/lib/runtime.js": 8,
-    "workspace-protocol/src/asset-sync.js": 1,
-    "workspace-protocol/src/layout-migration.js": 1,
-    "workspace-protocol/src/session-tree.js": 1
+    "workflow/src/lib/runtime.js": 8
   },
   "textShadow": {}
 }

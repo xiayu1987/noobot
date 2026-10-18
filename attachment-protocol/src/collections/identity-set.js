@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction } from "@noobot/shared/value";
 import { AttachmentProtocolError } from "../errors.js";
 import { attachmentIdentityKey, projectAttachmentIdentity } from "../identity.js";
 export function assertUniqueAttachmentIdentities(v, select = projectAttachmentIdentity) {
@@ -32,7 +33,7 @@ export function mergeAttachmentsByIdentity(
 ) {
   if (!Array.isArray(a) || !Array.isArray(b))
     throw new AttachmentProtocolError("attachments_must_be_array");
-  if (typeof onConflict !== "function")
+  if (!isFunction(onConflict))
     throw new AttachmentProtocolError("attachment_merge_conflict_policy_required");
   const out = a.slice(),
     idx = new Map(out.map((x, i) => [attachmentIdentityKey(selectIdentity(x)), i]));

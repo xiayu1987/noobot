@@ -3,9 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject, text } from "@noobot/shared/value";
 import { WORKSPACE_LAYOUT, isWorkspacePathSegment } from "./layout.js";
 
 export const SESSION_TREE_ERROR = Object.freeze({
+  INVALID_SHAPE: "SESSION_TREE_INVALID_SHAPE",
   LEGACY_SCHEMA: "SESSION_TREE_LEGACY_SCHEMA",
   SESSION_ID_REQUIRED: "SESSION_TREE_SESSION_ID_REQUIRED",
   INVALID_SESSION_ID: "SESSION_TREE_INVALID_SESSION_ID",
@@ -21,15 +23,23 @@ function sessionTreeError(code, message, details = {}, ErrorType = Error) {
   return error;
 }
 
-function normalizeId(value) {
-  return String(value ?? "").trim();
-}
-
-function assertSessionTreeSchema(tree, nodes) {
-  const legacyNode = Object.values(nodes).some(
-    (node) => node && ("children" in node || "createdAt" in node || "updatedAt" in node),
+function assertSessionTreeSchema(tree) {
+  const validShape =
+    isPlainObject(tree) &&
+    isPlainObject(tree.nodes) &&
+    Object.values(tree.nodes).every(isPlainObject);
+  if (!validShape) {
+    throw sessionTreeError(
+      SESSION_TREE_ERROR.INVALID_SHAPE,
+      "session tree must be { nodes: { [sessionId]: { parentSessionId } } }",
+      {},
+      TypeError,
+    );
+  }
+  const legacyNode = Object.values(tree.nodes).some(
+    (node) => "children" in node || "createdAt" in node || "updatedAt" in node,
   );
-  if (tree && ("roots" in tree || "updatedAt" in tree || legacyNode)) {
+  if ("roots" in tree || "updatedAt" in tree || legacyNode) {
     throw sessionTreeError(
       SESSION_TREE_ERROR.LEGACY_SCHEMA,
       "legacy session tree fields roots/children/createdAt/updatedAt are not supported; the workspace layout upgrade maps them to parentSessionId",
@@ -39,20 +49,19 @@ function assertSessionTreeSchema(tree, nodes) {
   }
 }
 
-export function normalizeSessionTree(tree = {}) {
-  const sourceNodes = tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
-  assertSessionTreeSchema(tree, sourceNodes);
+export function normalizeSessionTree(tree) {
+  assertSessionTreeSchema(tree);
   const nodes = {};
-  for (const [nodeId, node] of Object.entries(sourceNodes)) {
-    const sessionId = normalizeId(nodeId);
+  for (const [nodeId, node] of Object.entries(tree.nodes)) {
+    const sessionId = text(nodeId);
     if (!sessionId) continue;
-    nodes[sessionId] = { sessionId, parentSessionId: normalizeId(node?.parentSessionId) };
+    nodes[sessionId] = { sessionId, parentSessionId: text(node.parentSessionId) };
   }
   return { nodes };
 }
 
 function requireSessionId(value) {
-  const sessionId = normalizeId(value);
+  const sessionId = text(value);
   if (!sessionId) {
     throw sessionTreeError(SESSION_TREE_ERROR.SESSION_ID_REQUIRED, "sessionId is required");
   }
@@ -70,7 +79,7 @@ function requireSessionId(value) {
 
 export function resolveSessionTreeChain(tree, sessionId) {
   const leafId = requireSessionId(sessionId);
-  const nodes = tree?.nodes || {};
+  const nodes = tree.nodes;
   const chain = [];
   const visited = new Set();
   let currentId = leafId;
@@ -92,7 +101,7 @@ export function resolveSessionTreeChain(tree, sessionId) {
     }
     visited.add(currentId);
     chain.push(currentId);
-    currentId = normalizeId(node.parentSessionId);
+    currentId = text(node.parentSessionId);
   }
   return chain.reverse();
 }
@@ -102,9 +111,9 @@ export function resolveSessionTreeDepth(tree, sessionId) {
 }
 
 export function collectSessionTreeBranch(tree, sessionId) {
-  const rootId = normalizeId(sessionId);
+  const rootId = text(sessionId);
   if (!rootId) return [];
-  const nodes = Object.values(tree?.nodes || {});
+  const nodes = Object.values(tree.nodes);
   const branch = [];
   const visited = new Set();
   const queue = [rootId];
@@ -122,8 +131,8 @@ export function collectSessionTreeBranch(tree, sessionId) {
 
 export function resolveSessionTreePlacement(tree, sessionId, parentSessionId = "") {
   const leafId = requireSessionId(sessionId);
-  const parentId = normalizeId(parentSessionId);
-  const node = tree?.nodes?.[leafId];
+  const parentId = text(parentSessionId);
+  const node = tree.nodes[leafId];
   if (node) {
     if (parentId && parentId !== node.parentSessionId) {
       throw sessionTreeError(

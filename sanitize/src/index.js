@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isObjectLike } from "@noobot/shared/value";
 import { isIP } from "node:net";
 
 const SENSITIVE_FIELD_PATTERNS = [
@@ -62,7 +63,7 @@ function sanitizeSensitiveFields(value, depth = 0, options = {}) {
   if (depth > maxDepth) return options.maxDepthValue === undefined ? value : options.maxDepthValue;
   if (Array.isArray(value))
     return value.map((item) => sanitizeSensitiveFields(item, depth + 1, options));
-  if (!value || typeof value !== "object") return value;
+  if (!isObjectLike(value)) return value;
   const out = {};
   for (const [key, child] of Object.entries(value)) {
     out[key] = matchesSensitiveFieldPattern(key)
@@ -332,7 +333,7 @@ function sanitizeStructuredStrings(value, options = {}) {
     return /^sha256:[a-f0-9]{64}$/.test(value) ? value : sanitizeText(value, options);
   }
   if (Array.isArray(value)) return value.map((item) => sanitizeStructuredStrings(item, options));
-  if (!value || typeof value !== "object") return value;
+  if (!isObjectLike(value)) return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, child]) => [key, sanitizeStructuredStrings(child, options)]),
   );

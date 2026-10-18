@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import { WORKSPACE_OPERATION } from "./sections.js";
 
 const WORKSPACE_ASSET_STATE_VERSION = 1;
@@ -31,7 +32,7 @@ function stateError(message) {
 }
 
 function requireHashMap(value, label) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new TypeError(`${label} must be an object of relative path to sha256`);
   }
   for (const [relativePath, hash] of Object.entries(value)) {

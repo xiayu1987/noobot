@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction } from "@noobot/shared/value";
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
 import { LONG_MEMORY_MODEL, parseLongMemoryModelText } from "@noobot/memory-protocol/long-memory";
 import {
@@ -13,7 +14,7 @@ import { MEMORY_REPAIR_STATUS, migrateMemoryDocument } from "./document-migratio
 
 function requireIo(io) {
   for (const name of ["exists", "readText", "writeText", "writeBackup", "listMarkdownFiles"]) {
-    if (typeof io?.[name] !== "function") {
+    if (!isFunction(io?.[name])) {
       throw new TypeError(`memory workspace repair requires io.${name}`);
     }
   }

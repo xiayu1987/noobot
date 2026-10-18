@@ -69,7 +69,7 @@ export class FileSystemSessionTreeRepository {
     return normalizeSessionTreeEntity(tree);
   }
 
-  async saveTree(userId, tree = {}) {
+  async saveTree(userId, tree) {
     await this.assertWorkspaceInitialized(userId);
     await this.storageService.writeJsonAtomic(
       this._treeFile(userId),

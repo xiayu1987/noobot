@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction } from "@noobot/shared/value";
 import {
   WORKSPACE_LAYOUT,
   WORKSPACE_LAYOUT_VERSION,
@@ -95,7 +96,7 @@ function conflictError(migration) {
 }
 
 export function planWorkspaceLayoutMigrations({ exists } = {}) {
-  if (typeof exists !== "function") throw new TypeError("exists(relativePath) is required");
+  if (!isFunction(exists)) throw new TypeError("exists(relativePath) is required");
   const actions = [];
   for (const migration of WORKSPACE_LAYOUT_MIGRATIONS) {
     if (!exists(migration.from)) continue;

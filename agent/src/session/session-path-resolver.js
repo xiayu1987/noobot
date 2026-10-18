@@ -47,7 +47,7 @@ export class SessionPathResolver {
     const hintedParentSessionId = text(parentSessionId);
     if (hintedParentSessionId) {
       const tree = await this.treeRepository.getTree(userId);
-      if (!tree?.nodes?.[hintedParentSessionId]) {
+      if (!tree.nodes[hintedParentSessionId]) {
         throw fatalSystemError(
           `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${hintedParentSessionId}`,
           {
@@ -63,7 +63,7 @@ export class SessionPathResolver {
     if (!normalizedSessionId) return "";
 
     const tree = await this.treeRepository.getTree(userId);
-    return text(tree?.nodes?.[normalizedSessionId]?.parentSessionId);
+    return text(tree.nodes[normalizedSessionId]?.parentSessionId);
   }
 
   async resolveSessionDir(userId, sessionId, parentSessionId = "") {
