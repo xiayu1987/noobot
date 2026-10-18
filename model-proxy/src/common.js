@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import crypto from "node:crypto";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function pad(numberValue, lengthValue = 2) {
   return String(numberValue).padStart(lengthValue, "0");
@@ -26,7 +26,7 @@ function tryParseJson(inputText = "") {
 }
 
 function getHeaderValue(headers = {}, candidateKeys = []) {
-  if (!headers || typeof headers !== "object") return "";
+  if (!isObjectLike(headers)) return "";
   const keys = Array.isArray(candidateKeys) ? candidateKeys : [candidateKeys];
   const normalizedHeaders = Object.fromEntries(
     Object.entries(headers)

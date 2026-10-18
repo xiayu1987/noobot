@@ -7,7 +7,7 @@ import zlib from "node:zlib";
 import util from "node:util";
 import { parseServerSentEvents } from "@noobot/shared/event-stream";
 import { tryParseJson } from "./common.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const gunzip = util.promisify(zlib.gunzip);
 const inflate = util.promisify(zlib.inflate);
@@ -43,7 +43,7 @@ function normalizeBodyText(inputText, contentType = "") {
 }
 
 function normalizeToolCallItem(toolCallItem = {}) {
-  if (!toolCallItem || typeof toolCallItem !== "object") return null;
+  if (!isObjectLike(toolCallItem)) return null;
   const normalizedFunction =
     toolCallItem.function && typeof toolCallItem.function === "object"
       ? {
@@ -61,7 +61,7 @@ function normalizeToolCallItem(toolCallItem = {}) {
 }
 
 function extractToolCallsFromJsonPayload(payloadObject = null) {
-  if (!payloadObject || typeof payloadObject !== "object") return [];
+  if (!isObjectLike(payloadObject)) return [];
   const choices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
   const firstChoice = choices[0] && typeof choices[0] === "object" ? choices[0] : null;
   const messageToolCalls = Array.isArray(firstChoice?.message?.tool_calls)
@@ -80,7 +80,7 @@ function extractToolCallsFromJsonPayload(payloadObject = null) {
 }
 
 function normalizeResponsesOutputItem(item = {}) {
-  if (!item || typeof item !== "object") return null;
+  if (!isObjectLike(item)) return null;
   if (item.type === "function_call") {
     return {
       id: text(item.call_id || item.id),
@@ -100,7 +100,7 @@ function extractResponsesOutput(payloadObject = null) {
   const toolCalls = [];
   const reasoning = [];
   for (const item of payloadObject.output) {
-    if (!item || typeof item !== "object") continue;
+    if (!isObjectLike(item)) continue;
     if (item.type === "function_call") {
       const normalized = normalizeResponsesOutputItem(item);
       if (normalized) toolCalls.push(normalized);
@@ -160,7 +160,7 @@ function formatResponseProjection({ text: sourceText = "", toolCalls = [], reaso
 }
 
 function extractFinalTextFromJsonPayload(payloadObject = null) {
-  if (!payloadObject || typeof payloadObject !== "object") return "";
+  if (!isObjectLike(payloadObject)) return "";
 
   const choices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
   const firstChoice = choices[0] && typeof choices[0] === "object" ? choices[0] : null;
@@ -207,7 +207,7 @@ function extractFinalTextFromSseBody(sseText = "") {
   const toolCallBufferByIndex = new Map();
 
   function upsertToolCallDelta(deltaToolCallItem = {}, fallbackIndex = 0) {
-    if (!deltaToolCallItem || typeof deltaToolCallItem !== "object") return;
+    if (!isObjectLike(deltaToolCallItem)) return;
     const index = Number.isInteger(deltaToolCallItem.index)
       ? deltaToolCallItem.index
       : fallbackIndex;

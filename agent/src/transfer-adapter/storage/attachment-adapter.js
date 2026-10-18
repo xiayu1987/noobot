@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isFunction, isPlainObject } from "@noobot/shared/value";
+import { isFunction, isPlainObject, isObjectLike } from "@noobot/shared/value";
 import { Buffer } from "node:buffer";
 import {
   createAttachmentReference,
@@ -21,7 +21,7 @@ function requireIdentity(identity = {}) {
   for (const key of ["transferId", "messageId", "sessionId", "turnScopeId", "runId"]) {
     if (!safeStr(identity[key])) throw new Error(`semantic_transfer_${key}_required`);
   }
-  if (!identity.producer || typeof identity.producer !== "object") {
+  if (!isObjectLike(identity.producer)) {
     throw new Error("semantic_transfer_producer_required");
   }
   if (!safeStr(identity.producer.type) || !safeStr(identity.producer.id)) {

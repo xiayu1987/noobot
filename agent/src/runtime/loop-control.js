@@ -19,7 +19,7 @@ import { TOOL_NAME } from "../tools/constants/index.js";
 import { resolveControlToolOutcome } from "./control-tool-outcome.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
 import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function getSystemRuntime(runtime = {}) {
   return runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
@@ -42,7 +42,7 @@ function hasInternalMessageMarker(message = {}) {
 function resolveUnsummarizedMessageChars(messages = []) {
   if (!Array.isArray(messages)) return 0;
   return messages.reduce((total, message) => {
-    if (!message || typeof message !== "object") return total;
+    if (!isObjectLike(message)) return total;
     if (resolveContextMessageSummarized(message)) return total;
     if (hasInternalMessageMarker(message)) return total;
     const inputText = resolveContextMessageContent(message);

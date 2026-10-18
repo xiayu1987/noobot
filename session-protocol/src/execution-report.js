@@ -5,7 +5,7 @@
  */
 import { nullishText as clean } from "./normalize.js";
 import { requireDialogProcessKey } from "./identity.js";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 export const EXECUTION_REPORT_PROTOCOL = "noobot.execution-report";
 export const EXECUTION_REPORT_VERSION = 4;
@@ -159,7 +159,7 @@ export function buildExecutionReport({
 }
 
 export function decodeExecutionReport(payload) {
-  if (!payload || typeof payload !== "object") throw invalidReport("payload must be an object");
+  if (!isObjectLike(payload)) throw invalidReport("payload must be an object");
   if (payload.protocol !== EXECUTION_REPORT_PROTOCOL) {
     throw invalidReport(`unknown protocol "${payload.protocol}"`);
   }

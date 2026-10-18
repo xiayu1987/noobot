@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export const TASK_PROTOCOL_STATE = Object.freeze({
   CONTINUE: "CONTINUE",
@@ -22,7 +22,7 @@ export const TASK_PROTOCOL_RECEIPT_FIELDS = Object.freeze([
 const CONTENT_HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 export function parseTaskProtocolReceipt(value, { protocolError, subject, fieldPrefix = "" } = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw protocolError(`${subject} must be a plain object`);
   }
   const keys = Object.keys(value).sort();

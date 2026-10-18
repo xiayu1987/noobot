@@ -9,10 +9,10 @@ import {
   dedupeAttachmentsByIdentity,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 function normalizeAttachmentMeta(attachment = {}) {
-  if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) return null;
+  if (!isPlainObject(attachment)) return null;
   const out = { ...attachment };
   delete out.raw;
   delete out.file;

@@ -15,7 +15,7 @@ import {
   resolveSessionArtifactMutationLock,
   writeJsonArtifactFile,
 } from "./session-artifact-files.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export const EXECUTION_EVENT_TURNS_DIR = "turns";
 export const EXECUTION_EVENT_INDEX_FILE = "index.json";
@@ -70,8 +70,7 @@ async function readIndexFile(filePath) {
   } catch {
     throw indexCorrupted("execution event index is corrupted");
   }
-  if (!index || typeof index !== "object")
-    throw indexCorrupted("execution event index is corrupted");
+  if (!isObjectLike(index)) throw indexCorrupted("execution event index is corrupted");
   assertIndexSchema(index, filePath);
   return index;
 }

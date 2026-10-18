@@ -7,7 +7,7 @@ import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { createModelRequestExecutor } from "../executor/model-request-executor.js";
 import { createProviderAdapterRegistry } from "../adapters/registry.js";
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 const RESPONSE_LIMIT = 2 * 1024 * 1024;
 const REDACTED = "[REDACTED]";
@@ -17,7 +17,7 @@ const SECRET_FIELD =
 function normalizeDiagnosticTools(tools) {
   if (!Array.isArray(tools)) throw new TypeError("Tools must be an array / 工具定义必须是数组");
   return tools.map((tool) => {
-    if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
+    if (!isPlainObject(tool)) {
       throw new TypeError("Invalid tool definition / 工具定义无效");
     }
     if (tool.function || (tool.type && tool.type !== "function")) return tool;
@@ -36,7 +36,7 @@ export function redactModelDiagnostic(value, secrets = []) {
       .reduce((result, secret) => result.replaceAll(secret, REDACTED), value);
   }
   if (Array.isArray(value)) return value.map((entry) => redactModelDiagnostic(entry, secrets));
-  if (!value || typeof value !== "object") return value;
+  if (!isObjectLike(value)) return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => [
       key,
@@ -74,7 +74,7 @@ export async function testModelAccess({
   fetch: upstreamFetch = globalThis.fetch,
 }) {
   const spec = normalizeRuntimeModelSpec(modelSpec);
-  if (body !== undefined && (!body || typeof body !== "object" || Array.isArray(body))) {
+  if (body !== undefined && !isPlainObject(body)) {
     throw new TypeError("Request body must be a JSON object / 请求体必须是 JSON 对象");
   }
   const credential = text(spec.api_key);

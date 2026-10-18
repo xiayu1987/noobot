@@ -66,7 +66,7 @@ import {
 } from "./native-script-ipc.js";
 import { acquireBrowserSession, closeBrowserSession } from "./browser-session-registry.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 const FORBIDDEN_IDENTIFIERS = new Set(NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS);
 const FORBIDDEN_PROPERTIES = new Set(NATIVE_SCRIPT_FORBIDDEN_PROPERTIES);
@@ -83,7 +83,7 @@ function projectNativeOutput(value, { inputRoot = "", outputRoot = "", tempRoot 
 function projectNativeResult(value, roots) {
   if (typeof value === "string") return projectNativeOutput(value, roots);
   if (Array.isArray(value)) return value.map((item) => projectNativeResult(item, roots));
-  if (!value || typeof value !== "object") return value;
+  if (!isObjectLike(value)) return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [key, projectNativeResult(item, roots)]),
   );
@@ -104,7 +104,7 @@ function validateScriptBody(value) {
     throw new Error(`script_body syntax error: ${error.message}`);
   }
   const visit = (node) => {
-    if (!node || typeof node !== "object") return;
+    if (!isObjectLike(node)) return;
     const location = () => {
       const line = Math.max(1, Number(node.loc?.start?.line || 2) - 1);
       const column = Math.max(1, Number(node.loc?.start?.column || 0) + 1);
@@ -139,7 +139,7 @@ function validateScriptBody(value) {
     for (const [key, child] of Object.entries(node)) {
       if (key === "start" || key === "end") continue;
       if (Array.isArray(child)) child.forEach(visit);
-      else if (child && typeof child === "object") visit(child);
+      else if (isObjectLike(child)) visit(child);
     }
   };
   visit(ast);
@@ -500,8 +500,7 @@ export function createNativeScriptTool({ agentContext }) {
       toolConfig = {},
     ) => {
       const identity = toolConfig?.configurable?.transferIdentity;
-      if (!identity || typeof identity !== "object")
-        throw new Error("native_script_identity_required");
+      if (!isObjectLike(identity)) throw new Error("native_script_identity_required");
       const body = validateScriptBody(script_body);
       await confirmToolOperation({
         agentContext,

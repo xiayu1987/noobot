@@ -11,10 +11,10 @@ import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 export function applyRunStateMessagePatch(message, patch = {}) {
-  if (!message || !patch || typeof patch !== "object") return;
+  if (!message || !isObjectLike(patch)) return;
   const { clearRuntimeMark, ...restPatch } = patch;
 
   Object.entries(restPatch).forEach(([key, value]) => {

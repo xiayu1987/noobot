@@ -10,7 +10,7 @@ import {
   isTurnTerminalNotice,
 } from "../../runtime/sessionRunStateMachine.js";
 import { areTurnScopeIdsEquivalent } from "../messageIdentity.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 function normalizeText(value = "") {
   return text(value).toLowerCase();
 }
@@ -95,7 +95,7 @@ export function isUserMessage(messageItem = {}) {
   return normalizeMessageRole(messageItem) === "user";
 }
 export function isMonotonicMessage(messageItem = {}) {
-  if (!messageItem || typeof messageItem !== "object") return false;
+  if (!isObjectLike(messageItem)) return false;
   if (messageItem.isMonotonic === true || messageItem.monotonic === true) return true;
   if (normalizeText(messageItem.monotonicState) === "monotonic") return true;
   if (normalizeText(messageItem.stopState) === "user_stopped") return true;
@@ -113,7 +113,7 @@ function findMessageIndex(targetMessage = {}, allMessages = []) {
 }
 
 export function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
-  if (!messageItem || typeof messageItem !== "object") return null;
+  if (!isObjectLike(messageItem)) return null;
   if (isUserMessage(messageItem)) return messageItem;
   const messages = Array.isArray(allMessages) ? allMessages : [];
   const directIndex = findMessageIndex(messageItem, messages);

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   directTransfer,
@@ -40,7 +40,7 @@ export async function transferBotPluginSubagentResult({
   identity = null,
   userId = "",
 } = {}) {
-  if (!identity || typeof identity !== "object") {
+  if (!isObjectLike(identity)) {
     throw new Error("semantic_transfer_subagent_identity_required");
   }
   const normalizedMessages = normalizeSubAgentMessages(messages);

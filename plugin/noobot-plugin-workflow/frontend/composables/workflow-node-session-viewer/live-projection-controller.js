@@ -13,7 +13,7 @@ import {
 } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { createWorkflowNodeViewKey } from "../../runtime/workflowNodeSessionRuntime.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function uniqueExecutions(detail = {}) {
   return [
@@ -86,7 +86,7 @@ function buildLiveProjection({ props, runtimeNodeSessions, nodeViewTransaction, 
     });
   }
   const sessionDoc = props.selectSessionMessages(sessionId);
-  if (!sessionDoc || typeof sessionDoc !== "object") {
+  if (!isObjectLike(sessionDoc)) {
     return unavailable("session_projection_unavailable", {
       sessionId,
       runtimeNodeFound: Boolean(runtimeNode),

@@ -15,6 +15,7 @@ import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import { appendTurnContextControlMessage } from "./turn-context-message-appender.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 export const MAIN_FLOW_NO_FINAL_RESPONSE_RETRY = buildNoFinalResponseRetryPolicy(
   Object.freeze({ maxAttempts: NO_FINAL_RESPONSE_RETRY_POLICY.IN_PLACE_RETRY_ATTEMPTS }),
@@ -33,7 +34,7 @@ export function isRecoverableNoFinalResponse(error, runtime = {}) {
 
 export function resetNoFinalResponseRetryStreak(runtime = {}) {
   const systemRuntime = runtime?.systemRuntime;
-  if (systemRuntime && typeof systemRuntime === "object") {
+  if (isObjectLike(systemRuntime)) {
     systemRuntime.noFinalResponseRetryConsecutiveCount = 0;
   }
 }
@@ -42,7 +43,7 @@ export function recoverMainFlowNoFinalResponse({ error, modelState, loopState, t
   const { runtime, eventListener } = modelState;
   if (!isRecoverableNoFinalResponse(error, runtime)) return false;
   const systemRuntime = runtime?.systemRuntime;
-  if (!systemRuntime || typeof systemRuntime !== "object") {
+  if (!isObjectLike(systemRuntime)) {
     throw new Error("Empty response retry requires the dialog turn systemRuntime");
   }
   const ordinal = resolveNextNoFinalResponseRetryOrdinal(

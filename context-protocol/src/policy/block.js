@@ -18,7 +18,7 @@ import {
   extractContextTaskSummary,
   recoverContextTaskSummaryToolResult,
 } from "../task/summary-context.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function messageTurnScopeId(message = {}) {
   return readContextMessageField(message, "turnScopeId");
@@ -32,7 +32,7 @@ export function createHistoryRoundIdentityResolver(messages = []) {
   let activeDialogProcessId = "";
   const identityByMessage = new WeakMap();
   for (const message of Array.isArray(messages) ? messages : []) {
-    if (!message || typeof message !== "object") continue;
+    if (!isObjectLike(message)) continue;
     const explicitDialogProcessId = resolveContextMessageDialogProcessId(message);
     if (explicitDialogProcessId) activeDialogProcessId = explicitDialogProcessId;
     identityByMessage.set(message, explicitDialogProcessId || activeDialogProcessId);

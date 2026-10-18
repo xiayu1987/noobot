@@ -14,7 +14,7 @@ import {
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 let testScopeSequence = 0;
 let testTransferSequence = 0;
 let testModelResponseSequence = 0;
@@ -81,7 +81,7 @@ export function createTestModelResponse(
 
 function initializeTestSemanticTransfer(agentContext = {}) {
   const runtime = agentContext?.bindings?.runtime;
-  if (!runtime || typeof runtime !== "object") return;
+  if (!isObjectLike(runtime)) return;
   const sharedTools =
     runtime.sharedTools && typeof runtime.sharedTools === "object"
       ? runtime.sharedTools
@@ -152,7 +152,7 @@ function initializeTestSemanticTransfer(agentContext = {}) {
 }
 
 export function ensureTestAgentExecutionScope(ctx = {}) {
-  if (!ctx || typeof ctx !== "object") return null;
+  if (!isObjectLike(ctx)) return null;
   const agentContext =
     ctx.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
   if (!agentContext) return null;
@@ -161,7 +161,7 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
       ? agentContext.bindings
       : (agentContext.bindings = {});
   const legacyRuntime = agentContext?.execution?.controllers?.runtime;
-  if (!bindings.runtime || typeof bindings.runtime !== "object") {
+  if (!isObjectLike(bindings.runtime)) {
     bindings.runtime = legacyRuntime && typeof legacyRuntime === "object" ? legacyRuntime : {};
   }
   if (!Array.isArray(bindings.tools)) {
@@ -173,13 +173,13 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
     bindings.extensions && typeof bindings.extensions === "object"
       ? bindings.extensions
       : (bindings.extensions = {});
-  if (!extensions.harness || typeof extensions.harness !== "object") {
+  if (!isObjectLike(extensions.harness)) {
     extensions.harness =
       agentContext?.payload?.harness && typeof agentContext.payload.harness === "object"
         ? agentContext.payload.harness
         : {};
   }
-  if (!agentContext.context || typeof agentContext.context !== "object") {
+  if (!isObjectLike(agentContext.context)) {
     testScopeSequence += 1;
     const scopeSuffix = String(testScopeSequence);
     const dialogProcessId = text(ctx.dialogProcessId) || `test-dialog-${scopeSuffix}`;
@@ -207,7 +207,7 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
 }
 
 export function ensureTestHookContext(ctx = {}) {
-  if (!ctx || typeof ctx !== "object") return ctx;
+  if (!isObjectLike(ctx)) return ctx;
   const agentContext = ensureTestAgentExecutionScope(ctx);
   const explicitIdentity =
     ctx.activeTurnIdentity && typeof ctx.activeTurnIdentity === "object"
@@ -222,7 +222,7 @@ export function ensureTestHookContext(ctx = {}) {
   const activeTurnIdentity = { dialogProcessId, turnScopeId };
   const stampRoundIdentity = (messages = []) => {
     for (const message of Array.isArray(messages) ? messages : []) {
-      if (!message || typeof message !== "object") continue;
+      if (!isObjectLike(message)) continue;
       const role = String(message?.role || message?.type || "")
         .trim()
         .toLowerCase();
@@ -325,7 +325,7 @@ export function createTestResolveModelMessages() {
       throw new Error("test model resolver requires modelContext protocolVersion=3");
     }
     const blocks = modelContext.messageBlocks;
-    if (!blocks || typeof blocks !== "object") {
+    if (!isObjectLike(blocks)) {
       throw new Error("test model resolver requires authoritative messageBlocks");
     }
     return resolveModelFinalMessages({

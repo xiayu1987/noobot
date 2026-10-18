@@ -12,6 +12,7 @@ import {
 import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context/schema";
 import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { isObjectLike } from "@noobot/shared/value";
 
 function resolveHolder(ctx = {}) {
   const modelContext = resolveAuthoritativeModelContext(ctx);
@@ -30,7 +31,7 @@ export function resolveModelMessages(ctx = {}) {
 
 export function resolveModelMessageBlocks(ctx = {}) {
   const modelContext = resolveHolder(ctx);
-  if (!modelContext.messageBlocks || typeof modelContext.messageBlocks !== "object") {
+  if (!isObjectLike(modelContext.messageBlocks)) {
     throw new TypeError("Harness modelContext requires canonical messageBlocks");
   }
   return modelContext.messageBlocks;

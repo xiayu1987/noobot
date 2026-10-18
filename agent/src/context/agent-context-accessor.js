@@ -6,13 +6,13 @@
 
 import { getAgentContextIdentity } from "@noobot/context-protocol/agent-context/accessors";
 import { getAgentContextEnvelope } from "./agent-execution-scope.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export { getAgentContextEnvelope } from "./agent-execution-scope.js";
 
 export function getRuntimeFromAgentContext(scope = {}) {
   const runtime = scope?.bindings?.runtime;
-  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+  if (!isPlainObject(runtime)) {
     throw new TypeError("agent execution scope bindings.runtime is required");
   }
   return runtime;

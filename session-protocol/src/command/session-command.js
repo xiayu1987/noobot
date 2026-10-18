@@ -44,8 +44,7 @@ export function createSessionCommand({
 
 export function validateSessionCommand(command = {}) {
   const errors = [];
-  if (!command || typeof command !== "object" || Array.isArray(command))
-    return { valid: false, errors: ["invalid_command"] };
+  if (!isPlainObject(command)) return { valid: false, errors: ["invalid_command"] };
   if (Object.keys(command).some((key) => !COMMAND_KEYS.has(key)))
     errors.push("unknown_command_field");
   if (Number(command.protocolVersion) !== SESSION_PROTOCOL_VERSION)
@@ -55,8 +54,7 @@ export function validateSessionCommand(command = {}) {
   errors.push(...validateSessionScope(command.scope).errors);
   if (!Number.isInteger(command.expectedAggregateVersion) || command.expectedAggregateVersion < 0)
     errors.push("invalid_expected_aggregate_version");
-  if (!command.payload || typeof command.payload !== "object" || Array.isArray(command.payload))
-    errors.push("invalid_payload");
+  if (!isPlainObject(command.payload)) errors.push("invalid_payload");
   return { valid: errors.length === 0, errors };
 }
 

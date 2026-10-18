@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isPlainObject } from "@noobot/shared/value";
 
 function normalizeTurnTiming(timing = {}) {
-  if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
+  if (!isPlainObject(timing)) return null;
   const turnScopeId = clean(timing.turnScopeId);
   if (!turnScopeId) return null;
   const normalized = { turnScopeId, dialogProcessId: clean(timing.dialogProcessId) };

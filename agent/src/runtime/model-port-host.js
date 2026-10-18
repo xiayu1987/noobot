@@ -14,7 +14,7 @@ import {
 } from "@noobot/model-protocol";
 import { emitEvent } from "../events/index.js";
 import { resolveEffectiveModelSpec } from "./run-config/index.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 function resolveCredential(modelSpec = {}) {
   return text(modelSpec.api_key);
@@ -49,7 +49,7 @@ function createObservationPort({ modelState }) {
 
 function buildInvocation(modelState, request = {}) {
   const baseIdentity = modelState.invocationIdentity;
-  if (!baseIdentity || typeof baseIdentity !== "object") {
+  if (!isObjectLike(baseIdentity)) {
     throw new TypeError("model host requires an explicit invocationIdentity");
   }
   const identity = request.invocation || {};
@@ -131,7 +131,7 @@ export function initializeAgentModelHost({
   invocationIdentity,
   resolveModelSpec = resolveEffectiveModelSpec,
 } = {}) {
-  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+  if (!isPlainObject(runtime)) {
     throw new TypeError("agent model host requires runtime");
   }
   const identity = Object.freeze({

@@ -15,7 +15,7 @@ import {
   createSessionDisplaySourceRevision,
   SESSION_SOURCE_SCHEMA_VERSION,
 } from "../session-display-source-revision.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 
@@ -36,7 +36,7 @@ function isValidTransferEntry([key, child], visited) {
 }
 
 function hasValidTransferEnvelopes(value, visited = new WeakSet()) {
-  if (!value || typeof value !== "object") return true;
+  if (!isObjectLike(value)) return true;
   if (visited.has(value)) return true;
   visited.add(value);
   if (Array.isArray(value)) return value.every((item) => hasValidTransferEnvelopes(item, visited));
@@ -67,7 +67,7 @@ function assertValidTransferEnvelopes(payload) {
 }
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  if (!isPlainObject(payload)) return false;
   return (
     hasExpectedSummaryVersions(payload) &&
     hasValidSourceRevision(payload) &&

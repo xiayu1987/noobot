@@ -39,7 +39,7 @@ async function fetchWithAdmissionRetry(runFetch, { isStale = () => false } = {})
 function readConnectionProfile() {
   try {
     const parsed = JSON.parse(localStorage.getItem(CONNECTION_PROFILE_STORAGE_KEY) || "null");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    if (!isPlainObject(parsed)) return null;
     const userId = text(parsed.userId);
     const connectCode = text(parsed.connectCode);
     return userId && connectCode ? { userId, connectCode } : null;

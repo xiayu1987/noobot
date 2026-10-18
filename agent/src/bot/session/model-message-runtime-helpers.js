@@ -14,7 +14,7 @@ import {
   summarizeDiagnosticMessages,
 } from "@noobot/context-protocol/assembly/diagnostics";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -31,7 +31,7 @@ export class ModelMessageRuntimeHelpers {
 
   mergePluginOptions(...items) {
     return items.reduce((acc, item) => {
-      if (!item || typeof item !== "object") return acc;
+      if (!isObjectLike(item)) return acc;
       const next = { ...acc };
       for (const [key, value] of Object.entries(item)) {
         if (PLUGIN_DEEP_MERGE_KEYS.has(key) && isPlainObject(value)) {

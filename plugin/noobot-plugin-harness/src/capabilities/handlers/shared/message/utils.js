@@ -10,7 +10,7 @@ import {
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
   const expectedRole = text(role);
@@ -29,7 +29,7 @@ export function extractRawTextContent(input) {
   return input
     .map((item) => {
       if (typeof item === "string") return item;
-      if (item && typeof item === "object" && typeof item.text === "string") {
+      if (isObjectLike(item) && typeof item.text === "string") {
         return item.text;
       }
       return "";
@@ -42,7 +42,7 @@ export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
   const items = Array.isArray(messages) ? messages : [];
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const message = items[index];
-    if (!message || typeof message !== "object") continue;
+    if (!isObjectLike(message)) continue;
     if (isHarnessInjectedMessage(message)) continue;
     const role = resolveContextMessageRole(message);
     if (role !== "assistant") continue;

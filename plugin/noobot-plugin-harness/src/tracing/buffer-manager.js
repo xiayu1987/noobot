@@ -41,7 +41,7 @@ import {
   buildDynamicPolicyPromptSignature,
   resolveActiveDynamicPolicyPromptFromContext,
 } from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export { resolvePolicyPromptSelection } from "./policy-prompt-matrix.js";
 
@@ -103,10 +103,7 @@ function resolveAgentRuntimeFromContext(ctx = {}) {
 function isStoppedSnapshotResumeInitializingFirstLlmCall(ctx = {}) {
   const runtime = resolveAgentRuntimeFromContext(ctx);
   if (!runtime || runtime.resumeFromStoppedSnapshot !== true) return false;
-  if (
-    runtime.resumedStoppedSnapshotIdentity &&
-    typeof runtime.resumedStoppedSnapshotIdentity === "object"
-  ) {
+  if (isObjectLike(runtime.resumedStoppedSnapshotIdentity)) {
     return true;
   }
   const lifecycleState = text(

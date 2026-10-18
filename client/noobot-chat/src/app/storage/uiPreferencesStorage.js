@@ -7,7 +7,7 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   userId: "noobot_user_id",
@@ -71,7 +71,7 @@ function normalizeScenarioPreferenceKey(value = "") {
 }
 
 function normalizeSelectedModelByScenarioPreference(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  if (!isPlainObject(value)) return {};
   const nextValue = {};
   for (const [rawScenarioKey, rawModel] of Object.entries(value)) {
     const scenarioKey = normalizeScenarioPreferenceKey(rawScenarioKey);
@@ -82,13 +82,13 @@ function normalizeSelectedModelByScenarioPreference(value = {}) {
 }
 
 function normalizeSelectedModelSelectionByScenarioPreference(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  if (!isPlainObject(value)) return {};
   const nextValue = {};
   for (const [rawScenarioKey, rawSelection] of Object.entries(value)) {
     const scenarioKey = normalizeScenarioPreferenceKey(rawScenarioKey);
     if (!scenarioKey) continue;
     if (typeof rawSelection === "string") continue;
-    if (!rawSelection || typeof rawSelection !== "object" || Array.isArray(rawSelection)) continue;
+    if (!isPlainObject(rawSelection)) continue;
     nextValue[scenarioKey] = {
       value: normalizePreferenceString(rawSelection.value),
       source: normalizePreferenceString(rawSelection.source) || "user",
@@ -114,7 +114,7 @@ export function normalizePluginModelConfig(value = {}) {
         });
       return nextArray.length ? nextArray : undefined;
     }
-    if (!node || typeof node !== "object") return undefined;
+    if (!isObjectLike(node)) return undefined;
     const nextObject = {};
     for (const [rawKey, rawValue] of Object.entries(node)) {
       const key = normalizePreferenceString(rawKey);
@@ -136,7 +136,7 @@ export function normalizePluginModelConfig(value = {}) {
         if (nextValue.length) nextObject[key] = nextValue;
         continue;
       }
-      if (nextValue && typeof nextValue === "object" && Object.keys(nextValue).length) {
+      if (isObjectLike(nextValue) && Object.keys(nextValue).length) {
         nextObject[key] = nextValue;
       }
     }
@@ -166,7 +166,7 @@ export function applyPluginPreferenceDefaults(value = {}, defaultsByPluginId = {
 }
 
 function normalizePluginModelConfigByScenarioPreference(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  if (!isPlainObject(value)) return {};
   const nextValue = {};
   for (const [rawScenarioKey, rawConfig] of Object.entries(value)) {
     const scenarioKey = normalizeScenarioPreferenceKey(rawScenarioKey);
@@ -412,7 +412,7 @@ export function syncBotScenarioWithConfig({
     currentScenario: preferenceRef?.value,
     availableBotScenarios,
   });
-  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
+  if (isObjectLike(preferenceRef) && "value" in preferenceRef) {
     preferenceRef.value = resolved.value;
   }
   if (resolved.persist) persistBotScenarioPreference(resolved.value);
@@ -421,7 +421,7 @@ export function syncBotScenarioWithConfig({
 
 function updateBooleanPreference({ preferenceRef, key, value } = {}) {
   const nextValue = Boolean(value);
-  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
+  if (isObjectLike(preferenceRef) && "value" in preferenceRef) {
     preferenceRef.value = nextValue;
   }
   persistBooleanPreference(key, nextValue);
@@ -446,8 +446,7 @@ export function updateSafeConfirmPreference({ preferenceRef, value } = {}) {
 
 export function updateSafeConfirmLevelPreference({ preferenceRef, value } = {}) {
   const nextValue = normalizeSafeConfirmLevel(value);
-  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef)
-    preferenceRef.value = nextValue;
+  if (isObjectLike(preferenceRef) && "value" in preferenceRef) preferenceRef.value = nextValue;
   writeStorageValue(UI_PREFERENCE_STORAGE_KEYS.safeConfirmLevel, nextValue);
   return nextValue;
 }
@@ -477,7 +476,7 @@ export function updateBotScenarioPreference({
   const availableScenarioKeySet = getAvailableScenarioKeySet(availableBotScenarios);
   const resolvedScenario =
     nextScenario && availableScenarioKeySet.has(nextScenario) ? nextScenario : "";
-  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
+  if (isObjectLike(preferenceRef) && "value" in preferenceRef) {
     preferenceRef.value = resolvedScenario;
   }
   persistBotScenarioPreference(resolvedScenario);
@@ -490,7 +489,7 @@ export function updateSelectedModelPreference({
   scenarioKey = "",
 } = {}) {
   const nextModel = normalizePreferenceString(value);
-  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
+  if (isObjectLike(preferenceRef) && "value" in preferenceRef) {
     preferenceRef.value = nextModel;
   }
   persistSelectedModelPreference(nextModel, scenarioKey);
@@ -499,7 +498,7 @@ export function updateSelectedModelPreference({
 
 export function updatePluginModelConfigPreference({ preferenceRef, value = {}, scenarioKey } = {}) {
   const nextConfig = normalizePluginModelConfig(value);
-  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
+  if (isObjectLike(preferenceRef) && "value" in preferenceRef) {
     preferenceRef.value = nextConfig;
   }
   persistPluginModelConfigPreferenceByScenario(nextConfig, scenarioKey);

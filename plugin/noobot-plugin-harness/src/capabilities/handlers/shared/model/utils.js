@@ -19,7 +19,7 @@ export function readCapabilityModelInvoker(meta = {}) {
 }
 
 function normalizeCapabilityModelMap(source = {}) {
-  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  if (!isPlainObject(source)) return {};
   return Object.fromEntries(
     Object.entries(source)
       .map(([key, value]) => [

@@ -9,7 +9,7 @@ import { attachModelContextRuntime } from "./model-runtime.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function asObject(value) {
   return isPlainObject(value) ? value : null;
@@ -94,7 +94,7 @@ export function createModelContext({
 }
 
 export function attachModelContext(context = {}, modelContext = null) {
-  if (!context || typeof context !== "object") return context;
+  if (!isObjectLike(context)) return context;
   context.contextProtocolVersion = HOOK_PROTOCOL_VERSION;
   context.modelContext = modelContext;
   return context;

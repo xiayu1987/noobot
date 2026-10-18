@@ -12,18 +12,15 @@ import { deriveContextMessageProjectionId } from "@noobot/context-protocol/messa
 import { resolveMessagesByIds } from "@noobot/context-protocol/message/store";
 import { updateContextMessageById } from "@noobot/context-protocol/mutation/context";
 import { appendUserMetaParsedResult } from "./user-meta.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function setBackwrites(runtime = {}, records = []) {
   const normalized = normalizeUserMetaBackwrites(records);
   runtime.userMetaBackwrites = normalized;
-  if (runtime.activeMessageContext && typeof runtime.activeMessageContext === "object") {
+  if (isObjectLike(runtime.activeMessageContext)) {
     runtime.activeMessageContext.userMetaBackwrites = normalized;
   }
-  if (
-    runtime.stoppedModelMessageSnapshotCandidate &&
-    typeof runtime.stoppedModelMessageSnapshotCandidate === "object"
-  ) {
+  if (isObjectLike(runtime.stoppedModelMessageSnapshotCandidate)) {
     runtime.stoppedModelMessageSnapshotCandidate.userMetaBackwrites = normalized;
   }
   return normalized;
@@ -67,7 +64,7 @@ export async function applyPendingUserMetaBackwrites(
   const records = normalizeUserMetaBackwrites(runtime?.userMetaBackwrites || []);
   if (!records.length) return { appliedCount: 0, remaining: [] };
   const modelContext = runtime?.activeMessageContext;
-  if (!modelContext || typeof modelContext !== "object") {
+  if (!isObjectLike(modelContext)) {
     throw new Error("user_meta backwrite requires the active model context");
   }
   let remaining = records.slice();

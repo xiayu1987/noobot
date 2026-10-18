@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isObjectLike } from "@noobot/shared/value";
 import { normalizeExecutionIdentity } from "./execution-lifecycle.js";
 import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
@@ -201,7 +201,7 @@ function collectReplacementErrors(snapshot, errors) {
 }
 
 export function validateTurnLifecycleSnapshot(snapshot = {}) {
-  if (!snapshot || typeof snapshot !== "object") {
+  if (!isObjectLike(snapshot)) {
     return { valid: false, errors: ["snapshot_not_object"] };
   }
   const errors = [];

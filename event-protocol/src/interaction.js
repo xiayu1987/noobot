@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import {
   createSessionPersistenceScope,
   createSessionScope,
@@ -25,7 +25,7 @@ export function createInteractionAuthority(source = {}) {
 }
 
 export function validateInteractionAuthority(source = {}) {
-  if (!source || typeof source !== "object" || Array.isArray(source)) {
+  if (!isPlainObject(source)) {
     return { valid: false, errors: ["invalid_interaction_authority"] };
   }
   const authority = createInteractionAuthority(source);
@@ -91,7 +91,7 @@ export const INTERACTION_EVENT_TYPE = Object.freeze({
 export const INTERACTION_SEQUENCE_DOMAIN = "interaction";
 
 export function validateInteractionRequestPayload(data = {}) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
+  if (!isPlainObject(data)) {
     return { valid: false, reason: "payload_not_object", missing: [] };
   }
   const required = ["requestId", "dialogProcessId"];
@@ -108,8 +108,7 @@ export function validateInteractionRequestPayload(data = {}) {
   }
   const interactionData = data.interactionData;
   if (
-    interactionData &&
-    typeof interactionData === "object" &&
+    isObjectLike(interactionData) &&
     ["lifecycle", "resolvedBy", "ackMode", "notification"].some((key) =>
       Object.hasOwn(interactionData, key),
     )
@@ -132,11 +131,11 @@ export function validateInteractionRequestPayload(data = {}) {
 }
 
 export function isPendingInteractionReplay(record = {}) {
-  if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+  if (!isPlainObject(record)) return false;
   const eventType = text(record?.identity?.eventType);
   if (eventType !== INTERACTION_EVENT_TYPE.REQUEST) return false;
   const payload = record?.payload;
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  if (!isPlainObject(payload)) return false;
   const validation = validateInteractionRequestPayload(payload);
   return (
     validation.valid &&

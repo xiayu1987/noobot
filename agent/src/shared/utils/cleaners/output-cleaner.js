@@ -5,7 +5,7 @@
  */
 import { safeNum } from "../shared-utils.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 
@@ -35,7 +35,7 @@ export function compactStdout(input = "") {
   if (!normalizedText) return "";
   try {
     const parsed = JSON.parse(normalizedText);
-    if (Array.isArray(parsed) || (parsed && typeof parsed === "object")) {
+    if (Array.isArray(parsed) || isObjectLike(parsed)) {
       return JSON.stringify(parsed);
     }
   } catch (error) {

@@ -23,7 +23,7 @@ import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
 } from "@noobot/session-protocol";
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
@@ -99,10 +99,7 @@ export function createStateCommitter({
         modelResponseMetadata: isPlainObject(modelResponseMetadata) ? modelResponseMetadata : null,
       };
       assistantMessage = applyAuthoritativeMessageId(assistantMessage, messageId);
-      if (
-        !assistantMessage.additional_kwargs ||
-        typeof assistantMessage.additional_kwargs !== "object"
-      ) {
+      if (!isObjectLike(assistantMessage.additional_kwargs)) {
         assistantMessage.additional_kwargs = {};
       }
       assistantMessage.additional_kwargs.noobotMessageId = canonicalMessageUid;

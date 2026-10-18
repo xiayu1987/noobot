@@ -29,7 +29,7 @@ import {
   projectPathFields,
   resolveAvailableTools,
 } from "./help-sections.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export const HELP_TOOL_NAME = TOOL_NAME.HELP;
 
@@ -47,9 +47,9 @@ function failed(command, payload) {
 
 function projectManualCapabilities(toolName, manual) {
   const declared = manual?.capabilities;
-  if (!declared || typeof declared !== "object" || Array.isArray(declared)) return [];
+  if (!isPlainObject(declared)) return [];
   return Object.entries(declared).map(([name, detail]) => {
-    if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+    if (!isPlainObject(detail)) {
       throw new TypeError(`tool manual capability must be an object: ${toolName}.${name}`);
     }
     const bindings = Array.isArray(detail.bindings)

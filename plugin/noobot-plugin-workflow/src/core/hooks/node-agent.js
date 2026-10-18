@@ -33,7 +33,7 @@ import {
   withTimeout,
 } from "./runtime.js";
 import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
-import { firstText, text } from "@noobot/shared/value";
+import { firstText, text, isObjectLike } from "@noobot/shared/value";
 
 function buildWorkflowNodeInstruction(step = {}) {
   const locale = text(step?.locale);
@@ -113,7 +113,7 @@ export async function runNodeAgent({
 }
 
 function resolveNodeAgentIdentity({ nodeIdentity, ctx }) {
-  if (!nodeIdentity || typeof nodeIdentity !== "object") {
+  if (!isObjectLike(nodeIdentity)) {
     throw new TypeError("workflow node identity is required");
   }
   const dialogProcessId = text(nodeIdentity.dialogProcessId);
@@ -195,7 +195,7 @@ async function runWorkflowNodeSubSession(params) {
     return { subSession, childFailed: false };
   } catch (error) {
     if (isWorkflowAbortError(error, params.ctx)) throw error;
-    if (!error?.lifecycle || typeof error.lifecycle !== "object") throw error;
+    if (!isObjectLike(error?.lifecycle)) throw error;
     return { subSession: { lifecycle: error.lifecycle }, childFailed: true };
   }
 }

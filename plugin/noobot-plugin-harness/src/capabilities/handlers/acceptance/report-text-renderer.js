@@ -4,18 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { ACCEPTANCE_MODE, HARNESS_I18N_KEYSET, LOCALE, translateI18nText } from "./deps.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 const ALLOWED_STATUS = new Set(["completed", "in_progress", "pending"]);
 
 function hasRecognitionFailure(report = {}) {
-  if (!report || typeof report !== "object") return true;
+  if (!isObjectLike(report)) return true;
   if ("finalPlanChecklist" in report && !Array.isArray(report.finalPlanChecklist)) return true;
-  if (
-    "summary" in report &&
-    (report.summary === null || typeof report.summary !== "object" || Array.isArray(report.summary))
-  )
-    return true;
+  if ("summary" in report && !isPlainObject(report.summary)) return true;
   if (
     "semanticValidation" in report &&
     report.semanticValidation &&

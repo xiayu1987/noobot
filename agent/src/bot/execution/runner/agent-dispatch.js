@@ -19,7 +19,7 @@ import {
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
   const messageId = text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
@@ -45,7 +45,7 @@ function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
   }
   const accepted = [];
   for (const message of Array.isArray(messages) ? messages : []) {
-    if (!message || typeof message !== "object") continue;
+    if (!isObjectLike(message)) continue;
     const identity = messageIdentity(message);
     if (!identity) {
       throw new Error("dispatched turn message requires a canonical messageId");

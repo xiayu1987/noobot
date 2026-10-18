@@ -25,7 +25,7 @@ import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 import { applyLatestSessionAggregateVersion } from "../runtime/engine/sessionAggregateVersionManager.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
@@ -98,7 +98,7 @@ export function useChatEngine({
     const sessionId = text(response?.sessionId);
     const turnScopeId = text(response?.turnScopeId);
     const terminalStatus = response?.turn?.terminalStatus;
-    if (!sessionId || !turnScopeId || !terminalStatus || typeof terminalStatus !== "object") {
+    if (!sessionId || !turnScopeId || !isObjectLike(terminalStatus)) {
       logTerminalResolutionDebug("frontend.terminalResolution.rejected", () => ({
         sessionId,
         turnScopeId,

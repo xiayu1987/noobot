@@ -10,7 +10,7 @@ import path from "node:path";
 
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 import { SessionExecutionRunner } from "../../src/bot/execution/runner.js";
 import { finalizeAgentTurn } from "../../src/bot/execution/runner/result-finalizer.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
@@ -139,7 +139,7 @@ export function createRunner({
             return { agentContext, runtimeAgentContext: agentContext };
           })();
       const preparedRuntime = prepared?.runtimeAgentContext?.bindings?.runtime;
-      if (preparedRuntime && typeof preparedRuntime === "object") {
+      if (isObjectLike(preparedRuntime)) {
         preparedRuntime.sessionManager = preparedRuntime.sessionManager || sessionManager;
       }
       return prepared;

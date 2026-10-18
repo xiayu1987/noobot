@@ -10,7 +10,7 @@ import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { resolveRepairArtifactPath } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
 
@@ -22,8 +22,7 @@ function materializeRepairRecords(records, order, baseMessages = []) {
     const uid = text(record?.messageUid);
     if (!uid) continue;
     if (record.op === "remove") byUid.delete(uid);
-    else if (record.op === "upsert" && record.message && typeof record.message === "object")
-      byUid.set(uid, record.message);
+    else if (record.op === "upsert" && isObjectLike(record.message)) byUid.set(uid, record.message);
   }
   const orderedUids = Array.isArray(order) ? order.map(text).filter(Boolean) : [];
   const ordered = orderedUids.map((uid) => byUid.get(uid)).filter(Boolean);
@@ -86,7 +85,7 @@ async function readPreviousCheckpointRecords(sessionDir, records) {
 }
 
 export async function readSessionForProtocolRepair({ sessionDir = "", session = null } = {}) {
-  if (!session || typeof session !== "object" || Array.isArray(session)) {
+  if (!isPlainObject(session)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), {
       code: "SESSION_REPAIR_SOURCE_INVALID",
     });

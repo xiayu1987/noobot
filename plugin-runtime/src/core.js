@@ -10,7 +10,7 @@ import {
   validatePluginContributionReceipt,
   validatePluginActivationResult,
 } from "@noobot/plugin-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function normalizePath(path = []) {
   const normalized = Array.isArray(path) ? path.map((item) => text(item)).filter(Boolean) : [];
@@ -59,7 +59,7 @@ export function createPluginHostFacade({
   const ownedContainers = new Set([facade]);
   for (const port of portsForPluginSurface(entry.manifest, entry.surface)) {
     const descriptor = capabilityAdapters?.[port];
-    if (!descriptor || typeof descriptor !== "object") {
+    if (!isObjectLike(descriptor)) {
       throw new Error(`plugin ${entry.pluginId} requires unavailable host port ${port}`);
     }
     assignFacadePath(facade, normalizePath(descriptor.path), descriptor.value, ownedContainers);

@@ -8,14 +8,14 @@ import {
   resolveModelFamilyId,
   resolveModelStrictToolSchema,
 } from "@noobot/model-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export const TOOL_BINDING_NAME_MAX_LENGTH = 64;
 const TOOL_BINDING_NAME_PATTERN = new RegExp(`^[a-zA-Z0-9_-]{1,${TOOL_BINDING_NAME_MAX_LENGTH}}$`);
 const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
 
 function assertModelSpec(modelSpec) {
-  if (!modelSpec || typeof modelSpec !== "object" || !text(modelSpec.model)) {
+  if (!isObjectLike(modelSpec) || !text(modelSpec.model)) {
     throw new TypeError("adaptToolsForBinding requires a resolved model spec");
   }
 }

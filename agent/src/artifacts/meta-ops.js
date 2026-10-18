@@ -126,7 +126,7 @@ export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalized
 }
 
 export function attachmentMatchKeys(item = {}) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+  if (!isPlainObject(item)) return [];
   try {
     return [
       canonicalAttachmentIdentityKey({

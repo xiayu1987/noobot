@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isPlainObject } from "@noobot/shared/value";
 
 export function createSessionIdentity({ userId = "", sessionId = "", parentSessionId = "" } = {}) {
   return Object.freeze({
@@ -15,8 +15,7 @@ export function createSessionIdentity({ userId = "", sessionId = "", parentSessi
 
 export function validateSessionIdentity(identity = {}) {
   const errors = [];
-  if (!identity || typeof identity !== "object" || Array.isArray(identity))
-    return { valid: false, errors: ["invalid_session_identity"] };
+  if (!isPlainObject(identity)) return { valid: false, errors: ["invalid_session_identity"] };
   if (!clean(identity.userId)) errors.push("missing_user_id");
   if (!clean(identity.sessionId)) errors.push("missing_session_id");
   if (

@@ -5,7 +5,7 @@
  */
 import pino from "pino";
 import { createLoggerAdapterStore } from "./logger-adapter.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const DEFAULT_LEVEL = String(process.env.NOOBOT_LOG_LEVEL || process.env.NB_LOG_LEVEL || "error")
   .trim()
@@ -37,7 +37,7 @@ export function setLogLevel(level) {
 }
 
 function writePino(level, message, ...args) {
-  if (typeof message === "object" && message !== null) {
+  if (isObjectLike(message)) {
     pinoLogger[level](message);
     return;
   }
@@ -46,7 +46,7 @@ function writePino(level, message, ...args) {
     return;
   }
   const firstArg = args[0];
-  if (args.length === 1 && firstArg && typeof firstArg === "object") {
+  if (args.length === 1 && isObjectLike(firstArg)) {
     pinoLogger[level](firstArg, String(message || ""));
     return;
   }

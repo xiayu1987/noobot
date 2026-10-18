@@ -5,7 +5,7 @@
  */
 import { parseIdPatchCommands, parseKvPayload, parseListField } from "./id-patch.js";
 import { dedupeTextList, sanitizeFileName } from "../text.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function reportPatchParseError({
   rawContent = "",
@@ -51,7 +51,7 @@ function collectPatchItems({
     }
     const kv = parseKvPayload(command.payload);
     const item = typeof buildItem === "function" ? buildItem(kv, command) : null;
-    if (!item || typeof item !== "object") continue;
+    if (!isObjectLike(item)) continue;
     map.set(id, item);
   }
   return [...map.values()];
@@ -108,7 +108,7 @@ function groupItemsByCategory(items = [], mapSubItem = null) {
     if (!key) continue;
     const current = categoryMap.get(key) || [];
     const subItem = typeof mapSubItem === "function" ? mapSubItem(item) : null;
-    if (!subItem || typeof subItem !== "object") continue;
+    if (!isObjectLike(subItem)) continue;
     current.push(subItem);
     categoryMap.set(key, current);
   }

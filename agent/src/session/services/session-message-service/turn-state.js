@@ -33,11 +33,10 @@ import {
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir } from "./outbox-scope.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
-  if (!assistantMessage || typeof assistantMessage !== "object" || Array.isArray(assistantMessage))
-    return assistantMessage;
+  if (!isPlainObject(assistantMessage)) return assistantMessage;
   const clean = (value) => text(value);
   const turn = session?.turnLifecycle?.turns?.[clean(turnScopeId)] || {};
   return normalizeMessageEntity({

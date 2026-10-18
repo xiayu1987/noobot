@@ -9,7 +9,7 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { getMessageId, resolveModelMessageBlocks } from "../../../core/message-store.js";
 import { requestSummaryCheckpointMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const FAILURE_THRESHOLD = Object.freeze({
   CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
@@ -25,7 +25,7 @@ function resolveSummaryMarkBlocks(ctx = {}) {
 }
 
 export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
-  if (!state || typeof state !== "object") return [];
+  if (!isObjectLike(state)) return [];
   const blocks = resolveSummaryMarkBlocks(ctx);
   const summaryScope = resolveSummaryScope(blocks);
   const messageIds = [

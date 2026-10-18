@@ -26,7 +26,7 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 function requireArtifactEntries(items, label) {
   return items.map((item, index) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
+    if (!isPlainObject(item)) {
       throw new TypeError(`${label}[${index}] must be an object`);
     }
     const name = safeStr(item.name);

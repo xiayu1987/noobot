@@ -11,7 +11,7 @@ import {
   resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function resolveRole(message = {}) {
   return resolveContextMessageRole(message);
@@ -24,7 +24,7 @@ function extractContextTextContent(content = "") {
     return content
       .map((item = {}) => {
         if (typeof item === "string") return item;
-        if (!item || typeof item !== "object") return "";
+        if (!isObjectLike(item)) return "";
         return text(item?.text || item?.content || item?.value);
       })
       .filter(Boolean)

@@ -8,7 +8,7 @@ import {
   logResendDebug,
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function sessionIdentity(value = {}) {
   return _trimStr(value?.sessionId);
@@ -16,7 +16,7 @@ function sessionIdentity(value = {}) {
 
 function resolveMatchingSessionDetail(detail, sessionId = "") {
   const expectedSessionId = _trimStr(sessionId);
-  if (!expectedSessionId || !detail || typeof detail !== "object") return null;
+  if (!expectedSessionId || !isObjectLike(detail)) return null;
   const detailSessionId = sessionIdentity(detail);
   if (detailSessionId && detailSessionId !== expectedSessionId) return null;
   const sessionDocs = Array.isArray(detail?.sessions) ? detail.sessions : [];

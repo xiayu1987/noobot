@@ -10,7 +10,7 @@ import {
 } from "./handlers/shared/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 const DEFAULT_PENDING_TTL_HOOK_TURNS = TURN_THRESHOLDS.harness.pendingTtlHookTurns;
 const WARN_COOLDOWN_TURNS = TURN_THRESHOLDS.harness.pendingWarnCooldownTurns;
@@ -42,26 +42,14 @@ function normalizePendingTtlHookTurns(meta = {}) {
 }
 
 function ensurePendingMeta(state = {}) {
-  if (!state || typeof state !== "object") return { pending: {}, flags: {} };
-  if (
-    !state.pendingMeta ||
-    typeof state.pendingMeta !== "object" ||
-    Array.isArray(state.pendingMeta)
-  ) {
+  if (!isObjectLike(state)) return { pending: {}, flags: {} };
+  if (!isPlainObject(state.pendingMeta)) {
     state.pendingMeta = {};
   }
-  if (
-    !state.pendingMeta.pending ||
-    typeof state.pendingMeta.pending !== "object" ||
-    Array.isArray(state.pendingMeta.pending)
-  ) {
+  if (!isPlainObject(state.pendingMeta.pending)) {
     state.pendingMeta.pending = {};
   }
-  if (
-    !state.pendingMeta.flags ||
-    typeof state.pendingMeta.flags !== "object" ||
-    Array.isArray(state.pendingMeta.flags)
-  ) {
+  if (!isPlainObject(state.pendingMeta.flags)) {
     state.pendingMeta.flags = {};
   }
   return state.pendingMeta;
@@ -87,8 +75,8 @@ function isPendingKeyActive(key = "", value = null) {
 }
 
 export function setPendingStateWithMeta(state = {}, key = "", value = null) {
-  if (!key || !state || typeof state !== "object") return false;
-  if (!state.pending || typeof state.pending !== "object") state.pending = {};
+  if (!key || !isObjectLike(state)) return false;
+  if (!isObjectLike(state.pending)) state.pending = {};
   const pendingMeta = ensurePendingMeta(state);
   state.pending[key] = value;
   if (isPendingKeyActive(key, value)) {
@@ -100,20 +88,20 @@ export function setPendingStateWithMeta(state = {}, key = "", value = null) {
 }
 
 export function clearPendingSummaryState(state = {}) {
-  if (!state || typeof state !== "object") return false;
+  if (!isObjectLike(state)) return false;
   const hadPendingSummary = state?.pending?.summary === true;
   const hadCheckpoint = Array.isArray(state?.pending?.summaryCheckpointMessageIds);
   const hadCharTrigger = state?.flags?.summaryByCharsPrompted === true;
   setPendingStateWithMeta(state, "summary", false);
   state.pending.summaryCheckpointMessageIds = null;
-  if (!state.flags || typeof state.flags !== "object") state.flags = {};
+  if (!isObjectLike(state.flags)) state.flags = {};
   state.flags.summaryByCharsPrompted = false;
   return hadPendingSummary || hadCheckpoint || hadCharTrigger;
 }
 
 export function setCaptureFlagStateWithMeta(state = {}, key = "", active = false) {
-  if (!key || !state || typeof state !== "object") return false;
-  if (!state.flags || typeof state.flags !== "object") state.flags = {};
+  if (!key || !isObjectLike(state)) return false;
+  if (!isObjectLike(state.flags)) state.flags = {};
   const pendingMeta = ensurePendingMeta(state);
   const normalized = active === true;
   state.flags[key] = normalized;
@@ -141,7 +129,7 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
   if (!holder) return false;
   const ttlTurns = normalizePendingTtlHookTurns(meta);
   const { state } = holder;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (!isObjectLike(state.counters)) state.counters = {};
   if (shouldTickHookTurn(point)) {
     state.counters.hookTurns = resolveCurrentHookTurn(state) + 1;
   }

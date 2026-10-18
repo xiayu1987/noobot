@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { parsePlanDocumentFromText } from "./text-protocol.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 const MODEL_ACCEPTANCE_LINE_RE = /^\s*(ADD|UPDATE)\s+A([A-Za-z0-9._-]+)\s+(.+?)\s*$/i;
 
@@ -136,12 +136,8 @@ function buildPlanContentMapFromText(planText = "") {
 }
 
 function ensureStatusMap(bucket = {}) {
-  if (!bucket || typeof bucket !== "object") return {};
-  if (
-    !bucket.planAcceptanceStatusByPlanId ||
-    typeof bucket.planAcceptanceStatusByPlanId !== "object" ||
-    Array.isArray(bucket.planAcceptanceStatusByPlanId)
-  ) {
+  if (!isObjectLike(bucket)) return {};
+  if (!isPlainObject(bucket.planAcceptanceStatusByPlanId)) {
     bucket.planAcceptanceStatusByPlanId = {};
   }
   return bucket.planAcceptanceStatusByPlanId;
@@ -156,7 +152,7 @@ export function getPlanAcceptanceStatusMap(bucket = {}) {
 }
 
 export function applyPhaseAcceptanceReportToPlanStatus(bucket = {}, report = null) {
-  if (!bucket || typeof bucket !== "object" || !report) return { applied: false, count: 0 };
+  if (!isObjectLike(bucket) || !report) return { applied: false, count: 0 };
   const items = parsePlanAcceptanceItemsFromText(report?.content);
   if (!items.length) return { applied: false, count: 0 };
   const map = ensureStatusMap(bucket);
@@ -193,7 +189,7 @@ export function resetPlanAcceptanceStatusForPlanChange(
   nextPlanText = "",
   { stage = "revision", reason = "plan_changed" } = {},
 ) {
-  if (!bucket || typeof bucket !== "object") return { resetCount: 0, removedCount: 0 };
+  if (!isObjectLike(bucket)) return { resetCount: 0, removedCount: 0 };
   const map = ensureStatusMap(bucket);
   const keys = Object.keys(map);
   if (!keys.length) return { resetCount: 0, removedCount: 0 };

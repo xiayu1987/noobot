@@ -5,7 +5,7 @@
  */
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export const DYNAMIC_POLICY_PROMPT_BLOCK = "HARNESS_DYNAMIC_POLICY_PROMPT";
 const MAX_DYNAMIC_POLICY_PROMPT_CHARS =
@@ -81,7 +81,7 @@ function parseDynamicPolicyPromptProtocol(inputText = "") {
 }
 
 export function buildDynamicPolicyPromptSignature(record = null) {
-  if (!record || typeof record !== "object") return "";
+  if (!isObjectLike(record)) return "";
   return JSON.stringify({
     scenario: normalizeScenario(record.scenario),
     prompt: clipPrompt(record.prompt),
@@ -109,7 +109,7 @@ export function applyDynamicPolicyPromptFromText(ctx = {}, inputText = "", meta 
 
 export function resolveActiveDynamicPolicyPromptFromContext(ctx = {}) {
   const record = ctx?.agentContext?.bindings?.extensions?.harness?.dynamicPolicyPrompt;
-  if (!record || typeof record !== "object") return null;
+  if (!isObjectLike(record)) return null;
   const prompt = clipPrompt(record.prompt);
   if (!prompt) return null;
   return {

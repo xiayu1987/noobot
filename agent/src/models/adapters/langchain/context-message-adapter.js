@@ -5,11 +5,12 @@
  */
 
 import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { isObjectLike } from "@noobot/shared/value";
 
 export function toLangChainToolCalls(toolCalls = []) {
   return (Array.isArray(toolCalls) ? toolCalls : [])
     .map((toolCall) => {
-      if (!toolCall || typeof toolCall !== "object") return null;
+      if (!isObjectLike(toolCall)) return null;
       if (toolCall.name) {
         return projectToolContextPolicy(
           {

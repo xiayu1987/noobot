@@ -19,7 +19,7 @@ import {
   normalizeTurnLifecycleEntity,
   projectTurnLifecycleTiming,
 } from "../domain/turn-lifecycle-entity.js";
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isObjectLike } from "@noobot/shared/value";
 
 export function createAuthoritativeTurnSnapshot({
   lifecycle: lifecycleSource = {},
@@ -181,7 +181,7 @@ function isNewer(left, right) {
 
 function stableObject(value) {
   if (Array.isArray(value)) return value.map(stableObject);
-  if (!value || typeof value !== "object") return value;
+  if (!isObjectLike(value)) return value;
   return Object.fromEntries(
     Object.keys(value)
       .sort()

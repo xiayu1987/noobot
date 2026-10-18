@@ -9,7 +9,7 @@ import {
   normalizeInteractionLifecycle,
   normalizeInteractionResolvedBy,
 } from "@noobot/event-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function normalizeInteractionData(input = {}) {
   return input && typeof input === "object" ? input : {};
@@ -22,7 +22,7 @@ function normalizeInteractionAckMode(value = "") {
 }
 
 function normalizeInteractionNotification(input = {}) {
-  if (!input || typeof input !== "object") {
+  if (!isObjectLike(input)) {
     return { enabled: false, level: "info", title: "", content: "", data: {} };
   }
   const level = text(input?.level).toLowerCase();

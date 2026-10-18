@@ -17,6 +17,7 @@ import {
   logStateMachineDebug,
   summarizeTurnLifecycleSnapshot,
 } from "../../../debug/loggers/stateMachineLogger.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 function hasValidTurnLifecycleSnapshot(sessionEntry = {}) {
   const snapshot = sessionEntry?.replayBatch?.snapshot?.payload;
@@ -87,7 +88,7 @@ async function reconcileInvalidSessions(invalidSessions, reconcileSessionState) 
 function applyReplaySnapshots(reconnectSessions, applyTurnLifecycleSnapshot) {
   for (const sessionEntry of reconnectSessions) {
     const snapshot = sessionEntry?.replayBatch?.snapshot?.payload;
-    if (!snapshot || typeof snapshot !== "object") continue;
+    if (!isObjectLike(snapshot)) continue;
     logStateMachineDebug("stateMachine.reconnect.snapshot.received", () => ({
       ...summarizeTurnLifecycleSnapshot(snapshot),
     }));

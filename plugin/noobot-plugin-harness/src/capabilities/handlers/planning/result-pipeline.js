@@ -33,7 +33,7 @@ import {
   resolveModelMessages,
 } from "../../../core/message-store.js";
 import { isHarnessInjectedMessage } from "../shared/message/utils.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -56,7 +56,7 @@ function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
 }
 
 function increasePlanningCaptureAttempts(state = {}) {
-  if (!state || typeof state !== "object") return 1;
+  if (!isObjectLike(state)) return 1;
   const counters = state.counters && typeof state.counters === "object" ? state.counters : {};
   const current = Number.isFinite(Number(counters.planningCaptureAttempts))
     ? Number(counters.planningCaptureAttempts)

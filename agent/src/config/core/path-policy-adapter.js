@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolvePathPolicy } from "@noobot/path-resolver";
+import { isPlainObject } from "@noobot/shared/value";
 
 export function resolveConfiguredPathPolicy(globalConfig = {}) {
-  if (globalConfig === null || typeof globalConfig !== "object" || Array.isArray(globalConfig)) {
+  if (!isPlainObject(globalConfig)) {
     throw new TypeError("global config must be an object");
   }
   const security = globalConfig.security === undefined ? {} : globalConfig.security;
-  if (security === null || typeof security !== "object" || Array.isArray(security)) {
+  if (!isPlainObject(security)) {
     throw new TypeError("security config must be an object");
   }
   return resolvePathPolicy({

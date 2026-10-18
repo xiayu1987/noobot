@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 import { isPendingInteractionReplay } from "./interaction.js";
 import { validateProtocolEvent } from "./event-registry.js";
 
@@ -108,7 +108,7 @@ function readSnapshotSequence(batch, errors) {
 }
 
 function collectSnapshotErrors(snapshot, { snapshotSequence, sessionId }, errors) {
-  if (!snapshot || typeof snapshot !== "object") return;
+  if (!isObjectLike(snapshot)) return;
   const snapshotValidation = validateProtocolEvent(snapshot);
   if (!snapshotValidation.valid) errors.push(...snapshotValidation.errors);
   if (eventSequence(snapshot) !== snapshotSequence) errors.push("snapshot_sequence_mismatch");

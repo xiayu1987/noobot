@@ -7,14 +7,14 @@ import crypto from "node:crypto";
 
 import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
 import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
-import { isPlainObject, text } from "./value.js";
+import { isPlainObject, text, isObjectLike } from "./value.js";
 
 const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
 const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
 
 function readField(message = {}, field = "") {
   const key = text(field);
-  if (!key || !message || typeof message !== "object") return "";
+  if (!key || !isObjectLike(message)) return "";
   return String(
     message?.[key] ??
       message?.additional_kwargs?.[key] ??
@@ -44,7 +44,7 @@ function textHash(value = "") {
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== "object") return value;
+  if (!isObjectLike(value)) return value;
   return Object.fromEntries(
     Object.keys(value)
       .sort()

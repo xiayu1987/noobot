@@ -21,7 +21,7 @@ import {
   resolveModelMessages,
   writeMessageBlocks,
 } from "../../core/message-store.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
@@ -158,7 +158,7 @@ function applyAgentSystemTakeover(ctx = {}, directive = {}) {
 }
 
 export function applyMessageTakeover(ctx = {}, takeover = {}) {
-  if (!takeover || typeof takeover !== "object") return false;
+  if (!isObjectLike(takeover)) return false;
   if (takeover.enabled === false) return false;
   const target = text(takeover?.target) || "auto";
   if (target === "ctx_messages") return applyCtxMessagesTakeover(ctx, takeover);

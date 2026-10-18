@@ -7,7 +7,7 @@ import {
   MODEL_INPUT_PROCESSING_KIND,
   classifyModelInputProcessing,
 } from "../model/model-input-processing.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export const MODEL_OPERATION_KIND = Object.freeze({
   CHAT: "chat",
@@ -22,7 +22,7 @@ export const MODEL_WEB_SEARCH_INSTRUCTION =
 const OPERATION_KINDS = new Set(Object.values(MODEL_OPERATION_KIND));
 
 function requirePlainObject(value, path) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new TypeError(`${path} must be an object`);
   }
   return value;

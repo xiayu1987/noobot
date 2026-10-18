@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 
 const objectValue = (value, label) => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new TypeError(`${label} must be an object`);
   }
   return value;

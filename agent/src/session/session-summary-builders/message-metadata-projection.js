@@ -34,7 +34,7 @@ export function pickLightAttachments(message = {}) {
 }
 
 function pickLightObject(source = {}, allowedKeys = []) {
-  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  if (!isPlainObject(source)) return null;
   const picked = {};
   for (const key of allowedKeys) {
     const value = source?.[key];
@@ -71,7 +71,7 @@ function clonePlainJson(value, { maxStringLength = SUMMARY_DEFAULT_JSON_STRING_C
 }
 
 function pickPlainFields(source = {}, allowedKeys = [], options = {}) {
-  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  if (!isPlainObject(source)) return null;
   const picked = {};
   for (const key of allowedKeys) {
     if (source?.[key] === undefined || source?.[key] === null || source?.[key] === "") continue;
@@ -103,14 +103,14 @@ function pickPayloadStepFailure(value) {
 }
 
 function pickPayloadSemantic(semantic = {}) {
-  if (!semantic || typeof semantic !== "object" || Array.isArray(semantic)) return null;
+  if (!isPlainObject(semantic)) return null;
   return pickPlainFields(semantic, ["nodes", "flowtos", "edges", "attachments"], {
     maxStringLength: SUMMARY_DEFAULT_JSON_STRING_CHARS,
   });
 }
 
 function pickPayloadNodeRun(item = {}) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  if (!isPlainObject(item)) return null;
   const picked =
     pickPlainFields(
       item,
@@ -158,7 +158,7 @@ function pickPayloadNodeRun(item = {}) {
 }
 
 function pickPayloadNodeSession(item = {}) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  if (!isPlainObject(item)) return null;
   const picked =
     pickPlainFields(
       item,
@@ -193,7 +193,7 @@ function pickPayloadNodeSession(item = {}) {
 }
 
 function pickPluginPayloadSnapshot(payload = {}) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (!isPlainObject(payload)) return null;
   const picked =
     pickPlainFields(payload, ["workflowRunId", "status", "phase", "phaseStatus"], {
       maxStringLength: SUMMARY_SMALL_JSON_STRING_CHARS,

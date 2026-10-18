@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isObjectLike } from "@noobot/shared/value";
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { snapshotTurn } from "./turn-projection.js";
 import { TURN_FAILED_STATES, TURN_TERMINAL_STATES } from "./turn-state.js";
@@ -65,14 +65,10 @@ export function validateTurnTerminalResolution(response = {}) {
     if (!TERMINAL_STATE_VALUES.has(clean(turn.state))) errors.push("invalid_terminal_state");
     errors.push(...collectPositiveIntegerErrors(turn.revision, "invalid_turn_revision"));
     errors.push(...collectPositiveIntegerErrors(turn.sequence, "invalid_turn_sequence"));
-    if (!terminalStatus || typeof terminalStatus !== "object")
-      errors.push("missing_terminal_status");
+    if (!isObjectLike(terminalStatus)) errors.push("missing_terminal_status");
     if (!Number.isInteger(response.aggregateVersion) || response.aggregateVersion < 0)
       errors.push("invalid_aggregate_version");
-    if (
-      FAILED_TERMINAL_STATES.has(clean(turn.state)) &&
-      (!turn.failure || typeof turn.failure !== "object")
-    )
+    if (FAILED_TERMINAL_STATES.has(clean(turn.state)) && !isObjectLike(turn.failure))
       errors.push("missing_terminal_failure");
   } else if (!clean(response.reason)) errors.push("missing_unresolved_reason");
   return { valid: errors.length === 0, errors };

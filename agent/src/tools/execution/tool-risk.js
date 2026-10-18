@@ -18,7 +18,7 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const toolRiskAssessmentStorage = new AsyncLocalStorage();
 
@@ -73,7 +73,7 @@ function confirmationContent(
 ) {
   const formatTarget = (value) => {
     if (Array.isArray(value)) return value.map(formatTarget).filter(Boolean).join(", ");
-    if (!value || typeof value !== "object") return text(value);
+    if (!isObjectLike(value)) return text(value);
     if (value.view === "attachment" && value.identity) {
       return formatAttachmentIdentityRef(value.identity);
     }

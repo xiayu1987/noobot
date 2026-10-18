@@ -27,7 +27,7 @@ import {
   stopInstanceBestEffort,
 } from "./openvscode/process.js";
 import { createOpenVSCodeProxy } from "./openvscode/proxy.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function createOpenVSCodeService({
   getGlobalConfig = () => ({}),
@@ -68,7 +68,7 @@ export function createOpenVSCodeService({
   }
 
   function touchInstance(instance = {}, { persist = false } = {}) {
-    if (!instance || typeof instance !== "object") return;
+    if (!isObjectLike(instance)) return;
     const nowMs = Date.now();
     instance.lastAccessAtMs = nowMs;
     instance.lastAccessAt = new Date(nowMs).toISOString();

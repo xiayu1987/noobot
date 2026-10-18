@@ -8,9 +8,10 @@ import {
   resolveWorkflowThresholdModeFromContext,
 } from "./prompts.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 function resolveExplicitPlanRefinementEnabledFromSource(source = {}) {
-  if (!source || typeof source !== "object") return undefined;
+  if (!isObjectLike(source)) return undefined;
   const candidates = [
     source.planRefinementEnabled,
     source.enablePlanRefinement,
@@ -46,16 +47,16 @@ function resolvePlanRefinementEnabledForContext(ctx = {}, meta = {}) {
 
 export function syncPlanRefinementPolicyFlag(ctx = {}, state = {}, meta = {}) {
   const enabled = resolvePlanRefinementEnabledForContext(ctx, meta);
-  if (state && typeof state === "object") {
-    if (!state.flags || typeof state.flags !== "object") state.flags = {};
+  if (isObjectLike(state)) {
+    if (!isObjectLike(state.flags)) state.flags = {};
     state.flags.planRefinementEnabled = enabled;
   }
   return enabled;
 }
 
 export function clearPendingPlanRefinement(state = {}) {
-  if (!state || typeof state !== "object") return false;
-  if (!state.pending || typeof state.pending !== "object") state.pending = {};
+  if (!isObjectLike(state)) return false;
+  if (!isObjectLike(state.pending)) state.pending = {};
   state.pending.planRefinement = false;
   state.pending.planRefinementContext = null;
   return true;

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export const CONTEXT_MESSAGE_ROLE = Object.freeze({
   SYSTEM: "system",
@@ -14,7 +14,7 @@ export const CONTEXT_MESSAGE_ROLE = Object.freeze({
 
 export function readContextMessageField(message = {}, field = "") {
   const key = text(field);
-  if (!key || !message || typeof message !== "object") return "";
+  if (!key || !isObjectLike(message)) return "";
   return text(
     message?.[key] ??
       message?.additional_kwargs?.[key] ??
@@ -101,7 +101,7 @@ export function resolveContextMessageContent(message = {}) {
   return content
     .map((item) => {
       if (typeof item === "string") return item;
-      if (!item || typeof item !== "object") return "";
+      if (!isObjectLike(item)) return "";
       return String(item.text ?? item.content ?? item.value ?? "");
     })
     .filter(Boolean)
@@ -135,9 +135,9 @@ export function resolveContextMessageSummarized(message = {}) {
 }
 
 export function markContextMessageSummarized(message = {}) {
-  if (!message || typeof message !== "object") return message;
+  if (!isObjectLike(message)) return message;
   message.summarized = true;
-  if (message.lc_kwargs && typeof message.lc_kwargs === "object") {
+  if (isObjectLike(message.lc_kwargs)) {
     message.lc_kwargs.summarized = true;
   }
   return message;

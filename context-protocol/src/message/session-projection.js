@@ -5,11 +5,12 @@
  */
 
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 
 const SESSION_CONTEXT_ROLES = new Set(["system", "user", "assistant", "tool"]);
 
 function requireRecord(record) {
-  if (!record || typeof record !== "object" || Array.isArray(record)) {
+  if (!isPlainObject(record)) {
     throw new TypeError("Session Context projection requires a record object");
   }
   return record;
@@ -31,7 +32,7 @@ function optionalArray(value, field) {
 
 function optionalPlainObject(value, field) {
   if (value === undefined || value === null) return null;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new TypeError(`Session Context projection requires ${field} to be an object`);
   }
   return value;

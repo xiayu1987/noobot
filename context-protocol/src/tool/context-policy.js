@@ -39,7 +39,7 @@ function normalizeToolContextPolicy(value = null) {
 }
 
 export function resolveToolContextPolicy(value = null) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!isPlainObject(value)) return null;
   return normalizeToolContextPolicy(
     value.contextPolicy || value.metadata?.contextPolicy || value.lc_kwargs?.contextPolicy,
   );

@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 const RESOURCE_REF_VERSION = 1;
 const RESOURCE_KINDS = Object.freeze(["file"]);
@@ -58,8 +58,7 @@ export function createResourceRef({
 }
 
 function assertResourceRef(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new TypeError("resource reference must be an object");
+  if (!isPlainObject(value)) throw new TypeError("resource reference must be an object");
   if (Number(value.version || RESOURCE_REF_VERSION) !== RESOURCE_REF_VERSION)
     throw new TypeError("unsupported resource reference version");
   if (!text(value.resourceId) || !/^res_[A-Za-z0-9]+$/.test(text(value.resourceId)))
@@ -71,7 +70,7 @@ function assertResourceRef(value = {}) {
   if (!value.logical || text(value.logical.view) !== text(value.source))
     throw new TypeError("resource logical view must match source");
   if (!text(value.logical.path)) throw new TypeError("resource logical path is required");
-  if (value.source === "attachment" && (!value.attachment || typeof value.attachment !== "object"))
+  if (value.source === "attachment" && !isObjectLike(value.attachment))
     throw new TypeError("attachment resource identity is required");
   return value;
 }

@@ -109,7 +109,7 @@ function hasConnectorData(connectorStatusSection = {}) {
 }
 
 function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
-  if (!dynamicInfo || typeof dynamicInfo !== "object" || Array.isArray(dynamicInfo)) {
+  if (!isPlainObject(dynamicInfo)) {
     return {};
   }
   const config = isPlainObject(dynamicInfo.config) ? dynamicInfo.config : {};

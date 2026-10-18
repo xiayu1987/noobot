@@ -13,7 +13,7 @@ import {
 } from "@noobot/file-mutation-protocol";
 import { assertFileMutationVersion, withFileMutationLocks } from "./file-mutation-state.js";
 import { resolveSessionGeneratedDataRoot } from "../../session/session-generated-data.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 export function resolveFileMutationRoot(sessionDir) {
   return resolveSessionGeneratedDataRoot(sessionDir, "fileMutations");
@@ -385,7 +385,7 @@ async function rollbackFileMutationInternal({
     throw error;
   }
   await assertFileMutationVersion(filePath, record.mutations[0].after.sha256);
-  if (restoreState && typeof restoreState === "object" && restoreState.before) {
+  if (isObjectLike(restoreState) && restoreState.before) {
     await restoreTarget(filePath, restoreState.before, { writeText, removeFile });
     const recordPath = path.join(root, `${String(mutationId).trim()}.json`);
     if (restoreState.record) {

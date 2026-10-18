@@ -84,51 +84,49 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 699 处 / 291 个文件；内联 trim 兜底 116 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；原始 typeof 判断 1206 处 / 496 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 699 处 / 291 个文件；内联 trim 兜底 116 处 / 74 个文件；内联类型判断 2 处 / 2 个文件；原始 typeof 判断 773 处 / 380 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 原始 typeof 判断 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ------------ | ---------------- | ----------- |
-| `client/noobot-chat`             | 270    | 31             | 1            | 171              | 0           |
-| `agent`                          | 118    | 30             | 0            | 319              | 0           |
-| `plugin/noobot-plugin-harness`   | 46     | 10             | 0            | 227              | 0           |
-| `plugin/noobot-plugin-workflow`  | 99     | 11             | 0            | 63               | 0           |
-| `service`                        | 38     | 5              | 0            | 66               | 0           |
-| `context-protocol`               | 5      | 1              | 0            | 78               | 0           |
-| `agent-proxy`                    | 11     | 2              | 0            | 25               | 0           |
-| `session-protocol`               | 3      | 0              | 0            | 31               | 0           |
+| `client/noobot-chat`             | 270    | 31             | 1            | 115              | 0           |
+| `agent`                          | 118    | 30             | 0            | 210              | 0           |
+| `plugin/noobot-plugin-harness`   | 46     | 10             | 0            | 141              | 0           |
+| `plugin/noobot-plugin-workflow`  | 99     | 11             | 0            | 50               | 0           |
+| `service`                        | 38     | 5              | 0            | 60               | 0           |
+| `agent-proxy`                    | 11     | 2              | 0            | 23               | 0           |
+| `context-protocol`               | 5      | 1              | 0            | 30               | 0           |
 | `client/shared`                  | 24     | 0              | 0            | 6                | 0           |
-| `event-protocol`                 | 10     | 0              | 0            | 16               | 0           |
-| `workflow`                       | 2      | 2              | 0            | 22               | 0           |
-| `authoritative-state`            | 7      | 0              | 0            | 17               | 0           |
-| `model-runtime`                  | 8      | 0              | 0            | 15               | 0           |
-| `path-resolver`                  | 12     | 1              | 0            | 6                | 0           |
-| `shared`                         | 6      | 0              | 0            | 10               | 0           |
-| `agent-config-protocol`          | 2      | 0              | 0            | 13               | 0           |
+| `authoritative-state`            | 7      | 0              | 0            | 14               | 0           |
+| `workflow`                       | 2      | 2              | 0            | 17               | 0           |
+| `model-runtime`                  | 8      | 0              | 0            | 7                | 0           |
+| `path-resolver`                  | 12     | 1              | 0            | 2                | 0           |
 | `user-template`                  | 4      | 9              | 0            | 2                | 0           |
-| `plugin-runtime`                 | 0      | 0              | 0            | 14               | 0           |
-| `model-protocol`                 | 3      | 0              | 0            | 10               | 0           |
-| `model-proxy`                    | 0      | 0              | 0            | 13               | 0           |
-| `session-repair`                 | 4      | 2              | 0            | 7                | 0           |
-| `agent-transport-protocol`       | 0      | 0              | 0            | 12               | 0           |
-| `connector-instances`            | 4      | 0              | 0            | 8                | 0           |
-| `memory-protocol`                | 2      | 0              | 0            | 10               | 0           |
+| `session-protocol`               | 3      | 0              | 0            | 11               | 0           |
+| `event-protocol`                 | 10     | 0              | 0            | 3                | 0           |
+| `plugin-runtime`                 | 0      | 0              | 0            | 13               | 0           |
+| `connector-instances`            | 4      | 0              | 0            | 7                | 0           |
 | `i18n`                           | 3      | 1              | 0            | 7                | 0           |
 | `scripts`                        | 4      | 1              | 0            | 6                | 0           |
-| `plugin/noobot-plugin-character` | 5      | 1              | 0            | 4                | 0           |
-| `plugin-protocol`                | 1      | 0              | 0            | 6                | 0           |
-| `connector-protocol`             | 1      | 3              | 0            | 2                | 0           |
-| `semantic-transfer-protocol`     | 0      | 1              | 0            | 5                | 0           |
+| `model-protocol`                 | 3      | 0              | 0            | 7                | 0           |
+| `shared`                         | 6      | 0              | 0            | 4                | 0           |
+| `memory-protocol`                | 2      | 0              | 0            | 6                | 0           |
+| `plugin/noobot-plugin-character` | 5      | 1              | 0            | 2                | 0           |
+| `session-repair`                 | 4      | 2              | 0            | 1                | 0           |
 | `workspace-protocol`             | 0      | 3              | 0            | 3                | 0           |
+| `agent-config-protocol`          | 2      | 0              | 0            | 3                | 0           |
+| `model-proxy`                    | 0      | 0              | 0            | 5                | 0           |
+| `plugin-protocol`                | 1      | 0              | 0            | 4                | 0           |
 | `client/startup`                 | 4      | 0              | 0            | 0                | 0           |
+| `connector-protocol`             | 1      | 3              | 0            | 0                | 0           |
 | `runtime-events`                 | 1      | 1              | 0            | 2                | 0           |
 | `sanitize`                       | 1      | 1              | 0            | 2                | 0           |
+| `semantic-transfer-protocol`     | 0      | 1              | 0            | 3                | 0           |
 | `attachment-protocol`            | 0      | 0              | 1            | 2                | 0           |
 | `hook-protocol`                  | 0      | 0              | 0            | 2                | 0           |
 | `connector-runtime`              | 0      | 0              | 0            | 1                | 0           |
 | `file-mutation-protocol`         | 0      | 0              | 0            | 1                | 0           |
 | `memory-repair`                  | 0      | 0              | 0            | 1                | 0           |
 | `platform-compatibility`         | 1      | 0              | 0            | 0                | 0           |
-| `security-assessment-protocol`   | 0      | 0              | 0            | 1                | 0           |
 
 <!-- fallback-chain-modules:end -->
 

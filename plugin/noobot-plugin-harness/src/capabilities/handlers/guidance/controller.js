@@ -51,7 +51,7 @@ import {
   normalizePositiveInteger,
   resolveGatedThresholdWithSource,
 } from "../shared/threshold-utils.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -61,7 +61,7 @@ const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.mes
 function resolveUnsummarizedMessageChars(messages = []) {
   if (!Array.isArray(messages)) return 0;
   return messages.reduce((total, message) => {
-    if (!message || typeof message !== "object") return total;
+    if (!isObjectLike(message)) return total;
     if (resolveContextMessageSummarized(message)) return total;
     const content = extractRawTextContent(message?.content ?? message);
     return total + String(content || "").length;
@@ -109,7 +109,7 @@ function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder?.state) return false;
   const state = holder.state;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (!isObjectLike(state.counters)) state.counters = {};
   if (state.pending?.summary === true) return false;
   const currentTurn = Number(ctx?.turn);
   const previousTurn = Number(state.counters.lastGuidanceSummaryCounterTurn || 0);
@@ -192,7 +192,7 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder?.state) return false;
   const state = holder.state;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (!isObjectLike(state.counters)) state.counters = {};
   if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.modelContext?.messages)) return false;
   if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state, meta)) return false;
   if (state.pending?.summary === true) return false;

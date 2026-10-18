@@ -9,7 +9,7 @@ import { useChatStore } from "../stores/useChatStore.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
 import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugLogger.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}) {
   const { translate } = useLocale();
@@ -28,7 +28,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
   }
 
   function buildInteractionRequestSignature(request = {}) {
-    if (!request || typeof request !== "object") return "";
+    if (!isObjectLike(request)) return "";
     return [
       request?.sessionId,
       request?.dialogProcessId,
@@ -47,7 +47,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
   }
 
   function getInteractionRequestKey(request = {}) {
-    if (!request || typeof request !== "object") return "";
+    if (!isObjectLike(request)) return "";
     const normalizedRequestId = normalizeRequestId(request?.requestId || "");
     if (normalizedRequestId) return `id:${normalizedRequestId}`;
     const signature = buildInteractionRequestSignature(request);
@@ -64,7 +64,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
         ? buildInteractionRequestSignature(requestOrId)
         : "";
     return pendingInteractionRequests.value.findIndex((requestItem) => {
-      if (!requestItem || typeof requestItem !== "object") return false;
+      if (!isObjectLike(requestItem)) return false;
       const requestItemId = normalizeRequestId(requestItem?.requestId || "");
       if (normalizedRequestId && requestItemId === normalizedRequestId) return true;
       if (normalizedRequestId) return false;
@@ -108,7 +108,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
   }
 
   function markInteractionRequestHandled(requestOrId = "") {
-    if (requestOrId && typeof requestOrId === "object") {
+    if (isObjectLike(requestOrId)) {
       const normalizedRequestId = normalizeRequestId(requestOrId?.requestId || "");
       if (normalizedRequestId) handledInteractionRequestIds.add(normalizedRequestId);
       const signature = buildInteractionRequestSignature(requestOrId);
@@ -122,7 +122,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
   }
 
   function isInteractionRequestHandled(requestOrId = "") {
-    if (requestOrId && typeof requestOrId === "object") {
+    if (isObjectLike(requestOrId)) {
       const normalizedRequestId = normalizeRequestId(requestOrId?.requestId || "");
       if (normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId)) return true;
       if (normalizedRequestId) return false;
@@ -138,8 +138,8 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
   function clearPendingInteraction(requestOrId = null) {
     if (requestOrId) {
       const removed = removePendingInteraction((requestItem) => {
-        if (!requestItem || typeof requestItem !== "object") return false;
-        if (requestOrId && typeof requestOrId === "object") {
+        if (!isObjectLike(requestItem)) return false;
+        if (isObjectLike(requestOrId)) {
           return (
             findPendingInteractionIndex(requestOrId) >= 0 &&
             getInteractionRequestKey(requestItem) === getInteractionRequestKey(requestOrId)
@@ -167,7 +167,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     const normalizedTurnScopeId = text(turnScopeId);
     const normalizedRequestId = normalizeRequestId(requestId || "");
     const removed = removePendingInteraction((requestItem) => {
-      if (!requestItem || typeof requestItem !== "object") return false;
+      if (!isObjectLike(requestItem)) return false;
       const pendingRequestId = normalizeRequestId(requestItem?.requestId || "");
       if (normalizedRequestId) return pendingRequestId === normalizedRequestId;
       const pendingSessionId = text(requestItem?.sessionId);
@@ -197,7 +197,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
   }
 
   function setPendingInteractionRequest(request = {}) {
-    if (!request || typeof request !== "object") {
+    if (!isObjectLike(request)) {
       clearPendingInteraction();
       return;
     }

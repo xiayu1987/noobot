@@ -7,7 +7,7 @@
 import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
 import { emitEvent } from "../../events/emitter.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export const AGENT_LIFECYCLE_STATE = Object.freeze({
   INITIALIZING: "initializing",
@@ -58,7 +58,7 @@ export function resolveInitialLifecycleState(runConfig = {}) {
 }
 
 export function syncLifecycleRuntimeState(runtime = null, lifecycle = null) {
-  if (!runtime || typeof runtime !== "object" || !lifecycle) return runtime;
+  if (!isObjectLike(runtime) || !lifecycle) return runtime;
   runtime.agentLifecycle = lifecycle;
   runtime.agentLifecycleState = lifecycle.state;
   return runtime;
@@ -66,7 +66,7 @@ export function syncLifecycleRuntimeState(runtime = null, lifecycle = null) {
 
 export function bindLifecycleToRuntime(runtime = null, lifecycle = null) {
   syncLifecycleRuntimeState(runtime, lifecycle);
-  if (runtime && typeof runtime === "object" && lifecycle) {
+  if (isObjectLike(runtime) && lifecycle) {
     runtime.agentLifecycleInitialState = lifecycle.state;
   }
   return runtime;

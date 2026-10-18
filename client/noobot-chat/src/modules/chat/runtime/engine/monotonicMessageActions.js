@@ -32,7 +32,7 @@ import {
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { clearTurnUiState } from "./turnUiStore.js";
 import { logMessageMutationDiagnostics } from "../../../debug/loggers/messageMutationDiagnosticsLogger.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 const delay = (ms) =>
   new Promise((resolve) => {
@@ -174,7 +174,7 @@ export function createMonotonicMessageActions({
     const messages = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
-    if (!targetMessage || typeof targetMessage !== "object") return null;
+    if (!isObjectLike(targetMessage)) return null;
     if (isUserMessage(targetMessage)) return targetMessage;
 
     const directIndex = findMessageIdentityIndex(targetMessage, messages);

@@ -5,7 +5,7 @@
  */
 import { createImapClient, normalizeEmailConnectionInfo } from "./connection.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 const BINARY_MIME_TYPE = "application/octet-stream";
 
@@ -60,7 +60,7 @@ async function saveEmailAttachments({ attachmentHandler = null, parsedEmail = nu
       transferEnvelopes: [],
     };
   }
-  if (!savedOutput || typeof savedOutput !== "object") {
+  if (!isObjectLike(savedOutput)) {
     return {
       attachments: [],
       transferEnvelopes: [],

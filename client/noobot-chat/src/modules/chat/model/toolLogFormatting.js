@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 export { projectToolFileDisplay } from "@noobot/event-protocol/tool-presentation";
 
 const FAILED_TOOL_STATUSES = new Set(["failed", "failure", "error", "errored"]);
@@ -23,7 +23,7 @@ export function isToolResultFailure({ success, status, result, detailText } = {}
   if (FAILED_TOOL_STATUSES.has(text(status).toLowerCase())) return true;
   for (const value of [result, detailText]) {
     const parsed = parseToolResultValue(value);
-    if (!parsed || typeof parsed !== "object") continue;
+    if (!isObjectLike(parsed)) continue;
     if (parsed.ok === false || parsed.success === false) return true;
     if (FAILED_TOOL_STATUSES.has(text(parsed.status).toLowerCase())) return true;
   }

@@ -9,7 +9,7 @@ import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js"
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { MODEL_OPERATION_KIND, MODEL_WEB_SEARCH_INSTRUCTION } from "@noobot/model-protocol";
 import { readAnthropicMessageStream } from "./anthropic-message-stream.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
@@ -46,7 +46,7 @@ function baseMessagesUrl(baseUrl = "") {
 }
 
 function parseJson(value, fallback = {}) {
-  if (value && typeof value === "object") return value;
+  if (isObjectLike(value)) return value;
   try {
     return JSON.parse(String(value || ""));
   } catch {
@@ -59,7 +59,7 @@ function textBlocks(content) {
   if (!Array.isArray(content)) return [];
   return content.flatMap((block) => {
     if (typeof block === "string") return block ? [{ type: "text", text: block }] : [];
-    if (!block || typeof block !== "object") return [];
+    if (!isObjectLike(block)) return [];
     if (block.type === "text") return [{ ...block, text: String(block.text || "") }];
 
     if (
@@ -165,7 +165,7 @@ function convertTools(tools = []) {
 }
 
 function convertToolChoice(value = "auto") {
-  if (value && typeof value === "object") {
+  if (isObjectLike(value)) {
     const type = String(value.type || "auto");
     if (type === "function") {
       return { type: "tool", name: String(value.function?.name || value.name || "") };

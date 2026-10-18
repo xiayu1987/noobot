@@ -36,7 +36,7 @@ export function createConfigSnapshot({
 }
 
 export function validateConfigSnapshot(snapshot) {
-  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+  if (!isPlainObject(snapshot)) {
     throw new TypeError("agent config snapshot must be an object");
   }
   if (snapshot.protocol !== AGENT_CONFIG_PROTOCOL_NAME) {

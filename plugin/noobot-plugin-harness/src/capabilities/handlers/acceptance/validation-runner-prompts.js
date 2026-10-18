@@ -32,7 +32,7 @@ import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptanc
 import { resolveCurrentTaskGoalText } from "../shared/plan/checklist-context.js";
 import { parseMainPlansFromPlanText } from "../shared/plan/text-protocol.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function buildTextAcceptanceValidationResult(sourceText = "") {
   const raw = text(sourceText);
@@ -128,7 +128,7 @@ export function buildPhaseAcceptanceRequestPayload({ bucket = {}, state = {} } =
 }
 
 export function appendPhaseAcceptanceReport(bucket = {}, content = "") {
-  if (!bucket || typeof bucket !== "object") return null;
+  if (!isObjectLike(bucket)) return null;
   if (!Array.isArray(bucket.phaseAcceptanceReports)) bucket.phaseAcceptanceReports = [];
   const report = {
     type: "phase",

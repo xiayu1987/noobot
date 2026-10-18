@@ -6,7 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { TOOL_BINDING_NAME_MAX_LENGTH } from "../../models/tool/binding-adapter.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export function buildMcpToolDescription(toolSpec = {}) {
   const description = text(toolSpec?.description);
@@ -70,7 +70,7 @@ export function normalizeMcpToolResult(result = {}) {
   const contentItems = Array.isArray(result?.content) ? result.content : [];
   const inputText = contentItems
     .map((item) => {
-      if (!item || typeof item !== "object") return "";
+      if (!isObjectLike(item)) return "";
       if (item.type === "text") return String(item.text || "");
       return JSON.stringify(item);
     })

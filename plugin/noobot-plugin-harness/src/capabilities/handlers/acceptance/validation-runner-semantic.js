@@ -45,7 +45,7 @@ import {
   getAcceptanceSemanticValidationMarker,
 } from "../shared/workflow/prompts.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -186,7 +186,7 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
           : null) ||
         bucket.lastAcceptanceReport ||
         null;
-      if (!targetReport || typeof targetReport !== "object") {
+      if (!isObjectLike(targetReport)) {
         return { applied: false, detail: { reportIndex, reason: "missing_target_report" } };
       }
       const parsed = buildTextAcceptanceValidationResult(responseText);

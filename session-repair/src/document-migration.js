@@ -36,13 +36,13 @@ import {
   createSemanticTransferMigration,
   migrateSemanticTransfers,
 } from "./semantic-transfer-migrations.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import { stableId } from "./repair-primitives.js";
 
 const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
 
 function validateTransferCollections(value) {
-  if (!value || typeof value !== "object") return false;
+  if (!isObjectLike(value)) return false;
   if (Array.isArray(value)) {
     for (const item of value) validateTransferCollections(item);
     return false;
@@ -268,7 +268,7 @@ function isUncommittedAggregateConflictContinuation(turn, turns, messages) {
 }
 
 export function reconcileUncommittedAggregateConflictContinuations(document = {}) {
-  if (!document || typeof document !== "object" || Array.isArray(document)) {
+  if (!isPlainObject(document)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), {
       code: "SESSION_REPAIR_SOURCE_INVALID",
     });
@@ -337,7 +337,7 @@ function migrateEventTypedReceipt(context, receipt, eventType, commandIdMap) {
   commandIdMap.set(originalCommandId, commandId);
   const migrated = { ...receipt, commandId, type: eventType };
   delete migrated.eventType;
-  if (migrated.envelope && typeof migrated.envelope === "object") {
+  if (isObjectLike(migrated.envelope)) {
     migrated.envelope = { ...migrated.envelope, commandId };
   }
   context.changed = true;

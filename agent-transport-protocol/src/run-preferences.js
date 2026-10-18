@@ -34,7 +34,7 @@ function stringList(value) {
 }
 
 function pluginModelConfig(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!isPlainObject(value)) return undefined;
   const entries = Object.entries(value).filter(([key, item]) => clean(key) && isPlainObject(item));
   return entries.length
     ? Object.fromEntries(entries.map(([key, item]) => [clean(key), { ...item }]))
@@ -42,7 +42,7 @@ function pluginModelConfig(value) {
 }
 
 function summaryPolicy(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!isPlainObject(value)) return undefined;
   const phaseSummaryLoopTurns = Number(value.phaseSummaryLoopTurns);
   const taskCheckLoopTurns = Number(value.taskCheckLoopTurns);
   const normalized = {};
@@ -83,7 +83,7 @@ export function createRunPreferences(input = {}) {
 
 export function validateRunPreferences(preferences) {
   const errors = [];
-  if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) {
+  if (!isPlainObject(preferences)) {
     return { valid: false, errors: ["preferences_not_object"] };
   }
   for (const key of Object.keys(preferences)) {
@@ -112,15 +112,13 @@ export function validateRunPreferences(preferences) {
   }
   if (
     Object.prototype.hasOwnProperty.call(preferences, "pluginModelConfig") &&
-    (!preferences.pluginModelConfig ||
-      typeof preferences.pluginModelConfig !== "object" ||
-      Array.isArray(preferences.pluginModelConfig))
+    !isPlainObject(preferences.pluginModelConfig)
   ) {
     errors.push("invalid_plugin_model_config");
   }
   if (Object.prototype.hasOwnProperty.call(preferences, "summaryPolicy")) {
     const policy = preferences.summaryPolicy;
-    if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+    if (!isPlainObject(policy)) {
       errors.push("invalid_summary_policy");
     } else {
       for (const key of Object.keys(policy)) {

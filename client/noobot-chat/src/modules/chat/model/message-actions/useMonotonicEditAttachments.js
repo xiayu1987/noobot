@@ -14,6 +14,7 @@ import {
   isImageMime,
   rawFileKey,
 } from "./attachmentFormat.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 export function useMonotonicEditAttachments({ getMessageItem, operating }) {
   const editAttachments = ref([]);
@@ -46,7 +47,7 @@ export function useMonotonicEditAttachments({ getMessageItem, operating }) {
     const next = [];
     removedHistoryAttachmentKeys.value = [];
     for (const attachment of source) {
-      if (!attachment || typeof attachment !== "object") continue;
+      if (!isObjectLike(attachment)) continue;
       const meta = cloneHistoryAttachment(attachment);
       const key = attachmentKey(meta);
       if (key && seen.has(key)) continue;

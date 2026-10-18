@@ -15,7 +15,7 @@ import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } fro
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -97,7 +97,7 @@ function composeWorkflowFinalContent({ semanticText = "", attachmentPathBlock = 
 }
 
 function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
-  if (!workflowPayload || typeof workflowPayload !== "object") return null;
+  if (!isObjectLike(workflowPayload)) return null;
   let payload = null;
   try {
     payload = JSON.parse(JSON.stringify(workflowPayload));
@@ -108,7 +108,7 @@ function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
     ? payload.execution.nodeAgentRuns
     : [];
   for (const item of nodeAgentRuns) {
-    if (!item || typeof item !== "object") continue;
+    if (!isObjectLike(item)) continue;
     delete item.nodeResultText;
   }
   return payload;
@@ -167,7 +167,7 @@ function requireSemanticTransferContent(ctx, purpose) {
 
 function applyNodeResultTransfer(subSession, transferPayload) {
   const result = subSession.result;
-  if (!result || typeof result !== "object") return;
+  if (!isObjectLike(result)) return;
   applyWorkflowTransferPayload(result, transferPayload);
   if (!Array.isArray(result.messages) || !result.messages.length) return;
   const lastIndex = result.messages.length - 1;

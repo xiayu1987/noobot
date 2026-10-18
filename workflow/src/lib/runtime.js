@@ -12,7 +12,7 @@ import BackAction from "../engine/bizinst/action/back-action.js";
 import StopAction from "../engine/bizinst/action/stop-action.js";
 import { compileWorkflowSemantic } from "./compiler.js";
 import { randomUUID } from "node:crypto";
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction, isObjectLike } from "@noobot/shared/value";
 const WORKFLOW_INSTANCE_STORE = new Map();
 let WORKFLOW_RUNTIME_ID_COUNTER = 0;
 
@@ -124,7 +124,7 @@ function ensureStepStateRuntimeId(stepState = null) {
 
 export function startWorkflowInstance({ model = null, conditionContext = null } = {}) {
   const business = new Business();
-  if (conditionContext && typeof conditionContext === "object") {
+  if (isObjectLike(conditionContext)) {
     business.conditionContext = { ...conditionContext };
   }
   const controlCenter = new BizinstTreeControlCenter();
@@ -366,12 +366,12 @@ function normalizeSemanticNodeId(input = "") {
 }
 
 function isSemanticActionNode(node = null) {
-  if (!node || typeof node !== "object") return false;
+  if (!isObjectLike(node)) return false;
   return text(node?.type).toLowerCase() === "action";
 }
 
 function isSemanticStateNode(node = null) {
-  if (!node || typeof node !== "object") return false;
+  if (!isObjectLike(node)) return false;
   return text(node?.type).toLowerCase() === "state";
 }
 
@@ -399,7 +399,7 @@ function buildSemanticRelationIndex(semantic = {}) {
 }
 
 function resolveSemanticFromInput({ semantic = null, instanceId = "" } = {}) {
-  if (semantic && typeof semantic === "object") return semantic;
+  if (isObjectLike(semantic)) return semantic;
   const record = getWorkflowInstanceRecord({ instanceId });
   return record?.semantic && typeof record.semantic === "object" ? record.semantic : {};
 }

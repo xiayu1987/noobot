@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 import { TURN_EVENT } from "./lifecycle/turn-event.js";
 import { TURN_ACTION } from "./lifecycle/turn-action.js";
 
@@ -17,7 +17,7 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
   }
   const input = event.userMessage;
   const errors = [];
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
+  if (!isPlainObject(input)) {
     errors.push("accepted_user_message_required");
   } else {
     if (!text(input.content)) errors.push("accepted_user_message_content_required");

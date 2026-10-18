@@ -5,6 +5,7 @@
  */
 import { parseArgs } from "node:util";
 import { SECURITY_RISK_LEVELS } from "@noobot/security-assessment-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 
 const OUTPUT_FORMATS = Object.freeze(["text", "json", "stream-json"]);
 
@@ -63,7 +64,7 @@ function parsePluginModelConfig(entries = []) {
     } catch {
       throw new CliUsageError("--plugin-model value must be valid JSON");
     }
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (!isPlainObject(value)) {
       throw new CliUsageError("--plugin-model value must be a JSON object");
     }
     config[entry.slice(0, separator).trim()] = value;

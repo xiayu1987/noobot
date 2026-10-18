@@ -15,7 +15,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
 
@@ -208,7 +208,7 @@ export function createRunner({
   const prepareCanonicalAgentTurnExecution = async (payload = {}) => {
     const prepared = await prepareAgentTurnExecution(payload);
     const runtime = prepared?.runtimeAgentContext?.bindings?.runtime;
-    if (runtime && typeof runtime === "object") {
+    if (isObjectLike(runtime)) {
       runtime.sessionManager = runtime.sessionManager || sessionManager;
       const currentStore = runtime.currentTurnMessages;
       const isCanonicalStore =
@@ -227,7 +227,7 @@ export function createRunner({
   };
   const runCanonicalAgent = async (payload = {}) => {
     const result = await agentRunner(payload);
-    if (!result || typeof result !== "object" || !String(result.output || "")) return result;
+    if (!isObjectLike(result) || !String(result.output || "")) return result;
     const runtime = payload?.agentContext?.bindings?.runtime;
     const messageId = text(runtime?.systemRuntime?.messageEventStream?.activeMessageId);
     if (!messageId) throw new Error("test Agent result requires the bound canonical messageId");

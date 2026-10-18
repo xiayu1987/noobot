@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 
 export const PLUGIN_PROTOCOL_VERSION = 2;
 
@@ -181,7 +181,7 @@ export function requirePluginSurface(surface = "") {
 export function validatePluginActivationResult(result = {}, { pluginId = "", surface = "" } = {}) {
   const expectedPluginId = text(pluginId);
   const expectedSurface = requirePluginSurface(surface);
-  if (!result || typeof result !== "object" || Array.isArray(result)) {
+  if (!isPlainObject(result)) {
     throw new PluginProtocolError(
       "PLUGIN_ACTIVATION_RESULT_INVALID",
       "plugin activate must return a plain object",

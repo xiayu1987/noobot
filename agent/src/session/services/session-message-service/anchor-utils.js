@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export function normalizeAnchorValue(value = "") {
   return text(value);
@@ -35,7 +35,7 @@ export function resolveUserTurnStartIndex(messages = [], anchorIndex = -1) {
 }
 
 export function clearReplacementUserRuntimeState(message = {}) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return {};
+  if (!isPlainObject(message)) return {};
   const nextMessage = { ...message };
   for (const key of [
     "channelState",

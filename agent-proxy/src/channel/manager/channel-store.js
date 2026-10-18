@@ -34,7 +34,7 @@ import {
 } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const RUNNING_CONVERSATION_STATES = Object.freeze([
   AGENT_CHANNEL_STATE.SENDING,
@@ -291,7 +291,7 @@ class ChannelStoreMethods {
         },
       },
     });
-    if (startPayload && typeof startPayload === "object") {
+    if (isObjectLike(startPayload)) {
       nextChannel.startPayload = { ...startPayload };
     }
     this.channelStore.set(normalizedChannelKey, nextChannel);
@@ -450,7 +450,7 @@ class ChannelStoreMethods {
   }
 
   recordTurnLifecycleEnvelope(channel, lifecycleEnvelope = {}) {
-    if (!channel || !lifecycleEnvelope || typeof lifecycleEnvelope !== "object") return null;
+    if (!channel || !isObjectLike(lifecycleEnvelope)) return null;
     const sessionId = text(lifecycleEnvelope?.identity?.sessionId);
     const sequence = Number(lifecycleEnvelope?.ordering?.sequence || 0);
     const eventId = text(lifecycleEnvelope?.identity?.eventId);

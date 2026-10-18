@@ -46,7 +46,7 @@ import {
 } from "./script-tool/workspace-meta.js";
 import { runDockerCommand } from "./script-tool/docker-runner.js";
 import { buildScriptToolDescription } from "./script-tool/description.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
 
@@ -127,7 +127,7 @@ export function createScriptTool({ agentContext }) {
       const generatedDataRoot = text(runtime?.systemRuntime?.sessionDir);
       if (!generatedDataRoot) throw new Error("session directory is required for script output");
       const identity = toolConfig?.configurable?.transferIdentity;
-      if (!identity || typeof identity !== "object") {
+      if (!isObjectLike(identity)) {
         throw new Error("semantic_transfer_script_identity_required");
       }
 

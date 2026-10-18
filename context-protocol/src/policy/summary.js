@@ -23,7 +23,7 @@ import {
 import { SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES } from "../message/injected-types.js";
 import { isContextControlMessage } from "./injected-message.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const summaryAlwaysRetainedInjectedTypes = new Set(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES);
 
@@ -225,7 +225,7 @@ function collectPreservedMessages(messages = [], indexes = new Set()) {
   const ids = new Set();
   for (const index of indexes instanceof Set ? indexes : []) {
     const message = source[index];
-    if (!message || typeof message !== "object") continue;
+    if (!isObjectLike(message)) continue;
     objects.add(message);
     const id = resolveContextMessageId(message);
     if (id) ids.add(id);

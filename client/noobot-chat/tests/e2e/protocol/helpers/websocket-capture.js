@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function parseJson(value) {
   try {
@@ -33,14 +33,14 @@ export function findProtocolObjects(records = []) {
     const value = frame.decoded;
     if (Array.isArray(value) && value.length >= 2)
       objects.push({ event: value[0], data: value[1], frame });
-    else if (value && typeof value === "object")
+    else if (isObjectLike(value))
       objects.push({ event: value.event || "", data: value.data || value, frame });
   }
   return objects;
 }
 
 function visit(value, output, seen) {
-  if (!value || typeof value !== "object" || seen.has(value)) return;
+  if (!isObjectLike(value) || seen.has(value)) return;
   seen.add(value);
   if (Number(value.protocolVersion) > 0) output.push(value);
   if (Array.isArray(value)) value.forEach((item) => visit(item, output, seen));

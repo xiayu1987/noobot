@@ -9,7 +9,7 @@ import { resolvePluginAssetsRelativePath } from "@noobot/workspace-protocol";
 import { CHARACTER_PLUGIN_ID } from "./contract.js";
 import { AnimationAssetSchema } from "./animation-protocol.js";
 import { migrateLegacyAssetDescriptor } from "./asset-metadata-migration.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 async function readCharacterAssetCatalog(basePath) {
   const workspacePath = text(basePath);
@@ -25,7 +25,7 @@ async function readCharacterAssetCatalog(basePath) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
-  if (!catalog || typeof catalog !== "object" || Array.isArray(catalog)) {
+  if (!isPlainObject(catalog)) {
     throw new TypeError("character asset catalog must be an object");
   }
   return Object.entries(catalog).map(([assetId, value]) => {

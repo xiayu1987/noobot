@@ -2,7 +2,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 function normalizeText(value) {
   return text(value);
@@ -14,7 +14,7 @@ function isSupportedArtifactUrl(value) {
 }
 
 export function isModelOutputArtifactContentBlock(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!isPlainObject(value)) return false;
   const type = normalizeText(value.type).toLowerCase();
   if (!type.includes("image") && !type.includes("video")) return false;
 

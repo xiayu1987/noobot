@@ -5,7 +5,7 @@
  */
 
 import { deepFreeze } from "./deep-freeze.js";
-import { text } from "./value.js";
+import { text, isObjectLike } from "./value.js";
 
 export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
   runtimeEvents: {
@@ -333,7 +333,7 @@ export function resolveRuntimeEventsExecutionLogControls(env = process.env) {
 }
 
 export function shouldRecordRuntimeExecutionLog(event = {}, { env = process.env } = {}) {
-  if (event && typeof event === "object") {
+  if (isObjectLike(event)) {
     const level = text(event?.level).toLowerCase();
     const category = text(event?.category).toLowerCase();
     const status = String(event?.status || event?.data?.status || "")

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { isPlainObject } from "@noobot/shared/value";
 
 const TRANSFER_PREFERENCE = Object.freeze({
   AUTO: "auto",
@@ -26,8 +27,7 @@ function normalizeTransferPolicy({
   maxDirectChars = LENGTH_THRESHOLDS.semanticTransfer.directChars,
   previewChars = LENGTH_THRESHOLDS.semanticTransfer.previewChars,
 } = {}) {
-  if (!policy || typeof policy !== "object" || Array.isArray(policy))
-    throw new Error("invalid_transfer_policy");
+  if (!isPlainObject(policy)) throw new Error("invalid_transfer_policy");
   const preference = policy.preference ?? TRANSFER_PREFERENCE.AUTO;
   if (!Object.values(TRANSFER_PREFERENCE).includes(preference))
     throw new Error("invalid_transfer_preference");

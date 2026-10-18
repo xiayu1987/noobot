@@ -10,11 +10,12 @@ import {
   isTurnRuntimeDeleted,
   runtimeText,
 } from "./turnRuntimeRegistryIdentity.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 export function runtimeFingerprint(value = {}) {
   const normalize = (input) => {
     if (Array.isArray(input)) return input.map(normalize);
-    if (!input || typeof input !== "object") return input;
+    if (!isObjectLike(input)) return input;
     return Object.fromEntries(
       Object.keys(input)
         .sort()

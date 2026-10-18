@@ -19,7 +19,7 @@ import {
   resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "./codec.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];
@@ -67,8 +67,8 @@ export function deriveMessageProjectionId(sourceMessageId = "", projectionType =
 }
 
 function ensureMessageMetadata(message = {}) {
-  if (!message || typeof message !== "object") return {};
-  if (!message.additional_kwargs || typeof message.additional_kwargs !== "object") {
+  if (!isObjectLike(message)) return {};
+  if (!isObjectLike(message.additional_kwargs)) {
     message.additional_kwargs = {};
   }
   return message.additional_kwargs;
@@ -76,15 +76,12 @@ function ensureMessageMetadata(message = {}) {
 
 function assignMessageId(message = {}, id = "") {
   const normalizedId = text(id);
-  if (!message || typeof message !== "object" || !normalizedId) return "";
+  if (!isObjectLike(message) || !normalizedId) return "";
   const additionalKwargs = ensureMessageMetadata(message);
   additionalKwargs.noobotMessageId = normalizedId;
-  if (message.lc_kwargs && typeof message.lc_kwargs === "object") {
+  if (isObjectLike(message.lc_kwargs)) {
     message.lc_kwargs.noobotMessageId = normalizedId;
-    if (
-      !message.lc_kwargs.additional_kwargs ||
-      typeof message.lc_kwargs.additional_kwargs !== "object"
-    ) {
+    if (!isObjectLike(message.lc_kwargs.additional_kwargs)) {
       message.lc_kwargs.additional_kwargs = {};
     }
     message.lc_kwargs.additional_kwargs.noobotMessageId = normalizedId;
@@ -93,7 +90,7 @@ function assignMessageId(message = {}, id = "") {
 }
 
 function mergeMessageState(target = {}, source = {}) {
-  if (!target || typeof target !== "object" || !source || typeof source !== "object") return target;
+  if (!isObjectLike(target) || !isObjectLike(source)) return target;
   if (resolveContextMessageSummarized(source)) {
     markContextMessageSummarized(target);
   }
@@ -142,7 +139,7 @@ function nextMessageId(store = {}) {
 }
 
 function bumpNextMessageId(store = {}, id = "") {
-  if (!store || typeof store !== "object") return;
+  if (!isObjectLike(store)) return;
   const normalizedId = text(id);
   const match = normalizedId.match(/^am_([0-9a-z]+)$/i);
   if (!match) return;
@@ -153,7 +150,7 @@ function bumpNextMessageId(store = {}, id = "") {
 }
 
 function reserveExplicitMessageIds(store = null, messageLists = []) {
-  if (!store || typeof store !== "object") return;
+  if (!isObjectLike(store)) return;
   if (store.byId instanceof Map) {
     for (const id of store.byId.keys()) bumpNextMessageId(store, id);
   }
@@ -168,7 +165,7 @@ function reserveExplicitMessageIds(store = null, messageLists = []) {
 }
 
 function canonicalizeMessage(store = null, message = null) {
-  if (!store || !message || typeof message !== "object") return message;
+  if (!store || !isObjectLike(message)) return message;
   const existingId = resolveContextMessageId(message);
   if (existingId && store.byId.has(existingId)) {
     const existingById = store.byId.get(existingId);
@@ -192,7 +189,7 @@ function canonicalizeList(store = null, messages = []) {
 }
 
 function isKnownCanonicalEntity(store = null, message = {}) {
-  if (!store || !message || typeof message !== "object") return false;
+  if (!store || !isObjectLike(message)) return false;
   if (normalizeList(store.messages).includes(message)) return true;
   const id = resolveContextMessageId(message);
   return Boolean(id && store.byId instanceof Map && store.byId.has(id));
@@ -203,7 +200,7 @@ function prepareNewCanonicalEntities(holder = {}, store = null, messages = []) {
   const entitiesBySource = new Map();
   const seen = new Set();
   for (const message of normalizeList(messages)) {
-    if (!message || typeof message !== "object" || seen.has(message)) continue;
+    if (!isObjectLike(message) || seen.has(message)) continue;
     seen.add(message);
     if (isKnownCanonicalEntity(store, message)) {
       entitiesBySource.set(message, message);
@@ -225,7 +222,7 @@ function notifyCanonicalEntitiesAdded(holder = {}, messages = [], meta = {}) {
 }
 
 function syncBlockIds(blocks = null) {
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) return blocks;
+  if (!isPlainObject(blocks)) return blocks;
   for (const staleField of ["system", "history", "incremental"].map((name) => `${name}Ids`)) {
     delete blocks[staleField];
   }
@@ -233,7 +230,7 @@ function syncBlockIds(blocks = null) {
 }
 
 export function canonicalizeMessageStore(holder = {}) {
-  if (!holder || typeof holder !== "object") return null;
+  if (!isObjectLike(holder)) return null;
   const store = resolveStore(holder);
   const blocks = isPlainObject(holder.messageBlocks) ? holder.messageBlocks : null;
   reserveExplicitMessageIds(store, [
@@ -259,7 +256,7 @@ export function getMessageId(message = {}) {
 }
 
 export function removeMessagesByIds(holder = {}, messageIds = []) {
-  if (!holder || typeof holder !== "object") {
+  if (!isObjectLike(holder)) {
     throw new TypeError("modelContext document is required");
   }
   const normalizedIds = new Set(
@@ -271,7 +268,7 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
     throw new TypeError("messageIds must contain at least one canonical message id");
   }
   const blocks = holder.messageBlocks;
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {
+  if (!isPlainObject(blocks)) {
     throw new TypeError("modelContext.messageBlocks is required");
   }
 
@@ -297,12 +294,12 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
 }
 
 export function updateMessageById(holder = {}, messageId = "", patch = {}) {
-  if (!holder || typeof holder !== "object") {
+  if (!isObjectLike(holder)) {
     throw new TypeError("modelContext document is required");
   }
   const normalizedId = text(messageId);
   if (!normalizedId) throw new TypeError("messageId is required");
-  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+  if (!isPlainObject(patch)) {
     throw new TypeError("message patch must be an object");
   }
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
@@ -334,7 +331,7 @@ export function markMessagesSummarizedByIds(holder = {}, ids = []) {
 }
 
 export function replaceMessages(holder = {}, messages = []) {
-  if (!holder || typeof holder !== "object") return [];
+  if (!isObjectLike(holder)) return [];
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const prepared = prepareNewCanonicalEntities(holder, store, messages);
   const canonicalMessages = canonicalizeList(
@@ -369,7 +366,7 @@ export function replaceMessages(holder = {}, messages = []) {
 }
 
 export function replaceMessageProjection(holder = {}, messages = []) {
-  if (!holder || typeof holder !== "object") return [];
+  if (!isObjectLike(holder)) return [];
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const canonicalMessages = canonicalizeList(store, messages);
   if (!Array.isArray(holder.messages)) holder.messages = [];
@@ -378,7 +375,7 @@ export function replaceMessageProjection(holder = {}, messages = []) {
 }
 
 export function pruneSummarizedIncrementalMessages(holder = {}) {
-  if (!holder || typeof holder !== "object") return 0;
+  if (!isObjectLike(holder)) return 0;
   const keepActive = (message = {}) => !resolveContextMessageSummarized(message);
   const messages = Array.isArray(holder.messages) ? holder.messages : [];
   const blocks = isPlainObject(holder.messageBlocks) ? holder.messageBlocks : null;
@@ -399,7 +396,7 @@ export function pruneSummarizedIncrementalMessages(holder = {}) {
 }
 
 export function writeMessageBlocks(holder = {}, blocks = {}) {
-  if (!holder || typeof holder !== "object") return null;
+  if (!isObjectLike(holder)) return null;
   const existing = isPlainObject(holder.messageBlocks) ? holder.messageBlocks : {};
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const prepared = prepareNewCanonicalEntities(holder, store, [
@@ -438,7 +435,7 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
 }
 
 export function appendMessage(holder = {}, message = {}, { block = "" } = {}) {
-  if (!holder || typeof holder !== "object") return message;
+  if (!isObjectLike(holder)) return message;
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const isNewEntity = !isKnownCanonicalEntity(store, message);
   const identifiedMessage = isNewEntity ? applyActiveTurnIdentity(holder, message) : message;

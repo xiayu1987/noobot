@@ -29,7 +29,7 @@ import {
 } from "../observability/context-identity-debug.js";
 import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
 import { initializeAgentModelHost } from "./model-port-host.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function trimmedText(value) {
   return text(value);
@@ -103,7 +103,7 @@ function arrayOrEmpty(value) {
 }
 
 function normalizeMessageBlocks(messageBlocks) {
-  if (!messageBlocks || typeof messageBlocks !== "object") {
+  if (!isObjectLike(messageBlocks)) {
     return { system: [], history: [], incremental: [] };
   }
   return {

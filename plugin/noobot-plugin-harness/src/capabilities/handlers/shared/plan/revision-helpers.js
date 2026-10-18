@@ -16,7 +16,7 @@ import {
   getPlanningRefinementMarker,
 } from "../workflow/prompts.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "./acceptance-status.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function toRefinementTarget(item = {}) {
   return { index: Number(item.id), task: text(item.content) };
@@ -82,7 +82,7 @@ export function createPlanRevisionHelpers({
   ensureHarnessBucket,
 } = {}) {
   function ensurePlanTextBucket(bucket = {}) {
-    if (!bucket || typeof bucket !== "object") return {};
+    if (!isObjectLike(bucket)) return {};
     if (typeof bucket.planText !== "string") bucket.planText = "";
     if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
     if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes))

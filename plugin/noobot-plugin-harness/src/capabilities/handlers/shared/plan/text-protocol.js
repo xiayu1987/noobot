@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 const MAIN_PLAN_LINE = /^\s*(?<mainId>\d+)\.\s+(?<content>.+?)\s*$/;
 const SUB_PLAN_LINE = /^\s*(?<mainId>\d+)\.(?<subIndex>\d+)\.?\s+(?<content>.+?)\s*$/;
@@ -29,11 +29,7 @@ function splitLines(sourceText = "") {
 function ensurePlanDocumentShape(planDocument = null) {
   const doc = planDocument && typeof planDocument === "object" ? planDocument : {};
   if (!Array.isArray(doc.mainPlans)) doc.mainPlans = [];
-  if (
-    !doc.subPlansByMainId ||
-    typeof doc.subPlansByMainId !== "object" ||
-    Array.isArray(doc.subPlansByMainId)
-  ) {
+  if (!isPlainObject(doc.subPlansByMainId)) {
     doc.subPlansByMainId = {};
   }
   return doc;

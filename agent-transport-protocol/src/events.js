@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export const AGENT_TRANSPORT_EVENT = Object.freeze({
   READY: "transport_ready",
@@ -110,7 +110,7 @@ function collectChannelStateScopeErrors(channelState, errors) {
 
 export function validateAgentChannelState(channelState = {}) {
   const errors = [];
-  if (!channelState || typeof channelState !== "object" || Array.isArray(channelState)) {
+  if (!isPlainObject(channelState)) {
     return { valid: false, errors: ["channel_state_not_object"] };
   }
   for (const key of Object.keys(channelState)) {
@@ -167,7 +167,7 @@ export function createAgentTransportError({
 
 export function validateAgentTransportError(errorEvent = {}) {
   const errors = [];
-  if (!errorEvent || typeof errorEvent !== "object" || Array.isArray(errorEvent)) {
+  if (!isPlainObject(errorEvent)) {
     return { valid: false, errors: ["transport_error_not_object"] };
   }
   const allowed = new Set([
@@ -184,11 +184,7 @@ export function validateAgentTransportError(errorEvent = {}) {
   if (Number(errorEvent.protocolVersion) !== 1) errors.push("unsupported_transport_error_version");
   if (!text(errorEvent.code)) errors.push("missing_transport_error_code");
   if (!text(errorEvent.message)) errors.push("missing_transport_error_message");
-  if (
-    !errorEvent.identity ||
-    typeof errorEvent.identity !== "object" ||
-    Array.isArray(errorEvent.identity)
-  ) {
+  if (!isPlainObject(errorEvent.identity)) {
     errors.push("transport_error_identity_not_object");
   } else {
     const identityAllowed = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);
@@ -237,7 +233,7 @@ export function createAgentCommandReceipt({
 
 export function validateAgentCommandReceipt(receipt = {}) {
   const errors = [];
-  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+  if (!isPlainObject(receipt)) {
     return { valid: false, errors: ["receipt_not_object"] };
   }
   const allowed = new Set([
@@ -257,11 +253,7 @@ export function validateAgentCommandReceipt(receipt = {}) {
   if (!text(receipt.commandType)) errors.push("missing_command_type");
   if (!COMMAND_RECEIPT_OUTCOMES.has(text(receipt.outcome).toLowerCase()))
     errors.push("invalid_outcome");
-  if (
-    !receipt.identity ||
-    typeof receipt.identity !== "object" ||
-    Array.isArray(receipt.identity)
-  ) {
+  if (!isPlainObject(receipt.identity)) {
     errors.push("identity_not_object");
   } else {
     const identityAllowed = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);
@@ -274,7 +266,7 @@ export function validateAgentCommandReceipt(receipt = {}) {
     errors.push("invalid_occurred_at");
   }
   if (text(receipt.outcome).toLowerCase() === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
-    if (!receipt.error || typeof receipt.error !== "object" || Array.isArray(receipt.error)) {
+    if (!isPlainObject(receipt.error)) {
       errors.push("missing_failure_error");
     } else if (!text(receipt.error.message)) {
       errors.push("missing_failure_message");
@@ -288,7 +280,7 @@ export function validateAgentCommandReceipt(receipt = {}) {
 export function createAgentTransportEvent({ event, data, channelSessionId = "" } = {}) {
   const normalizedEvent = text(event);
   if (!normalizedEvent) throw new TypeError("missing_transport_event");
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
+  if (!isPlainObject(data)) {
     throw new TypeError("invalid_transport_event_data");
   }
   const normalizedChannelSessionId = text(channelSessionId);

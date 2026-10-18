@@ -37,7 +37,7 @@ import {
   buildScenarioPolicyPromptText,
   resolveScenarioPolicyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -111,7 +111,7 @@ export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
       if (!normalizedText)
         return { applied: false, detail: { reason: "empty_phase_acceptance_output" } };
       const report = appendPhaseAcceptanceReport(bucket, normalizedText);
-      if (report && state?.flags && typeof state.flags === "object") {
+      if (report && isObjectLike(state?.flags)) {
         state.flags.phaseAcceptanceTriggeredThisTurn = true;
       }
       return {
@@ -222,7 +222,7 @@ export async function runPhaseAcceptanceBySeparateModel(
   const responseText = text(response?.output?.text);
   if (!responseText) return false;
   appendPhaseAcceptanceReport(bucket, responseText);
-  if (state?.flags && typeof state.flags === "object") {
+  if (isObjectLike(state?.flags)) {
     state.flags.phaseAcceptanceTriggeredThisTurn = true;
   }
   const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
@@ -284,7 +284,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     const fallbackText = buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
     const report = appendPhaseAcceptanceReport(bucket, fallbackText);
     if (!report) return false;
-    if (state?.flags && typeof state.flags === "object") {
+    if (isObjectLike(state?.flags)) {
       state.flags.phaseAcceptanceTriggeredThisTurn = true;
     }
     appendCapabilityLog(ctx, {
@@ -358,7 +358,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
   const report = appendPhaseAcceptanceReport(bucket, reportText);
   if (!report) return false;
-  if (state?.flags && typeof state.flags === "object") {
+  if (isObjectLike(state?.flags)) {
     state.flags.phaseAcceptanceTriggeredThisTurn = true;
   }
   appendCapabilityLog(ctx, {

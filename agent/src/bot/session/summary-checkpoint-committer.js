@@ -19,10 +19,10 @@ import {
   resolveContextMessageId,
   resolveContextMessageSummarized,
 } from "@noobot/context-protocol/message/codec";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function createSummaryCompletionMarker(summaryCompletion = null) {
-  if (!summaryCompletion || typeof summaryCompletion !== "object") return null;
+  if (!isObjectLike(summaryCompletion)) return null;
   if (!Array.isArray(summaryCompletion.summarizedMessageIds)) return null;
   const summarizedMessageIds = new Set(
     summaryCompletion.summarizedMessageIds.map((id) => text(id)).filter(Boolean),
@@ -102,7 +102,7 @@ function resolveRetainedCheckpointEvidenceIds(turnMessages = []) {
 }
 
 function normalizeSummaryCompletion(summaryCompletion = null, retainedIds = new Set()) {
-  if (!summaryCompletion || typeof summaryCompletion !== "object") return summaryCompletion;
+  if (!isObjectLike(summaryCompletion)) return summaryCompletion;
   return {
     ...summaryCompletion,
     summarizedMessageIds: Array.isArray(summaryCompletion.summarizedMessageIds)

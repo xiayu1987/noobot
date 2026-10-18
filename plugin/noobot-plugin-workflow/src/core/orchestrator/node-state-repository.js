@@ -8,7 +8,7 @@ import {
   isWorkflowNodeTerminalStatus,
   normalizeWorkflowNodeStatus,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export { WORKFLOW_NODE_STATUS };
 
@@ -170,7 +170,7 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
   const runs = new Map();
   if (initialState instanceof Map) {
     for (const [key, value] of initialState.entries()) runs.set(key, cloneRun(value));
-  } else if (initialState && typeof initialState === "object") {
+  } else if (isObjectLike(initialState)) {
     for (const [key, value] of Object.entries(initialState)) {
       const run = {
         workflowRunId: normalizeText(value.workflowRunId || key),

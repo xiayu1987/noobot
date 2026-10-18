@@ -11,7 +11,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { z } from "zod";
-import { isFunction, isPlainObject, text } from "@noobot/shared/value";
+import { isFunction, isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export function resolveHarnessDenyToolNames(input = null) {
   if (!Array.isArray(input)) return [];
@@ -172,7 +172,7 @@ const HarnessOptionsSchema = z
 function normalizeModelByPurpose(...items) {
   const out = {};
   for (const item of items) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    if (!isPlainObject(item)) continue;
     for (const [key, value] of Object.entries(item)) {
       const normalizedKey = text(key);
       if (!normalizedKey) continue;
@@ -185,7 +185,7 @@ function normalizeModelByPurpose(...items) {
 }
 
 function resolveExplicitPlanRefinementEnabledOption(source = {}) {
-  if (!source || typeof source !== "object") return undefined;
+  if (!isObjectLike(source)) return undefined;
   const candidates = [
     source.planRefinementEnabled,
     source.enablePlanRefinement,

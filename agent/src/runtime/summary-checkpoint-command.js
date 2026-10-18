@@ -9,6 +9,7 @@ import {
   acknowledgeMainFlowSummaryCheckpoint,
   peekMainFlowSummaryCheckpoint,
 } from "./main-flow-control.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 export async function consumeSummaryCheckpointCommand({
   runtime = null,
@@ -22,7 +23,7 @@ export async function consumeSummaryCheckpointCommand({
     const result = await runtime?.commitSummaryCheckpoint?.({
       summaryCompletion: instruction,
     });
-    if (result?.committed === true && loopState && typeof loopState === "object") {
+    if (result?.committed === true && isObjectLike(loopState)) {
       loopState.turnMessages = runtime?.currentTurnMessages?.toArray?.() || loopState.turnMessages;
     }
     if (result?.committed !== true) {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ref } from "vue";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const PSEUDO_ROUTE_SESSION_KEY = "session";
 export const PSEUDO_ROUTE_PANEL_KEY = "panel";
@@ -156,8 +156,7 @@ export function usePseudoRoute({
 
     if (
       nextUrl === currentUrl &&
-      currentPseudoRoute &&
-      typeof currentPseudoRoute === "object" &&
+      isObjectLike(currentPseudoRoute) &&
       isSamePseudoRoute(currentPseudoRoute, nextRoute, { allowedPanels: allowedPanelSet })
     ) {
       return;

@@ -8,7 +8,7 @@ import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { parsePluginManifest } from "@noobot/plugin-protocol/manifest";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
@@ -105,7 +105,7 @@ async function discoverFrontendPluginEntries() {
     const pluginDir = path.resolve(pluginRoot, dirent.name);
     const manifestPath = path.resolve(pluginDir, "manifest.json");
     const sourceManifest = await readJsonSafe(manifestPath);
-    if (!sourceManifest || typeof sourceManifest !== "object") continue;
+    if (!isObjectLike(sourceManifest)) continue;
     const manifest = parsePluginManifest(sourceManifest);
     if (!manifest.contributes.frontend) continue;
     const frontendEntry = text(manifest?.entries?.frontend);

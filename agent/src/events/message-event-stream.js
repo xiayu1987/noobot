@@ -21,17 +21,17 @@ import {
   isTransientMessageEventType,
 } from "@noobot/event-protocol/message-event";
 import { AGENT_RUN_EVENT } from "./run-event.js";
-import { firstText, text } from "@noobot/shared/value";
+import { firstText, text, isObjectLike } from "@noobot/shared/value";
 
 export { assertMessageEventPayload };
 
 function runtimeState(runtime = {}) {
-  if (!runtime || typeof runtime !== "object") return {};
+  if (!isObjectLike(runtime)) return {};
   const systemRuntime =
     runtime.systemRuntime && typeof runtime.systemRuntime === "object"
       ? runtime.systemRuntime
       : (runtime.systemRuntime = {});
-  if (!systemRuntime.messageEventStream || typeof systemRuntime.messageEventStream !== "object") {
+  if (!isObjectLike(systemRuntime.messageEventStream)) {
     systemRuntime.messageEventStream = { activeMessageId: "" };
   }
   return systemRuntime;
@@ -146,7 +146,7 @@ export function currentAssistantPresentationMessageId(runtime = {}) {
 
 export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   const id = text(messageId);
-  if (!message || typeof message !== "object" || !id) return message;
+  if (!isObjectLike(message) || !id) return message;
 
   const target = { ...message };
   target.id = id;

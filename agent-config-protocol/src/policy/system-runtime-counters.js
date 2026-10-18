@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export const SYSTEM_RUNTIME_COUNTER_KEYS = Object.freeze([
   "phaseSummaryLoopCount",
@@ -38,7 +38,7 @@ export function projectSystemRuntimeTurnProgress(systemRuntime) {
 }
 
 export function applySystemRuntimeTurnProgress(systemRuntime, turnProgress) {
-  if (!systemRuntime || typeof systemRuntime !== "object") return null;
+  if (!isObjectLike(systemRuntime)) return null;
   const normalized = projectSystemRuntimeTurnProgress(turnProgress);
   for (const key of SYSTEM_RUNTIME_COUNTER_KEYS) {
     systemRuntime[key] = normalized[key];
@@ -50,7 +50,7 @@ export function applySystemRuntimeTurnProgress(systemRuntime, turnProgress) {
 }
 
 export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
-  if (!systemRuntime || typeof systemRuntime !== "object") return;
+  if (!isObjectLike(systemRuntime)) return;
 
   for (const key of SYSTEM_RUNTIME_COUNTER_KEYS) {
     systemRuntime[key] = normalizeSystemRuntimeCounterValue(systemRuntime[key]);

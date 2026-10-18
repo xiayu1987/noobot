@@ -8,7 +8,7 @@ import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
@@ -178,8 +178,7 @@ function materializeJournal(records, order = [], baseMessages = []) {
     const uid = text(record?.messageUid);
     if (!uid) continue;
     if (record.op === "remove") byUid.delete(uid);
-    else if (record.op === "upsert" && record.message && typeof record.message === "object")
-      byUid.set(uid, record.message);
+    else if (record.op === "upsert" && isObjectLike(record.message)) byUid.set(uid, record.message);
   }
   const ordered = (Array.isArray(order) ? order : [])
     .map((uid) => byUid.get(text(uid)))

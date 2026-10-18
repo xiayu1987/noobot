@@ -15,7 +15,7 @@ import {
   pickLightPluginMeta,
   pickLightTransferEnvelopes,
 } from "./message-metadata-projection.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 
@@ -71,7 +71,7 @@ function compactMessageSummary(summary = {}) {
 }
 
 export function buildMessageSummary(message = {}) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return null;
+  if (!isPlainObject(message)) return null;
   const summary = {
     role: text(message?.role),
     content: message?.content || "",
@@ -112,7 +112,7 @@ export function buildThinkingDetailCountByMessage(messages = []) {
   const routeByMessage = new WeakMap();
   const factsByRoute = new Map();
   messages.forEach((message, index) => {
-    if (!message || typeof message !== "object" || Array.isArray(message)) return;
+    if (!isPlainObject(message)) return;
     const turnScopeId = text(message?.turnScopeId);
     const dialogProcessId = text(message?.dialogProcessId);
     const route = turnScopeId
@@ -127,7 +127,7 @@ export function buildThinkingDetailCountByMessage(messages = []) {
       message?.activityTimeline || [],
     );
     for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isPlainObject(item)) continue;
       const key = text(item?.key || item?.toolCallId);
       const existingIndex = key
         ? facts.toolTimeline.findIndex((entry) => text(entry?.key || entry?.toolCallId) === key)
@@ -152,7 +152,7 @@ const TOOL_MESSAGE_TYPES = new Set(["tool_call", "tool_result"]);
 const DISPLAY_PASSTHROUGH_KEYS = ["pluginMessage", "done", "pending", "error"];
 
 function readDisplayRole(message) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return "";
+  if (!isPlainObject(message)) return "";
   const role = text(message.role);
   if (!role || isInjectedMessage(message)) return "";
   return DISPLAY_ROLES.has(role) ? role : "";

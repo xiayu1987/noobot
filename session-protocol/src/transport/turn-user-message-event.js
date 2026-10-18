@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as trim } from "@noobot/shared/value";
+import { text as trim, isPlainObject } from "@noobot/shared/value";
 
 function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
   const errors = [];
@@ -19,7 +19,7 @@ function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
   if (!Number.isInteger(aggregateVersion) || aggregateVersion < 1) {
     errors.push("aggregate_version_invalid");
   }
-  if (!userMessage || typeof userMessage !== "object" || Array.isArray(userMessage)) {
+  if (!isPlainObject(userMessage)) {
     errors.push("user_message_missing");
     return { ok: false, errors };
   }
@@ -44,7 +44,7 @@ function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
     errors.push("user_message_attachments_missing");
   }
   for (const attachment of attachmentList) {
-    if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) {
+    if (!isPlainObject(attachment)) {
       errors.push("attachment_invalid");
       continue;
     }

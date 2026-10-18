@@ -23,7 +23,7 @@ import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 export class SessionExecutionRunner {
   constructor({
@@ -268,7 +268,7 @@ export class SessionExecutionRunner {
         userInterjectionPort,
         committedTurnResult,
       });
-      if (dispatchRuntime && typeof dispatchRuntime === "object") {
+      if (isObjectLike(dispatchRuntime)) {
         lifecycleRuntime = dispatchRuntime;
       }
       emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {

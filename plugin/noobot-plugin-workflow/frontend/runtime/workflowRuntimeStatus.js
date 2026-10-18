@@ -12,12 +12,12 @@ function normalizeStatus(value = "") {
 }
 
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
   return function resolveStepStatus(stepItem = {}) {
     const failure = stepItem?.stepFailure;
-    if (failure && typeof failure === "object") {
+    if (isObjectLike(failure)) {
       if (text(failure?.message || failure?.error)) return "failed";
     } else if (text(failure)) {
       return "failed";

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function assertSessionIdentity(session, expected) {
   expect(session.sessionId).toBe(expected.sessionId);
@@ -33,7 +33,7 @@ export function assertNoLegacySessionProtocolKeys(value) {
       item.forEach((entry, index) => visit(entry, `${location}[${index}]`));
       return;
     }
-    if (!item || typeof item !== "object") return;
+    if (!isObjectLike(item)) return;
     for (const [key, entry] of Object.entries(item)) {
       if (forbidden.has(key)) violations.push(`${location}.${key}`);
       visit(entry, `${location}.${key}`);

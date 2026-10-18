@@ -26,7 +26,7 @@ const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
 
 function normalizeFinalizeIntent(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!isPlainObject(value)) return null;
   return {
     type: clean(value.type),
     commandId: clean(value.commandId),
@@ -124,7 +124,7 @@ function normalizeCommandReceipt(item) {
 function normalizeRecord(source, projector) {
   const output = {};
   for (const [key, value] of Object.entries(source || {})) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    if (!isPlainObject(value)) continue;
     const projected = projector(value, key);
     if (projected) output[projected.turnScopeId] = projected;
   }

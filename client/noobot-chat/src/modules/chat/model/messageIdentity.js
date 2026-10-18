@@ -8,7 +8,7 @@ import {
   canonicalizeTurnScopeId,
   turnScopeIdentityKey,
 } from "@noobot/session-protocol/turn-scope-identity";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function trim(value = "") {
   return text(value);
@@ -165,7 +165,7 @@ export function isAssistantWithoutTurnScope(messageItem = {}) {
 }
 
 export function clearTurnScopedAssets(messageItem = {}) {
-  if (!messageItem || typeof messageItem !== "object") return messageItem;
+  if (!isObjectLike(messageItem)) return messageItem;
   messageItem.attachments = [];
   messageItem.toolTimeline = [];
   messageItem.activityTimeline = [];

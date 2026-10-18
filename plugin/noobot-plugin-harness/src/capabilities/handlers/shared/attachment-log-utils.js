@@ -27,7 +27,7 @@ export function normalizeTransferPayload(payload = {}) {
 }
 
 export function applyTransferPayloadToMessage(message = {}, payload = {}) {
-  if (!message || typeof message !== "object") return message;
+  if (!isObjectLike(message)) return message;
   const transferPayload = normalizeTransferPayload(payload);
   if (transferPayload.transferEnvelopes.length) {
     message.transferEnvelopes = mergeTransferEnvelopes(
@@ -39,7 +39,7 @@ export function applyTransferPayloadToMessage(message = {}, payload = {}) {
 }
 
 import { isHarnessInjectedMessage as isHarnessInjectedMessageBase } from "./message/utils.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function isHarnessInjectedMessage(message = {}) {
   return isHarnessInjectedMessageBase(message, { role: "user" });

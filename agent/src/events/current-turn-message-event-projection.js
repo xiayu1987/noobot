@@ -13,10 +13,10 @@ import {
   reduceCanonicalToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
 import { resolveMessageEventModelMessageId } from "@noobot/event-protocol/message-event";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
-  if (!runtime || typeof runtime !== "object") {
+  if (!isObjectLike(runtime)) {
     throw new Error("current Turn message event projection requires runtime");
   }
   const store = runtime.currentTurnMessages;
@@ -28,7 +28,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
 
   const pendingMessageEvents = [];
   runtime.projectCurrentTurnMessageEvent = async (envelope = {}) => {
-    if (!envelope || typeof envelope !== "object") return null;
+    if (!isObjectLike(envelope)) return null;
     const eventId = text(envelope?.identity?.eventId);
     if (!eventId) return null;
     if (!isCanonicalToolMessageEvent(envelope) && !isCanonicalActivityMessageEvent(envelope)) {

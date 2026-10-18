@@ -10,6 +10,7 @@ import { compactThinkingTimeline } from "../session-summary-builders/message-sum
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 function resolveSummaryDetailPath(sessionDir = "", file = "") {
   return resolveScopedArtifactPath({
@@ -81,7 +82,7 @@ export async function hydrateSessionSummaryDetails({ storageService, sessionDir,
   const messages = (Array.isArray(payload?.messages) ? payload.messages : []).map(
     async (message) => {
       const ref = message?.thinkingDetailRef;
-      if (!ref || typeof ref !== "object") return message;
+      if (!isObjectLike(ref)) return message;
       const detail = await readJsonWithStorage({
         storageService,
         artifactPath: resolveSummaryDetailPath(sessionDir, ref.file),

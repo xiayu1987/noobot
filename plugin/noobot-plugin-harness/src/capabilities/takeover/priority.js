@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 function resolveDirectivePriority(value, fallback = 0) {
   const priority = Number(value);
   return Number.isFinite(priority) ? priority : fallback;
 }
 
 function getNestedValue(source = {}, key = "") {
-  if (!source || typeof source !== "object" || !key) return undefined;
+  if (!isObjectLike(source) || !key) return undefined;
   const segments = String(key)
     .split(".")
     .map((item) => item.trim())
     .filter(Boolean);
   let current = source;
   for (const segment of segments) {
-    if (!current || typeof current !== "object") return undefined;
+    if (!isObjectLike(current)) return undefined;
     current = current[segment];
   }
   return current;

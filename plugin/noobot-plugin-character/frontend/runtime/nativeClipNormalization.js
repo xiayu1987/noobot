@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import * as THREE from "three";
+import { isObjectLike } from "@noobot/shared/value";
 
 const ROOT_TRANSLATION_NODE_NAMES = new Set(["body", "hips", "pelvis", "root"]);
 const bindTranslationsByModel = new WeakMap();
@@ -36,7 +37,7 @@ export function makeNativeClipInPlace(clip, model) {
   let translations = bindTranslationsByModel.get(model);
   if (!translations) {
     translations = collectNativeRootTranslations(model);
-    if (model && typeof model === "object") bindTranslationsByModel.set(model, translations);
+    if (isObjectLike(model)) bindTranslationsByModel.set(model, translations);
   }
   const tracks = clip.tracks.map((track) => {
     if (!track.name.endsWith(".position")) return track;

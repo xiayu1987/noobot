@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isObjectLike } from "@noobot/shared/value";
 export function resolveToolHookMeta(configuredMeta = null, fallbackMeta = {}) {
   const runtimeMeta = configuredMeta && typeof configuredMeta === "object" ? configuredMeta : null;
-  if (runtimeMeta?.harness && typeof runtimeMeta.harness === "object") return runtimeMeta;
+  if (isObjectLike(runtimeMeta?.harness)) return runtimeMeta;
   return fallbackMeta && typeof fallbackMeta === "object" ? fallbackMeta : {};
 }

@@ -9,7 +9,7 @@ import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
   MODEL_PROVIDER_DECLARATION_VISIBILITY,
 } from "@noobot/model-protocol";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, isObjectLike } from "@noobot/shared/value";
 import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_ITEM_TYPE,
@@ -348,7 +348,7 @@ function projectConfigNode(node, value, options) {
     return projectDelegatedContract(node.delegatedContract, value, options);
   }
   if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    if (!isPlainObject(value)) return undefined;
     return Object.fromEntries(
       Object.entries(value)
         .map(([key, child]) => [key, projectConfigNode(node.entry, child, options)])
@@ -356,7 +356,7 @@ function projectConfigNode(node, value, options) {
     );
   }
   if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT && node.fields && !node.open) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    if (!isPlainObject(value)) return undefined;
     return Object.fromEntries(
       Object.entries(node.fields)
         .map(([key, child]) => {
@@ -370,7 +370,7 @@ function projectConfigNode(node, value, options) {
 }
 
 function projectDelegatedContract(contract, value, options) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!isPlainObject(value)) return undefined;
   const properties =
     contract?.properties && typeof contract.properties === "object" ? contract.properties : {};
   return Object.fromEntries(
@@ -388,7 +388,7 @@ export function projectConfigDocumentForAccess(
     representation = CONFIG_PATH_REPRESENTATION.PERSISTED,
   } = {},
 ) {
-  if (!document || typeof document !== "object" || Array.isArray(document)) return {};
+  if (!isPlainObject(document)) return {};
   if (!Object.values(CONFIG_NODE_ACCESS).includes(access)) {
     throw new TypeError(`unsupported config node access: ${access}`);
   }
@@ -400,7 +400,7 @@ export function projectConfigDocumentForAccess(
 
 export function projectUserVisibleConfigDeclarations(document = {}) {
   const providers = document?.providers;
-  if (!providers || typeof providers !== "object" || Array.isArray(providers)) {
+  if (!isPlainObject(providers)) {
     return Object.freeze({ providers: Object.freeze({}) });
   }
   const projectedProviders = Object.fromEntries(
@@ -451,14 +451,14 @@ export function listStructureModelReferences() {
 
 function assertConfigStructure(node = CONFIG_STRUCTURE, path = []) {
   const where = path.length ? path.join(".") : "$";
-  if (!node || typeof node !== "object" || typeof node.kind !== "string") {
+  if (!isObjectLike(node) || typeof node.kind !== "string") {
     throw new TypeError(`config structure node is not declared at ${where}`);
   }
   if (!Object.values(CONFIG_STRUCTURE_KIND).includes(node.kind)) {
     throw new TypeError(`unsupported config structure kind at ${where}: ${node.kind}`);
   }
   if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT && !node.delegatedContract && !node.open) {
-    if (!node.fields || typeof node.fields !== "object") {
+    if (!isObjectLike(node.fields)) {
       throw new TypeError(`config structure object fields are required at ${where}`);
     }
     for (const [key, child] of Object.entries(node.fields)) {

@@ -16,7 +16,7 @@ import {
   createConnectorSecretAad,
   normalizeConnectorSecretEnvelope,
 } from "@noobot/connector-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 const scrypt = promisify(deriveKey);
 const KEY_DOCUMENT_VERSION = 1;
@@ -228,7 +228,7 @@ export class ConnectorSecretVault {
         }),
       });
       const parameters = JSON.parse(plaintext.toString("utf8"));
-      if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) {
+      if (!isPlainObject(parameters)) {
         throw new TypeError("connector parameters payload must be an object");
       }
       return Object.freeze({ ...parameters });

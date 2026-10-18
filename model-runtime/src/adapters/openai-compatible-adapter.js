@@ -12,6 +12,7 @@ import {
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { classifyTransportError } from "../policies/default-retry-policy.js";
 import { executeOpenAiOperation } from "./openai-capability-adapter.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 function applyInvocationOverrides(target, overrides = {}) {
   if (!target || typeof target.invocationParams !== "function") return target;
@@ -23,7 +24,7 @@ function applyInvocationOverrides(target, overrides = {}) {
     const next = { ...(params && typeof params === "object" ? params : {}), ...overrides };
     if (Object.prototype.hasOwnProperty.call(overrides, "reasoning_effort")) {
       next.reasoning_effort = overrides.reasoning_effort;
-      if (next.reasoning && typeof next.reasoning === "object") {
+      if (isObjectLike(next.reasoning)) {
         next.reasoning = { ...next.reasoning, effort: overrides.reasoning_effort };
       }
     }

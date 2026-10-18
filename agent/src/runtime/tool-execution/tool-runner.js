@@ -102,8 +102,7 @@ function mergeToolResultWithInputTransferPayload(
 }
 
 function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
-  if (!inputTransfer || typeof inputTransfer !== "object" || Array.isArray(inputTransfer))
-    return {};
+  if (!isPlainObject(inputTransfer)) return {};
   const transferEnvelopes = Array.isArray(inputTransfer.transferEnvelopes)
     ? inputTransfer.transferEnvelopes
     : [];
@@ -114,13 +113,13 @@ function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
 
 function transferEnvelopesFromStructuredResult(rawResult = null) {
   const value = typeof rawResult === "string" ? parseJsonObjectSafely(rawResult) : rawResult;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  if (!isPlainObject(value)) return [];
   return Array.isArray(value.transferEnvelopes) ? value.transferEnvelopes : [];
 }
 
 function resourceRefsFromResult(value = null) {
   const parsed = typeof value === "string" ? parseJsonObjectSafely(value) : value;
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  if (!isPlainObject(parsed)) return [];
   return [
     ...(Array.isArray(parsed.resources) ? parsed.resources : []),
     ...(Array.isArray(parsed.input_resources) ? parsed.input_resources : []),

@@ -14,7 +14,7 @@ import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS, WEB_SEARCH_MODE } from "../constants/index.js";
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 const WEB_SEARCH_FLOW_NAME = "agent.do_search_web";
 const WEB_SEARCH_PURPOSE_NAME = "do_search_web";
@@ -53,7 +53,7 @@ function resolveWebSearchToolConfig(runtime = {}) {
 
 function resolveModelWebSearchConfig(toolCfg = {}) {
   const config = toolCfg?.model_web_search;
-  if (!config || typeof config !== "object") {
+  if (!isObjectLike(config)) {
     throw new TypeError("tools.do_search_web.model_web_search is required");
   }
   return config;

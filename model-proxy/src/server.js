@@ -7,7 +7,7 @@ import http from "node:http";
 import { createProxyServer as createHttpProxyServer } from "http-proxy-3";
 import { getHeaderValue } from "./common.js";
 import { decodeBodyByEncoding, resolveFinalResponseBodyText } from "./response-body.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function normalizeTerminalError(error = null) {
   if (!error) return null;
@@ -85,7 +85,7 @@ function createHeaderExtractors({
   }
 
   function extractParentSessionIdFromHeaders(headers = {}) {
-    if (!headers || typeof headers !== "object") return "";
+    if (!isObjectLike(headers)) return "";
     const candidates = [
       parentSessionIdHeaderKey,
       "parentsessionid",

@@ -12,7 +12,7 @@ import { initializeCurrentTurnMessageEventProjection } from "../../../src/events
 import { createModelContext } from "@noobot/context-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 export function createTestTurnMessagesStore(messages = []) {
   return createCurrentTurnMessagesStore(messages);
@@ -23,7 +23,7 @@ export function createTestTurnTasksStore(tasks = []) {
 }
 
 export function createTestModelPort(providerModel = {}) {
-  if (!providerModel || typeof providerModel !== "object") {
+  if (!isObjectLike(providerModel)) {
     throw new TypeError("test ModelPort requires a provider model");
   }
   return {
@@ -86,7 +86,7 @@ export function bindTestTurnMessageEventDomain(runtime = {}, identity = "test-tu
 
 export function prepareTestTurnExecution(modelState = {}, loopState = {}, identity = "test-turn") {
   const runtime = modelState?.runtime;
-  if (!runtime || typeof runtime !== "object") {
+  if (!isObjectLike(runtime)) {
     throw new Error("test Turn execution requires modelState.runtime");
   }
   if (loopState.modelContext?.protocolVersion !== 3) {

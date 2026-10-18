@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 function normalizeToolNameSet(input) {
   if (!Array.isArray(input)) return new Set();
   return new Set(input.map((item) => text(item)).filter(Boolean));
 }
 
 function normalizeCallShape(call = null) {
-  if (!call || typeof call !== "object") return null;
+  if (!isObjectLike(call)) return null;
   const name = text(call?.name);
   if (!name) return null;
   return {
@@ -22,7 +22,7 @@ function normalizeCallShape(call = null) {
 }
 
 function applyTakeoverForBeforeToolCalls(ctx = {}, takeover = {}) {
-  if (!ctx || typeof ctx !== "object") return false;
+  if (!isObjectLike(ctx)) return false;
   if (!Array.isArray(ctx.calls)) return false;
 
   const calls = ctx.calls;
@@ -70,8 +70,8 @@ function applyTakeoverForBeforeToolCalls(ctx = {}, takeover = {}) {
 }
 
 function applyTakeoverForBeforeToolCall(ctx = {}, takeover = {}) {
-  if (!ctx || typeof ctx !== "object") return false;
-  if (!ctx.call || typeof ctx.call !== "object") return false;
+  if (!isObjectLike(ctx)) return false;
+  if (!isObjectLike(ctx.call)) return false;
 
   const overrideCall = normalizeCallShape(takeover?.overrideCall || takeover?.forceCall);
   if (!overrideCall) return false;
@@ -83,7 +83,7 @@ function applyTakeoverForBeforeToolCall(ctx = {}, takeover = {}) {
 }
 
 export function applyToolTakeover(point = "", ctx = {}, takeover = {}) {
-  if (!takeover || typeof takeover !== "object") return false;
+  if (!isObjectLike(takeover)) return false;
   if (takeover.enabled === false) return false;
   if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS) {
     return applyTakeoverForBeforeToolCalls(ctx, takeover);

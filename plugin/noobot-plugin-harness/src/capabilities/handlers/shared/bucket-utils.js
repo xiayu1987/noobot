@@ -11,11 +11,12 @@ import {
   HARNESS_BUCKET_VERSION,
 } from "./constants.js";
 import { resolveLocale } from "./i18n.js";
+import { isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 function ensureObjectField(target = {}, key = "") {
   if (!target || !key) return {};
   const current = target[key];
-  if (!current || typeof current !== "object" || Array.isArray(current)) {
+  if (!isPlainObject(current)) {
     target[key] = {};
   }
   return target[key];
@@ -34,8 +35,8 @@ function fillMissingDefaults(target = {}, defaults = {}) {
 }
 
 function bindStateVersionAlias(bucket = {}, state = {}) {
-  if (!bucket || typeof bucket !== "object") return;
-  if (!state || typeof state !== "object") return;
+  if (!isObjectLike(bucket)) return;
+  if (!isObjectLike(state)) return;
   const bucketVersion = Number(bucket.__harnessBucketVersion);
   if (!Number.isFinite(bucketVersion)) {
     bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;

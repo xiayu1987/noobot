@@ -60,7 +60,7 @@ import {
   beginAssistantMessageEventStream,
   currentAssistantPresentationMessageId,
 } from "../../events/message-event-stream.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 export {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForLangChain,
@@ -100,7 +100,7 @@ function traceLoopStateContext(runtime = {}, stage = "", loopState = {}, extra =
 function syncMessagesFromBlocks(loopState = {}) {
   const modelContext = requireLoopStateModelContext(loopState);
   const blocks = modelContext.messageBlocks;
-  if (!blocks || typeof blocks !== "object" || !Array.isArray(modelContext.messages)) {
+  if (!isObjectLike(blocks) || !Array.isArray(modelContext.messages)) {
     throw new Error("modelContext requires canonical messages and messageBlocks");
   }
   const resolved = buildDualLaneModelContext({

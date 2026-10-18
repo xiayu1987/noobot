@@ -11,7 +11,7 @@ import {
   readJournalRecords,
   readSummarySnapshots,
 } from "./turn-journal-store.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function assertCanonicalTurnJournal(session, operation) {
   if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
@@ -45,7 +45,7 @@ export async function readRecentSessionTurns({
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, fallback);
-  if (!session || typeof session !== "object") return [];
+  if (!isObjectLike(session)) return [];
   assertCanonicalTurnJournal(session, "recent Session turns");
   const count = Math.max(0, Number(limit) || 0);
   const turns = [];
@@ -62,7 +62,7 @@ export async function readSessionTurn({
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, null);
-  if (!session || typeof session !== "object") return null;
+  if (!isObjectLike(session)) return null;
   assertCanonicalTurnJournal(session, "session turn lookup");
   const normalizedTurnScopeId = text(turnScopeId);
   const normalizedDialogProcessId = text(dialogProcessId);
@@ -94,7 +94,7 @@ export async function readSessionTurn({
 export async function readSessionMessageCount({ sessionDir = "" } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, null);
-  if (!session || typeof session !== "object") return 0;
+  if (!isObjectLike(session)) return 0;
   assertCanonicalTurnJournal(session, "session message count");
   return (Array.isArray(session.turnOrder) ? session.turnOrder : []).reduce(
     (count, item) => count + Math.max(0, Number(item?.messageCount || 0)),

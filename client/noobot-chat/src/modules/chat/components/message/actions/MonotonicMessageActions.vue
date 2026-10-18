@@ -10,7 +10,7 @@ import { overlayMessageBox } from "../../../../../shared/composables/overlayMess
 import { useMonotonicEditAttachments } from "../../../model/message-actions/useMonotonicEditAttachments.js";
 import MonotonicActionBar from "./MonotonicActionBar.vue";
 import MonotonicEditCard from "./MonotonicEditCard.vue";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -43,7 +43,7 @@ const {
 
 function markEditing(value) {
   editing.value = value;
-  if (props.messageItem && typeof props.messageItem === "object") {
+  if (isObjectLike(props.messageItem)) {
     props.messageItem.__monotonicEditing = value;
   }
 }

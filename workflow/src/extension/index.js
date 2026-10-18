@@ -8,9 +8,10 @@ import WorkFlowContext from "../engine/work-flow-context.js";
 import ContextRegister from "../engine/context-register.js";
 import ModelBoxFactory from "../engine/bizinst/box/modelbox/model-box-factory.js";
 import FlowtoBox from "../engine/bizinst/box/modelbox/flowto-box.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 function registerModelBoxFactory(factory = null) {
-  if (!factory || typeof factory !== "object") return false;
+  if (!isObjectLike(factory)) return false;
   ContextRegister.getInstance().regist(WorkFlowContext.MODELBOXFACTORYNAME, factory);
   return true;
 }

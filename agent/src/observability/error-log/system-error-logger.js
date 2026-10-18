@@ -7,7 +7,7 @@ import { appendSystemErrorLog } from "./system-error-log.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { logError } from "../console/logger.js";
 import { resolveErrorHeaderValue } from "../../shared/utils/error-header.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function resolveErrorStatus(error = {}) {
   const rawStatus =
@@ -56,7 +56,7 @@ function resolveErrorType(error = {}) {
 }
 
 function buildDefaultErrorExtra(error = null) {
-  if (!error || typeof error !== "object") return {};
+  if (!isObjectLike(error)) return {};
   const status = resolveErrorStatus(error);
   const code = resolveErrorCode(error);
   const type = resolveErrorType(error);

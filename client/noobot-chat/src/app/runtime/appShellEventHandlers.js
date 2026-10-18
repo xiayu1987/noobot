@@ -3,10 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isObjectLike } from "@noobot/shared/value";
 export function updateDrawerModelVisibility({ drawer = {}, value = false } = {}) {
   const nextVisible = Boolean(value);
   const model = drawer?.model;
-  if (!model || typeof model !== "object" || !("value" in model)) {
+  if (!isObjectLike(model) || !("value" in model)) {
     return { changed: false, closed: false };
   }
   if (model.value === nextVisible) return { changed: false, closed: false };

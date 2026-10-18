@@ -9,7 +9,7 @@ import {
   getAgentCommandIdentity,
   validateAgentCommandReceipt,
 } from "@noobot/agent-transport-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function normalizeTrimmedString(value = "") {
   return text(value);
@@ -17,7 +17,7 @@ export function normalizeTrimmedString(value = "") {
 
 export function normalizeErrorMessage(value, fallback = "") {
   if (typeof value === "string") return value.trim() || fallback;
-  if (!value || typeof value !== "object") return fallback;
+  if (!isObjectLike(value)) return fallback;
   for (const candidate of [value.message, value.reason, value.description, value.error]) {
     const normalized = normalizeErrorMessage(candidate, "");
     if (normalized) return normalized;

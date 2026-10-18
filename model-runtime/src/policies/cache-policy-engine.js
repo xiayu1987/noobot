@@ -14,7 +14,7 @@ import {
   requireModelFamilyId,
   resolveModelPromptCacheValue,
 } from "@noobot/model-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const PROVIDER_IDS = new Set(Object.values(MODEL_PROVIDER_ID));
 
@@ -84,11 +84,7 @@ export function applyPromptCacheMessages(spec = {}, messages = []) {
       block && typeof block === "object" ? { ...block } : block,
     );
     for (let i = blocks.length - 1; i >= 0; i -= 1) {
-      if (
-        blocks[i] &&
-        typeof blocks[i] === "object" &&
-        String(blocks[i].type || "text") === "text"
-      ) {
+      if (isObjectLike(blocks[i]) && String(blocks[i].type || "text") === "text") {
         blocks[i] = { ...blocks[i], cache_control: marker };
         return source.map((item, itemIndex) =>
           itemIndex === index ? { ...message, content: blocks } : item,

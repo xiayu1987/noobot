@@ -23,7 +23,7 @@ import {
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
 } from "../../frontend/utils/workflowDialogProcessId.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 export function createMockBotHookManager() {
   const listeners = new Map();
@@ -315,7 +315,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
     runtimeSharedTools.semanticTransfer = createSemanticTransferTool();
   }
   runtime.sharedTools = runtimeSharedTools;
-  if (!runtime.runConfig || typeof runtime.runConfig !== "object") runtime.runConfig = runConfig;
+  if (!isObjectLike(runtime.runConfig)) runtime.runConfig = runConfig;
   if (!runtime.sessionManager) {
     const sequences = new Map();
     runtime.sessionManager = {
@@ -355,7 +355,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
       ? agentContext.payload.tools.registry
       : [];
   }
-  if (!bindings.extensions || typeof bindings.extensions !== "object") {
+  if (!isObjectLike(bindings.extensions)) {
     bindings.extensions = {};
   }
 

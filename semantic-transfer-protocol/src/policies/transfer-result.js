@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export const TRANSFER_RESULT_STATUS = Object.freeze({
   DIRECT: "direct",
@@ -37,7 +37,7 @@ export function createTransferResult({
     ok: ok === true,
     status: normalizedStatus,
   };
-  if (envelope && typeof envelope === "object") result.envelope = envelope;
+  if (isObjectLike(envelope)) result.envelope = envelope;
   if (error) {
     result.error = isPlainObject(error)
       ? cleanObject({

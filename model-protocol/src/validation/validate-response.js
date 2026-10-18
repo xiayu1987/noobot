@@ -11,7 +11,7 @@ import {
 import { requireInvocationIdentity } from "../protocol/invocation.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "../protocol/operation.js";
 import { hasUsableModelChatOutput } from "../protocol/output.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 const RESPONSE_KEYS = Object.freeze([
   "protocol",
@@ -39,7 +39,7 @@ const ATTEMPT_KEYS = Object.freeze(["attempt", "status", "kind", "streaming", "o
 const ATTEMPT_STATUSES = new Set(["completed", "retry", "failed"]);
 
 function requirePlainObject(value, path) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new TypeError(`${path} must be an object`);
   }
   return value;

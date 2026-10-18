@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function cloneAttachmentList(value) {
   return Array.isArray(value) ? value : [];
 }
 
 export function resolveRuntimeUserMessageAttachments(runtime = {}) {
-  if (!runtime || typeof runtime !== "object") return [];
+  if (!isObjectLike(runtime)) return [];
   if (Array.isArray(runtime.userMessageAttachments)) {
     return runtime.userMessageAttachments;
   }
@@ -25,16 +25,16 @@ export function runtimeHasExplicitUserMessageAttachments(runtime = {}) {
 }
 
 export function applyRuntimeUserMessageAttachments(runtime = {}, attachments = []) {
-  if (!runtime || typeof runtime !== "object") return runtime;
+  if (!isObjectLike(runtime)) return runtime;
   const canonicalAttachments = cloneAttachmentList(attachments);
   runtime.userMessageAttachments = canonicalAttachments;
   return runtime;
 }
 
 export function updateRuntimeUserMessageAttachment(runtime = {}, attachmentId = "", update = {}) {
-  if (!runtime || typeof runtime !== "object") return false;
+  if (!isObjectLike(runtime)) return false;
   const normalizedAttachmentId = text(attachmentId);
-  if (!normalizedAttachmentId || !update || typeof update !== "object") return false;
+  if (!normalizedAttachmentId || !isObjectLike(update)) return false;
 
   const sourceAttachments = resolveRuntimeUserMessageAttachments(runtime);
   const sourceAttachmentIndex = sourceAttachments.findIndex(

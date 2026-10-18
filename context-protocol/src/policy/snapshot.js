@@ -16,7 +16,7 @@ import {
   resolveContextToolResultCallId,
 } from "../message/codec.js";
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 const SNAPSHOT_VERSION = 3;
 const IDENTITY_FIELDS = [
@@ -102,8 +102,7 @@ export function serializeContextMessage(message = {}) {
       ? cloneJson(message.invalid_tool_calls) || []
       : [];
     if (
-      message?.response_metadata &&
-      typeof message.response_metadata === "object" &&
+      isObjectLike(message?.response_metadata) &&
       Array.isArray(message.response_metadata.output)
     ) {
       serialized.response_metadata = {
@@ -135,11 +134,7 @@ function deserializeContextMessageRecord(item = {}) {
   if (item?.type === "ai") {
     message.tool_calls = cloneJson(item?.tool_calls) || [];
     message.invalid_tool_calls = cloneJson(item?.invalid_tool_calls) || [];
-    if (
-      item?.response_metadata &&
-      typeof item.response_metadata === "object" &&
-      Array.isArray(item.response_metadata.output)
-    ) {
+    if (isObjectLike(item?.response_metadata) && Array.isArray(item.response_metadata.output)) {
       message.response_metadata = {
         output: cloneJson(item.response_metadata.output) || [],
       };
@@ -169,7 +164,7 @@ export function composeMessagesFromBlocks(blocks = {}) {
 }
 
 function normalizeTurnProgress(turnProgress) {
-  if (!turnProgress || typeof turnProgress !== "object" || Array.isArray(turnProgress)) return {};
+  if (!isPlainObject(turnProgress)) return {};
   return cloneJson(turnProgress) || {};
 }
 

@@ -28,7 +28,7 @@ import {
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
 import { getRuntimeFromAgentContext } from "../context/agent-context-accessor.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 export {
   setToolBuilderAdapter,
   getToolBuilderAdapter,
@@ -39,7 +39,7 @@ function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled 
   const normalized = text(toolName);
   if (!normalized) return defaultEnabled;
   const toolConfig = effectiveConfig?.tools?.[normalized];
-  if (!toolConfig || typeof toolConfig !== "object") return defaultEnabled;
+  if (!isObjectLike(toolConfig)) return defaultEnabled;
   return toolConfig.enabled !== false;
 }
 

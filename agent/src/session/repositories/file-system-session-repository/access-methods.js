@@ -7,7 +7,7 @@ import { createSessionDeletedError } from "@noobot/session-protocol";
 import { fatalSystemError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 function requireIdentity(value, message, code) {
   const normalized = text(value);
@@ -40,7 +40,7 @@ class SessionAccessMethods {
     const tombstone = await this.storageService.readJson(tombstoneFile, null);
     if (tombstone === null) return { sessions: {} };
     const sessions = tombstone?.sessions;
-    if (!sessions || typeof sessions !== "object" || Array.isArray(sessions)) {
+    if (!isPlainObject(sessions)) {
       throw createTombstoneInvalidError(tombstoneFile);
     }
     for (const [sessionId, deletedAt] of Object.entries(sessions)) {

@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { text } from "./value.js";
+import { text, isPlainObject } from "./value.js";
 
 export const CONFIG_FILE_ERROR_CODE = Object.freeze({
   CORRUPTED: "CONFIG_FILE_CORRUPTED",
@@ -35,7 +35,7 @@ export function readOptionalJsonObjectConfigSync({ filePath, defaultValue = {} }
   } catch (error) {
     throw configFileError(CONFIG_FILE_ERROR_CODE.CORRUPTED, normalizedPath, error);
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (!isPlainObject(parsed)) {
     throw configFileError(
       CONFIG_FILE_ERROR_CODE.CORRUPTED,
       normalizedPath,

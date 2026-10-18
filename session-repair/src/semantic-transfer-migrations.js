@@ -12,7 +12,7 @@ import {
   TRANSFER_VERSION,
   transferIdentityKey,
 } from "@noobot/semantic-transfer-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 const HISTORICAL_MULTIMODAL_PARSE_REASON = "multimodal_parse_tool";
 const MULTIMODAL_PARSE_TOOL_NAME = "multimodal_parse";
@@ -40,7 +40,7 @@ function isHistoricalMultimodalParseEnvelope(envelope) {
 }
 
 function visitTransferCollections(value, visitor) {
-  if (!value || typeof value !== "object") return;
+  if (!isObjectLike(value)) return;
   if (Array.isArray(value)) {
     for (const item of value) visitTransferCollections(item, visitor);
     return;

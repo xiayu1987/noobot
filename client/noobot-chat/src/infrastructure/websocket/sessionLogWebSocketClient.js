@@ -15,7 +15,7 @@ import {
   WEB_SOCKET_TRANSPORT_PHASE,
 } from "./webSocketTransportSupervisor.js";
 import { closeWebSocket } from "./closeWebSocket.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 const MAX_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
@@ -215,7 +215,7 @@ export function createSessionLogWebSocketClient({
   }
 
   function updatePolicy(nextPolicy = {}) {
-    if (!nextPolicy || typeof nextPolicy !== "object") return false;
+    if (!isObjectLike(nextPolicy)) return false;
     policy = {
       debug:
         nextPolicy.debug && typeof nextPolicy.debug === "object" ? { ...nextPolicy.debug } : {},
@@ -242,7 +242,7 @@ export function createSessionLogWebSocketClient({
 
   function log(event = {}) {
     if (disposed) return false;
-    if (!event || typeof event !== "object") return false;
+    if (!isObjectLike(event)) return false;
     let record;
     try {
       record = buildSessionLogRecord({ ...event, source });

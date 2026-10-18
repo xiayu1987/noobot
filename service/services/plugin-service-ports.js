@@ -21,7 +21,7 @@ import {
   resolvePluginAssetsRelativePath,
   resolvePluginDataRelativePath,
 } from "@noobot/workspace-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 
 const assetIdPattern = WORKSPACE_PATH_SEGMENT_PATTERN;
 const assetVersionPattern = /^[a-f0-9]{64}$/;
@@ -119,7 +119,7 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
   const readCatalog = async (userId) => {
     try {
       const value = JSON.parse(await fs.readFile(resolveCatalogPath(userId), "utf8"));
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
+      if (!isPlainObject(value)) {
         throw new TypeError("workspace asset catalog must be an object");
       }
       return value;
@@ -168,7 +168,7 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
     },
     async writeMetadata({ userId, assetId, metadata } = {}) {
       const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
-      if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+      if (!isPlainObject(metadata)) {
         throw new TypeError("workspace asset metadata object is required");
       }
       return mutateCatalog(async () => {

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { nullishText as clean } from "../normalize.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 export const EXECUTION_ABORT_TYPE = Object.freeze({
   USER_STOP: "user_stop",
@@ -17,7 +18,7 @@ const EXECUTION_ABORT_TYPES = new Set(Object.values(EXECUTION_ABORT_TYPE));
 const EXECUTION_ABORTED = "execution_aborted";
 
 function structuredAbortReason(value) {
-  if (!value || typeof value !== "object") return null;
+  if (!isObjectLike(value)) return null;
   const type = clean(value.type);
   if (!EXECUTION_ABORT_TYPES.has(type)) return null;
   return Object.freeze({
@@ -88,7 +89,7 @@ export function resolveUserStopPayload({ abortSignal = null } = {}) {
     throw new TypeError("user stop payload requires a user_stop abort reason");
   }
   const stopPayload = reason.stopPayload;
-  if (!stopPayload || typeof stopPayload !== "object" || !clean(stopPayload.commandId)) {
+  if (!isObjectLike(stopPayload) || !clean(stopPayload.commandId)) {
     throw new TypeError("user stop abort reason requires a stopPayload with commandId");
   }
   return stopPayload;

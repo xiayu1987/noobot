@@ -27,7 +27,7 @@ function normalizeTransferEnvelopesFromMessage(message = {}) {
 }
 
 function normalizeSessionAttachment(item = {}) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  if (!isPlainObject(item)) return null;
   const identity = projectAttachmentIdentity(item);
   const name = text(item.name);
   const mimeType = text(item.mimeType);
@@ -51,7 +51,7 @@ function normalizeSessionAttachment(item = {}) {
 }
 
 function normalizeAttachmentOwner(owner = null) {
-  if (!owner || typeof owner !== "object" || Array.isArray(owner)) return null;
+  if (!isPlainObject(owner)) return null;
   const type = text(owner.type);
   const id = text(owner.id);
   if (!type && !id) return null;

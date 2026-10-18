@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 const STATUS_PENDING = "pending";
 
@@ -30,7 +30,7 @@ export function createUserMetaBackwrite({
   const normalizedAttachmentRef = text(attachmentRef);
   const id = deriveUserMetaBackwriteId(normalizedMetaId, normalizedAttachmentRef);
   if (!id) throw new TypeError("user_meta backwrite requires userMetaMessageUid and attachmentRef");
-  if (!result || typeof result !== "object" || Array.isArray(result)) {
+  if (!isPlainObject(result)) {
     throw new TypeError("user_meta backwrite result must be an object");
   }
   return {

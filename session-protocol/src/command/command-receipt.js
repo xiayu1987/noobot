@@ -76,7 +76,7 @@ export function validateCommandReceiptResult(type, result) {
 }
 
 export function normalizeCommandReceipt(receipt = {}) {
-  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+  if (!isPlainObject(receipt)) return null;
   const commandId = clean(receipt.commandId);
   const type = clean(receipt.type);
   const requestHash = clean(receipt.requestHash);

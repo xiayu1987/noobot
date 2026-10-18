@@ -5,7 +5,7 @@
  */
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { appendCapabilityLog } from "../attachment-log-utils.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 
@@ -15,7 +15,7 @@ function ensureObject(source = {}) {
 
 export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
   const harness = ctx?.agentContext?.bindings?.extensions?.harness;
-  if (!harness || typeof harness !== "object") return false;
+  if (!isObjectLike(harness)) return false;
   const state = ensureObject(harness.state);
   harness.state = state;
   state.pending = ensureObject(state.pending);

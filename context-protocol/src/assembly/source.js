@@ -8,11 +8,11 @@ import { resolveModelHistoryMessages } from "../policy/window.js";
 import { projectTerminalHistoryMessages } from "../policy/terminal-history.js";
 import { excludeActiveContextScopeItems } from "./scope.js";
 import { projectTurnTerminalStatuses } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function stableValue(value) {
   if (Array.isArray(value)) return `[${value.map(stableValue).join(",")}]`;
-  if (value && typeof value === "object") {
+  if (isObjectLike(value)) {
     return `{${Object.keys(value)
       .sort()
       .map((key) => `${JSON.stringify(key)}:${stableValue(value[key])}`)

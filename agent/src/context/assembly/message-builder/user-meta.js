@@ -20,7 +20,7 @@ import {
   resolveContextUserMetaMaterialized,
 } from "@noobot/context-protocol/message/codec";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export function resolveAttachments(msg = {}, fallbackAttachments = []) {
   const transferAttachments = getTransferAttachments(
@@ -165,14 +165,14 @@ function parseUserMetaPayload(content = "") {
     throw new Error("user_meta content does not contain a JSON payload");
   }
   const payload = JSON.parse(source.slice(jsonStart, jsonEnd + 1));
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+  if (!isPlainObject(payload)) {
     throw new Error("user_meta payload must be an object");
   }
   return { source, jsonStart, jsonEnd, payload };
 }
 
 export function appendUserMetaParsedResult(content = "", result = {}) {
-  if (!result || typeof result !== "object" || Array.isArray(result)) {
+  if (!isPlainObject(result)) {
     throw new TypeError("user_meta parsed result must be an object");
   }
   const parsed = parseUserMetaPayload(content);

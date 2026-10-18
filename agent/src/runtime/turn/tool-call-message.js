@@ -5,10 +5,10 @@
  */
 import { AIMessage } from "@langchain/core/messages";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 function clonePlainObjectWithoutToolCalls(value = null) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!isPlainObject(value)) return null;
   const cloned = { ...value };
   delete cloned.tool_calls;
   delete cloned.toolCalls;
@@ -55,7 +55,7 @@ function resolveAssistantRawContent(ai = {}, contentText = "") {
 
 function buildAssistantAdditionalKwargs(ai = {}, noobotMessageId = "") {
   const additionalKwargs = clonePlainObjectWithoutToolCalls(ai?.additional_kwargs) || {};
-  if (ai?.responseReasoning && typeof ai.responseReasoning === "object") {
+  if (isObjectLike(ai?.responseReasoning)) {
     additionalKwargs.reasoning = ai.responseReasoning;
   }
   const canonicalMessageId = text(noobotMessageId);

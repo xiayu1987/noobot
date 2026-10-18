@@ -11,7 +11,7 @@ import {
   resolveModelMessageBlocks,
   writeMessageBlocks,
 } from "../../core/message-store.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function normalizeStringArray(input) {
   if (!Array.isArray(input)) return [];
@@ -19,8 +19,8 @@ function normalizeStringArray(input) {
 }
 
 function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
-  if (!ctx || typeof ctx !== "object") return false;
-  if (!ctx.payload || typeof ctx.payload !== "object") return false;
+  if (!isObjectLike(ctx)) return false;
+  if (!isObjectLike(ctx.payload)) return false;
   const commitType = text(ctx?.commitType);
   const allowCommitTypes = normalizeStringArray(takeover?.allowCommitTypes);
   const blockCommitTypes = normalizeStringArray(takeover?.blockCommitTypes);
@@ -79,7 +79,7 @@ function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
 }
 
 function applyMemoryTakeoverForModelContext(ctx = {}, takeover = {}) {
-  if (!ctx || typeof ctx !== "object") return false;
+  if (!isObjectLike(ctx)) return false;
   let changed = false;
   const blocks = resolveModelMessageBlocks(ctx);
   const history = blocks.history;
@@ -112,7 +112,7 @@ function applyMemoryTakeoverForModelContext(ctx = {}, takeover = {}) {
 }
 
 export function applyMemoryTakeover(point = "", ctx = {}, takeover = {}) {
-  if (!takeover || typeof takeover !== "object") return false;
+  if (!isObjectLike(takeover)) return false;
   if (takeover.enabled === false) return false;
   let changed = false;
   if (point === HOOK_POINT.AGENT.BEFORE_STATE_COMMIT) {

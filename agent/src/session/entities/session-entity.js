@@ -16,7 +16,7 @@ import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
-import { firstText, text } from "@noobot/shared/value";
+import { firstText, text, isPlainObject } from "@noobot/shared/value";
 
 function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   const events = [];
@@ -42,7 +42,7 @@ function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
 }
 
 function normalizeTurnTimingEntity(timing = {}) {
-  if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
+  if (!isPlainObject(timing)) return null;
   const turnScopeId = text(timing?.turnScopeId);
   const dialogProcessId = resolveContextMessageDialogProcessId(timing);
   if (!turnScopeId) return null;
@@ -79,10 +79,10 @@ function normalizeCheckpointUidList(values) {
 }
 
 function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
-  if (!checkpoints || typeof checkpoints !== "object" || Array.isArray(checkpoints)) return {};
+  if (!isPlainObject(checkpoints)) return {};
   const normalized = {};
   for (const [scopeKey, value] of Object.entries(checkpoints)) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    if (!isPlainObject(value)) continue;
     const turnScopeId = text(value.turnScopeId || scopeKey);
     const dialogProcessId = text(value.dialogProcessId);
     if (!turnScopeId || !dialogProcessId) continue;
@@ -104,7 +104,7 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
     if (!ownedMessageUids.size) continue;
     const receipts = (Array.isArray(value.receipts) ? value.receipts : [])
       .map((receipt) => {
-        if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+        if (!isPlainObject(receipt)) return null;
         const checkpointId = text(receipt.checkpointId);
         const requestHash = text(receipt.requestHash);
         if (!checkpointId || !requestHash) return null;

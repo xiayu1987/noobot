@@ -3,13 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 export function defineCapabilityActivity(activityKind) {
   return requireCapabilityActivity({ activityKind });
 }
 
 export function requireCapabilityActivity(value) {
   if (value === null) return null;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new TypeError("capability activity must be an object or null");
   }
   if (Object.keys(value).some((key) => key !== "activityKind")) {

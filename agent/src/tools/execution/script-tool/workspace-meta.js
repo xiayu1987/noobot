@@ -14,13 +14,13 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { EXECUTE_SCRIPT_TOOL_NAME, SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { buildOutputTransferDeclaration } from "./output-transfer-declaration.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function compactObject(value = {}) {
   return Object.fromEntries(
     Object.entries(value && typeof value === "object" ? value : {}).filter(([, item]) => {
       if (Array.isArray(item)) return item.length > 0;
-      if (item && typeof item === "object") return Object.keys(item).length > 0;
+      if (isObjectLike(item)) return Object.keys(item).length > 0;
       return item !== undefined && item !== null && text(item) !== "";
     }),
   );

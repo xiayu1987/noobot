@@ -10,7 +10,7 @@ import {
   MODEL_CONTEXT_PROTOCOL_VERSION,
 } from "./schema.js";
 import { validateAgentContextIdentity } from "./identity.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function findSerializationError(value, path = "context", seen = new Set()) {
   if (value == null || ["string", "number", "boolean"].includes(typeof value)) return "";
@@ -46,7 +46,7 @@ export function validateAgentContextEnvelope(context = {}) {
   const identityResult = validateAgentContextIdentity(context?.identity);
   errors.push(...identityResult.errors);
   const modelContext = context?.modelContext;
-  if (!modelContext || typeof modelContext !== "object") {
+  if (!isObjectLike(modelContext)) {
     errors.push("modelContext is required");
   } else {
     if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
@@ -67,7 +67,7 @@ export function validateAgentContextEnvelope(context = {}) {
     if (text(active.turnScopeId) !== identityResult.identity.turnScopeId) {
       errors.push("modelContext.activeTurnIdentity.turnScopeId must match identity.turnScopeId");
     }
-    if (!modelContext.messageBlocks || typeof modelContext.messageBlocks !== "object") {
+    if (!isObjectLike(modelContext.messageBlocks)) {
       errors.push("modelContext.messageBlocks is required");
     }
   }

@@ -13,7 +13,7 @@ import {
   readJournalRecords,
   readSummarySnapshots,
 } from "./turn-journal-store.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export async function readSessionArtifact({
   storageService = null,
@@ -26,7 +26,7 @@ export async function readSessionArtifact({
     artifactPath: files.session,
     fallback,
   });
-  if (!session || typeof session !== "object") return fallback;
+  if (!isObjectLike(session)) return fallback;
   if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
     const error = new Error("Session artifact requires the canonical turn journal schema");
     error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
@@ -59,7 +59,7 @@ export async function readSessionArtifactForRepair({
     artifactPath: files.session,
     fallback,
   });
-  if (!session || typeof session !== "object") return fallback;
+  if (!isObjectLike(session)) return fallback;
   if (Number(session.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION) {
     return readSessionArtifact({ storageService, sessionDir, fallback });
   }

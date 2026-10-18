@@ -9,7 +9,7 @@ import {
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../../chat/runtime/sessionRunStateMachine.js";
 import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isObjectLike } from "@noobot/shared/value";
 
 let sessionLogSink = null;
 
@@ -22,7 +22,7 @@ export function isStateMachineDebugEnabled() {
 }
 
 export function summarizeStateMachineMessage(message = {}) {
-  if (!message || typeof message !== "object") return null;
+  if (!isObjectLike(message)) return null;
   const channelState = getMessageRuntimeChannelState(message);
   return {
     id: message.messageId || "",
@@ -59,7 +59,7 @@ export function summarizeStateMachineEvent(event = {}) {
 }
 
 export function summarizeStateMachineTurn(turn = {}, projection = null) {
-  if (!turn || typeof turn !== "object") return null;
+  if (!isObjectLike(turn)) return null;
   const view = projection && typeof projection === "object" ? projection : turn;
   return {
     sessionId: clean(turn.sessionId),
@@ -80,7 +80,7 @@ export function summarizeStateMachineTurn(turn = {}, projection = null) {
 }
 
 export function summarizeTurnLifecycleSnapshot(snapshot = {}) {
-  if (!snapshot || typeof snapshot !== "object") return null;
+  if (!isObjectLike(snapshot)) return null;
   const activeTurn =
     snapshot.activeTurn && typeof snapshot.activeTurn === "object" ? snapshot.activeTurn : null;
   return {

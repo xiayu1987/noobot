@@ -6,7 +6,7 @@
 
 import { ToolMessage } from "@langchain/core/messages";
 import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function appendToolResultModelMessage({
   modelContext,
@@ -15,7 +15,7 @@ export function appendToolResultModelMessage({
   messageUid = "",
   contextPolicy = null,
 } = {}) {
-  if (!modelContext || typeof modelContext !== "object") {
+  if (!isObjectLike(modelContext)) {
     throw new TypeError("Tool result model message requires the authoritative modelContext");
   }
   const canonicalToolCallId = text(toolCallId);

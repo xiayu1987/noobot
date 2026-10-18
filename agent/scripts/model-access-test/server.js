@@ -9,6 +9,7 @@ import { testModelAccess, redactModelDiagnostic } from "@noobot/model-runtime/di
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { publicModelList } from "./config.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 const STATIC_FILES = new Map([
   ["/", ["index.html", "text/html"]],
@@ -28,8 +29,7 @@ async function readJson(request) {
     chunks.push(chunk);
   }
   const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  if (!body || typeof body !== "object" || Array.isArray(body))
-    throw new Error("Invalid JSON / JSON 无效");
+  if (!isPlainObject(body)) throw new Error("Invalid JSON / JSON 无效");
   return body;
 }
 
@@ -114,10 +114,7 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
         throw new Error("Invalid endpoint / 接口地址无效");
       }
       const preview = pathname === "/api/preview";
-      if (
-        !preview &&
-        (!input.body || typeof input.body !== "object" || Array.isArray(input.body))
-      ) {
+      if (!preview && !isPlainObject(input.body)) {
         throw new Error("Request body required / 需要请求体");
       }
       const result = await execute({

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isRestrictedHostExecutionView } from "@noobot/execution-isolation-protocol/execution-views";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export const SECURITY_ASSESSMENT_PROTOCOL_NAME = "noobot.security-assessment";
 export const SECURITY_ASSESSMENT_PROTOCOL_VERSION = 1;
@@ -165,7 +165,7 @@ function buildAssessment({ toolName = "", evidence = [] } = {}) {
 
 export function validateSecurityAssessment(value) {
   const errors = [];
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     return Object.freeze({ valid: false, errors: Object.freeze(["invalid_assessment"]) });
   }
   if (value.protocol !== SECURITY_ASSESSMENT_PROTOCOL_NAME) errors.push("protocol_mismatch");

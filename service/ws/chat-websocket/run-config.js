@@ -109,7 +109,7 @@ export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runCo
 }
 
 export function summarizePluginConfig(plugins = {}) {
-  if (!plugins || typeof plugins !== "object" || Array.isArray(plugins)) return {};
+  if (!isPlainObject(plugins)) return {};
   return Object.fromEntries(
     Object.entries(plugins).map(([key, value]) => [
       key,

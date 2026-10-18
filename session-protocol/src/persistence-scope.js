@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 const SESSION_PERSISTENCE_SCOPE_FIELDS = Object.freeze([
   "scopeId",
@@ -14,7 +14,7 @@ const SESSION_PERSISTENCE_SCOPE_FIELDS = Object.freeze([
 
 export function createSessionPersistenceScope(source = null) {
   if (source == null) return null;
-  if (!source || typeof source !== "object" || Array.isArray(source)) {
+  if (!isPlainObject(source)) {
     return Object.freeze({});
   }
   return Object.freeze(
@@ -26,7 +26,7 @@ export function createSessionPersistenceScope(source = null) {
 
 export function validateSessionPersistenceScope(source = null) {
   if (source == null) return { valid: true, errors: [], scope: null };
-  if (!source || typeof source !== "object" || Array.isArray(source)) {
+  if (!isPlainObject(source)) {
     return { valid: false, errors: ["invalid_persistence_scope"], scope: null };
   }
   const scope = createSessionPersistenceScope(source);

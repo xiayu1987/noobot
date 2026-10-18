@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { translate } from "./i18n.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 const OPTIONAL_VALUES = {
   temperature: 0.7,
@@ -39,8 +40,7 @@ export function parseImportedRequest(text) {
     const parsed = JSON.parse(text);
     body = parsed.traces?.[0]?.request?.body || parsed.request?.body || parsed;
   }
-  if (!body || typeof body !== "object" || Array.isArray(body))
-    throw new Error(translate("importError"));
+  if (!isPlainObject(body)) throw new Error(translate("importError"));
   return { body, protocol };
 }
 

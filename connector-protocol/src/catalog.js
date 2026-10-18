@@ -40,7 +40,7 @@ export function connectorOperation(
   if (!normalizedDescription) {
     throw new TypeError(`connector operation description is required: ${normalizedName}`);
   }
-  if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
+  if (!isPlainObject(inputSchema)) {
     throw new TypeError(`connector operation inputSchema is invalid: ${normalizedName}`);
   }
   if (inputSchema.type !== "object") {

@@ -5,7 +5,7 @@
  */
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { mergeCanonicalSessionDetail } from "noobot-chat/plugin-api/session-domain";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function getListValue(value) {
   const resolved = value && typeof value === "object" && "value" in value ? value.value : value;
@@ -31,7 +31,7 @@ const TERMINAL_EXECUTION_STATES = new Set([
 ]);
 
 export function isTerminalExecutionProjection(execution = {}) {
-  if (!execution || typeof execution !== "object") return false;
+  if (!isObjectLike(execution)) return false;
   if (execution.terminal === true || execution?.lifecycle?.terminal === true) return true;
   return [
     execution.state,

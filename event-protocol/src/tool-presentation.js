@@ -5,7 +5,7 @@
  */
 
 import { collapsedText as text } from "./normalize.js";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 function structuredDetail(value) {
   if (isPlainObject(value)) return value;
@@ -34,20 +34,20 @@ function argumentDisplay(value) {
 }
 
 function attachmentDisplay(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  if (!isPlainObject(value)) return "";
   const attachmentId = text(value.attachmentId);
   return attachmentId ? `attachment:${attachmentId}` : "";
 }
 
 export function projectToolFileDisplay(value) {
   if (typeof value === "string") return value.trim();
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  if (!isPlainObject(value)) return "";
 
-  if (value.logical && typeof value.logical === "object") {
+  if (isObjectLike(value.logical)) {
     const logicalPath = projectToolFileDisplay(value.logical);
     if (logicalPath) return logicalPath;
   }
-  if (value.path && typeof value.path === "object") {
+  if (isObjectLike(value.path)) {
     const nestedPath = projectToolFileDisplay(value.path);
     if (nestedPath) return nestedPath;
   }

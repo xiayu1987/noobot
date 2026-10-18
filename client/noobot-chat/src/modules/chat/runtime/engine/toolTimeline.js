@@ -15,7 +15,7 @@ import { projectToolOperationSummary } from "@noobot/event-protocol/tool-present
 import { isToolResultFailure } from "../../model/toolLogFormatting.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { createWeakArrayIndex } from "@noobot/timeline-runtime";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 function parseToolResultObject(value) {
   if (isPlainObject(value)) return value;
@@ -76,7 +76,7 @@ function stringifyToolDetail(value) {
 }
 
 function projectToolTimelineLog({ entry = {}, facet = {}, kind = "", includeDetail = true } = {}) {
-  if (!facet || typeof facet !== "object") return null;
+  if (!isObjectLike(facet)) return null;
   const isCall = kind === "call";
   const canonicalDetail = isCall ? entry?.args : entry?.result;
   const summary = projectToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
@@ -230,9 +230,7 @@ export function selectTaskCheckReceipts(message = {}) {
       continue;
     }
     if (
-      !payload ||
-      typeof payload !== "object" ||
-      Array.isArray(payload) ||
+      !isPlainObject(payload) ||
       payload.toolName !== "task_check" ||
       payload.protocolVersion !== 1
     )

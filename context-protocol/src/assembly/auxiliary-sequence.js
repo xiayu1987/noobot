@@ -5,7 +5,7 @@
  */
 
 import { resolveContextMessageId } from "../message/codec.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export const AUXILIARY_SEQUENCE_IDENTITY_FIELD = "noobotAuxiliarySequenceIdentity";
 
@@ -16,7 +16,7 @@ export const AUXILIARY_SEQUENCE_MESSAGE_KIND = Object.freeze({
 });
 
 function cloneMessage(message = {}) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) {
+  if (!isPlainObject(message)) {
     throw new TypeError("auxiliary sequence message must be an object");
   }
   const cloned = { ...message };
@@ -73,7 +73,7 @@ export function declareAuxiliarySequenceIdentity(message = {}, identity = {}) {
 
 export function resolveAuxiliarySequenceIdentity(message = {}) {
   const identity = message?.[AUXILIARY_SEQUENCE_IDENTITY_FIELD];
-  if (!identity || typeof identity !== "object" || Array.isArray(identity)) return null;
+  if (!isPlainObject(identity)) return null;
   const kind = text(identity.kind);
   const key = text(identity.key);
   if (!Object.values(AUXILIARY_SEQUENCE_MESSAGE_KIND).includes(kind)) return null;
@@ -99,7 +99,7 @@ function requireContextIdentity(message = {}) {
 function validateCurrentContext(current = {}) {
   const revision = requireCheckpointRevision(current?.checkpointRevision);
   const blocks = current?.messageBlocks;
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {
+  if (!isPlainObject(blocks)) {
     throw new TypeError("auxiliary model context requires messageBlocks");
   }
   const system = Array.isArray(blocks.system) ? blocks.system : [];

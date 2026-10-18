@@ -17,7 +17,7 @@ import { initializeAgentModelHost } from "../../../runtime/model-port-host.js";
 import { buildAgentTransportConsumption } from "./agent-transport-consumption.js";
 import { bindCurrentTurnPersistence } from "./current-turn-persistence.js";
 import { appendUserInterjectionMessage } from "../../../runtime/turn/turn-context-message-appender.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function projectPresentationAttachments(attachments) {
   return Array.isArray(attachments)
@@ -80,7 +80,7 @@ export async function bindAgentDispatchRuntime({
   committedTurnResult,
 }) {
   const dispatchRuntime = runtimeAgentContext?.bindings?.runtime;
-  if (!dispatchRuntime || typeof dispatchRuntime !== "object") return dispatchRuntime;
+  if (!isObjectLike(dispatchRuntime)) return dispatchRuntime;
 
   dispatchRuntime.eventListener = eventListener;
   const systemRuntime =

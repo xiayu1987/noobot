@@ -8,6 +8,7 @@ import { getMessageRuntimeChannelState } from "../../chat/runtime/sessionRunStat
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 export { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import { acceptsDebugSink, emitLazyDebugSafely } from "./lazyDebugSink.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 let sessionLogSink = null;
 
@@ -16,7 +17,7 @@ export function setResendDebugLogSink(sink = null) {
 }
 
 export function summarizeDebugMessage(message = {}) {
-  if (!message || typeof message !== "object") return null;
+  if (!isObjectLike(message)) return null;
   const channelState = getMessageRuntimeChannelState(message);
   return {
     id: message.messageId || "",

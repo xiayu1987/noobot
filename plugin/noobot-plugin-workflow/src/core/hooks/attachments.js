@@ -13,7 +13,7 @@ import {
   mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
 import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
   return mergeAttachmentsByIdentity(existing, incoming, {
@@ -89,7 +89,7 @@ export function getWorkflowTransferPayloadFromResult(result = {}) {
 }
 
 export function applyWorkflowTransferPayload(target = {}, payload = {}) {
-  if (!target || typeof target !== "object") return target;
+  if (!isObjectLike(target)) return target;
   const transferPayload = normalizeWorkflowTransferPayload(payload);
   if (transferPayload.transferEnvelopes.length) {
     const existing = Array.isArray(target.transferEnvelopes) ? target.transferEnvelopes : [];

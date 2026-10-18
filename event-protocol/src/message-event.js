@@ -94,7 +94,7 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
 
 function validatePresentationMessage(message, expectedRole, value) {
   const errors = [];
-  if (!message || typeof message !== "object" || Array.isArray(message)) {
+  if (!isPlainObject(message)) {
     return [`invalid_${expectedRole}_presentation`];
   }
   const messageId = text(message.messageId);
@@ -119,7 +119,7 @@ function validatePresentationMessage(message, expectedRole, value) {
 
 function validateTurnPresentation(value) {
   const presentation = value?.presentation;
-  if (!presentation || typeof presentation !== "object" || Array.isArray(presentation)) {
+  if (!isPlainObject(presentation)) {
     return ["missing_turn_presentation"];
   }
   return [
@@ -281,7 +281,7 @@ export function projectTurnPresentation(event = {}) {
     return null;
   }
   const presentation = event?.presentation;
-  if (!presentation || typeof presentation !== "object" || Array.isArray(presentation)) {
+  if (!isPlainObject(presentation)) {
     return null;
   }
   return Object.freeze({

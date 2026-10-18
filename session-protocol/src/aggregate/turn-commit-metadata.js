@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, isPlainObject, isObjectLike } from "@noobot/shared/value";
 import { isTurnCommitAction, requireTurnCommitAction } from "../lifecycle/turn-commit-action.js";
 
 const TURN_COMMIT_METADATA_KEYS = Object.freeze([
@@ -15,7 +15,7 @@ const TURN_COMMIT_METADATA_KEYS = Object.freeze([
 ]);
 
 export function normalizeTurnCommitMetadata(turnCommit = null) {
-  if (!turnCommit || typeof turnCommit !== "object" || Array.isArray(turnCommit)) return null;
+  if (!isPlainObject(turnCommit)) return null;
   const commandId = clean(turnCommit.commandId);
   if (!commandId) return null;
   const normalized = {
@@ -32,7 +32,7 @@ export function normalizeTurnCommitMetadata(turnCommit = null) {
 }
 
 export function validateTurnCommitMetadata(turnCommit = null) {
-  if (turnCommit && typeof turnCommit === "object" && !isTurnCommitAction(turnCommit.action)) {
+  if (isObjectLike(turnCommit) && !isTurnCommitAction(turnCommit.action)) {
     return Object.freeze({ valid: false, errors: Object.freeze(["invalid_turn_commit_action"]) });
   }
   const normalized = normalizeTurnCommitMetadata(turnCommit);

@@ -6,7 +6,7 @@
 import { appendCapabilityLog } from "../attachment-log-utils.js";
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const WORKFLOW_EVENTS = WORKFLOW_PARAMS.workflow.events;
 
@@ -116,7 +116,7 @@ function resolveEventErrorCode(eventName = "") {
 }
 
 function resolveThrownErrorCode(error = null) {
-  if (!error || typeof error !== "object") return "";
+  if (!isObjectLike(error)) return "";
   const code = text(error?.code || error?.name);
   if (!code) return "";
   return code

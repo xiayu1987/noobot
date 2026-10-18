@@ -37,7 +37,7 @@ import {
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
 import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/message-store.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -101,7 +101,7 @@ function normalizePlanningTextContent(content = "") {
   return content
     .map((item) => {
       if (typeof item === "string") return item;
-      if (item && typeof item === "object" && typeof item.text === "string") return item.text;
+      if (isObjectLike(item) && typeof item.text === "string") return item.text;
       return "";
     })
     .join("\n")

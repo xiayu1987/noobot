@@ -7,7 +7,7 @@
 import { isContextSystemMessage, readDeclaredContextMessageRole } from "../message/codec.js";
 import { resolveModelFinalMessages } from "../policy/window.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
-import { text } from "@noobot/shared/value";
+import { text, isPlainObject } from "@noobot/shared/value";
 
 export const MODEL_CONTEXT_LANE = Object.freeze({
   PRIMARY: "primary",
@@ -19,7 +19,7 @@ function isSystemRole(message = {}) {
 }
 
 function requireMessage(message = {}, label = "message") {
-  if (!message || typeof message !== "object" || Array.isArray(message)) {
+  if (!isPlainObject(message)) {
     throw new TypeError(`${label} must be a message object`);
   }
   if (!readDeclaredContextMessageRole(message)) throw new TypeError(`${label}.role is required`);
@@ -78,7 +78,7 @@ export function buildDualLaneModelContext({
       );
     }
     const blocks = modelContext?.messageBlocks;
-    if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {
+    if (!isPlainObject(blocks)) {
       throw new TypeError("primary model context requires authoritative messageBlocks");
     }
     const materialized = resolveModelFinalMessages({

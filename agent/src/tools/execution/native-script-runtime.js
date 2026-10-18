@@ -28,7 +28,7 @@ import {
   NATIVE_SCRIPT_IPC_RESULT_CHANNEL,
   isNativeScriptIpcMessage,
 } from "./native-script-ipc.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 function createHostBridge() {
   const pending = new Map();
@@ -142,7 +142,7 @@ function redactCapabilityText(value, roots) {
 
 function redactCapabilityValue(value, roots, seen = new WeakSet()) {
   if (typeof value === "string") return redactCapabilityText(value, roots);
-  if (!value || typeof value !== "object") return value;
+  if (!isObjectLike(value)) return value;
   if (seen.has(value)) return "[Circular]";
   seen.add(value);
   if (value instanceof Error) return redactCapabilityText(value.message, roots);
@@ -253,7 +253,7 @@ function normalizeInteractionFields(value) {
     );
   }
   return declared.map((field, index) => {
-    if (!field || typeof field !== "object" || Array.isArray(field)) {
+    if (!isPlainObject(field)) {
       throw new TypeError(`ui.waitForUser field ${index} must be an object`);
     }
     const name = text(field.name);
@@ -341,7 +341,7 @@ function createPageFacade(page, paths) {
 }
 
 function requireOptionsObject(value, signature) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new TypeError(`${signature} requires one options object`);
   }
   return value;
@@ -741,7 +741,7 @@ export async function createNativeScriptRuntime({
             else await route.abort("blockedbyclient");
           });
         }
-        if (source.viewport && typeof source.viewport === "object") {
+        if (isObjectLike(source.viewport)) {
           await page.setViewportSize({
             width: Number(source.viewport.width || 0),
             height: Number(source.viewport.height || 0),

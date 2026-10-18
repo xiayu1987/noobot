@@ -272,7 +272,7 @@ export function createUserInteractionTool({ agentContext }) {
       }
 
       if (normalizedFieldsPayload.fields?.length) {
-        if (!result || typeof result !== "object" || Array.isArray(result)) {
+        if (!isPlainObject(result)) {
           throw recoverableToolError(tUserInteraction(runtime, "invalidResponseObject"), {
             code: ERROR_CODE.RECOVERABLE_INVALID_RESPONSE_OBJECT,
           });

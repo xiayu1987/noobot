@@ -20,7 +20,7 @@ import {
 } from "./deps.js";
 import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -170,7 +170,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   });
   bucket.lastAcceptanceReport = report;
   bucket.acceptanceReports.push(report);
-  if (ctx?.result && typeof ctx.result === "object") {
+  if (isObjectLike(ctx?.result)) {
     await runAcceptanceBySeparateModel(ctx, meta, report);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,

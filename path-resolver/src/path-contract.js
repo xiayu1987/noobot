@@ -10,7 +10,7 @@ import {
   normalizeSlashPath,
 } from "./platform.js";
 import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export const PATH_REF_VIEWS = Object.freeze({
   WORKSPACE: "workspace",
@@ -57,7 +57,7 @@ const DISPLAY_PATH_POLICIES = Object.freeze([
 const RESOLVED_PATH_POLICIES = new WeakSet();
 
 function deepFreeze(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  if (!isObjectLike(value) || Object.isFrozen(value)) return value;
   for (const item of Object.values(value)) deepFreeze(item);
   return Object.freeze(value);
 }
@@ -184,8 +184,7 @@ export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = 
     if (!Object.values(PATH_REF_VIEWS).includes(view))
       throw new Error(`invalid logical path view: ${view || "missing"}`);
     if (view === PATH_REF_VIEWS.ATTACHMENT) {
-      if (!input.identity || typeof input.identity !== "object" || Array.isArray(input.identity))
-        throw new Error("attachment path identity required");
+      if (!isPlainObject(input.identity)) throw new Error("attachment path identity required");
       return Object.freeze({ view, identity: Object.freeze({ ...input.identity }) });
     }
     const logicalPath = text(input.path);

@@ -6,7 +6,7 @@
 import { CAPABILITY_DOMAIN } from "../shared/constants.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const PLAN_UPDATE_POLICY = Object.freeze({
@@ -32,8 +32,8 @@ function resolveStageAttemptLimit(stage = "revision") {
 }
 
 export function resolvePlanUpdateAttempts(state = {}, { stage = "revision" } = {}) {
-  if (!state || typeof state !== "object") return 0;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (!isObjectLike(state)) return 0;
+  if (!isObjectLike(state.counters)) state.counters = {};
   const normalizedStage = normalizePlanUpdateStage(stage);
   const stageKey = resolveStageAttemptCounterKey(normalizedStage);
   if (Number.isFinite(Number(state.counters[stageKey]))) {
@@ -43,8 +43,8 @@ export function resolvePlanUpdateAttempts(state = {}, { stage = "revision" } = {
 }
 
 function syncPlanUpdateAttempts(state = {}, { stage = "revision", next = 0 } = {}) {
-  if (!state || typeof state !== "object") return;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (!isObjectLike(state)) return;
+  if (!isObjectLike(state.counters)) state.counters = {};
   const normalizedStage = normalizePlanUpdateStage(stage);
   const stageKey = resolveStageAttemptCounterKey(normalizedStage);
   state.counters[stageKey] = next;
@@ -62,8 +62,8 @@ export function canAttemptPlanUpdate(
   state = {},
   { increment = false, stage = "revision" } = {},
 ) {
-  if (!state || typeof state !== "object") return false;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (!isObjectLike(state)) return false;
+  if (!isObjectLike(state.counters)) state.counters = {};
   const normalizedStage = normalizePlanUpdateStage(stage);
   const current = resolvePlanUpdateAttempts(state, { stage: normalizedStage });
   const stageLimit = resolveStageAttemptLimit(normalizedStage);
@@ -89,8 +89,8 @@ export function setPendingPlanUpdate(
   state = {},
   { active = false, stage = "revision", targetMainStepIndexes = [] } = {},
 ) {
-  if (!state || typeof state !== "object") return false;
-  if (!state.pending || typeof state.pending !== "object") state.pending = {};
+  if (!isObjectLike(state)) return false;
+  if (!isObjectLike(state.pending)) state.pending = {};
   const pending = state.pending;
   if (active !== true) {
     const stageText = text(stage).toLowerCase();
@@ -133,8 +133,8 @@ export function writePlanUpdateCaptureContext(
   state = {},
   { stage = "revision", targetMainStepIndexes = [] } = {},
 ) {
-  if (!state || typeof state !== "object") return false;
-  if (!state.flags || typeof state.flags !== "object") state.flags = {};
+  if (!isObjectLike(state)) return false;
+  if (!isObjectLike(state.flags)) state.flags = {};
   const normalizedStage = normalizePlanUpdateStage(stage);
   const normalizedTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes

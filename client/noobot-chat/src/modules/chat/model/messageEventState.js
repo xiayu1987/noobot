@@ -6,13 +6,13 @@
 
 import { createSerializedWindowIndex } from "@noobot/timeline-runtime";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export function initializeMessageEventState(message = {}) {
   if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];
   if (!Array.isArray(message.activityTimeline)) message.activityTimeline = [];
   if (typeof message.content !== "string") message.content = String(message.content || "");
-  if (!message.messageEventState || typeof message.messageEventState !== "object") {
+  if (!isObjectLike(message.messageEventState)) {
     message.messageEventState = { lastSequence: 0, consumedEventIds: [] };
   }
   if (!Number.isFinite(Number(message.messageEventState.lastSequence))) {
@@ -57,7 +57,7 @@ export function resolveMessageEventLaneState(message = {}, envelope = {}) {
     sourceMessageId !== presentationMessageId,
   );
   if (!aggregateProjection) return root;
-  if (!root.sequenceLanesByScopeId || typeof root.sequenceLanesByScopeId !== "object") {
+  if (!isObjectLike(root.sequenceLanesByScopeId)) {
     root.sequenceLanesByScopeId = {};
   }
   if (!root.sequenceLanesByScopeId[sequenceScopeId]) {

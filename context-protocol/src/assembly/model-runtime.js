@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
 const runtimeByDocument = new WeakMap();
 
 function createStore() {
@@ -14,7 +15,7 @@ export function attachModelContextRuntime(
   document,
   { onCanonicalMessageAdded = null, onMutationConsumed = null } = {},
 ) {
-  if (!document || typeof document !== "object" || Array.isArray(document)) {
+  if (!isPlainObject(document)) {
     throw new TypeError("model context runtime requires a document object");
   }
   if (runtimeByDocument.has(document)) {

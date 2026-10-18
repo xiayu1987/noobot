@@ -5,6 +5,7 @@
  */
 import { dedupeTextList, sanitizeFileName } from "../text.js";
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
+import { isObjectLike } from "@noobot/shared/value";
 
 const EXPERIENCE_MODEL_ERROR_CODE = "EXPERIENCE_MODEL_DOCUMENT_INVALID";
 
@@ -22,12 +23,12 @@ function requireName(raw, line) {
 
 export function normalizeExperienceModelTree(raw = {}) {
   const out = {};
-  if (!raw || typeof raw !== "object") return out;
+  if (!isObjectLike(raw)) return out;
   for (const [domainKey, categoriesRaw] of Object.entries(raw)) {
     const domainName = sanitizeFileName(domainKey, "");
     if (!domainName) continue;
     const categoriesOut = {};
-    if (categoriesRaw && typeof categoriesRaw === "object") {
+    if (isObjectLike(categoriesRaw)) {
       for (const [categoryKey, subcategoriesRaw] of Object.entries(categoriesRaw)) {
         const categoryName = sanitizeFileName(categoryKey, "");
         if (!categoryName) continue;
