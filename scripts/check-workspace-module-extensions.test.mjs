@@ -4,16 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
-
-const checkerPath = fileURLToPath(
-  new URL("./check-workspace-module-extensions.mjs", import.meta.url),
-);
+import { measureWorkspaceModuleExtensions } from "./check-workspace-module-extensions.mjs";
 
 async function write(filePath, contents) {
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -22,13 +17,6 @@ async function write(filePath, contents) {
 
 async function writeJson(filePath, value) {
   await write(filePath, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-function runCheck(root) {
-  return spawnSync(process.execPath, [checkerPath, "--quiet"], {
-    cwd: root,
-    encoding: "utf8",
-  });
 }
 
 test("workspace module extension check enforces the package-level ESM suffix", async () => {
@@ -49,15 +37,16 @@ test("workspace module extension check enforces the package-level ESM suffix", a
     await write(path.join(root, "commonjs-package", "standalone.mjs"), "export {};\n");
     await write(path.join(root, "root-script.mjs"), "export {};\n");
     await write(path.join(root, "module-package", "dist", "generated.mjs"), "export {};\n");
+    await write(path.join(root, "module-package", "logs", "output.mjs"), "export {};\n");
 
-    const valid = runCheck(root);
-    assert.equal(valid.status, 0, valid.stderr);
+    const valid = await measureWorkspaceModuleExtensions(root);
+    assert.equal(valid.mjsInModuleWorkspace.total, 0);
 
     await write(path.join(root, "module-package", "src", "invalid.mjs"), "export {};\n");
-    const invalid = runCheck(root);
-    assert.equal(invalid.status, 1);
-    assert.match(invalid.stderr, /module-package\/src\/invalid\.mjs/);
-    assert.doesNotMatch(invalid.stderr, /root-script|generated|commonjs-package/);
+    const invalid = await measureWorkspaceModuleExtensions(root);
+    assert.deepEqual(Object.keys(invalid.mjsInModuleWorkspace.files), [
+      "module-package/src/invalid.mjs",
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

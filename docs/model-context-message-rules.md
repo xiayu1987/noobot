@@ -114,7 +114,7 @@ finalMessages = system + history + incremental
 
 ## 5. 请求日志审计范围
 
-`scripts/check-model-context-convergence.mjs` 审计 model-proxy 请求日志时，按每条请求的 `X-Model-Operation` 头（由 model-runtime 统一写入）区分：
+`npm run audit:model-request-log -- <日志路径>`（`scripts/audit-model-request-log.mjs`）审计 model-proxy 请求日志时，按每条请求的 `X-Model-Operation` 头（由 model-runtime 统一写入）区分：
 
 - `chat`（含缺失该头的旧日志）：主流程与 harness、workflow、memory 等消息组装型辅助调用，必须包含构造的 system/developer 消息，且不能只有 harness 注入；
 - 非 `chat` 的 provider operation（如 `web_search`）：消息由能力自身的调用计划构造，不要求 system；

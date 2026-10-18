@@ -5,44 +5,36 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findAddedSourceComments } from "./check-source-comments.mjs";
+import { findForbiddenComments } from "./quality/source-comments.mjs";
 
-test("source comment guard detects newly added comments", () => {
-  const comments = findAddedSourceComments(
-    "const value = 1;\n",
-    "const value = 1;\n// explanation\n",
-  );
-  assert.equal(comments.length, 1);
-});
-
-test("source comment guard counts duplicate comments instead of deduplicating them", () => {
-  const comments = findAddedSourceComments(
-    "// explanation\nconst value = 1;\n",
-    "// explanation\nconst value = 1;\n// explanation\n",
-  );
-  assert.equal(comments.length, 1);
-});
-
-test("source comment guard detects Vue template comments", () => {
-  const comments = findAddedSourceComments(
-    "<template><span /></template>\n",
-    "<template><!-- detail --><span /></template>\n",
-  );
-  assert.equal(comments.length, 1);
-});
-
-test("source comment guard allows the required license header", () => {
-  const source = `/*
+const LICENSE_HEADER = `/*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const value = 1;
 `;
-  assert.equal(findAddedSourceComments("const value = 1;\n", source).length, 0);
+
+test("reports every explanatory comment, including duplicates", () => {
+  const comments = findForbiddenComments("// note\nconst value = 1;\n// note\n", "a.js");
+  assert.deepEqual(
+    comments.map((comment) => comment.loc.start.line),
+    [1, 3],
+  );
 });
 
-test("source comment guard allows a shebang", () => {
-  const source = "#!/usr/bin/env node\nconst value = 1;\n";
-  assert.equal(findAddedSourceComments("const value = 1;\n", source).length, 0);
+test("reports Vue template comments", () => {
+  assert.equal(
+    findForbiddenComments("<template><!-- detail --><span /></template>\n", "a.vue").length,
+    1,
+  );
+});
+
+test("reports style and shell comments by file type", () => {
+  assert.equal(findForbiddenComments("a { color: red; } /* why */\n", "a.css").length, 1);
+  assert.equal(findForbiddenComments("#!/bin/sh\n# why\necho ok\n", "a.sh").length, 1);
+});
+
+test("allows the license header and a shebang", () => {
+  assert.equal(findForbiddenComments(`${LICENSE_HEADER}const value = 1;\n`, "a.js").length, 0);
+  assert.equal(findForbiddenComments("#!/usr/bin/env node\nconst value = 1;\n", "a.mjs").length, 0);
 });

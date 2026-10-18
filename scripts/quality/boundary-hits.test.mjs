@@ -6,6 +6,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  addContractHits,
+  addExemptablePatternOffsetHits,
   addExemptablePatternLineHits,
   addMissingConsumerHits,
   addMissingMarkerHits,
@@ -62,7 +64,7 @@ test("addMissingConsumerHits reports consumers that do not reference their marke
   assert.deepEqual(measurement.samples, ["package.json must consume zz-missing-consumer"]);
 });
 
-test("addExemptablePatternLineHits records exempt hits on the usage instead of the measurement", () => {
+function vendorExemptUsage() {
   const check = defineCheck({
     id: "s",
     description: "d",
@@ -73,7 +75,11 @@ test("addExemptablePatternLineHits records exempt hits on the usage instead of t
     baseline: { r: 0, exemptions: 1 },
     measure: async () => ({}),
   });
-  const usage = createExemptionUsage(check);
+  return createExemptionUsage(check);
+}
+
+test("addExemptablePatternLineHits records exempt hits on the usage instead of the measurement", () => {
+  const usage = vendorExemptUsage();
   const measurement = measurementFromHits([]);
   const args = { usage, rule: "r", measurement, pattern: /bad/, message: "bad" };
   addExemptablePatternLineHits({ ...args, file: "vendor/a.js", source: "ok" });
@@ -82,4 +88,66 @@ test("addExemptablePatternLineHits records exempt hits on the usage instead of t
   addExemptablePatternLineHits({ ...args, file: "src/a.js", source: "bad" });
   assert.deepEqual(usage.staleEntries(), []);
   assert.deepEqual(measurement.samples, ["src/a.js:1 bad"]);
+});
+
+test("addExemptablePatternOffsetHits reports start lines and marks exemptions used", () => {
+  const usage = vendorExemptUsage();
+  const measurement = measurementFromHits([]);
+  const args = { usage, rule: "r", measurement, pattern: /b\nad/g, message: "bad" };
+  addExemptablePatternOffsetHits({ ...args, file: "vendor/a.js", source: "b\nad" });
+  addExemptablePatternOffsetHits({ ...args, file: "src/a.js", source: "x\nb\nad" });
+  assert.deepEqual(usage.staleEntries(), []);
+  assert.deepEqual(measurement.samples, ["src/a.js:2 bad"]);
+});
+
+function contractMeasured() {
+  return { missingMarker: measurementFromHits([]), forbiddenPattern: measurementFromHits([]) };
+}
+
+test("addContractHits scopes a function body past a destructured parameter closing brace", () => {
+  const source = [
+    "export function owner({",
+    "  a = 1,",
+    "} = {}) {",
+    "  return legacy(a);",
+    "}",
+    "",
+    "export function other() {",
+    "  return canonical();",
+    "}",
+    "",
+  ].join("\n");
+  const measured = contractMeasured();
+  const contract = {
+    required: [["owner exists", /export function owner/]],
+    scoped: [
+      {
+        scope: { fn: "owner" },
+        required: [["owner stays canonical", /canonical\(/]],
+        forbidden: [["owner calls legacy", /legacy\(/]],
+      },
+    ],
+  };
+  addContractHits({ measured, file: "a.js", source, contract });
+  assert.deepEqual(measured.missingMarker.samples, ["a.js owner stays canonical"]);
+  assert.deepEqual(measured.forbiddenPattern.samples, ["a.js:4 owner calls legacy"]);
+});
+
+test("addContractHits limits window scopes around the marker", () => {
+  const source = "far system\n" + "x".repeat(40) + "\nnear system\nMARKER\n";
+  const measured = contractMeasured();
+  const scope = { around: "MARKER", before: 20, after: 5 };
+  const contract = { scoped: [{ scope, forbidden: [["system near marker", /system/]] }] };
+  addContractHits({ measured, file: "a.js", source, contract });
+  assert.deepEqual(measured.forbiddenPattern.samples, ["a.js:3 system near marker"]);
+});
+
+test("addContractHits reports a missing scope instead of passing silently", () => {
+  const measured = contractMeasured();
+  const contract = {
+    scoped: [{ scope: { fn: "gone" }, forbidden: [["never checked", /x/]] }],
+  };
+  addContractHits({ measured, file: "a.js", source: "export function kept() {\n}\n", contract });
+  assert.deepEqual(measured.missingMarker.samples, ['a.js missing scope {"fn":"gone"}']);
+  assert.equal(measured.forbiddenPattern.total, 0);
 });

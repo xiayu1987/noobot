@@ -8,7 +8,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { checkRepository, inspectSourceFile } from "./check-esm-relative-import-extensions.mjs";
+import { measureEsmRelativeImportExtensions } from "./check-esm-relative-import-extensions.mjs";
+import { fixEsmRelativeImportExtensions } from "./fix-esm-relative-import-extensions.mjs";
 
 function fixture(t, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-esm-extensions-"));
@@ -19,6 +20,18 @@ function fixture(t, files) {
     fs.writeFileSync(file, source);
   }
   return root;
+}
+
+function samples(measured) {
+  return Object.fromEntries(
+    Object.entries(measured)
+      .filter(([, measurement]) => measurement.total)
+      .map(([rule, measurement]) => [rule, measurement.samples]),
+  );
+}
+
+function read(root, file) {
+  return fs.readFileSync(path.join(root, file), "utf8");
 }
 
 test("finds parser-recognized extensionless imports without matching comments or packages", async (t) => {
@@ -34,64 +47,16 @@ test("finds parser-recognized extensionless imports without matching comments or
     "src/helpers/index.js": "export const helper = true;\n",
     "src/lazy.js": "export default 2;\n",
   });
-  const result = await checkRepository({ root, sourceRoots: ["src"] });
-  assert.deepEqual(
-    result.violations.map(({ specifier, replacement }) => [specifier, replacement]),
-    [
-      ["./value", "./value.js"],
-      ["./helpers", "./helpers/index.js"],
-      ["./lazy?raw", "./lazy.js?raw"],
+  assert.deepEqual(samples(await measureEsmRelativeImportExtensions(root, ["src/main.js"])), {
+    missingExtension: [
+      'src/main.js:1 "./value"',
+      'src/main.js:2 "./helpers"',
+      'src/main.js:3 "./lazy?raw"',
     ],
-  );
-});
-
-test("fixes only uniquely resolved imports and preserves quote style", async (t) => {
-  const root = fixture(t, {
-    "src/main.js": "import './side-effect';\nconst lazy = import(\"./lazy#worker\");\n",
-    "src/side-effect.js": "export {};\n",
-    "src/lazy.mjs": "export {};\n",
   });
-  const result = await checkRepository({ root, fix: true, sourceRoots: ["src"] });
-  assert.equal(result.fixed, 2);
-  assert.deepEqual(result.violations, []);
-  assert.equal(
-    fs.readFileSync(path.join(root, "src/main.js"), "utf8"),
-    "import './side-effect.js';\nconst lazy = import(\"./lazy.mjs#worker\");\n",
-  );
 });
 
-test("parses Vue script blocks and resolves Vue components by their real extension", async (t) => {
-  const root = fixture(t, {
-    "src/App.vue": [
-      "<template><Widget /></template>",
-      "<script setup>",
-      'import Widget from "./Widget";',
-      "</script>",
-    ].join("\n"),
-    "src/Widget.vue": "<template><p>Widget</p></template>\n",
-  });
-  const result = await checkRepository({ root, fix: true, sourceRoots: ["src"] });
-  assert.equal(result.fixed, 1);
-  assert.match(fs.readFileSync(path.join(root, "src/App.vue"), "utf8"), /from "\.\/Widget\.vue"/);
-});
-
-test("parses both classic and setup Vue script blocks through the SFC compiler", async (t) => {
-  const root = fixture(t, {
-    "src/App.vue": [
-      '<script>import classic from "./classic";</script>',
-      '<script setup>import setup from "./setup";</script>',
-    ].join("\n"),
-    "src/classic.js": "export default 1;\n",
-    "src/setup.js": "export default 2;\n",
-  });
-  const result = await checkRepository({ root, fix: true, sourceRoots: ["src"] });
-  assert.equal(result.fixed, 2);
-  const output = fs.readFileSync(path.join(root, "src/App.vue"), "utf8");
-  assert.match(output, /from "\.\/classic\.js"/);
-  assert.match(output, /from "\.\/setup\.js"/);
-});
-
-test("reports ambiguous, missing, and computed relative targets without guessing", async (t) => {
+test("reports ambiguous, missing, computed, and unparsable sources without guessing", async (t) => {
   const root = fixture(t, {
     "src/main.js": [
       'import value from "./value";',
@@ -100,17 +65,18 @@ test("reports ambiguous, missing, and computed relative targets without guessing
     ].join("\n"),
     "src/value.js": "export default 1;\n",
     "src/value.vue": "<template />\n",
+    "src/broken.js": "import { from './x.js';\n",
   });
-  const file = path.join(root, "src/main.js");
-  const violations = await inspectSourceFile(file);
-  assert.deepEqual(
-    violations.map(({ reason, replacement }) => [reason, replacement]),
-    [
-      ["ambiguous target (value.js, value.vue)", null],
-      ["target not found", null],
-      ["computed relative import has no explicit extension", null],
-    ],
+  const { unanalyzableSource, ...rest } = samples(
+    await measureEsmRelativeImportExtensions(root, ["src/main.js", "src/broken.js"]),
   );
+  assert.deepEqual(rest, {
+    ambiguousTarget: ['src/main.js:1 "./value (value.js, value.vue)"'],
+    targetNotFound: ['src/main.js:2 "./missing"'],
+    computedRelativeImport: ['src/main.js:3 "./locales/${locale}"'],
+  });
+  assert.equal(unanalyzableSource.length, 1);
+  assert.match(unanalyzableSource[0], /^src\/broken\.js:2 "module parse failed: /);
 });
 
 test("accepts explicit extensions including dynamic template suffixes", async (t) => {
@@ -120,5 +86,38 @@ test("accepts explicit extensions including dynamic template suffixes", async (t
       "const locale = import(`./locales/${name}.js`);",
     ].join("\n"),
   });
-  assert.deepEqual(await inspectSourceFile(path.join(root, "src/main.js")), []);
+  assert.deepEqual(samples(await measureEsmRelativeImportExtensions(root, ["src/main.js"])), {});
+});
+
+test("fix rewrites only uniquely resolved imports and preserves quote style", async (t) => {
+  const root = fixture(t, {
+    "src/main.js": "import './side-effect';\nconst lazy = import(\"./lazy#worker\");\n",
+    "src/side-effect.js": "export {};\n",
+    "src/lazy.mjs": "export {};\n",
+    "src/ambiguous.js": 'import value from "./value";\n',
+    "src/value.js": "export default 1;\n",
+    "src/value.vue": "<template />\n",
+  });
+  assert.equal(await fixEsmRelativeImportExtensions(root, ["src/main.js", "src/ambiguous.js"]), 2);
+  assert.equal(
+    read(root, "src/main.js"),
+    "import './side-effect.js';\nconst lazy = import(\"./lazy.mjs#worker\");\n",
+  );
+  assert.equal(read(root, "src/ambiguous.js"), 'import value from "./value";\n');
+});
+
+test("fix resolves imports in classic and setup Vue script blocks", async (t) => {
+  const root = fixture(t, {
+    "src/App.vue": [
+      '<script>import classic from "./classic";</script>',
+      '<script setup>import Widget from "./Widget";</script>',
+    ].join("\n"),
+    "src/classic.js": "export default 1;\n",
+    "src/Widget.vue": "<template><p>Widget</p></template>\n",
+  });
+  assert.equal(await fixEsmRelativeImportExtensions(root, ["src/App.vue"]), 2);
+  const output = read(root, "src/App.vue");
+  assert.match(output, /from "\.\/classic\.js"/);
+  assert.match(output, /from "\.\/Widget\.vue"/);
+  assert.deepEqual(samples(await measureEsmRelativeImportExtensions(root, ["src/App.vue"])), {});
 });

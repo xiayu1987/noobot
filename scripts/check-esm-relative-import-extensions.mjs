@@ -5,39 +5,17 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { init, parse } from "es-module-lexer";
 import { vueScriptRegions } from "./lib/vue-script-regions.mjs";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { repositoryRoot } from "./quality/repository-files.mjs";
+import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultSourceRoots = [
-  "agent",
-  "agent-proxy",
-  "client",
-  "hook-protocol",
-  "i18n",
-  "model-proxy",
-  "plugin",
-  "runtime-events",
-  "sanitize",
-  "scripts",
-  "service",
-  "shared",
-  "user-template",
-  "workflow",
-];
-const ignoredDirectories = new Set([
-  ".git",
-  ".noobot",
-  "build",
-  "coverage",
-  "dist",
-  "node_modules",
-  "test-results",
-  "vendor",
-  "workspace",
-]);
-const inspectedExtension = /\.(?:[cm]?[jt]s|[jt]sx|vue)$/i;
 const resolutionExtensions = [
   ".js",
   ".mjs",
@@ -50,10 +28,6 @@ const resolutionExtensions = [
   ".vue",
   ".json",
 ];
-
-function toPosix(file) {
-  return file.split(path.sep).join("/");
-}
 
 function splitResourceSuffix(specifier) {
   const suffixAt = specifier.search(/[?#]/);
@@ -91,6 +65,10 @@ function resolveCandidates(importer, specifier) {
   return candidates;
 }
 
+export const ESM_SOURCE_EXTENSIONS = Object.freeze(
+  resolutionExtensions.filter((ext) => ext !== ".json"),
+);
+
 function lineAt(source, index) {
   return source.slice(0, index).split("\n").length;
 }
@@ -105,162 +83,138 @@ function literalRange(moduleImport, region) {
   };
 }
 
-function inspectComputedRelativeImport(moduleImport, region, file, fullSource) {
+function isRelative(specifier) {
+  return specifier.startsWith("./") || specifier.startsWith("../");
+}
+
+function computedRelativeImport(moduleImport, region, source) {
   if (moduleImport.type !== "dynamic" || !moduleImport.glob) return null;
   const raw = region.source.slice(moduleImport.start, moduleImport.end);
   const body = /^["'`]/.test(raw) ? raw.slice(1, -1) : raw;
-  if (!body.startsWith("./") && !body.startsWith("../")) return null;
+  if (!isRelative(body)) return null;
   if (hasExplicitExtension(body.replaceAll(/\$\{[^}]*\}/g, "placeholder"))) return null;
   return {
-    file,
-    line: lineAt(fullSource, region.offset + moduleImport.start),
+    rule: "computedRelativeImport",
+    line: lineAt(source, region.offset + moduleImport.start),
     specifier: body,
-    reason: "computed relative import has no explicit extension",
     replacement: null,
-    start: null,
-    end: null,
   };
 }
 
-export async function inspectSourceFile(file, source = fs.readFileSync(file, "utf8")) {
+function unresolvedImport(file, moduleImport, region, source) {
+  const { specifier } = moduleImport;
+  if (typeof specifier !== "string" || !isRelative(specifier)) return null;
+  if (hasExplicitExtension(specifier)) return null;
+  const candidates = resolveCandidates(file, specifier);
+  const range = literalRange(moduleImport, region);
+  const base = { line: lineAt(source, range.start), specifier, replacement: null };
+  if (candidates.length === 0) return { ...base, rule: "targetNotFound" };
+  if (candidates.length > 1) {
+    const names = candidates.map(({ file: candidate }) => path.basename(candidate)).join(", ");
+    return { ...base, rule: "ambiguousTarget", specifier: `${specifier} (${names})` };
+  }
+  return {
+    ...base,
+    rule: "missingExtension",
+    replacement: { ...range, text: candidates[0].replacement },
+  };
+}
+
+function parseFailure(source, region, error) {
+  const offset = Number.isInteger(error.idx) ? region.offset + error.idx : region.offset;
+  return {
+    rule: "unanalyzableSource",
+    line: lineAt(source, offset),
+    specifier: `module parse failed: ${error.message}`,
+    replacement: null,
+  };
+}
+
+export async function inspectSourceFile(file, source) {
   await init;
-  const violations = [];
   let regions;
   try {
     regions = vueScriptRegions(file, source);
   } catch (error) {
-    return [
-      {
-        file,
-        line: 1,
-        specifier: "",
-        reason: error.message,
-        replacement: null,
-        start: null,
-        end: null,
-      },
-    ];
+    return [{ rule: "unanalyzableSource", line: 1, specifier: error.message, replacement: null }];
   }
+  const findings = [];
   for (const region of regions) {
     let imports;
     try {
       [imports] = parse(region.source, file);
     } catch (error) {
-      violations.push({
-        file,
-        line: lineAt(source, region.offset + Number(error.idx || 0)),
-        specifier: "",
-        reason: `module parse failed: ${error.message}`,
-        replacement: null,
-        start: null,
-        end: null,
-      });
+      findings.push(parseFailure(source, region, error));
       continue;
     }
     for (const moduleImport of imports) {
-      const computedViolation = inspectComputedRelativeImport(moduleImport, region, file, source);
-      if (computedViolation) {
-        violations.push(computedViolation);
-        continue;
-      }
-      const specifier = moduleImport.specifier;
-      if (typeof specifier !== "string") continue;
-      if (!specifier.startsWith("./") && !specifier.startsWith("../")) continue;
-      if (hasExplicitExtension(specifier)) continue;
-      const candidates = resolveCandidates(file, specifier);
-      const range = literalRange(moduleImport, region);
-      violations.push({
+      const finding =
+        computedRelativeImport(moduleImport, region, source) ??
+        unresolvedImport(file, moduleImport, region, source);
+      if (finding) findings.push(finding);
+    }
+  }
+  return findings;
+}
+
+export async function measureEsmRelativeImportExtensions(root, files) {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const file of files) {
+    const absolute = path.join(root, file);
+    for (const finding of await inspectSourceFile(absolute, fs.readFileSync(absolute, "utf8"))) {
+      addHit(measured[finding.rule], {
         file,
-        line: lineAt(source, range.start),
-        specifier,
-        reason:
-          candidates.length === 0
-            ? "target not found"
-            : candidates.length > 1
-              ? `ambiguous target (${candidates.map(({ file: candidate }) => path.basename(candidate)).join(", ")})`
-              : "missing explicit extension",
-        replacement: candidates.length === 1 ? candidates[0].replacement : null,
-        start: range.start,
-        end: range.end,
+        line: finding.line,
+        message: JSON.stringify(finding.specifier),
       });
     }
   }
-  return violations;
+  return measured;
 }
 
-function collectSourceFiles(root, sourceRoots) {
-  const files = [];
-  function walk(directory) {
-    if (!fs.statSync(directory, { throwIfNoEntry: false })?.isDirectory()) return;
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
-      const file = path.join(directory, entry.name);
-      if (entry.isDirectory()) walk(file);
-      else if (entry.isFile() && inspectedExtension.test(entry.name)) files.push(file);
-    }
-  }
-  for (const sourceRoot of sourceRoots) walk(path.resolve(root, sourceRoot));
-  return files.sort();
-}
+export const CHECK = defineCheck({
+  id: "esm-relative-import-extensions",
+  description: "Relative ESM imports name their real file extension",
+  rules: {
+    missingExtension: {
+      description: "Relative import resolves to exactly one file but omits its extension",
+      hint: "run npm run fix:esm-import-extensions, or write the real extension",
+    },
+    ambiguousTarget: {
+      description: "Extensionless relative import matches more than one file",
+      hint: "write the extension of the intended target explicitly",
+    },
+    targetNotFound: {
+      description: "Extensionless relative import matches no file",
+      hint: "fix the path or write the real extension of the target",
+    },
+    computedRelativeImport: {
+      description: "Computed relative dynamic import has no explicit extension",
+      hint: "end the template with the real extension, e.g. `./locales/${name}.js`",
+    },
+    unanalyzableSource: {
+      description: "Source or Vue script block cannot be parsed for imports",
+      hint: "fix the syntax error so imports can be verified",
+    },
+  },
+  exemptions: [],
+  baseline: {
+    missingExtension: 0,
+    ambiguousTarget: 0,
+    targetNotFound: 0,
+    computedRelativeImport: 0,
+    unanalyzableSource: 0,
+    exemptions: 0,
+  },
+  measure: async () =>
+    measureEsmRelativeImportExtensions(
+      repositoryRoot,
+      await getFirstPartyCodeFiles({
+        repositoryRoot,
+        extensions: ESM_SOURCE_EXTENSIONS,
+        includeTests: true,
+      }),
+    ),
+});
 
-function applyFixes(file, source, violations) {
-  const fixes = violations
-    .filter(
-      ({ replacement, start, end }) =>
-        replacement && Number.isInteger(start) && Number.isInteger(end),
-    )
-    .sort((left, right) => right.start - left.start);
-  let result = source;
-  for (const fix of fixes)
-    result = `${result.slice(0, fix.start)}${fix.replacement}${result.slice(fix.end)}`;
-  if (result !== source) fs.writeFileSync(file, result);
-  return fixes.length;
-}
-
-export async function checkRepository({
-  root = repositoryRoot,
-  fix = false,
-  sourceRoots = defaultSourceRoots,
-} = {}) {
-  const files = collectSourceFiles(root, sourceRoots);
-  const violations = [];
-  let fixed = 0;
-  for (const file of files) {
-    const source = fs.readFileSync(file, "utf8");
-    const fileViolations = await inspectSourceFile(file, source);
-    if (fix) fixed += applyFixes(file, source, fileViolations);
-    violations.push(...fileViolations);
-  }
-  const remaining = fix
-    ? (await Promise.all(files.map((file) => inspectSourceFile(file)))).flat()
-    : violations;
-  return { files, violations: remaining, fixed };
-}
-
-function formatViolation(root, violation) {
-  const relative = toPosix(path.relative(root, violation.file));
-  const specifier = violation.specifier ? ` ${JSON.stringify(violation.specifier)}` : "";
-  return `${relative}:${violation.line}: ${violation.reason}:${specifier}`;
-}
-
-async function main() {
-  const fix = process.argv.includes("--fix");
-  const result = await checkRepository({ fix });
-  if (result.violations.length) {
-    console.error(
-      [
-        "Relative ESM imports must include their real file extension.",
-        ...result.violations.map((violation) => formatViolation(repositoryRoot, violation)),
-      ].join("\n"),
-    );
-    process.exitCode = 1;
-    return;
-  }
-  const fixSummary = fix ? `; fixed ${result.fixed} import(s)` : "";
-  console.log(
-    `ESM relative import extension guard passed (${result.files.length} source files${fixSummary}).`,
-  );
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href)
-  await main();
+await runCheckWhenMain(CHECK, import.meta.url);

@@ -6,75 +6,96 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { init, parse } from "es-module-lexer";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { repositoryRoot } from "./quality/repository-files.mjs";
 import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
-const root = path.resolve(import.meta.dirname, "..");
+const MODULE_EXTENSIONS = Object.freeze([".js", ".mjs"]);
 
-function resolveLocalImport(fromModule, specifier, modules) {
-  if (!specifier.startsWith(".")) return "";
-  const resolved = path.normalize(path.join(path.dirname(fromModule), specifier));
-  const candidates = [
-    resolved,
-    `${resolved}.js`,
-    `${resolved}.mjs`,
-    path.join(resolved, "index.js"),
-  ];
-  return candidates.find((candidate) => modules.has(candidate)) || "";
+function resolveRelativeImport(fromModule, specifier) {
+  return path.posix.normalize(path.posix.join(path.posix.dirname(fromModule), specifier));
 }
 
-await init;
-const modules = new Set(
-  await getFirstPartyProductionFiles({
-    repositoryRoot: root,
-    extensions: [".js", ".mjs"],
-  }),
-);
-const graph = new Map();
-for (const modulePath of modules) {
-  const source = await readFile(path.join(root, modulePath), "utf8");
-  const [imports] = parse(source);
-  const dependencies = [];
-  for (const imported of imports) {
-    const specifier = imported.specifier;
-    if (typeof specifier !== "string") continue;
-    const dependency = resolveLocalImport(modulePath, specifier, modules);
-    if (dependency) dependencies.push(dependency);
+async function buildImportGraph(root, modules) {
+  await init;
+  const graph = new Map();
+  for (const modulePath of modules) {
+    const [imports] = parse(await readFile(path.join(root, modulePath), "utf8"), modulePath);
+    const dependencies = imports
+      .map(({ specifier }) => specifier)
+      .filter((specifier) => typeof specifier === "string" && specifier.startsWith("."))
+      .map((specifier) => resolveRelativeImport(modulePath, specifier))
+      .filter((dependency) => modules.has(dependency));
+    graph.set(modulePath, dependencies);
   }
-  graph.set(modulePath, dependencies);
+  return graph;
 }
 
-const visited = new Set();
-const active = new Set();
-const stack = [];
-const cycles = new Set();
-
-function canonicalCycle(nodes) {
-  const ring = nodes.slice(0, -1);
+function canonicalCycle(ring) {
   const rotations = ring.map((_, index) => [...ring.slice(index), ...ring.slice(0, index)]);
   rotations.sort((left, right) => left.join("\n").localeCompare(right.join("\n")));
-  const canonical = rotations[0] || [];
-  return [...canonical, canonical[0]].join(" -> ");
+  return rotations[0];
 }
 
-function visit(modulePath) {
-  if (active.has(modulePath)) {
-    const start = stack.indexOf(modulePath);
-    cycles.add(canonicalCycle([...stack.slice(start), modulePath]));
-    return;
+function findCycles(graph) {
+  const visited = new Set();
+  const active = new Set();
+  const stack = [];
+  const cycles = new Map();
+  const visit = (modulePath) => {
+    if (active.has(modulePath)) {
+      const ring = canonicalCycle(stack.slice(stack.indexOf(modulePath)));
+      cycles.set(ring.join("\n"), ring);
+      return;
+    }
+    if (visited.has(modulePath)) return;
+    active.add(modulePath);
+    stack.push(modulePath);
+    for (const dependency of graph.get(modulePath)) visit(dependency);
+    stack.pop();
+    active.delete(modulePath);
+    visited.add(modulePath);
+  };
+  for (const modulePath of graph.keys()) visit(modulePath);
+  return [...cycles.values()].sort((left, right) =>
+    left.join("\n").localeCompare(right.join("\n")),
+  );
+}
+
+export async function measureSourceCycles(root, files) {
+  const measured = emptyRuleMeasurements(CHECK);
+  const graph = await buildImportGraph(root, new Set(files));
+  for (const ring of findCycles(graph)) {
+    addHit(measured.importCycle, { file: ring[0], message: [...ring, ring[0]].join(" -> ") });
   }
-  if (visited.has(modulePath)) return;
-  active.add(modulePath);
-  stack.push(modulePath);
-  for (const dependency of graph.get(modulePath) || []) visit(dependency);
-  stack.pop();
-  active.delete(modulePath);
-  visited.add(modulePath);
+  return measured;
 }
 
-for (const modulePath of modules) visit(modulePath);
-if (cycles.size) {
-  console.error([...cycles].sort().join("\n"));
-  process.exitCode = 1;
-} else {
-  console.log(`Source dependency cycles passed (${modules.size} modules)`);
+async function measure() {
+  const files = await getFirstPartyProductionFiles({
+    repositoryRoot,
+    extensions: MODULE_EXTENSIONS,
+  });
+  return measureSourceCycles(repositoryRoot, files);
 }
+
+export const CHECK = defineCheck({
+  id: "source-cycles",
+  description: "First-party production modules have no relative import cycles",
+  rules: {
+    importCycle: {
+      description: "Production modules import each other through a relative import cycle",
+      hint: "move the shared fact into a leaf module that both sides import",
+    },
+  },
+  exemptions: [],
+  baseline: { importCycle: 0, exemptions: 0 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

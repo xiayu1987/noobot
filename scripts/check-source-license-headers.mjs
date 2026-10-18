@@ -5,35 +5,21 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { repositoryRoot } from "./quality/repository-files.mjs";
+import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
-const root = process.argv[2]
-  ? path.resolve(process.argv[2])
-  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourceRoots = ["."];
-const ignoredDirectories = new Set([
-  ".git",
-  "assets",
-  "build",
-  "coverage",
-  "dist",
-  "generated",
-  "node_modules",
-  "test-results",
-  "vendor",
-  "workspace",
-]);
-const sourceExtension = /\.(?:[cm]?js|jsx|ts|tsx|vue)$/i;
-const requiredHeaderLines = [
+export const CANONICAL_CONTACT = "Contact: 126240622+xiayu1987@users.noreply.github.com";
+const REQUIRED_HEADER_LINES = Object.freeze([
   "Copyright (c) 2026 xiayu",
-  "Contact: 126240622+xiayu1987@users.noreply.github.com",
+  CANONICAL_CONTACT,
   "SPDX-License-Identifier: MIT",
-];
-const canonicalContact = "Contact: 126240622+xiayu1987@users.noreply.github.com";
-const maskedContactLine = /^([ \t]*(?:\*|\/\/)?[ \t]*)Contact:[^\r\n]*x{3,}[^\r\n]*$/gim;
-const violations = [];
-let inspectedFileCount = 0;
-let repairedFileCount = 0;
+]);
 
 function sourceWithoutInterpreterDirective(source) {
   const normalizedSource = source.startsWith("\uFEFF") ? source.slice(1) : source;
@@ -43,68 +29,49 @@ function sourceWithoutInterpreterDirective(source) {
 }
 
 function leadingComment(source) {
-  if (source.startsWith("/*")) {
-    const commentEnd = source.indexOf("*/");
-    return commentEnd === -1 ? "" : source.slice(0, commentEnd + 2);
-  }
-  if (source.startsWith("<!--")) {
-    const commentEnd = source.indexOf("-->");
-    return commentEnd === -1 ? "" : source.slice(0, commentEnd + 3);
-  }
-  return "";
+  const closers = { "/*": "*/", "<!--": "-->" };
+  const opener = Object.keys(closers).find((candidate) => source.startsWith(candidate));
+  if (!opener) return "";
+  const commentEnd = source.indexOf(closers[opener]);
+  return commentEnd === -1 ? "" : source.slice(0, commentEnd + closers[opener].length);
 }
 
-function inspect(relativePath) {
-  if (!sourceExtension.test(relativePath)) return;
-  inspectedFileCount += 1;
-  const absolutePath = path.join(root, relativePath);
-  let source = fs.readFileSync(absolutePath, "utf8");
-  const prefix = source.slice(0, 1024);
-  const repairedPrefix = prefix.replace(
-    maskedContactLine,
-    (_, linePrefix) => `${linePrefix}${canonicalContact}`,
-  );
-  if (repairedPrefix !== prefix) {
-    source = repairedPrefix + source.slice(1024);
-    fs.writeFileSync(absolutePath, source, "utf8");
-    repairedFileCount += 1;
-  }
+export function licenseHeaderViolation(source) {
   const header = leadingComment(sourceWithoutInterpreterDirective(source));
-  const missingLines = requiredHeaderLines.filter((line) => !header.includes(line));
-  if (missingLines.length) {
-    const detail = header
-      ? `header missing ${missingLines.join("; ")}`
-      : "license header must be the first syntax element (after an optional shebang)";
-    violations.push(`${relativePath}: ${detail}`);
-  }
+  if (!header) return "license header must be the first syntax element (after an optional shebang)";
+  const missingLines = REQUIRED_HEADER_LINES.filter((line) => !header.includes(line));
+  return missingLines.length ? `header missing ${missingLines.join("; ")}` : "";
 }
 
-function walk(relativePath) {
-  const absolutePath = path.join(root, relativePath);
-  if (!fs.existsSync(absolutePath)) return;
-  const entry = fs.statSync(absolutePath);
-  if (entry.isFile()) {
-    inspect(relativePath);
-    return;
+export function measureLicenseHeaders(root, files) {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const file of files) {
+    const message = licenseHeaderViolation(fs.readFileSync(path.join(root, file), "utf8"));
+    if (message) addHit(measured.missingHeader, { file, line: 1, message });
   }
-  for (const child of fs.readdirSync(absolutePath, { withFileTypes: true })) {
-    if (child.isDirectory() && ignoredDirectories.has(child.name)) continue;
-    const childPath = path.join(relativePath, child.name).replaceAll("\\", "/");
-    if (child.isDirectory()) walk(childPath);
-    else if (child.isFile()) inspect(childPath);
-  }
+  return measured;
 }
 
-for (const sourceRoot of sourceRoots) walk(sourceRoot);
-
-if (violations.length) {
-  console.error(`Source files must contain the standard license header:\n${violations.join("\n")}`);
-  process.exit(1);
+async function measure() {
+  return measureLicenseHeaders(
+    repositoryRoot,
+    await getFirstPartyCodeFiles({ repositoryRoot, includeTests: true }),
+  );
 }
 
-const repairSummary = repairedFileCount
-  ? `; repaired ${repairedFileCount} masked contact header(s)`
-  : "";
-console.log(
-  `Source license header guard passed (${inspectedFileCount} source files${repairSummary}).`,
-);
+export const CHECK = defineCheck({
+  id: "source-license-headers",
+  description: "First-party code files start with the standard license header",
+  rules: {
+    missingHeader: {
+      description:
+        "A code file does not start with the copyright, contact, and SPDX header after an optional shebang",
+      hint: "add the standard header; masked contact lines are repaired by npm run fix:source-license-headers",
+    },
+  },
+  exemptions: [],
+  baseline: { missingHeader: 0, exemptions: 0 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

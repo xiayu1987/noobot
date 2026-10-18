@@ -8,7 +8,7 @@ import test from "node:test";
 import { scanCodeTokens } from "./check-numeric-literal-style.mjs";
 
 function tokensOf(source) {
-  return scanCodeTokens("sample.js", source).map((item) => item.token);
+  return scanCodeTokens("src/sample.js", source).map((item) => item.token);
 }
 
 test("rejects numeric separators in real numeric literals", () => {

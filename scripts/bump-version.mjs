@@ -11,6 +11,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { format, resolveConfig } from "prettier";
 import { text } from "@noobot/shared/value";
+import { readRootWorkspacePaths } from "./quality/source-inventory.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -72,13 +73,9 @@ async function updateJsonVersion(relativeFile, version) {
 }
 
 async function resolveProjectJsonFiles() {
-  const rootPackage = await readJson("package.json");
-  if (!Array.isArray(rootPackage.workspaces)) {
-    throw new Error("Expected package.json workspaces to be an array");
-  }
   return [
     "package.json",
-    ...rootPackage.workspaces.map((workspace) => `${workspace}/package.json`),
+    ...(await readRootWorkspacePaths(repoRoot)).map((workspace) => `${workspace}/package.json`),
     ...PROJECT_MANIFEST_FILES,
   ];
 }

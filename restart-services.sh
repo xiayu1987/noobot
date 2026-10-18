@@ -76,10 +76,10 @@ wait_for_runtime_ready() {
 [[ -d "$MODEL_PROXY_DIR" ]] || { echo "模型代理目录不存在: $MODEL_PROXY_DIR" >&2; exit 1; }
 mkdir -p "$PM2_HOME_DIR"
 
-if ! (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet); then
+if ! (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" >/dev/null); then
   echo "Workspace runtime dependencies changed; installing missing workspace links."
   npm --prefix "$ROOT_DIR" install --workspaces
-  (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet)
+  (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" >/dev/null)
 fi
 
 ensure_pm2_log_rotation

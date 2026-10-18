@@ -7,7 +7,6 @@ import { execFile } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { text } from "@noobot/shared/value";
 
 const execFileAsync = promisify(execFile);
 const GIT_CHECK_IGNORE_NONE_MATCHED = 1;
@@ -41,17 +40,24 @@ const ignoredDirectorySet = new Set(FIRST_PARTY_IGNORED_DIRECTORIES);
 const testDirectorySet = new Set(["__mocks__", "__tests__", "tests"]);
 const testFilePattern = /\.(?:test|spec)\.(?:[cm]?js|jsx|ts|tsx)$/i;
 
-async function readRootWorkspacePaths(repositoryRoot) {
-  const packagePath = path.join(repositoryRoot, "package.json");
-  const rootPackage = JSON.parse(await readFile(packagePath, "utf8"));
-  const workspaceEntries = Array.isArray(rootPackage?.workspaces) ? rootPackage.workspaces : [];
-  const unsupported = workspaceEntries.filter((entry) => /[*?{}[\]]/.test(String(entry || "")));
+export async function readPackageJson(filePath) {
+  return JSON.parse(await readFile(filePath, "utf8"));
+}
+
+export async function readRootWorkspacePaths(repositoryRoot) {
+  const { workspaces } = await readPackageJson(path.join(repositoryRoot, "package.json"));
+  if (!Array.isArray(workspaces)) {
+    throw new TypeError("root package.json workspaces must be an explicit path array");
+  }
+  const unsupported = workspaces.filter(
+    (entry) => typeof entry !== "string" || !entry.trim() || /[*?{}[\]]/.test(entry),
+  );
   if (unsupported.length) {
     throw new Error(
       `quality source inventory requires explicit workspace paths: ${unsupported.join(", ")}`,
     );
   }
-  return workspaceEntries.map((entry) => text(entry)).filter(Boolean);
+  return workspaces;
 }
 
 export async function getFirstPartySourceRoots({ repositoryRoot } = {}) {
@@ -136,6 +142,13 @@ async function gitIgnoredPaths(repositoryRoot, relativePaths) {
   }
 }
 
+async function collectRepositoryRootFiles({ repositoryRoot, extensions, output, includeTests }) {
+  for (const entry of await readdir(repositoryRoot, { withFileTypes: true })) {
+    if (!entry.isFile() || !isFirstPartyCodePath(entry.name, { includeTests })) continue;
+    if (extensions.has(path.extname(entry.name).toLowerCase())) output.add(entry.name);
+  }
+}
+
 export async function getFirstPartyProductionFiles({
   repositoryRoot,
   extensions = [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
@@ -152,6 +165,12 @@ export async function getFirstPartyCodeFiles({
   const sourceRoots = await getFirstPartySourceRoots({ repositoryRoot: normalizedRoot });
   const extensionSet = new Set(extensions.map((extension) => String(extension).toLowerCase()));
   const output = new Set();
+  await collectRepositoryRootFiles({
+    repositoryRoot: normalizedRoot,
+    extensions: extensionSet,
+    output,
+    includeTests,
+  });
   for (const relativeDirectory of sourceRoots) {
     await collectDirectoryFiles({
       repositoryRoot: normalizedRoot,

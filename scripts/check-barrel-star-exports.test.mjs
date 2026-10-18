@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { checkRepository, collectBarrels } from "./check-barrel-star-exports.mjs";
+import { measureBarrelStarExports } from "./check-barrel-star-exports.mjs";
 
 function fixture(t, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-barrel-star-"));
@@ -19,26 +19,27 @@ function fixture(t, files) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, source);
   }
-  return root;
+  return { root, files: Object.keys(files).filter((file) => file.endsWith(".js")) };
+}
+
+async function dropped(project) {
+  const { droppedStarExport } = await measureBarrelStarExports(project.root, project.files);
+  return droppedStarExport.samples;
 }
 
 test("reports symbols dropped when two star sources own the same name", async (t) => {
-  const root = fixture(t, {
+  const project = fixture(t, {
     "src/index.js": ['export * from "./left.js";', 'export * from "./right.js";'].join("\n"),
     "src/left.js": "export const shared = 1;\nexport const onlyLeft = 2;\n",
     "src/right.js": "export const shared = 3;\nexport const onlyRight = 4;\n",
   });
-  const { violations } = await checkRepository({ root });
-  assert.equal(violations.length, 1);
-  assert.equal(violations[0].relative, path.join("src", "index.js"));
-  assert.deepEqual(
-    violations[0].dropped.map(({ name, sources }) => [name, sources]),
-    [["shared", ["./left.js", "./right.js"]]],
-  );
+  assert.deepEqual(await dropped(project), [
+    "src/index.js shared exported by ./left.js and ./right.js",
+  ]);
 });
 
 test("accepts a collision resolved by an explicit re-export", async (t) => {
-  const root = fixture(t, {
+  const project = fixture(t, {
     "src/index.js": [
       'export * from "./left.js";',
       'export * from "./right.js";',
@@ -47,63 +48,44 @@ test("accepts a collision resolved by an explicit re-export", async (t) => {
     "src/left.js": "export const shared = 1;\n",
     "src/right.js": "export const shared = 3;\n",
   });
-  const { violations } = await checkRepository({ root });
-  assert.deepEqual(violations, []);
+  assert.deepEqual(await dropped(project), []);
 });
 
 test("accepts disjoint star sources", async (t) => {
-  const root = fixture(t, {
+  const project = fixture(t, {
     "src/index.js": ['export * from "./left.js";', 'export * from "./right.js";'].join("\n"),
     "src/left.js": "export const onlyLeft = 1;\n",
     "src/right.js": "export const onlyRight = 2;\n",
   });
-  const { violations } = await checkRepository({ root });
-  assert.deepEqual(violations, []);
+  assert.deepEqual(await dropped(project), []);
 });
 
 test("analyzes a barrel whose source has named Vue component re-exports", async (t) => {
-  const root = fixture(t, {
+  const project = fixture(t, {
     "src/index.js": ['export * from "./ui.js";', 'export * from "./domain.js";'].join("\n"),
     "src/ui.js": 'export { default as Widget } from "./Widget.vue";\n',
     "src/domain.js": "export const value = 1;\n",
     "src/Widget.vue": "<template><div /></template>\n",
   });
-  const { violations } = await checkRepository({ root });
-  assert.deepEqual(violations, []);
+  assert.deepEqual(await dropped(project), []);
 });
 
 test("fails when a star-export source cannot be analyzed", async (t) => {
-  const root = fixture(t, {
+  const project = fixture(t, {
     "src/index.js": ['export * from "./broken.js";', 'export * from "./valid.js";'].join("\n"),
     "src/broken.js": "export const = ;\n",
     "src/valid.js": "export const value = 1;\n",
   });
-  await assert.rejects(checkRepository({ root }), /unable to analyze/);
+  await assert.rejects(dropped(project), /unable to analyze/);
 });
 
 test("analyzes exports without executing repository modules", async (t) => {
-  const root = fixture(t, {
+  const project = fixture(t, {
     "src/index.js": ['export * from "./left.js";', 'export * from "./right.js";'].join("\n"),
     "src/left.js":
       'import fs from "node:fs";\nfs.writeFileSync(new URL("../executed", import.meta.url), "yes");\nexport const left = 1;\n',
     "src/right.js": "export const right = 2;\n",
   });
-  const { violations } = await checkRepository({ root });
-  assert.deepEqual(violations, []);
-  assert.equal(fs.existsSync(path.join(root, "executed")), false);
-});
-
-test("collects only files with at least two star re-exports and skips ignored directories", (t) => {
-  const root = fixture(t, {
-    "src/index.js": ['export * from "./a.js";', 'export * from "./b.js";'].join("\n"),
-    "src/single.js": 'export * from "./a.js";\n',
-    "src/a.js": "export const a = 1;\n",
-    "src/b.js": "export const b = 2;\n",
-    "dist/index.js": ['export * from "./a.js";', 'export * from "./b.js";'].join("\n"),
-  });
-  const barrels = collectBarrels({ root });
-  assert.deepEqual(
-    barrels.map((barrel) => barrel.relative),
-    [path.join("src", "index.js")],
-  );
+  assert.deepEqual(await dropped(project), []);
+  assert.equal(fs.existsSync(path.join(project.root, "executed")), false);
 });

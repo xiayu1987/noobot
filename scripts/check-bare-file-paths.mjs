@@ -3,49 +3,62 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  defineCheck,
+  emptyRuleMeasurements,
+  EXEMPTION_KINDS,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addExemptablePatternOffsetHits } from "./quality/boundary-hits.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const runtimeSourceRoots = ["client", "agent/src"];
-const ignoredDirectories = new Set(["node_modules", "dist", "build", "coverage", ".git"]);
-const sourceExtension = /\.(?:[cm]?js|jsx|ts|tsx)$/;
-const resolverFiles = new Set(["client/shared/path-resolver.js"]);
-const violations = [];
+const RUNTIME_SOURCE_ROOTS = Object.freeze(["client", "agent/src"]);
+const SCANNED_EXTENSIONS = Object.freeze([".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx"]);
 export const directPathModulePattern =
   /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](?:node:)?path(?:\/(?:posix|win32))?["']/g;
 
-function lineAt(text, index) {
-  return text.slice(0, index).split("\n").length;
-}
-
-function report(file, text, pattern, message) {
-  for (const match of text.matchAll(pattern)) {
-    violations.push(`${file}:${lineAt(text, match.index)}: ${message}: ${match[0]}`);
+async function measure(usage) {
+  const measured = emptyRuleMeasurements(CHECK);
+  const files = await getFirstPartyFilesUnder(RUNTIME_SOURCE_ROOTS, {
+    repositoryRoot,
+    extensions: SCANNED_EXTENSIONS,
+    includeTests: true,
+  });
+  for (const file of files) {
+    addExemptablePatternOffsetHits({
+      usage,
+      rule: "directPathModule",
+      measurement: measured.directPathModule,
+      file,
+      source: await readRepositoryText(file),
+      pattern: directPathModulePattern,
+      message: "direct path module access",
+    });
   }
+  return measured;
 }
 
-function inspect(file) {
-  if (resolverFiles.has(file)) return;
-  const text = fs.readFileSync(path.join(root, file), "utf8");
-  report(file, text, directPathModulePattern, "direct path module access");
-}
+export const CHECK = defineCheck({
+  id: "bare-file-paths",
+  description: "Client and agent runtime sources reach file path APIs only through the resolver",
+  rules: {
+    directPathModule: {
+      description: "Runtime sources never import node:path, path/posix or path/win32 directly",
+      hint: "import path helpers from @noobot/client-shared/path-resolver or @noobot/path-resolver",
+    },
+  },
+  exemptions: [
+    {
+      id: "client-path-resolver",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directPathModule"],
+      reason: "client/shared/path-resolver.js is the single wrapper around the Node path module",
+      match: ["client/shared/path-resolver.js"],
+    },
+  ],
+  baseline: { directPathModule: 0, exemptions: 1 },
+  measure,
+});
 
-function walk(relative) {
-  for (const entry of fs.readdirSync(path.join(root, relative), { withFileTypes: true })) {
-    if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
-    const file = path.join(relative, entry.name).replaceAll("\\", "/");
-    if (entry.isDirectory()) walk(file);
-    else if (entry.isFile() && sourceExtension.test(entry.name)) inspect(file);
-  }
-}
-
-for (const dir of runtimeSourceRoots) walk(dir);
-if (violations.length) {
-  console.error(`File path APIs must use the shared path resolver:\n${violations.join("\n")}`);
-  process.exit(1);
-}
-console.log(
-  `Bare file path guard passed (${runtimeSourceRoots.join(", ")} runtime sources; resolver-only exceptions).`,
-);
+await runCheckWhenMain(CHECK, import.meta.url);

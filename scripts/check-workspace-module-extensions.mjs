@@ -4,11 +4,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { repositoryRoot } from "./quality/repository-files.mjs";
+import { readPackageJson, readRootWorkspacePaths } from "./quality/source-inventory.mjs";
 
-const root = process.cwd();
-const ignoredDirectoryNames = new Set([
+const IGNORED_DIRECTORY_NAMES = new Set([
   ".git",
   "build",
   "coverage",
@@ -16,51 +23,52 @@ const ignoredDirectoryNames = new Set([
   "node_modules",
   "vendor",
 ]);
-const ignoredWorkspaceOutputNames = new Set(["logs", "workspace"]);
+const IGNORED_WORKSPACE_OUTPUT_NAMES = new Set(["logs", "workspace"]);
 
-async function readPackageJson(filePath) {
-  return JSON.parse(await readFile(filePath, "utf8"));
-}
-
-async function findMjsFiles(directory, workspaceRoot, results = []) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  for (const entry of entries) {
+async function findMjsFiles(directory, workspaceRoot, results) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
     const absolutePath = path.join(directory, entry.name);
-    if (entry.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
       const isWorkspaceOutput =
-        directory === workspaceRoot && ignoredWorkspaceOutputNames.has(entry.name);
-      if (!ignoredDirectoryNames.has(entry.name) && !isWorkspaceOutput) {
+        directory === workspaceRoot && IGNORED_WORKSPACE_OUTPUT_NAMES.has(entry.name);
+      if (!IGNORED_DIRECTORY_NAMES.has(entry.name) && !isWorkspaceOutput) {
         await findMjsFiles(absolutePath, workspaceRoot, results);
       }
-      continue;
+    } else if (entry.isFile() && path.extname(entry.name) === ".mjs") {
+      results.push(absolutePath);
     }
-    if (entry.isFile() && path.extname(entry.name) === ".mjs") results.push(absolutePath);
   }
   return results;
 }
 
-const rootPackage = await readPackageJson(path.join(root, "package.json"));
-const workspacePaths = Array.isArray(rootPackage.workspaces)
-  ? rootPackage.workspaces
-  : rootPackage.workspaces?.packages || [];
-const violations = [];
-
-for (const workspacePath of workspacePaths) {
-  const workspaceRoot = path.join(root, workspacePath);
-  const workspacePackage = await readPackageJson(path.join(workspaceRoot, "package.json"));
-  if (workspacePackage.type !== "module") continue;
-  violations.push(...(await findMjsFiles(workspaceRoot, workspaceRoot)));
-}
-
-if (violations.length) {
-  console.error('ES module workspaces must use ".js" under their package-level "type": "module":');
-  for (const filePath of violations.sort()) {
-    console.error(`- ${path.relative(root, filePath).split(path.sep).join("/")}`);
+export async function measureWorkspaceModuleExtensions(root) {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const workspacePath of await readRootWorkspacePaths(root)) {
+    const workspaceRoot = path.join(root, workspacePath);
+    const workspacePackage = await readPackageJson(path.join(workspaceRoot, "package.json"));
+    if (workspacePackage.type !== "module") continue;
+    for (const filePath of await findMjsFiles(workspaceRoot, workspaceRoot, [])) {
+      addHit(measured.mjsInModuleWorkspace, {
+        file: path.relative(root, filePath).split(path.sep).join("/"),
+        message: '.mjs file under package-level "type": "module"',
+      });
+    }
   }
-  process.exit(1);
+  return measured;
 }
 
-if (!process.argv.includes("--quiet")) {
-  console.log(`Workspace module extensions are canonical (${workspacePaths.length} workspaces).`);
-}
+export const CHECK = defineCheck({
+  id: "workspace-module-extensions",
+  description: 'ES module workspaces use ".js" under their package-level "type": "module"',
+  rules: {
+    mjsInModuleWorkspace: {
+      description: 'A workspace with "type": "module" contains a .mjs file',
+      hint: 'rename the file to ".js"; the package type already selects ESM',
+    },
+  },
+  exemptions: [],
+  baseline: { mjsInModuleWorkspace: 0, exemptions: 0 },
+  measure: () => measureWorkspaceModuleExtensions(repositoryRoot),
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

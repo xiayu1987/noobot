@@ -73,6 +73,16 @@ test("code inventory excludes git-ignored local runtime files", async () => {
   assert.equal(files.includes("agent-proxy/agent-proxy.config.json"), false);
 });
 
+test("code inventory includes repository root config files but not ignored local workspaces", async () => {
+  const files = await getFirstPartyCodeFiles({ repositoryRoot, includeTests: true });
+  assert.ok(files.includes("eslint.config.mjs"));
+  assert.ok(files.includes("ecosystem.noobot.config.cjs"));
+  assert.equal(
+    files.some((file) => file.startsWith(".e2e-workspace/")),
+    false,
+  );
+});
+
 test("directory-scoped inventory filters by prefix and requires an explicit test policy", async () => {
   const options = { repositoryRoot, extensions: [".js"] };
   const production = await getFirstPartyFilesUnder(["service/"], {

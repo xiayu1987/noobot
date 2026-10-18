@@ -4,44 +4,66 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { findTestIsolationViolations } from "./check-workspace-test-isolation.mjs";
+import { measureWorkspaceTestIsolation } from "./check-workspace-test-isolation.mjs";
 
-function writeJson(filePath, value) {
+function writeFile(filePath, content) {
   mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify(value)}\n`);
+  writeFileSync(filePath, content);
 }
 
-function fixture(t, workspaceTests) {
+function fixture(t, workspaces) {
   const root = mkdtempSync(path.join(os.tmpdir(), "noobot-test-isolation-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeJson(path.join(root, "package.json"), { workspaces: Object.keys(workspaceTests) });
-  for (const [workspacePath, testScript] of Object.entries(workspaceTests)) {
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ workspaces: Object.keys(workspaces) }),
+  );
+  for (const [workspacePath, { test: testScript, testFile }] of Object.entries(workspaces)) {
     const scripts = testScript ? { test: testScript } : {};
-    writeJson(path.join(root, workspacePath, "package.json"), { scripts });
+    writeFile(path.join(root, workspacePath, "package.json"), JSON.stringify({ scripts }));
+    if (testFile) writeFile(path.join(root, workspacePath, testFile), "");
   }
   return root;
 }
 
-test("accepts test scripts wrapped by the isolated tmp runner at any depth", (t) => {
+function hitFiles(measured) {
+  return Object.fromEntries(
+    Object.entries(measured).map(([rule, { files }]) => [rule, Object.keys(files)]),
+  );
+}
+
+test("accepts isolated, quoted test scripts at any depth and test-free workspaces", async (t) => {
   const root = fixture(t, {
-    shallow: "node ../scripts/run-with-isolated-tmp.mjs node --test",
-    "client/deep": "NODE_OPTIONS=--x node ../../scripts/run-with-isolated-tmp.mjs vitest run",
-    "no-tests": "",
+    shallow: {
+      test: 'node ../scripts/run-with-isolated-tmp.mjs node --test "__tests__/**/*.test.js"',
+    },
+    "client/deep": {
+      test: "NODE_OPTIONS=--x node ../../scripts/run-with-isolated-tmp.mjs vitest run",
+    },
+    "no-tests": {},
   });
-  assert.deepEqual(findTestIsolationViolations(root), []);
+  assert.deepEqual(hitFiles(await measureWorkspaceTestIsolation(root)), {
+    missingTestScript: [],
+    unisolatedTestScript: [],
+    unquotedRecursiveGlob: [],
+  });
 });
 
-test("reports unwrapped test scripts and runners referenced with the wrong depth", (t) => {
+test("reports missing scripts, bypassed runners, wrong depth and unquoted globs", async (t) => {
   const root = fixture(t, {
-    bare: "node --test __tests__/*.test.js",
-    "client/deep": "node ../scripts/run-with-isolated-tmp.mjs vitest run",
+    bare: { test: "node --test __tests__/**/*.test.js" },
+    "client/deep": { test: "node ../scripts/run-with-isolated-tmp.mjs vitest run" },
+    silent: { testFile: "__tests__/a.test.js" },
   });
-  assert.deepEqual(
-    findTestIsolationViolations(root).map(({ workspacePath }) => workspacePath),
-    ["bare", "client/deep"],
-  );
+  assert.deepEqual(hitFiles(await measureWorkspaceTestIsolation(root)), {
+    missingTestScript: ["silent/package.json"],
+    unisolatedTestScript: ["bare/package.json", "client/deep/package.json"],
+    unquotedRecursiveGlob: ["bare/package.json"],
+  });
 });

@@ -4,51 +4,32 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { resolveRepoRoot } from "./lib/repo-root.mjs";
-import { fileURLToPath } from "node:url";
 import {
-  collectSourceFiles,
-  ignorePathParts,
-  MISSING_DIRECTORY_POLICY,
-} from "./lib/guard-scan.mjs";
-
-const ROOT = resolveRepoRoot();
-const TARGET_DIRS = [
-  "agent",
-  "service",
-  "agent-proxy",
-  "model-proxy",
-  "client",
-  "plugin",
-  "workflow",
-  "i18n",
-];
-const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "out"]);
-
-function toPosix(filePath) {
-  return filePath.split(path.sep).join("/");
-}
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
 function isDigit(char) {
   return char >= "0" && char <= "9";
 }
 
-function isTokenChar(char = "") {
+function isTokenChar(char) {
   return /[\w.]/.test(char);
 }
 
-function isIdentifierStart(char = "") {
+function isIdentifierStart(char) {
   return /[A-Za-z_$]/.test(char);
 }
 
-function isIdentifierChar(char = "") {
+function isIdentifierChar(char) {
   return /[\w$]/.test(char);
 }
 
-export function scanCodeTokens(filePath, text) {
+export function scanCodeTokens(file, text) {
   const violations = [];
   let state = "code";
   let quote = "";
@@ -140,12 +121,7 @@ export function scanCodeTokens(filePath, text) {
     while (end < text.length && isTokenChar(text[end])) end += 1;
     const token = text.slice(start, end);
     if (/\d_\d/.test(token)) {
-      violations.push({
-        file: toPosix(path.relative(ROOT, filePath)),
-        line: tokenLine,
-        column: tokenColumn,
-        token,
-      });
+      violations.push({ file, line: tokenLine, column: tokenColumn, token });
     }
     column += end - index - 1;
     index = end - 1;
@@ -154,39 +130,35 @@ export function scanCodeTokens(filePath, text) {
   return violations;
 }
 
-function main() {
-  const files = collectSourceFiles(
-    TARGET_DIRS.map((dir) => path.join(ROOT, dir)),
-    {
-      extensions: CODE_EXT,
-      ignoredPathParts: IGNORE_PATH_PARTS,
-      missingDirectory: MISSING_DIRECTORY_POLICY.SKIP_UNREADABLE,
-    },
-  );
-  if (!files.length) {
-    console.error("[check-numeric-literal-style] failed");
-    console.error("no source files matched the scan targets; check TARGET_DIRS");
-    process.exit(1);
-  }
-
-  const violations = [];
+export async function measureNumericLiteralStyle(files) {
+  const measured = emptyRuleMeasurements(CHECK);
   for (const file of files) {
-    const text = readFileSync(file, "utf8");
-    violations.push(...scanCodeTokens(file, text));
-  }
-
-  if (violations.length) {
-    console.error(
-      "[check-numeric-literal-style] numeric separators are not allowed in code literals:",
-    );
-    for (const item of violations) {
-      console.error(`- ${item.file}:${item.line}:${item.column} ${item.token}`);
+    for (const { line, column, token } of scanCodeTokens(file, await readRepositoryText(file))) {
+      addHit(measured.numericSeparator, { file, line, message: `column ${column} ${token}` });
     }
-    console.error("\nUse plain digits instead, for example 18000000 rather than 18_000_000.");
-    process.exit(1);
   }
-
-  console.log("[check-numeric-literal-style] ok");
+  return measured;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+export const CHECK = defineCheck({
+  id: "numeric-literal-style",
+  description: "Numeric literals are written with plain digits",
+  rules: {
+    numericSeparator: {
+      description: "Numeric literal uses an underscore separator",
+      hint: "write plain digits, for example 18000000 rather than 18_000_000",
+    },
+  },
+  exemptions: [],
+  baseline: { numericSeparator: 0, exemptions: 0 },
+  measure: async () =>
+    measureNumericLiteralStyle(
+      await getFirstPartyCodeFiles({
+        repositoryRoot,
+        extensions: [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
+        includeTests: true,
+      }),
+    ),
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

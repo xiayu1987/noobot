@@ -4,123 +4,97 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs";
-import path from "node:path";
-import { text } from "@noobot/shared/value";
+import {
+  defineCheck,
+  emptyRuleMeasurements,
+  EXEMPTION_KINDS,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { addExemptablePatternOffsetHits } from "./quality/boundary-hits.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
-const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+export const DIRECT_I18N_IMPORT = /(?:from\s*|import\s*\(\s*)["']noobot-i18n(?:\/[^"']*)?["']/g;
 
-const ALL_PROJECTS = {
-  agent: {
-    root: "agent",
-    allow: ["src/**"],
-  },
-  service: {
-    root: "service",
-    allow: ["bootstrap/create-app-dependencies.js"],
-  },
-  "agent-proxy": {
-    root: "agent-proxy",
-    allow: ["src/**", "agent-proxy.js"],
-  },
-  client: {
-    root: "client/noobot-chat",
-    allow: ["src/**"],
-  },
-};
-
-const args = process.argv.slice(2);
-const projectArg = args.find((item) => item.startsWith("--project="));
-const selected = projectArg ? text(projectArg.split("=")[1]) : "";
-
-const projects = selected
-  ? Object.fromEntries(Object.entries(ALL_PROJECTS).filter(([name]) => name === selected))
-  : ALL_PROJECTS;
-
-if (selected && !projects[selected]) {
-  console.error(`[i18n-check] unknown project: ${selected}`);
-  process.exit(2);
-}
-
-const SOURCE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const IGNORE_DIR = new Set(["node_modules", ".git", "dist", "coverage", ".next", "build"]);
-
-function toPosix(p) {
-  return p.split(path.sep).join("/");
-}
-
-function walkFiles(dir) {
-  const out = [];
-  if (!fs.existsSync(dir)) return out;
-  const stack = [dir];
-  while (stack.length) {
-    const current = stack.pop();
-    const stat = fs.statSync(current);
-    if (stat.isDirectory()) {
-      const name = path.basename(current);
-      if (IGNORE_DIR.has(name)) continue;
-      for (const child of fs.readdirSync(current)) {
-        stack.push(path.join(current, child));
-      }
-      continue;
-    }
-    const ext = path.extname(current).toLowerCase();
-    if (SOURCE_EXT.has(ext)) out.push(current);
-  }
-  return out;
-}
-
-function isAllowed(relPath, allowPatterns = []) {
-  const rel = toPosix(relPath);
-  for (const p of allowPatterns) {
-    if (p.endsWith("/**")) {
-      const base = p.slice(0, -3);
-      if (rel === base || rel.startsWith(`${base}/`)) return true;
-      continue;
-    }
-    if (rel === p) return true;
-  }
-  return false;
-}
-
-const directImportRegexes = [
-  /from\s*["']noobot-i18n(?:\/[^"']*)?["']/g,
-  /import\s*\(\s*["']noobot-i18n(?:\/[^"']*)?["']\s*\)/g,
-];
-
-const violations = [];
-
-for (const [name, cfg] of Object.entries(projects)) {
-  const projectRoot = path.join(repoRoot, cfg.root);
-  const files = walkFiles(projectRoot);
+export async function measureI18nImports(files, usage) {
+  const measured = emptyRuleMeasurements(CHECK);
   for (const file of files) {
-    const rel = toPosix(path.relative(projectRoot, file));
-    const content = fs.readFileSync(file, "utf8");
-    let matched = false;
-    let sample = "";
-    for (const re of directImportRegexes) {
-      const m = content.match(re);
-      if (m && m.length) {
-        matched = true;
-        sample = m[0];
-        break;
-      }
-    }
-    if (!matched) continue;
-    if (isAllowed(rel, cfg.allow)) continue;
-    violations.push({ project: name, file: `${cfg.root}/${rel}`, sample });
+    addExemptablePatternOffsetHits({
+      usage,
+      rule: "directI18nImport",
+      measurement: measured.directI18nImport,
+      file,
+      source: await readRepositoryText(file),
+      pattern: DIRECT_I18N_IMPORT,
+      message: "direct noobot-i18n import",
+    });
   }
+  return measured;
 }
 
-if (violations.length) {
-  console.error(
-    `[i18n-check] found ${violations.length} forbidden direct import(s) of noobot-i18n:`,
-  );
-  for (const v of violations) {
-    console.error(`- [${v.project}] ${v.file}`);
-    if (v.sample) console.error(`  ${v.sample}`);
-  }
-  process.exit(1);
-}
+export const CHECK = defineCheck({
+  id: "i18n-imports",
+  description: "noobot-i18n is imported only by its declared locale entry points",
+  rules: {
+    directI18nImport: {
+      description: "Module imports noobot-i18n outside a declared locale entry point",
+      hint: "take localized text from the owning entry point instead of importing noobot-i18n",
+    },
+  },
+  exemptions: [
+    {
+      id: "agent-locale-consumers",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "agent runtime renders its own backend messages and prompts",
+      match: ["agent/src/"],
+    },
+    {
+      id: "agent-proxy-locale-consumers",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "agent-proxy renders its own channel and HTTP messages",
+      match: ["agent-proxy/src/"],
+    },
+    {
+      id: "chat-client-locale-consumers",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "chat client owns its UI message catalog",
+      match: ["client/noobot-chat/src/"],
+    },
+    {
+      id: "electron-window-messages",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "desktop shell window renders its desktop.* messages outside the chat client",
+      match: ["client/shared/electron/runtime/window.js"],
+    },
+    {
+      id: "model-runtime-capability-messages",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "model runtime renders its modelRuntime.* backend messages",
+      match: ["model-runtime/src/adapters/openai-capability-adapter.js"],
+    },
+    {
+      id: "service-dependency-root",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "service composition root injects locale text into service dependencies",
+      match: ["service/bootstrap/create-app-dependencies.js"],
+    },
+  ],
+  baseline: { directI18nImport: 0, exemptions: 6 },
+  measure: async (usage) =>
+    measureI18nImports(
+      await getFirstPartyCodeFiles({
+        repositoryRoot,
+        extensions: [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
+        includeTests: true,
+      }),
+      usage,
+    ),
+});
 
-console.log("[i18n-check] ok: no forbidden direct imports");
+await runCheckWhenMain(CHECK, import.meta.url);

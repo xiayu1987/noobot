@@ -4,36 +4,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { resolveRepoRoot } from "./lib/repo-root.mjs";
 import {
-  collectSourceFiles,
-  ignorePathParts,
-  MISSING_DIRECTORY_POLICY,
-} from "./lib/guard-scan.mjs";
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-const ROOT = resolveRepoRoot("shared");
-const TARGET_DIRS = [
+const SCANNED_DIRECTORIES = Object.freeze([
   "agent",
-  "service",
   "agent-proxy",
-  "model-proxy",
   "client",
-  "plugin",
-  "workflow",
   "i18n",
-];
-const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const SHARED_THRESHOLD_FILES = new Set([
-  "shared/length-thresholds.js",
-  "shared/quantity-thresholds.js",
-  "shared/time-thresholds.js",
-  "shared/turn-thresholds.js",
+  "model-proxy",
+  "plugin",
+  "service",
+  "workflow",
 ]);
-const SELF_CONTAINED_ENTRY_FILES = new Set(["client/shared/electron/main.js"]);
-const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "out", "__tests__", "tests"]);
-
 const CATEGORY_RULES = [
   {
     category: "length",
@@ -71,15 +60,7 @@ const CATEGORY_RULES = [
   },
 ];
 
-function toPosix(filePath) {
-  return filePath.split(path.sep).join("/");
-}
-
-function rel(filePath) {
-  return toPosix(path.relative(ROOT, filePath));
-}
-
-function stripCommentsAndStrings(text = "") {
+function stripCommentsAndStrings(text) {
   let out = "";
   let state = "code";
   let quote = "";
@@ -161,7 +142,7 @@ function lineAndColumn(text, index) {
   };
 }
 
-function isAllowedNumericExpression(expr = "") {
+function isAllowedNumericExpression(expr) {
   const trimmed = expr.trim();
   if (!trimmed) return true;
   if (trimmed === "0") return true;
@@ -170,91 +151,81 @@ function isAllowedNumericExpression(expr = "") {
   return false;
 }
 
-function expressionLooksNumeric(expr = "") {
+function expressionLooksNumeric(expr) {
   const trimmed = expr.trim();
   if (!trimmed) return false;
   if (isAllowedNumericExpression(trimmed)) return false;
   return /^[0-9]/.test(trimmed) || /^[A-Z0-9_]+\s*[*/+-]\s*[0-9]/i.test(trimmed);
 }
 
-function classifyName(name = "", kind = "name") {
+function classifyName(name, pattern) {
   for (const rule of CATEGORY_RULES) {
-    const pattern = kind === "prop" ? rule.propPattern : rule.namePattern;
-    if (pattern.test(name)) return rule;
+    if (rule[pattern].test(name)) return rule;
   }
   return null;
 }
 
-function collectViolations(filePath, text) {
-  const relativePath = rel(filePath);
-  if (SHARED_THRESHOLD_FILES.has(relativePath)) return [];
-  if (SELF_CONTAINED_ENTRY_FILES.has(relativePath)) return [];
+const DECLARATION =
+  /\b(?:export\s+)?(?:const|let|var)\s+(?<name>[A-Z_$][\w$]*)\s*=\s*(?<expr>[^;\n]+)/g;
+const PROPERTY = /\b(?<name>[A-Za-z_$][\w$]*)\s*:\s*(?<expr>[^,\n}]+)/g;
+
+export function findScatteredThresholds(text) {
   const code = stripCommentsAndStrings(text);
-  const violations = [];
-
-  const declarations =
-    /\b(?:export\s+)?(?:const|let|var)\s+(?<name>[A-Z_$][\w$]*)\s*=\s*(?<expr>[^;\n]+)/g;
-  let match;
-  while ((match = declarations.exec(code))) {
-    const { name, expr } = match.groups;
-    const rule = classifyName(name, "name");
-    if (!rule || !expressionLooksNumeric(expr)) continue;
-    violations.push({
-      file: relativePath,
-      ...lineAndColumn(code, match.index),
-      name,
-      expr: expr.trim(),
-      rule,
-    });
+  const findings = [];
+  for (const [pattern, namePattern] of [
+    [DECLARATION, "namePattern"],
+    [PROPERTY, "propPattern"],
+  ]) {
+    for (const match of code.matchAll(pattern)) {
+      const { name, expr } = match.groups;
+      const rule = classifyName(name, namePattern);
+      if (!rule || !expressionLooksNumeric(expr)) continue;
+      findings.push({ ...lineAndColumn(code, match.index), name, expr: expr.trim(), rule });
+    }
   }
+  return findings;
+}
 
-  const properties = /\b(?<name>[A-Za-z_$][\w$]*)\s*:\s*(?<expr>[^,\n}]+)/g;
-  while ((match = properties.exec(code))) {
-    const { name, expr } = match.groups;
-    const rule = classifyName(name, "prop");
-    if (!rule || !expressionLooksNumeric(expr)) continue;
-    violations.push({
-      file: relativePath,
-      ...lineAndColumn(code, match.index),
-      name,
-      expr: expr.trim(),
-      rule,
-    });
+export async function measureSharedThresholds(files) {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const file of files) {
+    for (const { line, name, expr, rule } of findScatteredThresholds(
+      await readRepositoryText(file),
+    )) {
+      addHit(measured[rule.category], {
+        file,
+        line,
+        message: `${name} = ${expr} -> use ${rule.symbol} from ${rule.importPath}`,
+      });
+    }
   }
-
-  return violations;
+  return measured;
 }
 
-const files = collectSourceFiles(
-  TARGET_DIRS.map((dir) => path.join(ROOT, dir)),
-  {
-    extensions: CODE_EXT,
-    ignoredPathParts: IGNORE_PATH_PARTS,
-    missingDirectory: MISSING_DIRECTORY_POLICY.SKIP_UNREADABLE,
-  },
-);
-if (!files.length) {
-  console.error("[check-shared-thresholds] failed");
-  console.error("no source files matched the scan targets; check TARGET_DIRS");
-  process.exit(1);
+function categoryRule(category) {
+  const { importPath, symbol } = CATEGORY_RULES.find((rule) => rule.category === category);
+  return {
+    description: `${category} threshold literal declared outside shared/${category}-thresholds.js`,
+    hint: `move the value into ${symbol} and import it from ${importPath}`,
+  };
 }
 
-const violations = [];
-for (const file of files) {
-  violations.push(...collectViolations(file, readFileSync(file, "utf8")));
-}
+export const CHECK = defineCheck({
+  id: "shared-thresholds",
+  description: "Length, quantity, time, and turn thresholds live in shared/*-thresholds.js",
+  rules: Object.fromEntries(
+    CATEGORY_RULES.map(({ category }) => [category, categoryRule(category)]),
+  ),
+  exemptions: [],
+  baseline: { length: 0, quantity: 0, time: 0, turn: 0, exemptions: 0 },
+  measure: async () =>
+    measureSharedThresholds(
+      await getFirstPartyFilesUnder(SCANNED_DIRECTORIES, {
+        repositoryRoot,
+        extensions: [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
+        includeTests: false,
+      }),
+    ),
+});
 
-if (violations.length) {
-  console.error("[check-shared-thresholds] scattered threshold literals found:");
-  for (const item of violations) {
-    console.error(
-      `- ${item.file}:${item.line}:${item.column} ${item.name} = ${item.expr} -> use ${item.rule.symbol} from ${item.rule.importPath}`,
-    );
-  }
-  console.error(
-    "\nPut length/quantity/time/turn thresholds in shared/*-thresholds.js and import them via @noobot/shared/*-thresholds.",
-  );
-  process.exit(1);
-}
-
-console.log("[check-shared-thresholds] ok");
+await runCheckWhenMain(CHECK, import.meta.url);

@@ -117,7 +117,7 @@ test("orphan recovery respects the authority grace period", async () => {
       commits += 1;
       return { applied: true };
     },
-    graceMs: 10_000,
+    graceMs: 10000,
   });
   assert.deepEqual(result, {
     recovered: false,

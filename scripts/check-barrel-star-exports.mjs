@@ -5,46 +5,19 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { init, parse } from "es-module-lexer";
 import { parse as parseJavaScript } from "espree";
-import { text } from "@noobot/shared/value";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { repositoryRoot } from "./quality/repository-files.mjs";
+import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
-const repositoryRoot = path.resolve(import.meta.dirname, "..");
-const defaultIgnoredDirectories = [
-  ".git",
-  "assets",
-  "build",
-  "coverage",
-  "dist",
-  "node_modules",
-  "report",
-  "test-results",
-  "vendor",
-  "workspace",
-];
-const starExportPattern = /^export\s+\*\s+from\s+["'](\.[^"']+)["']/gm;
-
-export function collectBarrels({ root, ignoredDirectories = defaultIgnoredDirectories }) {
-  const ignored = new Set(ignoredDirectories);
-  const barrels = [];
-  const visit = (relative) => {
-    for (const entry of fs.readdirSync(path.join(root, relative), { withFileTypes: true })) {
-      if (ignored.has(entry.name)) continue;
-      const child = path.join(relative, entry.name);
-      if (entry.isDirectory()) {
-        visit(child);
-        continue;
-      }
-      if (!entry.name.endsWith(".js")) continue;
-      const source = fs.readFileSync(path.join(root, child), "utf8");
-      const sources = [...source.matchAll(starExportPattern)].map((match) => match[1]);
-      if (sources.length >= 2) barrels.push({ relative: child, sources });
-    }
-  };
-  visit(".");
-  return barrels;
-}
+const STAR_EXPORT_PATTERN = /^export\s+\*\s+from\s+["'](\.[^"']+)["']/gm;
+const MIN_BARREL_STAR_SOURCES = 2;
 
 function resolveRelativeModule(fromFile, specifier) {
   const resolved = path.resolve(path.dirname(fromFile), specifier);
@@ -58,24 +31,22 @@ function resolveRelativeModule(fromFile, specifier) {
   return target;
 }
 
-function exportedNames(records = []) {
+function exportedNames(records) {
   return new Set(
-    records.map((record) => text(record?.name)).filter((name) => name && name !== "default"),
+    records
+      .filter((record) => record.type !== "reexport-all" && record.name !== "default")
+      .map((record) => record.name),
   );
 }
 
-function starSpecifiers(imports = []) {
+function starSpecifiers(imports) {
   return imports
-    .filter(
-      (record) =>
-        record?.type === "reexport-star" && String(record.specifier || "").startsWith("."),
-    )
+    .filter((record) => record.type === "reexport-star" && record.specifier.startsWith("."))
     .map((record) => record.specifier);
 }
 
-async function loadStaticNamespace(absolute, state = {}) {
-  const cache = state.cache || (state.cache = new Map());
-  const resolving = state.resolving || (state.resolving = new Set());
+async function loadStaticNamespace(absolute, state) {
+  const { cache, resolving } = state;
   if (cache.has(absolute)) return cache.get(absolute);
   if (resolving.has(absolute)) {
     throw new Error(`circular star export cannot be analyzed: ${absolute}`);
@@ -93,7 +64,7 @@ async function loadStaticNamespace(absolute, state = {}) {
       parseJavaScript(source, { ecmaVersion: "latest", sourceType: "module" });
       [imports, exports] = parse(source, absolute);
     } catch (error) {
-      throw new Error(`unable to analyze ${absolute}: ${error?.message || error}`, {
+      throw new Error(`unable to analyze ${absolute}: ${error.message}`, {
         cause: error,
       });
     }
@@ -118,56 +89,53 @@ async function loadStaticNamespace(absolute, state = {}) {
   }
 }
 
-async function inspectBarrel({ root, barrel }) {
-  const absolute = path.join(root, barrel.relative);
+async function inspectBarrel(root, relative, sources) {
+  const absolute = path.join(root, relative);
   const state = { cache: new Map(), resolving: new Set() };
   const exported = await loadStaticNamespace(absolute, state);
   const origins = new Map();
-  for (const source of barrel.sources) {
-    const sourceFile = resolveRelativeModule(absolute, source);
-    const namespace = await loadStaticNamespace(sourceFile, state);
+  for (const source of sources) {
+    const namespace = await loadStaticNamespace(resolveRelativeModule(absolute, source), state);
     for (const name of namespace) {
       if (!origins.has(name)) origins.set(name, []);
       origins.get(name).push(source);
     }
   }
-  const dropped = [...origins]
-    .filter(([name, sources]) => sources.length > 1 && !exported.has(name))
-    .map(([name, sources]) => ({ name, sources }));
-  return { relative: barrel.relative, dropped };
+  return [...origins].filter(([name, owners]) => owners.length > 1 && !exported.has(name));
 }
 
-export async function checkRepository({ root, ignoredDirectories } = {}) {
-  const barrels = collectBarrels({ root, ignoredDirectories });
-  const violations = [];
-  for (const barrel of barrels) {
-    const result = await inspectBarrel({ root, barrel });
-    if (result.dropped.length) violations.push(result);
-  }
-  return { barrels: barrels.length, violations };
-}
-
-function formatViolations(violations) {
-  const lines = ["Barrel star export collisions detected (symbols silently dropped by ESM):"];
-  for (const violation of violations) {
-    lines.push(`  ${violation.relative}`);
-    for (const entry of violation.dropped) {
-      lines.push(`    ${entry.name} exported by ${entry.sources.join(" and ")}`);
+export async function measureBarrelStarExports(root, files) {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(root, file), "utf8");
+    const sources = [...source.matchAll(STAR_EXPORT_PATTERN)].map((match) => match[1]);
+    if (sources.length < MIN_BARREL_STAR_SOURCES) continue;
+    for (const [name, owners] of await inspectBarrel(root, file, sources)) {
+      addHit(measured.droppedStarExport, {
+        file,
+        message: `${name} exported by ${owners.join(" and ")}`,
+      });
     }
   }
-  lines.push(
-    "Re-export the colliding symbol explicitly, or rename it so a single module owns the name.",
-  );
-  return lines.join("\n");
+  return measured;
 }
 
-const invokedDirectly = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+export const CHECK = defineCheck({
+  id: "barrel-star-exports",
+  description: "Barrels never lose a symbol to an ambiguous ESM star re-export",
+  rules: {
+    droppedStarExport: {
+      description: "Two star sources of a barrel export the same name, so ESM drops it",
+      hint: "re-export the colliding symbol explicitly, or rename it so one module owns the name",
+    },
+  },
+  exemptions: [],
+  baseline: { droppedStarExport: 0, exemptions: 0 },
+  measure: async () =>
+    measureBarrelStarExports(
+      repositoryRoot,
+      await getFirstPartyCodeFiles({ repositoryRoot, extensions: [".js"], includeTests: true }),
+    ),
+});
 
-if (invokedDirectly) {
-  const { barrels, violations } = await checkRepository({ root: repositoryRoot });
-  if (violations.length) {
-    console.error(formatViolations(violations));
-    process.exit(1);
-  }
-  console.log(`Barrel star exports passed (${barrels} barrels)`);
-}
+await runCheckWhenMain(CHECK, import.meta.url);

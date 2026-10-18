@@ -1,67 +1,86 @@
-#!/usr/bin/env node
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { defineCheck, emptyRuleMeasurements, runCheckWhenMain } from "./quality/check-protocol.mjs";
+import { readRepositoryText } from "./quality/repository-files.mjs";
+import { addPatternOffsetHits } from "./quality/boundary-hits.mjs";
 
-const root = process.cwd();
-const rules = Object.freeze([
+const FORMER_PLATFORM_FACT_OWNERS = Object.freeze([
   {
     file: "path-resolver/src/platform.js",
-    patterns: [/\["win",\s*"win32",\s*"windows"\]/, /\["mac",\s*"macos",\s*"darwin",\s*"osx"\]/],
+    patterns: [/\["win",\s*"win32",\s*"windows"\]/g, /\["mac",\s*"macos",\s*"darwin",\s*"osx"\]/g],
   },
   {
     file: "execution-isolation-protocol/src/protocol.js",
-    patterns: [/platform[^\n]*===?[^\n]*["']win32["']/, /["']cmd\.exe["']|["']\/bin\/sh["']/],
+    patterns: [/platform[^\n]*===?[^\n]*["']win32["']/g, /["']cmd\.exe["']|["']\/bin\/sh["']/g],
   },
   {
     file: "agent/src/shared/storage/atomic-file-write.js",
-    patterns: [/EPERM|EACCES|EBUSY/, /platform[^\n]*===?/],
+    patterns: [/EPERM|EACCES|EBUSY/g, /platform[^\n]*===?/g],
   },
   {
     file: "agent/src/tools/execution/native-script-runtime.js",
-    patterns: [/process\.platform[^\n]*(?:soffice|libreoffice)/i],
+    patterns: [/process\.platform[^\n]*(?:soffice|libreoffice)/gi],
   },
   {
     file: "agent/src/tools/execution/native-script-tool.js",
-    patterns: [/process\.platform\s*!==?\s*["']win32["']/],
+    patterns: [/process\.platform\s*!==?\s*["']win32["']/g],
   },
   {
     file: "agent/src/tools/execution/script-tool/process-exec.js",
     patterns: [
-      /process\.platform\s*[!=]==?\s*["']win32["']/,
-      /["']where["']\s*:\s*["']which["']/,
-      /process\.kill\(-/,
-      /shift_jis|euc-kr|windows-1252/,
+      /process\.platform\s*[!=]==?\s*["']win32["']/g,
+      /["']where["']\s*:\s*["']which["']/g,
+      /process\.kill\(-/g,
+      /shift_jis|euc-kr|windows-1252/g,
     ],
   },
   {
     file: "service/services/openvscode/process.js",
-    patterns: [/process\.platform\s*===?\s*["']win32["']/, /["']taskkill["']/],
+    patterns: [/process\.platform\s*===?\s*["']win32["']/g, /["']taskkill["']/g],
   },
   {
     file: "client/shared/electron/runtime/services.js",
-    patterns: [/process\.platform\s*===?\s*["']win32["']/, /["']taskkill["']/, /["']npm\.cmd["']/],
+    patterns: [
+      /process\.platform\s*===?\s*["']win32["']/g,
+      /["']taskkill["']/g,
+      /["']npm\.cmd["']/g,
+    ],
   },
 ]);
 
-const violations = [];
-for (const rule of rules) {
-  const source = readFileSync(path.join(root, rule.file), "utf8");
-  for (const pattern of rule.patterns) {
-    if (pattern.test(source)) violations.push(`${rule.file}: ${pattern}`);
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const { file, patterns } of FORMER_PLATFORM_FACT_OWNERS) {
+    const source = await readRepositoryText(file);
+    for (const pattern of patterns) {
+      addPatternOffsetHits({
+        measurement: measured.platformFact,
+        file,
+        source,
+        pattern,
+        message: `platform fact ${pattern}`,
+      });
+    }
   }
+  return measured;
 }
 
-if (violations.length) {
-  console.error(
-    "Platform compatibility facts must be implemented by @noobot/platform-compatibility:",
-  );
-  for (const violation of violations) console.error(`- ${violation}`);
-  process.exit(1);
-}
+export const CHECK = defineCheck({
+  id: "platform-compatibility-boundary",
+  description:
+    "Platform compatibility facts are implemented once by @noobot/platform-compatibility",
+  rules: {
+    platformFact: {
+      description: "Former owners never re-implement OS names, shells, kill or encoding facts",
+      hint: "consume the fact from @noobot/platform-compatibility",
+    },
+  },
+  exemptions: [],
+  baseline: { platformFact: 0, exemptions: 0 },
+  measure,
+});
 
-console.log("Platform compatibility boundary check passed.");
+await runCheckWhenMain(CHECK, import.meta.url);

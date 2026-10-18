@@ -4,104 +4,63 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync, statSync } from "node:fs";
-import path from "node:path";
-import { ignorePathParts, MISSING_DIRECTORY_POLICY, walkSourceFiles } from "./lib/guard-scan.mjs";
-import { text } from "@noobot/shared/value";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import {
+  importReferences,
+  readRepositoryText,
+  repositoryRoot,
+} from "./quality/repository-files.mjs";
+import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
-function resolveRepoRoot() {
-  const cwd = process.cwd();
-  if (statExists(path.join(cwd, "agent", "src"))) return cwd;
-  if (path.basename(cwd) === "agent" && statExists(path.join(cwd, "src"))) {
-    return path.dirname(cwd);
-  }
-  const parent = path.dirname(cwd);
-  if (statExists(path.join(parent, "agent", "src"))) return parent;
-  return cwd;
-}
+const SCANNED_EXTENSIONS = Object.freeze([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
+const CONCRETE_PLUGIN_SPECIFIER = /(?:^|[/@])noobot-plugin-(?:harness|workflow)(?:\/|$)/i;
+const AGENT_SOURCE_SPECIFIER = /(?:^|\/)agent\/src\//;
 
-function statExists(filePath) {
-  try {
-    statSync(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const ROOT = resolveRepoRoot();
-const TARGET_ROOT = path.join(ROOT, "agent", "src");
-const PLUGIN_ROOT = path.join(ROOT, "plugin");
-const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
-const IGNORE_PATH_PARTS = ignorePathParts();
-
-const IMPORT_SPECIFIER_REGEX = /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g;
-
-function toPosix(filePath) {
-  return filePath.split(path.sep).join("/");
-}
-
-function walk(dir) {
-  return walkSourceFiles(dir, {
-    extensions: CODE_EXT,
-    ignoredPathParts: IGNORE_PATH_PARTS,
-    missingDirectory: MISSING_DIRECTORY_POLICY.REQUIRE,
+async function addImportHits(measurement, roots, specifierPattern) {
+  const files = await getFirstPartyFilesUnder(roots, {
+    repositoryRoot,
+    extensions: SCANNED_EXTENSIONS,
+    includeTests: true,
   });
-}
-function collectImportMatches(sourceText = "", isViolation = () => false) {
-  const matches = [];
-  for (const match of sourceText.matchAll(IMPORT_SPECIFIER_REGEX)) {
-    const specifier = text(match[1]);
-    if (!isViolation(specifier)) continue;
-    const offset = Number(match.index) || 0;
-    const line = sourceText.slice(0, offset).split(/\r?\n/).length;
-    const sourceLine = sourceText.split(/\r?\n/)[line - 1] || "";
-    matches.push({ line, terms: [specifier], text: sourceLine.trim() });
-  }
-  return matches;
-}
-
-const violations = [];
-
-for (const file of walk(TARGET_ROOT)) {
-  const relPath = toPosix(path.relative(ROOT, file));
-  const inputText = readFileSync(file, "utf8");
-  const matches = collectImportMatches(
-    inputText,
-    (specifier) =>
-      /(?:^|[/@])noobot-plugin-(?:harness|workflow)(?:[/]|$)/i.test(specifier) ||
-      /(?:^|\/)plugin\/noobot-plugin-(?:harness|workflow)(?:\/|$)/i.test(specifier),
-  );
-  const count = matches.reduce((sum, item) => sum + item.terms.length, 0);
-  if (!count) continue;
-  violations.push({ relPath, count, matches });
-}
-
-if (statExists(PLUGIN_ROOT)) {
-  for (const file of walk(PLUGIN_ROOT)) {
-    const relPath = toPosix(path.relative(ROOT, file));
-    const inputText = readFileSync(file, "utf8");
-    const matches = collectImportMatches(inputText, (specifier) =>
-      /(?:^|\/)agent\/src\//.test(specifier),
-    );
-    if (matches.length) violations.push({ relPath, count: matches.length, matches });
-  }
-}
-
-if (violations.length) {
-  console.error("[check-agent-plugin-decoupling] concrete plugin coupling violations found:");
-  for (const item of violations) {
-    console.error(`- ${item.relPath}: ${item.count}`);
-    for (const match of item.matches.slice(0, 8)) {
-      console.error(`  ${match.line}: ${match.text}`);
+  for (const file of files) {
+    for (const { specifier, line } of importReferences(await readRepositoryText(file))) {
+      if (specifierPattern.test(specifier)) addHit(measurement, { file, line, message: specifier });
     }
-    if (item.matches.length > 8)
-      console.error(`  ... ${item.matches.length - 8} more matching lines`);
   }
-  console.error(
-    "\nAgent core has no concrete-plugin compatibility allowlist; remove the coupling.",
-  );
-  process.exit(1);
 }
 
-console.log("[check-agent-plugin-decoupling] ok");
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  await addImportHits(
+    measured.agentImportsConcretePlugin,
+    ["agent/src"],
+    CONCRETE_PLUGIN_SPECIFIER,
+  );
+  await addImportHits(measured.pluginImportsAgentSource, ["plugin"], AGENT_SOURCE_SPECIFIER);
+  return measured;
+}
+
+export const CHECK = defineCheck({
+  id: "agent-plugin-decoupling",
+  description: "Agent core and concrete plugins meet only through the plugin protocol",
+  rules: {
+    agentImportsConcretePlugin: {
+      description: "agent/src imports the harness or workflow plugin package directly",
+      hint: "expose the capability through plugin-protocol hooks instead of importing the plugin",
+    },
+    pluginImportsAgentSource: {
+      description: "A plugin reaches into agent/src internals",
+      hint: "depend on a protocol package; agent/src is not a plugin API",
+    },
+  },
+  exemptions: [],
+  baseline: { agentImportsConcretePlugin: 0, pluginImportsAgentSource: 0, exemptions: 0 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

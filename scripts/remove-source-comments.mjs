@@ -5,11 +5,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import {
-  isForbiddenComment,
-  listSourceFiles,
-  parseSourceComments,
-} from "./quality/source-comments.mjs";
+import { findForbiddenComments, listSourceFiles } from "./quality/source-comments.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -32,19 +28,10 @@ function replaceOpenFile(descriptor, value) {
 let changedFiles = 0;
 let removedComments = 0;
 for (const relativeFile of listSourceFiles(root)) {
-  const file = path.join(root, relativeFile);
-  let descriptor;
-  try {
-    descriptor = fs.openSync(file, "r+");
-  } catch (error) {
-    if (error?.code === "ENOENT") continue;
-    throw error;
-  }
+  const descriptor = fs.openSync(path.join(root, relativeFile), "r+");
   try {
     const source = fs.readFileSync(descriptor, "utf8");
-    const comments = parseSourceComments(source, relativeFile).filter((comment) =>
-      isForbiddenComment(source, comment),
-    );
+    const comments = findForbiddenComments(source, relativeFile);
     if (!comments.length) continue;
     let output = source;
     for (const comment of comments.sort((left, right) => right.range[0] - left.range[0])) {

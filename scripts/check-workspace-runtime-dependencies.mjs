@@ -4,53 +4,79 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { text } from "@noobot/shared/value";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { repositoryRoot } from "./quality/repository-files.mjs";
+import { readPackageJson, readRootWorkspacePaths } from "./quality/source-inventory.mjs";
 
-const root = process.cwd();
+const RUNTIME_DEPENDENCY_FIELDS = Object.freeze(["dependencies", "optionalDependencies"]);
 
-async function readPackageJson(filePath) {
-  return JSON.parse(await readFile(filePath, "utf8"));
-}
-
-const rootPackage = await readPackageJson(path.join(root, "package.json"));
-const workspacePaths = Array.isArray(rootPackage.workspaces) ? rootPackage.workspaces : [];
-const workspaces = await Promise.all(
-  workspacePaths.map(async (workspacePath) => ({
-    workspacePath,
-    packageJson: await readPackageJson(path.join(root, workspacePath, "package.json")),
-  })),
-);
-const internalPackageNames = new Set(
-  workspaces.map(({ packageJson }) => text(packageJson.name)).filter(Boolean),
-);
-const failures = [];
-
-for (const { workspacePath, packageJson } of workspaces) {
-  const runtimeDependencies = {
-    ...(packageJson.dependencies || {}),
-    ...(packageJson.optionalDependencies || {}),
-  };
-  for (const dependencyName of Object.keys(runtimeDependencies)) {
-    if (!internalPackageNames.has(dependencyName)) continue;
-    try {
-      const installedPackage = await readPackageJson(
-        path.join(root, "node_modules", ...dependencyName.split("/"), "package.json"),
-      );
-      if (installedPackage.name !== dependencyName) throw new Error("package identity mismatch");
-    } catch {
-      failures.push(`${workspacePath}: ${dependencyName}`);
-    }
+async function readInstalledPackage(root, dependencyName) {
+  try {
+    return await readPackageJson(
+      path.join(root, "node_modules", ...dependencyName.split("/"), "package.json"),
+    );
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
   }
 }
 
-if (failures.length) {
-  console.error("Missing installed runtime workspace dependencies:");
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
+function runtimeDependencyNames(packageJson) {
+  return RUNTIME_DEPENDENCY_FIELDS.flatMap((field) =>
+    field in packageJson ? Object.keys(packageJson[field]) : [],
+  );
 }
 
-if (!process.argv.includes("--quiet")) {
-  console.log(`Workspace runtime dependency links are complete (${workspaces.length} workspaces).`);
+export async function measureWorkspaceRuntimeDependencies(root) {
+  const measured = emptyRuleMeasurements(CHECK);
+  const workspacePaths = await readRootWorkspacePaths(root);
+  const workspaces = await Promise.all(
+    workspacePaths.map(async (workspacePath) => ({
+      workspacePath,
+      packageJson: await readPackageJson(path.join(root, workspacePath, "package.json")),
+    })),
+  );
+  const internalPackageNames = new Set(workspaces.map(({ packageJson }) => packageJson.name));
+  for (const { workspacePath, packageJson } of workspaces) {
+    const file = `${workspacePath}/package.json`;
+    for (const dependencyName of new Set(runtimeDependencyNames(packageJson))) {
+      if (!internalPackageNames.has(dependencyName)) continue;
+      const installed = await readInstalledPackage(root, dependencyName);
+      if (!installed) {
+        addHit(measured.missingLink, { file, message: `${dependencyName} is not installed` });
+      } else if (installed.name !== dependencyName) {
+        addHit(measured.identityMismatch, {
+          file,
+          message: `node_modules/${dependencyName} resolves to ${installed.name}`,
+        });
+      }
+    }
+  }
+  return measured;
 }
+
+export const CHECK = defineCheck({
+  id: "workspace-runtime-dependencies",
+  description: "Every internal runtime dependency of a workspace is linked in node_modules",
+  rules: {
+    missingLink: {
+      description: "An internal workspace dependency has no installed package.json",
+      hint: "run npm install --workspaces from the repository root",
+    },
+    identityMismatch: {
+      description: "An installed internal dependency declares a different package name",
+      hint: "remove the stale node_modules entry and reinstall the workspaces",
+    },
+  },
+  exemptions: [],
+  baseline: { missingLink: 0, identityMismatch: 0, exemptions: 0 },
+  measure: () => measureWorkspaceRuntimeDependencies(repositoryRoot),
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

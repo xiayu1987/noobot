@@ -5,17 +5,18 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findEmptyPromiseCatchOffsets } from "./check-empty-promise-catches.mjs";
+import { EMPTY_PROMISE_CATCH } from "./check-empty-promise-catches.mjs";
+
+function countEmptyCatches(source) {
+  return [...source.matchAll(EMPTY_PROMISE_CATCH)].length;
+}
 
 test("detects empty Promise rejection handlers", () => {
-  assert.equal(findEmptyPromiseCatchOffsets("work().catch(() => {});").length, 1);
-  assert.equal(findEmptyPromiseCatchOffsets("work().catch(async (error) => { });").length, 1);
+  assert.equal(countEmptyCatches("work().catch(() => {});"), 1);
+  assert.equal(countEmptyCatches("work().catch(async (error) => { });"), 1);
 });
 
 test("allows explicit queue settlement and diagnostic handlers", () => {
-  assert.equal(
-    findEmptyPromiseCatchOffsets("work().then(() => undefined, () => undefined);").length,
-    0,
-  );
-  assert.equal(findEmptyPromiseCatchOffsets("work().catch((error) => report(error));").length, 0);
+  assert.equal(countEmptyCatches("work().then(() => undefined, () => undefined);"), 0);
+  assert.equal(countEmptyCatches("work().catch((error) => report(error));"), 0);
 });

@@ -4,48 +4,49 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { execFileSync } from "node:child_process";
-import { statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import * as prettier from "prettier";
+import {
+  addHit,
+  defineCheck,
+  emptyRuleMeasurements,
+  runCheckWhenMain,
+} from "./quality/check-protocol.mjs";
+import { listRepositoryFiles, repositoryRoot } from "./quality/repository-files.mjs";
 
-const supported = /\.(?:cjs|js|json|md|mjs|vue|yaml|yml)$/i;
-const ignored =
-  /(?:^|\/)(?:build|coverage|dist|node_modules|report|vendor|workspace)(?:\/|$)|(?:^|\/)assets\/.*\.js$/;
+const FORMATTED_FILE_PATTERN = /\.(?:cjs|js|json|md|mjs|vue|yaml|yml)$/i;
+const IGNORE_PATH = ".prettierignore";
 
-function changedFiles(args) {
-  try {
-    return execFileSync("git", args, { encoding: "utf8" })
-      .split(/\r?\n/)
-      .map((file) => file.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
+export async function measureFormat(root, files) {
+  const measured = emptyRuleMeasurements(CHECK);
+  const ignorePath = path.join(root, IGNORE_PATH);
+  for (const file of files) {
+    const filepath = path.join(root, file);
+    const { ignored } = await prettier.getFileInfo(filepath, { ignorePath });
+    if (ignored) continue;
+    const options = await prettier.resolveConfig(filepath, { editorconfig: true });
+    const source = await readFile(filepath, "utf8");
+    if (!(await prettier.check(source, { ...options, filepath }))) {
+      addHit(measured.unformattedFile, { file, message: "differs from prettier output" });
+    }
   }
+  return measured;
 }
 
-function isFile(file) {
-  try {
-    return statSync(file).isFile();
-  } catch {
-    return false;
-  }
-}
-
-const files = [
-  ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR", "HEAD^", "HEAD"]),
-  ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR"]),
-  ...changedFiles(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]),
-  ...changedFiles(["ls-files", "--others", "--exclude-standard"]),
-]
-  .filter((file, index, all) => all.indexOf(file) === index)
-  .filter(isFile)
-  .filter((file) => supported.test(file) && !ignored.test(file));
-
-if (!files.length) {
-  console.log("[format-check] no changed source files to check");
-  process.exit(0);
-}
-
-console.log(`[format-check] checking ${files.length} changed file(s)`);
-execFileSync(process.platform === "win32" ? "npx.cmd" : "npx", ["prettier", "--check", ...files], {
-  stdio: "inherit",
+export const CHECK = defineCheck({
+  id: "format",
+  description: "Repository text files match prettier output",
+  rules: {
+    unformattedFile: {
+      description: "A tracked or untracked non-ignored file differs from prettier output",
+      hint: "run npx prettier --write <file>",
+    },
+  },
+  exemptions: [],
+  baseline: { unformattedFile: 0, exemptions: 0 },
+  measure: () =>
+    measureFormat(repositoryRoot, listRepositoryFiles(repositoryRoot, FORMATTED_FILE_PATTERN)),
 });
+
+await runCheckWhenMain(CHECK, import.meta.url);

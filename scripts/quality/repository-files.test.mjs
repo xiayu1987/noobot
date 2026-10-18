@@ -37,18 +37,25 @@ test("offsetLine maps a character offset to its one-based line", () => {
   assert.equal(offsetLine(source, source.indexOf("ccc")), 3);
 });
 
-test("importReferences returns each from-specifier with the line of its from clause", () => {
+test("importReferences returns static, side-effect, dynamic and require specifiers with lines", () => {
   const source = [
     'import a from "./a.js";',
     "import {",
     "  b,",
     "} from '../b.js';",
     'export { c } from "node:fs";',
+    'import "./side-effect.js";',
+    'const d = await import("./dynamic.js");',
+    "const e = require('./required.cjs');",
+    "const notImport = reimport('x');",
   ].join("\n");
   assert.deepEqual(importReferences(source), [
     { specifier: "./a.js", line: 1 },
     { specifier: "../b.js", line: 4 },
     { specifier: "node:fs", line: 5 },
+    { specifier: "./side-effect.js", line: 6 },
+    { specifier: "./dynamic.js", line: 7 },
+    { specifier: "./required.cjs", line: 8 },
   ]);
 });
 

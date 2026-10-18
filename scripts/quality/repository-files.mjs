@@ -3,13 +3,29 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { execFileSync } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 export const repositoryRoot = path.resolve(import.meta.dirname, "../..");
+const IMPORT_SPECIFIER_PATTERN =
+  /(?:\bfrom\s*|^\s*import\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["']([^"']+)["']/gm;
 
 export function readRepositoryText(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), "utf8");
+}
+
+function gitListedFiles(root, args) {
+  return execFileSync("git", ["ls-files", "-z", ...args], { cwd: root, encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
+}
+
+export function listRepositoryFiles(root, pattern) {
+  const deleted = new Set(gitListedFiles(root, ["--deleted"]));
+  return gitListedFiles(root, ["--cached", "--others", "--exclude-standard"]).filter(
+    (file) => pattern.test(file) && !deleted.has(file),
+  );
 }
 
 export async function readRepositoryJson(relativePath) {
@@ -33,7 +49,7 @@ export function matchingLineHits(file, source, matches, message) {
 }
 
 export function importReferences(source) {
-  return Array.from(source.matchAll(/from\s+["']([^"']+)["']/g), (match) => ({
+  return Array.from(source.matchAll(IMPORT_SPECIFIER_PATTERN), (match) => ({
     specifier: match[1],
     line: offsetLine(source, match.index),
   }));

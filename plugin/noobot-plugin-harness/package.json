@@ -10,8 +10,7 @@
   },
   "scripts": {
     "test": "node ../../scripts/run-with-isolated-tmp.mjs node --test \"__tests__/**/*.test.js\"",
-    "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\"",
-    "check:model-context-convergence": "node ../../scripts/check-model-context-convergence.mjs"
+    "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\""
   },
   "dependencies": {
     "@noobot/attachment-protocol": "file:../../attachment-protocol",

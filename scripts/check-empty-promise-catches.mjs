@@ -3,46 +3,39 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { defineCheck, emptyRuleMeasurements, runCheckWhenMain } from "./quality/check-protocol.mjs";
+import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
+import { addPatternOffsetHits } from "./quality/boundary-hits.mjs";
 import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
-const EMPTY_PROMISE_CATCH = /\.catch\s*\(\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{\s*\}\s*\)/gu;
+export const EMPTY_PROMISE_CATCH = /\.catch\s*\(\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{\s*\}\s*\)/gu;
 
-export function findEmptyPromiseCatchOffsets(source = "") {
-  return Array.from(String(source || "").matchAll(EMPTY_PROMISE_CATCH), (match) => match.index);
-}
-
-function lineNumberAt(source, offset) {
-  return source.slice(0, offset).split("\n").length;
-}
-
-async function checkEmptyPromiseCatches({ repoRoot = process.cwd() } = {}) {
-  const relativeFiles = await getFirstPartyProductionFiles({ repositoryRoot: repoRoot });
-  const violations = [];
-  for (const relativeFile of relativeFiles) {
-    const file = path.join(repoRoot, relativeFile);
-    const source = await fs.readFile(file, "utf8");
-    for (const offset of findEmptyPromiseCatchOffsets(source)) {
-      violations.push({
-        file: path.relative(repoRoot, file).split(path.sep).join("/"),
-        line: lineNumberAt(source, offset),
-      });
-    }
+async function measure() {
+  const measured = emptyRuleMeasurements(CHECK);
+  for (const file of await getFirstPartyProductionFiles({ repositoryRoot })) {
+    addPatternOffsetHits({
+      measurement: measured.emptyPromiseCatch,
+      file,
+      source: await readRepositoryText(file),
+      pattern: EMPTY_PROMISE_CATCH,
+      message: "empty Promise rejection handler",
+    });
   }
-  return { checkedFiles: relativeFiles.length, violations };
+  return measured;
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  const result = await checkEmptyPromiseCatches();
-  if (result.violations.length) {
-    for (const violation of result.violations) {
-      console.error(`${violation.file}:${violation.line}: empty Promise rejection handler`);
-    }
-    process.exitCode = 1;
-  } else {
-    console.log(`Empty Promise catch check passed (${result.checkedFiles} production sources).`);
-  }
-}
+export const CHECK = defineCheck({
+  id: "empty-promise-catches",
+  description: "Production Promise rejections are never swallowed silently",
+  rules: {
+    emptyPromiseCatch: {
+      description: "Production sources never call .catch with an empty arrow handler",
+      hint: "handle or report the rejection, or let it propagate",
+    },
+  },
+  exemptions: [],
+  baseline: { emptyPromiseCatch: 0, exemptions: 0 },
+  measure,
+});
+
+await runCheckWhenMain(CHECK, import.meta.url);

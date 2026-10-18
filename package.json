@@ -127,6 +127,7 @@
     "check:semantic-transfer-protocol-fields": "node ./scripts/check-semantic-transfer-protocol-fields.mjs",
     "check:attachment-protocol-fields": "node ./scripts/check-attachment-protocol-fields.mjs",
     "check:model-context-convergence": "node ./scripts/check-model-context-convergence.mjs",
+    "audit:model-request-log": "node ./scripts/audit-model-request-log.mjs",
     "check:agent-context-protocol-boundary": "node ./scripts/check-agent-context-protocol-boundary.mjs",
     "check:agent-transport-protocol-boundary": "node ./scripts/check-agent-transport-protocol-boundary.mjs",
     "check:connector-protocol-boundary": "node ./scripts/check-connector-protocol-boundary.mjs",
@@ -140,7 +141,8 @@
     "check:runtime-port-literals": "node ./scripts/check-runtime-port-literals.mjs",
     "check:bare-file-paths": "node ./scripts/check-bare-file-paths.mjs",
     "check:esm-import-extensions": "node ./scripts/check-esm-relative-import-extensions.mjs",
-    "fix:esm-import-extensions": "node ./scripts/check-esm-relative-import-extensions.mjs --fix",
+    "fix:esm-import-extensions": "node ./scripts/fix-esm-relative-import-extensions.mjs",
+    "fix:source-license-headers": "node ./scripts/fix-source-license-headers.mjs",
     "check:barrel-star-exports": "node ./scripts/check-barrel-star-exports.mjs",
     "check:memory-protocol-boundary": "node ./scripts/check-memory-protocol-boundary.mjs",
     "check:workspace-protocol-boundary": "node ./scripts/check-workspace-protocol-boundary.mjs"

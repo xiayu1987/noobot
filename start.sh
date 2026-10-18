@@ -549,7 +549,7 @@ main() {
 
 
     npm --prefix "$ROOT_DIR" install --workspaces --ignore-scripts --no-audit --no-fund --no-progress
-    (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet)
+    (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" >/dev/null)
   else
     npm --prefix "$CLIENT_DIR" install --ignore-scripts --no-audit --no-fund --no-progress
     npm --prefix "$SERVICE_DIR" install --ignore-scripts --no-audit --no-fund --no-progress
