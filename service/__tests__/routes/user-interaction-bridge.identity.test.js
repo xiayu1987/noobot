@@ -206,3 +206,30 @@ test("child interaction commits with its explicit scoped authority instead of ro
   requestItem.resolve({ confirmed: true });
   assert.deepEqual(await request, { confirmed: true });
 });
+
+test("lifecycle write failures reject the request with the outcome first", async () => {
+  const committedRequests = [];
+  const { userInteractionBridge } = createUserInteractionBridge({
+    async commitInteractionRequest(request) {
+      committedRequests.push(request);
+      return { identity: { eventId: "event-unprovisioned" } };
+    },
+    translateText: (key) => key,
+    ownerUserId: "user-unprovisioned",
+  });
+  const request = userInteractionBridge.requestUserInteraction({
+    interactionId: "unprovisioned-call",
+    authority: interactionAuthority({ session: { userId: "user-unprovisioned" } }),
+    toolName: "user_interaction",
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  findPendingInteraction({
+    requestId: committedRequests[0].payload.requestId,
+    ownerUserId: "user-unprovisioned",
+  }).resolve({ confirmed: true });
+  await assert.rejects(request, (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.ok(error.errors.every((item) => item.code === "ENOENT"));
+    return true;
+  });
+});

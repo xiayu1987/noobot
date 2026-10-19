@@ -10,8 +10,11 @@ import { createInteractionResponseCommand } from "@noobot/agent-transport-protoc
 import { createUserInteractionBridge } from "../../ws/chat-websocket/user-interaction-bridge.js";
 import { createMessageQueryHandlers } from "../../ws/chat-websocket/message-query-handlers.js";
 import { findPendingInteraction } from "../../ws/chat-websocket/pending-interaction-registry.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
 const OWNER = "user-cross";
+
+useProvisionedRuntimeEventsWorkspace([OWNER]);
 
 function responseCommand(sessionId, turnScopeId, requestId, response) {
   return createInteractionResponseCommand({

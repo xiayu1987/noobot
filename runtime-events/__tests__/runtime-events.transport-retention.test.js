@@ -343,20 +343,50 @@ test("runtime event archive cleanup failure is reported once per batch and keeps
   assert.equal((await readJsonl(results[0].file)).length, 3);
 });
 
-test("runtime event write failure is reported once and returned as ok:false", async (t) => {
+test("runtime event transport failure is reported once and returned as ok:false", async (t) => {
+  const workspaceRoot = await tempRoot();
+
+  const blockedSourceDir = path.join(
+    workspaceRoot,
+    "system",
+    "runtime",
+    "events",
+    "system",
+    "agent",
+  );
+  await fs.mkdir(path.dirname(blockedSourceDir), { recursive: true });
+  await fs.writeFile(blockedSourceDir, "not a directory", "utf8");
   const warn = t.mock.method(console, "warn", () => {});
   const result = await writeRuntimeEvent({
+    scope: "system",
     source: "agent",
     category: "system",
     level: "info",
-    event: "agent.runtime.writeFail.missingScope",
+    event: "agent.runtime.writeFail.transport",
   });
 
   assert.equal(result.ok, false);
   assert.ok(result.error instanceof Error);
+  assert.equal(result.record.event, "agent.runtime.writeFail.transport");
+  assert.equal(path.dirname(result.file), blockedSourceDir);
   const reports = warn.mock.calls.filter((call) =>
     String(call.arguments[0]).includes("write failed"),
   );
   assert.equal(reports.length, 1);
   assert.equal(reports[0].arguments[2], result.error);
+});
+
+test("runtime event protocol errors reject instead of being reported as transport failures", async (t) => {
+  await tempRoot();
+  const warn = t.mock.method(console, "warn", () => {});
+  await assert.rejects(
+    writeRuntimeEvent({
+      source: "agent",
+      category: "system",
+      level: "info",
+      event: "agent.runtime.writeFail.missingScope",
+    }),
+    /Invalid runtime event scope: undefined/,
+  );
+  assert.equal(warn.mock.callCount(), 0);
 });

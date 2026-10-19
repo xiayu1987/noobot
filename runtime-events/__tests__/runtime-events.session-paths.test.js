@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -159,6 +160,33 @@ test("child events are skipped when an ancestor is deleted", async () => {
   assert.equal(await pathExists(path.join(childDir, "events")), false);
 });
 
+test("session events reject when the workspace session tree cannot be read", async (t) => {
+  const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "tree-broken",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  await fs.writeFile(
+    path.join(workspaceRoot, "admin", WORKSPACE_LAYOUT.SESSION_TREE_FILE),
+    "{broken",
+    "utf8",
+  );
+  const warn = t.mock.method(console, "warn", () => {});
+  const event = {
+    source: "agent",
+    scope: "session",
+    category: "system",
+    event: "tree.broken",
+    userId: "admin",
+    sessionId: "tree-broken",
+  };
+  await assert.rejects(writeRuntimeEvent(event), SyntaxError);
+  await fs.rm(path.join(workspaceRoot, "admin", WORKSPACE_LAYOUT.SESSION_TREE_FILE));
+  await assert.rejects(writeRuntimeEvent(event), { code: "ENOENT" });
+  assert.equal(warn.mock.callCount(), 0);
+});
+
 test("an explicit parent that contradicts the tree is rejected", async () => {
   const workspaceRoot = await tempRoot();
   await persistSession(workspaceRoot, "admin", {
@@ -176,17 +204,18 @@ test("an explicit parent that contradicts the tree is rejected", async () => {
     parentSessionId: "parent-session",
     caller: SESSION_CALLER.USER,
   });
-  const result = await writeRuntimeEvent({
-    source: "agent",
-    scope: "session",
-    category: "system",
-    event: "child.event",
-    userId: "admin",
-    sessionId: "child-session",
-    parentSessionId: "other-session",
-  });
-  assert.equal(result.ok, false);
-  assert.match(result.error.message, /registered under "parent-session"/);
+  await assert.rejects(
+    writeRuntimeEvent({
+      source: "agent",
+      scope: "session",
+      category: "system",
+      event: "child.event",
+      userId: "admin",
+      sessionId: "child-session",
+      parentSessionId: "other-session",
+    }),
+    /registered under "parent-session"/,
+  );
 });
 
 test("workspace runtime events ignore placeholder parent session ids", async () => {

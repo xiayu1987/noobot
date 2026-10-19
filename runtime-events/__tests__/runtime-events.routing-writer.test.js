@@ -20,16 +20,16 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("session runtime event requires userId and sessionId", async () => {
-  const result = await writeRuntimeEvent({
-    scope: RUNTIME_EVENT_SCOPES.SESSION,
-    source: "agent",
-    category: "system",
-    level: "error",
-    event: "agent.session.missingContext",
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(result.error.message, /requires userId and sessionId/);
+  await assert.rejects(
+    writeRuntimeEvent({
+      scope: RUNTIME_EVENT_SCOPES.SESSION,
+      source: "agent",
+      category: "system",
+      level: "error",
+      event: "agent.session.missingContext",
+    }),
+    /requires userId and sessionId/,
+  );
 });
 
 test("startup and system events write JSONL without session context", async () => {
@@ -115,17 +115,17 @@ test("explicit session scope writes to the session events path", async () => {
 
 test("runtime events without a declared scope are rejected", async () => {
   await tempRoot();
-  const result = await writeRuntimeEvent({
-    source: "service",
-    category: "config",
-    level: "warn",
-    event: "service.undeclared.scope",
-    userId: "admin",
-    sessionId: "session-1",
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(result.error.message, /Invalid runtime event scope: undefined/);
+  await assert.rejects(
+    writeRuntimeEvent({
+      source: "service",
+      category: "config",
+      level: "warn",
+      event: "service.undeclared.scope",
+      userId: "admin",
+      sessionId: "session-1",
+    }),
+    /Invalid runtime event scope: undefined/,
+  );
 });
 
 test("routed runtime events write under NOOBOT_WORKSPACE_ROOT and fail when it is missing", async () => {
@@ -146,8 +146,7 @@ test("routed runtime events write under NOOBOT_WORKSPACE_ROOT and fail when it i
     assert.match(result.file, /runtime\/events\/startup\/agent-proxy\/state\.jsonl$/);
 
     delete process.env.NOOBOT_WORKSPACE_ROOT;
-    const missing = await writeRuntimeEvent(event);
-    assert.equal(missing.ok, false);
+    await assert.rejects(writeRuntimeEvent(event), /NOOBOT_WORKSPACE_ROOT/);
   } finally {
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
@@ -176,36 +175,36 @@ test("desktopRoot writes system events under the explicit desktop root", async (
 test("desktopRoot rejects session-scoped events", async () => {
   await tempRoot();
   const desktopRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-runtime-events-desktop-"));
-  const result = await writeRuntimeEvent(
-    {
-      source: "service",
-      scope: "session",
-      userId: "admin",
-      sessionId: "session-1",
-      category: "system",
-      event: "service.desktop.session",
-    },
-    { desktopRoot },
+  await assert.rejects(
+    writeRuntimeEvent(
+      {
+        source: "service",
+        scope: "session",
+        userId: "admin",
+        sessionId: "session-1",
+        category: "system",
+        event: "service.desktop.session",
+      },
+      { desktopRoot },
+    ),
+    /owned by the workspace/,
   );
-
-  assert.equal(result.ok, false);
-  assert.match(String(result.error?.message), /owned by the workspace/);
 });
 
 test("explicit session scope with partial session context is rejected", async () => {
   await tempRoot();
-  const result = await writeRuntimeEvent({
-    scope: "session",
-    source: "service",
-    category: "transport",
-    level: "warn",
-    event: "service.explicit.partialSession",
-    sessionId: "session-only",
-    dialogProcessId: "dialog-1",
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(result.error.message, /requires userId and sessionId/);
+  await assert.rejects(
+    writeRuntimeEvent({
+      scope: "session",
+      source: "service",
+      category: "transport",
+      level: "warn",
+      event: "service.explicit.partialSession",
+      sessionId: "session-only",
+      dialogProcessId: "dialog-1",
+    }),
+    /requires userId and sessionId/,
+  );
 });
 
 test("runtime event jsonl transport appends without rotating below max file bytes", async () => {

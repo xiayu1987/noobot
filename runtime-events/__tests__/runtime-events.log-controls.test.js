@@ -212,20 +212,20 @@ test("runtime-events writer rejects unregistered debug types", async () => {
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
   });
-  const result = await writeRuntimeEvent({
-    source: "frontend",
-    scope: "session",
-    category: "debug",
-    level: "debug",
-    event: "unknown.trace",
-    userId: "admin",
-    sessionId: "session-debug-unknown",
-    debugType: "unknown-debug",
-    data: {},
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(result.error.message, /Invalid runtime event debugType: unknown-debug/);
+  await assert.rejects(
+    writeRuntimeEvent({
+      source: "frontend",
+      scope: "session",
+      category: "debug",
+      level: "debug",
+      event: "unknown.trace",
+      userId: "admin",
+      sessionId: "session-debug-unknown",
+      debugType: "unknown-debug",
+      data: {},
+    }),
+    /Invalid runtime event debugType: unknown-debug/,
+  );
 });
 
 test("runtime-events writer never suppresses an error with a disabled debug control", async () => {

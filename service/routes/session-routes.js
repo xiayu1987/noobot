@@ -137,7 +137,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
         sessionId,
       });
       const sessionDocs = Array.isArray(result?.sessions) ? result.sessions : [];
-      void writeRuntimeEvent({
+      await writeRuntimeEvent({
         scope: "session",
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -206,7 +206,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
           ),
         },
       });
-      void writeRuntimeEvent({
+      await writeRuntimeEvent({
         scope: "session",
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -257,7 +257,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       turnScopeId,
       commandId,
     });
-    void writeRuntimeEvent({
+    await writeRuntimeEvent({
       scope: "session",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -364,43 +364,55 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
           turnScopeId: text(payload.anchor?.turnScopeId),
           data,
         });
-      void logDeleteMutation("service.messageDelete.requestReceived", {
+      await logDeleteMutation("service.messageDelete.requestReceived", {
         parentSessionId: payload.parentSessionId,
         anchor: payload.anchor,
         expectedAggregateVersion: payload.expectedAggregateVersion ?? null,
         commandId: payload.commandId,
       });
+      let result;
       try {
-        const result = await bot.session.deleteFromMessage(payload);
-        void logDeleteMutation("service.messageDelete.committed", {
-          deletedCount: result.deletedCount,
-          anchorIndex: result.anchorIndex,
-          deletedTurnScopeIds: result.deletedTurnScopeIds,
-          aggregateVersion: result.aggregateVersion,
-          deduplicated: result.deduplicated === true,
-          remainingMessages: result.session.messages.map((message = {}, index) => ({
-            index,
-            id: text(message?.messageId),
-            role: text(message?.role),
-            type: text(message?.type),
-            dialogProcessId: text(message?.dialogProcessId),
-            turnScopeId: text(message?.turnScopeId),
-            contentLength: String(message?.content || "").length,
-          })),
-        });
-        res.json({ ok: true, ...result });
+        result = await bot.session.deleteFromMessage(payload);
       } catch (error) {
-        void logDeleteMutation(
-          "service.messageDelete.failed",
-          {
-            error: String(error?.message || error || "delete_failed"),
-            errorCode: text(error?.code),
-            statusCode: Number(error?.statusCode || 0),
-          },
-          "error",
-        );
+        const [logged] = await Promise.allSettled([
+          logDeleteMutation(
+            "service.messageDelete.failed",
+            {
+              error: String(error?.message || error || "delete_failed"),
+              errorCode: text(error?.code),
+              statusCode: Number(error?.statusCode || 0),
+            },
+            "error",
+          ),
+        ]);
+        if (logged.status === "rejected") {
+          error.cause = new AggregateError(
+            [logged.reason],
+            "message delete diagnostic write failed",
+            {
+              cause: error.cause,
+            },
+          );
+        }
         throw error;
       }
+      await logDeleteMutation("service.messageDelete.committed", {
+        deletedCount: result.deletedCount,
+        anchorIndex: result.anchorIndex,
+        deletedTurnScopeIds: result.deletedTurnScopeIds,
+        aggregateVersion: result.aggregateVersion,
+        deduplicated: result.deduplicated === true,
+        remainingMessages: result.session.messages.map((message = {}, index) => ({
+          index,
+          id: text(message?.messageId),
+          role: text(message?.role),
+          type: text(message?.type),
+          dialogProcessId: text(message?.dialogProcessId),
+          turnScopeId: text(message?.turnScopeId),
+          contentLength: String(message?.content || "").length,
+        })),
+      });
+      res.json({ ok: true, ...result });
     }),
   );
 
@@ -429,7 +441,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       lifecycle?.replacedTurns && typeof lifecycle.replacedTurns === "object"
         ? lifecycle.replacedTurns
         : {};
-    void writeRuntimeEvent({
+    await writeRuntimeEvent({
       scope: "session",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,

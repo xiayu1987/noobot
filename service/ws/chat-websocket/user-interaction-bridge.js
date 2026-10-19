@@ -53,7 +53,6 @@ async function handleInteractionTimeout({
   interactionRequestsByIdentity,
   translateText,
   getCurrentLocale,
-  writeInteractionLifecycle,
   commitInteractionRequest,
   rejectInteraction,
 }) {
@@ -61,11 +60,12 @@ async function handleInteractionTimeout({
   if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
   requestItem.state = "rejected";
   const error = new Error(translateText("ws.userInteractionTimeout", getCurrentLocale()));
-  writeInteractionLifecycle(
-    "service.websocket.interaction.failed",
-    { interactionId, requestId, reason: "timeout", timeoutMs: effectiveTimeoutMs },
-    interactionAuthority,
-  );
+  requestItem.recordLifecycle("service.websocket.interaction.failed", {
+    interactionId,
+    requestId,
+    reason: "timeout",
+    timeoutMs: effectiveTimeoutMs,
+  });
   const terminalPayload = {
     ...requestItem.payload,
     lifecycle: "failed",
@@ -91,29 +91,36 @@ async function handleInteractionTimeout({
       payload: terminalPayload,
     });
   } catch (commitError) {
-    writeInteractionLifecycle(
-      "service.websocket.interaction.terminalCommitFailed",
-      {
-        interactionId,
-        requestId,
-        reason: commitError?.message || "interaction_authority_commit_failed",
-      },
-      interactionAuthority,
-    );
-  }
-  writeInteractionLifecycle(
-    "service.websocket.interaction.terminalSent",
-    {
+    requestItem.recordLifecycle("service.websocket.interaction.terminalCommitFailed", {
       interactionId,
       requestId,
-      lifecycle: "failed",
-      reason: "timeout",
-      timeoutMs: effectiveTimeoutMs,
-      sendStarted: true,
-    },
-    interactionAuthority,
-  );
+      reason: commitError?.message || "interaction_authority_commit_failed",
+    });
+  }
+  requestItem.recordLifecycle("service.websocket.interaction.terminalSent", {
+    interactionId,
+    requestId,
+    lifecycle: "failed",
+    reason: "timeout",
+    timeoutMs: effectiveTimeoutMs,
+    sendStarted: true,
+  });
   rejectInteraction(error);
+}
+
+async function settleAfterLifecycleWrites(settlement, requestItem) {
+  const [outcome] = await Promise.allSettled([settlement]);
+  const writeErrors = (await Promise.all(requestItem.lifecycleWrites)).filter(Boolean);
+  if (outcome.status === "rejected") {
+    if (!writeErrors.length) throw outcome.reason;
+    throw new AggregateError([outcome.reason, ...writeErrors], outcome.reason?.message, {
+      cause: outcome.reason,
+    });
+  }
+  if (writeErrors.length) {
+    throw new AggregateError(writeErrors, "user interaction lifecycle write failed");
+  }
+  return outcome.value;
 }
 
 function createInteractionPayload(input, authority, requestId, effectiveTimeoutMs) {
@@ -156,8 +163,8 @@ export function createUserInteractionBridge({
     throw new TypeError("commitInteractionRequest is required");
   }
   const interactionRequestsByIdentity = new Map();
-  const writeInteractionLifecycle = (event, data, authority) => {
-    void writeRuntimeEvent({
+  const writeInteractionLifecycle = (event, data, authority) =>
+    writeRuntimeEvent({
       scope: "session",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -169,7 +176,6 @@ export function createUserInteractionBridge({
       turnScopeId: authority.turn.turnScopeId,
       data,
     });
-  };
   const rejectTurnInteractions = ({ sessionId = "", turnScopeId = "" } = {}, error) =>
     rejectPendingInteractionsForTurn(
       { ownerUserId: interactionOwnerUserId, sessionId, turnScopeId },
@@ -189,15 +195,6 @@ export function createUserInteractionBridge({
         ? interactionRequestsByIdentity.get(interactionIdentityKey)
         : null;
       if (existingRequest) {
-        writeInteractionLifecycle(
-          "service.websocket.interaction.deduplicated",
-          {
-            interactionId: normalizedInteractionId,
-            requestId: existingRequest.requestId,
-            state: existingRequest.state,
-          },
-          interactionAuthority,
-        );
         return existingRequest.promise;
       }
 
@@ -213,6 +210,8 @@ export function createUserInteractionBridge({
         state: "pending",
         result: undefined,
         promise: null,
+        lifecycleWrites: [],
+        recordLifecycle: null,
         resolve: null,
         reject: null,
         timer: null,
@@ -222,10 +221,19 @@ export function createUserInteractionBridge({
         turnScopeId: interactionAuthority.turn.turnScopeId,
       };
       const effectiveTimeoutMs = normalizeInteractionTimeoutMs(timeoutMs, interactionTimeoutMs);
-      requestItem.promise = new Promise((resolveInteraction, rejectInteraction) => {
+
+      requestItem.recordLifecycle = (event, data) => {
+        requestItem.lifecycleWrites.push(
+          writeInteractionLifecycle(event, data, interactionAuthority).then(
+            () => null,
+            (error) => error,
+          ),
+        );
+      };
+      const settlement = new Promise((resolveInteraction, rejectInteraction) => {
         const timer = setTimeout(
           () =>
-            handleInteractionTimeout({
+            void handleInteractionTimeout({
               requestItem,
               requestId,
               interactionId: normalizedInteractionId,
@@ -235,33 +243,22 @@ export function createUserInteractionBridge({
               interactionRequestsByIdentity,
               translateText,
               getCurrentLocale,
-              writeInteractionLifecycle,
               commitInteractionRequest,
               rejectInteraction,
-            }),
+            }).catch(rejectInteraction),
           effectiveTimeoutMs,
         );
 
         requestItem.timer = timer;
-        writeInteractionLifecycle(
-          "service.websocket.interaction.timeoutScheduled",
-          {
-            interactionId: normalizedInteractionId,
-            requestId,
-            timeoutMs: effectiveTimeoutMs,
-          },
-          interactionAuthority,
-        );
         requestItem.resolve = (response) => {
           clearTimeout(requestItem.timer);
           unregisterPendingInteraction(requestItem);
           requestItem.state = "resolved";
           requestItem.result = response;
-          writeInteractionLifecycle(
-            "service.websocket.interaction.resolved",
-            { interactionId: normalizedInteractionId, requestId },
-            interactionAuthority,
-          );
+          requestItem.recordLifecycle("service.websocket.interaction.resolved", {
+            interactionId: normalizedInteractionId,
+            requestId,
+          });
           resolveInteraction(response);
         };
         requestItem.reject = (error) => {
@@ -271,6 +268,11 @@ export function createUserInteractionBridge({
           if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
           rejectInteraction(error);
         };
+        requestItem.recordLifecycle("service.websocket.interaction.timeoutScheduled", {
+          interactionId: normalizedInteractionId,
+          requestId,
+          timeoutMs: effectiveTimeoutMs,
+        });
         registerPendingInteraction(requestItem);
         if (interactionIdentityKey) {
           interactionRequestsByIdentity.set(interactionIdentityKey, requestItem);
@@ -303,12 +305,12 @@ export function createUserInteractionBridge({
           requestItem.state = "rejected";
           rejectInteraction(error);
         });
-        writeInteractionLifecycle(
-          "service.websocket.interaction.registered",
-          { interactionId: normalizedInteractionId, requestId },
-          interactionAuthority,
-        );
+        requestItem.recordLifecycle("service.websocket.interaction.registered", {
+          interactionId: normalizedInteractionId,
+          requestId,
+        });
       });
+      requestItem.promise = settleAfterLifecycleWrites(settlement, requestItem);
       return requestItem.promise;
     },
   };

@@ -179,13 +179,20 @@ test("log-websocket-server: mixed batches ACK after reliable writes without wait
         payload: {
           events: [
             {
+              source: "client",
               category: "debug",
               debugType: "tool-log-window",
               event: "debug.pending",
               scope: "session",
               sessionId: "s-mixed",
             },
-            { scope: "session", category: "state", event: "state.reliable", sessionId: "s-mixed" },
+            {
+              source: "client",
+              scope: "session",
+              category: "state",
+              event: "state.reliable",
+              sessionId: "s-mixed",
+            },
           ],
         },
       });
@@ -212,6 +219,7 @@ test("log-websocket-server: reliable write failures return error and never ACK",
     const messages = await sendLogWs({
       port: server.address().port,
       payload: {
+        source: "client",
         scope: "session",
         category: "state",
         event: "state.failed",
@@ -409,16 +417,18 @@ test("log-websocket-server: rejects debug logs without a registered debug type",
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
-    const result = await writeSessionLogEvent({
-      source: "client",
-      userId: "u1",
-      category: "debug",
-      scope: "session",
-      sessionId: "s-debug",
-      event: "debug.untyped",
-    });
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /Invalid runtime event debugType: undefined/);
+    await assert.rejects(
+      () =>
+        writeSessionLogEvent({
+          source: "client",
+          userId: "u1",
+          category: "debug",
+          scope: "session",
+          sessionId: "s-debug",
+          event: "debug.untyped",
+        }),
+      /Invalid runtime event debugType: undefined/,
+    );
     const debugDir = await sessionDirPath(workspaceRoot, "u1", "s-debug");
     await assert.rejects(() => fs.stat(path.join(debugDir, "events")));
   }));
@@ -431,15 +441,17 @@ test("log-websocket-server: rejects records without an explicit scope", () =>
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
-    const result = await writeSessionLogEvent({
-      source: "client",
-      userId: "u1",
-      category: "state",
-      sessionId: "s-noscope",
-      event: "state.noscope",
-    });
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /Invalid runtime event scope: undefined/);
+    await assert.rejects(
+      () =>
+        writeSessionLogEvent({
+          source: "client",
+          userId: "u1",
+          category: "state",
+          sessionId: "s-noscope",
+          event: "state.noscope",
+        }),
+      /Invalid runtime event scope: undefined/,
+    );
   }));
 
 test("log-websocket-server: rejects records without an explicit category", () =>
@@ -450,15 +462,17 @@ test("log-websocket-server: rejects records without an explicit category", () =>
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
-    const result = await writeSessionLogEvent({
-      source: "client",
-      userId: "u1",
-      scope: "session",
-      sessionId: "s-nocategory",
-      event: "state.nocategory",
-    });
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /Invalid runtime event category: undefined/);
+    await assert.rejects(
+      () =>
+        writeSessionLogEvent({
+          source: "client",
+          userId: "u1",
+          scope: "session",
+          sessionId: "s-nocategory",
+          event: "state.nocategory",
+        }),
+      /Invalid runtime event category: undefined/,
+    );
     const sessionDir = await sessionDirPath(workspaceRoot, "u1", "s-nocategory");
     await assert.rejects(() => fs.stat(path.join(sessionDir, "events")));
   }));
@@ -508,14 +522,17 @@ test("log-websocket-server: failed writes are not reported as written", () =>
         parentSessionId: "",
         caller: SESSION_CALLER.USER,
       });
-      const failed = await writeSessionLogEvent({
-        source: "client",
-        userId: "u1",
-        category: "state",
-        sessionId: "s-failed",
-        event: "state.failed",
-      });
-      assert.equal(failed.ok, false);
+      await assert.rejects(
+        () =>
+          writeSessionLogEvent({
+            source: "client",
+            userId: "u1",
+            category: "state",
+            sessionId: "s-failed",
+            event: "state.failed",
+          }),
+        /Invalid runtime event scope: undefined/,
+      );
       const written = await writeSessionLogEvent({
         source: "client",
         userId: "u1",

@@ -11,6 +11,7 @@ import {
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
+  normalizeRuntimeEventEnvelope,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
@@ -86,6 +87,20 @@ export function registerLogWebSocketServer(
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   });
   wss.on("connection", (ws, request) => {
+    const reportWriteFailure = (error) => {
+      void writeRuntimeEvent({
+        scope: "system",
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
+        category: "transport",
+        level: "warn",
+        event: "service.logWebSocket.write.failed",
+        data: { userIdLength: String(request?.auth?.userId || "").length },
+        error,
+      });
+      if (ws.readyState === ws.OPEN)
+        ws.send(JSON.stringify({ event: "error", error: error?.message || "log write failed" }));
+    };
     logDiagnostic("connected", { userId: request.auth?.userId || "" });
     if (ws.readyState === ws.OPEN) {
       ws.send(
@@ -106,16 +121,22 @@ export function registerLogWebSocketServer(
           throw new Error("log batch too large");
         }
         logDiagnostic("received", { count: events.length });
+        const records = events.map((item) => ({
+          ...item,
+          userId: request.auth?.userId || item.userId,
+        }));
+
+        for (const record of records) normalizeRuntimeEventEnvelope(record);
         const reliableWrites = [];
-        for (const item of events) {
-          const event = { ...item, userId: request.auth?.userId || item.userId };
-          if (isSessionLogDebugEvent(event)) {
-            void writeLogEvent(event);
+        for (const record of records) {
+          if (isSessionLogDebugEvent(record)) {
+            void Promise.resolve(writeLogEvent(record)).then((result) => {
+              if (result.ok === false) reportWriteFailure(result.error);
+            }, reportWriteFailure);
           } else {
             reliableWrites.push(
-              Promise.resolve(writeLogEvent(event)).then((result) => {
-                if (result?.ok === false)
-                  throw result.error || new Error("reliable log write failed");
+              Promise.resolve(writeLogEvent(record)).then((result) => {
+                if (result.ok === false) throw result.error;
                 return result;
               }),
             );
@@ -125,18 +146,7 @@ export function registerLogWebSocketServer(
         if (ws.readyState === ws.OPEN)
           ws.send(JSON.stringify({ event: "ack", count: events.length }));
       } catch (error) {
-        void writeRuntimeEvent({
-          scope: "system",
-          source: "service",
-          channel: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
-          category: "transport",
-          level: "warn",
-          event: "service.logWebSocket.write.failed",
-          data: { userIdLength: String(request?.auth?.userId || "").length },
-          error,
-        });
-        if (ws.readyState === ws.OPEN)
-          ws.send(JSON.stringify({ event: "error", error: error?.message || "log write failed" }));
+        reportWriteFailure(error);
       }
     });
   });

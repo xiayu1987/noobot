@@ -44,7 +44,7 @@ export async function mapRunCommand(context, command) {
 }
 
 export function recordReceivedCommand(command, run) {
-  void writeRuntimeEvent({
+  return writeRuntimeEvent({
     scope: "session",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
