@@ -57,12 +57,6 @@ export class TaskService {
           parentSessionId,
           persistenceContext,
         );
-        await this.sessionRepo.ensureSession({
-          userId,
-          sessionId,
-          parentSessionId: resolvedParentSessionId,
-          persistenceContext,
-        });
         const session = await this.sessionRepo.findById(
           userId,
           sessionId,

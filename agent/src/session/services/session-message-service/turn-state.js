@@ -23,7 +23,7 @@ import {
 } from "@noobot/session-protocol";
 import { createSessionMessageUid } from "../../../context/session/message-uid.js";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
-import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
+import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";
 import {
   appendAuthorityOutboxRecords,
@@ -186,7 +186,7 @@ function materializeAcceptedUserMessage({
     () => nowValue,
   );
   session.messages = [...session.messages, userMessage];
-  session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
+  registerSessionMessageFacts(session, userMessage);
   return userMessage;
 }
 
@@ -268,10 +268,11 @@ export async function applyTurnLifecycleEvent({
   parentSessionId = "",
   persistenceContext = null,
   expectedAggregateVersion,
+  sessionCaller,
   ...event
 } = {}) {
   if (!userId || !sessionId) return { applied: false, reason: "missing_session" };
-  const provisionIntent = validateSessionProvisionIntent(event);
+  const provisionIntent = validateSessionProvisionIntent({ ...event, sessionCaller });
   if (!provisionIntent.valid) return { applied: false, reason: "invalid_session_provision_intent" };
   if (provisionIntent.requested) {
     return provisionSessionWithInitialTurn.call(this, {
@@ -280,6 +281,7 @@ export async function applyTurnLifecycleEvent({
       parentSessionId,
       persistenceContext,
       expectedAggregateVersion,
+      sessionCaller,
       ...event,
     });
   }
@@ -347,8 +349,6 @@ export async function applyTurnLifecycleEvent({
         persistenceContext,
       });
       await appendCommittedTurnLifecycleEvent(outboxSessionDir, result.committedEvent);
-
-      await this.sessionRepo.writeSessionDisplaySummary(userId, session, { persistenceContext });
       return {
         ...result,
         session,
@@ -371,9 +371,10 @@ async function provisionSessionWithInitialTurn({
   persistenceContext = null,
   expectedAggregateVersion,
   createSessionIfAbsent,
+  sessionCaller,
   ...event
 } = {}) {
-  const intent = validateSessionProvisionIntent({ ...event, createSessionIfAbsent });
+  const intent = validateSessionProvisionIntent({ ...event, createSessionIfAbsent, sessionCaller });
   if (!intent.valid || !intent.requested)
     return { applied: false, reason: "invalid_session_provision_intent" };
   const mutation = this._withSessionMutation(
@@ -391,6 +392,7 @@ async function provisionSessionWithInitialTurn({
         this.sessionRepo.createInitialSession({
           sessionId,
           parentSessionId: resolvedParentSessionId,
+          caller: sessionCaller,
         });
       const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
         this,
@@ -471,7 +473,7 @@ export async function upsertTurnTiming({
         persistenceContext,
       );
       if (!session) return { upserted: false, reason: "session_not_found" };
-      const before = JSON.stringify(session.turnTimings || []);
+      const before = JSON.stringify(session.turnTimings);
       upsertSessionTurnTiming(session, {
         turnScopeId,
         dialogProcessId,
@@ -479,7 +481,7 @@ export async function upsertTurnTiming({
         thinkingFinishedAt,
         modelLoopRound,
       });
-      if (JSON.stringify(session.turnTimings || []) === before) {
+      if (JSON.stringify(session.turnTimings) === before) {
         return { upserted: false, reason: "unchanged", session };
       }
       session.updatedAt = this.now();

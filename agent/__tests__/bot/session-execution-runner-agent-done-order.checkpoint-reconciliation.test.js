@@ -10,6 +10,7 @@ import {
   createRunner,
   finalizeAgentTurn,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("runSession restores only the checkpoint-persisted agent prefix at finalization", async () => {
   const callOrder = [];
@@ -347,7 +348,7 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
     userId: "u1",
     parentSessionId: "",
     parentDialogProcessId: "",
-    caller: "user",
+    caller: SESSION_CALLER.USER,
     agentResult: {
       turnMessages: [
         {

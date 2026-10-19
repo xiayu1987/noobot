@@ -12,6 +12,10 @@ import { buildThinkingDetailPayload } from "../../src/session/session-thinking-d
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { readSessionTurn, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 test("thinking detail message carries its session identity without duplicating scoped messages", () => {
   const payload = buildThinkingDetailPayload(
@@ -293,6 +297,7 @@ test("session summary references canonical thinking detail without copying its t
   ];
 
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "child-session",
     aggregateVersion: 0,
     messages,
@@ -336,6 +341,7 @@ test("session summary does not copy large tool payloads retained by thinking det
   ];
 
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "large-session",
     aggregateVersion: 0,
     messages,
@@ -360,7 +366,8 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
   try {
     await writeSessionArtifact({
       sessionDir,
-      sessionPayload: {
+      sessionPayload: applySessionMessageFacts({
+        ...createTestSessionRequiredFields(),
         sessionId: "scoped-session",
         aggregateVersion: 0,
         messages: [
@@ -383,7 +390,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
             toolTimeline: [{ key: "call:two", status: "completed" }],
           },
         ],
-      },
+      }),
     });
 
     const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));

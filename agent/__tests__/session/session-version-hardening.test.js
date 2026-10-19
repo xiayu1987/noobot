@@ -6,9 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { TURN_EVENT, TURN_PHASE, createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { acceptTurn, canonical, harness } from "./session-version-hardening.test-helpers.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 async function completeTurn(service, turnScopeId) {
   const base = {
@@ -124,6 +125,7 @@ test("accepted turns receive allocated dialog identity and an immutable logical 
 test("dialog order accepts only canonical dialogOrdinal and messageUid fields", () => {
   const normalized = normalizeSessionEntity(
     {
+      ...createTestSessionRequiredFields(),
       sessionId: "s1",
       aggregateVersion: 0,
       messages: [
@@ -147,21 +149,31 @@ test("dialog order accepts only canonical dialogOrdinal and messageUid fields", 
     [
       {
         dialogProcessId: "d1",
-        turnScopeId: "t1",
-        startedAt: "2026-01-01T00:00:00.000Z",
+        turnScopeId: "",
+        startedAt: "",
         dialogOrdinal: 7,
       },
     ],
   );
-  assert.equal(normalized.dialogOrder[0].userMessageUid, normalized.messages[0].messageUid);
+  assert.equal(normalized.dialogOrder[0].userMessageUid, "");
   assert.equal("userMessageId" in normalized.dialogOrder[0], false);
   assert.equal("sequence" in normalized.dialogOrder[0], false);
 });
 
 test("messages without a persistent messageUid are rejected", () => {
   const invalid = {
+    ...createTestSessionRequiredFields(),
     sessionId: "s1",
     aggregateVersion: 0,
+    dialogOrder: [
+      {
+        dialogProcessId: "d1",
+        turnScopeId: "t1",
+        startedAt: "",
+        userMessageUid: "",
+        dialogOrdinal: 1,
+      },
+    ],
     messages: [
       {
         role: "assistant",
@@ -297,6 +309,7 @@ test("internal append and summary checkpoint use mutation lock without changing 
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "t",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
@@ -368,6 +381,7 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "t",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
@@ -416,6 +430,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "t",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
@@ -464,6 +479,7 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "t",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
@@ -507,6 +523,7 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "t",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
@@ -571,6 +588,7 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "t",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
@@ -601,6 +619,7 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "completed" } },
     },

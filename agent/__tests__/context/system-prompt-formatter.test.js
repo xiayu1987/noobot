@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { composeSystemInfoSections } from "../../src/context/formatters/system-prompt-formatter.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("composeSystemInfoSections omits conditional sections when data is empty", () => {
   const sections = composeSystemInfoSections({
@@ -66,7 +67,7 @@ test("composeSystemInfoSections projects only model-owned execution context", ()
     locale: "en-US",
     dynamicInfo: {
       now: "2026-08-05T12:00:00.000Z",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       sessionId: "session-secret",
       dialogProcessId: "dialog-secret",
       currentDialogProcessId: "dialog-current-secret",

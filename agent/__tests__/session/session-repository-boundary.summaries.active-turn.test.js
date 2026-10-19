@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -15,9 +17,14 @@ import {
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 test("session display summary materializes the active Turn presentation in the zero-event window", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "active-turn-session",
     aggregateVersion: 0,
     messages: [
@@ -33,6 +40,7 @@ test("session display summary materializes the active Turn presentation in the z
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-active",
       turns: {
         "turn-active": {
@@ -74,6 +82,7 @@ test("session display summary materializes the active Turn presentation in the z
 
 test("session display summary materializes stopped Turn details on its stable presentation", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "stopped-turn-session",
     aggregateVersion: 0,
     messages: [
@@ -102,6 +111,7 @@ test("session display summary materializes stopped Turn details on its stable pr
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "",
       turns: {
         "turn-stopped": {
@@ -131,8 +141,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     const sessionId = "active-full-detail";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
 
     const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, "");
     session.messages = canonicalMessages(
@@ -150,6 +159,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
       "active_full",
     );
     session.turnLifecycle = {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-active-full",
       sequence: 1,
       turns: {
@@ -163,7 +173,11 @@ test("full and summary Session Detail expose the same canonical active Turn mess
         },
       },
     };
-    await runtime.repositories.sessionRepository.save(userId, session, "");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(session),
+      "",
+    );
     await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
 
     const summaryDetail = await runtime.sessionCrudService.getSessionDisplayData({
@@ -194,6 +208,7 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
   const turnScopeId = "client-turn:active-timeline";
   const presentationMessageId = "presentation-active-timeline";
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "active-timeline-session",
     aggregateVersion: 0,
     messages: [
@@ -254,6 +269,7 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: turnScopeId,
       sequence: 1,
       turns: {

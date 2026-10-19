@@ -15,9 +15,10 @@ import {
   prepareTurnInput,
 } from "../../src/bot/session/turn-execution-preparer.js";
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
-import { persistSession } from "../helpers/runtime-events-env.js";
+import { initializeSessionTree, persistSession } from "../helpers/runtime-events-env.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
@@ -51,6 +52,7 @@ test("stopped snapshot resume degrades to a normal turn when the optional snapsh
   const workspaceRoot = await fs.mkdtemp(
     path.join(os.tmpdir(), "noobot-missing-stopped-snapshot-"),
   );
+  await initializeSessionTree(workspaceRoot, "u1");
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = { workspaceRoot };
   const calls = [];
@@ -108,7 +110,12 @@ test("stopped snapshot resume preserves history and incremental block boundaries
 
 test("stopped snapshot resume restores system as the same task-state fact", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-resume-system-boundary-"));
-  await persistSession(workspaceRoot, "u1", "s1");
+  await initializeSessionTree(workspaceRoot, "u1");
+  await persistSession(workspaceRoot, "u1", {
+    sessionId: "s1",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const stoppedIdentity = {
     userId: "u1",
     sessionId: "s1",
@@ -274,7 +281,12 @@ test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-
 
 test("stopped snapshot resume restores turn progress onto the live system runtime", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-resume-turn-progress-"));
-  await persistSession(workspaceRoot, "u1", "s1");
+  await initializeSessionTree(workspaceRoot, "u1");
+  await persistSession(workspaceRoot, "u1", {
+    sessionId: "s1",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const stoppedIdentity = {
     userId: "u1",
     sessionId: "s1",

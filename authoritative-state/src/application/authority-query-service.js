@@ -207,7 +207,7 @@ export function buildAuthoritativeExecutionReadModel(sessions = []) {
   const byId = new Map();
   const conflicts = new Map();
   for (const session of Array.isArray(sessions) ? sessions : []) {
-    const lifecycle = normalizeTurnLifecycleEntity(session?.turnLifecycle || {});
+    const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle);
     for (const turn of Object.values(lifecycle.turns)) {
       const execution = projectAuthoritativeExecution(turn, session);
       if (!execution.executionId) continue;

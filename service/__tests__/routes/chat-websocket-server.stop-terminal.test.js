@@ -25,6 +25,9 @@ import {
   AGENT_TRANSPORT_EVENT,
 } from "@noobot/agent-transport-protocol";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user"]);
 
 test("chat-websocket-server: stop persists and emits authoritative stop completion identity", async () => {
   let capturedStopPayload = null;

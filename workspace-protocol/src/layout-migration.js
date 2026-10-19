@@ -33,6 +33,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     toVersion: 4,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE,
   }),
+  Object.freeze({
+    id: "session-tree-caller-v5",
+    toVersion: 5,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE,
+  }),
 ]);
 
 function layoutStateError(message) {

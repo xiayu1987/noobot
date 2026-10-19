@@ -10,6 +10,7 @@ import { ContextBuilder } from "../../src/context/index.js";
 import { buildSystemRuntime } from "../../src/context/application/build-system-context.js";
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function createContextSessionManager({ getContextProjection = null } = {}) {
   return {
@@ -69,7 +70,7 @@ function createBuilderForAttachmentRuntimeTest({
       abortSignal: new AbortController().signal,
       userId: "u1",
       sessionId: "s1",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       parentSessionId,
       ...(Array.isArray(userMessageAttachments) ? { userMessageAttachments } : {}),
       attachments,
@@ -243,7 +244,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
       abortSignal: new AbortController().signal,
       userId: configuredSuperUserId,
       sessionId: "s1",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       parentSessionId: "",
       attachments: [],
       runConfig: executionRunConfig("turn-1", {
@@ -290,7 +291,7 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
       abortSignal: new AbortController().signal,
       userId: "u1",
       sessionId: "s1",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       parentSessionId: "",
       userMessageAttachments: [],
       runConfig: executionRunConfig("turn-runtime-only"),
@@ -337,7 +338,7 @@ test("buildNewSessionContext keeps super user identity in system message when sy
       abortSignal: new AbortController().signal,
       userId: configuredSuperUserId,
       sessionId: "s1",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       parentSessionId: "",
       attachments: [],
       runConfig: executionRunConfig("turn-1", {
@@ -485,7 +486,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
       abortSignal: new AbortController().signal,
       userId: "u1",
       sessionId: "s1",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       parentSessionId: "",
       attachments: [],
       runConfig: executionRunConfig("client-turn:edited", {
@@ -608,7 +609,7 @@ function createBuilderForLongMemoryTest(
     sessionContext: {
       userId: "u1",
       sessionId: "s1",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       parentSessionId: "",
       attachments: [],
       runConfig: executionRunConfig("client-turn:long-memory", {

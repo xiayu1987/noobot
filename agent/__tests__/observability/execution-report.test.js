@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { EXECUTION_REPORT_STATUS } from "@noobot/session-protocol/execution-report";
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 import { handleSessionRunFailure } from "../../src/bot/execution/runner/run-failure.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function createFinalizer(session) {
   return new SessionExecutionFinalizer({
@@ -87,7 +88,7 @@ function failureContext(overrides = {}) {
       userId: "u1",
       sessionId: "s1",
       parentSessionId: "",
-      caller: "user",
+      caller: SESSION_CALLER.USER,
       message: "hi",
       turnScopeId: "turn-1",
       saveExecutionReport: async (payload) => saved.push(payload),

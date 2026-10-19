@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { requireSessionTombstoneSessions } from "@noobot/workspace-protocol/session-tombstone";
 import {
   normalizeSessionTree,
   resolveSessionDirSegments,
@@ -26,30 +27,27 @@ function userRootOf({ workspaceRoot, userId } = {}) {
   return path.join(path.resolve(normalizedWorkspaceRoot), normalizedUserId);
 }
 
-async function readJsonFile(file, fallback) {
+async function readOptionalJsonFile(file) {
   let raw;
   try {
     raw = await fs.readFile(file, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT") return fallback;
+    if (error?.code === "ENOENT") return null;
     throw error;
   }
   return JSON.parse(raw);
 }
 
-async function readWorkspaceSessionTree(context = {}) {
-  const userRoot = userRootOf(context);
-  return normalizeSessionTree(
-    await readJsonFile(path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE), { nodes: {} }),
-  );
+async function readWorkspaceSessionTree(userRoot) {
+  const treeFile = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
+  return normalizeSessionTree(JSON.parse(await fs.readFile(treeFile, "utf8")));
 }
 
-async function readWorkspaceSessionTombstones(context = {}) {
-  const userRoot = userRootOf(context);
-  const marker = await readJsonFile(path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE), {
-    sessions: {},
-  });
-  return marker?.sessions && typeof marker.sessions === "object" ? marker.sessions : {};
+async function readWorkspaceSessionTombstones(userRoot) {
+  const tombstoneFile = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
+  const tombstone = await readOptionalJsonFile(tombstoneFile);
+  if (tombstone === null) return {};
+  return requireSessionTombstoneSessions(tombstone, { persistencePath: tombstoneFile });
 }
 
 export async function resolveWorkspaceSessionLocation({
@@ -60,10 +58,9 @@ export async function resolveWorkspaceSessionLocation({
 } = {}) {
   const normalizedSessionId = normalizeId(sessionId);
   if (!normalizedSessionId) throw new TypeError("workspace session location requires sessionId");
-  const context = { workspaceRoot, userId };
-  const userRoot = userRootOf(context);
-  const tombstones = await readWorkspaceSessionTombstones(context);
-  const tree = await readWorkspaceSessionTree(context);
+  const userRoot = userRootOf({ workspaceRoot, userId });
+  const tombstones = await readWorkspaceSessionTombstones(userRoot);
+  const tree = await readWorkspaceSessionTree(userRoot);
   const node = tree.nodes[normalizedSessionId];
   const normalizedParentSessionId = normalizeId(parentSessionId);
   if (!node) {

@@ -6,20 +6,13 @@
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import {
-  collectSessionTreeBranch,
-  resolveSessionTreeDepth,
-} from "@noobot/workspace-protocol/session-tree";
+import { collectSessionTreeBranch } from "@noobot/workspace-protocol/session-tree";
 import { text } from "@noobot/shared/value";
 
 export class SessionTreeService {
   constructor({ sessionRepo, treeRepo } = {}) {
     this.sessionRepo = sessionRepo;
     this.treeRepo = treeRepo;
-  }
-
-  async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
-    return this.sessionRepo.registerSessionTreeNode(userId, sessionId, parentSessionId);
   }
 
   async getSessionTree({ userId }) {
@@ -33,12 +26,6 @@ export class SessionTreeService {
 
   collectBranchSessionIds(sessionId = "", sessionTree = null) {
     return collectSessionTreeBranch(sessionTree, sessionId);
-  }
-
-  resolveDepthInTree(sessionId = "", sessionTree = null) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId || !sessionTree?.nodes?.[normalizedSessionId]) return 0;
-    return resolveSessionTreeDepth(sessionTree, normalizedSessionId);
   }
 
   async deleteSessionBranch({ userId, sessionId }) {

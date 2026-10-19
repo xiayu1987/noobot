@@ -20,6 +20,9 @@ import {
   createAuthoritativeBot,
   payload,
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user"]);
 
 test("summary failure is classified as completion without authoritative completed", async () => {
   const authoritative = createAuthoritativeBot({ persistSummary: false });

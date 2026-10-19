@@ -12,8 +12,12 @@ export { resolveTurnArtifactPath } from "./session-artifact-session/turn-message
 export {
   readSessionArtifact,
   readSessionArtifactForRepair,
+  readSessionTurnView,
 } from "./session-artifact-session/session-artifact-reader.js";
-export { writeSessionArtifact } from "./session-artifact-session/session-artifact-writer.js";
+export {
+  writeSessionArtifact,
+  writeSessionTurnArtifacts,
+} from "./session-artifact-session/session-artifact-writer.js";
 export {
   readSessionDisplaySummaryArtifact,
   rebuildSessionDisplaySummaryArtifact,

@@ -19,6 +19,9 @@ import {
   createAuthoritativeBot,
   payload,
 } from "../routes/chat-websocket-server.turn-lifecycle.fixtures.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user"]);
 
 function createTransport() {
   return createInProcessChatTransport({

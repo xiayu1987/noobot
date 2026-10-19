@@ -8,7 +8,7 @@ import test from "node:test";
 import { TaskService } from "../../src/session/services/task-service.js";
 
 function createRepos({ session = null, bundle = { tasks: [], currentTaskId: "" } } = {}) {
-  const calls = { saved: [], savedBatch: [], savedSessions: [], mutations: 0, ensured: [] };
+  const calls = { saved: [], savedBatch: [], savedSessions: [], mutations: 0 };
   const sessionRepo = {
     async resolveSessionScope(_userId, _sessionId, parentSessionId) {
       return { resolvedParentSessionId: parentSessionId || "resolved-parent" };
@@ -16,9 +16,6 @@ function createRepos({ session = null, bundle = { tasks: [], currentTaskId: "" }
     async withSessionMutation(_userId, _sessionId, _parentSessionId, operation) {
       calls.mutations += 1;
       return operation();
-    },
-    async ensureSession(payload) {
-      calls.ensured.push(payload);
     },
     async findById() {
       return session;
@@ -50,8 +47,6 @@ test("task service short-circuits every path when the session is missing", async
   assert.equal(await service.finishSkillTask({ ...args, taskId: "t1" }), null);
   assert.equal(await service.saveCurrentTurnTasks({ ...args, currentTurnTasks: [] }), null);
   assert.equal(calls.mutations, 3);
-  assert.equal(calls.ensured.length, 3);
-  assert.equal(calls.ensured[0].parentSessionId, "resolved-parent");
   assert.deepEqual(calls.savedBatch, []);
 });
 

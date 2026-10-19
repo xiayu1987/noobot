@@ -6,28 +6,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { appendTurns } from "../../src/session/services/session-message-service/append-turn.js";
-import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 
 test("appendTurns upserts an ordered message batch with one Session save", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   let findCount = 0;
   let saveCount = 0;
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
-      findById: async () => {
+      findTurnView: async () => {
         findCount += 1;
-        return session;
+        return { session, turnScopeIds: [] };
       },
-      save: async () => {
+      saveTurnView: async () => {
         saveCount += 1;
       },
     },
@@ -75,13 +74,15 @@ test("appendTurns upserts an ordered message batch with one Session save", async
 });
 
 test("appendTurns supersedes the prior canonical assistant presentation in one Turn", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
-    sessionRepo: { findById: async () => session, save: async () => {} },
+    sessionRepo: {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
+    },
   };
   const canonical = (messageUid, content) => ({
     messageUid,
@@ -129,14 +130,16 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
 });
 
 test("appendTurns persists the canonical tool policy", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
-    sessionRepo: { findById: async () => session, save: async () => {} },
+    sessionRepo: {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
+    },
   };
 
   await appendTurns.call(service, {
@@ -159,15 +162,14 @@ test("appendTurns persists the canonical tool policy", async () => {
 });
 
 test("appendTurns persists the canonical internal control message type", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
-      findById: async () => session,
-      save: async () => {},
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
     },
   };
 
@@ -193,13 +195,15 @@ test("appendTurns persists the canonical internal control message type", async (
 });
 
 test("appendTurns preserves canonical user interjection time and sequence", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   const service = {
     now: () => "2026-09-18T01:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
-    sessionRepo: { findById: async () => session, save: async () => {} },
+    sessionRepo: {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
+    },
   };
 
   await appendTurns.call(service, {
@@ -226,13 +230,15 @@ test("appendTurns preserves canonical user interjection time and sequence", asyn
 });
 
 test("appendTurns leaves natural user presentation unspecified and visible", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
-    sessionRepo: { findById: async () => session, save: async () => {} },
+    sessionRepo: {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
+    },
   };
 
   await appendTurns.call(service, {
@@ -257,6 +263,7 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
 
 test("appendTurns updates an existing message with the same authoritative messageId", async () => {
   const session = {
+    ...createTestSessionRequiredFields(),
     currentTaskId: "",
     messages: [
       {
@@ -276,10 +283,9 @@ test("appendTurns updates an existing message with the same authoritative messag
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
-      findById: async () => session,
-      save: async () => {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {
         saveCount += 1;
       },
     },
@@ -314,6 +320,7 @@ test("appendTurns updates an existing message with the same authoritative messag
 
 test("appendTurns does not overwrite another dialog when local message ids collide", async () => {
   const session = {
+    ...createTestSessionRequiredFields(),
     currentTaskId: "",
     messages: [
       {
@@ -332,8 +339,10 @@ test("appendTurns does not overwrite another dialog when local message ids colli
     now: () => "2026-07-25T01:00:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
-    sessionRepo: { findById: async () => session, save: async () => {} },
+    sessionRepo: {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
+    },
   };
 
   await appendTurns.call(service, {
@@ -363,15 +372,14 @@ test("appendTurns does not overwrite another dialog when local message ids colli
 });
 
 test("appendTurns assigns a stable persisted identity when no runtime messageId is provided", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
-      findById: async () => session,
-      save: async () => {},
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
     },
   };
 
@@ -389,6 +397,7 @@ test("appendTurns assigns a stable persisted identity when no runtime messageId 
 
 test("appendTurns uses messageUid as the persistence identity and validates its dialog scope", async () => {
   const session = {
+    ...createTestSessionRequiredFields(),
     currentTaskId: "",
     messages: [
       {
@@ -406,8 +415,10 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
-    sessionRepo: { findById: async () => session, save: async () => {} },
+    sessionRepo: {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
+    },
   };
 
   const updated = await appendTurns.call(service, {
@@ -467,13 +478,15 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
 });
 
 test("appendTurns preserves assistant presentation identity in the authoritative snapshot", async () => {
-  const session = { currentTaskId: "", messages: [] };
+  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
-    _findSession: SessionMessageService.prototype._findSession,
-    sessionRepo: { findById: async () => session, save: async () => {} },
+    sessionRepo: {
+      findTurnView: async () => ({ session, turnScopeIds: [] }),
+      saveTurnView: async () => {},
+    },
   };
 
   await appendTurns.call(service, {

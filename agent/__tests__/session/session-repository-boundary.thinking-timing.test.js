@@ -12,6 +12,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createTestSessionServices } from "../helpers/session-services.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -32,8 +34,7 @@ test("session save persists thinking timing fields to full session and display s
       { now: () => "2026-07-08T10:00:10.000Z" },
     );
 
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "S" });
-    await runtime.sessionCrudService.ensureSession(userId, "S", "");
+    await runtime.sessionCrudService.ensureSession(userId, "S", "", SESSION_CALLER.USER);
     const session = await runtime.repositories.sessionRepository.findById(userId, "S", "");
     session.messages = [
       {
@@ -60,10 +61,15 @@ test("session save persists thinking timing fields to full session and display s
         thinkingFinishedAt: "2026-07-08T10:00:04.000Z",
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, session, "");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(session),
+      "",
+    );
 
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "S", "");
     const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "S", "");
     const displaySummary = JSON.parse(
       await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
     );
@@ -92,8 +98,7 @@ test("session save keeps the model loop round on persisted turn timings", async 
       { now: () => "2026-07-08T10:00:10.000Z" },
     );
 
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "S" });
-    await runtime.sessionCrudService.ensureSession(userId, "S", "");
+    await runtime.sessionCrudService.ensureSession(userId, "S", "", SESSION_CALLER.USER);
     const session = await runtime.repositories.sessionRepository.findById(userId, "S", "");
     session.messages = [
       {
@@ -120,10 +125,15 @@ test("session save keeps the model loop round on persisted turn timings", async 
         modelLoopRound: 6,
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, session, "");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(session),
+      "",
+    );
 
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "S", "");
     const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "S", "");
     const displaySummary = JSON.parse(
       await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
     );

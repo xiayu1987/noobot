@@ -34,6 +34,7 @@ import {
   TURN_FAILED_PHASE_STATE,
 } from "./lifecycle/turn-transition-policy.js";
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
+import { isSessionCaller } from "@noobot/shared/session-caller";
 import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
 import {
   isActionableTurnRecovery,
@@ -116,6 +117,7 @@ export function validateSessionProvisionIntent(input = {}) {
   }
   const valid =
     input.createSessionIfAbsent === true &&
+    isSessionCaller(input.sessionCaller) &&
     clean(input.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
     normalizeTurnCommitAction(input.action) === TURN_COMMIT_ACTION.SEND &&
     Number(input.expectedRevision ?? 0) === 0;

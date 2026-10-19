@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
+import { pruneTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
 import { acceptTurn, harness } from "./session-version-hardening.test-helpers.js";
 
 test("turn summary checkpoint receipts reject stale revisions and are pruned with removed turns", async () => {
@@ -62,14 +62,7 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
     (error) => error.code === "TURN_SUMMARY_CHECKPOINT_ID_REUSED",
   );
 
-  const normalized = normalizeSessionEntity(
-    {
-      ...h.get(),
-      messages: [],
-    },
-    { now: () => "2026-01-01T00:00:00.000Z" },
-  );
-  assert.equal(normalized.turnSummaryCheckpoints, undefined);
+  assert.deepEqual(pruneTurnSummaryCheckpoints(h.get().turnSummaryCheckpoints, []), {});
 });
 
 test("attachment binding rejects placeholders and cross-session injection after Turn commit", async (t) => {

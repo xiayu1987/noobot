@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 const TEST_SHORT_DELAY_MS = 5;
 const TEST_MEDIUM_DELAY_MS = 20;
@@ -69,7 +70,7 @@ function buildFinalizeInput(userConfig = {}) {
     sessionId: "s1",
     parentSessionId: "",
     parentDialogProcessId: "",
-    caller: "user",
+    caller: SESSION_CALLER.USER,
     dialogProcessId: "d1",
     turnScopeId: "turn-1",
     thinkingStartedAt: "2026-07-08T16:49:44.113Z",

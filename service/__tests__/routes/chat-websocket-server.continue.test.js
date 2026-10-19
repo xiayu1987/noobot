@@ -17,6 +17,9 @@ import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
 } from "@noobot/agent-transport-protocol";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user"]);
 
 function stoppedLifecycle({
   sessionId = "s1",

@@ -27,6 +27,7 @@ import {
   withTemp,
   writeSessionArtifact,
 } from "./session-artifact-store-v2.test-helpers.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 const allowSessionWrite = async () => {};
 
@@ -39,7 +40,12 @@ test("session manifest stores ordered turn references and rejects noncanonical s
     ];
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "s", aggregateVersion: 0, messages },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "s",
+        aggregateVersion: 0,
+        messages,
+      },
     });
     const files = buildSessionArtifactFileMap(root);
     const manifest = JSON.parse(await readFile(files.session, "utf8"));
@@ -55,11 +61,21 @@ test("session manifest stores ordered turn references and rejects noncanonical s
     const legacy = path.join(root, "legacy");
     await writeSessionArtifact({
       sessionDir: legacy,
-      sessionPayload: { sessionId: "unused", aggregateVersion: 0, messages: [] },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "unused",
+        aggregateVersion: 0,
+        messages: [],
+      },
     });
     await writeFile(
       path.join(legacy, "session.json"),
-      JSON.stringify({ sessionId: "legacy", aggregateVersion: 0, messages }),
+      JSON.stringify({
+        ...createTestSessionRequiredFields(),
+        sessionId: "legacy",
+        aggregateVersion: 0,
+        messages,
+      }),
       "utf8",
     );
     await assert.rejects(readSessionArtifact({ sessionDir: legacy }), {
@@ -77,7 +93,12 @@ test("session turns preserve non-contiguous scopes without reordering and reject
     ];
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "edges", aggregateVersion: 0, messages },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "edges",
+        aggregateVersion: 0,
+        messages,
+      },
     });
     const files = buildSessionArtifactFileMap(root);
     const manifest = JSON.parse(await readFile(files.session, "utf8"));
@@ -94,7 +115,12 @@ test("session turns preserve non-contiguous scopes without reordering and reject
 
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "empty", aggregateVersion: 0, messages: [] },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "empty",
+        aggregateVersion: 0,
+        messages: [],
+      },
     });
     const emptyManifest = JSON.parse(await readFile(files.session, "utf8"));
     assert.deepEqual(emptyManifest.turnOrder, []);
@@ -104,6 +130,7 @@ test("session turns preserve non-contiguous scopes without reordering and reject
       writeSessionArtifactCanonical({
         sessionDir: root,
         sessionPayload: {
+          ...createTestSessionRequiredFields(),
           sessionId: "missing-turn-identity",
           aggregateVersion: 0,
           messages: [{ messageUid: "sm_missing_turn", role: "user", content: "invalid" }],
@@ -151,7 +178,12 @@ test("session artifacts group interleaved messages by logical dialog without cha
     ];
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "interleaved", aggregateVersion: 0, messages },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "interleaved",
+        aggregateVersion: 0,
+        messages,
+      },
     });
 
     const files = buildSessionArtifactFileMap(root);
@@ -189,6 +221,7 @@ test("session artifact publication rejects duplicate persistent message UIDs", a
       writeSessionArtifact({
         sessionDir: root,
         sessionPayload: {
+          ...createTestSessionRequiredFields(),
           sessionId: "duplicate-uids",
           aggregateVersion: 0,
           messages: [
@@ -219,7 +252,12 @@ test("canonical turn journals append only changed messages and hide uncommitted 
     const second = { role: "assistant", content: "two", turnScopeId: "active", messageUid: "m2" };
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "journal", aggregateVersion: 0, messages: [first] },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "journal",
+        aggregateVersion: 0,
+        messages: [first],
+      },
     });
     const files = buildSessionArtifactFileMap(root);
     let manifest = JSON.parse(await readFile(files.session, "utf8"));
@@ -227,7 +265,12 @@ test("canonical turn journals append only changed messages and hide uncommitted 
     const original = await readFile(journal, "utf8");
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "journal", aggregateVersion: 0, messages: [first, second] },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "journal",
+        aggregateVersion: 0,
+        messages: [first, second],
+      },
     });
     manifest = JSON.parse(await readFile(files.session, "utf8"));
     const appended = await readFile(journal, "utf8");
@@ -241,7 +284,7 @@ test("canonical turn journals append only changed messages and hide uncommitted 
     );
   }));
 
-test("summary checkpoints write immutable snapshots and journal indexes", async () =>
+test("summary checkpoints write immutable snapshots indexed by the manifest", async () =>
   withTemp(async (root) => {
     const messages = [
       {
@@ -268,21 +311,26 @@ test("summary checkpoints write immutable snapshots and journal indexes", async 
       committedAt: "2026-01-01T00:00:00.000Z",
     };
     const sessionPayload = {
+      ...createTestSessionRequiredFields(),
       sessionId: "summary-journal",
       aggregateVersion: 0,
       messages,
-      turnSummaryCheckpoints: { active: { dialogProcessId: "dialog-active", receipts: [receipt] } },
+      turnSummaryCheckpoints: {
+        active: { dialogProcessId: "dialog-active", turnScopeId: "active", receipts: [receipt] },
+      },
     };
     await writeSessionArtifact({ sessionDir: root, sessionPayload });
     const files = buildSessionArtifactFileMap(root);
-    const manifest = JSON.parse(await readFile(files.session, "utf8"));
-    const journalFile = path.join(root, manifest.turnOrder[0].file);
-    const journalRecords = (await readFile(journalFile, "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-    const index = journalRecords.find((record) => record.op === "summary_snapshot");
+    const readManifestTurn = async () =>
+      JSON.parse(await readFile(files.session, "utf8")).turnOrder[0];
+    const manifestTurn = await readManifestTurn();
+    const journalFile = path.join(root, manifestTurn.file);
+    assert.equal(await readFile(journalFile, "utf8"), "");
+    assert.equal(manifestTurn.committedBytes, 0);
+    assert.equal(manifestTurn.summarySnapshots.length, 1);
+    const [index] = manifestTurn.summarySnapshots;
     assert.equal(index.checkpointId, "checkpoint-1");
+    assert.equal("op" in index, false);
     assert.equal(index.file, "turn-snapshots/turn-000001/checkpoint-000001.json");
     const snapshot = JSON.parse(await readFile(path.join(root, index.file), "utf8"));
     assert.equal(snapshot.schemaVersion, 2);
@@ -303,12 +351,8 @@ test("summary checkpoints write immutable snapshots and journal indexes", async 
     assert.equal(turn.summarySnapshots[0].payload.checkpointId, "checkpoint-1");
 
     await writeSessionArtifact({ sessionDir: root, sessionPayload });
-    const repeated = await readFile(journalFile, "utf8");
-    const repeatedRecords = repeated
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-    assert.equal(repeatedRecords.filter((record) => record.op === "summary_snapshot").length, 1);
+    assert.deepEqual((await readManifestTurn()).summarySnapshots, [index]);
+    assert.equal(await readFile(journalFile, "utf8"), "");
 
     const secondReceipt = {
       ...receipt,
@@ -331,18 +375,20 @@ test("summary checkpoints write immutable snapshots and journal indexes", async 
         },
       ],
       turnSummaryCheckpoints: {
-        active: { dialogProcessId: "dialog-active", receipts: [receipt, secondReceipt] },
+        active: {
+          dialogProcessId: "dialog-active",
+          turnScopeId: "active",
+          receipts: [receipt, secondReceipt],
+        },
       },
     };
     await writeSessionArtifact({ sessionDir: root, sessionPayload: expandedPayload });
-    const indexedRecords = (await readFile(journalFile, "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
+    const indexedRecords = (await readManifestTurn()).summarySnapshots;
     assert.deepEqual(
-      indexedRecords.map((record) => record.op),
-      ["summary_snapshot", "summary_snapshot"],
+      indexedRecords.map((record) => record.checkpointId),
+      ["checkpoint-1", "checkpoint-2"],
     );
+    assert.equal(await readFile(journalFile, "utf8"), "");
     const secondSnapshot = JSON.parse(
       await readFile(path.join(root, indexedRecords[1].file), "utf8"),
     );
@@ -364,14 +410,8 @@ test("summary checkpoints write immutable snapshots and journal indexes", async 
         ...expandedPayload,
       },
     });
-    const compactedRecords = (await readFile(journalFile, "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-    assert.deepEqual(
-      compactedRecords.map((record) => record.op),
-      ["summary_snapshot", "summary_snapshot"],
-    );
+    assert.deepEqual((await readManifestTurn()).summarySnapshots, indexedRecords);
+    assert.equal(await readFile(journalFile, "utf8"), "");
     assert.deepEqual(
       (await readSessionArtifact({ sessionDir: root })).messages.map(
         (message) => message.messageUid,
@@ -398,7 +438,12 @@ test("replacement turns receive a new stable journal identity instead of reusing
     };
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "replace", aggregateVersion: 0, messages: [first, replaced] },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "replace",
+        aggregateVersion: 0,
+        messages: [first, replaced],
+      },
     });
 
     const files = buildSessionArtifactFileMap(root);
@@ -418,7 +463,12 @@ test("replacement turns receive a new stable journal identity instead of reusing
     };
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: { sessionId: "replace", aggregateVersion: 0, messages: [first, replacement] },
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "replace",
+        aggregateVersion: 0,
+        messages: [first, replacement],
+      },
     });
     manifest = JSON.parse(await readFile(files.session, "utf8"));
 
@@ -443,6 +493,7 @@ test("replacement turns receive a new stable journal identity instead of reusing
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: {
+        ...createTestSessionRequiredFields(),
         sessionId: "replace",
         aggregateVersion: 0,
         messages: [first, updatedReplacement],
@@ -472,6 +523,7 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: {
+        ...createTestSessionRequiredFields(),
         sessionId: "continue",
         aggregateVersion: 0,
         messages: [stopped],
@@ -487,6 +539,7 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: {
+        ...createTestSessionRequiredFields(),
         sessionId: "continue",
         aggregateVersion: 0,
         messages: [stopped, continuation],
@@ -511,6 +564,7 @@ test("session reader reports missing and corrupted turn artifacts", async () =>
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: {
+        ...createTestSessionRequiredFields(),
         sessionId: "broken",
         aggregateVersion: 0,
         messages: [{ role: "user", content: "x", turnScopeId: "x" }],
@@ -534,6 +588,7 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
     await writeSessionArtifact({
       sessionDir,
       sessionPayload: {
+        ...createTestSessionRequiredFields(),
         sessionId: "a",
         aggregateVersion: 0,
         messages: [{ role: "user", content: "x" }],
@@ -595,6 +650,7 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
     await writeFile(
       files.session,
       JSON.stringify({
+        ...createTestSessionRequiredFields(),
         sessionId: "deleted-session",
         aggregateVersion: 0,
         messages: [{ role: "user", content: "legacy", turnScopeId: "one" }],

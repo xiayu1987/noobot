@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TURN_EVENT } from "@noobot/session-protocol";
+import { requireSessionCaller } from "@noobot/shared/session-caller";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import {
@@ -18,6 +19,7 @@ import {
 } from "../../src/session/authority-outbox-store/outbox-journal.js";
 import { text } from "@noobot/shared/value";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
@@ -39,10 +41,9 @@ function harness(initial = {}) {
     sessionId: "s1",
     parentSessionId: "",
     aggregateVersion: 3,
-    messages: [],
+    ...createTestSessionRequiredFields(),
     ...initial,
   });
-  let displaySummarySession = null;
   let saveFailure = null;
   const repo = {
     async withSessionMutation(_u, _s, _p, operation) {
@@ -63,9 +64,6 @@ function harness(initial = {}) {
       }
       persisted = structuredClone(normalizeSessionEntity(next, { now }));
     },
-    async writeSessionDisplaySummary(_u, session) {
-      displaySummarySession = structuredClone(normalizeSessionEntity(session, { now }));
-    },
   };
   return {
     service: new SessionMessageService({ sessionRepo: repo, now }),
@@ -74,9 +72,6 @@ function harness(initial = {}) {
     outboxEntry: async (eventId) =>
       (await readAuthorityOutbox(sessionDir)).find((item) => item.eventId === eventId) || null,
     reload: () => normalizeSessionEntity(structuredClone(persisted), { now }),
-    reloadDisplaySummarySession: () =>
-      displaySummarySession &&
-      normalizeSessionEntity(structuredClone(displaySummarySession), { now }),
     failNextSave: (error = new Error("session_save_failed")) => {
       saveFailure = error;
     },
@@ -108,9 +103,16 @@ function newSessionHarness() {
     async isSessionDeleted() {
       return false;
     },
-    createInitialSession({ sessionId }) {
+    createInitialSession({ sessionId, caller }) {
       return normalizeSessionEntity(
-        { sessionId, parentSessionId: "", aggregateVersion: 0, messages: [] },
+        {
+          ...createTestSessionRequiredFields(),
+          caller: requireSessionCaller(caller),
+          sessionId,
+          parentSessionId: "",
+          aggregateVersion: 0,
+          messages: [],
+        },
         { now },
       );
     },

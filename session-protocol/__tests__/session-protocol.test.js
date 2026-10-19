@@ -22,14 +22,16 @@ import {
   decideCommandIdempotency,
   normalizeCommandReceipt,
   normalizeTurnCommitMetadata,
+  createEmptyTurnLifecycle,
   validateSessionAggregateInvariants,
   validateCanonicalAssistantPresentation,
   validateTurnAcceptanceUserMessage,
   validateSessionCommand,
 } from "../src/index.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 10);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 12);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -49,8 +51,9 @@ test("Session artifact and Turn commit metadata have one canonical protocol shap
     }).result,
     { messageUid: "message-1" },
   );
-  assert.equal(
+  assert.deepEqual(
     validateSessionAggregateInvariants({
+      caller: SESSION_CALLER.USER,
       messages: [
         {
           messageUid: "message-1",
@@ -61,10 +64,42 @@ test("Session artifact and Turn commit metadata have one canonical protocol shap
           },
         },
       ],
-      turnLifecycle: { commandReceipts: [] },
-    }).valid,
-    false,
+      dialogOrder: [],
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+    }).errors,
+    ["invalid_turn_commit_metadata"],
   );
+});
+
+test("session aggregate requires canonical collection shapes", () => {
+  assert.deepEqual(validateSessionAggregateInvariants({ messages: [] }).errors, [
+    "invalid_caller",
+    "invalid_dialog_order",
+    "invalid_turn_timings",
+    "invalid_turn_lifecycle",
+  ]);
+  assert.deepEqual(
+    validateSessionAggregateInvariants({
+      caller: SESSION_CALLER.BOT,
+      messages: [],
+      dialogOrder: [],
+      turnTimings: [],
+      turnLifecycle: { turns: {}, commandReceipts: [] },
+    }).errors,
+    ["invalid_turn_lifecycle"],
+  );
+  assert.deepEqual(
+    validateSessionAggregateInvariants({
+      caller: "",
+      messages: [],
+      dialogOrder: [],
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+    }).errors,
+    ["invalid_caller"],
+  );
+  assert.deepEqual(validateSessionAggregateInvariants(null).errors, ["invalid_session"]);
 });
 
 test("canonical assistant presentation is unique and fully identified per Turn", () => {
@@ -78,6 +113,7 @@ test("canonical assistant presentation is unique and fully identified per Turn",
     true,
   );
   const result = validateSessionAggregateInvariants({
+    caller: SESSION_CALLER.USER,
     messages: [
       {
         messageUid: "assistant-1",
@@ -94,6 +130,9 @@ test("canonical assistant presentation is unique and fully identified per Turn",
         presentationMessageId: "presentation-1",
       },
     ],
+    dialogOrder: [],
+    turnTimings: [],
+    turnLifecycle: createEmptyTurnLifecycle(),
   });
   assert.equal(result.errors.includes("duplicate_canonical_assistant_presentation"), true);
 });

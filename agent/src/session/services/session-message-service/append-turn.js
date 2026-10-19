@@ -5,6 +5,7 @@
  */
 import { upsertTurnInSession } from "./turn-upsert.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
+import { text } from "@noobot/shared/value";
 
 export async function appendTurns({
   userId,
@@ -15,17 +16,23 @@ export async function appendTurns({
 } = {}) {
   const sourceTurns = Array.isArray(turns) ? turns : [];
   if (!sourceTurns.length) return { appended: false, reason: "empty_batch", turns: [] };
+  const requestedTurnScopeIds = [...new Set(sourceTurns.map((turn) => text(turn?.turnScopeId)))];
   const mutation = this._withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const { session, resolvedParentSessionId } = await this._findSession(
+      const resolvedParentSessionId = await this._resolveParentSessionId(
         userId,
         sessionId,
         parentSessionId,
         persistenceContext,
       );
-      if (!session) return { appended: false, reason: "session_not_found", turns: [] };
+      const view = await this.sessionRepo.findTurnView(userId, sessionId, resolvedParentSessionId, {
+        turnScopeIds: requestedTurnScopeIds,
+        persistenceContext,
+      });
+      if (!view) return { appended: false, reason: "session_not_found", turns: [] };
+      const { session, turnScopeIds } = view;
 
       const persistedTurns = sourceTurns.map((turn = {}) =>
         upsertTurnInSession(this, session, resolvedParentSessionId, {
@@ -36,7 +43,10 @@ export async function appendTurns({
           persistenceContext,
         }),
       );
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+      await this.sessionRepo.saveTurnView(userId, session, resolvedParentSessionId, {
+        turnScopeIds,
+        persistenceContext,
+      });
       return { appended: true, reason: "", turns: persistedTurns };
     },
     parentSessionId,

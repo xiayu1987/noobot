@@ -18,11 +18,20 @@ import {
   tempRoot,
   useRuntimeEventsEnv,
 } from "./runtime-events-test-fixtures.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("workspace runtime events nest child session logs along the session tree", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "parent-session");
-  const childDir = await persistSession(workspaceRoot, "admin", "child-session", "parent-session");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "parent-session",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  const childDir = await persistSession(workspaceRoot, "admin", {
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     source: "agent",
     scope: "session",
@@ -57,9 +66,21 @@ test("workspace runtime events nest child session logs along the session tree", 
 
 test("grandchild session events nest under every ancestor", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "root");
-  await persistSession(workspaceRoot, "admin", "child", "root");
-  const leafDir = await persistSession(workspaceRoot, "admin", "leaf", "child");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "root",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "child",
+    parentSessionId: "root",
+    caller: SESSION_CALLER.USER,
+  });
+  const leafDir = await persistSession(workspaceRoot, "admin", {
+    sessionId: "leaf",
+    parentSessionId: "child",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     source: "agent",
     scope: "session",
@@ -87,7 +108,11 @@ test("grandchild session events nest under every ancestor", async () => {
 
 test("child events are refused while the child is not registered in the tree", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "parent-session");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "parent-session",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     source: "agent",
     scope: "session",
@@ -111,8 +136,16 @@ test("child events are refused while the child is not registered in the tree", a
 
 test("child events are skipped when an ancestor is deleted", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "parent-session");
-  const childDir = await persistSession(workspaceRoot, "admin", "child-session", "parent-session");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "parent-session",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  const childDir = await persistSession(workspaceRoot, "admin", {
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+    caller: SESSION_CALLER.USER,
+  });
   await markSessionDeleted(workspaceRoot, "admin", "parent-session");
   const result = await writeRuntimeEvent({
     source: "agent",
@@ -128,9 +161,21 @@ test("child events are skipped when an ancestor is deleted", async () => {
 
 test("an explicit parent that contradicts the tree is rejected", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "parent-session");
-  await persistSession(workspaceRoot, "admin", "other-session");
-  await persistSession(workspaceRoot, "admin", "child-session", "parent-session");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "parent-session",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "other-session",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     source: "agent",
     scope: "session",
@@ -146,7 +191,11 @@ test("an explicit parent that contradicts the tree is rejected", async () => {
 
 test("workspace runtime events ignore placeholder parent session ids", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "real-session");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "real-session",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     source: "agent-proxy",
     scope: "session",
@@ -268,7 +317,11 @@ test("runtime event writer does not recreate a deleted parent session for child 
 
 test("runtime-events writer records normal session logs when their control is enabled", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-log-default");
+  await persistSession(root, "admin", {
+    sessionId: "session-log-default",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ log: { message: true } });
   const result = await writeRuntimeEvent({
     source: "frontend",

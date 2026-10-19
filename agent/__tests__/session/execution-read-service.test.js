@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ExecutionReadService } from "../../src/session/services/execution-read-service.js";
@@ -42,6 +43,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       sessionId: "root-session",
       parentSessionId: "",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           root: turn({
             executionKind: "workflow",
@@ -55,6 +57,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       sessionId: "child-session",
       parentSessionId: "root-session",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           child: turn({
             turnScopeId: "child",
@@ -70,6 +73,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       sessionId: "grandchild-session",
       parentSessionId: "child-session",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           grandchild: turn({
             turnScopeId: "grandchild",
@@ -96,7 +100,10 @@ test("execution recovery keeps lifecycle and thinking timing as separate authori
   const reader = service([
     {
       sessionId: "timed-session",
-      turnLifecycle: { turns: { root: turn({ createdAt: "2026-07-20T00:00:05.000Z" }) } },
+      turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
+        turns: { root: turn({ createdAt: "2026-07-20T00:00:05.000Z" }) },
+      },
       turnTimings: [
         {
           turnScopeId: "root",
@@ -115,11 +122,15 @@ test("execution recovery keeps lifecycle and thinking timing as separate authori
 
 test("children query returns direct children only and preserves historical attempts", async () => {
   const reader = service([
-    { sessionId: "root", turnLifecycle: { turns: { root: turn() } } },
+    {
+      sessionId: "root",
+      turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } },
+    },
     {
       sessionId: "attempt-1",
       parentSessionId: "root",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           a1: turn({
             turnScopeId: "attempt-1",
@@ -133,6 +144,7 @@ test("children query returns direct children only and preserves historical attem
       sessionId: "attempt-2",
       parentSessionId: "root",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           a2: turn({
             turnScopeId: "attempt-2",
@@ -146,6 +158,7 @@ test("children query returns direct children only and preserves historical attem
       sessionId: "nested",
       parentSessionId: "attempt-2",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           nested: turn({
             turnScopeId: "nested",
@@ -168,6 +181,7 @@ test("same execution identity resolves deterministically to the newest authorita
     {
       sessionId: "same",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           old: turn({
             turnScopeId: "duplicate",
@@ -181,6 +195,7 @@ test("same execution identity resolves deterministically to the newest authorita
     {
       sessionId: "same",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           newer: turn({
             turnScopeId: "duplicate",
@@ -202,12 +217,14 @@ test("duplicate executionId with different ownership is diagnosed and excluded",
     {
       sessionId: "left",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: { left: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
       },
     },
     {
       sessionId: "right",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: { right: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
       },
     },
@@ -226,6 +243,7 @@ test("orphan execution remains visible as a root in the read model", async () =>
     {
       sessionId: "orphan",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           orphan: turn({
             turnScopeId: "orphan",
@@ -244,7 +262,9 @@ test("orphan execution remains visible as a root in the read model", async () =>
 });
 
 test("execution tree query without target is rejected", async () => {
-  const reader = service([{ sessionId: "s1", turnLifecycle: { turns: { root: turn() } } }]);
+  const reader = service([
+    { sessionId: "s1", turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } } },
+  ]);
   const result = await reader.getExecutionTree({ userId: "u1" });
   assert.deepEqual(result, { found: false, reason: "missing_execution" });
 });
@@ -256,7 +276,7 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
       {
         sessionId: "u1-session",
         updatedAt: "2026-07-20T00:00:00.000Z",
-        turnLifecycle: { turns: { root: turn() } },
+        turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } },
       },
     ],
     u2: [
@@ -264,6 +284,7 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
         sessionId: "u2-session",
         updatedAt: "2026-07-20T00:00:00.000Z",
         turnLifecycle: {
+          ...createEmptyTurnLifecycle(),
           turns: {
             root: turn({ turnScopeId: "u2", executionId: "agent:u2", rootExecutionId: "agent:u2" }),
           },
@@ -324,7 +345,10 @@ test("summary/index failure falls back to authoritative scan without caching sta
         return [
           {
             sessionId: "root",
-            turnLifecycle: { turns: { root: turn({ revision, sequence: revision }) } },
+            turnLifecycle: {
+              ...createEmptyTurnLifecycle(),
+              turns: { root: turn({ revision, sequence: revision }) },
+            },
           },
         ];
       },
@@ -350,7 +374,11 @@ test("unreadable sessions are skipped and surfaced as read diagnostics", async (
       async getAllSessionsData({ failures }) {
         failures.push({ sessionId: "broken", code: "SESSION_REPAIR_FAILED", message: "bad" });
         return [
-          { sessionId: "ok", parentSessionId: "", turnLifecycle: { turns: { root: turn() } } },
+          {
+            sessionId: "ok",
+            parentSessionId: "",
+            turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } },
+          },
         ];
       },
     },

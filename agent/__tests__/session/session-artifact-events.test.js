@@ -17,6 +17,7 @@ import {
   PLUGIN_ARTIFACT_SEQUENCE_DOMAIN,
   PLUGIN_ARTIFACT_EVENT,
 } from "@noobot/event-protocol/plugin-artifact-event";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 const protocol = {
   format: "noobot.animation.protocol",
@@ -87,6 +88,7 @@ const protocol = {
 test("plugin artifact commits persist an independent Session artifact fact", async () => {
   const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
   let session = {
+    ...createTestSessionRequiredFields(),
     sessionId: "session-1",
     parentSessionId: "",
     aggregateVersion: 0,
@@ -204,6 +206,7 @@ test("Session normalization never derives artifact history from the delivery out
     },
   };
   const normalized = normalizeSessionEntity({
+    ...createTestSessionRequiredFields(),
     sessionId: "session-1",
     parentSessionId: "",
     aggregateVersion: 1,
@@ -224,6 +227,7 @@ test("Session normalization never derives artifact history from the delivery out
 test("plugin artifact replacement increments revision and rejects a stale base revision", async () => {
   const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
   let session = {
+    ...createTestSessionRequiredFields(),
     sessionId: "session-1",
     parentSessionId: "",
     aggregateVersion: 0,

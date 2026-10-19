@@ -3,53 +3,76 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
+import {
+  createSessionTreeNode,
+  resolveSessionDirSegments,
+} from "@noobot/workspace-protocol/session-tree";
+import { resolveRepairedSessionCaller } from "./session-caller-migration.js";
 
 export const SESSION_TREE_UNRECOVERABLE = "SESSION_TREE_UNRECOVERABLE";
 
-function unrecoverable(message) {
-  const failure = new Error(message);
+export const SESSION_TREE_SHAPE = Object.freeze({
+  INVALID: "invalid",
+  LEGACY: "legacy",
+  PARENT_ONLY: "parent-only",
+  CURRENT: "current",
+});
+
+const LEGACY_NODE_FIELDS = Object.freeze(["children", "createdAt", "updatedAt"]);
+
+function unrecoverable(message, cause) {
+  const failure = new Error(message, cause ? { cause } : undefined);
   failure.code = SESSION_TREE_UNRECOVERABLE;
   return failure;
 }
 
-function treeNodes(tree) {
-  return tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
+export function classifySessionTree(tree) {
+  if (!isPlainObject(tree) || !isPlainObject(tree.nodes)) return SESSION_TREE_SHAPE.INVALID;
+  const nodes = Object.values(tree.nodes);
+  if (!nodes.every(isPlainObject)) return SESSION_TREE_SHAPE.INVALID;
+  const legacy =
+    "roots" in tree ||
+    "updatedAt" in tree ||
+    nodes.some((node) => LEGACY_NODE_FIELDS.some((field) => field in node));
+  if (legacy) return SESSION_TREE_SHAPE.LEGACY;
+  if (nodes.every((node) => "caller" in node)) return SESSION_TREE_SHAPE.CURRENT;
+  return SESSION_TREE_SHAPE.PARENT_ONLY;
 }
 
-export function isLegacySessionTree(tree) {
-  return (
-    Boolean(tree) &&
-    ("roots" in tree ||
-      "updatedAt" in tree ||
-      Object.values(treeNodes(tree)).some(
-        (node) => node && ("children" in node || "createdAt" in node || "updatedAt" in node),
-      ))
-  );
-}
-
-export function mapLegacySessionTree(tree) {
-  return {
+export function listSessionTreePlacements(tree) {
+  const placements = [];
+  for (const [sessionId, node] of Object.entries(tree.nodes)) {
+    if (typeof node.parentSessionId !== "string") {
+      throw unrecoverable(`session tree parentSessionId is invalid: ${sessionId}`);
+    }
+    placements.push({ sessionId, parentSessionId: node.parentSessionId });
+  }
+  const parents = {
     nodes: Object.fromEntries(
-      Object.entries(treeNodes(tree)).map(([sessionId, node]) => [
-        sessionId,
-        { sessionId, parentSessionId: text(node?.parentSessionId) },
-      ]),
+      placements.map(({ sessionId, parentSessionId }) => [sessionId, { parentSessionId }]),
     ),
   };
+  return placements.map((placement) => {
+    try {
+      return { ...placement, segments: resolveSessionDirSegments(parents, placement.sessionId) };
+    } catch (error) {
+      throw unrecoverable(`session tree placement is invalid: ${placement.sessionId}`, error);
+    }
+  });
 }
 
-export function rebuildSessionTree(sessionDocuments = []) {
+export function buildSessionTree(entries) {
   const nodes = {};
-  for (const { directoryName, document } of sessionDocuments) {
-    const sessionId = text(document?.sessionId);
-    if (!sessionId || sessionId !== text(directoryName)) {
-      throw unrecoverable(`session document identity does not match directory: ${directoryName}`);
+  const repairedCallers = [];
+  for (const { sessionId, parentSessionId, document } of entries) {
+    const { caller, repaired } = resolveRepairedSessionCaller(document);
+    if (repaired) repairedCallers.push(sessionId);
+    try {
+      nodes[sessionId] = createSessionTreeNode({ sessionId, parentSessionId, caller });
+    } catch (error) {
+      throw unrecoverable(`session tree node is invalid: ${sessionId}`, error);
     }
-    if (typeof (document.parentSessionId ?? "") !== "string") {
-      throw unrecoverable(`session document parentSessionId is invalid: ${sessionId}`);
-    }
-    nodes[sessionId] = { sessionId, parentSessionId: text(document.parentSessionId) };
   }
   for (const node of Object.values(nodes)) {
     if (node.parentSessionId && !nodes[node.parentSessionId]) {
@@ -58,5 +81,18 @@ export function rebuildSessionTree(sessionDocuments = []) {
       );
     }
   }
-  return { nodes };
+  return { tree: { nodes }, repairedCallers };
+}
+
+export function rebuildSessionTree(sessionDocuments) {
+  const entries = sessionDocuments.map(({ directoryName, document }) => {
+    if (!isPlainObject(document) || document.sessionId !== directoryName) {
+      throw unrecoverable(`session document identity does not match directory: ${directoryName}`);
+    }
+    if (typeof document.parentSessionId !== "string") {
+      throw unrecoverable(`session document parentSessionId is invalid: ${directoryName}`);
+    }
+    return { sessionId: directoryName, parentSessionId: document.parentSessionId, document };
+  });
+  return buildSessionTree(entries);
 }

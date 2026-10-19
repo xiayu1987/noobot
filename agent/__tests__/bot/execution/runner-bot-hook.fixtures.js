@@ -19,6 +19,7 @@ import {
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
+import { createTestSessionRequiredFields } from "../../helpers/session-message-facts.js";
 
 export const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
 
@@ -151,6 +152,7 @@ export function createRunner({
       turnScopeId,
       runConfig,
       turnAcceptance: createTurnAcceptanceReceipt({
+        ...createTestSessionRequiredFields(),
         commandId: runConfig.commandId,
         sessionId,
         turnScopeId,

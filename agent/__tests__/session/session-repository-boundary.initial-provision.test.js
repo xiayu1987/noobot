@@ -10,6 +10,7 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createSessionFacade } from "../../src/session/index.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
@@ -56,6 +57,7 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     },
     expectedRevision: 0,
     createSessionIfAbsent: true,
+    sessionCaller: SESSION_CALLER.USER,
   };
 }
 
@@ -102,7 +104,7 @@ test("connector selection reads only the Session manifest fact", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
-    await runtime.sessionCrudService.ensureSession("u1", "session-1");
+    await runtime.sessionCrudService.ensureSession("u1", "session-1", "", SESSION_CALLER.USER);
     await runtime.sessionCrudService.setRootSessionSelectedConnectorIds({
       userId: "u1",
       sessionId: "session-1",
@@ -177,7 +179,7 @@ test("shared file mutation lock makes concurrent initial provisions idempotent a
 test("deleted Session cannot be revived by initial provision", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession("u1", "session-1");
+    await runtime.sessionCrudService.ensureSession("u1", "session-1", "", SESSION_CALLER.USER);
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
       "u1",
       "session-1",
@@ -219,24 +221,28 @@ test("failed initial provision save leaves no empty Session artifact or summary"
   });
 });
 
-test("summary write failure is repaired from the committed Session artifact", async () => {
+test("summary write failure surfaces and the explicit rebuild repairs the list index", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     const originalUpsert = repository.upsertSessionSummary.bind(repository);
-    let failures = 0;
-    repository.upsertSessionSummary = async (...args) => {
-      if (failures++ === 0) throw new Error("injected summary failure");
-      return originalUpsert(...args);
+    repository.upsertSessionSummary = async () => {
+      throw new Error("injected summary failure");
     };
 
-    const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(
-      firstSend("summary-repair"),
+    await assert.rejects(
+      runtime.sessionMessageService.applyTurnLifecycleEvent(firstSend("summary-repair")),
+      /injected summary failure/,
     );
-    assert.equal(result.applied, true);
+    repository.upsertSessionSummary = originalUpsert;
     const persisted = await repository.findById("u1", "session-1", "");
     assert.equal(persisted.turnLifecycle.sequence, 1);
-    const summary = await repository.readSessionsSummary("u1");
+    const stale = await repository.readSessionsSummary("u1");
+    assert.equal(
+      stale.sessions.some((item) => item.sessionId === "session-1"),
+      false,
+    );
+    const summary = await repository.rebuildSessionsSummary("u1");
     assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);
 
     const replay = await runtime.sessionMessageService.applyTurnLifecycleEvent(
@@ -282,7 +288,7 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
       "u1",
       "child-session-1",
       "parent-session-1",
-      {},
+      SESSION_CALLER.USER,
       persistenceContext,
     );
     await session.appendTurns({
@@ -327,5 +333,25 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
       sessionId: "child-session-1",
     });
     assert.deepEqual(defaultScopeTurns, []);
+  });
+});
+
+test("registerSessionTreeNode rejects a parent that is not registered in the session tree", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const runtime = createTestSessionServices({ workspaceRoot });
+    const sessionRepository = runtime.repositories.sessionRepository;
+    await assert.rejects(
+      () =>
+        sessionRepository.registerSessionTreeNode("u1", {
+          sessionId: "child",
+          parentSessionId: "ghost",
+          caller: SESSION_CALLER.BOT,
+        }),
+      (error) =>
+        error.code === "FATAL_PARENT_SESSION_MISSING" &&
+        error.details.protocolCode === "SESSION_TREE_PARENT_MISSING",
+    );
+    const tree = await runtime.repositories.sessionTreeRepository.getTree("u1");
+    assert.equal(Object.hasOwn(tree.nodes, "child"), false);
   });
 });

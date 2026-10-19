@@ -6,120 +6,116 @@
 import {
   buildSessionSummary,
   buildUnavailableSessionSummary,
-  normalizeSessionsSummaryPayload,
+  requireSessionsSummaryPayload,
   SESSIONS_SUMMARY_SCHEMA_VERSION,
 } from "../../session-summary-builders.js";
 import { readJsonArtifactFile } from "../../session-artifact-store.js";
+import { buildSessionListFacts } from "../../session-artifact-session/session-list-facts.js";
 import { PERSISTED_JSON_READ_ERROR_CODE } from "../../../shared/storage/json-file-reader.js";
-import { text } from "@noobot/shared/value";
+import { requireSessionTreeNode } from "@noobot/workspace-protocol/session-tree";
+
+const UNAVAILABLE_METADATA_FIELDS = Object.freeze({
+  title: "customTitle",
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
+});
+
+function projectUnavailableMetadata(manifest) {
+  const metadata = {};
+  for (const [field, key] of Object.entries(UNAVAILABLE_METADATA_FIELDS)) {
+    const value = manifest === null ? undefined : manifest[key];
+    metadata[field] = typeof value === "string" ? value : "";
+  }
+  return metadata;
+}
+
+function requireUnavailableError(error) {
+  if (typeof error?.code === "string" && error.code && typeof error.message === "string") {
+    return error;
+  }
+  throw error;
+}
 
 class SessionSummaryMethods {
-  _basePath(userId = "") {
+  _basePath(userId) {
     return this.pathResolver.resolveBasePath(userId);
   }
 
-  _sessionRoot(userId = "") {
-    return this.pathResolver.sessionRoot(this._basePath(userId));
-  }
-
-  _sessionTombstoneFile(userId = "") {
+  _sessionTombstoneFile(userId) {
     return this.pathResolver.sessionTombstoneFile(this._basePath(userId));
   }
 
-  _sessionsSummaryFile(userId = "") {
+  _sessionsSummaryFile(userId) {
     return this.pathResolver.sessionsSummaryFile(this._basePath(userId));
   }
 
-  _sortSummaries(sessions = []) {
-    return [...sessions].sort(
-      (leftSession, rightSession) =>
-        new Date(rightSession.updatedAt || 0).getTime() -
-        new Date(leftSession.updatedAt || 0).getTime(),
-    );
-  }
-
-  _withSummaryDepth(session = {}, sessionTree = null) {
-    const sessionId = text(session?.sessionId);
-    if (!sessionId || !sessionTree?.nodes?.[sessionId])
-      return buildSessionSummary(session, { depth: 0 });
-    return buildSessionSummary(session, { depth: this._getSummaryDepth(sessionId, sessionTree) });
-  }
-
-  async readSessionsSummary(userId = "") {
-    const normalizedUserId = text(userId);
-    const payload = await this.storageService.readJson(
-      this._sessionsSummaryFile(normalizedUserId),
-      { sessions: [], updatedAt: this.now() },
-    );
-    if (payload?.schemaVersion !== SESSIONS_SUMMARY_SCHEMA_VERSION) {
-      return this.rebuildSessionsSummary(normalizedUserId);
+  async readSessionsSummary(userId) {
+    const payload = await this.storageService.readJson(this._sessionsSummaryFile(userId), null);
+    if (payload === null) {
+      return {
+        schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
+        sessions: [],
+        updatedAt: this.now(),
+      };
     }
-    return normalizeSessionsSummaryPayload(payload, this.now);
+    if (payload.schemaVersion !== SESSIONS_SUMMARY_SCHEMA_VERSION) {
+      const error = new Error(
+        `sessions summary schema ${payload.schemaVersion} is not ${SESSIONS_SUMMARY_SCHEMA_VERSION}; rebuild required`,
+      );
+      error.code = "SESSIONS_SUMMARY_SCHEMA_UNSUPPORTED";
+      throw error;
+    }
+    return requireSessionsSummaryPayload(payload);
   }
 
-  async writeSessionsSummary(userId = "", sessions = []) {
-    const normalizedUserId = text(userId);
-    const payload = normalizeSessionsSummaryPayload(
-      { sessions: this._sortSummaries(sessions), updatedAt: this.now() },
-      this.now,
-    );
-    await this.storageService.writeJsonAtomic(this._sessionsSummaryFile(normalizedUserId), payload);
+  async ensureSessionsSummarySchema(userId) {
+    try {
+      await this.readSessionsSummary(userId);
+    } catch (error) {
+      if (error.code !== "SESSIONS_SUMMARY_SCHEMA_UNSUPPORTED") throw error;
+      await this.rebuildSessionsSummary(userId);
+    }
+  }
+
+  async writeSessionsSummary(userId, sessions) {
+    const payload = {
+      schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
+      sessions,
+      updatedAt: this.now(),
+    };
+    await this.storageService.writeJsonAtomic(this._sessionsSummaryFile(userId), payload);
     return payload;
   }
 
-  async upsertSessionSummary(userId = "", session = {}, { sessionTree = null } = {}) {
-    const summary = this._withSummaryDepth(session, sessionTree);
-    if (!summary.sessionId) return null;
+  async upsertSessionSummary(userId, session, { listFacts, persistenceContext }) {
+    if (persistenceContext) return null;
+    const summary = buildSessionSummary(session, { listFacts });
+    return this._replaceSessionSummary(userId, summary);
+  }
+
+  async markSessionSummaryUnavailable(userId, sessionId, { error, persistenceContext }) {
+    if (persistenceContext) return null;
+    const sessionTree = await this.sessionTreeRepository.getTree(userId);
+    const unavailable = await this.buildUnavailableSessionSummary(
+      userId,
+      requireSessionTreeNode(sessionTree, sessionId),
+      error,
+    );
+    return this._replaceSessionSummary(userId, unavailable);
+  }
+
+  async _replaceSessionSummary(userId, summary) {
     return this._withSessionSummaryMutation(userId, async () => {
       const current = await this.readSessionsSummary(userId);
-      const nextMap = new Map(current.sessions.map((item) => [item.sessionId, item]));
-      nextMap.set(summary.sessionId, summary);
-      await this.writeSessionsSummary(userId, Array.from(nextMap.values()));
+      const next = current.sessions.filter((item) => item.sessionId !== summary.sessionId);
+      next.push(summary);
+      await this.writeSessionsSummary(userId, next);
       return summary;
     });
   }
 
-  async markSessionSummaryUnavailable(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    error = null,
-  ) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return null;
-    const metadata = await this._readSessionSummaryMetadata(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-    );
-    return this._withSessionSummaryMutation(userId, async () => {
-      const current = await this.readSessionsSummary(userId);
-      const existing = current.sessions.find((item) => item.sessionId === normalizedSessionId);
-      const unavailable = buildUnavailableSessionSummary({
-        sessionId: normalizedSessionId,
-        parentSessionId,
-        title: metadata.title || existing?.title,
-        caller: metadata.caller || existing?.caller,
-        createdAt: metadata.createdAt || existing?.createdAt,
-        updatedAt: metadata.updatedAt || existing?.updatedAt,
-        depth: existing?.depth,
-        errorCode: error?.code || "SESSION_PROTOCOL_INVALID",
-        reason: error?.message || "Session uses an unsupported protocol",
-      });
-      const next = current.sessions.filter((item) => item.sessionId !== normalizedSessionId);
-      next.push(unavailable);
-      await this.writeSessionsSummary(userId, next);
-      return unavailable;
-    });
-  }
-
-  async removeSessionSummaries(userId = "", sessionIds = []) {
-    const ids = new Set(
-      (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
-        .map((item) => text(item))
-        .filter(Boolean),
-    );
-    if (!ids.size) return 0;
+  async removeSessionSummaries(userId, sessionIds) {
+    const ids = new Set(sessionIds);
     return this._withSessionSummaryMutation(userId, async () => {
       const current = await this.readSessionsSummary(userId);
       const next = current.sessions.filter((item) => !ids.has(item.sessionId));
@@ -129,68 +125,45 @@ class SessionSummaryMethods {
     });
   }
 
-  async rebuildSessionsSummary(userId = "", { sessionTree = null } = {}) {
-    const tree = sessionTree || null;
-
+  async rebuildSessionsSummary(userId) {
+    const sessionTree = await this.sessionTreeRepository.getTree(userId);
     const sessionIds = await this.listSessionIds(userId);
     const summaries = [];
     for (const sessionId of sessionIds) {
-      const parentSessionId = text(tree?.nodes?.[sessionId]?.parentSessionId);
+      const node = requireSessionTreeNode(sessionTree, sessionId);
       try {
-        const session = await this.findById(userId, sessionId, parentSessionId);
+        const session = await this.findById(userId, sessionId, node.parentSessionId);
         if (!session) {
           const error = new Error("Canonical session artifact is missing");
           error.code = "SESSION_ARTIFACT_MISSING";
           throw error;
         }
-        summaries.push(this._withSummaryDepth(session, tree));
+        summaries.push(buildSessionSummary(session, { listFacts: buildSessionListFacts(session) }));
       } catch (error) {
-        const metadata = await this._readSessionSummaryMetadata(userId, sessionId, parentSessionId);
-        summaries.push(
-          buildUnavailableSessionSummary({
-            sessionId,
-            parentSessionId,
-            title: metadata.title,
-            caller: metadata.caller,
-            createdAt: metadata.createdAt,
-            updatedAt: metadata.updatedAt,
-            depth: this._getSummaryDepth(sessionId, tree),
-            errorCode: error?.code || "SESSION_PROTOCOL_INVALID",
-            reason: error?.message || "Session uses an unsupported protocol",
-          }),
-        );
+        summaries.push(await this.buildUnavailableSessionSummary(userId, node, error));
       }
     }
     return this.writeSessionsSummary(userId, summaries);
   }
 
-  _getSummaryDepth(sessionId = "", tree = null) {
-    const node = tree?.nodes?.[sessionId];
-    if (!node) return 0;
-    let depth = 0;
-    const visited = new Set();
-    let currentId = sessionId;
-    while (currentId && !visited.has(currentId) && tree?.nodes?.[currentId]) {
-      visited.add(currentId);
-      depth += 1;
-      currentId = text(tree.nodes[currentId]?.parentSessionId);
-    }
-    return depth;
+  async buildUnavailableSessionSummary(userId, node, error) {
+    const { sessionId, parentSessionId, caller } = node;
+    return buildUnavailableSessionSummary({
+      sessionId,
+      parentSessionId,
+      caller,
+      metadata: await this._readSessionSummaryMetadata(userId, sessionId, parentSessionId),
+      error: requireUnavailableError(error),
+    });
   }
 
-  async _readSessionSummaryMetadata(userId = "", sessionId = "", parentSessionId = "") {
+  async _readSessionSummaryMetadata(userId, sessionId, parentSessionId) {
+    const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId);
     try {
-      const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId);
-      const manifest = await readJsonArtifactFile(scope.sessionFile, null);
-      return {
-        title: text(manifest?.customTitle),
-        caller: text(manifest?.caller) || "user",
-        createdAt: text(manifest?.createdAt),
-        updatedAt: text(manifest?.updatedAt),
-      };
+      return projectUnavailableMetadata(await readJsonArtifactFile(scope.sessionFile, null));
     } catch (error) {
-      if (error?.code !== PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED) throw error;
-      return { title: "", caller: "user", createdAt: "", updatedAt: "" };
+      if (error.code !== PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED) throw error;
+      return projectUnavailableMetadata(null);
     }
   }
 }

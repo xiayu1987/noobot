@@ -5,175 +5,30 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import os from "node:os";
 import path from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
 import {
   buildExecutionReport,
   EXECUTION_REPORT_PROTOCOL,
   EXECUTION_REPORT_VERSION,
 } from "@noobot/session-protocol/execution-report";
-
-import { FileSystemSessionRepository } from "../../src/session/repositories/file-system-session-repository.js";
-import { FileSystemSessionTreeRepository } from "../../src/session/repositories/file-system-session-tree-repository.js";
 import { resolveSessionArtifactMutationLock } from "../../src/session/session-artifact-files.js";
-import { FileSystemTaskRepository } from "../../src/session/repositories/file-system-task-repository.js";
-import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
 import { summarizeExecutionLogs } from "../../src/observability/execution-log/execution-log-summary.js";
 import { ExecutionLogService } from "../../src/observability/execution-log/execution-log-service.js";
 import { createSessionFacade } from "../../src/session/index.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
-import { StorageService } from "../../src/session/storage-service.js";
-import { normalizeTaskEntity } from "../../src/session/entities/task-entity.js";
 import {
   ScopedSessionLocationResolver,
   createPersistenceContext,
 } from "../../src/session/session-location-resolver.js";
 import {
-  buildSessionArtifactFileMap,
   readExecutionLogs,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
-import { PathResolver } from "../../src/session/path-resolver.js";
-import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-
-function buildHarness() {
-  let root;
-  const pathResolver = new PathResolver({
-    get workspaceRoot() {
-      return root;
-    },
-  });
-  const sessionPathResolver = {
-    async resolveSessionScope(userId, sessionId, parentSessionId = "") {
-      const sessionDir = path.join(
-        pathResolver.sessionRoot(pathResolver.resolveBasePath(userId)),
-        sessionId,
-      );
-      return {
-        resolvedParentSessionId: String(parentSessionId || ""),
-        sessionDir,
-        sessionFile: path.join(sessionDir, "session.json"),
-        sessionSummaryFile: path.join(sessionDir, "session-summary.json"),
-        taskFile: path.join(sessionDir, "task.json"),
-        metadataFile: path.join(sessionDir, "meta.json"),
-      };
-    },
-  };
-  return {
-    async setup() {
-      root = await mkdtemp(path.join(os.tmpdir(), "noobot-scoped-session-"));
-      await initializeUserWorkspace(root, "alice");
-      const storageService = new StorageService({ pathResolver });
-      const sessionRepo = new FileSystemSessionRepository({
-        pathResolver,
-        sessionPathResolver,
-        sessionTreeRepository: new FileSystemSessionTreeRepository({
-          pathResolver,
-          storageService,
-        }),
-        storageService,
-      });
-      const taskRepo = new FileSystemTaskRepository({
-        pathResolver,
-        sessionPathResolver,
-        storageService,
-        normalizeTask: normalizeTaskEntity,
-        sessionRepository: sessionRepo,
-      });
-      const executionRepo = new FileSystemExecutionRepository({
-        pathResolver,
-        sessionPathResolver,
-        storageService,
-        sessionRepository: sessionRepo,
-      });
-      return { root, pathResolver, storageService, sessionRepo, taskRepo, executionRepo };
-    },
-    async cleanup() {
-      if (root) await rm(root, { recursive: true, force: true });
-    },
-  };
-}
-
-async function readJson(file) {
-  return JSON.parse(await readFile(file, "utf8"));
-}
-
-test("concurrent repository saves allocate monotonic Turn journals without cross-Turn records", async () => {
-  const harness = buildHarness();
-  const { sessionRepo } = await harness.setup();
-  try {
-    const sessionId = "concurrent-turn-journals";
-    const keep = {
-      messageUid: "keep-message",
-      role: "user",
-      content: "keep",
-      dialogProcessId: "dialog-keep",
-      turnScopeId: "turn-keep",
-    };
-    const replaced = {
-      messageUid: "replaced-message",
-      role: "assistant",
-      content: "replaced",
-      dialogProcessId: "dialog-replaced",
-      turnScopeId: "turn-replaced",
-    };
-    await sessionRepo.save("alice", { sessionId, aggregateVersion: 0, messages: [keep, replaced] });
-
-    const replacement = (suffix) => ({
-      messageUid: `replacement-${suffix}`,
-      role: "assistant",
-      content: `replacement-${suffix}`,
-      dialogProcessId: `dialog-${suffix}`,
-      turnScopeId: `turn-${suffix}`,
-    });
-    await Promise.all([
-      sessionRepo.save("alice", {
-        sessionId,
-        aggregateVersion: 0,
-        messages: [keep, replacement("a")],
-      }),
-      sessionRepo.save("alice", {
-        sessionId,
-        aggregateVersion: 0,
-        messages: [keep, replacement("b")],
-      }),
-    ]);
-
-    const scope = await sessionRepo.resolveSessionScope("alice", sessionId, "");
-    const files = buildSessionArtifactFileMap(scope.sessionDir);
-    const manifest = await readJson(files.session);
-    assert.deepEqual(
-      manifest.turnOrder.map((turn) => turn.turnId),
-      ["turn-000001", "turn-000004"],
-    );
-    assert.equal(manifest.turnArtifactSequence, 4);
-    assert.equal(
-      new Set(manifest.turnOrder.map((turn) => turn.turnId)).size,
-      manifest.turnOrder.length,
-    );
-
-    const restored = await readSessionArtifact({ sessionDir: scope.sessionDir });
-    assert.equal(restored.messages[0].turnScopeId, "turn-keep");
-    assert.equal(restored.messages.length, 2);
-    assert.equal(["turn-a", "turn-b"].includes(restored.messages[1].turnScopeId), true);
-
-    for (const turn of manifest.turnOrder) {
-      const records = (await readFile(path.join(scope.sessionDir, turn.file), "utf8"))
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line));
-      const recordTurnScopes = new Set(
-        records.map((record) => record?.message?.turnScopeId).filter(Boolean),
-      );
-      assert.deepEqual([...recordTurnScopes], [turn.turnScopeId]);
-    }
-  } finally {
-    await harness.cleanup();
-  }
-});
+import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { createEmptySessionTree } from "@noobot/workspace-protocol/session-tree";
 
 test("scoped repositories keep all artifacts and metadata in their execution directory without default leakage", async () => {
   const harness = buildHarness();
@@ -207,7 +62,7 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
           userId: "alice",
           sessionId: "child-a",
           parentSessionId: "parent-a",
-          meta: { caller: "bot", modelAlias: "m" },
+          caller: SESSION_CALLER.BOT,
           persistenceContext: context,
         });
         await taskRepo.save(
@@ -245,6 +100,7 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       sessionDir: scope.sessionDir,
     });
     assert.equal((await readJson(scope.sessionFile)).parentSessionId, "parent-a");
+    await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", "parent-a", context);
     assert.equal((await readJson(scope.sessionSummaryFile)).sessionId, "child-a");
     assert.equal((await readJson(scope.taskFile)).tasks[0].taskId, "task-a");
     assert.equal((await readExecutionLogs(scope.sessionDir))[0].value, 1);
@@ -262,9 +118,9 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       await sessionRepo.storageService.exists(path.join(defaultRoot, ".deleted-sessions.json")),
       false,
     );
-    assert.equal(
-      await sessionRepo.storageService.exists(path.join(defaultRoot, "session-tree.json")),
-      false,
+    assert.deepEqual(
+      await readJson(path.join(defaultRoot, "session-tree.json")),
+      createEmptySessionTree(),
     );
     assert.equal(
       await sessionRepo.storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
@@ -303,6 +159,13 @@ test("session facade execution reads do not create a default shadow session for 
       executionLogService,
     });
 
+    await sessionRepo.ensureSession({
+      userId: "alice",
+      sessionId: "child-facade",
+      parentSessionId: "parent-facade",
+      caller: SESSION_CALLER.BOT,
+      persistenceContext,
+    });
     await session.getExecutionTurnLogs({
       userId: "alice",
       sessionId: "child-facade",
@@ -351,7 +214,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       userId: "alice",
       sessionId: "child-agent",
       parentSessionId: "root-agent",
-      meta: { caller: "bot" },
+      caller: SESSION_CALLER.BOT,
       persistenceContext: context,
     });
     const messageService = new SessionMessageService({ sessionRepo });
@@ -464,6 +327,7 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
           async () => {
             await sessionRepo.ensureSession({
               userId: "alice",
+              caller: SESSION_CALLER.USER,
               sessionId: `child-${index}`,
               parentSessionId: "parent",
               persistenceContext: context,
@@ -528,6 +392,7 @@ test("scoped metadata contributor failures abort the locked mutation", async () 
           async () => {
             await sessionRepo.ensureSession({
               userId: "alice",
+              caller: SESSION_CALLER.USER,
               sessionId: "child",
               parentSessionId: "parent",
               persistenceContext: context,
@@ -663,49 +528,6 @@ test("execution report writes reject deleted sessions and invalid turn keys", as
         false,
       );
     }
-  } finally {
-    await harness.cleanup();
-  }
-});
-
-test("session save rejects entity parentSessionId that conflicts with the explicit scope", async () => {
-  const harness = buildHarness();
-  const { root, sessionRepo } = await harness.setup();
-  const sessionFile = (sessionId) =>
-    path.join(root, `alice/runtime/session/${sessionId}/session.json`);
-  try {
-    for (const explicitParent of ["p2", ""]) {
-      await assert.rejects(
-        sessionRepo.save(
-          "alice",
-          { sessionId: "child", parentSessionId: "p1", aggregateVersion: 0 },
-          explicitParent,
-        ),
-        { code: "SESSION_PARENT_SESSION_SCOPE_CONFLICT", statusCode: 409 },
-      );
-    }
-    assert.equal(await sessionRepo.storageService.exists(sessionFile("child")), false);
-    await sessionRepo.save(
-      "alice",
-      { sessionId: "child", parentSessionId: "p1", aggregateVersion: 0 },
-      "p1",
-    );
-    assert.equal((await readJson(sessionFile("child"))).parentSessionId, "p1");
-  } finally {
-    await harness.cleanup();
-  }
-});
-
-test("protocol repair of a missing Session reports not found without recording a repair failure", async () => {
-  const harness = buildHarness();
-  const { sessionRepo } = await harness.setup();
-  try {
-    await assert.rejects(sessionRepo.repairSessionProtocol("alice", "missing-session"), {
-      code: "SESSION_ARTIFACT_NOT_FOUND",
-      statusCode: 404,
-    });
-    const lifecycle = await sessionRepo._readSessionLifecycleRecord("alice", "missing-session");
-    assert.notEqual(lifecycle?.repair?.status, "failed");
   } finally {
     await harness.cleanup();
   }

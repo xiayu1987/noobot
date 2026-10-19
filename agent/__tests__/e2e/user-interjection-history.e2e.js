@@ -18,6 +18,7 @@ import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 test("session execution preserves every user interjection into the next model history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-user-interjection-e2e-"));
@@ -196,6 +197,7 @@ test("session execution preserves every user interjection into the next model hi
       dialogProcessId,
       turnScopeId,
       turnAcceptance: createTurnAcceptanceReceipt({
+        ...createTestSessionRequiredFields(),
         commandId: turnScopeId,
         sessionId,
         turnScopeId,

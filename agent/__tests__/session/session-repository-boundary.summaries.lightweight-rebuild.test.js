@@ -19,6 +19,8 @@ import {
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("session display summary should keep chat view lightweight and rebuild stale files", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -30,14 +32,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
 
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
-    await runtime.sessionCrudService.ensureSession(userId, "A", "");
-    await runtime.sessionTreeService.upsertSessionTree({
-      userId,
-      sessionId: "B",
-      parentSessionId: "A",
-    });
-    await runtime.sessionCrudService.ensureSession(userId, "B", "A");
+    await runtime.sessionCrudService.ensureSession(userId, "A", "", SESSION_CALLER.USER);
+    await runtime.sessionCrudService.ensureSession(userId, "B", "A", SESSION_CALLER.USER);
 
     const userContentTail = "__USER_CONTENT_COMPLETE_TAIL__";
     const assistantContentTail = "__ASSISTANT_CONTENT_COMPLETE_TAIL__";
@@ -289,7 +285,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
       ],
       "lightweight_b",
     );
-    await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(sessionB),
+      "A",
+    );
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "B", "A");
 
     const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(
       userId,
@@ -457,6 +458,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
       sessionId: "B",
     });
     assert.equal(displayBeforeMaintenance.sessions[0].messages.length, 6);
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "A", "");
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
       userId,
     });

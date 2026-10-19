@@ -17,6 +17,9 @@ import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
 } from "@noobot/agent-transport-protocol";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user", "authenticated-user"]);
 
 test("chat-websocket-server: non-user abort emits only authoritative failure and failed receipt", async () => {
   const server = await startServerWithWs({

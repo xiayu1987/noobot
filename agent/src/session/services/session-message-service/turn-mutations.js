@@ -15,6 +15,11 @@ import {
 } from "./anchor-utils.js";
 import { pruneSessionTurnTimings } from "./turn-timing.js";
 import {
+  pruneSessionMessageFacts,
+  registerSessionMessageFacts,
+} from "../../entities/session-message-facts.js";
+import { pruneTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
+import {
   appendCommandReceipt,
   assertTurnReplacementMaterialization,
   createMessageDeleteFingerprint,
@@ -34,6 +39,15 @@ import {
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir } from "./outbox-scope.js";
 import { text } from "@noobot/shared/value";
+
+function pruneTruncatedSessionFacts(session) {
+  pruneSessionTurnTimings(session);
+  pruneSessionMessageFacts(session);
+  session.turnSummaryCheckpoints = pruneTurnSummaryCheckpoints(
+    session.turnSummaryCheckpoints,
+    session.messages,
+  );
+}
 
 function assertIdempotencyDecision(decision) {
   if (decision.allowed) return;
@@ -242,7 +256,7 @@ export async function deleteFromMessage({
       });
 
       session.messages = messages.slice(0, anchorIndex);
-      pruneSessionTurnTimings(session);
+      pruneTruncatedSessionFacts(session);
       session.updatedAt = this.now();
       session.aggregateVersion = nextAggregateVersion;
       session.turnLifecycle = lifecycleDeletion.lifecycle;
@@ -354,7 +368,8 @@ export async function replaceTurn({
         nowValue,
       );
       session.messages = [...messages.slice(0, turnStartIndex), newMessage];
-      pruneSessionTurnTimings(session);
+      pruneTruncatedSessionFacts(session);
+      registerSessionMessageFacts(session, newMessage);
       session.updatedAt = nowValue;
       session.aggregateVersion = nextAggregateVersion;
 

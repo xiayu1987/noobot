@@ -27,6 +27,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 export function createRunner({
   callOrder,
@@ -192,6 +193,7 @@ export function createRunner({
       turnScopeId,
       runConfig: acceptedRunConfig,
       turnAcceptance: createTurnAcceptanceReceipt({
+        ...createTestSessionRequiredFields(),
         commandId: acceptedRunConfig.commandId,
         sessionId: "session-used",
         turnScopeId,

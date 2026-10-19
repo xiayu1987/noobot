@@ -242,34 +242,6 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
   return normalizedMessage;
 }
 
-export function normalizeMessagesEntity(messages = [], now = () => new Date().toISOString()) {
-  return (messages || []).map((messageItem, index) => {
-    const normalized = normalizeMessageEntity(messageItem, now);
-    if (!normalized.messageUid) {
-      const error = new TypeError(`session message is missing messageUid at index ${index}`);
-      error.code = "SESSION_MESSAGE_UID_MISSING";
-      throw error;
-    }
-    return normalized;
-  });
-}
-
-export function assertSessionMessageIdentityInvariants(messages = []) {
-  const seen = new Set();
-  for (const [index, message] of (Array.isArray(messages) ? messages : []).entries()) {
-    const messageUid = text(message?.messageUid);
-    if (!messageUid) {
-      const error = new Error(`session message is missing messageUid at index ${index}`);
-      error.code = "SESSION_MESSAGE_UID_MISSING";
-      throw error;
-    }
-    if (seen.has(messageUid)) {
-      const error = new Error(`duplicate session messageUid: ${messageUid}`);
-      error.code = "SESSION_MESSAGE_UID_DUPLICATE";
-      error.messageUid = messageUid;
-      throw error;
-    }
-    seen.add(messageUid);
-  }
-  return true;
+export function normalizeMessagesEntity(messages, now) {
+  return messages.map((messageItem) => normalizeMessageEntity(messageItem, now));
 }

@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import {
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
@@ -33,8 +34,24 @@ function materializeRepairRecords(records, order, baseMessages = []) {
   ];
 }
 
-async function readLegacyCheckpointMessages(sessionDir, records) {
-  const indexes = records.filter((record) => record?.op === "summary_snapshot");
+function isJournalSnapshotIndex(record) {
+  return record?.op === "summary_snapshot";
+}
+
+function splitTurnSnapshotIndexes(schemaVersion, item, records) {
+  if (schemaVersion >= SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION) {
+    return {
+      indexes: Array.isArray(item?.summarySnapshots) ? item.summarySnapshots : [],
+      journal: records,
+    };
+  }
+  return {
+    indexes: records.filter(isJournalSnapshotIndex),
+    journal: records.filter((record) => !isJournalSnapshotIndex(record)),
+  };
+}
+
+async function readLegacyCheckpointMessages(sessionDir, indexes) {
   if (!indexes.length) return [];
   const latest = indexes.at(-1);
   const file = resolveRepairArtifactPath(sessionDir, latest.file, "turn-snapshots", [".json"]);
@@ -56,8 +73,7 @@ async function readLegacyCheckpointMessages(sessionDir, records) {
   return payload.messages;
 }
 
-async function readPreviousCheckpointRecords(sessionDir, records) {
-  const indexes = records.filter((record) => record?.op === "summary_snapshot");
+async function readPreviousCheckpointRecords(sessionDir, indexes) {
   const checkpointRecords = [];
   let previousCheckpointHash = "";
   for (const index of indexes) {
@@ -109,15 +125,16 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
     let turnMessages;
     if (path.extname(artifact) === ".jsonl") {
       const records = await readRepairJournal(artifact, item?.committedBytes);
+      const { indexes, journal } = splitTurnSnapshotIndexes(schemaVersion, item, records);
       if (schemaVersion >= SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION) {
-        const checkpointRecords = await readPreviousCheckpointRecords(sessionDir, records);
+        const checkpointRecords = await readPreviousCheckpointRecords(sessionDir, indexes);
         turnMessages = materializeRepairRecords(
-          [...checkpointRecords, ...records.filter((record) => record?.op !== "summary_snapshot")],
+          [...checkpointRecords, ...journal],
           item?.messageOrder,
         );
       } else {
-        const baseMessages = await readLegacyCheckpointMessages(sessionDir, records);
-        turnMessages = materializeRepairRecords(records, item?.messageOrder, baseMessages);
+        const baseMessages = await readLegacyCheckpointMessages(sessionDir, indexes);
+        turnMessages = materializeRepairRecords(journal, item?.messageOrder, baseMessages);
       }
     } else {
       const turn = await readRepairJson(artifact);

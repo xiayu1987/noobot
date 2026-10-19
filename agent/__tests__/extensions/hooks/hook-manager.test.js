@@ -12,6 +12,7 @@ import {
   runAgentRuntimeHook,
   withHookRuntimeMeta,
 } from "../../../src/extensions/hooks/index.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("agent adapter resolves only the canonical hookManager field", () => {
   const hookManager = createHookManager();
@@ -146,7 +147,7 @@ test("withHookRuntimeMeta projects the canonical runtime identity", () => {
         parentSessionId: "p1",
         dialogProcessId: "d1",
         turnScopeId: "t1",
-        caller: "user",
+        caller: SESSION_CALLER.USER,
       },
     },
     { phase: "turn" },
@@ -157,7 +158,7 @@ test("withHookRuntimeMeta projects the canonical runtime identity", () => {
     parentSessionId: "p1",
     dialogProcessId: "d1",
     turnScopeId: "t1",
-    caller: "user",
+    caller: SESSION_CALLER.USER,
     resumeFromStoppedSnapshot: false,
     phase: "turn",
   });

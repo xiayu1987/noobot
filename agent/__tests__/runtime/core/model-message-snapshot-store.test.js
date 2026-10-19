@@ -14,7 +14,8 @@ import {
   saveStoppedModelMessageSnapshot,
   loadStoppedModelMessageSnapshot,
 } from "../../../src/runtime/resume/model-message-snapshot-store.js";
-import { persistSession } from "../../helpers/runtime-events-env.js";
+import { initializeSessionTree, persistSession } from "../../helpers/runtime-events-env.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 const identity = {
   userId: "admin",
@@ -26,13 +27,17 @@ const identity = {
 
 async function createWorkspace() {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-stopped-snapshot-"));
-  await persistSession(workspaceRoot, identity.userId, identity.parentSessionId);
-  await persistSession(
-    workspaceRoot,
-    identity.userId,
-    identity.sessionId,
-    identity.parentSessionId,
-  );
+  await initializeSessionTree(workspaceRoot, identity.userId);
+  await persistSession(workspaceRoot, identity.userId, {
+    sessionId: identity.parentSessionId,
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  await persistSession(workspaceRoot, identity.userId, {
+    sessionId: identity.sessionId,
+    parentSessionId: identity.parentSessionId,
+    caller: SESSION_CALLER.USER,
+  });
   return workspaceRoot;
 }
 
@@ -380,7 +385,7 @@ test("stopped model message snapshot does not recreate a deleted parent session 
   await fs.writeFile(
     path.join(sessionRoot, ".deleted-sessions.json"),
     JSON.stringify({
-      sessions: { [identity.parentSessionId]: { deletedAt: new Date().toISOString() } },
+      sessions: { [identity.parentSessionId]: Date.now() },
     }),
     "utf8",
   );
@@ -405,6 +410,7 @@ test("stopped model message snapshot does not recreate a deleted parent session 
 
 test("stopped model message snapshot skips a session that is not registered in the tree", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-stopped-snapshot-"));
+  await initializeSessionTree(workspaceRoot, identity.userId);
   const saved = await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
@@ -412,10 +418,7 @@ test("stopped model message snapshot skips a session that is not registered in t
   });
 
   assert.deepEqual(saved, { saved: false, reason: "session_missing" });
-  await assert.rejects(
-    () => fs.access(path.join(workspaceRoot, identity.userId, "runtime", "session")),
-    /ENOENT/,
-  );
+  await assert.rejects(() => fs.access(path.dirname(snapshotFileOf(workspaceRoot))), /ENOENT/);
   await assert.rejects(
     () => loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity }),
     /snapshot unavailable: session_missing/,

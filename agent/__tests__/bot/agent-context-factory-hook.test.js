@@ -10,6 +10,7 @@ import { AgentContextFactory } from "../../src/context/assembly/agent-context-fa
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("buildAgentContextFromBuilder triggers before/after context build hooks", async () => {
   const hookManager = createHookManager();
@@ -57,7 +58,7 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
     mode: "new_session",
     userId: "u_ctx_1",
     sessionId: "s_ctx_1",
-    caller: "user",
+    caller: SESSION_CALLER.USER,
     parentSessionId: "p_ctx_1",
     dialogProcessId: "dp_ctx_1",
     runConfig: { hookManager },
@@ -120,7 +121,7 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
         mode: "new_session",
         userId: "u_ctx_2",
         sessionId: "s_ctx_2",
-        caller: "user",
+        caller: SESSION_CALLER.USER,
         parentSessionId: "p_ctx_2",
         dialogProcessId: "dp_ctx_2",
         runConfig: { hookManager },

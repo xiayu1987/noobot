@@ -17,11 +17,13 @@ import {
   SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   canonicalMessages,
   withTempWorkspace,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 
 test("session summaries should be maintained and rebuilt for list API", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -33,14 +35,8 @@ test("session summaries should be maintained and rebuilt for list API", async ()
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
 
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
-    await runtime.sessionCrudService.ensureSession(userId, "A", "");
-    await runtime.sessionTreeService.upsertSessionTree({
-      userId,
-      sessionId: "B",
-      parentSessionId: "A",
-    });
-    await runtime.sessionCrudService.ensureSession(userId, "B", "A");
+    await runtime.sessionCrudService.ensureSession(userId, "A", "", SESSION_CALLER.USER);
+    await runtime.sessionCrudService.ensureSession(userId, "B", "A", SESSION_CALLER.USER);
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
     sessionB.messages = canonicalMessages(
@@ -53,7 +49,11 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     );
     sessionB.currentTaskId = "task-b";
     sessionB.aggregateVersion = 4;
-    await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(sessionB),
+      "A",
+    );
 
     let summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
     assert.equal(summary.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
@@ -61,7 +61,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     assert.equal(writtenB.title, "12345678901234567890");
     assert.equal(writtenB.messageCount, 3);
     assert.equal(writtenB.aggregateVersion, 4);
-    assert.equal(writtenB.depth, 0);
+    assert.equal("depth" in writtenB, false);
     assert.equal(Array.isArray(writtenB.messages), false);
     assert.equal(writtenB.lastMessage.role, "assistant");
     assert.equal("attachmentMetas" in writtenB.lastMessage, false);
@@ -79,7 +79,34 @@ test("session summaries should be maintained and rebuilt for list API", async ()
         "utf8",
       ),
     );
-    assert.equal(summary.sessions.find((item) => item.sessionId === "B").depth, 2);
+    assert.equal("depth" in summary.sessions.find((item) => item.sessionId === "B"), false);
+  });
+});
+
+test("list index under another schema is rejected on read and rebuilt only by listing reconciliation", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createTestSessionServices({ workspaceRoot });
+    const repository = runtime.repositories.sessionRepository;
+    await runtime.sessionCrudService.ensureSession(userId, "A", "", SESSION_CALLER.USER);
+    const summaryFile = path.join(workspaceRoot, userId, "runtime", "session", "sessions.json");
+    await writeFile(
+      summaryFile,
+      JSON.stringify({ schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION - 1, sessions: [] }),
+    );
+
+    await assert.rejects(repository.readSessionsSummary(userId), {
+      code: "SESSIONS_SUMMARY_SCHEMA_UNSUPPORTED",
+    });
+
+    const list = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    assert.deepEqual(
+      list.map((item) => item.sessionId),
+      ["A"],
+    );
+    const repaired = JSON.parse(await readFile(summaryFile, "utf8"));
+    assert.equal(repaired.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
   });
 });
 
@@ -88,14 +115,19 @@ test("session list projects session-tree nodes without Session artifacts as unav
     const userId = "u-tree-orphans";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession(userId, "materialized", "");
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "orphan" });
+    await runtime.sessionCrudService.ensureSession(userId, "materialized", "", SESSION_CALLER.USER);
+    await runtime.repositories.sessionRepository.registerSessionTreeNode(userId, {
+      sessionId: "orphan",
+      parentSessionId: "",
+      caller: SESSION_CALLER.BOT,
+    });
 
     const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
     assert.deepEqual(summaries.map((item) => item.sessionId).sort(), ["materialized", "orphan"]);
     const orphan = summaries.find((item) => item.sessionId === "orphan");
     assert.equal(orphan.availability, "unavailable");
     assert.equal(orphan.unavailableReason.code, "SESSION_ARTIFACT_MISSING");
+    assert.equal(orphan.caller, SESSION_CALLER.BOT);
   });
 });
 
@@ -104,11 +136,11 @@ test("session detail projects a tree child without artifact as unavailable", asy
     const userId = "u-detail-orphan-child";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession(userId, "root", "");
-    await runtime.sessionTreeService.upsertSessionTree({
-      userId,
+    await runtime.sessionCrudService.ensureSession(userId, "root", "", SESSION_CALLER.USER);
+    await runtime.repositories.sessionRepository.registerSessionTreeNode(userId, {
       sessionId: "child",
       parentSessionId: "root",
+      caller: SESSION_CALLER.BOT,
     });
 
     const detail = await runtime.sessionCrudService.getSessionData({ userId, sessionId: "root" });
@@ -120,6 +152,7 @@ test("session detail projects a tree child without artifact as unavailable", asy
     assert.equal(child.availability, "unavailable");
     assert.equal(child.unavailableReason.code, "SESSION_ARTIFACT_MISSING");
     assert.equal(child.parentSessionId, "root");
+    assert.equal(child.caller, SESSION_CALLER.BOT);
   });
 });
 
@@ -128,12 +161,12 @@ test("ensureSession rejects an artifact absent from the session tree without reg
     const userId = "u-artifact-without-tree-node";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession(userId, "S", "");
+    await runtime.sessionCrudService.ensureSession(userId, "S", "", SESSION_CALLER.USER);
     const treeFile = path.join(workspaceRoot, userId, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
     await writeFile(treeFile, JSON.stringify({ nodes: {} }));
 
     await assert.rejects(
-      runtime.sessionCrudService.ensureSession(userId, "S", ""),
+      runtime.sessionCrudService.ensureSession(userId, "S", "", SESSION_CALLER.USER),
       (error) => error?.code === "FATAL_SESSION_TREE_NODE_MISSING",
     );
     const tree = JSON.parse(await readFile(treeFile, "utf8"));
@@ -147,14 +180,8 @@ test("session discovery traverses only canonical Session directories", async () 
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
 
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "root" });
-    await runtime.sessionCrudService.ensureSession(userId, "root", "");
-    await runtime.sessionTreeService.upsertSessionTree({
-      userId,
-      sessionId: "child",
-      parentSessionId: "root",
-    });
-    await runtime.sessionCrudService.ensureSession(userId, "child", "root");
+    await runtime.sessionCrudService.ensureSession(userId, "root", "", SESSION_CALLER.USER);
+    await runtime.sessionCrudService.ensureSession(userId, "child", "root", SESSION_CALLER.USER);
 
     const runtimeSessionRoot = path.join(workspaceRoot, userId, "runtime", "session");
     const nonSessionTree = path.join(runtimeSessionRoot, "root", "turn-snapshots", "nested");
@@ -176,8 +203,8 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
       { workspaceRoot },
       { now: () => "2026-08-08T00:00:00.000Z" },
     );
-    await runtime.sessionCrudService.ensureSession(userId, "available", "");
-    await runtime.sessionCrudService.ensureSession(userId, "legacy", "");
+    await runtime.sessionCrudService.ensureSession(userId, "available", "", SESSION_CALLER.USER);
+    await runtime.sessionCrudService.ensureSession(userId, "legacy", "", SESSION_CALLER.USER);
 
     const repository = runtime.repositories.sessionRepository;
     const findById = repository.findById.bind(repository);
@@ -195,7 +222,7 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
     const unavailable = payload.sessions.find((item) => item.sessionId === "legacy");
     assert.equal(available.availability, "available");
     assert.equal(unavailable.availability, "unavailable");
-    assert.deepEqual(unavailable.messages, []);
+    assert.equal("messages" in unavailable, false);
     assert.equal(unavailable.messageCount, 0);
     assert.equal(unavailable.lastMessage, null);
     assert.equal(unavailable.unavailableReason.code, "INVALID_TRANSFER_ENVELOPE");
@@ -218,7 +245,7 @@ test("failed Session repair is marked and skipped on subsequent reads", async ()
     const sessionId = "broken";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
     await writeFile(path.join(sessionDir, "session.json"), "{invalid-json", "utf8");
 
@@ -249,13 +276,33 @@ test("failed Session repair is marked and skipped on subsequent reads", async ()
   });
 });
 
+test("unavailable summary takes caller from the session tree when the manifest is corrupt", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-corrupt-manifest-caller";
+    const sessionId = "corrupt";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createTestSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.BOT);
+    const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
+    await writeFile(path.join(sessionDir, "session.json"), "{invalid-json", "utf8");
+
+    const payload = await runtime.repositories.sessionRepository.rebuildSessionsSummary(userId);
+    const unavailable = payload.sessions.find((item) => item.sessionId === sessionId);
+    assert.equal(unavailable.availability, "unavailable");
+    assert.equal(unavailable.caller, SESSION_CALLER.BOT);
+    assert.equal(unavailable.parentSessionId, "");
+    assert.equal(unavailable.createdAt, "");
+    assert.equal(unavailable.updatedAt, "");
+  });
+});
+
 test("stale Session repair failure marker is cleared once the artifact validates", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-repair-heal";
     const sessionId = "healed";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
     const sessionFile = path.join(
       workspaceRoot,
       userId,
@@ -295,8 +342,7 @@ test("display maintenance migrates repairable artifacts through the Session repa
     const sessionId = "legacy";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
 
     const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, "");
     session.messages = [
@@ -308,7 +354,11 @@ test("display maintenance migrates repairable artifacts through the Session repa
         dialogProcessId: "dialog-legacy",
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, session, "");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(session),
+      "",
+    );
 
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
     await writeFile(
@@ -341,8 +391,7 @@ test("display summary repair migrates the previous canonical artifact before rev
     const sessionId = "previous-artifact";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
 
     const repository = runtime.repositories.sessionRepository;
     const session = await repository.findById(userId, sessionId, "");
@@ -360,7 +409,7 @@ test("display summary repair migrates the previous canonical artifact before rev
       ],
       "previous",
     );
-    await repository.save(userId, session, "");
+    await repository.save(userId, applySessionMessageFacts(session), "");
 
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
     const manifestFile = path.join(sessionDir, "session.json");
@@ -393,11 +442,7 @@ test("display summary repair migrates the previous canonical artifact before rev
     const repaired = await repository.ensureSessionDisplaySummary(userId, sessionId, "");
     const repairedManifest = JSON.parse(await readFile(manifestFile, "utf8"));
     const repairedSession = await repository.findById(userId, sessionId, "");
-    const displaySummary = await repository.readSessionDisplaySummaryArtifact(
-      userId,
-      sessionId,
-      "",
-    );
+    const displaySummary = repaired.summary;
 
     assert.equal(repaired.migrated, true);
     assert.equal(repairedManifest.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
@@ -420,8 +465,7 @@ test("deleting one session does not invalidate another session display summary",
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
     for (const sessionId of ["kept", "deleted"]) {
-      await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
-      await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+      await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
     }
 
     const kept = await runtime.repositories.sessionRepository.findById(userId, "kept", "");
@@ -434,7 +478,8 @@ test("deleting one session does not invalidate another session display summary",
         dialogProcessId: "dialog-kept",
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, kept, "");
+    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(kept), "");
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "kept", "");
     const keptSummaryFile = path.join(
       workspaceRoot,
       userId,

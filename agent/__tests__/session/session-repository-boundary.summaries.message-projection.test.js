@@ -4,14 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 test("session display summary projects persisted messageId and messageUid without identity fallback", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "identity-session",
     aggregateVersion: 0,
     messages: [
@@ -39,6 +42,7 @@ test("session display summary projects persisted messageId and messageUid withou
 
 test("session display summary preserves the canonical internal control message type", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "internal-control-session",
     aggregateVersion: 0,
     messages: [
@@ -61,6 +65,7 @@ test("session display summary preserves the canonical internal control message t
 
 test("session display summary retains a workflow final assistant with stable presentation identity", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "workflow-final-session",
     aggregateVersion: 0,
     messages: [
@@ -85,6 +90,7 @@ test("session display summary retains a workflow final assistant with stable pre
 
 test("session display summary does not synthesize a missing workflow presentation identity", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "workflow-lifecycle-session",
     aggregateVersion: 0,
     messages: [
@@ -99,6 +105,7 @@ test("session display summary does not synthesize a missing workflow presentatio
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       turns: {
         "turn-workflow-lifecycle": {
           turnScopeId: "turn-workflow-lifecycle",
@@ -116,10 +123,12 @@ test("session display summary rejects an active Turn without canonical presentat
   assert.throws(
     () =>
       buildSessionDisplaySummary({
+        ...createTestSessionRequiredFields(),
         sessionId: "invalid-active-turn-session",
         aggregateVersion: 0,
         messages: [],
         turnLifecycle: {
+          ...createEmptyTurnLifecycle(),
           activeTurnScopeId: "turn-active",
           turns: { "turn-active": { turnScopeId: "turn-active", state: "processing" } },
         },
@@ -132,6 +141,7 @@ test("session display summary rejects an active Turn presentation identity owned
   assert.throws(
     () =>
       buildSessionDisplaySummary({
+        ...createTestSessionRequiredFields(),
         sessionId: "conflicting-active-turn-session",
         aggregateVersion: 0,
         messages: [
@@ -143,6 +153,7 @@ test("session display summary rejects an active Turn presentation identity owned
           },
         ],
         turnLifecycle: {
+          ...createEmptyTurnLifecycle(),
           activeTurnScopeId: "turn-active",
           turns: {
             "turn-active": {
@@ -159,6 +170,7 @@ test("session display summary rejects an active Turn presentation identity owned
 
 test("session display summary does not duplicate an active Turn with persisted assistant facts", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "active-turn-with-facts",
     aggregateVersion: 0,
     messages: [
@@ -184,6 +196,7 @@ test("session display summary does not duplicate an active Turn with persisted a
       },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-active",
       turns: {
         "turn-active": {
@@ -204,6 +217,7 @@ test("session display summary does not duplicate an active Turn with persisted a
 
 test("session display summary projects one explicit assistant presentation from many model messages", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "assistant-presentation-session",
     aggregateVersion: 0,
     messages: [
@@ -276,6 +290,7 @@ test("session display summary rejects multiple canonical assistants for one pres
   assert.throws(
     () =>
       buildSessionDisplaySummary({
+        ...createTestSessionRequiredFields(),
         sessionId: "duplicate-presentation-session",
         aggregateVersion: 0,
         messages: [

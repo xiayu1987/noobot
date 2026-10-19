@@ -7,7 +7,7 @@
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { isValidSessionId } from "../utils/session-utils.js";
-import { CALLER_ROLE, VALID_CALLER_ROLES } from "./constants.js";
+import { isSessionCaller } from "@noobot/shared/session-caller";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
 
@@ -22,7 +22,7 @@ export class BotManageValidator {
     return normalizedMessage;
   }
 
-  validateRunInput({ userId, sessionId, caller = CALLER_ROLE.USER, parentSessionId = "" }) {
+  validateRunInput({ userId, sessionId, caller, parentSessionId = "" }) {
     if (!userId || !sessionId) {
       throw recoverableToolError(tSystem("common.userSessionRequired"), {
         code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -33,7 +33,7 @@ export class BotManageValidator {
         code: ERROR_CODE.RECOVERABLE_INVALID_SESSION_ID,
       });
     }
-    if (!VALID_CALLER_ROLES.includes(String(caller || ""))) {
+    if (!isSessionCaller(caller)) {
       throw recoverableToolError(tSystem("bot.invalidCaller"), {
         code: ERROR_CODE.RECOVERABLE_INVALID_CALLER,
       });

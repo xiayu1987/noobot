@@ -7,7 +7,7 @@
 import { emitEvent } from "../../events/index.js";
 import { runBotRuntimeHook } from "../hook/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
+import { SESSION_ASYNC_STATUS } from "../config/constants.js";
 import { syncLifecycleRuntimeState } from "../../runtime/lifecycle/state-machine.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "../../runtime/resume/model-message-snapshot-store.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
@@ -95,7 +95,7 @@ export class SessionExecutionRunner {
     attachments = [],
     systemMessages = [],
     eventListener = null,
-    caller = CALLER_ROLE.USER,
+    caller,
     parentSessionId = "",
     parentDialogProcessId = "",
     dialogProcessId: requestedDialogProcessId = "",

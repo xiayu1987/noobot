@@ -41,12 +41,6 @@ export class ExecutionLogService {
       parentSessionId,
       persistenceContext,
     );
-    await this.sessionRepo.ensureSession({
-      userId,
-      sessionId,
-      parentSessionId: resolvedParentSessionId,
-      persistenceContext,
-    });
     return this.executionRepo.getTurnLogs(
       userId,
       sessionId,

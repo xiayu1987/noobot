@@ -529,6 +529,7 @@ test("session provision intent is explicit and restricted to the first send acce
   assert.deepEqual(
     validateSessionProvisionIntent({
       createSessionIfAbsent: true,
+      sessionCaller: "user",
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       action: "send",
       expectedRevision: 0,
@@ -537,6 +538,13 @@ test("session provision intent is explicit and restricted to the first send acce
   );
   for (const input of [
     { createSessionIfAbsent: "true", eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send" },
+    { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send" },
+    {
+      createSessionIfAbsent: true,
+      sessionCaller: "admin",
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      action: "send",
+    },
     { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "resend" },
     { createSessionIfAbsent: true, eventType: TURN_EVENT.PROCESSING_STARTED, action: "send" },
     {

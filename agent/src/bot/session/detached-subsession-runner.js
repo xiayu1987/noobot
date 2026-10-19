@@ -6,7 +6,6 @@
 import { randomUUID } from "node:crypto";
 import { AGENT_RUN_EVENT, createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
-import { CALLER_ROLE } from "../config/constants.js";
 import {
   TURN_ACTION,
   TURN_EVENT,
@@ -19,6 +18,7 @@ import {
   EXECUTION_KIND,
   isExecutionAbortError,
 } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
 import {
   createDetachedTerminalReceipt,
@@ -379,6 +379,7 @@ async function commitDetachedStart(lifecycle, startedAt, message, identity, runC
     executionState: "accepted",
     startedAt,
     createSessionIfAbsent: true,
+    sessionCaller: SESSION_CALLER.BOT,
     expectedRevision: 0,
     userMessage: {
       content: message,
@@ -405,7 +406,7 @@ async function executeDetachedSession(dependencies, identity, prepared, lifecycl
     parentSessionId: identity.parentSessionId,
     parentDialogProcessId: identity.parentDialogProcessId,
     dialogProcessId: identity.subDialogProcessId,
-    caller: CALLER_ROLE.BOT,
+    caller: SESSION_CALLER.BOT,
     message: prepared.message,
     attachments: prepared.subSessionAttachments,
     systemMessages: prepared.systemMessages,
@@ -550,7 +551,7 @@ function projectDetachedResult(result, identity, terminalLifecycle) {
       sessionId: identity.subSessionId,
       parentSessionId: identity.parentSessionId,
       parentDialogProcessId: identity.parentDialogProcessId,
-      caller: CALLER_ROLE.BOT,
+      caller: SESSION_CALLER.BOT,
       answer: text(result?.answer),
       traces: readArray(result?.traces),
       messages,

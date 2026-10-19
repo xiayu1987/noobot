@@ -6,28 +6,31 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
-import { buildSessionDisplaySummary } from "../session-summary-builders.js";
-import { assertSessionMessageIdentityInvariants } from "../entities/message-entity.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
   buildSessionArtifactFileMap,
   SESSION_ARTIFACT_FILE_NAMES,
 } from "../session-artifact-files.js";
 import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
-import { writeSessionSummaryDetails } from "./summary-detail-store.js";
-import { splitSessionMessages } from "./turn-message-partition.js";
+import { buildSessionListFacts } from "./session-list-facts.js";
+import {
+  compareTurnPlacement,
+  dialogLogicalOrder,
+  splitSessionMessages,
+} from "./turn-message-partition.js";
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
   appendJournal,
-  collectSummarySnapshotRecords,
   isTerminalTurn,
   journalPath,
   messageHash,
   readJournalRecords,
+  receiptCheckpoint,
   replaceJournal,
   replaceJournalRecords,
   resolveTurnSummaryReceipts,
-  summarySnapshotRecord,
+  summarySnapshotIndex,
+  turnArtifactRequiresRewrite,
   turnIdOrdinal,
   turnKey,
   writeSummarySnapshot,
@@ -91,17 +94,6 @@ function diffTurnMessages(messages, previousHashes) {
   return { nextHashes, records };
 }
 
-function receiptCheckpoint(receipt, previousCheckpointIds) {
-  const checkpointId = text(receipt?.checkpointId);
-  const checkpointRevision = Number(receipt?.checkpointRevision || 0);
-  const valid =
-    checkpointId &&
-    Number.isInteger(checkpointRevision) &&
-    checkpointRevision >= 1 &&
-    !previousCheckpointIds.has(checkpointId);
-  return valid ? { checkpointId, checkpointRevision } : null;
-}
-
 function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -144,22 +136,23 @@ async function writeTurnSummarySnapshots({
   sessionDir,
   sessionPayload,
   turn,
-  previousRecords,
+  file,
+  previous,
   records,
 }) {
-  const summaryRecords = collectSummarySnapshotRecords(previousRecords);
+  const summarySnapshots = [...arrayOrEmpty(previous?.summarySnapshots)];
   const previousCheckpointIds = new Set(
-    summaryRecords.map((record) => text(record?.checkpointId)).filter(Boolean),
+    summarySnapshots.map((snapshot) => text(snapshot?.checkpointId)).filter(Boolean),
   );
-  let checkpointRecords = [
-    ...previousRecords.filter((record) => record?.op !== "summary_snapshot"),
-    ...records,
-  ];
-  let previousCheckpointHash = summaryRecords.at(-1)?.contentHash || "";
-  let snapshotCompactedJournal = false;
+  let checkpointRecords = null;
+  let previousCheckpointHash = summarySnapshots.at(-1)?.contentHash || "";
   for (const receipt of resolveTurnSummaryReceipts(sessionPayload, turn)) {
     const checkpoint = receiptCheckpoint(receipt, previousCheckpointIds);
     if (!checkpoint) continue;
+    checkpointRecords ??= [
+      ...(previous ? await readJournalRecords(file, previous.committedBytes) : []),
+      ...records,
+    ];
     const relativeSnapshotFile = summarySnapshotRelativeFile(
       turn.turnId,
       checkpoint.checkpointRevision,
@@ -176,15 +169,12 @@ async function writeTurnSummarySnapshots({
       .update(JSON.stringify(snapshotPayload))
       .digest("hex")}`;
     await writeSummarySnapshot(path.join(sessionDir, relativeSnapshotFile), snapshotPayload);
-    const indexRecord = summarySnapshotRecord(receipt, turn, relativeSnapshotFile, contentHash);
-    records.push(indexRecord);
-    summaryRecords.push(indexRecord);
+    summarySnapshots.push(summarySnapshotIndex(receipt, relativeSnapshotFile, contentHash));
     previousCheckpointIds.add(checkpoint.checkpointId);
     previousCheckpointHash = contentHash;
     checkpointRecords = [];
-    snapshotCompactedJournal = true;
   }
-  return { summaryRecords, snapshotCompactedJournal };
+  return { summarySnapshots, snapshotCompactedJournal: checkpointRecords !== null };
 }
 
 async function commitTurnJournal({
@@ -192,21 +182,17 @@ async function commitTurnJournal({
   turn,
   previous,
   records,
-  summaryRecords,
   compact,
   snapshotCompactedJournal,
 }) {
   if (compact) {
     return {
-      committedBytes: await replaceJournal(file, turn.messages, summaryRecords),
-      recordCount: turn.messages.length + summaryRecords.length,
+      committedBytes: await replaceJournal(file, turn.messages),
+      recordCount: turn.messages.length,
     };
   }
   if (snapshotCompactedJournal) {
-    return {
-      committedBytes: await replaceJournalRecords(file, summaryRecords),
-      recordCount: summaryRecords.length,
-    };
+    return { committedBytes: await replaceJournalRecords(file, []), recordCount: 0 };
   }
   return {
     committedBytes: await appendJournal(file, records, previous?.committedBytes || 0),
@@ -221,25 +207,24 @@ async function writeTurnArtifact({ sessionDir, sessionPayload, turn, previousV5 
     previous?.messageHashes && typeof previous.messageHashes === "object"
       ? previous.messageHashes
       : {};
-  const previousRecords = previous ? await readJournalRecords(file, previous.committedBytes) : [];
   const { nextHashes, records } = diffTurnMessages(turn.messages, previousHashes);
-  const { summaryRecords, snapshotCompactedJournal } = await writeTurnSummarySnapshots({
+  const { summarySnapshots, snapshotCompactedJournal } = await writeTurnSummarySnapshots({
     sessionDir,
     sessionPayload,
     turn,
-    previousRecords,
+    file,
+    previous,
     records,
   });
   const compact =
     isTerminalTurn(sessionPayload, turn) &&
     previous?.compacted !== true &&
-    summaryRecords.length === 0;
+    summarySnapshots.length === 0;
   const { committedBytes, recordCount } = await commitTurnJournal({
     file,
     turn,
     previous,
     records,
-    summaryRecords,
     compact,
     snapshotCompactedJournal,
   });
@@ -254,6 +239,7 @@ async function writeTurnArtifact({ sessionDir, sessionPayload, turn, previousV5 
     messageCount: turn.messages.length,
     messageOrder: turn.messages.map((message) => message.messageUid),
     messageHashes: nextHashes,
+    summarySnapshots,
     compacted: compact || previous?.compacted === true,
   };
 }
@@ -275,18 +261,12 @@ async function pruneUnreferencedJournals(files, artifactTurns) {
   }
 }
 
-async function collectReferencedSnapshots(sessionDir, turnOrder) {
-  const referencedSnapshots = new Set();
-  for (const turn of turnOrder) {
-    const journalRecords = await readJournalRecords(
-      journalPath(sessionDir, turn.turnId),
-      turn.committedBytes,
-    );
-    for (const record of collectSummarySnapshotRecords(journalRecords)) {
-      referencedSnapshots.add(String(record?.file || "").replaceAll("\\", "/"));
-    }
-  }
-  return referencedSnapshots;
+function collectReferencedSnapshots(turnOrder) {
+  return new Set(
+    turnOrder.flatMap((turn) =>
+      turn.summarySnapshots.map((snapshot) => text(snapshot?.file).replaceAll("\\", "/")),
+    ),
+  );
 }
 
 async function pruneTurnSnapshotDir(turnDir, turnDirName, referencedSnapshots) {
@@ -300,8 +280,8 @@ async function pruneTurnSnapshotDir(turnDir, turnDirName, referencedSnapshots) {
   }
 }
 
-async function pruneUnreferencedSnapshots(sessionDir, files, turnOrder) {
-  const referencedSnapshots = await collectReferencedSnapshots(sessionDir, turnOrder);
+async function pruneUnreferencedSnapshots(files, turnOrder) {
+  const referencedSnapshots = collectReferencedSnapshots(turnOrder);
   try {
     for (const turnEntry of await readdir(files.turnSnapshotsDir, { withFileTypes: true })) {
       if (!turnEntry.isDirectory()) continue;
@@ -323,9 +303,6 @@ export async function writeSessionArtifact({
   const files = buildSessionArtifactFileMap(sessionDir);
   await mkdir(sessionDir, { recursive: true });
   const normalizedSessionPayload = normalizeSessionEntity(sessionPayload, { now });
-  assertSessionMessageIdentityInvariants(normalizedSessionPayload.messages);
-  const summaryPayload = buildSessionDisplaySummary(normalizedSessionPayload);
-  await writeSessionSummaryDetails({ storageService, sessionDir, summaryPayload });
   const { turns } = splitSessionMessages(
     normalizedSessionPayload.messages,
     normalizedSessionPayload.dialogOrder,
@@ -345,36 +322,174 @@ export async function writeSessionArtifact({
       }),
     );
   }
-  const manifest = {
-    ...normalizedSessionPayload,
-    schemaVersion: TURN_JOURNAL_SCHEMA_VERSION,
-    messageIdentityVersion: 1,
-    turnArtifactSequence,
-    turnOrder,
-    messageOrder: normalizedSessionPayload.messages.map((message) => ({
-      messageUid: message.messageUid,
-    })),
-  };
-  delete manifest.messages;
-  await Promise.all([
-    writeJsonWithStorage({
-      storageService,
-      artifactPath: files.session,
-      payload: manifest,
-      atomic,
-    }),
-    writeJsonWithStorage({
-      storageService,
-      artifactPath: files.sessionSummary,
-      payload: summaryPayload,
-      atomic: true,
-    }),
-  ]);
+  const messageOrder = normalizedSessionPayload.messages.map((message) => ({
+    messageUid: message.messageUid,
+  }));
+  await writeSessionManifest({
+    storageService,
+    files,
+    sessionPayload: normalizedSessionPayload,
+    layout: { turnArtifactSequence, turnOrder, messageOrder },
+    atomic,
+  });
   await pruneUnreferencedJournals(files, artifactTurns);
-  await pruneUnreferencedSnapshots(sessionDir, files, turnOrder);
+  await pruneUnreferencedSnapshots(files, turnOrder);
   return {
     files,
     session: normalizedSessionPayload,
-    sessionSummary: summaryPayload,
+    listFacts: buildSessionListFacts({
+      messageOrder,
+      messages: normalizedSessionPayload.messages,
+    }),
   };
+}
+
+function turnViewError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function assertTurnViewOwnership({ session, previous, viewScopes, turns }) {
+  const outsideItems = previous.turnOrder.filter((item) => !viewScopes.has(item.turnScopeId));
+  const outsideOwner = new Map();
+  for (const item of outsideItems) {
+    if (turnArtifactRequiresRewrite(session, item))
+      throw turnViewError(
+        `turn view omits a turn that requires rewrite: ${item.turnScopeId}`,
+        "SESSION_TURN_VIEW_INCOMPLETE",
+      );
+    for (const messageUid of item.messageOrder) outsideOwner.set(messageUid, item.turnScopeId);
+  }
+  const outsideScopes = new Set(outsideItems.map((item) => item.turnScopeId));
+  for (const turn of turns) {
+    if (outsideScopes.has(turn.turnScopeId))
+      throw turnViewError(
+        `turn view writes a turn it did not materialize: ${turn.turnScopeId}`,
+        "SESSION_TURN_VIEW_INCOMPLETE",
+      );
+    if (turn.messages.some((message) => outsideOwner.has(message.messageUid)))
+      throw turnViewError(
+        "messageUid does not belong to the requested dialog and turn",
+        "SESSION_MESSAGE_IDENTITY_CONFLICT",
+      );
+  }
+  return outsideItems;
+}
+
+function mergeTurnViewMessageOrder({ previous, viewScopes, messages }) {
+  const viewUids = new Set(messages.map((message) => message.messageUid));
+  const viewOwnedUids = new Set(
+    previous.turnOrder
+      .filter((item) => viewScopes.has(item.turnScopeId))
+      .flatMap((item) => item.messageOrder),
+  );
+  const kept = previous.messageOrder.filter(
+    (reference) => !viewOwnedUids.has(reference.messageUid) || viewUids.has(reference.messageUid),
+  );
+  const keptUids = new Set(kept.map((reference) => reference.messageUid));
+  const appended = messages
+    .filter((message) => !keptUids.has(message.messageUid))
+    .map((message) => ({ messageUid: message.messageUid }));
+  return [...kept, ...appended];
+}
+
+function placeTurnViewTurns({ session, outsideItems, turns, messageOrder }) {
+  const position = new Map(messageOrder.map((reference, index) => [reference.messageUid, index]));
+  const firstSourceIndex = (turnScopeId, uids) => {
+    const indices = uids.map((uid) => position.get(uid));
+    if (!indices.length || indices.some((index) => index === undefined))
+      throw turnViewError(
+        `turn messages are not covered by the session message order: ${turnScopeId}`,
+        "SESSION_TURN_VIEW_INCOMPLETE",
+      );
+    return Math.min(...indices);
+  };
+  const candidates = [
+    ...outsideItems.map((item) => ({
+      ...item,
+      firstSourceIndex: firstSourceIndex(item.turnScopeId, item.messageOrder),
+    })),
+    ...turns.map(({ sourceIndices, ...turn }) => ({
+      ...turn,
+      firstSourceIndex: firstSourceIndex(
+        turn.turnScopeId,
+        turn.messages.map((message) => message.messageUid),
+      ),
+    })),
+  ];
+  return candidates
+    .sort((left, right) => left.firstSourceIndex - right.firstSourceIndex)
+    .sort(compareTurnPlacement(dialogLogicalOrder(session.dialogOrder)))
+    .map(({ firstSourceIndex: _placement, ...turn }) => turn);
+}
+
+export async function writeSessionTurnArtifacts({
+  storageService = null,
+  sessionDir = "",
+  sessionPayload = {},
+  turnScopeIds = [],
+  atomic = true,
+  now = () => new Date().toISOString(),
+} = {}) {
+  const files = buildSessionArtifactFileMap(sessionDir);
+  const session = normalizeSessionEntity(sessionPayload, { now });
+  const previous = await readPreviousTurnManifest({ storageService, files });
+  if (!previous)
+    throw turnViewError(
+      "turn view write requires the canonical turn journal schema",
+      "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
+    );
+  const viewScopes = new Set(turnScopeIds.map((turnScopeId) => text(turnScopeId)));
+  const { turns } = splitSessionMessages(session.messages, session.dialogOrder);
+  const outsideItems = assertTurnViewOwnership({ session, previous, viewScopes, turns });
+  const messageOrder = mergeTurnViewMessageOrder({
+    previous,
+    viewScopes,
+    messages: session.messages,
+  });
+  const placed = placeTurnViewTurns({ session, outsideItems, turns, messageOrder });
+  const { artifactTurns, turnArtifactSequence } = assignArtifactTurnIds(placed, previous);
+  const turnOrder = [];
+  for (const turn of artifactTurns) {
+    if (!Array.isArray(turn.messages)) {
+      turnOrder.push(turn);
+      continue;
+    }
+    turnOrder.push(
+      await writeTurnArtifact({ sessionDir, sessionPayload: session, turn, previousV5: previous }),
+    );
+  }
+  await writeSessionManifest({
+    storageService,
+    files,
+    sessionPayload: session,
+    layout: { turnArtifactSequence, turnOrder, messageOrder },
+    atomic,
+  });
+  await pruneUnreferencedJournals(files, artifactTurns);
+  await pruneUnreferencedSnapshots(files, turnOrder);
+  return {
+    files,
+    session,
+    listFacts: buildSessionListFacts({ messageOrder, messages: session.messages }),
+  };
+}
+
+async function writeSessionManifest({ storageService, files, sessionPayload, layout, atomic }) {
+  const manifest = {
+    ...sessionPayload,
+    schemaVersion: TURN_JOURNAL_SCHEMA_VERSION,
+    messageIdentityVersion: 1,
+    turnArtifactSequence: layout.turnArtifactSequence,
+    turnOrder: layout.turnOrder,
+    messageOrder: layout.messageOrder,
+  };
+  delete manifest.messages;
+  await writeJsonWithStorage({
+    storageService,
+    artifactPath: files.session,
+    payload: manifest,
+    atomic,
+  });
 }

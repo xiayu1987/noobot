@@ -15,6 +15,7 @@ import {
   WORKSPACE_RUNTIME_DIRECTORIES,
   WORKSPACE_SECTION,
   WORKSPACE_SECTIONS,
+  createEmptySessionTree,
   parseWorkspaceLayoutState,
   planWorkspaceLayoutMigrations,
   planWorkspaceLayoutUpgrades,
@@ -87,6 +88,15 @@ export async function ensureRuntimeDirectories(base) {
   for (const relativePath of WORKSPACE_RUNTIME_DIRECTORIES) {
     await mkdir(path.join(base, relativePath), { recursive: true });
   }
+  const treeFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
+  if (await pathExists(treeFile)) return;
+  await writeFileAtomic({
+    filePath: treeFile,
+    content: `${JSON.stringify(createEmptySessionTree(), null, 2)}\n`,
+    writeFile,
+    rename,
+    remove: rm,
+  });
 }
 
 export function repairMemorySection(base) {

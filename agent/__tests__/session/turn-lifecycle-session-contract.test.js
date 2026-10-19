@@ -5,7 +5,13 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
+  createEmptyTurnLifecycle,
+} from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
@@ -16,6 +22,7 @@ import {
   newSessionHarness,
   now,
 } from "./turn-lifecycle-session-contract.test-helpers.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 test("first send creates the session before committing action accepted", async () => {
   const h = newSessionHarness();
@@ -24,6 +31,7 @@ test("first send creates the session before committing action accepted", async (
       action: "send",
       phase: TURN_PHASE.ACTION,
       createSessionIfAbsent: true,
+      sessionCaller: SESSION_CALLER.USER,
     }),
   );
   assert.equal(accepted.applied, true);
@@ -53,6 +61,7 @@ test("initial provision replay is idempotent and concurrent first actions are mu
     action: "send",
     phase: TURN_PHASE.ACTION,
     createSessionIfAbsent: true,
+    sessionCaller: SESSION_CALLER.USER,
   });
   const accepted = await h.service.applyTurnLifecycleEvent(first);
   const replay = await h.service.applyTurnLifecycleEvent(first);
@@ -61,6 +70,7 @@ test("initial provision replay is idempotent and concurrent first actions are mu
       action: "send",
       phase: TURN_PHASE.ACTION,
       createSessionIfAbsent: true,
+      sessionCaller: SESSION_CALLER.USER,
       turnScopeId: "t2",
     }),
   );
@@ -121,10 +131,6 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   assert.equal(restored.activeTurnScopeId, "");
   assert.equal(restored.turns.t1.state, TURN_STATE.COMPLETED);
   assert.equal(restored.turns.t1.executionState, "completed");
-  const displayLifecycle = h.reloadDisplaySummarySession().turnLifecycle;
-  assert.equal(displayLifecycle.sequence, restored.sequence);
-  assert.equal(displayLifecycle.turns.t1.state, TURN_STATE.COMPLETED);
-  assert.equal(displayLifecycle.turns.t1.executionState, "completed");
   assert.equal(restored.turns.t1.summaryVersion, 1);
   assert.equal(restored.turns.t1.terminalStatus.status, "completed");
   assert.equal(restored.turns.t1.terminalStatus.status, "completed");
@@ -284,10 +290,12 @@ test("terminal resolution reads status from the Turn without returning messages"
 test("noncanonical terminal snapshots are discarded without mutating Turns", () => {
   const normalized = normalizeSessionEntity(
     {
+      ...createTestSessionRequiredFields(),
       sessionId: "legacy",
       aggregateVersion: 0,
       messages: [],
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         sequence: 1,
         turns: { t1: { turnScopeId: "t1", state: "completed", revision: 1, sequence: 1 } },
       },

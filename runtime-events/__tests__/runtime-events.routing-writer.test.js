@@ -17,6 +17,7 @@ import {
   tempRoot,
   useRuntimeEventsEnv,
 } from "./runtime-events-test-fixtures.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("session runtime event requires userId and sessionId", async () => {
   const result = await writeRuntimeEvent({
@@ -59,7 +60,11 @@ test("startup and system events write JSONL without session context", async () =
 
 test("session runtime events write to runtime session events path", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "s_1");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "s_1",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     source: "agent",
     scope: "session",
@@ -85,7 +90,11 @@ test("session runtime events write to runtime session events path", async () => 
 
 test("explicit session scope writes to the session events path", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "session_1");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "session_1",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     scope: "session",
     source: "agent",
@@ -201,7 +210,11 @@ test("explicit session scope with partial session context is rejected", async ()
 
 test("runtime event jsonl transport appends without rotating below max file bytes", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "rotation-1");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "rotation-1",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ storage: { maxFileBytes: 1024 * 1024 } });
   const first = await writeRuntimeEvent({
     source: "agent",

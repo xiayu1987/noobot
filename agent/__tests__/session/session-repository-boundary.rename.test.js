@@ -13,6 +13,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createTestSessionServices } from "../helpers/session-services.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -33,8 +35,7 @@ test("renameSession should persist custom title to full, display summary and ses
       { now: () => "2026-05-14T01:02:03.000Z" },
     );
 
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
-    await runtime.sessionCrudService.ensureSession(userId, "A", "");
+    await runtime.sessionCrudService.ensureSession(userId, "A", "", SESSION_CALLER.USER);
     const session = await runtime.repositories.sessionRepository.findById(userId, "A", "");
     session.messages = [
       {
@@ -45,7 +46,11 @@ test("renameSession should persist custom title to full, display summary and ses
         turnScopeId: "turn-rename",
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, session, "");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(session),
+      "",
+    );
 
     const renamed = await runtime.sessionCrudService.renameSession({
       userId,
@@ -58,6 +63,7 @@ test("renameSession should persist custom title to full, display summary and ses
 
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "A", "");
     const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "A", "");
     const displaySummary = JSON.parse(
       await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
     );

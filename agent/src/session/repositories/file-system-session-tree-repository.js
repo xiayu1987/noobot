@@ -61,11 +61,18 @@ export class FileSystemSessionTreeRepository {
         details: { basePath, missingDirectory: directory },
       });
     }
+    const treeFile = this._treeFile(userId);
+    if (!(await this.storageService.exists(treeFile))) {
+      throw fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
+        code: ERROR_CODE.FATAL_WORKSPACE_NOT_INITIALIZED,
+        details: { basePath, missingFile: treeFile },
+      });
+    }
   }
 
   async getTree(userId) {
     await this.assertWorkspaceInitialized(userId);
-    const tree = await this.storageService.readJson(this._treeFile(userId), { nodes: {} });
+    const tree = await this.storageService.readJson(this._treeFile(userId), null);
     return normalizeSessionTreeEntity(tree);
   }
 

@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
-import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import { createEmptyTurnLifecycle, normalizeDialogProcessId } from "@noobot/session-protocol";
 import { repairOrphanedTerminalTurns } from "@noobot/authoritative-state/application";
-import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { text } from "@noobot/shared/value";
 
 export async function getSessionTurns({
@@ -36,7 +35,7 @@ export async function getSessionContextSource({
     parentSessionId,
     persistenceContext,
   );
-  if (!session) return { messages: [], turnLifecycle: normalizeTurnLifecycleEntity({}) };
+  if (!session) return { messages: [], turnLifecycle: createEmptyTurnLifecycle() };
   const repair = repairOrphanedTerminalTurns({
     messages: session.messages,
     turnLifecycle: session.turnLifecycle,

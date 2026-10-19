@@ -18,6 +18,7 @@ import {
   createTurnAcceptanceReceipt,
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   TURN_COMMITTED_WIRE_EVENT,
   assertTurnCommittedEventData,
@@ -125,6 +126,7 @@ function createActionEvent(command, run, executionIntent, startedAt) {
     presentationMessageId: run.normalizedRunConfig.presentationMessageId,
     startedAt,
     createSessionIfAbsent: run.createSessionIfAbsent,
+    sessionCaller: SESSION_CALLER.USER,
     expectedRevision: run.expectedRevision,
     expectedAggregateVersion: run.normalizedRunConfig.expectedAggregateVersion,
     ...executionIntent,

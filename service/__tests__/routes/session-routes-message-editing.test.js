@@ -11,6 +11,9 @@ import {
   SESSION_COMMAND,
 } from "@noobot/session-protocol";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["u1"]);
 
 function createReplaceTurnResult(
   payload,

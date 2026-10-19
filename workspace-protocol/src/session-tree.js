@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { requireSessionCaller } from "@noobot/shared/session-caller";
+import { isPlainObject } from "@noobot/shared/value";
 import { WORKSPACE_LAYOUT, isWorkspacePathSegment } from "./layout.js";
 
 export const SESSION_TREE_ERROR = Object.freeze({
@@ -12,9 +13,12 @@ export const SESSION_TREE_ERROR = Object.freeze({
   SESSION_ID_REQUIRED: "SESSION_TREE_SESSION_ID_REQUIRED",
   INVALID_SESSION_ID: "SESSION_TREE_INVALID_SESSION_ID",
   NODE_MISSING: "SESSION_TREE_NODE_MISSING",
+  PARENT_MISSING: "SESSION_TREE_PARENT_MISSING",
   CYCLE: "SESSION_TREE_CYCLE",
   PARENT_MISMATCH: "SESSION_TREE_PARENT_MISMATCH",
 });
+
+export const SESSION_TREE_NODE_FIELDS = Object.freeze(["sessionId", "parentSessionId", "caller"]);
 
 function sessionTreeError(code, message, details = {}, ErrorType = Error) {
   const error = new ErrorType(message);
@@ -23,17 +27,26 @@ function sessionTreeError(code, message, details = {}, ErrorType = Error) {
   return error;
 }
 
+function invalidShape(message, details = {}) {
+  return sessionTreeError(SESSION_TREE_ERROR.INVALID_SHAPE, message, details, TypeError);
+}
+
+function hasExactNodeFields(node) {
+  const keys = Object.keys(node);
+  return (
+    keys.length === SESSION_TREE_NODE_FIELDS.length &&
+    SESSION_TREE_NODE_FIELDS.every((field) => keys.includes(field))
+  );
+}
+
 function assertSessionTreeSchema(tree) {
   const validShape =
     isPlainObject(tree) &&
     isPlainObject(tree.nodes) &&
     Object.values(tree.nodes).every(isPlainObject);
   if (!validShape) {
-    throw sessionTreeError(
-      SESSION_TREE_ERROR.INVALID_SHAPE,
-      "session tree must be { nodes: { [sessionId]: { parentSessionId } } }",
-      {},
-      TypeError,
+    throw invalidShape(
+      "session tree must be { nodes: { [sessionId]: { sessionId, parentSessionId, caller } } }",
     );
   }
   const legacyNode = Object.values(tree.nodes).some(
@@ -47,34 +60,54 @@ function assertSessionTreeSchema(tree) {
       TypeError,
     );
   }
+  if (Object.keys(tree).length !== 1) throw invalidShape("session tree only contains nodes");
+}
+
+function requireSessionId(value) {
+  if (typeof value !== "string" || !value) {
+    throw sessionTreeError(SESSION_TREE_ERROR.SESSION_ID_REQUIRED, "sessionId is required");
+  }
+  if (!isWorkspacePathSegment(value)) {
+    throw sessionTreeError(SESSION_TREE_ERROR.INVALID_SESSION_ID, `invalid sessionId: ${value}`, {
+      sessionId: value,
+    });
+  }
+  return value;
+}
+
+function requireParentSessionId(value) {
+  return value === "" ? value : requireSessionId(value);
+}
+
+export function createSessionTreeNode({ sessionId, parentSessionId, caller }) {
+  return {
+    sessionId: requireSessionId(sessionId),
+    parentSessionId: requireParentSessionId(parentSessionId),
+    caller: requireSessionCaller(caller),
+  };
+}
+
+export function createEmptySessionTree() {
+  return { nodes: {} };
 }
 
 export function normalizeSessionTree(tree) {
   assertSessionTreeSchema(tree);
   const nodes = {};
   for (const [nodeId, node] of Object.entries(tree.nodes)) {
-    const sessionId = text(nodeId);
-    if (!sessionId) continue;
-    nodes[sessionId] = { sessionId, parentSessionId: text(node.parentSessionId) };
+    if (!hasExactNodeFields(node)) {
+      throw invalidShape(`session tree node must only contain ${SESSION_TREE_NODE_FIELDS}`, {
+        sessionId: nodeId,
+      });
+    }
+    if (node.sessionId !== nodeId) {
+      throw invalidShape(`session tree node key must equal its sessionId: ${nodeId}`, {
+        sessionId: nodeId,
+      });
+    }
+    nodes[nodeId] = createSessionTreeNode(node);
   }
   return { nodes };
-}
-
-function requireSessionId(value) {
-  const sessionId = text(value);
-  if (!sessionId) {
-    throw sessionTreeError(SESSION_TREE_ERROR.SESSION_ID_REQUIRED, "sessionId is required");
-  }
-  if (!isWorkspacePathSegment(sessionId)) {
-    throw sessionTreeError(
-      SESSION_TREE_ERROR.INVALID_SESSION_ID,
-      `invalid sessionId: ${sessionId}`,
-      {
-        sessionId,
-      },
-    );
-  }
-  return sessionId;
 }
 
 export function resolveSessionTreeChain(tree, sessionId) {
@@ -90,7 +123,6 @@ export function resolveSessionTreeChain(tree, sessionId) {
         cycleSessionId: currentId,
       });
     }
-    requireSessionId(currentId);
     const node = nodes[currentId];
     if (!node) {
       throw sessionTreeError(
@@ -101,9 +133,24 @@ export function resolveSessionTreeChain(tree, sessionId) {
     }
     visited.add(currentId);
     chain.push(currentId);
-    currentId = text(node.parentSessionId);
+    currentId = node.parentSessionId;
   }
   return chain.reverse();
+}
+
+export function requireSessionTreeNode(tree, sessionId) {
+  const node = tree.nodes[requireSessionId(sessionId)];
+  if (!node) {
+    throw sessionTreeError(
+      SESSION_TREE_ERROR.NODE_MISSING,
+      `session tree node missing: ${sessionId}`,
+      {
+        sessionId,
+        missingSessionId: sessionId,
+      },
+    );
+  }
+  return node;
 }
 
 export function resolveSessionTreeDepth(tree, sessionId) {
@@ -111,12 +158,10 @@ export function resolveSessionTreeDepth(tree, sessionId) {
 }
 
 export function collectSessionTreeBranch(tree, sessionId) {
-  const rootId = text(sessionId);
-  if (!rootId) return [];
   const nodes = Object.values(tree.nodes);
   const branch = [];
   const visited = new Set();
-  const queue = [rootId];
+  const queue = [requireSessionId(sessionId)];
   while (queue.length) {
     const currentId = queue.shift();
     if (visited.has(currentId)) continue;
@@ -129,9 +174,9 @@ export function collectSessionTreeBranch(tree, sessionId) {
   return branch;
 }
 
-export function resolveSessionTreePlacement(tree, sessionId, parentSessionId = "") {
+export function resolveSessionTreePlacement(tree, sessionId, parentSessionId) {
   const leafId = requireSessionId(sessionId);
-  const parentId = text(parentSessionId);
+  const parentId = requireParentSessionId(parentSessionId);
   const node = tree.nodes[leafId];
   if (node) {
     if (parentId && parentId !== node.parentSessionId) {
@@ -144,8 +189,17 @@ export function resolveSessionTreePlacement(tree, sessionId, parentSessionId = "
     return resolveSessionTreeChain(tree, leafId);
   }
   if (!parentId) return [leafId];
-  requireSessionId(parentId);
+  assertSessionTreeParentRegistered(tree, leafId, parentId);
   return [...resolveSessionTreeChain(tree, parentId), leafId];
+}
+
+export function assertSessionTreeParentRegistered(tree, sessionId, parentSessionId) {
+  if (Object.hasOwn(tree.nodes, parentSessionId)) return;
+  throw sessionTreeError(
+    SESSION_TREE_ERROR.PARENT_MISSING,
+    `parent session not registered: ${parentSessionId}`,
+    { sessionId, parentSessionId },
+  );
 }
 
 export function resolveSessionDirSegments(tree, sessionId) {

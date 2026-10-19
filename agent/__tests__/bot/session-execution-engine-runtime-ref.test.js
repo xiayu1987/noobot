@@ -11,6 +11,7 @@ import { createAgentDetachedSubSessionStrategy } from "../../src/bot/session/det
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { DETACHED_REQUEST_METADATA } from "./detached-subsession-runner.test-helpers.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 test("SessionExecutionEngine forwards the authoritative dialog identity to runtime initialization", async () => {
   const engine = new SessionExecutionEngine({});
@@ -41,6 +42,7 @@ test("SessionExecutionEngine preserves persistence context and cross-layer scope
     sealIfEmpty: () => true,
   };
   const turnAcceptance = Object.freeze({
+    ...createTestSessionRequiredFields(),
     commandId: "command-1",
     sessionId: "s1",
     turnScopeId: "turn-1",

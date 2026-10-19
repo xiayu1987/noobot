@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 test("session summary projects attachment identities without object stringification", () => {
   const attachmentIdentity = {
@@ -16,6 +17,7 @@ test("session summary projects attachment identities without object stringificat
     attachmentSource: "model",
   };
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "summary-session",
     aggregateVersion: 0,
     messages: [
@@ -59,6 +61,7 @@ test("session summary projects attachment identities without object stringificat
 
 test("session summary uses the canonical tool presentation protocol", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "tool-summary-session",
     aggregateVersion: 0,
     messages: [

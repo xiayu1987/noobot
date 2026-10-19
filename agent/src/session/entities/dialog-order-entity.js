@@ -4,111 +4,86 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
+import { isDialogAnchorMessage } from "@noobot/context-protocol/policy/message";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
-function normalizeText(value) {
-  return text(value);
+function dialogOrderError(message, code = "SESSION_DIALOG_ORDER_INVALID") {
+  const error = new TypeError(message);
+  error.code = code;
+  return error;
 }
 
-function isDialogAnchor(message = {}) {
-  if (normalizeText(message?.role) !== "user") return false;
-  if (isInjectedOrPluginMessage(message)) return false;
-  if (normalizeText(message?.injectedMessageType)) return false;
-  return normalizeText(message?.messageOrigin).toLowerCase() !== "internal";
-}
-
-function compareDialogAnchors(left, right) {
-  const leftTime = Date.parse(left.startedAt);
-  const rightTime = Date.parse(right.startedAt);
-  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
-    return leftTime - rightTime;
+function normalizeDialogOrderItem(entry) {
+  if (!isPlainObject(entry)) throw dialogOrderError("session dialogOrder entry must be an object");
+  const dialogProcessId = text(entry.dialogProcessId);
+  const { dialogOrdinal } = entry;
+  if (!dialogProcessId || !Number.isSafeInteger(dialogOrdinal) || dialogOrdinal < 1) {
+    throw dialogOrderError("session dialogOrder entry requires dialogProcessId and ordinal");
   }
-  if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) {
-    return Number.isFinite(leftTime) ? -1 : 1;
-  }
-  return left.sourceIndex - right.sourceIndex;
+  return {
+    dialogProcessId,
+    turnScopeId: text(entry.turnScopeId),
+    userMessageUid: text(entry.userMessageUid),
+    startedAt: text(entry.startedAt),
+    dialogOrdinal,
+  };
 }
 
-function deriveDialogOrderFromMessages(messages = []) {
-  const source = Array.isArray(messages) ? messages : [];
-  const anchorsByDialog = new Map();
-  source.forEach((message, sourceIndex) => {
-    if (!isDialogAnchor(message)) return;
-    const dialogProcessId = resolveContextMessageDialogProcessId(message);
-    if (!dialogProcessId || anchorsByDialog.has(dialogProcessId)) return;
-    anchorsByDialog.set(dialogProcessId, {
-      dialogProcessId,
-      turnScopeId: normalizeText(message?.turnScopeId),
-      userMessageUid: normalizeText(message?.messageUid),
-      startedAt: normalizeText(message?.ts),
-      sourceIndex,
-    });
-  });
-  source.forEach((message, sourceIndex) => {
-    const dialogProcessId = resolveContextMessageDialogProcessId(message);
-    if (!dialogProcessId || anchorsByDialog.has(dialogProcessId)) return;
-    anchorsByDialog.set(dialogProcessId, {
-      dialogProcessId,
-      turnScopeId: normalizeText(message?.turnScopeId),
-      userMessageUid: "",
-      startedAt: normalizeText(message?.ts),
-      sourceIndex,
-    });
-  });
-  return [...anchorsByDialog.values()]
-    .sort(compareDialogAnchors)
-    .map(({ sourceIndex, ...entry }, index) => ({ ...entry, dialogOrdinal: index + 1 }));
-}
-
-export function normalizeDialogOrderEntity(dialogOrder = [], messages = []) {
-  const derived = deriveDialogOrderFromMessages(messages);
-  const liveDialogIds = new Set(derived.map((entry) => entry.dialogProcessId));
-  const persisted = (Array.isArray(dialogOrder) ? dialogOrder : [])
-    .map((entry = {}, index) => ({
-      dialogProcessId: normalizeText(entry.dialogProcessId),
-      turnScopeId: normalizeText(entry.turnScopeId),
-      userMessageUid: normalizeText(entry.userMessageUid),
-      startedAt: normalizeText(entry.startedAt),
-      dialogOrdinal:
-        Number.isInteger(Number(entry.dialogOrdinal)) && Number(entry.dialogOrdinal) > 0
-          ? Number(entry.dialogOrdinal)
-          : index + 1,
-    }))
-    .filter((entry) => entry.dialogProcessId && liveDialogIds.has(entry.dialogProcessId));
-  const persistedByDialog = new Map(persisted.map((entry) => [entry.dialogProcessId, entry]));
-  const maxDialogOrdinal = persisted.reduce((max, entry) => Math.max(max, entry.dialogOrdinal), 0);
-  let nextDialogOrdinal = maxDialogOrdinal + 1;
-  const combined = [...persisted];
-  for (const entry of derived) {
-    const current = persistedByDialog.get(entry.dialogProcessId);
-    if (current) {
-      current.turnScopeId ||= entry.turnScopeId;
-      current.userMessageUid ||= entry.userMessageUid;
-      current.startedAt ||= entry.startedAt;
-      continue;
+export function normalizeDialogOrderEntity(dialogOrder) {
+  if (!Array.isArray(dialogOrder)) throw dialogOrderError("session dialogOrder must be an array");
+  const entries = dialogOrder.map(normalizeDialogOrderItem);
+  const seen = new Set();
+  for (const entry of entries) {
+    if (seen.has(entry.dialogProcessId)) {
+      throw dialogOrderError(`duplicate session dialogOrder entry: ${entry.dialogProcessId}`);
     }
-    combined.push({ ...entry, dialogOrdinal: nextDialogOrdinal++ });
+    seen.add(entry.dialogProcessId);
   }
-  return combined.sort((left, right) => left.dialogOrdinal - right.dialogOrdinal);
+  return entries.sort((left, right) => left.dialogOrdinal - right.dialogOrdinal);
 }
 
-export function appendDialogOrderEntry(dialogOrder = [], message = {}) {
+export function assertDialogOrderCoversMessages(dialogOrder, messages) {
+  const registered = new Set(dialogOrder.map((entry) => entry.dialogProcessId));
+  for (const message of messages) {
+    const dialogProcessId = resolveContextMessageDialogProcessId(message);
+    if (dialogProcessId && !registered.has(dialogProcessId)) {
+      throw dialogOrderError(
+        `session dialog is not registered: ${dialogProcessId}`,
+        "SESSION_DIALOG_ORDER_UNREGISTERED",
+      );
+    }
+  }
+}
+
+export function registerDialogOrderMessage(dialogOrder, message) {
   const dialogProcessId = resolveContextMessageDialogProcessId(message);
-  const source = Array.isArray(dialogOrder) ? dialogOrder : [];
-  if (!dialogProcessId || source.some((entry) => entry?.dialogProcessId === dialogProcessId))
-    return source;
+  if (!dialogProcessId) return dialogOrder;
+  const anchorUid = isDialogAnchorMessage(message) ? text(message.messageUid) : "";
+  const index = dialogOrder.findIndex((entry) => entry.dialogProcessId === dialogProcessId);
+  if (index >= 0) {
+    if (!anchorUid || dialogOrder[index].userMessageUid) return dialogOrder;
+    return dialogOrder.map((entry, entryIndex) =>
+      entryIndex === index
+        ? { ...entry, userMessageUid: anchorUid, startedAt: text(message.ts) || entry.startedAt }
+        : entry,
+    );
+  }
   const dialogOrdinal =
-    source.reduce((max, entry) => Math.max(max, Number(entry?.dialogOrdinal) || 0), 0) + 1;
+    dialogOrder.reduce((max, entry) => Math.max(max, entry.dialogOrdinal), 0) + 1;
   return [
-    ...source,
+    ...dialogOrder,
     {
       dialogProcessId,
-      turnScopeId: normalizeText(message?.turnScopeId),
-      userMessageUid: normalizeText(message?.messageUid),
-      startedAt: normalizeText(message?.ts),
+      turnScopeId: text(message.turnScopeId),
+      userMessageUid: anchorUid,
+      startedAt: text(message.ts),
       dialogOrdinal,
     },
   ];
+}
+
+export function pruneDialogOrder(dialogOrder, messages) {
+  const live = new Set(messages.map(resolveContextMessageDialogProcessId));
+  return dialogOrder.filter((entry) => live.has(entry.dialogProcessId));
 }

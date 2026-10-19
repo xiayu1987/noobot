@@ -14,12 +14,8 @@ import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
 import {
-  SESSION_TREE_UNRECOVERABLE,
-  isLegacySessionTree,
-  mapLegacySessionTree,
   migrateSessionDocument,
   readSessionForProtocolRepair,
-  rebuildSessionTree,
   reconcileCompletedTurnSummaryMarks,
   reconcileDuplicateCanonicalAssistantPresentations,
   reconcileExecutionSegmentIndex,
@@ -28,51 +24,6 @@ import {
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
 } from "../src/index.js";
-
-test("session tree rules keep only parent identity and reject unrecoverable documents", () => {
-  assert.equal(
-    isLegacySessionTree({ nodes: { s: { sessionId: "s", parentSessionId: "" } } }),
-    false,
-  );
-  assert.equal(isLegacySessionTree({ nodes: {}, updatedAt: "t" }), true);
-  assert.equal(isLegacySessionTree({ roots: [], nodes: {} }), true);
-  assert.deepEqual(
-    mapLegacySessionTree({
-      roots: ["a"],
-      nodes: {
-        a: { parentSessionId: "", children: ["b"], createdAt: "t" },
-        b: { parentSessionId: "a" },
-      },
-      updatedAt: "t",
-    }),
-    {
-      nodes: {
-        a: { sessionId: "a", parentSessionId: "" },
-        b: { sessionId: "b", parentSessionId: "a" },
-      },
-    },
-  );
-  assert.deepEqual(
-    rebuildSessionTree([
-      { directoryName: "a", document: { sessionId: "a", parentSessionId: "", createdAt: "t" } },
-      { directoryName: "b", document: { sessionId: "b", parentSessionId: "a" } },
-    ]),
-    {
-      nodes: {
-        a: { sessionId: "a", parentSessionId: "" },
-        b: { sessionId: "b", parentSessionId: "a" },
-      },
-    },
-  );
-  for (const documents of [
-    [{ directoryName: "a", document: null }],
-    [{ directoryName: "a", document: { sessionId: "other" } }],
-    [{ directoryName: "a", document: { sessionId: "a", parentSessionId: 1 } }],
-    [{ directoryName: "b", document: { sessionId: "b", parentSessionId: "missing" } }],
-  ]) {
-    assert.throws(() => rebuildSessionTree(documents), { code: SESSION_TREE_UNRECOVERABLE });
-  }
-});
 
 test("session repair demotes older duplicate canonical assistant presentations", () => {
   const result = reconcileDuplicateCanonicalAssistantPresentations({
@@ -766,18 +717,43 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
       source.messages.map((message) => message.messageUid),
       ["m1", "m2", "m3"],
     );
+    await Promise.all([
+      writeFile(journalFile, "", "utf8"),
+      writeFile(
+        path.join(root, "session.json"),
+        JSON.stringify({
+          schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+          turnOrder: [
+            {
+              turnId: "turn-000001",
+              file: "turns/turn-000001.jsonl",
+              committedBytes: 0,
+              recordCount: 0,
+              summarySnapshots: indexes.map(({ op, ...index }) => index),
+            },
+          ],
+        }),
+        "utf8",
+      ),
+    ]);
     const repaired = await resegmentMigratedCheckpointBaselines({ sessionDir: root });
     assert.deepEqual(repaired, [
       { turnId: "turn-000001", checkpointRecordCounts: [1, 1], tailRecordCount: 1 },
     ]);
     const nextJournal = (await readFile(journalFile, "utf8")).trim().split("\n").map(JSON.parse);
     assert.deepEqual(
-      nextJournal.map((entry) => entry.op),
-      ["summary_snapshot", "summary_snapshot", "upsert"],
+      nextJournal.map((entry) => [entry.op, entry.messageUid]),
+      [["upsert", "m3"]],
     );
-    assert.equal(nextJournal[2].messageUid, "m3");
-    const first = JSON.parse(await readFile(path.join(root, nextJournal[0].file), "utf8"));
-    const second = JSON.parse(await readFile(path.join(root, nextJournal[1].file), "utf8"));
+    const manifestTurn = JSON.parse(await readFile(path.join(root, "session.json"), "utf8"))
+      .turnOrder[0];
+    const nextIndexes = manifestTurn.summarySnapshots;
+    assert.equal(
+      manifestTurn.committedBytes,
+      Buffer.byteLength(`${JSON.stringify(nextJournal[0])}\n`),
+    );
+    const first = JSON.parse(await readFile(path.join(root, nextIndexes[0].file), "utf8"));
+    const second = JSON.parse(await readFile(path.join(root, nextIndexes[1].file), "utf8"));
     assert.deepEqual(
       first.records.map((entry) => entry.messageUid),
       ["m1"],
@@ -786,10 +762,10 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
       second.records.map((entry) => entry.messageUid),
       ["m2"],
     );
-    assert.equal(second.previousCheckpointHash, nextJournal[0].contentHash);
+    assert.equal(second.previousCheckpointHash, nextIndexes[0].contentHash);
     assert.equal(
       `sha256:${createHash("sha256").update(JSON.stringify(second)).digest("hex")}`,
-      nextJournal[1].contentHash,
+      nextIndexes[1].contentHash,
     );
     assert.deepEqual(await resegmentMigratedCheckpointBaselines({ sessionDir: root }), []);
   } finally {

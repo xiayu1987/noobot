@@ -20,6 +20,7 @@ import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ARTIFACT_TURN_TERMINAL_STATUS_SCHEMA_VERSION,
   TURN_ORPHAN_RECOVERY,
+  createEmptyTurnLifecycle,
   createTurnCommitFingerprint,
   createTurnTerminalStatus,
   normalizeTurnTerminalStatus,
@@ -38,6 +39,8 @@ import {
 } from "./semantic-transfer-migrations.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import { stableId } from "./repair-primitives.js";
+import { migrateWriteTimeDialogFacts } from "./write-time-dialog-facts.js";
+import { migrateSessionCaller } from "./session-caller-migration.js";
 
 const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
 
@@ -205,41 +208,36 @@ export function reconcileDuplicateCanonicalAssistantPresentations(document = {})
 }
 
 export function reconcileCompletedTurnSummaryMarks(document = {}) {
-  const next = structuredClone(document);
-  const messages = Array.isArray(next.messages) ? next.messages : [];
+  const messages = Array.isArray(document.messages) ? [...document.messages] : [];
   const completedTurns = new Set(
-    Object.values(next.turnLifecycle?.turns || {})
+    Object.values(document.turnLifecycle?.turns || {})
       .filter((turn) => text(turn?.terminalStatus?.status) === TURN_TERMINAL_STATUS.COMPLETED)
       .map((turn) => `${text(turn?.dialogProcessId)}\u0000${text(turn?.turnScopeId)}`)
       .filter((key) => !key.startsWith("\u0000") && !key.endsWith("\u0000")),
   );
-  let changed = false;
+  const turnIndexes = new Map();
+  messages.forEach((message, index) => {
+    const key = `${text(message?.dialogProcessId)}\u0000${text(message?.turnScopeId)}`;
+    if (!completedTurns.has(key)) return;
+    if (!turnIndexes.has(key)) turnIndexes.set(key, []);
+    turnIndexes.get(key).push(index);
+  });
   const repaired = [];
   for (const key of completedTurns) {
-    const [dialogProcessId, turnScopeId] = key.split("\u0000");
-    const indexes = messages
-      .map((message, index) => ({ message, index }))
-      .filter(
-        ({ message }) =>
-          text(message?.dialogProcessId) === dialogProcessId &&
-          text(message?.turnScopeId) === turnScopeId,
-      );
-    if (!indexes.length) continue;
-    const source = indexes.map(({ message }) => message);
+    const indexes = turnIndexes.get(key);
+    if (!indexes) continue;
+    const source = indexes.map((index) => messages[index]);
     const projected = projectTurnCompletionMessages(source);
     let turnChanged = false;
     projected.forEach((message, index) => {
-      const original = source[index];
-      if (JSON.stringify(original) === JSON.stringify(message)) return;
-      messages[indexes[index].index] = message;
+      if (message === source[index] || source[index]?.summarized === true) return;
+      messages[indexes[index]] = message;
       turnChanged = true;
     });
-    if (turnChanged) {
-      changed = true;
-      repaired.push(turnScopeId);
-    }
+    if (turnChanged) repaired.push(key.split("\u0000")[1]);
   }
-  return { document: next, changed, repaired };
+  const changed = repaired.length > 0;
+  return { document: changed ? { ...document, messages } : document, changed, repaired };
 }
 
 function isUncommittedAggregateConflictContinuation(turn, turns, messages) {
@@ -710,7 +708,13 @@ function createDocumentMigrationContext(document, suppliedSessionId) {
   const transferMigration = createSemanticTransferMigration(next);
   const migrations = [];
   const changed = migrateArtifactSchema(next, migrations, sourceSchemaVersion);
-  const lifecycle = ensureRecordField(next, "turnLifecycle");
+  const lifecycle = { ...createEmptyTurnLifecycle(), ...ensureRecordField(next, "turnLifecycle") };
+  next.turnLifecycle = lifecycle;
+  ensureRecordField(lifecycle, "turns");
+  ensureRecordField(lifecycle, "replacedTurns");
+  if (!Array.isArray(lifecycle.commandReceipts)) lifecycle.commandReceipts = [];
+  if (!Array.isArray(next.turnTimings)) next.turnTimings = [];
+  if (!Array.isArray(next.messages)) next.messages = [];
   return {
     next,
     migrations,
@@ -735,6 +739,8 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateDocumentMessages,
   migrateReplacedTurns,
   dropLegacyTerminalCommits,
+  migrateWriteTimeDialogFacts,
+  migrateSessionCaller,
 ]);
 
 export function migrateSessionDocument(document = {}, { sessionId: suppliedSessionId = "" } = {}) {

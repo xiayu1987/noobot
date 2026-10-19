@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
 
 export function reconcileExecutionSegmentIndex(index = {}, segments = []) {
   const next = structuredClone(index);
@@ -20,16 +19,14 @@ export function reconcileExecutionSegmentIndex(index = {}, segments = []) {
   return { index: next, repaired };
 }
 
-export function reconcileSessionSummaryIndex({ sessions = [], sessionIds = [] } = {}) {
-  const allowedIds = new Set(
-    (Array.isArray(sessionIds) ? sessionIds : []).map((id) => text(id)).filter(Boolean),
-  );
+export function reconcileSessionSummaryIndex({ sessions, sessionIds }) {
+  const allowedIds = new Set(sessionIds);
   const next = [];
   const seen = new Set();
   let changed = false;
-  for (const item of Array.isArray(sessions) ? sessions : []) {
-    const sessionId = text(item?.sessionId);
-    if (!sessionId || !allowedIds.has(sessionId) || seen.has(sessionId)) {
+  for (const item of sessions) {
+    const { sessionId } = item;
+    if (!allowedIds.has(sessionId) || seen.has(sessionId)) {
       changed = true;
       continue;
     }

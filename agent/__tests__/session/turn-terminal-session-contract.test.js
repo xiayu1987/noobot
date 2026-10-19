@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -11,6 +12,10 @@ import {
   buildSessionDisplaySummary,
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
 } from "../../src/session/session-summary-builders.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 const now = () => "2026-07-10T00:00:00.000Z";
 
@@ -22,6 +27,7 @@ function terminalLifecycle({
   reason = "run_completed",
 } = {}) {
   return {
+    ...createEmptyTurnLifecycle(),
     sequence: 2,
     activeTurnScopeId: "",
     turns: {
@@ -51,6 +57,7 @@ function terminalLifecycle({
 test("message-local lifecycle fields cannot become authoritative terminal facts", () => {
   const session = normalizeSessionEntity(
     {
+      ...createTestSessionRequiredFields(),
       sessionId: "s1",
       aggregateVersion: 0,
       messages: [
@@ -79,7 +86,8 @@ test("message-local lifecycle fields cannot become authoritative terminal facts"
 
 test("summary projects only the authoritative lifecycle snapshot", () => {
   const session = normalizeSessionEntity(
-    {
+    applySessionMessageFacts({
+      ...createTestSessionRequiredFields(),
       sessionId: "s-lifecycle",
       aggregateVersion: 0,
       updatedAt: now(),
@@ -93,7 +101,7 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
         },
       ],
       turnLifecycle: terminalLifecycle(),
-    },
+    }),
     { now },
   );
 
@@ -113,6 +121,7 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
 test("action failure before message persistence remains terminal after summary hydration", () => {
   const session = normalizeSessionEntity(
     {
+      ...createTestSessionRequiredFields(),
       sessionId: "s-action-failure",
       aggregateVersion: 0,
       updatedAt: now(),
@@ -139,6 +148,7 @@ test("action failure before message persistence remains terminal after summary h
 test("parent and child sessions own independent lifecycle aggregates", () => {
   const parent = normalizeSessionEntity(
     {
+      ...createTestSessionRequiredFields(),
       sessionId: "parent",
       aggregateVersion: 0,
       turnLifecycle: terminalLifecycle({
@@ -150,6 +160,7 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
   );
   const child = normalizeSessionEntity(
     {
+      ...createTestSessionRequiredFields(),
       sessionId: "child",
       aggregateVersion: 0,
       parentSessionId: "parent",
@@ -176,6 +187,7 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
 test("synthetic placeholders cannot enter persistence or summary", () => {
   const session = normalizeSessionEntity(
     {
+      ...createTestSessionRequiredFields(),
       sessionId: "s-placeholder",
       aggregateVersion: 0,
       messages: [

@@ -15,10 +15,15 @@ import {
   tempRoot,
   useRuntimeEventsEnv,
 } from "./runtime-events-test-fixtures.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("runtime-events writer drops debug session logs when their control is disabled", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-debug-default");
+  await persistSession(root, "admin", {
+    sessionId: "session-debug-default",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ debug: { stateMachine: false } });
   const result = await writeRuntimeEvent({
     source: "frontend",
@@ -38,7 +43,11 @@ test("runtime-events writer drops debug session logs when their control is disab
 
 test("runtime-events writer filters session logs by business log control", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-category-filter");
+  await persistSession(root, "admin", {
+    sessionId: "session-category-filter",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ log: { message: false } });
   const skipped = await writeRuntimeEvent({
     source: "frontend",
@@ -68,7 +77,11 @@ test("runtime-events writer filters session logs by business log control", async
 
 test("runtime-events writer separates debug session logs by debug type", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-debug-files");
+  await persistSession(root, "admin", {
+    sessionId: "session-debug-files",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ debug: { stateMachine: true, resend: true } });
   const stateMachine = await writeRuntimeEvent({
     source: "frontend",
@@ -105,7 +118,11 @@ test("runtime-events writer separates debug session logs by debug type", async (
 
 test("agent context debug logs default off and use their own file when enabled", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-agent-context");
+  await persistSession(root, "admin", {
+    sessionId: "session-agent-context",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const event = {
     source: "agent",
     scope: "session",
@@ -129,7 +146,11 @@ test("agent context debug logs default off and use their own file when enabled",
 
 test("agent context debug logs honor an explicit disabled control", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-agent-context-disabled");
+  await persistSession(root, "admin", {
+    sessionId: "session-agent-context-disabled",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ debug: { agentContext: false } });
   const disabled = await writeRuntimeEvent({
     source: "agent",
@@ -147,7 +168,11 @@ test("agent context debug logs honor an explicit disabled control", async () => 
 
 test("runtime-events writer filters debug session logs by business debug control", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-debug-type");
+  await persistSession(root, "admin", {
+    sessionId: "session-debug-type",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ debug: { resend: false } });
   const skipped = await writeRuntimeEvent({
     source: "frontend",
@@ -182,7 +207,11 @@ test("runtime-events writer filters debug session logs by business debug control
 
 test("runtime-events writer rejects unregistered debug types", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-debug-unknown");
+  await persistSession(root, "admin", {
+    sessionId: "session-debug-unknown",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const result = await writeRuntimeEvent({
     source: "frontend",
     scope: "session",
@@ -201,7 +230,11 @@ test("runtime-events writer rejects unregistered debug types", async () => {
 
 test("runtime-events writer never suppresses an error with a disabled debug control", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-debug-error");
+  await persistSession(root, "admin", {
+    sessionId: "session-debug-error",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ debug: { contextIdentity: false } });
   const result = await writeRuntimeEvent({
     source: "agent",
@@ -222,7 +255,11 @@ test("runtime-events writer never suppresses an error with a disabled debug cont
 
 test("disabled debug logs are skipped before payload sanitization", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-skip-before-sanitize");
+  await persistSession(root, "admin", {
+    sessionId: "session-skip-before-sanitize",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   let payloadReads = 0;
   const data = {};
   Object.defineProperty(data, "chunk", {

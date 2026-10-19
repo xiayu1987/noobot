@@ -17,6 +17,8 @@ import {
   writeTaskArtifact,
 } from "noobot-agent/session";
 import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { summarizeExecutionLogs } from "noobot-agent/tracking";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
@@ -47,7 +49,15 @@ test("workflow service reads child execution events only from the workflow scope
   );
   await writeScopedSessionDir({
     sessionDir: workflowDir,
-    sessionPayload: { sessionId: "child-s", aggregateVersion: 0, messages: [] },
+    sessionPayload: {
+      sessionId: "child-s",
+      caller: SESSION_CALLER.USER,
+      aggregateVersion: 0,
+      messages: [],
+      dialogOrder: [],
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+    },
     taskPayload: { sessionId: "child-s", tasks: [] },
   });
   const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => workspaceRoot } });
@@ -69,8 +79,14 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     sessionDir: workflowDir,
     sessionPayload: {
       sessionId: "node-s",
+      caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
       updatedAt: "2026-08-19T00:00:00.000Z",
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+      dialogOrder: [
+        { dialogProcessId: "wf_node_1", turnScopeId: "workflow-node:wf_node_1", dialogOrdinal: 1 },
+      ],
       messages: [
         {
           messageUid: "workflow-message-1",
@@ -146,7 +162,14 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     sessionDir: workflowDir,
     sessionPayload: {
       sessionId: "node-s",
+      caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+      dialogOrder: [
+        { dialogProcessId: "dp-1", turnScopeId, dialogOrdinal: 1 },
+        { dialogProcessId: "dp-2", turnScopeId: "workflow-node:other", dialogOrdinal: 2 },
+      ],
       messages: [
         {
           messageUid: "a1",

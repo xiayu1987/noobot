@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +12,7 @@ import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -18,8 +20,8 @@ after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
 function createService({ initialSession }) {
   const saved = [];
   let currentSession = structuredClone({
+    ...createTestSessionRequiredFields(),
     aggregateVersion: 0,
-    turnLifecycle: { turns: {}, commandReceipts: [] },
     ...initialSession,
   });
   const sessionRepo = {
@@ -50,6 +52,7 @@ function createService({ initialSession }) {
 test("SessionMessageService.deleteFromMessage deletes from anchor message to session tail", async () => {
   const { service, saved } = createService({
     initialSession: {
+      ...createTestSessionRequiredFields(),
       sessionId: "s1",
       parentSessionId: "",
       aggregateVersion: 2,
@@ -120,6 +123,7 @@ test("SessionMessageService.deleteFromMessage mutates only the owning Session ag
 test("SessionMessageService.deleteFromMessage removes deleted terminal Turns from refresh projection", async () => {
   const { service, getSession } = createService({
     initialSession: {
+      ...createTestSessionRequiredFields(),
       sessionId: "s1",
       aggregateVersion: 2,
       messages: [
@@ -127,6 +131,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
         { turnScopeId: "scope-delete", role: "assistant", content: "delete" },
       ],
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         sequence: 2,
         activeTurnScopeId: "",
         turns: {
@@ -206,6 +211,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
 
 test("SessionMessageService.deleteFromMessage clears a survivor's reference to the deleted source", async () => {
   const initialSession = {
+    ...createTestSessionRequiredFields(),
     sessionId: "s1",
     aggregateVersion: 2,
     messages: [
@@ -213,6 +219,7 @@ test("SessionMessageService.deleteFromMessage clears a survivor's reference to t
       { turnScopeId: "source", role: "user", content: "source" },
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       sequence: 2,
       turns: {
         source: {
@@ -277,6 +284,7 @@ test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing
 test("SessionMessageService.deleteFromMessage rejects dialogProcessId legacy anchors", async () => {
   const { service, saved } = createService({
     initialSession: {
+      ...createTestSessionRequiredFields(),
       sessionId: "s1",
       parentSessionId: "",
       aggregateVersion: 1,
@@ -302,6 +310,7 @@ test("SessionMessageService.deleteFromMessage rejects dialogProcessId legacy anc
 test("SessionMessageService.deleteFromMessage returns 409 when expectedAggregateVersion conflicts", async () => {
   const { service, saved } = createService({
     initialSession: {
+      ...createTestSessionRequiredFields(),
       sessionId: "s1",
       parentSessionId: "",
       aggregateVersion: 5,
@@ -320,4 +329,77 @@ test("SessionMessageService.deleteFromMessage returns 409 when expectedAggregate
     (error) => error?.statusCode === 409 && error?.currentVersion === 5,
   );
   assert.equal(saved.length, 0);
+});
+
+test("SessionMessageService.deleteFromMessage prunes write-time dialog facts of truncated turns", async () => {
+  const receipt = (checkpointId, uids) => ({
+    checkpointId,
+    requestHash: `sha256:${checkpointId}`,
+    persistedMessageUids: uids,
+    summarizedMessageUids: uids,
+  });
+  const { service, saved } = createService({
+    initialSession: {
+      ...createTestSessionRequiredFields(),
+      sessionId: "s1",
+      parentSessionId: "",
+      aggregateVersion: 1,
+      autoTitle: "stale title",
+      messages: [
+        {
+          messageUid: "k1",
+          dialogProcessId: "d-keep",
+          turnScopeId: "t-keep",
+          role: "user",
+          content: "kept question",
+        },
+        { messageUid: "x1", dialogProcessId: "d-drop", turnScopeId: "t-drop", role: "user" },
+      ],
+      dialogOrder: [
+        {
+          dialogProcessId: "d-keep",
+          turnScopeId: "t-keep",
+          userMessageUid: "k1",
+          dialogOrdinal: 1,
+        },
+        {
+          dialogProcessId: "d-drop",
+          turnScopeId: "t-drop",
+          userMessageUid: "x1",
+          dialogOrdinal: 2,
+        },
+      ],
+      turnSummaryCheckpoints: {
+        "t-keep": {
+          dialogProcessId: "d-keep",
+          turnScopeId: "t-keep",
+          receipts: [receipt("keep", ["k1"]), receipt("cross", ["k1", "x1"])],
+        },
+        "t-drop": {
+          dialogProcessId: "d-drop",
+          turnScopeId: "t-drop",
+          receipts: [receipt("drop", ["x1"])],
+        },
+      },
+    },
+  });
+
+  await service.deleteFromMessage({
+    userId: "u1",
+    sessionId: "s1",
+    anchor: { turnScopeId: "t-drop" },
+    expectedAggregateVersion: 1,
+    commandId: "delete-dialog-facts",
+  });
+
+  assert.deepEqual(
+    saved[0].dialogOrder.map((entry) => entry.dialogProcessId),
+    ["d-keep"],
+  );
+  assert.equal(saved[0].autoTitle, "kept question");
+  assert.deepEqual(Object.keys(saved[0].turnSummaryCheckpoints), ["t-keep"]);
+  assert.deepEqual(
+    saved[0].turnSummaryCheckpoints["t-keep"].receipts.map((item) => item.checkpointId),
+    ["keep"],
+  );
 });

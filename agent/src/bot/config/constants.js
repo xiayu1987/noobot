@@ -50,10 +50,3 @@ export const BOT_MANAGE_LOG_EVENT = {
   MEMORY_POSTPROCESS_FAILED: "memory_postprocess_failed",
   MEMORY_INJECTION_FAILED: "memory_injection_failed",
 };
-
-export const CALLER_ROLE = {
-  USER: "user",
-  BOT: "bot",
-};
-
-export const VALID_CALLER_ROLES = Object.freeze(Object.values(CALLER_ROLE));

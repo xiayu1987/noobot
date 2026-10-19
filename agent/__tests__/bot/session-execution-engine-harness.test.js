@@ -19,8 +19,10 @@ import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext, getMessageId } from "@noobot/context-protocol";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -464,8 +466,10 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     abortSignal: new AbortController().signal,
     userId: "u1",
     sessionId,
+    caller: SESSION_CALLER.USER,
     dialogProcessId: "dp-scope-smoke",
     turnAcceptance: createTurnAcceptanceReceipt({
+      ...createTestSessionRequiredFields(),
       commandId: "turn-scope-smoke",
       sessionId,
       turnScopeId: "turn-scope-smoke",

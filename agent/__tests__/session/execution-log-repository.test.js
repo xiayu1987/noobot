@@ -10,7 +10,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
-import { persistChildSessionFixture, useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
+import {
+  persistChildSessionFixture,
+  useRuntimeEventsEnv,
+  useRuntimeEventsUserWorkspace,
+} from "../helpers/runtime-events-env.js";
 
 async function makeTempDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-execution-log-repository-"));
@@ -40,7 +44,8 @@ function createInMemoryExecutionRepository() {
   };
 }
 
-test("appendLog keeps each dialog's logs in its own turn", async () => {
+test("appendLog keeps each dialog's logs in its own turn", async (t) => {
+  await useRuntimeEventsUserWorkspace(t, "u1");
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
     now: () => "2026-05-13T00:00:00.000Z",
@@ -62,7 +67,8 @@ test("appendLog keeps each dialog's logs in its own turn", async () => {
   );
 });
 
-test("getTurnLogs and appendLog preserve scoped persistence context", async () => {
+test("getTurnLogs and appendLog preserve scoped persistence context", async (t) => {
+  await useRuntimeEventsUserWorkspace(t, "u1");
   const calls = [];
   const persistenceContext = { locationResolver: { scopeId: "workflow-node" } };
   const executionRepository = {
@@ -93,7 +99,8 @@ test("getTurnLogs and appendLog preserve scoped persistence context", async () =
   assert.equal(calls[1][1][4], persistenceContext);
 });
 
-test("appendLog forwards logs without deriving a dialogProcessId", async () => {
+test("appendLog forwards logs without deriving a dialogProcessId", async (t) => {
+  await useRuntimeEventsUserWorkspace(t, "u1");
   const appended = [];
   const repo = new ExecutionLogRepository({
     executionRepository: {

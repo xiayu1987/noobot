@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_EVENT, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   consumeUserInterjections,
   createExecutionLivenessInspector,
@@ -125,7 +126,7 @@ async function executeAcceptedRun(context, run, accepted, active) {
     dialogProcessId: run.dialogProcessId,
     parentDialogProcessId: run.parentDialogProcessId,
     turnScopeId: run.turnScopeId,
-    caller: "user",
+    caller: SESSION_CALLER.USER,
     message: run.message,
     attachments: run.attachments,
     turnAcceptance: run.turnAcceptance,

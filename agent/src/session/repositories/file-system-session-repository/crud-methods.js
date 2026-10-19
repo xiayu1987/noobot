@@ -8,24 +8,27 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { fsMkdir, fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
-import { writeSessionArtifact } from "../../session-artifact-store.js";
+import { writeSessionArtifact, writeSessionTurnArtifacts } from "../../session-artifact-store.js";
 import {
   SESSION_ERROR_CODE,
   createSessionDeletedError,
   normalizeParentSessionId,
+  createEmptyTurnLifecycle,
   requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
+import { requireSessionCaller } from "@noobot/shared/session-caller";
+import {
+  assertSessionTreeParentRegistered,
+  createSessionTreeNode,
+} from "@noobot/workspace-protocol/session-tree";
+import { toSessionTreeFatalError } from "../../session-path-resolver.js";
 import { text } from "@noobot/shared/value";
 
 class SessionCrudMethods {
-  async registerSessionTreeNode(userId, sessionId, parentSessionId = "") {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) {
-      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
-      });
-    }
-    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
+  async registerSessionTreeNode(userId, { sessionId, parentSessionId, caller }) {
+    const node = createSessionTreeNode({ sessionId, parentSessionId, caller });
+    const normalizedSessionId = node.sessionId;
+    const normalizedParentSessionId = node.parentSessionId;
     return this.sessionTreeRepository.withLock(userId, async () => {
       if (await this.isSessionDeleted(userId, normalizedSessionId)) {
         throw createSessionDeletedError({ userId, sessionId: normalizedSessionId });
@@ -37,27 +40,31 @@ class SessionCrudMethods {
         throw createSessionDeletedError({ userId, sessionId: normalizedParentSessionId });
       }
       const sessionTree = await this.sessionTreeRepository.getTree(userId);
-      if (normalizedParentSessionId && !sessionTree.nodes[normalizedParentSessionId]) {
-        throw fatalSystemError(
-          `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${normalizedParentSessionId}`,
-          {
-            code: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
-            details: { normalizedParentSessionId },
-          },
-        );
+      if (normalizedParentSessionId) {
+        try {
+          assertSessionTreeParentRegistered(
+            sessionTree,
+            normalizedSessionId,
+            normalizedParentSessionId,
+          );
+        } catch (error) {
+          throw toSessionTreeFatalError(error, normalizedSessionId);
+        }
       }
       const currentNode = sessionTree.nodes[normalizedSessionId];
       if (currentNode) {
-        if (currentNode.parentSessionId === normalizedParentSessionId) return true;
-        const error = new Error("session tree parent conflicts with requested parent");
+        if (
+          currentNode.parentSessionId === normalizedParentSessionId &&
+          currentNode.caller === node.caller
+        ) {
+          return true;
+        }
+        const error = new Error("session tree node conflicts with requested node");
         error.statusCode = 409;
-        error.code = SESSION_ERROR_CODE.PARENT_SESSION_SCOPE_CONFLICT;
+        error.code = SESSION_ERROR_CODE.SESSION_TREE_NODE_CONFLICT;
         throw error;
       }
-      sessionTree.nodes[normalizedSessionId] = {
-        sessionId: normalizedSessionId,
-        parentSessionId: normalizedParentSessionId,
-      };
+      sessionTree.nodes[normalizedSessionId] = node;
       await this.sessionTreeRepository.saveTree(userId, sessionTree);
       return true;
     });
@@ -71,13 +78,7 @@ class SessionCrudMethods {
     );
   }
 
-  async ensureSession({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    meta = {},
-    persistenceContext = null,
-  }) {
+  async ensureSession({ userId, sessionId, parentSessionId, caller, persistenceContext }) {
     return this.withSessionMutation(
       userId,
       sessionId,
@@ -100,47 +101,41 @@ class SessionCrudMethods {
           return true;
         }
         await fsMkdir(sessionDir, { recursive: true });
-        const payload = normalizeSessionEntity(
-          {
-            sessionId,
-            parentSessionId: resolvedParentSessionId || "",
-            aggregateVersion: 0,
-            caller: meta?.caller || "user",
-            modelAlias: meta?.modelAlias || "",
-            currentTaskId: "",
-            shortMemoryCheckpoint: 0,
-            messages: [],
-            selectedConnectorIds: [],
-          },
-          { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
-        );
-        await writeSessionArtifact({
+        const payload = this.createInitialSession({
+          sessionId,
+          parentSessionId: resolvedParentSessionId,
+          caller,
+        });
+        const { listFacts } = await writeSessionArtifact({
           storageService: this.storageService,
           sessionDir,
           sessionPayload: payload,
           atomic: true,
         });
         if (!persistenceContext) {
-          await this.registerSessionTreeNode(userId, sessionId, resolvedParentSessionId);
-          await this.upsertSessionSummary(userId, payload);
+          await this.registerSessionTreeNode(userId, payload);
         }
+        await this.upsertSessionSummary(userId, payload, { listFacts, persistenceContext });
         return true;
       },
       persistenceContext,
     );
   }
 
-  createInitialSession({ sessionId, parentSessionId = "", meta = {} } = {}) {
+  createInitialSession({ sessionId, parentSessionId, caller }) {
     return normalizeSessionEntity(
       {
         sessionId,
         parentSessionId,
         aggregateVersion: 0,
-        caller: meta?.caller || "user",
-        modelAlias: meta?.modelAlias || "",
+        caller: requireSessionCaller(caller),
+        modelAlias: "",
         currentTaskId: "",
         shortMemoryCheckpoint: 0,
         messages: [],
+        dialogOrder: [],
+        turnTimings: [],
+        turnLifecycle: createEmptyTurnLifecycle(),
         selectedConnectorIds: [],
       },
       { now: this.now, sessionId, parentSessionId },
@@ -148,6 +143,29 @@ class SessionCrudMethods {
   }
 
   async findById(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    return this._findWithProtocolRepair(userId, sessionId, {
+      parentSessionId,
+      persistenceContext,
+      read: (scope, resolvedParentSessionId) =>
+        this._readNormalizedSession(scope, sessionId, resolvedParentSessionId),
+    });
+  }
+
+  async findTurnView(
+    userId,
+    sessionId,
+    parentSessionId = "",
+    { turnScopeIds = [], persistenceContext = null } = {},
+  ) {
+    return this._findWithProtocolRepair(userId, sessionId, {
+      parentSessionId,
+      persistenceContext,
+      read: (scope, resolvedParentSessionId) =>
+        this._readNormalizedTurnView(scope, sessionId, resolvedParentSessionId, turnScopeIds),
+    });
+  }
+
+  async _findWithProtocolRepair(userId, sessionId, { parentSessionId, persistenceContext, read }) {
     if (await this.isSessionDeleted(userId, sessionId)) return null;
     const { resolvedParentSessionId, sessionFile, sessionDir } = await this.resolveSessionScope(
       userId,
@@ -161,9 +179,9 @@ class SessionCrudMethods {
     const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
     const repairPreviouslyFailed = lifecycle?.repair?.status === "failed";
     try {
-      const session = await this._readNormalizedSession(scope, sessionId, resolvedParentSessionId);
+      const result = await read(scope, resolvedParentSessionId);
       if (repairPreviouslyFailed) await this._clearSessionRepairFailure(userId, sessionId);
-      return session;
+      return result;
     } catch (error) {
       if (repairPreviouslyFailed) throw this._createPreviousRepairFailureError(lifecycle, error);
       try {
@@ -173,15 +191,13 @@ class SessionCrudMethods {
           resolvedParentSessionId,
           persistenceContext,
         );
-        return this._readNormalizedSession(scope, sessionId, resolvedParentSessionId);
+        return read(scope, resolvedParentSessionId);
       } catch (repairError) {
         try {
-          await this.markSessionSummaryUnavailable(
-            userId,
-            sessionId,
-            resolvedParentSessionId,
-            repairError,
-          );
+          await this.markSessionSummaryUnavailable(userId, sessionId, {
+            error: repairError,
+            persistenceContext,
+          });
         } catch (projectionError) {
           repairError.unavailableProjectionCause = projectionError;
         }
@@ -219,30 +235,10 @@ class SessionCrudMethods {
     parentSessionId = "",
     { expectedAggregateVersion, createOnly = false, persistenceContext = null } = {},
   ) {
-    const sessionId = text(session?.sessionId);
-    if (!sessionId) {
-      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
-      });
-    }
-    return this.withSessionMutation(
-      userId,
-      sessionId,
+    return this._writeScopedSession(userId, session, {
       parentSessionId,
-      async () => {
-        const { resolvedParentSessionId, sessionDir } = await this.resolveSessionScope(
-          userId,
-          sessionId,
-          parentSessionId,
-          persistenceContext,
-        );
-        const entityParentSessionId = normalizeParentSessionId(session?.parentSessionId);
-        if (entityParentSessionId && entityParentSessionId !== resolvedParentSessionId) {
-          const error = new Error("session entity parentSessionId conflicts with resolved scope");
-          error.statusCode = 409;
-          error.code = SESSION_ERROR_CODE.PARENT_SESSION_SCOPE_CONFLICT;
-          throw error;
-        }
+      persistenceContext,
+      write: async ({ sessionId, resolvedParentSessionId, sessionDir }) => {
         const persistedForChecks =
           createOnly ||
           (expectedAggregateVersion !== undefined && expectedAggregateVersion !== null)
@@ -270,39 +266,89 @@ class SessionCrudMethods {
             throw error;
           }
         }
-        const payload = normalizeSessionEntity(
-          {
-            ...session,
-            sessionId,
-            parentSessionId: resolvedParentSessionId,
-            updatedAt: this.now(),
-          },
-          { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
-        );
-        await writeSessionArtifact({
+        const payload = this._buildSavePayload(session, sessionId, resolvedParentSessionId);
+        const { listFacts } = await writeSessionArtifact({
           storageService: this.storageService,
           sessionDir,
           sessionPayload: payload,
           atomic: true,
         });
         if (createOnly && !persistenceContext) {
-          await this.registerSessionTreeNode(userId, sessionId, resolvedParentSessionId);
+          await this.registerSessionTreeNode(userId, payload);
         }
-        try {
-          await this.upsertSessionSummary(userId, payload);
-        } catch (summaryError) {
-          try {
-            if (!persistenceContext) {
-              await this.rebuildSessionsSummary(userId);
-            }
-          } catch (rebuildError) {
-            rebuildError.cause = rebuildError.cause || summaryError;
-            throw rebuildError;
-          }
-        }
+        return { payload, listFacts };
+      },
+    });
+  }
+
+  async saveTurnView(
+    userId,
+    session = {},
+    parentSessionId = "",
+    { turnScopeIds = [], persistenceContext = null } = {},
+  ) {
+    return this._writeScopedSession(userId, session, {
+      parentSessionId,
+      persistenceContext,
+      write: async ({ sessionId, resolvedParentSessionId, sessionDir }) => {
+        const payload = this._buildSavePayload(session, sessionId, resolvedParentSessionId);
+        const { listFacts } = await writeSessionTurnArtifacts({
+          storageService: this.storageService,
+          sessionDir,
+          sessionPayload: payload,
+          turnScopeIds,
+          atomic: true,
+        });
+        return { payload, listFacts };
+      },
+    });
+  }
+
+  async _writeScopedSession(userId, session, { parentSessionId, persistenceContext, write }) {
+    const sessionId = text(session?.sessionId);
+    if (!sessionId) {
+      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
+      });
+    }
+    return this.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      async () => {
+        const { resolvedParentSessionId, sessionDir } = await this.resolveSessionScope(
+          userId,
+          sessionId,
+          parentSessionId,
+          persistenceContext,
+        );
+        this._assertSessionParentScope(session, resolvedParentSessionId);
+        const { payload, listFacts } = await write({
+          sessionId,
+          resolvedParentSessionId,
+          sessionDir,
+        });
+        await this.upsertSessionSummary(userId, payload, { listFacts, persistenceContext });
         return true;
       },
       persistenceContext,
+    );
+  }
+
+  _assertSessionParentScope(session, resolvedParentSessionId) {
+    const entityParentSessionId = normalizeParentSessionId(session?.parentSessionId);
+    if (entityParentSessionId && entityParentSessionId !== resolvedParentSessionId) {
+      const error = new Error("session entity parentSessionId conflicts with resolved scope");
+      error.statusCode = 409;
+      error.code = SESSION_ERROR_CODE.PARENT_SESSION_SCOPE_CONFLICT;
+      throw error;
+    }
+  }
+
+  _buildSavePayload(session, sessionId, resolvedParentSessionId) {
+    return normalizeSessionEntity(
+      { ...session, sessionId, parentSessionId: resolvedParentSessionId, updatedAt: this.now() },
+      { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
     );
   }
 

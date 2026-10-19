@@ -40,6 +40,30 @@ export function isInjectedOrPluginMessage(message = {}) {
   return flags.injected || flags.plugin;
 }
 
+export function isDialogAnchorMessage(message = {}) {
+  if (text(message?.role) !== "user") return false;
+  if (isInjectedOrPluginMessage(message)) return false;
+  if (text(message?.injectedMessageType)) return false;
+  return text(message?.messageOrigin).toLowerCase() !== "internal";
+}
+
+export const SESSION_AUTO_TITLE_MAX_LENGTH = 20;
+
+export function resolveSessionAutoTitle(message = {}) {
+  if (message?.injectedMessage === true) return "";
+  if (text(message?.role).toLowerCase() !== "user") return "";
+  if (!text(message?.content)) return "";
+  return String(message.content).slice(0, SESSION_AUTO_TITLE_MAX_LENGTH);
+}
+
+export function deriveSessionAutoTitle(messages = []) {
+  for (const message of Array.isArray(messages) ? messages : []) {
+    const title = resolveSessionAutoTitle(message);
+    if (title) return title;
+  }
+  return "";
+}
+
 export function resolveInjectedMessageType(message = {}) {
   if (!isInjectedMessage(message)) return "";
   const explicit = readContextMessageField(message, "injectedMessageType");

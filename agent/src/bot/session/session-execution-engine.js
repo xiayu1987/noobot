@@ -12,7 +12,6 @@ import { BotManageValidator } from "../config/validator.js";
 import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.js";
 import { mergeRunConfigPluginPolicy, RunConfigResolver } from "@noobot/agent-config-protocol";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
-import { CALLER_ROLE } from "../config/constants.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
 import {
@@ -189,7 +188,7 @@ export class SessionExecutionEngine {
     return this.validator.normalizeRunMessage(message);
   }
 
-  _validateRunInput({ userId, sessionId, caller = CALLER_ROLE.USER, parentSessionId = "" }) {
+  _validateRunInput({ userId, sessionId, caller, parentSessionId = "" }) {
     this.validator.validateRunInput({
       userId,
       sessionId,
@@ -218,7 +217,7 @@ export class SessionExecutionEngine {
 
   _ensureParentAsyncResultContainer({
     parentAsyncResultContainer = null,
-    caller = CALLER_ROLE.USER,
+    caller,
     parentSessionId = "",
     parentDialogProcessId = "",
     dialogProcessId = "",
@@ -349,7 +348,7 @@ export class SessionExecutionEngine {
   _buildContextBuilder({
     userId,
     sessionId,
-    caller = CALLER_ROLE.USER,
+    caller,
     parentSessionId,
     userConfig,
     userMessageAttachments = [],
@@ -507,7 +506,7 @@ export class SessionExecutionEngine {
     attachments = [],
     systemMessages = [],
     eventListener = null,
-    caller = CALLER_ROLE.USER,
+    caller,
     parentSessionId = "",
     parentDialogProcessId = "",
     dialogProcessId = "",

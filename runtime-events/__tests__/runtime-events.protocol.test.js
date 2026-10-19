@@ -29,6 +29,7 @@ import {
   persistSession,
   useRuntimeEventsEnv,
 } from "./runtime-events-test-fixtures.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("session log protocol exports stable categories and helpers from runtime-events", () => {
   assert.ok(SESSION_LOG_CATEGORIES.includes("system"));
@@ -165,7 +166,11 @@ test("session log client policy is derived from the shared debug registry", () =
 
 test("agent transport debug uses its own file and excludes business payloads", async () => {
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-transport");
+  await persistSession(root, "admin", {
+    sessionId: "session-transport",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ debug: { agentTransport: true } });
   const result = await writeRuntimeEvent({
     source: "frontend",
@@ -199,7 +204,11 @@ test("tool log window debug uses its own file when enabled", async () => {
     "NOOBOT_RUNTIME_EVENT_FRONTEND_TOOL_LOG_WINDOW_DEBUG",
   );
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-tool-window");
+  await persistSession(root, "admin", {
+    sessionId: "session-tool-window",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   useRuntimeEventsEnv({ debug: { frontendToolLogWindow: true } });
   const result = await writeRuntimeEvent({
     source: "frontend",
@@ -225,7 +234,11 @@ test("workflow diagnostics debug follows explicit disabled and enabled controls"
     "NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG",
   );
   const root = await tempRoot();
-  await persistSession(root, "admin", "session-workflow");
+  await persistSession(root, "admin", {
+    sessionId: "session-workflow",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const event = {
     source: "frontend",
     scope: "session",

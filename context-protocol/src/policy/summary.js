@@ -499,3 +499,89 @@ export function collectDialogScopedMessagesToSummarize(
       }).messages,
   );
 }
+
+function collectTurnMessageOwnership(messages = []) {
+  const allMessageUids = new Set();
+  const ownedByTurn = new Map();
+  for (const message of Array.isArray(messages) ? messages : []) {
+    const messageUid = text(message?.messageUid);
+    allMessageUids.add(messageUid);
+    const key = `${resolveContextMessageDialogProcessId(message)}\u0000${text(message?.turnScopeId)}`;
+    const owned = ownedByTurn.get(key) || new Set();
+    owned.add(messageUid);
+    ownedByTurn.set(key, owned);
+  }
+  return { allMessageUids, ownedByTurn };
+}
+
+function isSummaryReceiptLive(receipt, owned, allMessageUids) {
+  if (!isObjectLike(receipt)) return false;
+  const persisted = Array.isArray(receipt.persistedMessageUids) ? receipt.persistedMessageUids : [];
+  const summarized = Array.isArray(receipt.summarizedMessageUids)
+    ? receipt.summarizedMessageUids
+    : [];
+  return (
+    persisted.every((uid) => owned.has(text(uid))) &&
+    summarized.every((uid) => allMessageUids.has(text(uid)))
+  );
+}
+
+function normalizeCheckpointUidList(values) {
+  return [
+    ...new Set((Array.isArray(values) ? values : []).map((uid) => text(uid)).filter(Boolean)),
+  ];
+}
+
+function normalizeSummaryReceipt(receipt) {
+  if (!isObjectLike(receipt) || Array.isArray(receipt)) return null;
+  const checkpointId = text(receipt.checkpointId);
+  const requestHash = text(receipt.requestHash);
+  if (!checkpointId || !requestHash) return null;
+  return {
+    checkpointId,
+    checkpointRevision: Math.max(0, Number(receipt.checkpointRevision) || 0),
+    requestHash,
+    persistedMessageUids: normalizeCheckpointUidList(receipt.persistedMessageUids),
+    summarizedMessageUids: normalizeCheckpointUidList(receipt.summarizedMessageUids),
+    retainedMessageUids: normalizeCheckpointUidList(receipt.retainedMessageUids),
+    markedCount: Math.max(0, Number(receipt.markedCount) || 0),
+    committedAt: text(receipt.committedAt),
+  };
+}
+
+export function normalizeTurnSummaryCheckpoints(checkpoints = {}) {
+  if (!isObjectLike(checkpoints) || Array.isArray(checkpoints)) return {};
+  const normalized = {};
+  for (const value of Object.values(checkpoints)) {
+    if (!isObjectLike(value) || Array.isArray(value)) continue;
+    const turnScopeId = text(value.turnScopeId);
+    const dialogProcessId = text(value.dialogProcessId);
+    if (!turnScopeId || !dialogProcessId) continue;
+    normalized[turnScopeId] = {
+      dialogProcessId,
+      turnScopeId,
+      checkpointRevision: Math.max(0, Number(value.checkpointRevision) || 0),
+      receipts: (Array.isArray(value.receipts) ? value.receipts : [])
+        .map(normalizeSummaryReceipt)
+        .filter(Boolean)
+        .slice(-50),
+    };
+  }
+  return normalized;
+}
+
+export function pruneTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
+  const { allMessageUids, ownedByTurn } = collectTurnMessageOwnership(messages);
+  const pruned = {};
+  for (const [turnScopeId, state] of Object.entries(normalizeTurnSummaryCheckpoints(checkpoints))) {
+    const owned = ownedByTurn.get(`${state.dialogProcessId}\u0000${turnScopeId}`);
+    if (!owned) continue;
+    pruned[turnScopeId] = {
+      ...state,
+      receipts: state.receipts.filter((receipt) =>
+        isSummaryReceiptLive(receipt, owned, allMessageUids),
+      ),
+    };
+  }
+  return pruned;
+}

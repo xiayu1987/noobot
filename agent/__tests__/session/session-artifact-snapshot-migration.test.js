@@ -5,19 +5,22 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile, writeFile } from "node:fs/promises";
 import {
-  buildSessionArtifactFileMap,
   writeSessionArtifact,
   readSessionArtifactSnapshot,
 } from "../../src/session/session-artifact-store.js";
 import { canonicalMessages, withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 test("snapshot reads legacy transfer reasons only after canonical Session migration", async () =>
   withTemp(async (root) => {
     await writeSessionArtifact({
       sessionDir: root,
-      sessionPayload: {
+      sessionPayload: applySessionMessageFacts({
+        ...createTestSessionRequiredFields(),
         sessionId: "legacy-transfer-session",
         aggregateVersion: 0,
         messages: [
@@ -60,12 +63,8 @@ test("snapshot reads legacy transfer reasons only after canonical Session migrat
             ],
           },
         ],
-      },
+      }),
     });
-    const files = buildSessionArtifactFileMap(root);
-    const summary = JSON.parse(await readFile(files.sessionSummary, "utf8"));
-    summary.messages[0].transferEnvelopes[0].intent.reason = "multimodal_parse_tool";
-    await writeFile(files.sessionSummary, JSON.stringify(summary), "utf8");
     const snapshot = await readSessionArtifactSnapshot({
       outputDir: root,
       includeExecutionLogs: false,

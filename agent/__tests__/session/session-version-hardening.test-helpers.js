@@ -10,19 +10,24 @@ import { after } from "node:test";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
 
 export function harness(initial = {}) {
-  let session = structuredClone({
-    sessionId: "s1",
-    parentSessionId: "",
-    aggregateVersion: 0,
-    messages: [],
-    turnLifecycle: { turns: {}, commandReceipts: [] },
-    ...initial,
-  });
+  let session = applySessionMessageFacts(
+    structuredClone({
+      sessionId: "s1",
+      parentSessionId: "",
+      aggregateVersion: 0,
+      ...createTestSessionRequiredFields(),
+      ...initial,
+    }),
+  );
   let lockCalls = 0;
   const repo = {
     async withSessionMutation(_u, _s, _p, operation) {
@@ -36,6 +41,12 @@ export function harness(initial = {}) {
     async findById() {
       return structuredClone(session);
     },
+    async findTurnView(_u, _s, _p, { turnScopeIds = [] } = {}) {
+      return { session: structuredClone(session), turnScopeIds };
+    },
+    async saveTurnView(_u, next) {
+      session = structuredClone(next);
+    },
     async save(_u, next, _p, { expectedAggregateVersion } = {}) {
       const actual = Number(session.aggregateVersion ?? 0);
       if (expectedAggregateVersion != null && Number(expectedAggregateVersion) !== actual) {
@@ -47,7 +58,6 @@ export function harness(initial = {}) {
       }
       session = structuredClone(next);
     },
-    async writeSessionDisplaySummary() {},
   };
   return {
     service: new SessionMessageService({

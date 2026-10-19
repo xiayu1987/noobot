@@ -7,6 +7,7 @@ import { createSessionTurnLifecycleSnapshot } from "../session-turn-read-model.j
 import { buildSessionDisplayMessages } from "./display-message-list.js";
 import { buildSessionDisplayStats } from "./display-summary-stats.js";
 import { attachSessionToolArtifacts } from "./display-tool-artifacts.js";
+import { resolveSessionTitle } from "../entities/session-message-facts.js";
 import {
   isTransferEnvelopeField,
   validateTransferEnvelope,
@@ -92,41 +93,23 @@ function createDisplaySummaryContext(session) {
   return {
     session,
     messages,
-    turnTimings: Array.isArray(session.turnTimings) ? session.turnTimings : [],
-    sessionId: text(session.sessionId),
-    lifecycle:
-      session.turnLifecycle && typeof session.turnLifecycle === "object"
-        ? session.turnLifecycle
-        : null,
+    turnTimings: session.turnTimings,
+    sessionId: session.sessionId,
+    lifecycle: session.turnLifecycle,
   };
 }
 
-function resolveSessionTitle(session, messages, sessionId) {
-  const customTitle = text(session.customTitle);
-  if (customTitle) return customTitle;
-  const firstUserMessage = messages.find(
-    (message) =>
-      message?.injectedMessage !== true &&
-      text(message?.role).toLowerCase() === "user" &&
-      text(message?.content),
-  );
-  return firstUserMessage
-    ? String(firstUserMessage.content || "").slice(0, 20)
-    : sessionId.slice(0, 8);
-}
-
 function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
-  if (!lifecycle) return null;
   return createSessionTurnLifecycleSnapshot({
     session,
-    commandId: `session-summary:${sessionId}:${Number(lifecycle.sequence || 0)}`,
+    commandId: `session-summary:${sessionId}:${lifecycle.sequence}`,
     knownSequence: 0,
     terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT,
     generatedAt: text(session.updatedAt),
   });
 }
 
-export function buildSessionDisplaySummary(session = {}) {
+export function buildSessionDisplaySummary(session) {
   const context = createDisplaySummaryContext(session);
   const { messages, turnTimings, sessionId, lifecycle } = context;
   const displayMessages = buildSessionDisplayMessages({ messages, lifecycle, sessionId });
@@ -138,18 +121,16 @@ export function buildSessionDisplaySummary(session = {}) {
       revision: createSessionDisplaySourceRevision(session),
     },
     sessionId,
-    parentSessionId: text(session.parentSessionId),
-    caller: text(session.caller || "user") || "user",
-    currentTaskId: text(session.currentTaskId),
-    createdAt: text(session.createdAt),
-    updatedAt: text(session.updatedAt),
-    title: resolveSessionTitle(session, messages, sessionId),
+    parentSessionId: session.parentSessionId,
+    caller: session.caller,
+    currentTaskId: session.currentTaskId,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    title: resolveSessionTitle(session),
     aggregateVersion: session.aggregateVersion,
     turnTimings,
     turnLifecycleSnapshot: buildTurnLifecycleSnapshot(context),
-    sessionArtifactEvents: Array.isArray(session.sessionArtifactEvents)
-      ? session.sessionArtifactEvents
-      : [],
+    sessionArtifactEvents: session.sessionArtifactEvents,
     messages: displayMessages,
     stats: buildSessionDisplayStats({ messages, displayMessages, ...toolArtifactStats }),
   };

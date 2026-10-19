@@ -14,6 +14,7 @@ import express, {
   registerSessionRoutes,
   withTestServer,
 } from "./session-routes.helpers.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("session-routes: sessions 列表只读取并返回概要", async () => {
   const app = express();
@@ -32,7 +33,7 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
           {
             sessionId: "s1",
             parentSessionId: "",
-            caller: "user",
+            caller: SESSION_CALLER.USER,
             currentTaskId: "t1",
             createdAt: "2026-05-14T00:00:00.000Z",
             updatedAt: "2026-05-14T00:01:00.000Z",

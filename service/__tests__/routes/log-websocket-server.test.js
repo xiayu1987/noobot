@@ -13,11 +13,13 @@ import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
 import { flushJsonLineBatches } from "@noobot/runtime-events";
 import { registerLogWebSocketServer, writeSessionLogEvent } from "../../ws/log-websocket-server.js";
 import {
+  initializeSessionTree,
   persistSession,
   sessionDirPath,
   withRuntimeEventsEnv,
   withRuntimeEventsRoot,
 } from "../runtime-events-root.test-helpers.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 async function sessionEventFile(workspaceRoot, sessionId, fileName) {
   return path.join(await sessionDirPath(workspaceRoot, "u1", sessionId), "events", fileName);
@@ -83,7 +85,12 @@ function sendLogWs({
 
 test("log-websocket-server: writes session logs by category", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s1");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s1",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const { server, registered } = await startLogServer();
     try {
       const { port } = server.address();
@@ -116,7 +123,12 @@ test("log-websocket-server: writes session logs by category", () =>
 test("log-websocket-server: announces the effective client policy before ACK", () =>
   withRuntimeEventsRoot("noobot-session-logs-", (workspaceRoot) =>
     withRuntimeEventsEnv({ debug: { workflowDiagnostics: true } }, async () => {
-      await persistSession(workspaceRoot, "u1", "s-policy");
+      await initializeSessionTree(workspaceRoot, "u1");
+      await persistSession(workspaceRoot, "u1", {
+        sessionId: "s-policy",
+        parentSessionId: "",
+        caller: SESSION_CALLER.USER,
+      });
       const { server, registered } = await startLogServer();
       try {
         const { port } = server.address();
@@ -222,7 +234,12 @@ test("log-websocket-server: reliable write failures return error and never ACK",
 
 test("log-websocket-server: batches containing a record without category return error and never ACK", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s-batch");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s-batch",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const { server, registered } = await startLogServer();
     try {
       const base = { source: "client", scope: "session", sessionId: "s-batch" };
@@ -248,7 +265,12 @@ test("log-websocket-server: batches containing a record without category return 
 test("log-websocket-server: writes tool log window debug to its dedicated file", () =>
   withRuntimeEventsRoot("noobot-session-logs-", (workspaceRoot) =>
     withRuntimeEventsEnv({ debug: { frontendToolLogWindow: true } }, async () => {
-      await persistSession(workspaceRoot, "u1", "s-tool-window");
+      await initializeSessionTree(workspaceRoot, "u1");
+      await persistSession(workspaceRoot, "u1", {
+        sessionId: "s-tool-window",
+        parentSessionId: "",
+        caller: SESSION_CALLER.USER,
+      });
       const { server, registered } = await startLogServer();
       try {
         const { port } = server.address();
@@ -283,7 +305,12 @@ test("log-websocket-server: writes tool log window debug to its dedicated file",
 
 test("log-websocket-server: writes to the user runtime session events directory", () =>
   withRuntimeEventsRoot("noobot-workspace-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s-runtime");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s-runtime",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const result = await writeSessionLogEvent({
       userId: "u1",
       source: "client",
@@ -302,7 +329,12 @@ test("log-websocket-server: writes to the user runtime session events directory"
 
 test("log-websocket-server: works when chat websocket server is registered first", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "combined-s1");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "combined-s1",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const server = createServer((_req, res) => {
       res.statusCode = 404;
       res.end("not-found");
@@ -348,7 +380,12 @@ test("log-websocket-server: works when chat websocket server is registered first
 
 test("log-websocket-server: skips registered debug types by default", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s-debug");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s-debug",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const result = await writeSessionLogEvent({
       source: "client",
       userId: "u1",
@@ -366,7 +403,12 @@ test("log-websocket-server: skips registered debug types by default", () =>
 
 test("log-websocket-server: rejects debug logs without a registered debug type", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s-debug");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s-debug",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const result = await writeSessionLogEvent({
       source: "client",
       userId: "u1",
@@ -383,7 +425,12 @@ test("log-websocket-server: rejects debug logs without a registered debug type",
 
 test("log-websocket-server: rejects records without an explicit scope", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s-noscope");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s-noscope",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const result = await writeSessionLogEvent({
       source: "client",
       userId: "u1",
@@ -397,7 +444,12 @@ test("log-websocket-server: rejects records without an explicit scope", () =>
 
 test("log-websocket-server: rejects records without an explicit category", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s-nocategory");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s-nocategory",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const result = await writeSessionLogEvent({
       source: "client",
       userId: "u1",
@@ -413,10 +465,15 @@ test("log-websocket-server: rejects records without an explicit category", () =>
 
 test("log-websocket-server: debug records follow only their debugType switch", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await initializeSessionTree(workspaceRoot, "u1");
     await withRuntimeEventsEnv(
       { log: { system: false }, debug: { stateMachine: true } },
       async () => {
-        await persistSession(workspaceRoot, "u1", "s-debug-on");
+        await persistSession(workspaceRoot, "u1", {
+          sessionId: "s-debug-on",
+          parentSessionId: "",
+          caller: SESSION_CALLER.USER,
+        });
         const debug = await writeSessionLogEvent({
           source: "client",
           userId: "u1",
@@ -445,7 +502,12 @@ test("log-websocket-server: debug records follow only their debugType switch", (
 test("log-websocket-server: failed writes are not reported as written", () =>
   withRuntimeEventsRoot("noobot-session-logs-", (workspaceRoot) =>
     withRuntimeEventsEnv({ debug: { sessionLogWs: true } }, async () => {
-      await persistSession(workspaceRoot, "u1", "s-ok");
+      await initializeSessionTree(workspaceRoot, "u1");
+      await persistSession(workspaceRoot, "u1", {
+        sessionId: "s-ok",
+        parentSessionId: "",
+        caller: SESSION_CALLER.USER,
+      });
       const failed = await writeSessionLogEvent({
         source: "client",
         userId: "u1",

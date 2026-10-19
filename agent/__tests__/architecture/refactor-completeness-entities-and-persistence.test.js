@@ -15,6 +15,7 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 describe("2. 字段对齐测试", () => {
   describe("normalizeMessageEntity 字段对齐", () => {
@@ -174,10 +175,14 @@ describe("2. 字段对齐测试", () => {
   describe("normalizeSessionTreeEntity 字段对齐", () => {
     it("只包含 nodes 字段", () => {
       const normalized = normalizeSessionTreeEntity({
-        nodes: { "session-1": { sessionId: "session-1", parentSessionId: "" } },
+        nodes: {
+          "session-1": { sessionId: "session-1", parentSessionId: "", caller: SESSION_CALLER.USER },
+        },
       });
       assert.deepEqual(normalized, {
-        nodes: { "session-1": { sessionId: "session-1", parentSessionId: "" } },
+        nodes: {
+          "session-1": { sessionId: "session-1", parentSessionId: "", caller: SESSION_CALLER.USER },
+        },
       });
     });
 
@@ -190,17 +195,18 @@ describe("2. 字段对齐测试", () => {
       );
     });
 
-    it("nodes 中每个节点应规范化 sessionId 和 parentSessionId", () => {
+    it("nodes 中每个节点保留 sessionId、parentSessionId 和 caller", () => {
       const raw = {
         nodes: {
-          s1: { parentSessionId: "" },
-          s2: { parentSessionId: "s1" },
+          s1: { sessionId: "s1", parentSessionId: "", caller: SESSION_CALLER.USER },
+          s2: { sessionId: "s2", parentSessionId: "s1", caller: SESSION_CALLER.BOT },
         },
       };
       const normalized = normalizeSessionTreeEntity(raw);
       assert.equal(normalized.nodes["s1"].sessionId, "s1");
       assert.equal(normalized.nodes["s1"].parentSessionId, "");
       assert.equal(normalized.nodes["s2"].parentSessionId, "s1");
+      assert.equal(normalized.nodes["s2"].caller, "bot");
       assert.equal("children" in normalized.nodes["s1"], false);
     });
   });

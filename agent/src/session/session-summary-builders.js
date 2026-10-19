@@ -16,5 +16,5 @@ export {
   SESSIONS_SUMMARY_SCHEMA_VERSION,
   buildSessionSummary,
   buildUnavailableSessionSummary,
-  normalizeSessionsSummaryPayload,
+  requireSessionsSummaryPayload,
 } from "./session-summary-builders/session-list-summary.js";

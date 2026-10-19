@@ -14,6 +14,7 @@ import { AttachmentService } from "noobot-agent/attach";
 import { AUTHORITY_EVENT_CONSUMER } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createInteractionAuthorityBridge } from "../../ws/chat-websocket/interaction-authority-bridge.js";
 import { initializeUserRuntimeDirectories } from "../runtime-events-root.test-helpers.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 async function withTempWorkspace(operation) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-interaction-authority-"));
@@ -38,7 +39,12 @@ test("child interaction authority commits through the protocol persistence scope
       relativeDir: "runtime/agent/session/child-session",
       allowedRoot: "runtime/agent/session",
     });
-    await runtime.sessionCrudService.ensureSession("user-1", "root-session", "", {});
+    await runtime.sessionCrudService.ensureSession(
+      "user-1",
+      "root-session",
+      "",
+      SESSION_CALLER.USER,
+    );
     const childPersistenceContext = runtime.createScopedPersistenceContext({
       userId: "user-1",
       sessionId: "child-session",
@@ -51,7 +57,7 @@ test("child interaction authority commits through the protocol persistence scope
       "user-1",
       "child-session",
       "root-session",
-      {},
+      SESSION_CALLER.USER,
       childPersistenceContext,
     );
 

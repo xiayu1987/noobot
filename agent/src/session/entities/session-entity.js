@@ -5,13 +5,18 @@
  */
 
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import { normalizeTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import {
   assertSessionAggregateInvariants,
+  assertSessionAggregateShape,
   requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
-import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
+import {
+  assertDialogOrderCoversMessages,
+  normalizeDialogOrderEntity,
+} from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { objectRecord } from "./entity-primitives.js";
@@ -58,82 +63,15 @@ function normalizeTurnTimingEntity(timing = {}) {
   return normalized;
 }
 
-function normalizeTurnTimingsEntity(turnTimings = []) {
-  const source = Array.isArray(turnTimings)
-    ? turnTimings
-    : Object.values(turnTimings && typeof turnTimings === "object" ? turnTimings : {});
+function normalizeTurnTimingsEntity(turnTimings) {
   const byKey = new Map();
-  for (const item of source) {
+  for (const item of turnTimings) {
     const normalized = normalizeTurnTimingEntity(item);
     if (!normalized) continue;
     const key = normalized.turnScopeId;
     byKey.set(key, { ...(byKey.get(key) || {}), ...normalized });
   }
   return [...byKey.values()];
-}
-
-function normalizeCheckpointUidList(values) {
-  return [
-    ...new Set((Array.isArray(values) ? values : []).map((uid) => text(uid)).filter(Boolean)),
-  ];
-}
-
-function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
-  if (!isPlainObject(checkpoints)) return {};
-  const normalized = {};
-  for (const [scopeKey, value] of Object.entries(checkpoints)) {
-    if (!isPlainObject(value)) continue;
-    const turnScopeId = text(value.turnScopeId || scopeKey);
-    const dialogProcessId = text(value.dialogProcessId);
-    if (!turnScopeId || !dialogProcessId) continue;
-    const checkpointRevision = Math.max(0, Number(value.checkpointRevision) || 0);
-    const sessionMessages = Array.isArray(messages) ? messages : [];
-    const allMessageUids = new Set(
-      sessionMessages.map((message) => text(message?.messageUid)).filter(Boolean),
-    );
-    const ownedMessageUids = new Set(
-      sessionMessages
-        .filter(
-          (message) =>
-            resolveContextMessageDialogProcessId(message) === dialogProcessId &&
-            text(message?.turnScopeId) === turnScopeId,
-        )
-        .map((message) => text(message?.messageUid))
-        .filter(Boolean),
-    );
-    if (!ownedMessageUids.size) continue;
-    const receipts = (Array.isArray(value.receipts) ? value.receipts : [])
-      .map((receipt) => {
-        if (!isPlainObject(receipt)) return null;
-        const checkpointId = text(receipt.checkpointId);
-        const requestHash = text(receipt.requestHash);
-        if (!checkpointId || !requestHash) return null;
-        const persistedMessageUids = normalizeCheckpointUidList(receipt.persistedMessageUids);
-        const summarizedMessageUids = normalizeCheckpointUidList(receipt.summarizedMessageUids);
-        const retainedMessageUids = normalizeCheckpointUidList(receipt.retainedMessageUids);
-        if (persistedMessageUids.some((uid) => !ownedMessageUids.has(uid))) return null;
-        if (summarizedMessageUids.some((uid) => !allMessageUids.has(uid))) return null;
-        return {
-          checkpointId,
-          checkpointRevision: Math.max(0, Number(receipt.checkpointRevision) || 0),
-          requestHash,
-          persistedMessageUids,
-          summarizedMessageUids,
-          retainedMessageUids,
-          markedCount: Math.max(0, Number(receipt.markedCount) || 0),
-          committedAt: text(receipt.committedAt),
-        };
-      })
-      .filter(Boolean)
-      .slice(-50);
-    normalized[turnScopeId] = {
-      dialogProcessId,
-      turnScopeId,
-      checkpointRevision,
-      receipts,
-    };
-  }
-  return normalized;
 }
 
 function resolveSessionNormalizationContext(session, { now, sessionId, parentSessionId }) {
@@ -144,6 +82,7 @@ function resolveSessionNormalizationContext(session, { now, sessionId, parentSes
     sessionId: firstText(session?.sessionId, sessionId),
     parentSessionId: firstText(session?.parentSessionId, parentSessionId),
     customTitle: text(session?.customTitle),
+    autoTitle: text(session?.autoTitle),
     shortMemoryCheckpoint: Number.isFinite(shortMemoryCheckpoint) ? shortMemoryCheckpoint : 0,
   };
 }
@@ -157,14 +96,14 @@ function createNormalizedSessionEntity(session, context, messages) {
     sessionId: context.sessionId,
     parentSessionId: context.parentSessionId,
     aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
-    caller: firstText(session?.caller, "user"),
+    caller: session.caller,
     modelAlias: String(session?.modelAlias || ""),
     currentTaskId: text(session?.currentTaskId),
     shortMemoryCheckpoint: context.shortMemoryCheckpoint,
     messages,
-    dialogOrder: normalizeDialogOrderEntity(session?.dialogOrder || [], messages),
-    turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
-    turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
+    dialogOrder: normalizeDialogOrderEntity(session.dialogOrder),
+    turnTimings: normalizeTurnTimingsEntity(session.turnTimings),
+    turnLifecycle: normalizeTurnLifecycleEntity(session.turnLifecycle),
     sessionArtifactEvents: normalizeSessionArtifactEvents(session, context.sessionId),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstText(session?.createdAt, context.nowValue),
@@ -181,16 +120,18 @@ export function normalizeSessionEntity(
       "legacy session version fields are not supported; run the session protocol migration",
     );
   }
-  assertSessionAggregateInvariants(session);
+  assertSessionAggregateShape(session);
   const context = resolveSessionNormalizationContext(session, { now, sessionId, parentSessionId });
-  const normalizedMessages = normalizeMessagesEntity(session?.messages || [], now);
+  const normalizedMessages = normalizeMessagesEntity(session.messages, now);
   const normalizedTurnSummaryCheckpoints = normalizeTurnSummaryCheckpoints(
     session?.turnSummaryCheckpoints || {},
-    normalizedMessages,
   );
   const normalizedSession = createNormalizedSessionEntity(session, context, normalizedMessages);
+  assertDialogOrderCoversMessages(normalizedSession.dialogOrder, normalizedMessages);
   if (context.customTitle) normalizedSession.customTitle = context.customTitle;
   else delete normalizedSession.customTitle;
+  if (context.autoTitle) normalizedSession.autoTitle = context.autoTitle;
+  else delete normalizedSession.autoTitle;
   if (Object.keys(normalizedTurnSummaryCheckpoints).length) {
     normalizedSession.turnSummaryCheckpoints = normalizedTurnSummaryCheckpoints;
   } else {

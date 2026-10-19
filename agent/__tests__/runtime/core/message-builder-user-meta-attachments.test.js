@@ -12,6 +12,7 @@ import {
 } from "../../../src/context/assembly/message-builder.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function findUserMetaMessage(messages) {
   return messages.find((message) => String(message?.content || "").startsWith("[用户元信息]"));
@@ -677,7 +678,11 @@ test("buildContextMessages does not project frontend user metadata for internal 
       {
         userId: "admin",
         userMessageAttachments: [],
-        systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child", caller: "bot" },
+        systemRuntime: {
+          sessionId: "child",
+          dialogProcessId: "dialog-child",
+          caller: SESSION_CALLER.BOT,
+        },
       },
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),

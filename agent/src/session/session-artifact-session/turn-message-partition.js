@@ -8,14 +8,25 @@ import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/m
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { text } from "@noobot/shared/value";
 
-export function splitSessionMessages(messages = [], dialogOrder = []) {
-  const source = Array.isArray(messages) ? messages : [];
-  const logicalOrder = new Map(
-    (Array.isArray(dialogOrder) ? dialogOrder : []).map((entry, index) => [
-      text(entry?.dialogProcessId),
-      Number(entry?.dialogOrdinal) || index + 1,
-    ]),
-  );
+export function dialogLogicalOrder(dialogOrder) {
+  return new Map(dialogOrder.map((entry) => [entry.dialogProcessId, entry.dialogOrdinal]));
+}
+
+export function compareTurnPlacement(logicalOrder) {
+  return (left, right) => {
+    const leftDialogOrdinal = logicalOrder.get(left.dialogProcessId);
+    const rightDialogOrdinal = logicalOrder.get(right.dialogProcessId);
+    if (Number.isFinite(leftDialogOrdinal) && Number.isFinite(rightDialogOrdinal))
+      return leftDialogOrdinal - rightDialogOrdinal;
+    if (Number.isFinite(leftDialogOrdinal) !== Number.isFinite(rightDialogOrdinal))
+      return Number.isFinite(leftDialogOrdinal) ? -1 : 1;
+    return left.firstSourceIndex - right.firstSourceIndex;
+  };
+}
+
+export function splitSessionMessages(messages, dialogOrder) {
+  const source = messages;
+  const logicalOrder = dialogLogicalOrder(dialogOrder);
   const buckets = new Map();
   source.forEach((message, sourceIndex) => {
     const dialogProcessId = resolveContextMessageDialogProcessId(message);
@@ -46,15 +57,7 @@ export function splitSessionMessages(messages = [], dialogOrder = []) {
     bucket.sourceIndices.push(sourceIndex);
     buckets.set(key, bucket);
   });
-  const ordered = [...buckets.values()].sort((left, right) => {
-    const leftDialogOrdinal = logicalOrder.get(left.dialogProcessId);
-    const rightDialogOrdinal = logicalOrder.get(right.dialogProcessId);
-    if (Number.isFinite(leftDialogOrdinal) && Number.isFinite(rightDialogOrdinal))
-      return leftDialogOrdinal - rightDialogOrdinal;
-    if (Number.isFinite(leftDialogOrdinal) !== Number.isFinite(rightDialogOrdinal))
-      return Number.isFinite(leftDialogOrdinal) ? -1 : 1;
-    return left.firstSourceIndex - right.firstSourceIndex;
-  });
+  const ordered = [...buckets.values()].sort(compareTurnPlacement(logicalOrder));
   const turns = ordered.map((bucket, index) => {
     const artifactOrdinal = index + 1;
     return {

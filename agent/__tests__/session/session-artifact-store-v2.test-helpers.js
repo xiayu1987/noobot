@@ -11,6 +11,10 @@ import {
   buildSessionArtifactFileMap,
   writeSessionArtifact as writeSessionArtifactCanonical,
 } from "../../src/session/session-artifact-store.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 export const TEST_TURN = "turn-1";
 
@@ -48,9 +52,10 @@ export function canonicalMessages(messages = []) {
 export async function writeSessionArtifact(options = {}) {
   return writeSessionArtifactCanonical({
     ...options,
-    sessionPayload: {
+    sessionPayload: applySessionMessageFacts({
+      ...createTestSessionRequiredFields(),
       ...options.sessionPayload,
       messages: canonicalMessages(options.sessionPayload?.messages),
-    },
+    }),
   });
 }

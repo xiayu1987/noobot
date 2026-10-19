@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +11,7 @@ import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -18,7 +20,7 @@ function createService({ initialSession }) {
   const saved = [];
   let currentSession = structuredClone({
     aggregateVersion: 0,
-    turnLifecycle: { turns: {}, commandReceipts: [] },
+    turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
     ...initialSession,
   });
   const sessionRepo = {
@@ -49,10 +51,11 @@ function createService({ initialSession }) {
 
 function baseSession(overrides = {}) {
   return {
+    ...createTestSessionRequiredFields(),
     sessionId: "s1",
     parentSessionId: "",
     aggregateVersion: 2,
-    turnLifecycle: { turns: {}, commandReceipts: [] },
+    turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
     messages: [
       { turnScopeId: "scope-keep", role: "user", content: "keep", dialogProcessId: "dp-keep" },
       { role: "user", content: "old", dialogProcessId: "dp-old", turnScopeId: "scope-old" },
@@ -72,6 +75,7 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   const { service, saved } = createService({
     initialSession: baseSession({
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         activeTurnScopeId: "",
         sequence: 8,
         turns: {
@@ -197,6 +201,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
   const parent = createService({
     initialSession: baseSession({
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           "scope-keep": {
             turnScopeId: "scope-keep",
@@ -224,6 +229,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
       parentSessionId: "s1",
       messages: [{ turnScopeId: "child-turn", role: "user", content: "child" }],
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
         turns: {
           "child-turn": {
             turnScopeId: "child-turn",

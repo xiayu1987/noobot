@@ -74,11 +74,6 @@ export class ScopedSessionLocationResolver {
     Object.freeze(this);
   }
 
-  async resolveSessionDir(userId, sessionId) {
-    this._assertIdentity(userId, sessionId);
-    return this.sessionDir;
-  }
-
   async resolveSessionScope(userId, sessionId, parentSessionId = "") {
     this._assertIdentity(userId, sessionId);
     const resolvedParentSessionId = text(parentSessionId);

@@ -5,7 +5,6 @@
  */
 
 import { createExecutionEventListener, emitEvent } from "../../events/index.js";
-import { CALLER_ROLE } from "../config/constants.js";
 import { text } from "@noobot/shared/value";
 
 export class SessionExecutionInitializer {
@@ -19,7 +18,7 @@ export class SessionExecutionInitializer {
     userId,
     sessionId,
     parentSessionId = "",
-    caller = CALLER_ROLE.USER,
+    caller,
     eventListener = null,
     dialogProcessId = "",
     turnScopeId = "",
@@ -40,17 +39,18 @@ export class SessionExecutionInitializer {
       parentSessionId,
       persistenceContext,
     });
-    const sessionLoadState = sessionBundle?.exists ? "loaded" : "created";
+    const sessionLoadState = sessionBundle.exists ? "loaded" : "created";
     const userConfig = await this.configService.loadUserConfig(basePath);
 
-    await this.session.createSession({
-      userId,
-      sessionId: usedSessionId,
-      parentSessionId,
-      caller,
-      modelAlias: "",
-      persistenceContext,
-    });
+    if (!sessionBundle.exists) {
+      await this.session.createSession({
+        userId,
+        sessionId: usedSessionId,
+        parentSessionId,
+        caller,
+        persistenceContext,
+      });
+    }
 
     await this.session.upsertTurnTiming({
       userId,

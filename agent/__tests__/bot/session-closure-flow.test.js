@@ -19,6 +19,8 @@ import { SessionExecutionEngine } from "../../src/bot/session/session-execution-
 import { BotManager } from "../../src/bot/index.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
@@ -85,7 +87,13 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         attachments: [],
       };
       persistedTurns.push(userMessage);
-      return { sessionId: payload.sessionId, userMessage, attachments: [], aggregateVersion: 1 };
+      return {
+        ...createTestSessionRequiredFields(),
+        sessionId: payload.sessionId,
+        userMessage,
+        attachments: [],
+        aggregateVersion: 1,
+      };
     },
     async bindTurnAttachments(payload = {}) {
       const index = persistedTurns.findIndex(
@@ -313,6 +321,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       commandId: acceptedTurn.turnScopeId,
     }),
     turnAcceptance: createTurnAcceptanceReceipt({
+      ...createTestSessionRequiredFields(),
       commandId: acceptedTurn.turnScopeId,
       sessionId,
       turnScopeId: acceptedTurn.turnScopeId,
@@ -336,7 +345,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         upstreamEvents.push(evt);
       },
     },
-    caller: "user",
+    caller: SESSION_CALLER.USER,
     parentSessionId: "",
   });
 
@@ -585,6 +594,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       commandId: acceptedTurn.turnScopeId,
     }),
     turnAcceptance: createTurnAcceptanceReceipt({
+      ...createTestSessionRequiredFields(),
       commandId: acceptedTurn.turnScopeId,
       sessionId,
       turnScopeId: acceptedTurn.turnScopeId,
@@ -595,7 +605,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     userId: "u1",
     sessionId,
     parentSessionId: parentRootSessionId,
-    caller: "bot",
+    caller: SESSION_CALLER.BOT,
     parentDialogProcessId: acceptedTurn.parentDialogProcessId,
     message: acceptedTurn.content,
     turnScopeId: acceptedTurn.turnScopeId,

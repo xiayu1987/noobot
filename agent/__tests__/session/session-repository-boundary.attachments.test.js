@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 
 import {
   readSessionArtifact,
@@ -19,6 +19,11 @@ import {
   buildSessionDisplaySummary,
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
 } from "../../src/session/session-summary-builders.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -31,6 +36,7 @@ async function withTempWorkspace(fn) {
 
 test("session display summary should keep canonical attachment fields", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "s-attachments",
     aggregateVersion: 0,
     messages: [
@@ -62,6 +68,7 @@ test("session display summary should keep canonical attachment fields", () => {
 
 test("session display summary keeps rich attachment fields for preview and parsed result", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "s-rich-attachments",
     aggregateVersion: 0,
     messages: [
@@ -140,6 +147,7 @@ test("session display summary keeps rich attachment fields for preview and parse
 
 test("session display summary derives attachments from transfer envelopes", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "s-transfer-attachments",
     aggregateVersion: 0,
     messages: [
@@ -199,6 +207,7 @@ test("session display summary derives attachments from transfer envelopes", () =
 
 test("session display summary binds completed tool artifacts to one explicit assistant turn", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "s-tool-artifacts",
     aggregateVersion: 0,
     messages: [
@@ -293,6 +302,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
 
 test("session display summary does not guess ownership for an unmatched tool artifact turn", () => {
   const summary = buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
     sessionId: "s-unmatched-artifact",
     aggregateVersion: 0,
     messages: [
@@ -359,14 +369,15 @@ test("session display summary does not guess ownership for an unmatched tool art
 test("session artifact persistence should normalize attachment fields before writing", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-attachments");
-    const result = await writeSessionArtifact({
+    await writeSessionArtifact({
       sessionDir,
       depth: 1,
       now: () => "2026-05-14T00:00:00.000Z",
-      sessionPayload: {
+      sessionPayload: applySessionMessageFacts({
+        ...createTestSessionRequiredFields(),
         sessionId: "s-attachments",
         aggregateVersion: 0,
-        caller: "user",
+        caller: SESSION_CALLER.USER,
         messages: [
           {
             messageUid: "sm_attachment_user",
@@ -396,11 +407,11 @@ test("session artifact persistence should normalize attachment fields before wri
             attachment_metas: [{ attachmentId: "att-legacy-only-snake" }],
           },
         ],
-      },
+      }),
     });
 
     const persistedSession = await readSessionArtifact({ sessionDir });
-    const persistedSummary = JSON.parse(await readFile(result.files.sessionSummary, "utf8"));
+    const persistedSummary = buildSessionDisplaySummary(persistedSession);
     const sessionJson = JSON.stringify(persistedSession);
     const summaryJson = JSON.stringify(persistedSummary);
 

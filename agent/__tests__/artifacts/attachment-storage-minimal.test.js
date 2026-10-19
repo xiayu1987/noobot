@@ -25,6 +25,10 @@ import {
   createTestAgentEnvironment,
   createTestAgentExecutionScope,
 } from "../helpers/agent-execution-scope.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -639,7 +643,8 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
       pluginDialogId,
       "session-summary.json",
     );
-    const snapshotPayload = {
+    const snapshotPayload = applySessionMessageFacts({
+      ...createTestSessionRequiredFields(),
       sessionId: rootSessionId,
       aggregateVersion: 0,
       messages: [
@@ -656,7 +661,7 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
           ],
         },
       ],
-    };
+    });
     await writeSessionArtifact({
       sessionDir: path.dirname(runtimeSessionFile),
       sessionPayload: snapshotPayload,

@@ -18,7 +18,8 @@ import {
   collectLifecycleStates,
   findStoppedLifecycleEvent,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
-import { persistSession } from "../helpers/runtime-events-env.js";
+import { initializeSessionTree, persistSession } from "../helpers/runtime-events-env.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("runSession emits interrupted branch lifecycle state for non-user abort errors", async () => {
   const callOrder = [];
@@ -106,7 +107,12 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   const callOrder = [];
   const events = [];
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-runner-stop-snapshot-"));
-  await persistSession(workspaceRoot, "u1", "session-used");
+  await initializeSessionTree(workspaceRoot, "u1");
+  await persistSession(workspaceRoot, "u1", {
+    sessionId: "session-used",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
@@ -196,7 +202,12 @@ test("runSession persists stopped model message snapshot for plain user_stop err
   const workspaceRoot = await fs.mkdtemp(
     path.join(os.tmpdir(), "noobot-runner-plain-user-stop-snapshot-"),
   );
-  await persistSession(workspaceRoot, "u1", "session-used");
+  await initializeSessionTree(workspaceRoot, "u1");
+  await persistSession(workspaceRoot, "u1", {
+    sessionId: "session-used",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
     stoppedModelMessageSnapshotCandidate: {
@@ -266,7 +277,12 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   const workspaceRoot = await fs.mkdtemp(
     path.join(os.tmpdir(), "noobot-runner-stop-signal-snapshot-"),
   );
-  await persistSession(workspaceRoot, "u1", "session-used");
+  await initializeSessionTree(workspaceRoot, "u1");
+  await persistSession(workspaceRoot, "u1", {
+    sessionId: "session-used",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const abortController = new AbortController();
   const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
@@ -348,7 +364,12 @@ test("runSession drains accepted user interjections before sealing the stopped s
   const workspaceRoot = await fs.mkdtemp(
     path.join(os.tmpdir(), "noobot-runner-stop-interjection-snapshot-"),
   );
-  await persistSession(workspaceRoot, "u1", "session-used");
+  await initializeSessionTree(workspaceRoot, "u1");
+  await persistSession(workspaceRoot, "u1", {
+    sessionId: "session-used",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const modelContext = createModelContext({
     activeTurnIdentity: {
       dialogProcessId: "dialog-1",

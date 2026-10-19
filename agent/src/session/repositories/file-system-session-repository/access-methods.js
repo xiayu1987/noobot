@@ -7,7 +7,8 @@ import { createSessionDeletedError } from "@noobot/session-protocol";
 import { fatalSystemError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
-import { text, isPlainObject } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
+import { requireSessionTombstoneSessions } from "@noobot/workspace-protocol/session-tombstone";
 
 function requireIdentity(value, message, code) {
   const normalized = text(value);
@@ -27,28 +28,14 @@ function requireSessionId(sessionId) {
   );
 }
 
-function createTombstoneInvalidError(tombstoneFile) {
-  const error = new Error(`invalid session tombstone: ${tombstoneFile}`);
-  error.code = "SESSION_TOMBSTONE_INVALID";
-  error.persistencePath = tombstoneFile;
-  return error;
-}
-
 class SessionAccessMethods {
   async _readDeletedSessions(userId) {
     const tombstoneFile = this._sessionTombstoneFile(requireUserId(userId));
     const tombstone = await this.storageService.readJson(tombstoneFile, null);
     if (tombstone === null) return { sessions: {} };
-    const sessions = tombstone?.sessions;
-    if (!isPlainObject(sessions)) {
-      throw createTombstoneInvalidError(tombstoneFile);
-    }
-    for (const [sessionId, deletedAt] of Object.entries(sessions)) {
-      if (!String(sessionId).trim() || !Number.isFinite(deletedAt)) {
-        throw createTombstoneInvalidError(tombstoneFile);
-      }
-    }
-    return { sessions };
+    return {
+      sessions: requireSessionTombstoneSessions(tombstone, { persistencePath: tombstoneFile }),
+    };
   }
 
   async markSessionsDeleted(userId, sessionIds) {
@@ -81,10 +68,6 @@ class SessionAccessMethods {
     if (await this.isSessionDeleted(userId, sessionId)) {
       throw createSessionDeletedError({ userId, sessionId });
     }
-  }
-
-  async resolveSessionDir(userId, sessionId, parentSessionId = "") {
-    return this.sessionPathResolver.resolveSessionDir(userId, sessionId, parentSessionId);
   }
 
   async resolveSessionScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {

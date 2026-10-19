@@ -14,6 +14,8 @@ import {
   withTempWorkspace,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function canonicalTransferEnvelope(sessionId) {
   return {
@@ -58,8 +60,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
 
     const session = await repository.findById(userId, sessionId, "");
     session.messages = canonicalMessages(
@@ -72,7 +73,8 @@ test("session detail derives transfer envelopes from the canonical Session", asy
       ],
       "canonical_display",
     );
-    await repository.save(userId, session, "");
+    await repository.save(userId, applySessionMessageFacts(session), "");
+    await repository.ensureSessionDisplaySummary(userId, sessionId, "");
 
     const scope = await repository.resolveSessionScope(userId, sessionId, "");
     const summaryFile = path.join(scope.sessionDir, "session-summary.json");
@@ -120,8 +122,7 @@ test("failed Session repair projects an unavailable list item", async () => {
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
 
     const scope = await repository.resolveSessionScope(userId, sessionId, "");
     await writeFile(scope.sessionFile, "{invalid-json", "utf8");

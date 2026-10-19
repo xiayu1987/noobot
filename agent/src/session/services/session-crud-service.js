@@ -7,23 +7,18 @@ import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { readRepositoryParentSessionId } from "./session-scope-resolution.js";
 import {
   buildSessionDisplaySummary,
-  buildUnavailableSessionSummary,
   SESSION_DETAIL_MESSAGE_PROJECTION,
 } from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
 import { reconcileSessionSummaryIndex } from "@noobot/session-repair";
+import {
+  requireSessionTreeNode,
+  resolveSessionTreeDepth,
+} from "@noobot/workspace-protocol/session-tree";
 import { projectSessionAttachmentState } from "./session-attachment-projection.js";
 import { text } from "@noobot/shared/value";
-
-function projectSessionTreeDepth(summary = {}, depth = 0) {
-  const normalizedDepth = Number.isFinite(Number(depth)) ? Number(depth) : 0;
-  return {
-    ...summary,
-    depth: normalizedDepth,
-  };
-}
 
 export class SessionCrudService {
   constructor({
@@ -60,40 +55,18 @@ export class SessionCrudService {
     return this.sessionRepo.listSessionIds(userId);
   }
 
-  async ensureSession(
-    userId,
-    sessionId,
-    parentSessionId = "",
-    meta = {},
-    persistenceContext = null,
-  ) {
+  async ensureSession(userId, sessionId, parentSessionId, caller, persistenceContext = null) {
     await this.sessionRepo.ensureSession({
       userId,
       sessionId,
       parentSessionId,
-      meta,
+      caller,
       persistenceContext,
     });
   }
 
-  async createSession({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    caller = "user",
-    modelAlias = "",
-    persistenceContext = null,
-  }) {
-    await this.ensureSession(
-      userId,
-      sessionId,
-      parentSessionId,
-      {
-        caller,
-        modelAlias,
-      },
-      persistenceContext,
-    );
+  async createSession({ userId, sessionId, parentSessionId, caller, persistenceContext = null }) {
+    await this.ensureSession(userId, sessionId, parentSessionId, caller, persistenceContext);
     return this.getSessionBundle({ userId, sessionId, parentSessionId, persistenceContext });
   }
 
@@ -147,15 +120,16 @@ export class SessionCrudService {
       });
     } catch (error) {
       if (error?.code !== "SESSION_PROTOCOL_INVALID") throw error;
+      const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
       return {
         exists: true,
         sessionId: normalizedSessionId,
         sessions: [
-          buildUnavailableSessionSummary({
-            sessionId: normalizedSessionId,
-            errorCode: error.code,
-            reason: error.message,
-          }),
+          await this.sessionRepo.buildUnavailableSessionSummary(
+            userId,
+            requireSessionTreeNode(sessionTree, normalizedSessionId),
+            error,
+          ),
         ],
         availability: "unavailable",
         unavailableReason: { code: error.code, message: error.message },
@@ -173,9 +147,9 @@ export class SessionCrudService {
 
     const sessions = [];
     for (const currentSessionId of allSessionIds) {
-      const currentParentSessionId = String(
-        sessionTree?.nodes?.[currentSessionId]?.parentSessionId || "",
-      );
+      const currentNode = requireSessionTreeNode(sessionTree, currentSessionId);
+      const currentParentSessionId = currentNode.parentSessionId;
+      const depth = resolveSessionTreeDepth(sessionTree, currentSessionId);
       const currentBundle = await this.getSessionBundle({
         userId,
         sessionId: currentSessionId,
@@ -183,30 +157,25 @@ export class SessionCrudService {
       });
       if (!currentBundle.exists) {
         if (await this.sessionRepo.isSessionDeleted(userId, currentSessionId)) continue;
-        sessions.push(
-          buildUnavailableSessionSummary({
-            sessionId: currentSessionId,
-            parentSessionId: currentParentSessionId,
-            depth: this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree),
-            errorCode: "SESSION_ARTIFACT_MISSING",
-            reason: "Canonical session artifact is missing",
-          }),
+        const missing = new Error("Canonical session artifact is missing");
+        missing.code = "SESSION_ARTIFACT_MISSING";
+        const unavailable = await this.sessionRepo.buildUnavailableSessionSummary(
+          userId,
+          currentNode,
+          missing,
         );
+        sessions.push({ ...unavailable, depth });
         continue;
       }
       const rawMessages = currentBundle.session.messages;
-      const depth = this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree);
-      const displayProjection = projectSessionTreeDepth(
-        buildSessionDisplaySummary(currentBundle.session),
-        depth,
-      );
       sessions.push(
         await projectSessionAttachmentState({
           attachmentService: this.attachmentService,
           userId,
           session: {
             ...currentBundle.session,
-            ...displayProjection,
+            ...buildSessionDisplaySummary(currentBundle.session),
+            depth,
             sessionId: currentSessionId,
             parentSessionId: currentParentSessionId,
             rawMessages,
@@ -306,7 +275,7 @@ export class SessionCrudService {
   async getSessionDisplayData({ userId, sessionId }) {
     const normalizedSessionId = text(sessionId);
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-    if (!sessionTree?.nodes?.[normalizedSessionId]) {
+    if (!Object.hasOwn(sessionTree.nodes, normalizedSessionId)) {
       return {
         exists: false,
         sessionId: normalizedSessionId,
@@ -324,10 +293,9 @@ export class SessionCrudService {
 
     const sessions = [];
     for (const currentSessionId of allSessionIds) {
-      const currentParentSessionId = String(
-        sessionTree?.nodes?.[currentSessionId]?.parentSessionId || "",
-      );
-      const depth = this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree);
+      const currentNode = requireSessionTreeNode(sessionTree, currentSessionId);
+      const currentParentSessionId = currentNode.parentSessionId;
+      const depth = resolveSessionTreeDepth(sessionTree, currentSessionId);
       let summary = null;
       try {
         summary = await this.sessionRepo.readSessionDisplaySummary(
@@ -336,27 +304,19 @@ export class SessionCrudService {
           currentParentSessionId,
         );
       } catch (error) {
-        summary = buildUnavailableSessionSummary({
-          sessionId: currentSessionId,
-          parentSessionId: currentParentSessionId,
-          errorCode: error?.code || "SESSION_PROTOCOL_INVALID",
-          reason: error?.message || "Session requires protocol repair",
-          depth,
-        });
+        summary = await this.sessionRepo.buildUnavailableSessionSummary(userId, currentNode, error);
       }
       if (!summary) continue;
       sessions.push(
         await projectSessionAttachmentState({
           attachmentService: this.attachmentService,
           userId,
-          session: projectSessionTreeDepth(
-            {
-              ...summary,
-              sessionId: currentSessionId,
-              parentSessionId: currentParentSessionId,
-            },
+          session: {
+            ...summary,
+            sessionId: currentSessionId,
+            parentSessionId: currentParentSessionId,
             depth,
-          ),
+          },
         }),
       );
     }
@@ -379,7 +339,7 @@ export class SessionCrudService {
     const migratedSessionIds = [];
     const failures = [];
     for (const sessionId of sessionIds) {
-      const parentSessionId = text(sessionTree?.nodes?.[sessionId]?.parentSessionId);
+      const { parentSessionId } = requireSessionTreeNode(sessionTree, sessionId);
       try {
         const result = await this.sessionRepo.ensureSessionDisplaySummary(
           userId,
@@ -407,7 +367,7 @@ export class SessionCrudService {
     const sessionList = (
       await Promise.all(
         sessionIds.map(async (sessionId) => {
-          const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "");
+          const { parentSessionId } = requireSessionTreeNode(sessionTree, sessionId);
           let sessionBundle;
           try {
             sessionBundle = await this.getSessionBundle({
@@ -430,66 +390,43 @@ export class SessionCrudService {
             ...sessionBundle.session,
             sessionId,
             parentSessionId,
-            depth: this.sessionTreeService.resolveDepthInTree(sessionId, sessionTree),
+            depth: resolveSessionTreeDepth(sessionTree, sessionId),
           };
         }),
       )
     ).filter(Boolean);
 
-    sessionList.sort(
-      (leftSession, rightSession) =>
-        new Date(rightSession.updatedAt || 0).getTime() -
-        new Date(leftSession.updatedAt || 0).getTime(),
+    sessionList.sort((leftSession, rightSession) =>
+      rightSession.updatedAt.localeCompare(leftSession.updatedAt),
     );
     return sessionList;
   }
 
   async getAllSessionSummaries({ userId }) {
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
+    await this.sessionRepo.ensureSessionsSummarySchema(userId);
     const sessionIds = await this.listSessionIds({ userId });
-    const expectedIds = new Set(sessionIds.map((item) => text(item)).filter(Boolean));
     for (const sessionId of sessionIds) {
-      const parentSessionId = text(sessionTree?.nodes?.[sessionId]?.parentSessionId);
+      const { parentSessionId } = requireSessionTreeNode(sessionTree, sessionId);
       try {
         await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
       } catch (error) {
-        await this.sessionRepo.markSessionSummaryUnavailable(
-          userId,
-          sessionId,
-          parentSessionId,
-          error,
-        );
+        await this.sessionRepo.markSessionSummaryUnavailable(userId, sessionId, { error });
       }
     }
     let payload = await this.sessionRepo.readSessionsSummary(userId);
-    const summaries = Array.isArray(payload?.sessions) ? payload.sessions : [];
-    const summaryIndex = reconcileSessionSummaryIndex({ sessions: summaries, sessionIds });
-    const summaryIds = new Set(summaries.map((item) => text(item?.sessionId)).filter(Boolean));
-    const needsRebuild =
-      summaryIndex.changed ||
-      !summaries.length ||
-      summaryIds.size !== expectedIds.size ||
-      [...expectedIds].some((sessionId) => !summaryIds.has(sessionId)) ||
-      summaries.some((summary) => {
-        const sessionId = text(summary?.sessionId);
-        if (!expectedIds.has(sessionId)) return true;
-        if (!sessionTree?.nodes?.[sessionId]) return false;
-        return (
-          Number(summary?.depth || 0) !==
-          this.sessionTreeService.resolveDepthInTree(sessionId, sessionTree)
-        );
-      });
-    if (needsRebuild) {
-      payload = await this.sessionRepo.rebuildSessionsSummary(userId, { sessionTree });
+    if (reconcileSessionSummaryIndex({ sessions: payload.sessions, sessionIds }).changed) {
+      payload = await this.sessionRepo.rebuildSessionsSummary(userId);
     }
-    const sessions = (Array.isArray(payload?.sessions) ? payload.sessions : [])
-      .filter((item) => expectedIds.has(text(item?.sessionId)))
-      .sort(
-        (leftSession, rightSession) =>
-          new Date(rightSession.updatedAt || 0).getTime() -
-          new Date(leftSession.updatedAt || 0).getTime(),
+
+    return payload.sessions
+      .map((summary) => ({
+        ...summary,
+        depth: resolveSessionTreeDepth(sessionTree, summary.sessionId),
+      }))
+      .sort((leftSession, rightSession) =>
+        rightSession.updatedAt.localeCompare(leftSession.updatedAt),
       );
-    return sessions;
   }
 
   async setSessionModelAlias({ userId, sessionId, modelAlias }) {
@@ -498,6 +435,8 @@ export class SessionCrudService {
         this.sessionRepo,
         userId,
         sessionId,
+        "",
+        null,
       );
       const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
       if (!session) return null;
@@ -520,6 +459,8 @@ export class SessionCrudService {
         this.sessionRepo,
         userId,
         sessionId,
+        "",
+        null,
       );
       const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
       if (!session) return null;
@@ -542,6 +483,8 @@ export class SessionCrudService {
         this.sessionRepo,
         userId,
         rootSessionId,
+        "",
+        null,
       );
       const session = await this.sessionRepo.findById(
         userId,

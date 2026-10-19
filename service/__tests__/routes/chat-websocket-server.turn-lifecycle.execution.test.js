@@ -39,6 +39,9 @@ import {
   createAuthoritativeBot,
   payload,
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"]);
 
 test("run event publishing awaits the actual transport send result", async () => {
   const handle = {};

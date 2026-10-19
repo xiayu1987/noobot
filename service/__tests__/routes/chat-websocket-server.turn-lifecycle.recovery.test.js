@@ -24,6 +24,9 @@ import {
   installLifecycleSnapshotReader,
   requestTurnSnapshot,
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user"]);
 
 test("socket close detaches an accepted turn which still completes and releases the session mutex", async () => {
   const authoritative = createAuthoritativeBot();

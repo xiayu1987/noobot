@@ -26,7 +26,7 @@ async function materializeTurn(sessionDir, item) {
     journalPath(sessionDir, item.turnId),
     item.committedBytes,
   );
-  const summarySnapshots = await readSummarySnapshots(sessionDir, records);
+  const summarySnapshots = await readSummarySnapshots(sessionDir, item.summarySnapshots);
   return {
     turnId: item.turnId,
     artifactOrdinal: item.artifactOrdinal,

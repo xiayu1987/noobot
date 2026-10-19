@@ -13,6 +13,9 @@ import {
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["primary-user", "owner-a", "owner-b", "canonical-owner"]);
 
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
   let capturedStopPayload = null;

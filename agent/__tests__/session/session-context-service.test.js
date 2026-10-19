@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -33,7 +34,10 @@ function createSessionContextService(messages = [], { terminalTurns = [] } = {})
   return new SessionContextService({
     sessionMessageService: {
       async getSessionContextSource() {
-        return { messages, turnLifecycle: { turns, commandReceipts: [] } };
+        return {
+          messages,
+          turnLifecycle: { ...createEmptyTurnLifecycle(), turns, commandReceipts: [] },
+        };
       },
     },
   });
@@ -43,7 +47,10 @@ function createIndexedSessionContextService(messages = []) {
   return new SessionContextService({
     sessionMessageService: {
       async getSessionContextSource() {
-        return { messages, turnLifecycle: { turns: {}, commandReceipts: [] } };
+        return {
+          messages,
+          turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
+        };
       },
     },
   });
@@ -575,7 +582,10 @@ test("session context reads messages and terminal statuses from the same parent-
     sessionMessageService: {
       async getSessionContextSource(payload) {
         received = payload;
-        return { messages: [], turnLifecycle: { turns: {}, commandReceipts: [] } };
+        return {
+          messages: [],
+          turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
+        };
       },
     },
   });

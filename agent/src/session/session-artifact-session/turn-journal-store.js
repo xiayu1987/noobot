@@ -43,8 +43,8 @@ function assertIncrementalJournalRecords(records, file) {
       text(record.message.messageUid) === uid &&
       record.hash === messageHash(record.message);
     if (!validRemove && !validUpsert) {
-      const error = new Error(`summary snapshot contains an invalid incremental record: ${file}`);
-      error.code = "SESSION_SUMMARY_SNAPSHOT_RECORD_INVALID";
+      const error = new Error(`turn journal contains an invalid incremental record: ${file}`);
+      error.code = "SESSION_TURN_JOURNAL_RECORD_INVALID";
       throw error;
     }
   }
@@ -72,13 +72,33 @@ export function resolveTurnSummaryReceipts(session = {}, turn = {}) {
   return Array.isArray(state?.receipts) ? state.receipts : [];
 }
 
-export function summarySnapshotRecord(receipt = {}, turn = {}, file = "", contentHash = "") {
+export function receiptCheckpoint(receipt, previousCheckpointIds) {
+  const checkpointId = text(receipt?.checkpointId);
+  const checkpointRevision = Number(receipt?.checkpointRevision || 0);
+  const valid =
+    checkpointId &&
+    Number.isInteger(checkpointRevision) &&
+    checkpointRevision >= 1 &&
+    !previousCheckpointIds.has(checkpointId);
+  return valid ? { checkpointId, checkpointRevision } : null;
+}
+
+export function turnArtifactRequiresRewrite(session, item) {
+  const snapshots = Array.isArray(item?.summarySnapshots) ? item.summarySnapshots : [];
+  const checkpointIds = new Set(snapshots.map((snapshot) => text(snapshot?.checkpointId)));
+  if (
+    resolveTurnSummaryReceipts(session, item).some((receipt) =>
+      receiptCheckpoint(receipt, checkpointIds),
+    )
+  )
+    return true;
+  return isTerminalTurn(session, item) && item?.compacted !== true && snapshots.length === 0;
+}
+
+export function summarySnapshotIndex(receipt = {}, file = "", contentHash = "") {
   return {
-    op: "summary_snapshot",
     checkpointId: text(receipt?.checkpointId),
     checkpointRevision: Number(receipt?.checkpointRevision || 0),
-    turnScopeId: text(turn?.turnScopeId),
-    dialogProcessId: text(turn?.dialogProcessId),
     file,
     contentHash,
     messageUids: Array.isArray(receipt?.summarizedMessageUids)
@@ -95,16 +115,10 @@ export async function writeSummarySnapshot(file, payload) {
   await rename(temp, file);
 }
 
-export function collectSummarySnapshotRecords(records = []) {
-  return (Array.isArray(records) ? records : []).filter(
-    (record) => record?.op === "summary_snapshot",
-  );
-}
-
-export async function readSummarySnapshots(sessionDir, records = []) {
+export async function readSummarySnapshots(sessionDir, indexes = []) {
   const snapshots = [];
   let previousCheckpointHash = "";
-  for (const record of collectSummarySnapshotRecords(records)) {
+  for (const record of Array.isArray(indexes) ? indexes : []) {
     const file = text(record?.file);
     const payload = await readJsonArtifactFile(resolveSummarySnapshotPath(sessionDir, file), null);
     if (
@@ -116,7 +130,7 @@ export async function readSummarySnapshots(sessionDir, records = []) {
       payload.checkpointId !== record.checkpointId ||
       payload.checkpointRevision !== record.checkpointRevision
     ) {
-      const error = new Error(`summary snapshot does not match its journal index: ${file}`);
+      const error = new Error(`summary snapshot does not match its manifest index: ${file}`);
       error.code = "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH";
       throw error;
     }
@@ -128,7 +142,6 @@ export async function readSummarySnapshots(sessionDir, records = []) {
       error.code = "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH";
       throw error;
     }
-    assertIncrementalJournalRecords(payload.records, file);
     snapshots.push({ ...record, payload });
     previousCheckpointHash = record.contentHash;
   }
@@ -161,10 +174,7 @@ export async function readJournalRecords(file, committedBytes) {
       throw failure;
     }
   }
-  assertIncrementalJournalRecords(
-    records.filter((record) => record?.op !== "summary_snapshot"),
-    file,
-  );
+  assertIncrementalJournalRecords(records, file);
   return records;
 }
 
@@ -225,14 +235,14 @@ export async function replaceJournalRecords(file, records) {
   return Buffer.byteLength(payload, "utf8");
 }
 
-export async function replaceJournal(file, messages, summaryRecords = []) {
-  return replaceJournalRecords(file, [
-    ...messages.map((message) => ({
+export async function replaceJournal(file, messages) {
+  return replaceJournalRecords(
+    file,
+    messages.map((message) => ({
       op: "upsert",
       messageUid: message.messageUid,
       message,
       hash: messageHash(message),
     })),
-    ...summaryRecords,
-  ]);
+  );
 }

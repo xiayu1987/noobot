@@ -19,7 +19,6 @@ import {
   AGENT_DETACHED_SESSION_ROOT,
   createAgentDetachedSubSessionStrategy,
 } from "../../src/bot/session/detached-subsession-strategy.js";
-import { CALLER_ROLE } from "../../src/bot/config/constants.js";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
@@ -29,6 +28,8 @@ import {
   createDeps,
   createParentExecutionScope,
 } from "./detached-subsession-runner.test-helpers.js";
+import { SESSION_CALLER, requireSessionCaller } from "@noobot/shared/session-caller";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 test("detached sub-session delegates execution and persistence to the main runner", async () => {
   const { calls, deps } = createDeps();
@@ -68,7 +69,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.sessionId, "sub1");
   assert.equal(payload.parentSessionId, "parent1");
   assert.equal(payload.parentDialogProcessId, "parent-dialog");
-  assert.equal(payload.caller, CALLER_ROLE.BOT);
+  assert.equal(payload.caller, SESSION_CALLER.BOT);
   assert.equal(payload.message, "hello");
   assert.deepEqual(payload.attachments, [{ name: "a.txt" }]);
   assert.deepEqual(payload.systemMessages, ["system"]);
@@ -390,9 +391,11 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     async resolveSessionScope() {
       return { resolvedParentSessionId: "parent1", sessionDir };
     },
-    createInitialSession({ sessionId, parentSessionId }) {
+    createInitialSession({ sessionId, parentSessionId, caller }) {
       return normalizeSessionEntity(
         {
+          ...createTestSessionRequiredFields(),
+          caller: requireSessionCaller(caller),
           sessionId,
           parentSessionId,
           aggregateVersion: 0,
@@ -415,7 +418,6 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       next.aggregateVersion = Number(persisted?.aggregateVersion ?? 0) + 1;
       persisted = structuredClone(normalizeSessionEntity(next, { now: fixedNow }));
     },
-    async writeSessionDisplaySummary() {},
   };
   const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
   const { deps } = createDeps({
@@ -459,6 +461,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       "turn.completed",
     ],
   );
+  assert.equal(persisted.caller, SESSION_CALLER.BOT);
   assert.equal(persisted.turnLifecycle.turns["turn-persisted"].state, "completed");
   assert.equal(
     outbox[3].envelope.payload.summaryVersion,

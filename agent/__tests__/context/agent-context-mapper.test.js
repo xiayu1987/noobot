@@ -12,6 +12,7 @@ import {
   TEST_AGENT_EXECUTION,
   createTestAgentEnvironment,
 } from "../helpers/agent-execution-scope.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function buildEnvelope() {
   return createAgentContextEnvelope(
@@ -36,7 +37,7 @@ function buildEnvelope() {
       workspaceDirectories: ["runtime/session", "runtime/ops_workdir"],
       systemRuntime: {
         now: "2026-08-16T00:00:00.000Z",
-        caller: "user",
+        caller: SESSION_CALLER.USER,
         isSuperUser: true,
         config: { allowUserInteraction: false, safeConfirm: true, selectedConnectorIds: ["c1"] },
       },

@@ -8,9 +8,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
-import { applyRuntimeEventsEnv } from "../src/testing.js";
+import { applyRuntimeEventsEnv, initializeSessionTree } from "../src/testing.js";
 
-export { markSessionDeleted, persistSession } from "../src/testing.js";
+export { initializeSessionTree, markSessionDeleted, persistSession } from "../src/testing.js";
+
+export const FIXTURE_USER_ID = "admin";
 
 const CONTROL_ENV_NAMES = [
   ...Object.values(RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents),
@@ -22,6 +24,7 @@ export async function tempRoot() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "runtime-events-"));
   process.env.NOOBOT_WORKSPACE_ROOT = root;
   for (const name of CONTROL_ENV_NAMES) delete process.env[name];
+  await initializeSessionTree(root, FIXTURE_USER_ID);
   return root;
 }
 

@@ -21,6 +21,7 @@ import {
 } from "./tool-runner.test-helpers.js";
 import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function withAttachmentService(options) {
   return createTestRuntimeContext({
@@ -528,7 +529,7 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
     invoke: async () => ({ ok: true }),
   };
   const runtime = createTestRuntimeContext({
-    systemRuntime: { caller: "user" },
+    systemRuntime: { caller: SESSION_CALLER.USER },
     runConfig: { hookManager },
   });
 

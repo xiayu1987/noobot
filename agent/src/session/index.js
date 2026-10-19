@@ -309,11 +309,7 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.listSessionIds({ userId });
     },
 
-    async ensureSession(userId, sessionId, parentSessionId = "", meta = {}) {
-      return sessionCrudService.ensureSession(userId, sessionId, parentSessionId, meta);
-    },
-
-    async createSession(payload = {}) {
+    async createSession(payload) {
       return sessionCrudService.createSession(payload);
     },
 
@@ -533,7 +529,7 @@ export {
   buildSessionDisplaySummary,
   buildSessionSummary,
   isSessionDisplaySummaryPayload,
-  normalizeSessionsSummaryPayload,
+  requireSessionsSummaryPayload,
 } from "./session-summary-builders.js";
 export {
   SESSION_ARTIFACT_FILE_NAMES,
@@ -550,7 +546,6 @@ export {
   readSessionMessageCount,
   readSessionTurn,
   readSessionArtifactSnapshot,
-  readSessionDisplaySummaryArtifact,
   rebuildSessionDisplaySummaryArtifact,
   writeExecutionReportArtifact,
   readExecutionReportArtifact,

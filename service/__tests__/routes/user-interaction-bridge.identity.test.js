@@ -8,6 +8,9 @@ import assert from "node:assert/strict";
 
 import { createUserInteractionBridge } from "../../ws/chat-websocket/user-interaction-bridge.js";
 import { findPendingInteraction } from "../../ws/chat-websocket/pending-interaction-registry.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["user-1"]);
 
 const bridgePorts = { ownerUserId: "user-1" };
 

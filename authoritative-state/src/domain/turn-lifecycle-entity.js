@@ -131,7 +131,7 @@ function normalizeRecord(source, projector) {
   return output;
 }
 
-export function normalizeTurnLifecycleEntity(source = {}) {
+export function normalizeTurnLifecycleEntity(source) {
   const turns = normalizeRecord(source.turns, normalizeTurn);
   const replacedTurns = normalizeRecord(source.replacedTurns, normalizeReplacedTurn);
   const commandReceipts = normalizeCommandReceipts(source.commandReceipts).map(

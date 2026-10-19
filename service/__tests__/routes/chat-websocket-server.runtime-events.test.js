@@ -18,10 +18,12 @@ import {
   requestRawUpgrade,
 } from "./chat-websocket-server.test-helpers.js";
 import {
+  initializeSessionTree,
   persistSession,
   sessionDirPath,
   withRuntimeEventsRoot,
 } from "../runtime-events-root.test-helpers.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime event", () =>
   withRuntimeEventsRoot("noobot-chat-ws-system-", async (workspaceRoot) => {
@@ -71,7 +73,12 @@ test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime
 
 test("chat-websocket-server: service websocket send failures write direct system runtime event", () =>
   withRuntimeEventsRoot("noobot-service-runtime-events-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "s1");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s1",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     await recordServiceWebSocketSendFailure({
       eventName: "done",
       userId: "u1",
@@ -99,8 +106,17 @@ test("chat-websocket-server: service websocket send failures write direct system
 
 test("chat-websocket-server: service websocket runtime errors write direct system runtime event", () =>
   withRuntimeEventsRoot("noobot-service-runtime-events-error-", async (workspaceRoot) => {
-    await persistSession(workspaceRoot, "u1", "p1");
-    const childDir = await persistSession(workspaceRoot, "u1", "s1", "p1");
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "p1",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const childDir = await persistSession(workspaceRoot, "u1", {
+      sessionId: "s1",
+      parentSessionId: "p1",
+      caller: SESSION_CALLER.USER,
+    });
     assert.equal(childDir, path.join(await sessionDirPath(workspaceRoot, "u1", "p1"), "s1"));
     await recordServiceWebSocketRuntimeError({
       event: "service.websocket.run.failed",

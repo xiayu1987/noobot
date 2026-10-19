@@ -27,9 +27,8 @@ export function upsertSessionTurnTiming(session = {}, timing = {}) {
     ...(modelLoopRound ? { modelLoopRound } : {}),
   };
   const incomingKey = resolveTurnTimingKey(incoming);
-  const source = Array.isArray(session.turnTimings) ? session.turnTimings : [];
   let matched = false;
-  session.turnTimings = source.map((item) => {
+  session.turnTimings = session.turnTimings.map((item) => {
     if (resolveTurnTimingKey(item) !== incomingKey) return item;
     matched = true;
     return { ...item, ...incoming };
@@ -40,7 +39,7 @@ export function upsertSessionTurnTiming(session = {}, timing = {}) {
 export function pruneSessionTurnTimings(session) {
   const messages = session.messages;
   const liveKeys = new Set(messages.map(resolveTurnTimingKey).filter(Boolean));
-  session.turnTimings = (Array.isArray(session.turnTimings) ? session.turnTimings : []).filter(
-    (item) => liveKeys.has(resolveTurnTimingKey(item)),
+  session.turnTimings = session.turnTimings.filter((item) =>
+    liveKeys.has(resolveTurnTimingKey(item)),
   );
 }

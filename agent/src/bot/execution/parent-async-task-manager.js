@@ -7,7 +7,8 @@
 import { isPlainObject } from "@noobot/shared/value";
 import { v4 as uuidv4 } from "uuid";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
-import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { SESSION_ASYNC_STATUS } from "../config/constants.js";
 
 export class ParentAsyncTaskManager {
   constructor({ now = () => new Date().toISOString() } = {}) {
@@ -84,13 +85,13 @@ export class ParentAsyncTaskManager {
 
   ensureParentAsyncResultContainer({
     parentAsyncResultContainer = null,
-    caller = CALLER_ROLE.USER,
+    caller,
     parentSessionId = "",
     parentDialogProcessId = "",
   }) {
     let container = parentAsyncResultContainer;
     if (!isPlainObject(container)) {
-      if (String(caller || CALLER_ROLE.USER) !== CALLER_ROLE.BOT) return null;
+      if (caller !== SESSION_CALLER.BOT) return null;
       container = {};
     }
     container.id = (container?.id ?? "").trim() || uuidv4();

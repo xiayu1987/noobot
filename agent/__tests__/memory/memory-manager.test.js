@@ -13,6 +13,10 @@ import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/
 
 import { MemoryManager } from "../../src/memory/index.js";
 import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  applySessionMessageFacts,
+  createTestSessionRequiredFields,
+} from "../helpers/session-message-facts.js";
 
 function createMemoryConfig(workspaceRoot, alias = "mock-memory-model") {
   return {
@@ -580,7 +584,8 @@ test("captureSessionToShortMemory skips injected messages", async () => {
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   await writeSessionArtifact({
     sessionDir: path.join(userRoot, "runtime/session", normalizedParentSessionId, "s1"),
-    sessionPayload: {
+    sessionPayload: applySessionMessageFacts({
+      ...createTestSessionRequiredFields(),
       sessionId: "s1",
       aggregateVersion: 0,
       messages: [
@@ -616,7 +621,7 @@ test("captureSessionToShortMemory skips injected messages", async () => {
           noobotInternalMessageType: internalType,
         })),
       ],
-    },
+    }),
   });
 
   const service = new MemoryManager({ workspaceRoot });

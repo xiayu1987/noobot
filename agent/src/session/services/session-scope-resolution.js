@@ -8,8 +8,8 @@ export async function readRepositoryParentSessionId(
   sessionRepo,
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
+  parentSessionId,
+  persistenceContext,
 ) {
   const scope = await sessionRepo.resolveSessionScope(
     userId,

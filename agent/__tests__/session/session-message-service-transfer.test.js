@@ -10,6 +10,7 @@ import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -34,15 +35,17 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
       return operation();
     },
     async ensureSession() {},
-    async findById() {
-      return {
+    async findTurnView() {
+      const session = {
+        ...createTestSessionRequiredFields(),
         sessionId: "s1",
         aggregateVersion: 0,
         parentSessionId: "",
         messages: [],
       };
+      return { session, turnScopeIds: [] };
     },
-    async save(_userId, session) {
+    async saveTurnView(_userId, session) {
       saved.push(session);
     },
   };
@@ -101,6 +104,7 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
 test("SessionMessageService.appendTurns stores thinking timing in turnTimings without message timing", async () => {
   const saved = [];
   const session = {
+    ...createTestSessionRequiredFields(),
     sessionId: "s1",
     aggregateVersion: 0,
     parentSessionId: "",
@@ -115,10 +119,10 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
       return operation();
     },
     async ensureSession() {},
-    async findById() {
-      return session;
+    async findTurnView() {
+      return { session, turnScopeIds: [] };
     },
-    async save(_userId, nextSession) {
+    async saveTurnView(_userId, nextSession) {
       saved.push(JSON.parse(JSON.stringify(nextSession)));
     },
   };
@@ -163,6 +167,7 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
 test("SessionMessageService.appendTurns keeps existing turn timing when later same-turn appends pass empty timing", async () => {
   const saved = [];
   const session = {
+    ...createTestSessionRequiredFields(),
     sessionId: "s1",
     aggregateVersion: 0,
     parentSessionId: "",
@@ -177,10 +182,10 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
       return operation();
     },
     async ensureSession() {},
-    async findById() {
-      return session;
+    async findTurnView() {
+      return { session, turnScopeIds: [] };
     },
-    async save(_userId, nextSession) {
+    async saveTurnView(_userId, nextSession) {
       saved.push(JSON.parse(JSON.stringify(nextSession)));
     },
   };
@@ -239,6 +244,7 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
 test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async () => {
   const saved = [];
   const session = {
+    ...createTestSessionRequiredFields(),
     sessionId: "s1",
     parentSessionId: "",
     aggregateVersion: 1,
@@ -299,6 +305,7 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
 test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () => {
   const saved = [];
   const session = {
+    ...createTestSessionRequiredFields(),
     sessionId: "s1",
     parentSessionId: "",
     aggregateVersion: 1,

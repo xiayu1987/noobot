@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -16,14 +18,14 @@ import {
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 
 test("session save refreshes the display projection with live activity timeline", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "live" });
-    await runtime.sessionCrudService.ensureSession(userId, "live", "");
+    await runtime.sessionCrudService.ensureSession(userId, "live", "", SESSION_CALLER.USER);
 
     const session = await runtime.repositories.sessionRepository.findById(userId, "live", "");
     session.messages = canonicalMessages(
@@ -53,7 +55,11 @@ test("session save refreshes the display projection with live activity timeline"
       ],
       "live",
     );
-    await runtime.repositories.sessionRepository.save(userId, session, "");
+    await runtime.repositories.sessionRepository.save(
+      userId,
+      applySessionMessageFacts(session),
+      "",
+    );
 
     const display = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
       userId,
@@ -68,16 +74,17 @@ test("session save refreshes the display projection with live activity timeline"
   });
 });
 
-test("session save writes the display summary once", async () => {
+test("session save leaves the display summary to the revision-checked projection", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({
+    await runtime.sessionCrudService.ensureSession(
       userId,
-      sessionId: "single-summary-write",
-    });
-    await runtime.sessionCrudService.ensureSession(userId, "single-summary-write", "");
+      "single-summary-write",
+      "",
+      SESSION_CALLER.USER,
+    );
 
     const repository = runtime.repositories.sessionRepository;
     const originalWriteJsonAtomic = repository.storageService.writeJsonAtomic.bind(
@@ -94,8 +101,11 @@ test("session save writes the display summary once", async () => {
       "single_write",
     );
 
-    await repository.save(userId, session, "");
-
+    await repository.save(userId, applySessionMessageFacts(session), "");
+    assert.equal(displaySummaryWrites, 0);
+    await repository.ensureSessionDisplaySummary(userId, "single-summary-write", "");
+    assert.equal(displaySummaryWrites, 1);
+    await repository.ensureSessionDisplaySummary(userId, "single-summary-write", "");
     assert.equal(displaySummaryWrites, 1);
   });
 });
@@ -106,8 +116,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     const sessionId = "checkpoint-receipt";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
 
     const repository = runtime.repositories.sessionRepository;
     const session = await repository.findById(userId, sessionId, "");
@@ -128,6 +137,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       },
     ];
     session.turnLifecycle = {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-current",
       turns: {
         "turn-current": {
@@ -139,7 +149,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
         },
       },
     };
-    await repository.save(userId, session, "");
+    await repository.save(userId, applySessionMessageFacts(session), "");
 
     const checkpoint = {
       userId,
@@ -186,10 +196,13 @@ test("concurrent saves for different sessions preserve every sessions summary en
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "B" });
-    await runtime.sessionCrudService.ensureSession(userId, "A", "");
-    await runtime.sessionCrudService.ensureSession(userId, "B", "");
+    await runtime.repositories.sessionRepository.registerSessionTreeNode(userId, {
+      sessionId: "A",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    await runtime.sessionCrudService.ensureSession(userId, "A", "", SESSION_CALLER.USER);
+    await runtime.sessionCrudService.ensureSession(userId, "B", "", SESSION_CALLER.USER);
     const [sessionA, sessionB] = await Promise.all([
       runtime.repositories.sessionRepository.findById(userId, "A", ""),
       runtime.repositories.sessionRepository.findById(userId, "B", ""),
@@ -198,8 +211,8 @@ test("concurrent saves for different sessions preserve every sessions summary en
     sessionB.messages = canonicalMessages([{ role: "user", content: "updated B" }], "concurrent_b");
 
     await Promise.all([
-      runtime.repositories.sessionRepository.save(userId, sessionA, ""),
-      runtime.repositories.sessionRepository.save(userId, sessionB, ""),
+      runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionA), ""),
+      runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionB), ""),
     ]);
 
     const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);

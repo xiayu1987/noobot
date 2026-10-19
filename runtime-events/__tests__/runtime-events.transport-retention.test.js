@@ -19,10 +19,15 @@ import {
   writeArchive,
   useRuntimeEventsEnv,
 } from "./runtime-events-test-fixtures.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("runtime event jsonl transport rotates active file when max file bytes is exceeded", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "rotation-2");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "rotation-2",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const baseEvent = {
     source: "agent",
     scope: "session",
@@ -58,7 +63,11 @@ test("runtime event jsonl transport rotates active file when max file bytes is e
 
 test("runtime event max file bytes can be disabled with zero", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "rotation-disabled");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "rotation-disabled",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const baseEvent = {
     source: "agent",
     scope: "session",
@@ -88,7 +97,11 @@ test("runtime event max file bytes can be disabled with zero", async () => {
 
 test("runtime event jsonl transport serializes concurrent writes to the same file", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "concurrent-writes");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "concurrent-writes",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const writes = await Promise.all(
     Array.from({ length: 100 }, (_, id) =>
       writeRuntimeEvent({
@@ -118,7 +131,11 @@ test("runtime event max file bytes falls back when environment value is invalid"
   const previousDefaultWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
   const defaultWorkspaceRoot = await tempRoot();
   try {
-    await persistSession(defaultWorkspaceRoot, "admin", "rotation-invalid-env");
+    await persistSession(defaultWorkspaceRoot, "admin", {
+      sessionId: "rotation-invalid-env",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     process.env[maxFileBytesEnv] = "invalid";
     process.env.NOOBOT_WORKSPACE_ROOT = defaultWorkspaceRoot;
     const first = await writeRuntimeEvent({
@@ -156,7 +173,11 @@ test("runtime event max file bytes falls back when environment value is invalid"
 
 test("runtime event archive cleanup deletes archives older than retention days", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "cleanup-ttl");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "cleanup-ttl",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const baseEvent = {
     source: "agent",
     scope: "session",
@@ -184,7 +205,11 @@ test("runtime event archive cleanup deletes archives older than retention days",
 
 test("runtime event archive cleanup keeps only newest max archives", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "cleanup-max");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "cleanup-max",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const baseEvent = {
     source: "agent",
     scope: "session",
@@ -213,7 +238,11 @@ test("runtime event archive cleanup keeps only newest max archives", async () =>
 
 test("runtime event archive cleanup can be disabled", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "cleanup-disabled");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "cleanup-disabled",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const baseEvent = {
     source: "agent",
     scope: "session",
@@ -242,7 +271,11 @@ test("runtime event archive cleanup can be disabled", async () => {
 
 test("runtime event archive cleanup ignores active and unrelated jsonl files", async () => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "cleanup-active");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "cleanup-active",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const baseEvent = {
     source: "agent",
     scope: "session",
@@ -269,7 +302,11 @@ test("runtime event archive cleanup ignores active and unrelated jsonl files", a
 
 test("runtime event archive cleanup failure is reported once per batch and keeps the write", async (t) => {
   const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "cleanup-fail");
+  await persistSession(workspaceRoot, "admin", {
+    sessionId: "cleanup-fail",
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
   const baseEvent = {
     source: "agent",
     scope: "session",

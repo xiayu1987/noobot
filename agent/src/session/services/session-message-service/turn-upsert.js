@@ -12,6 +12,7 @@ import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/m
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { createSessionMessageUid } from "../../../context/session/message-uid.js";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
+import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
@@ -238,6 +239,7 @@ export function upsertTurnInSession(service, session, resolvedParentSessionId, i
   applyToolFields(turn, input);
   applyAttachments(turn, input);
   const persistedTurn = persistTurn(service, session.messages, turn);
+  registerSessionMessageFacts(session, persistedTurn);
   updateSessionMetadata(service, session, turn, input);
   return persistedTurn;
 }

@@ -44,6 +44,7 @@ import {
 } from "../../src/tools/collaboration/help-sections.js";
 import { createHelpTool } from "../../src/tools/collaboration/help-tool.js";
 import { projectToolResultForModel } from "../../src/tools/core/tool-json-result.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function isAbsoluteAnyPlatform(value) {
   return /^([A-Za-z]:[\\/]|[\\/])/.test(String(value || ""));
@@ -89,7 +90,7 @@ function createScope({
           sessionId: identity.sessionId,
           dialogProcessId: identity.dialogProcessId,
           turnScopeId: identity.turnScopeId,
-          caller: "user",
+          caller: SESSION_CALLER.USER,
           now: "2026-01-01T00:00:00.000Z",
           isSuperUser: true,
         },

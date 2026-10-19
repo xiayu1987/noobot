@@ -21,10 +21,12 @@ import {
   readSessionDisplaySummaryArtifact as readDisplaySummaryArtifact,
   readSessionMessageCount,
   readSessionTurn,
+  readSessionTurnView,
   rebuildSessionDisplaySummaryArtifact,
   writeSessionArtifact,
   repairSessionArtifacts,
 } from "../../session-artifact-store.js";
+import { buildSessionListFacts } from "../../session-artifact-session/session-list-facts.js";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import {
   reconcileCompletedTurnSummaryMarks,
@@ -121,7 +123,10 @@ class SessionArtifactMethods {
       });
       let currentManifest = await this.storageService.readJson(scope.sessionFile, null);
       if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
-        await this.upsertSessionSummary(userId, session);
+        await this.upsertSessionSummary(userId, session, {
+          listFacts: buildSessionListFacts(session),
+          persistenceContext,
+        });
         return { summary: rebuilt, migrated, rebuilt: !migrated };
       }
       await this._refreshSessionDisplaySummary(
@@ -145,12 +150,10 @@ class SessionArtifactMethods {
       throw error;
     } catch (error) {
       try {
-        await this.markSessionSummaryUnavailable(
-          userId,
-          normalizedSessionId,
-          parentSessionId,
+        await this.markSessionSummaryUnavailable(userId, normalizedSessionId, {
           error,
-        );
+          persistenceContext,
+        });
       } catch (projectionError) {
         error.unavailableProjectionCause = projectionError;
       }
@@ -188,59 +191,14 @@ class SessionArtifactMethods {
           sessionDir: scope.sessionDir,
           sessionPayload: session,
         });
-        await this.upsertSessionSummary(userId, session);
+        await this.upsertSessionSummary(userId, session, {
+          listFacts: buildSessionListFacts(session),
+          persistenceContext,
+        });
         return session;
       },
       persistenceContext,
     );
-  }
-
-  async readSessionDisplaySummaryArtifact(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return null;
-    const { sessionDir } = await this.resolveSessionScope(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    return readDisplaySummaryArtifact({
-      storageService: this.storageService,
-      sessionDir,
-      sessionId: normalizedSessionId,
-    });
-  }
-
-  async writeSessionDisplaySummary(userId = "", session = {}, { persistenceContext = null } = {}) {
-    const sessionId = text(session?.sessionId);
-    if (!sessionId) return null;
-    const { sessionDir } = await this.resolveSessionScope(
-      userId,
-      sessionId,
-      session?.parentSessionId || "",
-      persistenceContext,
-    );
-    return rebuildSessionDisplaySummaryArtifact({
-      storageService: this.storageService,
-      sessionDir,
-      sessionPayload: session,
-    });
-  }
-
-  async rebuildSessionDisplaySummary(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    { persistenceContext = null } = {},
-  ) {
-    const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
-    if (!session) return null;
-    return this.writeSessionDisplaySummary(userId, session, { persistenceContext });
   }
 
   async readSessionTurn(
@@ -369,6 +327,22 @@ class SessionArtifactMethods {
       storageService: this.storageService,
       sessionDir: scope.sessionDir,
     });
+    return this._normalizeReadSession(session, sessionId, parentSessionId);
+  }
+
+  async _readNormalizedTurnView(scope, sessionId = "", parentSessionId = "", turnScopeIds = []) {
+    const view = await readSessionTurnView({
+      storageService: this.storageService,
+      sessionDir: scope.sessionDir,
+      turnScopeIds,
+    });
+    return {
+      session: this._normalizeReadSession(view?.session, sessionId, parentSessionId),
+      turnScopeIds: view.turnScopeIds,
+    };
+  }
+
+  _normalizeReadSession(session, sessionId, parentSessionId) {
     if (!session) {
       const error = new Error("session not found");
       error.code = SESSION_ARTIFACT_NOT_FOUND;

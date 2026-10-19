@@ -8,9 +8,11 @@ import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { EXECUTION_REPORT_VERSION } from "@noobot/session-protocol/execution-report";
 import {
+  SESSION_TREE_SHAPE,
   SESSION_TREE_UNRECOVERABLE,
-  isLegacySessionTree,
-  mapLegacySessionTree,
+  buildSessionTree,
+  classifySessionTree,
+  listSessionTreePlacements,
   rebuildSessionTree,
 } from "@noobot/session-repair";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
@@ -79,12 +81,36 @@ async function readSessionDocuments(sessionRoot) {
   return documents;
 }
 
+async function readPlacedSessionDocuments(base, tree) {
+  const entries = [];
+  for (const { sessionId, parentSessionId, segments } of listSessionTreePlacements(tree)) {
+    const session = await readJsonDocument(
+      path.join(base, ...segments, SESSION_ARTIFACT_FILE_NAMES.session),
+    );
+    entries.push({
+      sessionId,
+      parentSessionId,
+      document: session.exists ? session.document : null,
+    });
+  }
+  return entries;
+}
+
+const SESSION_TREE_UPGRADE_ACTION = Object.freeze({
+  [SESSION_TREE_SHAPE.LEGACY]: "mapped",
+  [SESSION_TREE_SHAPE.PARENT_ONLY]: "caller-filled",
+});
+
 async function resolveSessionTreeUpgrade({ base, document }) {
-  if (document && !isLegacySessionTree(document)) return null;
-  if (document) return { action: "mapped", tree: mapLegacySessionTree(document) };
+  const shape = classifySessionTree(document);
+  if (shape === SESSION_TREE_SHAPE.CURRENT) return null;
   try {
-    const sessionRoot = path.join(base, WORKSPACE_LAYOUT.SESSION_DIR);
-    return { action: "rebuilt", tree: rebuildSessionTree(await readSessionDocuments(sessionRoot)) };
+    if (shape === SESSION_TREE_SHAPE.INVALID) {
+      const sessionRoot = path.join(base, WORKSPACE_LAYOUT.SESSION_DIR);
+      return { action: "rebuilt", ...rebuildSessionTree(await readSessionDocuments(sessionRoot)) };
+    }
+    const entries = await readPlacedSessionDocuments(base, document);
+    return { action: SESSION_TREE_UPGRADE_ACTION[shape], ...buildSessionTree(entries) };
   } catch (error) {
     if (error?.code !== SESSION_TREE_UNRECOVERABLE) throw error;
     return { action: "retired", reason: error.message };
@@ -107,7 +133,11 @@ async function upgradeSessionTree({ base, retire }) {
     rename,
     remove: rm,
   });
-  return { ...report, nodes: Object.keys(upgrade.tree.nodes).length };
+  return {
+    ...report,
+    nodes: Object.keys(upgrade.tree.nodes).length,
+    repairedCallers: upgrade.repairedCallers,
+  };
 }
 
 async function isRetiredExecutionEvents(sessionDir) {

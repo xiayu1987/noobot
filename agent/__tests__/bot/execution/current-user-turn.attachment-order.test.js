@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { prepareCurrentUserTurn } from "../../../src/bot/execution/runner/current-user-turn.js";
+import { createTestSessionRequiredFields } from "../../helpers/session-message-facts.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function createInput(overrides = {}) {
   return {
@@ -26,7 +28,7 @@ function createInput(overrides = {}) {
     dialogProcessId: "dp1",
     parentDialogProcessId: "",
     turnScopeId: "t1",
-    caller: "user",
+    caller: SESSION_CALLER.USER,
     userConfig: {},
     resolvedRunConfig: {},
     requestRunConfig: {},
@@ -61,6 +63,7 @@ test("attachment preprocessing failure consumes the already accepted user messag
     prepareCurrentUserTurn(
       createInput({
         turnAcceptance: {
+          ...createTestSessionRequiredFields(),
           commandId: "command-1",
           sessionId: "s1",
           turnScopeId: "t1",
@@ -109,6 +112,7 @@ test("accepted user message binds canonical attachments before Context construct
         return { kind: "context-builder" };
       },
       turnAcceptance: {
+        ...createTestSessionRequiredFields(),
         commandId: "command-1",
         sessionId: "s1",
         turnScopeId: "t1",

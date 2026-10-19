@@ -6,7 +6,6 @@
 
 import { emitEvent } from "../../events/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
-import { CALLER_ROLE } from "../config/constants.js";
 import { normalizeParentSessionId, requireDialogProcessKey } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
@@ -45,7 +44,7 @@ export class SessionExecutionFinalizer {
     sessionId,
     parentSessionId = "",
     parentDialogProcessId = "",
-    caller = CALLER_ROLE.USER,
+    caller,
     dialogProcessId,
     turnScopeId = "",
     thinkingStartedAt = "",
@@ -239,7 +238,7 @@ export class SessionExecutionFinalizer {
       sessionId,
       parentSessionId: normalizeParentSessionId(parentSessionId),
       parentDialogProcessId: parentDialogProcessId || "",
-      caller: String(caller || CALLER_ROLE.USER),
+      caller,
       answer: agentResult.output,
       traces: agentResult.traces,
       messages: turnMessages,
