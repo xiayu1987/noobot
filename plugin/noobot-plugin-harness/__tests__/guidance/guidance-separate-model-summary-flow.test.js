@@ -41,19 +41,23 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
   };
 
   const ctx = {
-    messages: [
-      {
-        role: "assistant",
-        content: "",
-        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
-      },
-      {
-        role: "tool",
-        content: '{"toolName":"execute_script","ok":true}',
-        tool_call_id: "c1",
-        toolName: "execute_script",
-      },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+        },
+        {
+          role: "tool",
+          content: '{"toolName":"execute_script","ok":true}',
+          tool_call_id: "c1",
+          toolName: "execute_script",
+        },
+      ],
+    },
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
@@ -79,19 +83,23 @@ test("failed separate-model summary remains pending until a checkpoint succeeds"
   agentContext.execution = { dialogProcessId: "dp-1" };
   agentContext.bindings.runtime = { systemRuntime: { turnScopeId: "turn-1" } };
   const ctx = {
-    messages: [
-      {
-        role: "assistant",
-        content: "",
-        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
-      },
-      {
-        role: "tool",
-        content: '{"ok":true}',
-        tool_call_id: "c1",
-        toolName: "execute_script",
-      },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+        },
+        {
+          role: "tool",
+          content: '{"ok":true}',
+          tool_call_id: "c1",
+          toolName: "execute_script",
+        },
+      ],
+    },
     agentContext,
   };
   const meta = {
@@ -149,7 +157,10 @@ test("separate_model summary request includes previous summary after complete pl
     },
   };
 
-  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   const checklistIndex = capturedMessages.findIndex((item = {}) =>
@@ -221,16 +232,20 @@ test("separate_model summary request extracts previous summary relay into standa
   };
 
   const ctx = {
-    messages: [
-      { role: "user", content: "继续" },
-      {
-        role: "user",
-        content: previousSummaryRelay,
-        injectedMessage: true,
-        injectedBy: "harness-plugin",
-        injectedMessageType: "separate_model_relay:summary",
-      },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "user", content: "继续" },
+        {
+          role: "user",
+          content: previousSummaryRelay,
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+          injectedMessageType: "separate_model_relay:summary",
+        },
+      ],
+    },
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
@@ -271,7 +286,10 @@ test("separate_model summary no longer auto-triggers revision", async () => {
   await handler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
+    ctx: {
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      agentContext,
+    },
     meta,
   });
   assert.deepEqual(

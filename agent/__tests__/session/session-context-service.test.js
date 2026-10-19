@@ -8,10 +8,11 @@ import assert from "node:assert/strict";
 
 import { SessionContextService } from "../../src/session/services/session-context-service.js";
 
-function createSessionContextService(
-  messages = [],
-  { globalConfig = {}, terminalTurns = [] } = {},
-) {
+async function projectMessages(service, payload) {
+  return (await service.getContextProjection(payload)).messages;
+}
+
+function createSessionContextService(messages = [], { terminalTurns = [] } = {}) {
   const turns = Object.fromEntries(
     terminalTurns.map((terminalStatus) => [
       terminalStatus.turnScopeId,
@@ -30,8 +31,7 @@ function createSessionContextService(
     ]),
   );
   return new SessionContextService({
-    globalConfig,
-    sessionService: {
+    sessionMessageService: {
       async getSessionContextSource() {
         return { messages, turnLifecycle: { turns, commandReceipts: [] } };
       },
@@ -41,7 +41,7 @@ function createSessionContextService(
 
 function createIndexedSessionContextService(messages = []) {
   return new SessionContextService({
-    sessionService: {
+    sessionMessageService: {
       async getSessionContextSource() {
         return { messages, turnLifecycle: { turns: {}, commandReceipts: [] } };
       },
@@ -49,7 +49,7 @@ function createIndexedSessionContextService(messages = []) {
   });
 }
 
-test("getRecentSessionMessages excludes history without dialog identity", async () => {
+test("getContextProjection excludes history without dialog identity", async () => {
   const messages = [
     {
       role: "assistant",
@@ -72,7 +72,7 @@ test("getRecentSessionMessages excludes history without dialog identity", async 
     },
   ];
   const service = createSessionContextService(messages);
-  const result = await service.getRecentSessionMessages({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
   });
@@ -80,7 +80,7 @@ test("getRecentSessionMessages excludes history without dialog identity", async 
   assert.deepEqual(result, []);
 });
 
-test("getRecentSessionMessages keeps explicit dialog group content in original order", async () => {
+test("getContextProjection keeps explicit dialog group content in original order", async () => {
   const messages = [
     { role: "user", content: "please continue", dialogProcessId: "dlg_1" },
     { role: "assistant", content: "", dialogProcessId: "dlg_1" },
@@ -98,7 +98,7 @@ test("getRecentSessionMessages keeps explicit dialog group content in original o
     },
   ];
   const service = createSessionContextService(messages);
-  const result = await service.getRecentSessionMessages({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
   });
@@ -109,14 +109,14 @@ test("getRecentSessionMessages keeps explicit dialog group content in original o
   );
 });
 
-test("getRecentSessionMessages respects summarized filter before window normalization", async () => {
+test("getContextProjection respects summarized filter before window normalization", async () => {
   const messages = [
     { role: "user", content: "keep me", summarized: false, dialogProcessId: "dlg_1" },
     { role: "assistant", content: "old", summarized: true, dialogProcessId: "dlg_1" },
     { role: "assistant", content: "new", summarized: false, dialogProcessId: "dlg_1" },
   ];
   const service = createSessionContextService(messages);
-  const result = await service.getRecentSessionMessages({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
   });
@@ -127,7 +127,7 @@ test("getRecentSessionMessages respects summarized filter before window normaliz
   );
 });
 
-test("getRecentSessionMessages applies the terminal-history protocol before summarized filtering", async () => {
+test("getContextProjection applies the terminal-history protocol before summarized filtering", async () => {
   const messages = [
     {
       messageUid: "stopped-user",
@@ -227,7 +227,7 @@ test("getRecentSessionMessages applies the terminal-history protocol before summ
     ],
   });
 
-  const result = await service.getRecentSessionMessages({ userId: "u1", sessionId: "s1" });
+  const result = await projectMessages(service, { userId: "u1", sessionId: "s1" });
 
   assert.deepEqual(
     result.map((item) => item.messageUid),
@@ -244,7 +244,7 @@ test("getRecentSessionMessages applies the terminal-history protocol before summ
   assert.equal(result[2].terminalHistoryExplanation, true);
 });
 
-test("getRecentSessionMessages projects error and timeout explanations as assistant messages", async () => {
+test("getContextProjection projects error and timeout explanations as assistant messages", async () => {
   const messages = ["error", "timeout"].map((terminalStatus) => ({
     messageUid: `${terminalStatus}-user`,
     role: "user",
@@ -264,7 +264,7 @@ test("getRecentSessionMessages projects error and timeout explanations as assist
   }));
   const service = createSessionContextService(messages, { terminalTurns });
 
-  const result = await service.getRecentSessionMessages({ userId: "u1", sessionId: "s1" });
+  const result = await projectMessages(service, { userId: "u1", sessionId: "s1" });
 
   assert.deepEqual(
     result.map((item) => [item.messageUid, item.role]),
@@ -277,7 +277,7 @@ test("getRecentSessionMessages projects error and timeout explanations as assist
   );
 });
 
-test("getRecentSessionMessages rejects a terminal lifecycle without canonical messages", async () => {
+test("getContextProjection rejects a terminal lifecycle without canonical messages", async () => {
   const messages = [
     {
       messageUid: "completed-user",
@@ -302,12 +302,12 @@ test("getRecentSessionMessages rejects a terminal lifecycle without canonical me
   });
 
   await assert.rejects(
-    service.getRecentSessionMessages({ userId: "u1", sessionId: "s1" }),
+    projectMessages(service, { userId: "u1", sessionId: "s1" }),
     /terminal lifecycle is missing canonical messages: unmaterialized-turn/,
   );
 });
 
-test("getRecentSessionMessages keeps latest fixed dialog rounds and all unsummarized injected messages", async () => {
+test("getContextProjection keeps latest fixed dialog rounds and all unsummarized injected messages", async () => {
   const messages = [
     { role: "user", content: "first real question", dialogProcessId: "dlg_1" },
     {
@@ -337,7 +337,7 @@ test("getRecentSessionMessages keeps latest fixed dialog rounds and all unsummar
     { role: "assistant", content: "third real answer", dialogProcessId: "dlg_3" },
   ];
   const service = createSessionContextService(messages);
-  const result = await service.getRecentSessionMessages({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
   });
@@ -359,7 +359,7 @@ test("getRecentSessionMessages keeps latest fixed dialog rounds and all unsummar
   );
 });
 
-test("getRecentSessionMessages excludes current turn user when reusing an edited turn", async () => {
+test("getContextProjection excludes current turn user when reusing an edited turn", async () => {
   const messages = [
     {
       role: "user",
@@ -387,7 +387,7 @@ test("getRecentSessionMessages excludes current turn user when reusing an edited
     },
   ];
   const service = createSessionContextService(messages);
-  const result = await service.getRecentSessionMessages({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
     currentTurnScopeId: "client-turn:mqrt1icf:lxcfigpr",
@@ -399,7 +399,7 @@ test("getRecentSessionMessages excludes current turn user when reusing an edited
   );
 });
 
-test("getContextRecords passes current turn filter through recent history", async () => {
+test("getContextProjection passes current turn filter through recent history", async () => {
   const messages = [
     {
       role: "user",
@@ -427,7 +427,7 @@ test("getContextRecords passes current turn filter through recent history", asyn
     },
   ];
   const service = createSessionContextService(messages);
-  const result = await service.getContextRecords({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
     currentTurnScopeId: "client-turn:mqrt1icf:lxcfigpr",
@@ -463,7 +463,7 @@ test("current terminal round is excluded from both authoritative snapshot dimens
     ],
   });
 
-  const result = await service.getContextRecords({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
     currentDialogProcessId: "dlg_current",
@@ -473,7 +473,7 @@ test("current terminal round is excluded from both authoritative snapshot dimens
   assert.deepEqual(result, []);
 });
 
-test("getRecentSessionMessages selects fixed latest previous dialogProcessId rounds", async () => {
+test("getContextProjection selects fixed latest previous dialogProcessId rounds", async () => {
   const messages = [];
   for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_current"]) {
     messages.push({
@@ -492,7 +492,7 @@ test("getRecentSessionMessages selects fixed latest previous dialogProcessId rou
     }
   }
   const service = createSessionContextService(messages);
-  const result = await service.getRecentSessionMessages({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
     currentDialogProcessId: "dlg_current",
@@ -514,7 +514,7 @@ test("getRecentSessionMessages selects fixed latest previous dialogProcessId rou
   );
 });
 
-test("getContextRecords uses fixed latest dialog history", async () => {
+test("getContextProjection uses fixed latest dialog history", async () => {
   const messages = [
     { role: "user", content: "origin user", dialogProcessId: "dlg_1" },
     { role: "assistant", content: "old answer", dialogProcessId: "dlg_1" },
@@ -535,7 +535,7 @@ test("getContextRecords uses fixed latest dialog history", async () => {
   ];
   const service = createSessionContextService(messages);
 
-  const result = await service.getContextRecords({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
   });
@@ -546,7 +546,7 @@ test("getContextRecords uses fixed latest dialog history", async () => {
   );
 });
 
-test("getRecentSessionMessages uses message first occurrence as the only model history order", async () => {
+test("getContextProjection uses message first occurrence as the only model history order", async () => {
   const messages = [
     { role: "user", content: "d6 user", dialogProcessId: "d6" },
     { role: "assistant", content: "d1 late append", dialogProcessId: "d1" },
@@ -558,7 +558,7 @@ test("getRecentSessionMessages uses message first occurrence as the only model h
   ];
   const service = createIndexedSessionContextService(messages);
 
-  const result = await service.getRecentSessionMessages({
+  const result = await projectMessages(service, {
     userId: "u1",
     sessionId: "s1",
   });
@@ -567,14 +567,6 @@ test("getRecentSessionMessages uses message first occurrence as the only model h
     result.map((messageItem) => messageItem.content),
     ["d1 late append", "d1 user", "d2 user", "d3 user", "d4 user", "d5 user"],
   );
-});
-
-test("session context config always uses the central main history round limit", async () => {
-  const service = createSessionContextService([]);
-
-  const result = service._sessionContextConfig();
-
-  assert.equal(result.historyRoundLimit, 5);
 });
 
 test("session context reads messages and terminal statuses from the same parent-scoped snapshot", async () => {
@@ -588,7 +580,7 @@ test("session context reads messages and terminal statuses from the same parent-
     },
   });
 
-  await service.getContextRecords({
+  await projectMessages(service, {
     userId: "u1",
     sessionId: "child-1",
     parentSessionId: "parent-1",

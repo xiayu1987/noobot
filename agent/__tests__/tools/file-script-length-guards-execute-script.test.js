@@ -20,22 +20,13 @@ import {
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
 
-function buildHostScriptAgentContext(basePath, userId, overrides = {}) {
-  const runtime =
-    overrides?.runtime && typeof overrides.runtime === "object" ? overrides.runtime : {};
+function buildHostScriptAgentContext(basePath, userId, { runtime }) {
   return buildAgentContext(basePath, userId, {
-    ...overrides,
     runtime: {
       ...runtime,
       systemRuntime: {
-        ...(runtime.systemRuntime || {}),
-        sessionDir:
-          runtime.systemRuntime?.sessionDir ||
-          path.join(basePath, "runtime", "session", runtime.systemRuntime?.sessionId || "s-1"),
-        config: {
-          ...(runtime.systemRuntime?.config || {}),
-          safeConfirm: false,
-        },
+        ...runtime.systemRuntime,
+        config: { safeConfirm: false },
         isSuperUser: true,
       },
     },
@@ -100,7 +91,7 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
     ...toolCallScope(
       buildAgentContext(basePath, "u-test", {
         runtime: {
-          systemRuntime: { sessionId: "s-script" },
+          systemRuntime: { sessionId: "s-script", rootSessionId: "s-script" },
           globalConfig: {},
           attachmentService: buildAttachmentService(),
         },
@@ -388,7 +379,10 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
   };
   const agentContext = buildHostScriptAgentContext(basePath, "primary-user", {
     runtime: {
-      systemRuntime: { sessionId: "s-script-large-output" },
+      systemRuntime: {
+        sessionId: "s-script-large-output",
+        rootSessionId: "s-script-large-output",
+      },
       globalConfig: { security: { executionIsolation: { mode: "host" } } },
       attachmentService,
     },

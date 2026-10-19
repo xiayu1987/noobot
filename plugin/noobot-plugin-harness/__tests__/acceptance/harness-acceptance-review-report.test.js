@@ -29,29 +29,37 @@ test("harness summary selection does not mutate canonical messages before commit
       },
     },
     {
-      messages: [
-        { role: "user", content: "用户当前输入" },
-        {
-          role: "assistant",
-          content: "",
-          tool_calls: [{ id: "call-exec", function: { name: "execute_script", arguments: "{}" } }],
-        },
-        {
-          role: "tool",
-          content: '{"toolName":"execute_script","ok":true}',
-          tool_call_id: "call-exec",
-        },
-        {
-          role: "assistant",
-          content: "",
-          tool_calls: [{ id: "call-summary", function: { name: "task_summary", arguments: "{}" } }],
-        },
-        {
-          role: "tool",
-          content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结"}',
-          tool_call_id: "call-summary",
-        },
-      ],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          { role: "user", content: "用户当前输入" },
+          {
+            role: "assistant",
+            content: "",
+            tool_calls: [
+              { id: "call-exec", function: { name: "execute_script", arguments: "{}" } },
+            ],
+          },
+          {
+            role: "tool",
+            content: '{"toolName":"execute_script","ok":true}',
+            tool_call_id: "call-exec",
+          },
+          {
+            role: "assistant",
+            content: "",
+            tool_calls: [
+              { id: "call-summary", function: { name: "task_summary", arguments: "{}" } },
+            ],
+          },
+          {
+            role: "tool",
+            content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结"}',
+            tool_call_id: "call-summary",
+          },
+        ],
+      },
     },
   );
 

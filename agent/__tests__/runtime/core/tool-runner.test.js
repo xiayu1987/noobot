@@ -166,9 +166,7 @@ test("executeToolCall extracts strict V2 transfer envelopes from JSON tool resul
 
 test("executeToolCall materializes outputArtifacts through the single transfer outlet", async () => {
   const call = { id: "call_output_artifact", name: "write_file", args: {} };
-  const runtime = {
-    abortSignal: new AbortController().signal,
-    systemRuntime: { userId: "test-user" },
+  const runtime = createTestRuntimeContext({
     attachmentService: {
       async ingestGeneratedArtifacts(payload = {}) {
         return payload.artifacts.map((artifact, index) => ({
@@ -181,7 +179,7 @@ test("executeToolCall materializes outputArtifacts through the single transfer o
         }));
       },
     },
-  };
+  });
   const result = await executeToolCall({
     call,
     runtime,
@@ -216,16 +214,14 @@ test("executeToolCall rejects output artifact types that differ from the registe
   let persisted = false;
   const result = await executeToolCall({
     call: { id: "call_output_type_mismatch", name: "write_file", args: {} },
-    runtime: {
-      abortSignal: new AbortController().signal,
-      systemRuntime: { userId: "test-user" },
+    runtime: createTestRuntimeContext({
       attachmentService: {
         async ingestGeneratedArtifacts() {
           persisted = true;
           return [];
         },
       },
-    },
+    }),
     tool: {
       invoke: async () => ({
         toolName: "write_file",
@@ -249,21 +245,9 @@ test("executeToolCall rejects output artifact types that differ from the registe
 
 test("executeToolCall does not publish writtenFiles outside semantic transfer", async () => {
   const events = [];
-  const runtime = {
-    abortSignal: new AbortController().signal,
+  const runtime = createTestRuntimeContext({
     eventListener: { onEvent: (event) => events.push(event) },
-    systemRuntime: {
-      userId: "test-user",
-      sessionId: "child-session",
-      dialogProcessId: "child-dialog",
-      turnScopeId: "workflow-node:turn-1",
-      messageEventStream: {
-        activeMessageId: "message-1",
-        activePresentationMessageId: "child-assistant-1",
-        sequence: 0,
-      },
-    },
-  };
+  });
   await executeToolCall({
     call: { id: "call-write", name: "write_file", args: {} },
     tool: {
@@ -277,7 +261,17 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
       }),
     },
     runtime,
-    messageId: "message-1",
+    identity: {
+      userId: "test-user",
+      sessionId: "child-session",
+      rootSessionId: "child-session",
+      parentSessionId: "",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "workflow-node:turn-1",
+      runId: "agent:workflow-node:turn-1",
+      messageId: "message-1",
+    },
+    presentationMessageId: "child-assistant-1",
   });
 
   const completed = findCommittedMessagePayload(events, "tool_call_end");
@@ -287,13 +281,10 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
 
 test("canonical tool events publish the server-assessed maximum risk level", async () => {
   const events = [];
-  const runtime = {
-    abortSignal: new AbortController().signal,
+  const runtime = createTestRuntimeContext({
     eventListener: { onEvent: (event) => events.push(event) },
-    systemRuntime: {
-      config: { safeConfirm: false },
-    },
-  };
+    systemRuntime: { config: { safeConfirm: false } },
+  });
   const result = await executeToolCall({
     call: {
       id: "call-risk",
@@ -345,11 +336,10 @@ test("tool operation baseline risk is published even when invocation fails befor
         throw new Error("script_body contains forbidden runtime capability: require");
       },
     },
-    runtime: {
-      abortSignal: new AbortController().signal,
+    runtime: createTestRuntimeContext({
       eventListener: { onEvent: (event) => events.push(event) },
       systemRuntime: { config: { safeConfirm: false } },
-    },
+    }),
   });
 
   assert.equal(result.success, false);
@@ -376,10 +366,9 @@ test("canonical tool_call_end preserves a complete JSON tool result beyond 200 c
   await executeToolCall({
     call: { id: "call-task-check", name: "task_check", args: {} },
     tool: { invoke: async () => resultPayload },
-    runtime: {
-      abortSignal: new AbortController().signal,
+    runtime: createTestRuntimeContext({
       eventListener: { onEvent: (event) => events.push(event) },
-    },
+    }),
   });
 
   const completed = findCommittedMessagePayload(events, "tool_call_end");
@@ -538,23 +527,26 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
   const tool = {
     invoke: async () => ({ ok: true }),
   };
-  const runtime = {
-    abortSignal: new AbortController().signal,
-    systemRuntime: {
-      userId: "runtime_user",
-      sessionId: "session_1",
-      parentSessionId: "parent_1",
-      dialogProcessId: "dp_1",
-      caller: "user",
-    },
-    hookManager,
-  };
+  const runtime = createTestRuntimeContext({
+    systemRuntime: { caller: "user" },
+    runConfig: { hookManager },
+  });
 
   await executeToolCall({
     call: { id: "call_meta", name: "meta_tool", args: { q: 1 } },
     tool,
     turn: 2,
     runtime,
+    identity: {
+      userId: "runtime_user",
+      sessionId: "session_1",
+      rootSessionId: "parent_1",
+      parentSessionId: "parent_1",
+      dialogProcessId: "dp_1",
+      turnScopeId: "turn-call_meta",
+      runId: "run-call_meta",
+      messageId: "message-call_meta",
+    },
   });
 
   assert.equal(starts.length, 1);
@@ -584,12 +576,22 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
 
   const result = await executeToolCall({
     call: { id: "call_overflow", name: "demo_tool", args: {} },
+    identity: {
+      userId: "user-call_overflow",
+      sessionId: "session-overflow-1",
+      rootSessionId: "session-overflow-1",
+      parentSessionId: "",
+      dialogProcessId: "dialog-call_overflow",
+      turnScopeId: "turn-call_overflow",
+      runId: "run-call_overflow",
+      messageId: "message-call_overflow",
+    },
     tool,
     turn: 1,
     runtime: withAttachmentService({
       basePath,
-      systemRuntime: { sessionId: "session-overflow-1" },
       globalConfig: {
+        workspaceRoot: basePath,
         tools: {
           maxToolResultChars: 120,
         },
@@ -648,12 +650,11 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
     call: { id: "call_compact_not_overflow", name: "demo_tool", args: {} },
     tool,
     turn: 1,
-    runtime: {
-      abortSignal: new AbortController().signal,
+    runtime: createTestRuntimeContext({
       basePath,
       globalConfig: { tools: { maxToolResultChars: 1000 } },
       userConfig: {},
-    },
+    }),
   });
 
   const payload = JSON.parse(result.toolResultText);
@@ -697,7 +698,7 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
     turn: 1,
     runtime: withAttachmentService({
       basePath,
-      globalConfig: { tools: { maxToolResultChars: 120 } },
+      globalConfig: { workspaceRoot: basePath, tools: { maxToolResultChars: 120 } },
       userConfig: {},
     }),
   });
@@ -744,8 +745,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
         extraField: "should be omitted for task_summary",
       }),
   };
-  const runtime = {
-    abortSignal: new AbortController().signal,
+  const runtime = createTestRuntimeContext({
     attachmentService: {
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact, index) => ({
@@ -762,14 +762,22 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
         }));
       },
     },
-    systemRuntime: { userId: "u1", sessionId: "s1" },
-  };
+  });
 
   const result = await executeToolCall({
     call,
     tool,
     runtime,
-    sessionId: "s1",
+    identity: {
+      userId: "u1",
+      sessionId: "s1",
+      rootSessionId: "s1",
+      parentSessionId: "",
+      dialogProcessId: "dialog-call_task_summary_transfer",
+      turnScopeId: "turn-call_task_summary_transfer",
+      runId: "run-call_task_summary_transfer",
+      messageId: "message-call_task_summary_transfer",
+    },
     turn: 1,
   });
 
@@ -816,6 +824,7 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
     runtime: withAttachmentService({
       basePath,
       globalConfig: {
+        workspaceRoot: basePath,
         tools: {
           maxToolResultChars: 120,
         },

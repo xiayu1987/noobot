@@ -17,7 +17,6 @@ import { getModelContextRevision } from "../src/assembly/model-runtime.js";
 
 test("model context document excludes runtime capabilities and is JSON serializable", () => {
   const document = createModelContext({
-    messages: [{ role: "user", content: "hello" }],
     messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
     onCanonicalMessageAdded() {},
   });

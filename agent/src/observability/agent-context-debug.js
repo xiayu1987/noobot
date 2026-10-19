@@ -5,72 +5,43 @@
  */
 
 import { emitEvent } from "../events/index.js";
+import { MESSAGE_BLOCK_LANES } from "@noobot/context-protocol/agent-context/schema";
 import { text } from "@noobot/shared/value";
 
-function messageBlockCounts(modelContext = {}) {
-  const blocks = modelContext?.messageBlocks || {};
+function buildAgentContextDebugData({ context, bindings }) {
+  const { identity, environment, execution, modelContext } = context;
   return {
-    system: Array.isArray(blocks.system) ? blocks.system.length : 0,
-    history: Array.isArray(blocks.history) ? blocks.history.length : 0,
-    incremental: Array.isArray(blocks.incremental) ? blocks.incremental.length : 0,
-  };
-}
-
-function isJsonSerializable(value) {
-  try {
-    JSON.stringify(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function buildAgentContextDebugData(scope = {}) {
-  const context = scope?.context || {};
-  const bindings = scope?.bindings || {};
-  const identity = context?.identity || {};
-  const tools = Array.isArray(bindings.tools) ? bindings.tools : [];
-  const extensions =
-    bindings?.extensions && typeof bindings.extensions === "object" ? bindings.extensions : {};
-  return {
-    userId: text(identity.userId),
-    sessionId: text(identity.sessionId),
-    rootSessionId: text(identity.rootSessionId),
-    parentSessionId: text(identity.parentSessionId),
-    dialogProcessId: text(identity.dialogProcessId),
-    turnScopeId: text(identity.turnScopeId),
-    runId: text(identity.runId),
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    rootSessionId: identity.rootSessionId,
+    parentSessionId: identity.parentSessionId,
+    dialogProcessId: identity.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    runId: identity.runId,
     envelope: {
-      kind: text(context?.kind),
-      protocolVersion: Number(context?.protocolVersion || 0),
+      kind: context.kind,
+      protocolVersion: context.protocolVersion,
       keys: Object.keys(context),
       workspace: {
-        cwd: text(context?.environment?.workspace?.cwd),
-        basePath: text(context?.environment?.workspace?.basePath),
+        cwd: text(environment.workspace?.cwd),
+        basePath: text(environment.workspace?.basePath),
       },
-      caller: text(context?.execution?.caller),
-      modelContextProtocolVersion: Number(context?.modelContext?.protocolVersion || 0),
-      activeTurnIdentity: { ...(context?.modelContext?.activeTurnIdentity || {}) },
-      messageBlockCounts: messageBlockCounts(context?.modelContext),
+      caller: text(execution.caller),
+      modelContextProtocolVersion: modelContext.protocolVersion,
+      messageBlockCounts: Object.fromEntries(
+        MESSAGE_BLOCK_LANES.map((lane) => [lane, modelContext.messageBlocks[lane].length]),
+      ),
     },
     bindings: {
       keys: Object.keys(bindings),
-      runtimeBound: Boolean(bindings?.runtime && typeof bindings.runtime === "object"),
-      toolCount: tools.length,
-      toolNames: tools.map((tool = {}) => text(tool?.name)).filter(Boolean),
-      extensionNames: Object.keys(extensions),
-    },
-    separation: {
-      envelopeJsonSerializable: isJsonSerializable(context),
-      runtimeOutsideEnvelope:
-        !Object.prototype.hasOwnProperty.call(context, "runtime") &&
-        context?.execution?.controllers == null,
-      toolsOutsideEnvelope: context?.payload?.tools == null,
+      toolCount: bindings.tools.length,
+      toolNames: bindings.tools.map((tool) => text(tool.name)).filter(Boolean),
+      extensionNames: Object.keys(bindings.extensions),
     },
   };
 }
 
-export function emitAgentContextDebug(eventListener, scope = {}) {
+export function emitAgentContextDebug(eventListener, scope) {
   return emitEvent(
     eventListener,
     "agent.context.executionScopeCreated",

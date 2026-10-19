@@ -29,11 +29,7 @@ import {
 } from "../observability/context-identity-debug.js";
 import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
 import { initializeAgentModelHost } from "./model-port-host.js";
-import { text, isObjectLike } from "@noobot/shared/value";
-
-function trimmedText(value) {
-  return text(value);
-}
+import { text } from "@noobot/shared/value";
 
 function resolveLoopConfig(resolvers, runConfig) {
   return {
@@ -47,39 +43,25 @@ function resolveLoopConfig(resolvers, runConfig) {
   };
 }
 
-function resolveActiveTurnIdentity(currentUserMessage, context) {
-  const activeTurnIdentity = {
-    dialogProcessId: trimmedText(currentUserMessage?.dialogProcessId),
-    turnScopeId: trimmedText(currentUserMessage?.turnScopeId),
-  };
-  if (!activeTurnIdentity.dialogProcessId || !activeTurnIdentity.turnScopeId) {
-    throw new Error("current canonical user message requires dialogProcessId and turnScopeId");
-  }
-  const contextIdentity = context.identity || {};
-  for (const [field, currentValue] of Object.entries(activeTurnIdentity)) {
-    const contextValue = trimmedText(contextIdentity[field]);
-    if (!contextValue) throw new Error(`agent context identity.${field} is required`);
-    if (contextValue !== currentValue) {
+function resolveActiveTurnIdentity(currentUserMessage, identity) {
+  for (const field of ["dialogProcessId", "turnScopeId"]) {
+    if (currentUserMessage[field] !== identity[field]) {
       throw new Error(
         `current canonical user message ${field} conflicts with agent context identity`,
       );
     }
   }
-  return { activeTurnIdentity, contextIdentity };
+  return { dialogProcessId: identity.dialogProcessId, turnScopeId: identity.turnScopeId };
 }
 
-function resolveInvocationIdentity(contextIdentity, activeTurnIdentity) {
-  const invocationIdentity = {
-    sessionId: trimmedText(contextIdentity.sessionId),
-    parentSessionId: trimmedText(contextIdentity.parentSessionId),
-    dialogProcessId: activeTurnIdentity.dialogProcessId,
-    turnScopeId: activeTurnIdentity.turnScopeId,
-    runId: trimmedText(contextIdentity.runId),
+function resolveInvocationIdentity(identity) {
+  return {
+    sessionId: identity.sessionId,
+    parentSessionId: identity.parentSessionId,
+    dialogProcessId: identity.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    runId: identity.runId,
   };
-  for (const field of ["sessionId", "dialogProcessId", "turnScopeId", "runId"]) {
-    if (!invocationIdentity[field]) throw new Error(`agent model identity.${field} is required`);
-  }
-  return invocationIdentity;
 }
 
 function assertRuntimeIdentityConsistent(runtime, sys, invocationIdentity) {
@@ -91,26 +73,11 @@ function assertRuntimeIdentityConsistent(runtime, sys, invocationIdentity) {
     runId: runtime?.runId,
   };
   for (const [field, rawValue] of Object.entries(runtimeIdentitySources)) {
-    const runtimeValue = trimmedText(rawValue);
+    const runtimeValue = text(rawValue);
     if (runtimeValue && runtimeValue !== invocationIdentity[field]) {
       throw new Error(`runtime ${field} conflicts with agent context identity`);
     }
   }
-}
-
-function arrayOrEmpty(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function normalizeMessageBlocks(messageBlocks) {
-  if (!isObjectLike(messageBlocks)) {
-    return { system: [], history: [], incremental: [] };
-  }
-  return {
-    system: arrayOrEmpty(messageBlocks.system),
-    history: arrayOrEmpty(messageBlocks.history),
-    incremental: arrayOrEmpty(messageBlocks.incremental),
-  };
 }
 
 function applySelectedModel(modelState, agentContext, selectedModelSpec) {
@@ -120,17 +87,10 @@ function applySelectedModel(modelState, agentContext, selectedModelSpec) {
   modelState.activeModelSpec = selectedModelSpec;
 }
 
-function createAgentModelContext({
-  runtime,
-  eventListener,
-  messages,
-  messageBlocks,
-  activeTurnIdentity,
-}) {
+function createAgentModelContext({ runtime, eventListener, messageBlocks, activeTurnIdentity }) {
   const modelContext = createModelContext({
-    messages,
     activeTurnIdentity,
-    checkpointRevision: Math.max(0, Number(runtime.summaryCheckpointRevision) || 0),
+    checkpointRevision: runtime.summaryCheckpointRevision,
     onCanonicalMessageAdded(message, meta) {
       emitContextIdentityDebug(
         eventListener,
@@ -146,11 +106,12 @@ function createAgentModelContext({
         revision: result.revision,
       });
     },
-    messageBlocks: normalizeMessageBlocks(messageBlocks),
+    messageBlocks: {
+      system: messageBlocks.system,
+      history: messageBlocks.history,
+      incremental: messageBlocks.incremental,
+    },
   });
-  if (!modelContext) {
-    throw new Error("agent state requires a versioned modelContext");
-  }
   emitAgentContextProtocolDebug(eventListener, "documentCreated", {
     consumer: "agent-state-builder",
     revision: 0,
@@ -205,7 +166,7 @@ function recordModelContextOnRuntime(runtime, context, sys, activeTurnIdentity, 
     ...activeTurnIdentity,
     messages: modelContext.messages,
     messageBlocks: modelContext.messageBlocks,
-    userMetaBackwrites: arrayOrEmpty(modelContext.userMetaBackwrites),
+    userMetaBackwrites: modelContext.userMetaBackwrites,
     systemRuntime: sys,
   };
   return runtime.stoppedModelMessageSnapshotCandidate;
@@ -218,7 +179,7 @@ function emitAgentStateDiagnostics({
   currentUserMessage,
   modelContext,
 }) {
-  const sourceMessageUid = trimmedText(currentUserMessage?.messageUid);
+  const sourceMessageUid = text(currentUserMessage.messageUid);
   const userMetaId = `${sourceMessageUid}::user_meta`;
   const modelMessageIds = modelContext.messages.map(resolveContextMessageId).filter(Boolean);
   emitContextIdentityDebug(eventListener, "modelContextCreated", {
@@ -271,13 +232,9 @@ export function createStateBuilder({
     const loopConfig = resolveLoopConfig(loopResolvers, runtime.runConfig || {});
 
     const messageBlocks = buildContextMessageBlocksFn(agentContext, { currentUserMessage });
-    const messages = messageBlocks.messages;
 
-    const { activeTurnIdentity, contextIdentity } = resolveActiveTurnIdentity(
-      currentUserMessage,
-      context,
-    );
-    const invocationIdentity = resolveInvocationIdentity(contextIdentity, activeTurnIdentity);
+    const activeTurnIdentity = resolveActiveTurnIdentity(currentUserMessage, context.identity);
+    const invocationIdentity = resolveInvocationIdentity(context.identity);
     assertRuntimeIdentityConsistent(runtime, sys, invocationIdentity);
 
     const modelHost = initializeAgentModelHost({
@@ -291,7 +248,6 @@ export function createStateBuilder({
     const modelContext = createAgentModelContext({
       runtime,
       eventListener,
-      messages,
       messageBlocks,
       activeTurnIdentity,
     });

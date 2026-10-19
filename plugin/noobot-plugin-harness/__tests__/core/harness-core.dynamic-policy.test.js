@@ -106,7 +106,13 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
         },
       },
     },
-    { messages: [{ role: "user", content: "continue" }] },
+    {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "continue" }],
+      },
+    },
   );
 
   const prompt = buildDefaultPolicyPrompt("en-US", ctx, {});
@@ -146,7 +152,13 @@ test("dynamic policy changes cannot rewrite the main-flow system prefix after fi
     {
       agentContext: { bindings: { extensions: { harness: {} } } },
     },
-    { messages: [{ role: "user", content: "continue" }] },
+    {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "continue" }],
+      },
+    },
   );
 
   applyDynamicPolicyPromptFromText(

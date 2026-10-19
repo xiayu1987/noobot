@@ -41,7 +41,7 @@ test("search: text 输入超过上限时由 semantic-transfer 保存附件并直
     ...toolCallScope(
       buildAgentContext(basePath, "u-test", {
         runtime: {
-          systemRuntime: { sessionId: "s-search" },
+          systemRuntime: { sessionId: "s-search", rootSessionId: "s-search" },
           globalConfig: {},
           attachmentService: buildAttachmentService(),
         },
@@ -93,7 +93,7 @@ test("patch_file: patch 超过 semantic-transfer 阈值时保存附件并直接�
     ...toolCallScope(
       buildAgentContext(basePath, "u-test", {
         runtime: {
-          systemRuntime: { sessionId: "s-patch" },
+          systemRuntime: { sessionId: "s-patch", rootSessionId: "s-patch" },
           globalConfig: {},
           attachmentService: buildAttachmentService(),
         },

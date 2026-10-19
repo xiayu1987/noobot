@@ -7,22 +7,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { executeToolCall } from "./core/tool-runner.test-helpers.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 const email = "alice@example.com";
 
 function runtime(sanitizeOutput) {
-  return {
-    abortSignal: new AbortController().signal,
-    runConfig: {
-      messageId: "message-sanitize-output",
-      turnScopeId: "turn-sanitize-output",
-      executionId: "run-sanitize-output",
-    },
-    systemRuntime: {
-      sessionId: "session-sanitize-output",
-      config: { sanitizeOutput },
-    },
-  };
+  return createTestRuntimeContext({ systemRuntime: { config: { sanitizeOutput } } });
 }
 
 test("tool runner sanitizes successful output by default and preserves it when disabled", async () => {

@@ -10,11 +10,11 @@ import { createTestHookManager as createAgentHookManager } from "../helpers/publ
 import { registerHarnessCore } from "../../src/index.js";
 import { createModelContext } from "@noobot/context-protocol";
 
-function withModelContext(ctx = {}, { messages = [], messageBlocks = null } = {}) {
+function withModelContext(ctx, { messageBlocks }) {
   return {
     ...ctx,
     contextProtocolVersion: 3,
-    modelContext: createModelContext({ messages, messageBlocks }),
+    modelContext: createModelContext({ messageBlocks }),
   };
 }
 
@@ -43,17 +43,20 @@ test("harness capability hook can take over tool calls", async () => {
     },
   );
 
-  const ctx = withModelContext({
-    userId: "u4",
-    sessionId: "s4",
-    dialogProcessId: "dp4",
-    phase: "tool_calls",
-    status: "start",
-    calls: [
-      { name: "do_search_web", args: { q: "abc" } },
-      { name: "help", args: {} },
-    ],
-  });
+  const ctx = withModelContext(
+    {
+      userId: "u4",
+      sessionId: "s4",
+      dialogProcessId: "dp4",
+      phase: "tool_calls",
+      status: "start",
+      calls: [
+        { name: "do_search_web", args: { q: "abc" } },
+        { name: "help", args: {} },
+      ],
+    },
+    { messageBlocks: { system: [], history: [], incremental: [] } },
+  );
 
   await hookManager.emit("agent.before_tool_calls", ctx);
   assert.equal(ctx.calls.length, 1);
@@ -153,16 +156,20 @@ test("harness capability hook can take over and remove agent internal forced mes
       },
     },
     {
-      messages: [
-        {
-          role: "user",
-          content: "internal retry prompt",
-          additional_kwargs: {
-            noobotInternalMessageType: "tool_choice_required_retry_prompt",
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          {
+            role: "user",
+            content: "internal retry prompt",
+            additional_kwargs: {
+              noobotInternalMessageType: "tool_choice_required_retry_prompt",
+            },
           },
-        },
-        { role: "user", content: "real user message" },
-      ],
+          { role: "user", content: "real user message" },
+        ],
+      },
     },
   );
 
@@ -221,10 +228,11 @@ test("harness message takeover keeps system context before injected ctx messages
       },
     },
     {
-      messages: [
-        { role: "system", content: "system context" },
-        { role: "user", content: "real user message" },
-      ],
+      messageBlocks: {
+        system: [{ role: "system", content: "system context" }],
+        history: [],
+        incremental: [{ role: "user", content: "real user message" }],
+      },
     },
   );
 
@@ -277,7 +285,6 @@ test("harness ctx message takeover writes through message store views", async ()
       },
     },
     {
-      messages: [{ role: "user", content: "real user message" }],
       messageBlocks: {
         system: [],
         history: [],
@@ -330,10 +337,6 @@ test("harness agent system takeover does not write ctx message store", async () 
       agentContext: { payload: {} },
     },
     {
-      messages: [
-        { role: "system", content: "existing system message" },
-        { role: "user", content: "real user message" },
-      ],
       messageBlocks: {
         system: [{ role: "system", content: "existing system message" }],
         history: [],
@@ -390,16 +393,6 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
       dialogProcessId: "dp10",
     },
     {
-      messages: [
-        {
-          role: "user",
-          content: "internal retry prompt",
-          additional_kwargs: {
-            noobotInternalMessageType: "tool_choice_required_retry_prompt",
-          },
-        },
-        existingInjected,
-      ],
       messageBlocks: {
         system: [],
         history: [],
@@ -482,7 +475,6 @@ test("harness ctx message takeover ignores id markers echoed in tool results", a
       },
     },
     {
-      messages: [toolCallMessage, toolResult],
       messageBlocks: { system: [], history: [], incremental: [toolCallMessage, toolResult] },
     },
   );

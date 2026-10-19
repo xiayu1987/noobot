@@ -61,7 +61,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
           turnScopeId: "turn-thought-signature",
         },
       },
-      { messageBlocks: { system: [], history } },
+      { messageBlocks: { system: [], history, incremental: [] } },
     ),
     { currentUserMessage: null },
   );
@@ -105,7 +105,7 @@ test("buildContextMessages restores OpenAI Responses reasoning output sequence",
           turnScopeId: "turn-responses",
         },
       },
-      { messageBlocks: { system: [], history } },
+      { messageBlocks: { system: [], history, incremental: [] } },
     ),
     { currentUserMessage: null },
   );

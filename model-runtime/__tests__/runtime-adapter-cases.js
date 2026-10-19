@@ -21,7 +21,7 @@ import {
 } from "../src/index.js";
 
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 
 const sdkTool = {
@@ -440,11 +440,10 @@ test("Anthropic Messages adapter preserves LangChain system, assistant, and tool
 });
 
 test("Anthropic Messages adapter preserves LangChain tool schemas", () => {
-  const tool = new DynamicStructuredTool({
+  const tool = structuredTool(async () => "", {
     name: "read_file",
     description: "Read a file",
     schema: z.object({ filePath: z.string() }),
-    func: async () => "",
   });
 
   assert.deepEqual(convertTools([tool]), [
@@ -563,11 +562,10 @@ test("Anthropic Messages keeps reasoning/cache fields before the append-only mes
     );
   };
   try {
-    const tool = new DynamicStructuredTool({
+    const tool = structuredTool(async () => "", {
       name: "read_file",
       description: "Read a file",
       schema: z.object({ filePath: z.string() }),
-      func: async () => "",
     });
     const client = anthropicMessagesAdapter.createClient({
       credential: "sk-test",

@@ -6,12 +6,10 @@
 
 export * from "./agent-context/accessors.js";
 export * from "./agent-context/envelope.js";
-export * from "./agent-context/identity.js";
 export * from "./agent-context/schema.js";
 export * from "./agent-context/validation.js";
 export * from "./assembly/auxiliary-history.js";
 export * from "./assembly/auxiliary-sequence.js";
-export * from "./assembly/build-receipt.js";
 export * from "./assembly/diagnostics.js";
 export * from "./assembly/scope.js";
 export * from "./assembly/source.js";

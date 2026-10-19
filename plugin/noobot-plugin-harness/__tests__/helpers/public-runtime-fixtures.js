@@ -5,7 +5,7 @@
  */
 
 import { createModelContext, resolveModelFinalMessages } from "@noobot/context-protocol";
-import { createHookManager } from "@noobot/hook-protocol";
+import { createHookManager, HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import {
   attachmentTransfer,
   directTransfer,
@@ -193,7 +193,7 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
 
 export function ensureTestHookContext(ctx = {}) {
   if (!isObjectLike(ctx)) return ctx;
-  const agentContext = ensureTestAgentExecutionScope(ctx);
+  ensureTestAgentExecutionScope(ctx);
   const explicitIdentity =
     ctx.activeTurnIdentity && typeof ctx.activeTurnIdentity === "object"
       ? ctx.activeTurnIdentity
@@ -214,18 +214,11 @@ export function ensureTestHookContext(ctx = {}) {
       if (!text(message.turnScopeId)) message.turnScopeId = turnScopeId;
     }
   };
-  stampRoundIdentity(ctx.messages);
   stampRoundIdentity(ctx.messageBlocks?.history);
   stampRoundIdentity(ctx.messageBlocks?.incremental);
   if (ctx.modelContext?.protocolVersion !== 3) {
-    const explicitMessageBlocks =
-      ctx.messageBlocks ||
-      (!ctx.messageStore && !Array.isArray(ctx.messages)
-        ? { system: [], history: [], incremental: [] }
-        : null);
     ctx.modelContext = createModelContext({
-      messages: explicitMessageBlocks ? null : Array.isArray(ctx.messages) ? ctx.messages : null,
-      messageBlocks: explicitMessageBlocks,
+      messageBlocks: ctx.messageBlocks || { system: [], history: [], incremental: [] },
       activeTurnIdentity,
     });
     ctx.contextProtocolVersion = 2;
@@ -233,28 +226,15 @@ export function ensureTestHookContext(ctx = {}) {
   if (!ctx.modelContext.activeTurnIdentity) {
     ctx.modelContext.activeTurnIdentity = activeTurnIdentity;
   }
-  if (agentContext?.context) agentContext.context.modelContext = ctx.modelContext;
-  delete ctx.messageStore;
-  delete ctx.messages;
   delete ctx.messageBlocks;
   delete ctx.activeTurnIdentity;
   migrateHarnessBucket(ctx);
   return ctx;
 }
 
-export function createTestModelContext({
-  messages = null,
-  messageBlocks = null,
-  activeTurnIdentity = null,
-} = {}) {
-  return createModelContext({ messages, messageBlocks, activeTurnIdentity });
-}
-
 export function createTestHookContext(ctx = {}, context = {}) {
   return ensureTestHookContext({
     ...ctx,
-    messageStore: context.messageStore ?? ctx.messageStore,
-    messages: context.messages ?? ctx.messages,
     messageBlocks: context.messageBlocks ?? ctx.messageBlocks,
     activeTurnIdentity: context.activeTurnIdentity ?? ctx.activeTurnIdentity,
   });
@@ -282,6 +262,15 @@ export function createTestHookManager() {
       ensureTestHookContext(context);
       return manager.emit(point, context, options);
     },
+  });
+}
+
+export function invokeTestHookHandler(handler, point, ctx, signal) {
+  return handler(ctx, {
+    protocolVersion: HOOK_PROTOCOL_VERSION,
+    point,
+    handlerId: `test.${point}`,
+    signal,
   });
 }
 

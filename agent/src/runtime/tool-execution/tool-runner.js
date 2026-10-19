@@ -198,14 +198,6 @@ function deriveToolInputTransferMeta(inputTransfer = {}) {
   };
 }
 
-function resolveToolHookMeta(runtime = {}) {
-  const plugins =
-    runtime?.runConfig?.plugins && typeof runtime.runConfig.plugins === "object"
-      ? runtime.runConfig.plugins
-      : {};
-  return { ...plugins, runtime };
-}
-
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
     return { success: false, reason: "invoke_error" };
@@ -376,7 +368,6 @@ function toolInvocationConfig(state) {
         status: HOOK_PHASE_STATUS.RUNNING,
         args: state.call?.args || {},
       }),
-      noobotHookMeta: resolveToolHookMeta(state.runtime),
     },
     signal: state.abortSignal,
   };

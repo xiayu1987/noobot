@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 import { mergeConfig } from "../../config/index.js";
@@ -114,7 +114,7 @@ export function buildSearchEngineRequest({ toolCfg = {}, query = "" }) {
   };
 }
 
-export async function searchWithSearchEngine({ runtime = {}, toolCfg = {}, query = "" }) {
+export async function searchWithSearchEngine({ runtime, toolCfg, query, abortSignal }) {
   const endpointCfg = toolCfg?.endpoints?.[WEB_SEARCH_SERVICE_ENDPOINT_NAME] || {};
   const endpointUrl = text(endpointCfg?.url);
   if (!endpointUrl) {
@@ -127,7 +127,7 @@ export async function searchWithSearchEngine({ runtime = {}, toolCfg = {}, query
     method: request.method,
     headers: request.headers,
     ...(request.body ? { body: request.body } : {}),
-    signal: runtime?.abortSignal || undefined,
+    signal: abortSignal,
   });
   const contentType = String(response.headers.get("content-type") || "").toLowerCase();
   const data = contentType.includes("application/json")
@@ -152,13 +152,8 @@ export function createWebSearchTool({ agentContext }) {
   const userConfig = runtime?.userConfig || {};
 
   return [
-    new DynamicStructuredTool({
-      name: TOOL_NAME.DO_SEARCH_WEB,
-      description: tTool(runtime, "tools.do_search_web.description"),
-      schema: z.object({
-        query: z.string().describe(tTool(runtime, "tools.do_search_web.fieldQuery")),
-      }),
-      func: async ({ query }) => {
+    structuredTool(
+      async ({ query }, toolConfig) => {
         const normalizedQuery = text(query);
         let resolvedModelSpec = null;
         if (!normalizedQuery) {
@@ -174,6 +169,7 @@ export function createWebSearchTool({ agentContext }) {
               runtime,
               toolCfg: searchEngineCfg,
               query: normalizedQuery,
+              abortSignal: toolConfig.signal,
             });
             return toToolJsonResult(
               TOOL_NAME.DO_SEARCH_WEB,
@@ -202,7 +198,7 @@ export function createWebSearchTool({ agentContext }) {
               input: { query: normalizedQuery },
             },
             options: {
-              signal: runtime?.abortSignal || undefined,
+              signal: toolConfig.signal,
               locale: runtime?.systemRuntime?.config?.locale || runtime?.locale || "zh-CN",
             },
             invocation: {
@@ -240,6 +236,13 @@ export function createWebSearchTool({ agentContext }) {
           });
         }
       },
-    }),
+      {
+        name: TOOL_NAME.DO_SEARCH_WEB,
+        description: tTool(runtime, "tools.do_search_web.description"),
+        schema: z.object({
+          query: z.string().describe(tTool(runtime, "tools.do_search_web.fieldQuery")),
+        }),
+      },
+    ),
   ];
 }

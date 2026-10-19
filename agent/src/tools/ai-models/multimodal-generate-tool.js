@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
@@ -116,10 +116,10 @@ function buildFailureDetails({
   };
 }
 
-async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
+async function imageUrlToBase64(url, { fetchImpl, runtime, abortSignal }) {
   const normalizedUrl = text(url);
   if (!normalizedUrl || typeof fetchImpl !== "function") return "";
-  const response = await fetchImpl(normalizedUrl);
+  const response = await fetchImpl(normalizedUrl, { signal: abortSignal });
   if (!response?.ok) {
     throw recoverableToolError(
       `${tMultimodal(runtime, "fetchGeneratedImageUrlFailed")}: HTTP ${response?.status || 500}`,
@@ -209,7 +209,14 @@ function assertGenerationModelSupported(state, runtime) {
   );
 }
 
-function buildImageGenerationRequest({ modelSpec, generationContent, imageSize, input, runtime }) {
+function buildImageGenerationRequest({
+  modelSpec,
+  generationContent,
+  imageSize,
+  input,
+  runtime,
+  abortSignal,
+}) {
   return {
     model: modelSpec,
     messages: [],
@@ -225,7 +232,7 @@ function buildImageGenerationRequest({ modelSpec, generationContent, imageSize, 
       },
     },
     options: {
-      signal: runtime?.abortSignal || undefined,
+      signal: abortSignal,
       locale: resolveLocaleFromRuntime(runtime),
     },
     invocation: {
@@ -237,11 +244,11 @@ function buildImageGenerationRequest({ modelSpec, generationContent, imageSize, 
   };
 }
 
-async function materializeImageAttachments(imageArtifacts, fetchImpl, runtime) {
+async function materializeImageAttachments(imageArtifacts, fetchContext) {
   const outputArtifacts = [];
   for (const imageArtifact of imageArtifacts) {
     const resolvedBase64 =
-      imageArtifact.b64Json || (await imageUrlToBase64(imageArtifact.url, fetchImpl, runtime));
+      imageArtifact.b64Json || (await imageUrlToBase64(imageArtifact.url, fetchContext));
     if (!resolvedBase64) continue;
     outputArtifacts.push({
       type: "attachment_bytes",
@@ -313,6 +320,7 @@ async function generateImages(input, deps, state) {
       imageSize: state.effectiveImageSize,
       input,
       runtime,
+      abortSignal: deps.abortSignal,
     }),
   );
   const generationResult = response.result;
@@ -329,11 +337,11 @@ async function generateImages(input, deps, state) {
       ),
     });
   }
-  const outputArtifacts = await materializeImageAttachments(
-    imageArtifacts,
-    deps.sharedFetch,
+  const outputArtifacts = await materializeImageAttachments(imageArtifacts, {
+    fetchImpl: deps.sharedFetch,
     runtime,
-  );
+    abortSignal: deps.abortSignal,
+  });
   return toToolJsonResult(
     TOOL_NAME.MULTIMODAL_GENERATE,
     {
@@ -396,36 +404,45 @@ export function createMultimodalGenerateTool({ agentContext }) {
   const userConfig = runtime?.userConfig || {};
   const sharedFetch = runtime.sharedTools.fetch;
 
-  const multimodalGenerateTool = new DynamicStructuredTool({
-    name: TOOL_NAME.MULTIMODAL_GENERATE,
-    description: tTool(runtime, "tools.multimodal.description"),
-    schema: z.object({
-      generation_content: z
-        .string()
-        .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),
-      model_name: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldModelName")),
-      size: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldSize")),
-      image_size: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldImageSize")),
-      resolution: z
-        .string()
-        .optional()
-        .describe(tTool(runtime, "tools.multimodal.fieldResolution")),
-      n: z.number().optional().describe(tTool(runtime, "tools.multimodal.fieldN")),
-      quality: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldQuality")),
-      image_urls: z
-        .array(z.string())
-        .optional()
-        .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
-    }),
-    func: async (input) =>
+  const multimodalGenerateTool = structuredTool(
+    (input, toolConfig) =>
       runMultimodalGeneration(input, {
         runtime,
         effectiveConfig,
         globalConfig,
         userConfig,
         sharedFetch,
+        abortSignal: toolConfig.signal,
       }),
-  });
+    {
+      name: TOOL_NAME.MULTIMODAL_GENERATE,
+      description: tTool(runtime, "tools.multimodal.description"),
+      schema: z.object({
+        generation_content: z
+          .string()
+          .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),
+        model_name: z
+          .string()
+          .optional()
+          .describe(tTool(runtime, "tools.multimodal.fieldModelName")),
+        size: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldSize")),
+        image_size: z
+          .string()
+          .optional()
+          .describe(tTool(runtime, "tools.multimodal.fieldImageSize")),
+        resolution: z
+          .string()
+          .optional()
+          .describe(tTool(runtime, "tools.multimodal.fieldResolution")),
+        n: z.number().optional().describe(tTool(runtime, "tools.multimodal.fieldN")),
+        quality: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldQuality")),
+        image_urls: z
+          .array(z.string())
+          .optional()
+          .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
+      }),
+    },
+  );
 
   return [multimodalGenerateTool];
 }

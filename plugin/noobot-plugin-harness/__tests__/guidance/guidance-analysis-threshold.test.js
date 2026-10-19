@@ -26,7 +26,7 @@ test("guidance schedules analysis by full-mode turn threshold", async () => {
     },
   });
   const ctx = {
-    messages: [{ role: "user", content: "继续" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
     agentContext,
   };
 
@@ -51,7 +51,7 @@ test("planning does not schedule guidance analysis", async () => {
     },
   });
   const ctx = {
-    messages: [{ role: "user", content: "继续" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
     agentContext,
   };
 
@@ -81,7 +81,7 @@ test("planning counters consume skipped agent turns without owning analysis turn
     point: "agent.before_llm_call",
     ctx: {
       turn: 4,
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext,
     },
     meta: {},
@@ -104,7 +104,11 @@ test("guidance analysis counter consumes skipped turns and ignores same-turn ree
     },
   });
 
-  const ctx = { turn: 2, messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    turn: 2,
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
 
@@ -129,7 +133,7 @@ test("guidance analysis waits for captured main plan before scheduling", async (
     point: "agent.before_llm_call",
     ctx: {
       turn: 2,
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext,
     },
     meta: {},
@@ -157,7 +161,7 @@ test("guidance analysis does not require captured main plan when planning is dis
     point: "agent.before_llm_call",
     ctx: {
       turn: 2,
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext,
     },
     meta: {
@@ -190,7 +194,7 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
     point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext: beforeProgrammingThreshold,
     },
     meta: {},
@@ -216,7 +220,7 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
     point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext: atProgrammingThreshold,
     },
     meta: {},
@@ -240,7 +244,7 @@ test("guidance analysis runtime threshold overrides scenario workflow params wit
     point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext: beforeRuntimeThreshold,
     },
     meta: {
@@ -266,7 +270,7 @@ test("guidance analysis runtime threshold overrides scenario workflow params wit
     point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext: atRuntimeThreshold,
     },
     meta: {
@@ -295,7 +299,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 10 to
     point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext,
     },
     meta: {
@@ -329,7 +333,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext: beforeThreshold,
     },
     meta: {
@@ -355,7 +359,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
-      messages: [{ role: "user", content: "继续" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext: atThreshold,
     },
     meta: {

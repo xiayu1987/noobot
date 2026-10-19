@@ -19,7 +19,7 @@ async function finishGuidanceSummaryRound(
     capability: "guidance",
     point: "agent.after_llm_call",
     ctx: {
-      messages,
+      messageBlocks: { system: [], history: [], incremental: messages },
       modelResponse: { text: content },
       calls: [],
       agentContext,
@@ -35,7 +35,7 @@ async function runGuidanceSummaryRound(
   await guidanceHandler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages, agentContext },
+    ctx: { messageBlocks: { system: [], history: [], incremental: messages }, agentContext },
     meta: {},
   });
   await finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content });
@@ -64,7 +64,7 @@ test("guidance summary capture leaves tool-call pair unchanged until checkpoint 
   await guidanceHandler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages, agentContext },
+    ctx: { messageBlocks: { system: [], history: [], incremental: messages }, agentContext },
     meta: {},
   });
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
@@ -108,7 +108,7 @@ test("overflow after harness summary schedules the harness summary flow again wi
   await guidanceHandler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages, agentContext },
+    ctx: { messageBlocks: { system: [], history: [], incremental: messages }, agentContext },
     meta: {},
   });
   assert.equal(

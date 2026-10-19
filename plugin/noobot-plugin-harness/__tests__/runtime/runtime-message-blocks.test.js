@@ -46,7 +46,7 @@ test("before_llm_call reopens the active harness turn after stale terminal state
         },
       },
     },
-    messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
   });
 
   assert.equal(isHarnessAgentTurnEnded(ctx), true);
@@ -71,13 +71,17 @@ test("capability runtime runs global bootstrap before capability handlers", asyn
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", withModelContext({ messages: [] }), {
-    harness: {
-      globalBootstrap: async () => {
-        calls.push("globalBootstrap");
+  await runtime.runHook(
+    "agent.before_llm_call",
+    withModelContext({ messageBlocks: { system: [], history: [], incremental: [] } }),
+    {
+      harness: {
+        globalBootstrap: async () => {
+          calls.push("globalBootstrap");
+        },
       },
     },
-  });
+  );
 
   assert.deepEqual(calls, ["globalBootstrap", "planning"]);
 });
@@ -99,7 +103,11 @@ test("capability runtime exposes resolved capability profile to handlers", async
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", withModelContext({ messages: [] }), {});
+  await runtime.runHook(
+    "agent.before_llm_call",
+    withModelContext({ messageBlocks: { system: [], history: [], incremental: [] } }),
+    {},
+  );
 
   assert.equal(capturedProfile?.planning?.enabled, false);
   assert.equal(capturedProfile?.guidance?.enabled, true);
@@ -139,7 +147,7 @@ test("capability runtime keeps planning first without blocking later before_llm_
         },
       },
     },
-    messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
   });
 
   const results = await runtime.runHook("agent.before_llm_call", ctx, {});
@@ -185,7 +193,7 @@ test("capability runtime does not block guidance when plan text exists but captu
         },
       },
     },
-    messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
   });
 
   await runtime.runHook("agent.before_llm_call", ctx, {});
@@ -204,7 +212,6 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
     },
   });
   const ctx = withModelContext({
-    messages: [{ role: "assistant", content: "legacy" }],
     messageBlocks: {
       system: [{ role: "system", content: "sys1" }],
       history: [{ role: "assistant", content: "h1", dialogProcessId: "d1" }],
@@ -245,7 +252,6 @@ test("capability runtime filters summarized messages from incremental blocks by 
     },
   });
   const ctx = withModelContext({
-    messages: [],
     messageBlocks: {
       system: [{ role: "system", content: "sys" }],
       history: [
@@ -294,7 +300,6 @@ test("capability runtime does not let resolver reintroduce summarized messages",
   });
   const summarized = { role: "assistant", content: "summarized-incremental", summarized: true };
   const ctx = withModelContext({
-    messages: [],
     messageBlocks: {
       system: [],
       history: [],
@@ -333,7 +338,6 @@ test("capability runtime applies message blocks only once per runtime turn conte
     },
   });
   const ctx = withModelContext({
-    messages: [{ role: "assistant", content: "legacy" }],
     messageBlocks: {
       system: [{ role: "system", content: "sys1" }],
       history: [{ role: "assistant", content: "h1", dialogProcessId: "d1" }],
@@ -442,7 +446,6 @@ test("capability runtime preserves history and incremental user messages in bloc
     },
   });
   const ctx = withModelContext({
-    messages: [],
     messageBlocks: {
       system: [
         { role: "system", content: "sys" },
@@ -518,7 +521,6 @@ test("capability runtime does not remove same-text user from a different turn", 
     },
   });
   const ctx = withModelContext({
-    messages: [],
     messageBlocks: {
       system: [{ role: "system", content: "sys" }],
       history: [
@@ -598,7 +600,7 @@ test("capability runtime keeps later flows running when one flow fails", async (
   };
   const results = await runtime.runHook(
     "agent.before_llm_call",
-    withModelContext({ agentContext, messages: [] }),
+    withModelContext({ agentContext, messageBlocks: { system: [], history: [], incremental: [] } }),
     {},
   );
 

@@ -42,7 +42,13 @@ test("resolveLatestCompleteSummaryText falls back to latest summary guidance out
   const ctx = createTestHookContext(
     {},
     {
-      messages: [{ role: "user", content: "[来自harness外部模型输出/summary]\n1. relay fallback" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          { role: "user", content: "[来自harness外部模型输出/summary]\n1. relay fallback" },
+        ],
+      },
     },
   );
 
@@ -60,14 +66,18 @@ test("resolveLatestCompleteSummaryText falls back to latest summary relay then s
   const relayCtx = createTestHookContext(
     {},
     {
-      messages: [
-        { role: "user", content: "[来自harness外部模型输出/summary]\n1. old relay" },
-        {
-          role: "user",
-          content:
-            "[Relay from harness external model/summary]\n1. latest relay\n2. latest relay item",
-        },
-      ],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          { role: "user", content: "[来自harness外部模型输出/summary]\n1. old relay" },
+          {
+            role: "user",
+            content:
+              "[Relay from harness external model/summary]\n1. latest relay\n2. latest relay item",
+          },
+        ],
+      },
     },
   );
   assert.equal(resolveLatestSummaryRelayText(relayCtx), "1. latest relay\n2. latest relay item");

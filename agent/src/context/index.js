@@ -140,39 +140,12 @@ export class ContextBuilder {
     return this._workspaceDirectoriesPromise;
   }
 
-  async _buildStaticAgentContext({ runtimeBasePath = "", staticInfo = {} } = {}) {
-    return {
-      cwd: staticInfo.cwd || process.cwd(),
-      userId: staticInfo.userId || "",
-      basePath: staticInfo.basePath || runtimeBasePath || "",
-      platform: staticInfo.platform || process.platform,
-      arch: staticInfo.arch || process.arch,
-      nodeVersion: staticInfo.nodeVersion || process.version,
-      timezone: staticInfo.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-      globalDefaults: staticInfo.globalDefaults || {
-        workspaceRoot: this.globalConfig?.workspaceRoot || "",
-      },
-      workspaceDirectories: await this._resolveWorkspaceDirectoriesCached(runtimeBasePath),
-    };
-  }
-
   async buildAgentContext(
     systemMessages,
     conversationMessages,
-    {
-      runtimeBasePath = "",
-      dialogProcessId = "",
-      attachments = [],
-      incrementalMessages = [],
-      sourceRevision = "",
-      contextBuildMode = "",
-    } = {},
+    { runtimeBasePath = "", dialogProcessId = "", attachments = [], incrementalMessages = [] } = {},
   ) {
-    const contextBuildStartedAt = this._now();
-    const effectiveSystemMessages = [
-      ...(Array.isArray(systemMessages) ? systemMessages : []),
-      ...this.additionalSystemMessages,
-    ];
+    const effectiveSystemMessages = [...systemMessages, ...this.additionalSystemMessages];
     const resolvedRuntimeBasePath = runtimeBasePath || this._resolveRuntimeBasePath();
     const resolvedRootSessionId = await resolveRootSessionId({
       sessionManager: this.sessionManager,
@@ -186,10 +159,8 @@ export class ContextBuilder {
       userId: this.userId,
       globalConfig: this.globalConfig,
     });
-    const staticAgentContext = await this._buildStaticAgentContext({
-      runtimeBasePath: resolvedRuntimeBasePath,
-      staticInfo: runtimeStaticInfo,
-    });
+    const workspaceDirectories =
+      await this._resolveWorkspaceDirectoriesCached(resolvedRuntimeBasePath);
     const effectiveConfig = this._getEffectiveConfig();
     const runtimeModel = text(this.runConfig?.runtimeModel);
     const allEnabledProviders = resolveAllEnabledProviders(effectiveConfig);
@@ -218,7 +189,6 @@ export class ContextBuilder {
         parentSessionId: this.parentSessionId,
         dialogProcessId,
       },
-      caller: this.caller,
       globalConfig: this.globalConfig,
       userConfig: this.userConfig,
       eventListener: this.eventListener,
@@ -233,17 +203,12 @@ export class ContextBuilder {
       runtimeModel,
       allEnabledProviders,
       systemRuntime,
-      staticAgentContext,
+      staticInfo: runtimeStaticInfo,
+      workspaceDirectories,
       systemMessages: effectiveSystemMessages,
       conversationMessages,
       incrementalMessages,
       attachments,
-      contextBuild: {
-        mode: contextBuildMode,
-        sourceRevision,
-        startedAt: contextBuildStartedAt,
-        completedAt: this._now(),
-      },
     });
   }
 
@@ -252,7 +217,6 @@ export class ContextBuilder {
       userId: this.userId,
       sessionId: this.sessionId,
       parentSessionId: normalizeParentSessionId(this.parentSessionId),
-      userConfig: this.userConfig,
       currentDialogProcessId: dialogProcessId,
       currentTurnScopeId: text(this.runConfig?.turnScopeId),
     });
@@ -328,8 +292,6 @@ export class ContextBuilder {
         runtimeBasePath,
         dialogProcessId,
         attachments,
-        sourceRevision: sessionProjection?.sourceRevision || "",
-        contextBuildMode: mode,
       },
     );
   }

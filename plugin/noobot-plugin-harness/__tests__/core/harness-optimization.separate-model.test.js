@@ -20,7 +20,11 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 test("planning separate_model avoids duplicate invoker calls while one run is in-flight", async () => {
   const handler = createPlanningHandler();
   const ctx = {
-    messages: [{ role: "user", content: "analyze harness token spikes" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "analyze harness token spikes" }],
+    },
     agentContext: { payload: {} },
   };
   let invokerCalls = 0;
@@ -173,10 +177,6 @@ test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", 
 test("planning separate_model uses injected resolveModelMessages from harness meta", async () => {
   const handler = createPlanningHandler();
   const ctx = {
-    messages: [
-      { role: "user", content: "keep-me" },
-      { role: "assistant", content: "drop-me" },
-    ],
     messageBlocks: {
       system: [],
       history: [{ role: "assistant", content: "drop-me" }],

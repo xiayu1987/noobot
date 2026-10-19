@@ -8,7 +8,7 @@ import {
   resolvePathRef,
   TOOL_PATH_CONTRACTS,
 } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { FILE_MUTATION_PROTOCOL, FILE_MUTATION_VERSION } from "@noobot/file-mutation-protocol";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -417,11 +417,13 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
 }
 
 export function createPatchFileTool({ agentContext, runtime, workspaceIo, mutationScopeId }) {
-  return new DynamicStructuredTool({
-    name: TOOL_NAME.PATCH_FILE,
-    metadata: { pathContract: TOOL_PATH_CONTRACTS.filePatch },
-    description: buildFileToolDescription(runtime, "tools.patch_file.description"),
-    schema: buildPatchSchema(agentContext, runtime),
-    func: (args) => runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeId, args }),
-  });
+  return structuredTool(
+    (args) => runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeId, args }),
+    {
+      name: TOOL_NAME.PATCH_FILE,
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.filePatch },
+      description: buildFileToolDescription(runtime, "tools.patch_file.description"),
+      schema: buildPatchSchema(agentContext, runtime),
+    },
+  );
 }

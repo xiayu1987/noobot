@@ -142,7 +142,12 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
     },
   });
 
-  const ctx = createTestHookContext({}, { messages: [{ role: "user", content: "hello" }] });
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
+    },
+  );
   await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ctx, {});
 
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /guidance/);
@@ -181,7 +186,7 @@ test("capability runtime skips disabled planning guidance and acceptance handler
   const ctx = createTestHookContext(
     { toolPolicy: {} },
     {
-      messages: [{ role: "user", content: "hello" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
     },
   );
   const hooksWithDisabledCapabilities = [

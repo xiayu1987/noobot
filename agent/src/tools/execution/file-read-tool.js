@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { assertValidFileNameFromPath, projectToolPathRef } from "../core/check-tool-input.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -33,40 +33,8 @@ import {
 } from "./file-tool-shared.js";
 
 export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
-  return new DynamicStructuredTool({
-    name: TOOL_NAME.READ_FILE,
-    metadata: { pathContract: TOOL_PATH_CONTRACTS.fileRead },
-    description: buildFileToolDescription(runtime, "tools.file.readDescriptionWithLineNumbers"),
-    schema: z.object({
-      filePath: createFileSourceSchema({
-        filePathDescription: tTool(runtime, "tools.file.readFilePathField"),
-      }),
-      startLine: z
-        .number()
-        .int()
-        .min(1)
-        .optional()
-        .describe(tTool(runtime, "tools.file.readStartLineField")),
-      endLine: z
-        .number()
-        .int()
-        .min(1)
-        .optional()
-        .describe(tTool(runtime, "tools.file.readEndLineField")),
-      includeLineNumbers: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(tTool(runtime, "tools.file.readIncludeLineNumbersField")),
-      maxLines: z
-        .number()
-        .int()
-        .optional()
-        .default(DEFAULT_READ_MAX_LINES)
-        .describe(tTool(runtime, "tools.file.readMaxLinesField")),
-      riskLevel: createRiskLevelSchema(runtime, "tools.file.readRiskLevelField"),
-    }),
-    func: async ({
+  return structuredTool(
+    async ({
       filePath,
       startLine,
       endLine,
@@ -175,5 +143,39 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
         content,
       });
     },
-  });
+    {
+      name: TOOL_NAME.READ_FILE,
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.fileRead },
+      description: buildFileToolDescription(runtime, "tools.file.readDescriptionWithLineNumbers"),
+      schema: z.object({
+        filePath: createFileSourceSchema({
+          filePathDescription: tTool(runtime, "tools.file.readFilePathField"),
+        }),
+        startLine: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(tTool(runtime, "tools.file.readStartLineField")),
+        endLine: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(tTool(runtime, "tools.file.readEndLineField")),
+        includeLineNumbers: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe(tTool(runtime, "tools.file.readIncludeLineNumbersField")),
+        maxLines: z
+          .number()
+          .int()
+          .optional()
+          .default(DEFAULT_READ_MAX_LINES)
+          .describe(tTool(runtime, "tools.file.readMaxLinesField")),
+        riskLevel: createRiskLevelSchema(runtime, "tools.file.readRiskLevelField"),
+      }),
+    },
+  );
 }

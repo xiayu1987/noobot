@@ -102,12 +102,7 @@ test("hook context uses explicit modelContext instead of agent payload messages"
   );
 });
 
-test("hook context canonicalizes messages and messageBlocks through one store", () => {
-  const ctxMessage = {
-    role: "assistant",
-    content: "",
-    tool_calls: [{ id: "call_1", function: { name: "write_file" } }],
-  };
+test("hook context projection shares canonical entities with messageBlocks", () => {
   const blockCopy = {
     role: "assistant",
     content: "",
@@ -116,7 +111,6 @@ test("hook context canonicalizes messages and messageBlocks through one store", 
   const ctx = createTestHookContext(
     {},
     {
-      messages: [{ role: "user", content: "task" }, ctxMessage],
       messageBlocks: {
         system: [],
         history: [],

@@ -13,11 +13,18 @@ import { createHookManager } from "@noobot/hook-protocol";
 import {
   createTestTurnMessagesStore,
   createTestModelPort,
+  createLoopTurnIdentity,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 function runFunctionCallLoop(args = {}) {
-  prepareTestTurnExecution(args.modelState, args.loopState, "orchestrator-tool-pairs");
+  prepareTestTurnExecution(
+    args.modelState,
+    args.loopState,
+    createLoopTurnIdentity(args.loopState),
+    "presentation-orchestrator-tool-pairs",
+  );
   return runFunctionCallLoopProduction(args);
 }
 
@@ -59,7 +66,6 @@ function createToolCallingLlm(responses = []) {
 function createLoopState({ maxTurns = 1, tool = null } = {}) {
   return {
     tools: tool ? [tool] : [],
-    messages: [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
     turnMessages: [],
@@ -94,12 +100,7 @@ function createModelState(llm, defaultModelSpec = null) {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    runtime: {
-      abortSignal: new AbortController().signal,
-      systemRuntime: {
-        config: { safeConfirm: true },
-      },
-    },
+    runtime: createTestRuntimeContext({ systemRuntime: { config: { safeConfirm: true } } }),
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,

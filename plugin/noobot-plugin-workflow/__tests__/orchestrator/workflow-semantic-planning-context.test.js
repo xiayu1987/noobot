@@ -111,16 +111,20 @@ test("workflow semantic planning passes conversation context before current user
       userMessage: "请基于前文生成工作流",
       runConfig: { locale: "zh-CN" },
       modelContext: createModelContext({
-        messages: [
-          { role: "user", content: "前文：我要处理报销审批" },
-          { role: "assistant", content: "已记录报销审批背景" },
-          {
-            role: "user",
-            content: "请基于前文生成工作流",
-            messageOrigin: "natural",
-            userMetaMaterialized: true,
-          },
-        ],
+        messageBlocks: {
+          system: [],
+          history: [],
+          incremental: [
+            { role: "user", content: "前文：我要处理报销审批" },
+            { role: "assistant", content: "已记录报销审批背景" },
+            {
+              role: "user",
+              content: "请基于前文生成工作流",
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
+            },
+          ],
+        },
       }),
     },
     createTestHookInvocation(),
@@ -199,7 +203,6 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
       userMessage: "请根据上下文继续生成工作流",
       runConfig: { locale: "zh-CN" },
       modelContext: createModelContext({
-        messages: [],
         messageBlocks: {
           system: [{ role: "system", content: "你是流程专家" }],
           history: [

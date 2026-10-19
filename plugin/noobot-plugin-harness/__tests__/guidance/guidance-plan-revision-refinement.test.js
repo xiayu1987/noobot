@@ -31,7 +31,14 @@ test("unified attempts no longer block revision scheduling in planning handler",
       planUpdateAttempts: MAX_PLAN_UPDATE_ATTEMPTS,
     },
   });
-  const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const ctx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, true);
   assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateTurns, 0);
@@ -49,7 +56,10 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   });
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
 
-  const beforeCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const beforeCtx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: beforeCtx, meta });
   const afterCtx = {
     modelContext: beforeCtx.modelContext,
@@ -89,7 +99,10 @@ test("separate_model refinement-only flow runs planning_refinement then guidance
   await handler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
+    ctx: {
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      agentContext,
+    },
     meta,
   });
 
@@ -114,7 +127,11 @@ test("planning revision followup uses dynamic programming scenario over initial 
   };
   const ctx = createTestHookContext({
     agentContext,
-    messages: [{ role: "user", content: "继续修代码" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续修代码" }],
+    },
   });
   const revisedPlan = "UPDATE [1] 修改代码并验证";
   const meta = {
@@ -168,7 +185,7 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
         planRefinementContext: { targetMainStepIndexes: [1] },
       },
     }),
-    messages: [{ role: "user", content: "继续" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
   });
   const meta = {
     harness: {
@@ -213,7 +230,10 @@ test("separate_model skips planning_revision when revision attempts already reac
   await handler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
+    ctx: {
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      agentContext,
+    },
     meta,
   });
   assert.deepEqual(
@@ -247,7 +267,10 @@ test("separate_model summary does not consume refinement attempts", async () => 
   await handler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
+    ctx: {
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      agentContext,
+    },
     meta,
   });
   assert.deepEqual(
@@ -282,7 +305,10 @@ test("separate_model does not auto-run refinement when revision has no main-plan
   await handler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
+    ctx: {
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      agentContext,
+    },
     meta,
   });
   assert.deepEqual(

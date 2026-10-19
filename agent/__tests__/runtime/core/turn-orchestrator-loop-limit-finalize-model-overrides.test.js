@@ -11,15 +11,18 @@ import { resolveBoundToolModelRequestOverrides } from "../../../src/runtime/turn
 import { createBoundLlmToolChoiceInvoker } from "../../../src/runtime/turn/tool-invoke-strategy.js";
 import {
   createTestTurnMessagesStore,
+  createLoopTurnIdentity,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 function runFunctionCallLoop(args = {}) {
-  prepareTestTurnExecution(args.modelState, args.loopState, "orchestrator-model-overrides");
-  args.loopState.modelContext.activeTurnIdentity = {
-    dialogProcessId: "dialog-1",
-    turnScopeId: args.modelState.runtime.systemRuntime.turnScopeId,
-  };
+  prepareTestTurnExecution(
+    args.modelState,
+    args.loopState,
+    createLoopTurnIdentity(args.loopState),
+    "presentation-orchestrator-model-overrides",
+  );
   return runFunctionCallLoopProduction(args);
 }
 
@@ -52,7 +55,6 @@ function createToolCallingModelPort(responses = []) {
 function createLoopState({ maxTurns = 1, tool = null } = {}) {
   return {
     tools: tool ? [tool] : [],
-    messages: [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
     turnMessages: [],
@@ -85,15 +87,9 @@ function createModelState(modelPort, defaultModelSpec = null) {
     modelPort,
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    runtime: {
-      abortSignal: new AbortController().signal,
-      runConfig: {
-        executionId: "run-orchestrator-model-overrides",
-      },
-      systemRuntime: {
-        config: { safeConfirm: true },
-      },
-    },
+    runtime: createTestRuntimeContext({
+      systemRuntime: { config: { safeConfirm: true } },
+    }),
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,

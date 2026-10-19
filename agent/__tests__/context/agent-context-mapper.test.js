@@ -6,49 +6,45 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context/envelope";
+import { createAgentContextEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { createAgentContextEnvelopeInput } from "../../src/context/agent-context-envelope-input.js";
+import {
+  TEST_AGENT_EXECUTION,
+  createTestAgentEnvironment,
+} from "../helpers/agent-execution-scope.js";
 
 function buildEnvelope() {
-  return createAgentContextBuildEnvelope(
+  return createAgentContextEnvelope(
     createAgentContextEnvelopeInput({
-      userId: "u1",
-      sessionId: "s1",
-      parentSessionId: "p1",
-      rootSessionId: "r1",
-      dialogProcessId: "dp1",
-      caller: "user",
-      runConfig: {
-        turnScopeId: "turn1",
-        executionId: "run1",
-        messageId: "message1",
-      },
-      staticAgentContext: {
+      identity: {
         userId: "u1",
+        sessionId: "s1",
+        parentSessionId: "p1",
+        rootSessionId: "r1",
+        dialogProcessId: "dp1",
+      },
+      runConfig: { turnScopeId: "turn1", executionId: "run1", messageId: "message1" },
+      staticInfo: {
         cwd: "/workspace",
         basePath: "/workspace/u1",
-        workspaceDirectories: ["runtime/session", "runtime/ops_workdir"],
         platform: "linux",
         arch: "x64",
         nodeVersion: "v20.0.0",
         timezone: "Asia/Shanghai",
         globalDefaults: { workspaceRoot: "/workspace" },
       },
-      runtimeModel: "openai",
-      allEnabledProviders: { openai: { model: "gpt-4o" } },
+      workspaceDirectories: ["runtime/session", "runtime/ops_workdir"],
       systemRuntime: {
         now: "2026-08-16T00:00:00.000Z",
+        caller: "user",
         isSuperUser: true,
-        config: { allowUserInteraction: false, maxToolLoopTurns: "6" },
+        config: { allowUserInteraction: false, safeConfirm: true, selectedConnectorIds: ["c1"] },
       },
+      runtimeModel: "openai",
+      allEnabledProviders: { openai: { model: "gpt-4o" } },
       systemMessages: ["sys"],
       conversationMessages: [{ role: "user", content: "hi" }],
-      contextBuild: {
-        sourceRevision: "ctxsrc:test",
-        mode: "existing_session",
-        startedAt: "2026-08-16T00:00:00.000Z",
-        completedAt: "2026-08-16T00:00:01.000Z",
-      },
+      incrementalMessages: [],
     }),
   );
 }
@@ -68,12 +64,12 @@ test("explicit envelope input creates a serializable versioned envelope", () => 
     messageId: "message1",
   });
   assert.equal(context.environment.permissions.isSuperUser, true);
-  assert.equal(context.execution.flags.allowUserInteraction, false);
+  assert.equal(context.environment.workspace.basePath, "/workspace/u1");
+  assert.equal(context.execution.timestamp, "2026-08-16T00:00:00.000Z");
+  assert.deepEqual(context.execution.flags, { allowUserInteraction: false, safeConfirm: true });
+  assert.deepEqual(context.execution.selectedConnectorIds, ["c1"]);
   assert.equal(context.modelContext.messageBlocks.history.length, 1);
-  assert.equal(context.execution.contextBuild.status, "ready");
-  assert.equal(context.execution.contextBuild.mode, "existing_session");
-  assert.equal(context.execution.contextBuild.sourceRevision, "ctxsrc:test");
-  assert.equal(context.execution.contextBuild.messageCount, 1);
+  assert.equal("contextBuild" in context.execution, false);
   assert.doesNotThrow(() => JSON.stringify(context));
 });
 
@@ -87,7 +83,12 @@ test("explicit envelope input excludes runtime controllers and tool instances", 
 test("protocol envelope rejects incomplete execution identity", () => {
   assert.throws(
     () =>
-      createAgentContextBuildEnvelope({ identity: { sessionId: "s1", dialogProcessId: "dp1" } }),
-    /context build receipt requires a complete context scope/,
+      createAgentContextEnvelope({
+        identity: { sessionId: "s1", dialogProcessId: "dp1" },
+        environment: createTestAgentEnvironment({ basePath: "/workspace" }),
+        execution: TEST_AGENT_EXECUTION,
+        messageBlocks: { system: [], history: [], incremental: [] },
+      }),
+    /identity\.turnScopeId must be a non-empty string/,
   );
 });

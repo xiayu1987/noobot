@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import {
   assertConnectorAccessPort,
   normalizeSelectedConnectorIds,
@@ -68,21 +68,8 @@ export function createConnectorAccessTool({ agentContext }) {
   const selectedConnectorIds = normalizeSelectedConnectorIds(
     runtime?.systemRuntime?.config?.selectedConnectorIds,
   );
-  const tool = new DynamicStructuredTool({
-    name: TOOL_NAME.ACCESS_CONNECTOR,
-    description: tToolDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR),
-    schema: z.object({
-      connector_id: z
-        .string()
-        .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "connector_id")),
-      operation: z
-        .string()
-        .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "operation")),
-      input: z
-        .record(z.string(), z.unknown())
-        .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "input")),
-    }),
-    func: async ({ connector_id, operation, input }, _runManager, toolConfig) => {
+  const tool = structuredTool(
+    async ({ connector_id, operation, input }, toolConfig) => {
       const connectorId = assertSelectedConnector(selectedConnectorIds, connector_id);
       if (!userId) {
         throw recoverableToolError("connector owner userId is unavailable", {
@@ -119,6 +106,21 @@ export function createConnectorAccessTool({ agentContext }) {
         });
       }
     },
-  });
+    {
+      name: TOOL_NAME.ACCESS_CONNECTOR,
+      description: tToolDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR),
+      schema: z.object({
+        connector_id: z
+          .string()
+          .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "connector_id")),
+        operation: z
+          .string()
+          .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "operation")),
+        input: z
+          .record(z.string(), z.unknown())
+          .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "input")),
+      }),
+    },
+  );
   return [tool];
 }

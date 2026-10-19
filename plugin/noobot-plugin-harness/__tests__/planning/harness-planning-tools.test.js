@@ -58,7 +58,7 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
   const messages = [{ role: "user", content: "auxiliary planning call" }];
   const ctx = {
     executionScope: "auxiliary",
-    messages,
+    messageBlocks: { system: [], history: [], incremental: messages },
     agentContext: {
       bindings: {
         tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
@@ -117,7 +117,11 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
     userId: "u11-r",
     sessionId: "s11-r",
     dialogProcessId: "dp11-r",
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -130,12 +134,15 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   });
   assert.equal(agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
 
-  const messages = [{ role: "user", content: "继续处理" }];
   const currentHookContext = {
     userId: "u11-r",
     sessionId: "s11-r",
     dialogProcessId: "dp11-r",
-    messages,
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续处理" }],
+    },
     agentContext,
   };
   await hookManager.emit("agent.before_llm_call", currentHookContext);
@@ -146,7 +153,10 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
 
   const toolResult = await refinementTool.invoke(
     { summary: "阶段完成，细化下一步" },
-    { configurable: { noobotHookContext: currentHookContext } },
+    {
+      signal: new AbortController().signal,
+      configurable: { noobotHookContext: currentHookContext },
+    },
   );
   assert.equal(toolResult?.ok, true);
   assert.equal(toolResult?.status, "completed");
@@ -163,8 +173,8 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   );
   assert.equal(Array.isArray(agentContext.bindings.extensions.harness.planRefinementRecords), true);
   assert.equal(agentContext.bindings.extensions.harness.planRefinementRecords.length >= 1, true);
-  const followupMessage = messages.find((item = {}) =>
-    /next_phase_plan_refinement_followup/.test(String(item?.content || "")),
+  const followupMessage = currentHookContext.modelContext.messageBlocks.incremental.find(
+    (item = {}) => /next_phase_plan_refinement_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
   assert.match(followupText, /\[Harness operation dir\] runtime\/ops_workdir/);
@@ -202,7 +212,11 @@ test("harness planning does not inject refinement tool by default in programming
     userId: "u11-rp",
     sessionId: "s11-rp",
     dialogProcessId: "dp11-rp",
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -220,7 +234,11 @@ test("harness planning does not inject refinement tool by default in programming
     userId: "u11-rp",
     sessionId: "s11-rp",
     dialogProcessId: "dp11-rp",
-    messages: [{ role: "user", content: "继续处理" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续处理" }],
+    },
     agentContext,
   });
   const refinementTool = agentContext.bindings.tools.find(
@@ -248,7 +266,11 @@ test("harness exposes plan refinement before capture and the tool owns its not-r
     userId: "u11-ready",
     sessionId: "s11-ready",
     dialogProcessId: "dp11-ready",
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   const refinementTool = agentContext.bindings.tools.find(
@@ -256,83 +278,15 @@ test("harness exposes plan refinement before capture and the tool owns its not-r
   );
   assert.ok(refinementTool);
   agentContext.bindings.extensions.harness.state.flags.planningCaptured = false;
-  const result = await refinementTool.invoke({ targetMainStepIndexes: [1] });
+  const result = await refinementTool.invoke(
+    { targetMainStepIndexes: [1] },
+    {
+      signal: new AbortController().signal,
+      configurable: { noobotHookContext: createTestHookContext({ agentContext }) },
+    },
+  );
   assert.equal(result.ok, false);
   assert.equal(result.status, "not_ready");
-});
-
-test("harness request_plan_refinement falls back to closure meta when configurable meta lacks harness", async () => {
-  const hookManager = createAgentHookManager();
-  const invocations = [];
-  registerHarnessCore(
-    { hookManager },
-    {
-      trace: false,
-      promptPolicy: false,
-      planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async (payload) => {
-        invocations.push(payload);
-        if (payload.purpose === "planning_refinement") {
-          return createTestModelResponse(
-            invocations.filter((item = {}) => item.purpose === "planning_refinement").length === 1
-              ? "ADD 1.1 细化步骤一"
-              : "ADD 2.1 细化步骤二",
-          );
-        }
-        return createTestModelResponse("1. 解析附件\n2. 执行核心任务");
-      },
-    },
-  );
-
-  const agentContext = {
-    bindings: {
-      tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
-      extensions: { harness: {} },
-    },
-  };
-
-  await hookManager.emit("agent.before_llm_call", {
-    userId: "u11-r2",
-    sessionId: "s11-r2",
-    dialogProcessId: "dp11-r2",
-    messages: [{ role: "user", content: "开始任务" }],
-    agentContext,
-  });
-  await hookManager.emit("agent.after_llm_call", {
-    userId: "u11-r2",
-    sessionId: "s11-r2",
-    dialogProcessId: "dp11-r2",
-    modelResponse: { text: "1. 解析附件\n2. 执行核心任务" },
-    calls: [],
-    agentContext,
-  });
-  await hookManager.emit("agent.before_llm_call", {
-    userId: "u11-r2",
-    sessionId: "s11-r2",
-    dialogProcessId: "dp11-r2",
-    messages: [{ role: "user", content: "继续处理" }],
-    agentContext,
-  });
-  const refinementTool = agentContext.bindings.tools.find(
-    (tool) => tool?.name === "request_plan_refinement",
-  );
-  assert.ok(refinementTool, "request_plan_refinement 工具应注入");
-
-  const toolResult = await refinementTool.invoke(
-    { summary: "阶段完成，细化下一步" },
-    {
-      configurable: {
-        noobotHookContext: createTestHookContext({ agentContext }),
-        noobotHookMeta: { systemRuntime: { userId: "u11-r2", sessionId: "s11-r2" } },
-      },
-    },
-  );
-  assert.equal(toolResult?.ok, true);
-  assert.equal(toolResult?.status, "completed");
-  assert.equal(
-    invocations.some((item = {}) => item.purpose === "planning_refinement"),
-    true,
-  );
 });
 
 test("harness planning allows tool-call turn without assistant text when planning tools are allowed", async () => {
@@ -356,7 +310,11 @@ test("harness planning allows tool-call turn without assistant text when plannin
   };
 
   await hookManager.emit("agent.before_llm_call", {
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -402,7 +360,11 @@ test("harness planning separate model uses resolved planning tool allowlist", as
     sessionId: "s-planning-allowlist",
     dialogProcessId: "dp-planning-allowlist",
     caller: "user",
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext: {
       bindings: {
         runtime: { systemRuntime: { config: {} } },

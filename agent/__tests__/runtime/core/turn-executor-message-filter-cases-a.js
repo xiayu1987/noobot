@@ -14,7 +14,12 @@ import {
   invokeWithToolsTurn as invokeWithToolsTurnProduction,
 } from "../../../src/runtime/turn/turn-executor.js";
 import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
-import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
+import {
+  createTestModelPort,
+  createLoopTurnIdentity,
+  prepareTestTurnExecution,
+} from "./turn-runtime-test-helper.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 const TEST_MODEL_SPEC = Object.freeze(
   normalizeRuntimeModelSpec({
@@ -30,7 +35,8 @@ function invokeNoToolsTurn(args = {}) {
   prepareTestTurnExecution(
     args.modelState,
     args.loopState,
-    `no-tools-${args.loopState?.dialogProcessId || "turn"}`,
+    createLoopTurnIdentity(args.loopState),
+    "presentation-message-filter-cases-a",
   );
   return invokeNoToolsTurnProduction(args);
 }
@@ -39,7 +45,8 @@ function invokeWithToolsTurn(args = {}) {
   prepareTestTurnExecution(
     args.modelState,
     args.loopState,
-    `with-tools-${args.loopState?.dialogProcessId || "turn"}`,
+    createLoopTurnIdentity(args.loopState),
+    "presentation-message-filter-cases-a",
   );
   return invokeWithToolsTurnProduction(args);
 }
@@ -55,22 +62,12 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
 
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: { systemRuntime: {} },
+    runtime: createTestRuntimeContext(),
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [
-      {
-        role: "assistant",
-        content: "",
-        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
-      },
-      { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
-      { role: "assistant", content: "summarized", summarized: true },
-      { role: "user", content: "keep-user" },
-    ],
     messageBlocks: {
       system: [],
       history: [],
@@ -130,23 +127,12 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
 
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: { systemRuntime: {} },
+    runtime: createTestRuntimeContext(),
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [
-      {
-        role: "assistant",
-        content: "",
-        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
-      },
-      { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
-      { role: "assistant", content: "keep-assistant" },
-      { role: "user", content: "keep-user" },
-      { role: "assistant", content: "drop-summarized", summarized: true },
-    ],
     messageBlocks: {
       system: [],
       history: [],
@@ -190,16 +176,17 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
 
 test("invokeWithToolsTurn sends system history incremental order after before_llm_call hooks", async () => {
   let capturedMessages = [];
-  const runtime = {
-    systemRuntime: {},
-    hookManager: {
-      async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
+  const runtime = createTestRuntimeContext({
+    runConfig: {
+      hookManager: {
+        async emit(point, ctx = {}) {
+          if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
 
-        return createEmptyHookResult(point, ctx);
+          return createEmptyHookResult(point, ctx);
+        },
       },
     },
-  };
+  });
   const llm = {
     bindTools() {
       return {
@@ -222,7 +209,6 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [system, history, incremental],
     messageBlocks: {
       system: [system],
       history: [history],
@@ -247,29 +233,30 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
 
 test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook", async () => {
   let capturedMessages = [];
-  const runtime = {
-    systemRuntime: {},
-    hookManager: {
-      async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
-        appendContextMessage(
-          ctx.modelContext,
-          {
-            role: "user",
-            content: "[来自harness外部模型输出/guidance]\\n分析结果",
-            injectedMessage: true,
-            injectedBy: "harness-plugin",
-            injectedMessageType: "separate_model_relay:guidance",
-            purpose: "guidance",
-            pluginFlow: "analysis",
-            chain: "auxiliary",
-          },
-          { block: "incremental" },
-        );
-        return createEmptyHookResult(point, ctx);
+  const runtime = createTestRuntimeContext({
+    runConfig: {
+      hookManager: {
+        async emit(point, ctx = {}) {
+          if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
+          appendContextMessage(
+            ctx.modelContext,
+            {
+              role: "user",
+              content: "[来自harness外部模型输出/guidance]\\n分析结果",
+              injectedMessage: true,
+              injectedBy: "harness-plugin",
+              injectedMessageType: "separate_model_relay:guidance",
+              purpose: "guidance",
+              pluginFlow: "analysis",
+              chain: "auxiliary",
+            },
+            { block: "incremental" },
+          );
+          return createEmptyHookResult(point, ctx);
+        },
       },
     },
-  };
+  });
   const llm = {
     bindTools() {
       return {
@@ -289,7 +276,6 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [current],
     messageBlocks: { system: [], history: [], incremental: [current] },
     traces: [],
     tools: [{ name: "execute_script" }],
@@ -326,30 +312,31 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
   const summary = { role: "user", content: "summary-relay" };
   let loopState = null;
   let checkpointCount = 0;
-  const runtime = {
-    systemRuntime: {},
-    hookManager: {
-      async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
-        writeMessageBlocks(ctx.modelContext, {
-          incremental: [...ctx.modelContext.messageBlocks.incremental, summary],
-        });
-        requestMainFlowSummaryCheckpoint(runtime, {
-          source: "plugin.summary",
-          summarizedMessageIds: ["tool-call", "tool-result"],
-        });
-        return createEmptyHookResult(point, ctx);
+  const runtime = createTestRuntimeContext({
+    runConfig: {
+      hookManager: {
+        async emit(point, ctx = {}) {
+          if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
+          writeMessageBlocks(ctx.modelContext, {
+            incremental: [...ctx.modelContext.messageBlocks.incremental, summary],
+          });
+          requestMainFlowSummaryCheckpoint(runtime, {
+            source: "plugin.summary",
+            summarizedMessageIds: ["tool-call", "tool-result"],
+          });
+          return createEmptyHookResult(point, ctx);
+        },
       },
     },
-    async commitSummaryCheckpoint() {
-      checkpointCount += 1;
-      writeMessageBlocks(loopState.modelContext, {
-        incremental: loopState.modelContext.messageBlocks.incremental.filter(
-          (message) => message !== toolCall && message !== toolResult,
-        ),
-      });
-      return { committed: true };
-    },
+  });
+  runtime.commitSummaryCheckpoint = async () => {
+    checkpointCount += 1;
+    writeMessageBlocks(loopState.modelContext, {
+      incremental: loopState.modelContext.messageBlocks.incremental.filter(
+        (message) => message !== toolCall && message !== toolResult,
+      ),
+    });
+    return { committed: true };
   };
   const llm = {
     bindTools() {
@@ -369,7 +356,6 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     activeModelSpec: TEST_MODEL_SPEC,
   };
   loopState = {
-    messages: [current, toolCall, toolResult],
     messageBlocks: { system: [], history: [], incremental: [current, toolCall, toolResult] },
     traces: [],
     tools: [{ name: "execute_script" }],

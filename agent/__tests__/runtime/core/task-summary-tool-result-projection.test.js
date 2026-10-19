@@ -6,11 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeToolCall } from "./tool-runner.test-helpers.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 test("executeToolCall task_summary preserves recovery diagnostics", async () => {
   const summaryContent = "NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE";
-  const runtime = {
-    abortSignal: new AbortController().signal,
+  const runtime = createTestRuntimeContext({
     attachmentService: {
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact, index) => ({
@@ -26,8 +26,7 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
         }));
       },
     },
-    systemRuntime: { userId: "u1", sessionId: "s1" },
-  };
+  });
   const result = await executeToolCall({
     call: {
       id: "call_task_summary_invalid",
@@ -47,6 +46,16 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
       },
     },
     runtime,
+    identity: {
+      userId: "u1",
+      sessionId: "s1",
+      rootSessionId: "s1",
+      parentSessionId: "",
+      dialogProcessId: "dialog-call_task_summary_invalid",
+      turnScopeId: "turn-call_task_summary_invalid",
+      runId: "run-call_task_summary_invalid",
+      messageId: "message-call_task_summary_invalid",
+    },
     turn: 1,
   });
 

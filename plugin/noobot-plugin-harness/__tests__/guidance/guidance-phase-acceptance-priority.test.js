@@ -27,7 +27,14 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
     planningCaptured: true,
   };
 
-  const firstCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const firstCtx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
   await planningHandler({
     capability: "planning",
     point: "agent.before_llm_call",
@@ -43,7 +50,14 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
 
   agentContext.bindings.extensions.harness.state.pending.planRevision = false;
   agentContext.bindings.extensions.harness.state.pending.planRevisionContext = null;
-  const secondCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const secondCtx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
   await planningHandler({
     capability: "planning",
     point: "agent.before_llm_call",
@@ -67,7 +81,14 @@ test("planning and phase acceptance use canonical per-run thresholds", async () 
   await handler({
     capability: "planning",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext },
+    ctx: {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
+      agentContext,
+    },
     meta: {
       harness: {
         frontendThresholdsEnabled: true,
@@ -89,7 +110,15 @@ test("planning and phase acceptance use canonical per-run thresholds", async () 
   await handler({
     capability: "planning",
     point: "agent.before_llm_call",
-    ctx: { turn: 2, messages: [{ role: "user", content: "继续任务" }], agentContext },
+    ctx: {
+      turn: 2,
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
+      agentContext,
+    },
     meta: {
       harness: {
         frontendThresholdsEnabled: true,

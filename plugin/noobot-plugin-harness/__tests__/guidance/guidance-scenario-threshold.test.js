@@ -55,7 +55,14 @@ test("guidance summary and planning plan-update thresholds use full-mode default
       planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
-  const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const ctx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
 
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(
@@ -83,7 +90,11 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
     capability: "guidance",
     point: "agent.before_llm_call",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       agentContext: beforeProgrammingThresholds,
     },
     meta: {},
@@ -108,7 +119,11 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
     capability: "guidance",
     point: "agent.before_llm_call",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       agentContext: atProgrammingThresholds,
     },
     meta: {},
@@ -124,7 +139,11 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
     capability: "planning",
     point: "agent.before_llm_call",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       agentContext: atProgrammingThresholds,
     },
     meta: {},
@@ -157,7 +176,11 @@ test("phase acceptance threshold uses programming-mode override", async () => {
     capability: "planning",
     point: "agent.before_llm_call",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       agentContext: beforeProgrammingPhaseAcceptance,
     },
     meta: {},
@@ -182,7 +205,11 @@ test("phase acceptance threshold uses programming-mode override", async () => {
     capability: "planning",
     point: "agent.before_llm_call",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       agentContext: atProgrammingPhaseAcceptance,
     },
     meta: {},
@@ -219,7 +246,14 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
   await guidanceHandler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeTextThresholds },
+    ctx: {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
+      agentContext: beforeTextThresholds,
+    },
     meta: {},
   });
   assert.equal(beforeTextThresholds.bindings.extensions.harness.state.pending.summary, false);
@@ -235,7 +269,14 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
   await guidanceHandler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
+    ctx: {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
+      agentContext: atTextThresholds,
+    },
     meta: {},
   });
   assert.equal(
@@ -248,7 +289,14 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
   await planningHandler({
     capability: "planning",
     point: "agent.before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
+    ctx: {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
+      agentContext: atTextThresholds,
+    },
     meta: {},
   });
   assert.equal(atTextThresholds.bindings.extensions.harness.state.pending.summary, false);
@@ -273,7 +321,11 @@ test("phase acceptance threshold uses text-mode override", async () => {
     capability: "planning",
     point: "agent.before_llm_call",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       agentContext: atTextPhaseAcceptance,
     },
     meta: {},
@@ -303,7 +355,14 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
     targetMainStepIndexes: [],
   };
 
-  const blockedCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const blockedCtx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
   await planningHandler({
     capability: "planning",
     point: "agent.before_llm_call",
@@ -317,7 +376,14 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
 
   agentContext.bindings.extensions.harness.state.pending.planRevision = false;
   agentContext.bindings.extensions.harness.state.pending.planRevisionContext = null;
-  const unblockedCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const unblockedCtx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
   await planningHandler({
     capability: "planning",
     point: "agent.before_llm_call",

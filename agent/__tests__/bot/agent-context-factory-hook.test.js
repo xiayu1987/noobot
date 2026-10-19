@@ -41,6 +41,8 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
               { role: "user", content: "a" },
               { role: "assistant", content: "b" },
             ],
+            system: [],
+            incremental: [],
           },
         },
       );

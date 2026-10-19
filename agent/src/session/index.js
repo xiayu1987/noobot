@@ -38,7 +38,6 @@ function normalizeContextServicePayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
   return {
     ...source,
-    userConfig: isPlainObject(source.userConfig) ? source.userConfig : {},
     currentDialogProcessId: text(source.currentDialogProcessId),
     currentTurnScopeId: text(source.currentTurnScopeId),
   };
@@ -160,10 +159,7 @@ export function createSessionServices(
     now,
   });
 
-  const sessionContextService = new SessionContextService({
-    globalConfig,
-    sessionMessageService,
-  });
+  const sessionContextService = new SessionContextService({ sessionMessageService });
 
   const taskService = new TaskService({
     taskRepo: taskRepository,
@@ -444,15 +440,6 @@ export function createSessionFacade(runtime = {}) {
       return executionLogService.getExecutionReport(payload);
     },
 
-    async getRecentSessionMessages(payload = {}) {
-      return sessionContextService.getRecentSessionMessages({
-        ...normalizeContextServicePayload(payload),
-      });
-    },
-
-    async getContextRecords(payload = {}) {
-      return sessionContextService.getContextRecords(normalizeContextServicePayload(payload));
-    },
     async getContextProjection(payload = {}) {
       return sessionContextService.getContextProjection(normalizeContextServicePayload(payload));
     },

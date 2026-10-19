@@ -21,7 +21,10 @@ import {
   readSessionArtifact,
   writeSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
-import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import {
+  createTestAgentEnvironment,
+  createTestAgentExecutionScope,
+} from "../helpers/agent-execution-scope.js";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -369,8 +372,17 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
       },
     };
     const agentContext = createTestAgentExecutionScope(runtime, {
-      identity: { userId: "u1", sessionId: "s1" },
-      environment: { workspace: { basePath: workspaceRoot } },
+      identity: {
+        userId: "u1",
+        sessionId: "s1",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        dialogProcessId: "d-1",
+        turnScopeId: "t-1",
+        runId: "r-1",
+        messageId: "m-1",
+      },
+      environment: createTestAgentEnvironment({ basePath: workspaceRoot }),
     });
 
     const resolved = await resolveCanonicalSourceAttachment({

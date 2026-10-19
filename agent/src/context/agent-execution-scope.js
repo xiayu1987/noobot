@@ -7,29 +7,23 @@
 import { assertValidAgentContextEnvelope } from "@noobot/context-protocol/agent-context/validation";
 import { isPlainObject } from "@noobot/shared/value";
 
-function asObject(value) {
-  return isPlainObject(value) ? value : null;
-}
-
-export function createAgentExecutionScope({ context, bindings = {} } = {}) {
+export function createAgentExecutionScope({ context, bindings }) {
   assertValidAgentContextEnvelope(context);
-  const runtime = asObject(bindings?.runtime);
-  if (!runtime) throw new TypeError("agent execution scope bindings.runtime is required");
-  const tools = Array.isArray(bindings?.tools) ? bindings.tools : [];
-  const extensions = asObject(bindings?.extensions) || {};
-  return {
-    context,
-    bindings: {
-      ...bindings,
-      runtime,
-      tools,
-      extensions,
-    },
-  };
+  if (!isPlainObject(bindings.runtime)) {
+    throw new TypeError("agent execution scope bindings.runtime is required");
+  }
+  if (!Array.isArray(bindings.tools)) {
+    throw new TypeError("agent execution scope bindings.tools must be an array");
+  }
+  if (!isPlainObject(bindings.extensions)) {
+    throw new TypeError("agent execution scope bindings.extensions must be a plain object");
+  }
+  return { context, bindings };
 }
 
-export function getAgentContextEnvelope(scope = {}) {
-  const context = asObject(scope?.context);
-  if (!context) throw new TypeError("agent execution scope context is required");
-  return context;
+export function getAgentContextEnvelope(scope) {
+  if (!isPlainObject(scope) || !isPlainObject(scope.context)) {
+    throw new TypeError("agent execution scope context is required");
+  }
+  return scope.context;
 }

@@ -88,6 +88,7 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
         messageBlocks: {
           system: Array.from({ length: 7 }, (_, index) => `snapshot system ${index + 1}`),
           history,
+          incremental: [],
         },
       },
     ),
@@ -180,7 +181,7 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
           turnScopeId: "client-turn:current",
         },
       },
-      { messageBlocks: { system: [], history } },
+      { messageBlocks: { system: [], history, incremental: [] } },
     ),
   );
   const all = blocks.messages;
@@ -279,6 +280,7 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
         messageBlocks: {
           system: ["snapshot system"],
           history,
+          incremental: [],
         },
       },
     ),
@@ -426,6 +428,7 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
         messageBlocks: {
           system: ["snapshot system"],
           history,
+          incremental: [],
         },
       },
     ),
@@ -551,7 +554,7 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
           turnScopeId: "client-turn:current:first-continue",
         },
       },
-      { messageBlocks: { system: ["snapshot system"], history } },
+      { messageBlocks: { system: ["snapshot system"], history, incremental: [] } },
     ),
     {
       currentUserMessage: createPersistedCurrentUserMessage("继续", {

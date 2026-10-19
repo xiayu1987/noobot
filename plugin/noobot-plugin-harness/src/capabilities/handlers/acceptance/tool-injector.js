@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   FLOW_CONTROL_ROLE,
@@ -26,7 +26,7 @@ import {
   runAcceptanceBySeparateModel,
   runPhaseAcceptanceBySeparateModel,
 } from "./validation-runner.js";
-import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
+import { requireToolHookContext } from "../shared/tool-hook-context.js";
 import { clearPendingSummaryState } from "../../pending-cleanup.js";
 import { text } from "@noobot/shared/value";
 
@@ -54,27 +54,16 @@ function buildAcceptanceReceipt(report) {
   return receipt;
 }
 
-function createRequestTaskAcceptanceTool({ bucket, state, ctx, meta }) {
+function createRequestTaskAcceptanceTool({ bucket, state, meta }) {
   const locale = state.locale || LOCALE.ZH_CN;
-  return new DynamicStructuredTool({
-    name: TASK_ACCEPTANCE_TOOL_NAME,
-    description: translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.DESCRIPTION),
-    schema: z.object({
-      mode: z
-        .enum([ACCEPTANCE_MODE.ACTIVE, ACCEPTANCE_MODE.FORCED])
-        .optional()
-        .describe(translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.MODE_DESCRIPTION)),
-    }),
-    metadata: {
-      contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
-    },
-    async func(args = {}, _runManager, config = {}) {
-      const toolCtx = config?.configurable?.noobotHookContext || ctx;
+  return structuredTool(
+    async (args, config) => {
+      const toolCtx = requireToolHookContext(config);
       const capabilityLogStartIndex = Array.isArray(toolCtx.harnessCapabilityLogs)
         ? toolCtx.harnessCapabilityLogs.length
         : 0;
-      const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
-      const requestedMode = (text(args?.mode) || ACCEPTANCE_MODE.ACTIVE).toLowerCase();
+      const toolMeta = meta.harness.bindSignal(config.signal);
+      const requestedMode = (text(args.mode) || ACCEPTANCE_MODE.ACTIVE).toLowerCase();
       const mode =
         requestedMode === ACCEPTANCE_MODE.FORCED ? ACCEPTANCE_MODE.FORCED : ACCEPTANCE_MODE.ACTIVE;
       if (state.flags.acceptanceRequested === true) {
@@ -139,16 +128,30 @@ function createRequestTaskAcceptanceTool({ bucket, state, ctx, meta }) {
         state.flags.acceptanceReviewing = false;
       }
     },
-  });
+    {
+      name: TASK_ACCEPTANCE_TOOL_NAME,
+      description: translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.DESCRIPTION),
+      schema: z.object({
+        mode: z
+          .enum([ACCEPTANCE_MODE.ACTIVE, ACCEPTANCE_MODE.FORCED])
+          .optional()
+          .describe(
+            translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.MODE_DESCRIPTION),
+          ),
+      }),
+      metadata: {
+        contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
+      },
+    },
+  );
 }
 
-export function synchronizeTaskAcceptanceTool(ctx = {}, meta = {}) {
+export function synchronizeTaskAcceptanceTool(ctx, meta) {
   const holder = ensureHarnessBucket(ctx);
-  if (!holder) return false;
+  if (!holder) throw new TypeError("synchronizeTaskAcceptanceTool requires ctx.agentContext");
   const { bucket, state } = holder;
-  const registry = ctx?.agentContext?.bindings?.tools;
-  if (!Array.isArray(registry)) return false;
-  if (state?.flags?.acceptanceRequested === true) {
+  const registry = ctx.agentContext.bindings.tools;
+  if (state.flags.acceptanceRequested === true) {
     const next = registry.filter((tool) => text(tool?.name) !== TASK_ACCEPTANCE_TOOL_NAME);
     if (next.length === registry.length) return false;
     registry.splice(0, registry.length, ...next);
@@ -157,7 +160,7 @@ export function synchronizeTaskAcceptanceTool(ctx = {}, meta = {}) {
   if (registry.some((tool) => text(tool?.name) === TASK_ACCEPTANCE_TOOL_NAME)) {
     return false;
   }
-  registry.push(createRequestTaskAcceptanceTool({ bucket, state, ctx, meta }));
+  registry.push(createRequestTaskAcceptanceTool({ bucket, state, meta }));
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: ACCEPTANCE_EVENTS.taskAcceptanceToolInjected,

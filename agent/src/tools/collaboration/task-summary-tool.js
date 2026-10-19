@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { TASK_STATUS } from "../../bot/config/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -39,16 +39,8 @@ export function createTaskSummaryTool(ctx = {}) {
   const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
   const systemRuntime = runtime?.systemRuntime || {};
 
-  const taskSummaryTool = new DynamicStructuredTool({
-    name: TASK_SUMMARY_TOOL_NAME,
-    description: tTool(runtime, "tools.task_summary.description"),
-    schema: z.object({
-      summaryContent: z.string().describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),
-    }),
-    metadata: {
-      contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY),
-    },
-    func: async ({ summaryContent }) => {
+  const taskSummaryTool = structuredTool(
+    async ({ summaryContent }) => {
       if (systemRuntime.needsPhaseSummary !== true) {
         throw recoverableToolError(tTool(runtime, "tools.task_summary.notRequested"), {
           code: ERROR_CODE.RECOVERABLE_CONTROL_TOOL_NOT_REQUESTED,
@@ -100,7 +92,19 @@ export function createTaskSummaryTool(ctx = {}) {
         true,
       );
     },
-  });
+    {
+      name: TASK_SUMMARY_TOOL_NAME,
+      description: tTool(runtime, "tools.task_summary.description"),
+      schema: z.object({
+        summaryContent: z
+          .string()
+          .describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),
+      }),
+      metadata: {
+        contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY),
+      },
+    },
+  );
 
   return [taskSummaryTool];
 }

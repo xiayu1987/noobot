@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
@@ -96,7 +96,15 @@ function buildSubSessionRunConfigPatch(runtime, mcpToolset) {
   };
 }
 
-async function runMcpTask({ agentContext, runtime, input, identity, parentSessionId, mcpToolset }) {
+async function runMcpTask({
+  agentContext,
+  runtime,
+  input,
+  identity,
+  parentSessionId,
+  mcpToolset,
+  abortSignal,
+}) {
   if (!mcpToolset.tools.length) {
     throw recoverableToolError(tTool(runtime, "mcp.noToolsAvailable"), {
       code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
@@ -106,7 +114,7 @@ async function runMcpTask({ agentContext, runtime, input, identity, parentSessio
     parentExecutionScope: agentContext,
     message: `${tTool(runtime, "bot.taskPrefix")}: ${input.task}`,
     eventListener: runtime.eventListener,
-    abortSignal: runtime.abortSignal,
+    abortSignal,
     strategy: createAgentDetachedSubSessionStrategy({
       userId: identity.userId,
       parentSessionId,
@@ -141,29 +149,28 @@ function logMcpTaskFailure({ runtime, identity, parentSessionId, input, error })
 
 export function createMcpTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const callMcpTaskTool = new DynamicStructuredTool({
-    name: TOOL_NAME.CALL_MCP_TASK,
-    description: tTool(runtime, "tools.mcp.description"),
-    schema: z.object({
-      mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
-      task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
-    }),
-    func: async (rawInput) => {
+  const callMcpTaskTool = structuredTool(
+    async (rawInput, toolConfig) => {
+      const abortSignal = toolConfig.signal;
       const input = requireTaskInput(runtime, rawInput);
       const identity = getSessionIdsFromAgentContext(agentContext);
       const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
       let mcpToolset = null;
-      let releaseMcpToolset = null;
+      const closeOnAbort = () =>
+        runBestEffort(() => mcpToolset?.close(), {
+          operationName: "mcpTool.closeToolsetOnAbort",
+          context: { mcpName: input.mcpName },
+        });
       try {
         requireRunContext(runtime, identity);
         mcpToolset = await createMcpAgentTools({
           globalConfig: runtime.globalConfig,
           userConfig: runtime.userConfig,
           mcpName: input.mcpName,
-          signal: runtime.abortSignal,
+          signal: abortSignal,
           fetchImpl: runtime.sharedTools.fetch,
         });
-        releaseMcpToolset = runtime.cancellationScope.register(() => mcpToolset.close());
+        abortSignal.addEventListener("abort", closeOnAbort, { once: true });
         return await runMcpTask({
           agentContext,
           runtime,
@@ -171,6 +178,7 @@ export function createMcpTool({ agentContext }) {
           identity,
           parentSessionId,
           mcpToolset,
+          abortSignal,
         });
       } catch (error) {
         if (isAbortError(error)) throw error;
@@ -179,14 +187,22 @@ export function createMcpTool({ agentContext }) {
           code: String(error.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),
         });
       } finally {
-        releaseMcpToolset?.();
+        abortSignal.removeEventListener("abort", closeOnAbort);
         await runBestEffort(() => mcpToolset?.close(), {
           operationName: "mcpTool.closeToolset",
           context: { mcpName: input.mcpName },
         });
       }
     },
-  });
+    {
+      name: TOOL_NAME.CALL_MCP_TASK,
+      description: tTool(runtime, "tools.mcp.description"),
+      schema: z.object({
+        mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
+        task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
+      }),
+    },
+  );
 
   return [callMcpTaskTool];
 }

@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
+import { invokeTestHookHandler } from "../helpers/public-runtime-fixtures.js";
 
 test("createRegisterHarnessHooks wires trace/flush handlers and executes success flow", async () => {
   const calls = [];
@@ -80,14 +81,22 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
   );
   assert.equal(handlers.get("agent.after_turn")?.opts?.id, `${plugin.name}.flush.agent.after_turn`);
 
-  const traceResult = await handlers
-    .get("agent.before_llm_call")
-    .handler({ userId: "u1" }, { signal: hookAbortController.signal });
+  const traceResult = await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call").handler,
+    "agent.before_llm_call",
+    { userId: "u1" },
+    hookAbortController.signal,
+  );
   assert.deepEqual(traceResult, { fsmState: "planning", fsmRejected: false });
   const capabilitySignal = calls.find(([name]) => name === "capabilityModelInvoker")?.[1];
   assert.equal(capabilitySignal instanceof AbortSignal, true);
   assert.notEqual(capabilitySignal, hookAbortController.signal);
-  await handlers.get("agent.after_turn").handler();
+  await invokeTestHookHandler(
+    handlers.get("agent.after_turn").handler,
+    "agent.after_turn",
+    { userId: "u1" },
+    new AbortController().signal,
+  );
 
   assert.deepEqual(
     calls
@@ -148,7 +157,16 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  await assert.rejects(() => handlers.get("agent.before_turn")({}), /boom/);
+  await assert.rejects(
+    () =>
+      invokeTestHookHandler(
+        handlers.get("agent.before_turn"),
+        "agent.before_turn",
+        {},
+        new AbortController().signal,
+      ),
+    /boom/,
+  );
   assert.equal(
     progressEvents.some((item) => item.event === "hook_error"),
     true,

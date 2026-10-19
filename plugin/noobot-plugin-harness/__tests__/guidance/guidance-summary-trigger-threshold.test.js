@@ -23,7 +23,14 @@ test("guidance summary threshold by turns is independent from plan update attemp
   const agentContext = createPlanningAgentContext({
     counters: { summaryTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1, planUpdateAttempts: 0 },
   });
-  const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const ctx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(
     agentContext.bindings.extensions.harness.logs.guidance.some(
@@ -61,7 +68,14 @@ test("task acceptance pauses planning and guidance only while its review is runn
     acceptanceRequested: true,
     acceptanceReviewing: true,
   };
-  const ctx = { messages: [{ role: "tool", content: "acceptance completed" }], agentContext };
+  const ctx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "tool", content: "acceptance completed" }],
+    },
+    agentContext,
+  };
 
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
@@ -99,7 +113,14 @@ test("task acceptance pauses planning and guidance only while its review is runn
 test("guidance summary uses the canonical per-run threshold and records its source", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({ counters: { summaryTurns: 1 } });
-  const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  const ctx = {
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续任务" }],
+    },
+    agentContext,
+  };
 
   await handler({
     capability: "guidance",
@@ -125,7 +146,11 @@ test("guidance summary threshold by chars is independent from plan update attemp
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext();
   const ctx = {
-    messages: [{ role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1) }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1) }],
+    },
     agentContext,
   };
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
@@ -157,7 +182,11 @@ test("guidance schedules summary after a single model tool burst reaches summary
     capability: "planning",
     point: "agent.after_tool_calls",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       calls,
       agentContext,
     },
@@ -169,7 +198,11 @@ test("guidance schedules summary after a single model tool burst reaches summary
     capability: "guidance",
     point: "agent.after_tool_calls",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       calls,
       agentContext,
     },
@@ -186,15 +219,19 @@ test("guidance schedules summary after a single model tool burst reaches summary
   );
 
   const nextCtx = {
-    messages: [
-      { role: "assistant", content: "", tool_calls: calls },
-      ...calls.map((call) => ({
-        role: "tool",
-        tool_call_id: call.id,
-        toolName: call.name,
-        content: `{"toolName":"${call.name}","ok":true}`,
-      })),
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "assistant", content: "", tool_calls: calls },
+        ...calls.map((call) => ({
+          role: "tool",
+          tool_call_id: call.id,
+          toolName: call.name,
+          content: `{"toolName":"${call.name}","ok":true}`,
+        })),
+      ],
+    },
     agentContext,
   };
   await guidanceHandler({
@@ -228,7 +265,11 @@ test("planning does not schedule tool-burst summary by default", async () => {
     capability: "planning",
     point: "agent.after_tool_calls",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       calls,
       agentContext,
     },
@@ -260,7 +301,11 @@ test("planning does not schedule tool-burst summary when summary is already pend
     capability: "planning",
     point: "agent.after_tool_calls",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       calls: burstCalls,
       agentContext: alreadyPendingContext,
     },
@@ -280,7 +325,11 @@ test("planning does not schedule tool-burst summary when summary is already pend
     capability: "planning",
     point: "agent.after_tool_calls",
     ctx: {
-      messages: [{ role: "user", content: "继续任务" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "继续任务" }],
+      },
       calls: [{ id: "summary_call", name: "task_summary", args: {} }, ...burstCalls.slice(1)],
       agentContext: taskSummaryContext,
     },

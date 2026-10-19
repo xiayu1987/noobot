@@ -174,8 +174,8 @@ export function materializeTurnTerminalMessages({
   });
 }
 
-export function projectTurnTerminalStatuses(lifecycle = {}) {
-  return Object.values(lifecycle?.turns || {})
+export function projectTurnTerminalStatuses(lifecycle) {
+  return Object.values(lifecycle.turns)
     .filter(isSettledTurn)
     .map((turn) => normalizeTurnTerminalStatus(turn.terminalStatus))
     .filter(Boolean);

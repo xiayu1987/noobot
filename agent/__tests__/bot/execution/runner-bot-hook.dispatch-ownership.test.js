@@ -86,11 +86,14 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       const turnScopeId = buildContextPayload.runConfig.turnScopeId;
       const invocationIdentity = {
+        userId: buildContextPayload.userId,
         sessionId: buildContextPayload.sessionId,
-        parentSessionId: buildContextPayload.parentSessionId || "",
+        rootSessionId: "s1",
+        parentSessionId: buildContextPayload.parentSessionId,
         dialogProcessId: buildContextPayload.dialogProcessId,
         turnScopeId,
         runId: `agent:${turnScopeId}`,
+        messageId: buildContextPayload.runConfig.messageId,
       };
       const modelPort = {
         async invoke(request) {

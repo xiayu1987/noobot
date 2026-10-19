@@ -13,15 +13,7 @@ import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 function runtime(abortSignal = null) {
   return createTestRuntimeContext({
     abortSignal,
-    runConfig: {
-      messageId: "message-abort-responsiveness",
-      turnScopeId: "turn-abort-responsiveness",
-      executionId: "run-abort-responsiveness",
-    },
-    systemRuntime: {
-      sessionId: "session-abort-responsiveness",
-      config: { sanitizeOutput: false },
-    },
+    systemRuntime: { config: { sanitizeOutput: false } },
   });
 }
 

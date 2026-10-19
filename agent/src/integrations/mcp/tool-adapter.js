@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { TOOL_BINDING_NAME_MAX_LENGTH } from "../../models/tool/binding-adapter.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
@@ -100,18 +100,20 @@ export function buildLangChainMcpTools({ mcpTools = [], client }) {
     .map((toolSpec) => {
       const toolName = text(toolSpec?.name);
       if (!toolName) return null;
-      return new DynamicStructuredTool({
-        name: resolveMcpToolBindingName(toolName, usedNames),
-        description: buildMcpToolDescription(toolSpec),
-        schema: normalizeMcpInputSchema(toolSpec?.inputSchema || {}),
-        func: async (args = {}) => {
+      return structuredTool(
+        async (args = {}) => {
           const callResult = await client.callTool({
             name: toolName,
             args: normalizeMcpToolCallArgs(args),
           });
           return normalizeMcpToolResult(callResult);
         },
-      });
+        {
+          name: resolveMcpToolBindingName(toolName, usedNames),
+          description: buildMcpToolDescription(toolSpec),
+          schema: normalizeMcpInputSchema(toolSpec?.inputSchema || {}),
+        },
+      );
     })
     .filter(Boolean);
 }

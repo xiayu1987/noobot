@@ -11,7 +11,12 @@ import {
   invokeNoToolsTurn as invokeNoToolsTurnProduction,
   invokeWithToolsTurn as invokeWithToolsTurnProduction,
 } from "../../../src/runtime/turn/turn-executor.js";
-import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
+import {
+  createTestModelPort,
+  createLoopTurnIdentity,
+  prepareTestTurnExecution,
+} from "./turn-runtime-test-helper.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 const TEST_MODEL_SPEC = Object.freeze(
   normalizeRuntimeModelSpec({
@@ -27,7 +32,8 @@ function invokeNoToolsTurn(args = {}) {
   prepareTestTurnExecution(
     args.modelState,
     args.loopState,
-    `no-tools-${args.loopState?.dialogProcessId || "turn"}`,
+    createLoopTurnIdentity(args.loopState),
+    "presentation-message-filter-cases-c",
   );
   return invokeNoToolsTurnProduction(args);
 }
@@ -36,7 +42,8 @@ function invokeWithToolsTurn(args = {}) {
   prepareTestTurnExecution(
     args.modelState,
     args.loopState,
-    `with-tools-${args.loopState?.dialogProcessId || "turn"}`,
+    createLoopTurnIdentity(args.loopState),
+    "presentation-message-filter-cases-c",
   );
   return invokeWithToolsTurnProduction(args);
 }
@@ -60,14 +67,7 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
 
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: {
-      runConfig: { streaming: false },
-      systemRuntime: {
-        sessionId: "child-session",
-        dialogProcessId: "d-stream-disabled",
-        turnScopeId: "workflow-node:stream-disabled",
-      },
-    },
+    runtime: createTestRuntimeContext({ runConfig: { streaming: false } }),
     globalConfig: { streaming: true },
     userConfig: {},
     eventListener: {
@@ -79,7 +79,11 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [{ role: "user", content: "keep-user" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "keep-user" }],
+    },
     traces: [],
     tools: [{ name: "execute_script" }],
     turnMessages: [],
@@ -106,13 +110,12 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
         return { output: { text: "ok after retry", toolCalls: [] } };
       },
     },
-    runtime: { systemRuntime: {} },
+    runtime: createTestRuntimeContext(),
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [{ role: "user", content: "go" }],
     messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "go" }] },
     traces: [],
     turnMessages: [],
@@ -139,10 +142,7 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
         return { output: { text: "ok with tools after retry", toolCalls: [] } };
       },
     },
-    runtime: {
-      runConfig: { streaming: false },
-      systemRuntime: {},
-    },
+    runtime: createTestRuntimeContext({ runConfig: { streaming: false } }),
     globalConfig: { streaming: true },
     userConfig: {},
     eventListener: null,
@@ -150,7 +150,6 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [{ role: "user", content: "go" }],
     messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "go" }] },
     traces: [],
     tools: [{ name: "execute_script" }],

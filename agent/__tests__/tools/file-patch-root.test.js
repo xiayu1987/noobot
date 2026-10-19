@@ -31,7 +31,18 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
       },
       ...runtimeOverrides,
     },
-    { identity: { userId } },
+    {
+      identity: {
+        userId,
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        parentSessionId: "",
+        dialogProcessId: "d-1",
+        turnScopeId: "t-1",
+        runId: "r-1",
+        messageId: "m-1",
+      },
+    },
   );
 }
 
@@ -124,18 +135,9 @@ test("resolvePatchRoot: 非工作区相对子目录 root 一律拒绝", async ()
     await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\n", "utf8");
     const agentContext = buildAgentContext(basePath);
 
-    assert.equal(
-      classifyToolInputPath("/etc", { agentContext }).view,
-      TOOL_PATH_VIEWS.HOST_ABSOLUTE,
-    );
-    assert.equal(
-      classifyToolInputPath("/project", { agentContext }).view,
-      TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE,
-    );
-    assert.equal(
-      classifyToolInputPath("project", { agentContext }).view,
-      TOOL_PATH_VIEWS.VIRTUAL_RELATIVE,
-    );
+    assert.equal(classifyToolInputPath("/etc").view, TOOL_PATH_VIEWS.HOST_ABSOLUTE);
+    assert.equal(classifyToolInputPath("/project").view, TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE);
+    assert.equal(classifyToolInputPath("project").view, TOOL_PATH_VIEWS.VIRTUAL_RELATIVE);
 
     const invalidRoots = ["..", "../escape", "/etc", "/project", "project", "project/agent"];
     for (const root of invalidRoots) {

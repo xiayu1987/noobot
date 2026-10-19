@@ -18,9 +18,12 @@ test("harness planning prompt includes current tool names and descriptions", asy
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
 
-  const messages = [{ role: "user", content: "开始任务" }];
   const ctx = {
-    messages,
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext: {
       bindings: {
         tools: [
@@ -37,11 +40,12 @@ test("harness planning prompt includes current tool names and descriptions", asy
   };
 
   await hookManager.emit("agent.before_llm_call", ctx);
+  const messages = ctx.modelContext.messageBlocks.incremental;
   const planningPromptMessage = messages.find((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
   );
   const planningPrompt = String(planningPromptMessage?.content || "");
-  const toolsPrompt = messages.find((item = {}) =>
+  const toolsPrompt = ctx.modelContext.messageBlocks.system.find((item = {}) =>
     /harness-planning-tools/.test(String(item?.content || "")),
   );
   const toolsPromptText = String(toolsPrompt?.content || "");
@@ -62,9 +66,12 @@ test("harness initial planning keeps scenario policy out of text protocol and re
     { planningGuidanceMode: "inject", trace: false, promptPolicy: false },
   );
 
-  const messages = [{ role: "user", content: "整理这些文本资料" }];
   const ctx = {
-    messages,
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "整理这些文本资料" }],
+    },
     agentContext: {
       bindings: {
         runtime: {
@@ -80,6 +87,7 @@ test("harness initial planning keeps scenario policy out of text protocol and re
   };
 
   await hookManager.emit("agent.before_llm_call", ctx);
+  const messages = ctx.modelContext.messageBlocks.incremental;
 
   const planningIndex = messages.findIndex((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
@@ -121,7 +129,11 @@ test("harness planning followup uses text deliverable-batch policy in text scena
   );
 
   const ctx = {
-    messages: [{ role: "user", content: "整理这些文本资料" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "整理这些文本资料" }],
+    },
     agentContext: {
       bindings: {
         runtime: {
@@ -170,7 +182,11 @@ test("harness planning captures dynamic policy prompt protocol from separate mod
   );
 
   const ctx = {
-    messages: [{ role: "user", content: "整理资料" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "整理资料" }],
+    },
     agentContext: {
       bindings: {
         runtime: {
@@ -219,7 +235,11 @@ test("harness planning followup uses dynamic programming scenario over initial t
   );
 
   const ctx = {
-    messages: [{ role: "user", content: "修一下 harness 插件里的代码" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "修一下 harness 插件里的代码" }],
+    },
     agentContext: {
       bindings: {
         runtime: {
@@ -267,7 +287,7 @@ test("harness planning separate model keeps latest user goal in planning context
   );
 
   const ctx = {
-    messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
     userMessage: "查找最适合组织的人",
     agentContext: {
       bindings: { tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -292,9 +312,12 @@ test("harness planning operation directory uses sandbox view without losing host
 
   const hostBasePath = "/host/user-a";
   const sandboxBasePath = "/workspace/user-a";
-  const messages = [{ role: "user", content: "开始任务" }];
   const ctx = {
-    messages,
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext: {
       environment: {
         workspace: { basePath: sandboxBasePath },
@@ -321,7 +344,7 @@ test("harness planning operation directory uses sandbox view without losing host
 
   await hookManager.emit("agent.before_llm_call", ctx);
 
-  const contextMessage = messages.find((item = {}) =>
+  const contextMessage = ctx.modelContext.messageBlocks.system.find((item = {}) =>
     /"operationDirectory"/.test(String(item?.content || "")),
   );
   const contextText = String(contextMessage?.content || "");
@@ -349,7 +372,11 @@ test("harness separate-model plan relay includes operation directory for main ag
   const ctx = {
     userId: "user-b",
     sessionId: "s-user-b",
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext: {
       bindings: {
         runtime: {

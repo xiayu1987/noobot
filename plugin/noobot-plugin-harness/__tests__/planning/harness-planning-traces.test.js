@@ -37,7 +37,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
     sessionId: "s7",
     dialogProcessId: "dp7",
     caller: "user",
-    messages: [{ role: "user", content: "hello" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
     agentContext: {
       bindings: { runtime: { basePath } },
     },

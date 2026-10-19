@@ -9,7 +9,10 @@ import assert from "node:assert/strict";
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { appendMessage } from "../../src/core/message-store.js";
 import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestHookContext,
+  invokeTestHookHandler,
+} from "../helpers/public-runtime-fixtures.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
   const blocks =
@@ -100,7 +103,12 @@ test("createRegisterHarnessHooks keeps message block order and lets incremental 
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   const exactUserIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
@@ -197,7 +205,12 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   const exactUserIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
@@ -313,7 +326,12 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -389,7 +407,12 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
     [
@@ -409,7 +432,12 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     message.summarized = true;
   }
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
     ["system context", "harness current-turn injection"],
@@ -474,7 +502,12 @@ test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messag
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   const assistantIds = ctx.modelContext.messages
     .filter((item) => item.role === "assistant")

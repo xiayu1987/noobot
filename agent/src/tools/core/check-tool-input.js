@@ -201,7 +201,6 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
     runtime,
     workspacePath,
     workspaceRoot,
-    agentContext,
     allowHostAbsolute: true,
     allowSandbox: isSandboxIsolationMode(isolation.mode),
     allowVirtualRelative: false,

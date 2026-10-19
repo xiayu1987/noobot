@@ -115,8 +115,6 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
 function buildStateWithRunConfig(runConfig) {
   let received = null;
   const builder = createStateBuilder({
-    mergeConfigFn: (a, b) => ({ ...a, ...b }),
-    emitEventFn: () => {},
     buildContextMessageBlocksFn: () => ({ system: [], history: [], incremental: [], messages: [] }),
     normalizeSystemRuntimeCountersFn: () => {},
     resolveEffectiveModelSpecFn: (params) => {
@@ -143,6 +141,11 @@ function buildStateWithRunConfig(runConfig) {
           sessionId: "s1",
           dialogProcessId: "dialog-model-selection",
           turnScopeId: "turn-model-selection",
+          userId: "u-test",
+          rootSessionId: "s1",
+          parentSessionId: "",
+          runId: "r-1",
+          messageId: "m-1",
         },
       },
     ),

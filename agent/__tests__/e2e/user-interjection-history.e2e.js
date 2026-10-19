@@ -16,6 +16,8 @@ import { createModelContext } from "@noobot/context-protocol/assembly/hook-conte
 import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
+import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
+import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 
 test("session execution preserves every user interjection into the next model history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-user-interjection-e2e-"));
@@ -40,6 +42,7 @@ test("session execution preserves every user interjection into the next model hi
   });
 
   const session = {
+    assertPersistenceContextIdentity,
     async getSessionBundle() {
       return { exists: false, session: { messages: [] } };
     },
@@ -60,7 +63,7 @@ test("session execution preserves every user interjection into the next model hi
       return rootSessionId;
     },
     async getContextProjection() {
-      return { messages: [], sourceRevision: "" };
+      return { scope: {}, messages: [] };
     },
     async appendTurns({ turns = [] } = {}) {
       persistedTurns.push(...turns);
@@ -102,7 +105,11 @@ test("session execution preserves every user interjection into the next model hi
       async captureSessionToShortMemory() {},
       async maybeSummarize() {},
     },
-    attach: {},
+    attach: {
+      async ingest() {
+        throw new Error("user interjection e2e carries no raw attachments");
+      },
+    },
     skill: {},
     configService: {
       async loadUserConfig() {
@@ -121,7 +128,10 @@ test("session execution preserves every user interjection into the next model hi
     botManager: {},
     agentRunner: async ({ agentContext, currentUserMessage }) => {
       const runtime = agentContext.bindings.runtime;
-      const modelContext = agentContext.context.modelContext;
+      const modelContext = createModelContext({
+        activeTurnIdentity: { dialogProcessId, turnScopeId },
+        messageBlocks: agentContext.context.modelContext.messageBlocks,
+      });
       for (const interjection of interjections) {
         appendUserInterjectionMessage({
           runtime,
@@ -165,10 +175,6 @@ test("session execution preserves every user interjection into the next model hi
     const builder = originalBuildContextBuilder(options);
     const bindSessionManager = async (build) => {
       const scope = await build();
-      scope.context.modelContext = createModelContext({
-        activeTurnIdentity: { dialogProcessId, turnScopeId },
-        messageBlocks: scope.context.modelContext.messageBlocks,
-      });
       scope.bindings.runtime.sessionManager = sessionManager;
       return scope;
     };
@@ -183,6 +189,7 @@ test("session execution preserves every user interjection into the next model hi
 
   try {
     await engine.runSession({
+      abortSignal: new AbortController().signal,
       userId: "admin",
       sessionId,
       message: "start task",
@@ -197,9 +204,8 @@ test("session execution preserves every user interjection into the next model hi
         aggregateVersion: 1,
       }),
       runConfig: {
-        executionId: `agent:${turnScopeId}`,
+        ...createAcceptedRunIdentity(turnScopeId, { commandId: turnScopeId }),
         executionKind: "agent",
-        rootExecutionId: `agent:${turnScopeId}`,
       },
     });
 

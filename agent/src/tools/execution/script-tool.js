@@ -5,7 +5,7 @@
  */
 import { mkdir } from "node:fs/promises";
 import { resolveRuntimePathContext, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   BUILTIN_THRESHOLDS,
@@ -90,32 +90,14 @@ export function createScriptTool({ agentContext }) {
     executionView: executionPolicy.view,
   });
 
-  const execute_script = new DynamicStructuredTool({
-    name: EXECUTE_SCRIPT_TOOL_NAME,
-    metadata: { pathContract: TOOL_PATH_CONTRACTS.scriptInput },
-    description,
-    schema: z.object({
-      command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
-      riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel"),
-      executionMode: z
-        .enum([SCRIPT_EXECUTION_MODE.FOREGROUND, SCRIPT_EXECUTION_MODE.BACKGROUND])
-        .optional()
-        .default(SCRIPT_EXECUTION_MODE.FOREGROUND)
-        .describe(tTool(runtime, "tools.script.fieldExecutionMode")),
-      includeLineNumbers: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
-    }),
-    func: async (
+  const execute_script = structuredTool(
+    async (
       {
         command,
         riskLevel,
         executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND,
         includeLineNumbers = false,
       },
-      _runManager,
       toolConfig = {},
     ) => {
       await mkdir(workspace, { recursive: true });
@@ -200,7 +182,26 @@ export function createScriptTool({ agentContext }) {
         identity,
       });
     },
-  });
+    {
+      name: EXECUTE_SCRIPT_TOOL_NAME,
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.scriptInput },
+      description,
+      schema: z.object({
+        command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
+        riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel"),
+        executionMode: z
+          .enum([SCRIPT_EXECUTION_MODE.FOREGROUND, SCRIPT_EXECUTION_MODE.BACKGROUND])
+          .optional()
+          .default(SCRIPT_EXECUTION_MODE.FOREGROUND)
+          .describe(tTool(runtime, "tools.script.fieldExecutionMode")),
+        includeLineNumbers: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
+      }),
+    },
+  );
 
   return [execute_script];
 }

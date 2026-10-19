@@ -9,11 +9,9 @@ import test from "node:test";
 import {
   PATH_CAPABILITIES,
   PATH_PLATFORMS,
-  PATH_VIEWS,
   TOOL_PATH_VIEWS,
   TOOL_PATH_RESOLUTION_ERROR,
   classifyToolInputPath,
-  convertPathView,
   detectPathPlatform,
   normalizePathForPlatform,
   isPathWithinRoot,
@@ -74,20 +72,6 @@ test("resolveHostPath reads only sandboxPath", () => {
   assert.equal(resolveHostPath({ path: "/data/x.txt", runtime: mountRuntime }), "");
 });
 
-test("convertPathView mappings accept only host, sandbox and client keys", () => {
-  const result = convertPathView({
-    path: "/srv/project/file.txt",
-    sourceView: PATH_VIEWS.HOST,
-    targetView: PATH_VIEWS.SANDBOX,
-    mappings: [
-      { hostPath: "/srv/project", sandboxPath: "/workspace/project" },
-      { source: "/srv/project", target: "/workspace/project" },
-    ],
-  });
-  assert.equal(result.mapped, false);
-  assert.equal(result.path, "/srv/project/file.txt");
-});
-
 test("resolveRuntimeUserId reads runtime identity only from systemRuntime", () => {
   assert.equal(
     resolveRuntimeUserId({ runtime: { userId: "stale", systemRuntime: { userId: "u1" } } }),
@@ -105,22 +89,6 @@ test("path containment distinguishes parent traversal from dot-prefixed names", 
   assert.equal(isPathWithinRoot("/srv/workspace", "/srv/workspace"), true);
   assert.equal(isPathWithinRoot("/srv/workspace", "/srv/workspace/..reports/a.txt"), true);
   assert.equal(isPathWithinRoot("/srv/workspace", "/srv/outside.txt"), false);
-});
-
-test("converts explicit path views without losing the source contract", () => {
-  const result = convertPathView({
-    path: "C:\\Users\\me\\project\\file.txt",
-    sourcePlatform: PATH_PLATFORMS.WINDOWS,
-    sourceView: PATH_VIEWS.CLIENT,
-    targetPlatform: PATH_PLATFORMS.LINUX,
-    targetView: PATH_VIEWS.SANDBOX,
-    mappings: [
-      { client: "C:/Users/me/project", host: "/srv/project", sandbox: "/workspace/project" },
-    ],
-  });
-  assert.equal(result.path, "/workspace/project/file.txt");
-  assert.equal(result.sourceView, PATH_VIEWS.CLIENT);
-  assert.equal(result.targetView, PATH_VIEWS.SANDBOX);
 });
 
 test("classifies tool input views as one canonical result", () => {

@@ -86,7 +86,7 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
       inputPath: "",
     };
   }
-  const classifiedRoot = classifyToolInputPath(normalizedRoot, { agentContext });
+  const classifiedRoot = classifyToolInputPath(normalizedRoot);
   if (
     normalizedRoot === ".." ||
     normalizedRoot.startsWith("../") ||

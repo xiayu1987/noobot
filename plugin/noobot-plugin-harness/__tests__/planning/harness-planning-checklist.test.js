@@ -23,15 +23,20 @@ test("harness planning captures checklist and forces acceptance at final output"
       extensions: { harness: {} },
     },
   };
-  const messages = [{ role: "user", content: "开始任务" }];
 
-  await hookManager.emit("agent.before_llm_call", {
+  const messagesCtx = {
     userId: "u11",
     sessionId: "s11",
     dialogProcessId: "dp11",
-    messages,
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
-  });
+  };
+  await hookManager.emit("agent.before_llm_call", messagesCtx);
+  const messages = messagesCtx.modelContext.messageBlocks.incremental;
   const planningPromptMessage = messages.find((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
   );
@@ -91,7 +96,10 @@ test("harness planning retries injection when first response has no checklist", 
   };
 
   const firstMessages = [{ role: "user", content: "执行任务" }];
-  await hookManager.emit("agent.before_llm_call", { messages: firstMessages, agentContext });
+  await hookManager.emit("agent.before_llm_call", {
+    messageBlocks: { system: [], history: [], incremental: firstMessages },
+    agentContext,
+  });
   await hookManager.emit("agent.after_llm_call", {
     modelResponse: { text: "先读取上下文后再规划。" },
     calls: [],
@@ -102,8 +110,12 @@ test("harness planning retries injection when first response has no checklist", 
   assert.equal(agentContext.bindings.extensions.harness.state.flags.planningPromptInjected, false);
   assert.equal(agentContext.bindings.runtime.systemRuntime.config.forceTool, undefined);
 
-  const secondMessages = [{ role: "user", content: "继续" }];
-  await hookManager.emit("agent.before_llm_call", { messages: secondMessages, agentContext });
+  const secondMessagesCtx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
+  await hookManager.emit("agent.before_llm_call", secondMessagesCtx);
+  const secondMessages = secondMessagesCtx.modelContext.messageBlocks.incremental;
   assert.equal(
     secondMessages.some((item = {}) =>
       /harness-planning-bootstrap/.test(String(item?.content || "")),
@@ -140,7 +152,11 @@ test("harness planning does not mutate runtime forceTool config", async () => {
   };
 
   await hookManager.emit("agent.before_llm_call", {
-    messages: [{ role: "user", content: "执行任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "执行任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -152,7 +168,7 @@ test("harness planning does not mutate runtime forceTool config", async () => {
   assert.equal(runtimeConfig.forceTool, true);
 
   await hookManager.emit("agent.before_llm_call", {
-    messages: [{ role: "user", content: "继续" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -184,7 +200,11 @@ test("harness planning blocks tool-call turn without assistant text and schedule
   };
 
   await hookManager.emit("agent.before_llm_call", {
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {

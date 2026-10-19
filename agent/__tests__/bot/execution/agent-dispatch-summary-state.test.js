@@ -64,8 +64,11 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
         dialogProcessId: "dp1",
         turnScopeId: "ts1",
         messageId: "sm_user",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        runId: "r-1",
       },
-      messageBlocks: { history: [] },
+      messageBlocks: { history: [], system: [], incremental: [] },
     }),
     normalizedMessage: { userId: "u1", content: "question" },
     currentUserMessage: {
@@ -81,9 +84,6 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
     botHookRuntime: {},
     botHookBase: {},
     agentContextSummary: {},
-    usedSessionId: "s1",
-    dialogProcessId: "dp1",
-    resolvedTurnScopeId: "ts1",
     syncLifecycleRuntimeState() {},
   });
 

@@ -36,7 +36,7 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
     ...toolCallScope(
       buildAgentContext(basePath, "u-test", {
         runtime: {
-          systemRuntime: { sessionId: "s-write" },
+          systemRuntime: { sessionId: "s-write", rootSessionId: "s-write" },
           globalConfig: {},
           attachmentService: buildAttachmentService(),
         },

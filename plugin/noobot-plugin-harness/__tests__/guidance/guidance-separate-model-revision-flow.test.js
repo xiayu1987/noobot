@@ -32,7 +32,10 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
     },
   };
 
-  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(invocations.length >= 1, true);
   assert.equal(invocations[0]?.purpose, "planning_revision");
@@ -75,7 +78,10 @@ test("separate_model mode: pending revision runs by separate model without promp
     },
   };
 
-  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(
     invocations.some((item = {}) => item.purpose === "planning_revision"),
@@ -119,7 +125,10 @@ test("separate_model simultaneous plan update follows up with summary before ana
     },
   };
 
-  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.deepEqual(
@@ -168,7 +177,10 @@ test("workflow_execution_result captures errorCode when separate_model guidance 
     },
   };
 
-  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   const executionLog = agentContext.bindings.extensions.harness.logs.guidance.find(

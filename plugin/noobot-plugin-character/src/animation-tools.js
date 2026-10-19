@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   AnimationIdSchema,
@@ -139,22 +139,16 @@ function resultFor(receipt, protocol) {
 }
 
 function createCameraTools({ getArtifact, commitArtifact }) {
-  const cameraListTool = new DynamicStructuredTool({
-    name: CHARACTER_CAMERA_PRESET_LIST_TOOL_ID,
-    description: "List authoritative built-in camera preset IDs.",
-    schema: z.object({}),
-    func: async () => JSON.stringify({ ok: true, presets: listCameraPresets() }),
-  });
-  const cameraApplyTool = new DynamicStructuredTool({
-    name: CHARACTER_ANIMATION_CAMERA_APPLY_TOOL_ID,
-    description:
-      "Replace one authoritative animation's camera track with a built-in preset at an explicit revision.",
-    schema: z.object({
-      animationId: AnimationIdSchema,
-      baseRevision: z.number().int().positive(),
-      ...CameraPresetInvocationSchema.shape,
-    }),
-    func: async ({ animationId, baseRevision, presetId, subjectIds }) => {
+  const cameraListTool = structuredTool(
+    async () => JSON.stringify({ ok: true, presets: listCameraPresets() }),
+    {
+      name: CHARACTER_CAMERA_PRESET_LIST_TOOL_ID,
+      description: "List authoritative built-in camera preset IDs.",
+      schema: z.object({}),
+    },
+  );
+  const cameraApplyTool = structuredTool(
+    async ({ animationId, baseRevision, presetId, subjectIds }) => {
       const current = await getArtifact({
         artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
         artifactId: animationId,
@@ -196,7 +190,17 @@ function createCameraTools({ getArtifact, commitArtifact }) {
       });
       return resultFor(receipt, protocol);
     },
-  });
+    {
+      name: CHARACTER_ANIMATION_CAMERA_APPLY_TOOL_ID,
+      description:
+        "Replace one authoritative animation's camera track with a built-in preset at an explicit revision.",
+      schema: z.object({
+        animationId: AnimationIdSchema,
+        baseRevision: z.number().int().positive(),
+        ...CameraPresetInvocationSchema.shape,
+      }),
+    },
+  );
   return [cameraListTool, cameraApplyTool];
 }
 
@@ -223,12 +227,8 @@ export function createAnimationTools({ commitArtifact, getArtifact, resolveSelec
       data: { protocol, assets },
     });
   };
-  const createTool = new DynamicStructuredTool({
-    name: CHARACTER_ANIMATION_TOOL_ID,
-    description:
-      "Create a new v4 character animation. Root motion input is character_local and is compiled to absolute normalized_world tracks. Use orientationMode face_motion for walking/running, authored for backing/side-steps, and explicit opposite yaw rotations when characters face each other: left facing +X [0,-0.7071068,0,0.7071068], right facing -X [0,0.7071068,0,0.7071068]. Omit animationId to generate one; never append to an existing ID.",
-    schema: z.object({ protocol: AnimationProtocolInputSchema }),
-    func: async ({ protocol: input }) => {
+  const createTool = structuredTool(
+    async ({ protocol: input }) => {
       const selectedAssets = await resolveSelectedAssets();
       const protocol = compileAnimationInput(
         {
@@ -243,29 +243,29 @@ export function createAnimationTools({ commitArtifact, getArtifact, resolveSelec
       if (artifactError) return JSON.stringify({ ok: false, ...artifactError });
       return resultFor(await commit(protocol, selectedAssets), protocol);
     },
-  });
-  const getTool = new DynamicStructuredTool({
-    name: CHARACTER_ANIMATION_GET_TOOL_ID,
-    description: "Read the authoritative current animation by animationId before modifying it.",
-    schema: z.object({ animationId: AnimationIdSchema }),
-    func: async ({ animationId }) =>
+    {
+      name: CHARACTER_ANIMATION_TOOL_ID,
+      description:
+        "Create a new v4 character animation. Root motion input is character_local and is compiled to absolute normalized_world tracks. Use orientationMode face_motion for walking/running, authored for backing/side-steps, and explicit opposite yaw rotations when characters face each other: left facing +X [0,-0.7071068,0,0.7071068], right facing -X [0,0.7071068,0,0.7071068]. Omit animationId to generate one; never append to an existing ID.",
+      schema: z.object({ protocol: AnimationProtocolInputSchema }),
+    },
+  );
+  const getTool = structuredTool(
+    async ({ animationId }) =>
       JSON.stringify(
         await getArtifact({
           artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
           artifactId: animationId,
         }),
       ),
-  });
-  const updateTool = new DynamicStructuredTool({
-    name: CHARACTER_ANIMATION_UPDATE_TOOL_ID,
-    description:
-      "Replace the current animation for an existing animationId. Call character_animation_get first and provide its revision.",
-    schema: z.object({
-      animationId: AnimationIdSchema,
-      baseRevision: z.number().int().positive(),
-      protocol: AnimationProtocolUpdateInputSchema,
-    }),
-    func: async ({ animationId, baseRevision, protocol: input }) => {
+    {
+      name: CHARACTER_ANIMATION_GET_TOOL_ID,
+      description: "Read the authoritative current animation by animationId before modifying it.",
+      schema: z.object({ animationId: AnimationIdSchema }),
+    },
+  );
+  const updateTool = structuredTool(
+    async ({ animationId, baseRevision, protocol: input }) => {
       const selectedAssets = await resolveSelectedAssets();
       const protocol = AnimationProtocolSchema.parse({ ...input, animationId });
       const error = validateProtocolAssets(protocol, selectedAssets);
@@ -275,13 +275,19 @@ export function createAnimationTools({ commitArtifact, getArtifact, resolveSelec
       const committed = await update(protocol, baseRevision, selectedAssets);
       return resultFor(committed, protocol);
     },
-  });
-  const scriptTool = new DynamicStructuredTool({
-    name: CHARACTER_ANIMATION_SCRIPT_TOOL_ID,
-    description:
-      'Create or replace one v4 character animation from declarative sequence/parallel/event data. Prefer semantic nodes: move {type:"move", characterId, mode:"walk"|"run"|"crawl"|"jump"|"hop"|"drop"|"detour"|"step_over"|"jump_over"|"vault"|"climb_over", clip, target:[x,y,z], duration?, obstacleId?, clearance?}; orient face {type:"orient", characterId, mode:"face", clip, target:[x,y,z], duration?}; orient turn {type:"orient", characterId, mode:"turn", clip, angle, duration?}; posture {type:"posture", characterId, mode:"idle"|"stop"|"crouch"|"kneel"|"sit"|"lie"|"stand_up", clip, duration}; program an exact animation channel with {type:"channel", characterId, channelId, duration, tracks:[{node, property:"position"|"rotation"|"scale", keyframes:[{time,...}]}], rootMotion?}. Channel keyframes are authoritative and are compiled into the same v4 timeline; no code is executed. target is world-space; start comes from rootTransform or the previous node endpoint. Obstacle modes require a solid box collider ID. Arguments are {script, animationId?, baseRevision?}; for existing animations call character_animation_get first. The compiler expands semantic nodes into authoritative v4 rootMotion.',
-    schema: AnimationScriptToolInputSchema,
-    func: async ({ script, animationId, baseRevision }) => {
+    {
+      name: CHARACTER_ANIMATION_UPDATE_TOOL_ID,
+      description:
+        "Replace the current animation for an existing animationId. Call character_animation_get first and provide its revision.",
+      schema: z.object({
+        animationId: AnimationIdSchema,
+        baseRevision: z.number().int().positive(),
+        protocol: AnimationProtocolUpdateInputSchema,
+      }),
+    },
+  );
+  const scriptTool = structuredTool(
+    async ({ script, animationId, baseRevision }) => {
       const selectedAssets = await resolveSelectedAssets();
       let input;
       try {
@@ -324,7 +330,13 @@ export function createAnimationTools({ commitArtifact, getArtifact, resolveSelec
         : await commit(protocol, selectedAssets);
       return resultFor(receipt, protocol);
     },
-  });
+    {
+      name: CHARACTER_ANIMATION_SCRIPT_TOOL_ID,
+      description:
+        'Create or replace one v4 character animation from declarative sequence/parallel/event data. Prefer semantic nodes: move {type:"move", characterId, mode:"walk"|"run"|"crawl"|"jump"|"hop"|"drop"|"detour"|"step_over"|"jump_over"|"vault"|"climb_over", clip, target:[x,y,z], duration?, obstacleId?, clearance?}; orient face {type:"orient", characterId, mode:"face", clip, target:[x,y,z], duration?}; orient turn {type:"orient", characterId, mode:"turn", clip, angle, duration?}; posture {type:"posture", characterId, mode:"idle"|"stop"|"crouch"|"kneel"|"sit"|"lie"|"stand_up", clip, duration}; program an exact animation channel with {type:"channel", characterId, channelId, duration, tracks:[{node, property:"position"|"rotation"|"scale", keyframes:[{time,...}]}], rootMotion?}. Channel keyframes are authoritative and are compiled into the same v4 timeline; no code is executed. target is world-space; start comes from rootTransform or the previous node endpoint. Obstacle modes require a solid box collider ID. Arguments are {script, animationId?, baseRevision?}; for existing animations call character_animation_get first. The compiler expands semantic nodes into authoritative v4 rootMotion.',
+      schema: AnimationScriptToolInputSchema,
+    },
+  );
   return [
     createTool,
     getTool,

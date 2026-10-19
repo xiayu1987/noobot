@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -156,12 +156,6 @@ async function buildAttachsResult({ runtime, agentContext, options }) {
   if (!attachmentService) {
     return attachsFailure(runtime, "tools.help.attachmentServiceMissing");
   }
-  if (!userId) {
-    return attachsFailure(runtime, "tools.help.attachmentUserIdMissing");
-  }
-  if (!sessionId) {
-    return attachsFailure(runtime, "tools.help.attachmentSessionIdMissing");
-  }
 
   const requestedSource = normalizeName(options.source);
   if (requestedSource && !ATTACHMENT_SOURCES.includes(requestedSource)) {
@@ -271,13 +265,8 @@ async function dispatchHelpCommand({ runtime, agentContext, command, options }) 
 
 export function createHelpTool({ agentContext } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const helpTool = new DynamicStructuredTool({
-    name: HELP_TOOL_NAME,
-    description: tTool(runtime, "tools.help.description"),
-    schema: z.object({
-      command: z.string().optional().describe(tTool(runtime, "tools.help.fieldCommand")),
-    }),
-    func: async ({ command }) => {
+  const helpTool = structuredTool(
+    async ({ command }) => {
       const parsed = parseHelpCommand(command);
       const payload = parsed.ok
         ? await dispatchHelpCommand({
@@ -289,6 +278,13 @@ export function createHelpTool({ agentContext } = {}) {
         : buildParseFailure(runtime, parsed);
       return toToolJsonResult(HELP_TOOL_NAME, payload, true);
     },
-  });
+    {
+      name: HELP_TOOL_NAME,
+      description: tTool(runtime, "tools.help.description"),
+      schema: z.object({
+        command: z.string().optional().describe(tTool(runtime, "tools.help.fieldCommand")),
+      }),
+    },
+  );
   return [helpTool];
 }

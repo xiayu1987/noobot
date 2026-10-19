@@ -5,7 +5,6 @@
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import crypto from "node:crypto";
-import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { text } from "@noobot/shared/value";
 
@@ -76,10 +75,6 @@ function buildPayloadPreview(point, ctx = {}, options = {}) {
   return undefined;
 }
 
-function extractRuntime(ctx = {}) {
-  return ctx?.agentContext?.bindings?.runtime || null;
-}
-
 function resolveToolTurnLimitReached(capabilityLogs = []) {
   const logs = Array.isArray(capabilityLogs) ? capabilityLogs : [];
   return logs.some(
@@ -116,57 +111,34 @@ export function buildEvent({ point, ctx = {}, options = {} } = {}) {
   };
 }
 
-function arrayLength(value) {
-  return Array.isArray(value) ? value.length : 0;
-}
-
-function buildSnapshotIdentity(ctx, identity, execution) {
-  return {
-    userId: ctx.userId || identity.userId || "",
-    sessionId: ctx.sessionId || identity.sessionId || "",
-    parentSessionId: ctx.parentSessionId || identity.parentSessionId || "",
-    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
-    caller: ctx.caller || execution.caller || "",
-  };
-}
-
-function buildSnapshotExecution(execution, runtime) {
-  const model = execution.model || {};
-  return {
-    flags: execution.flags || {},
-    runtimeModel: model.runtimeModel || runtime.runtimeModel || "",
-  };
-}
-
-function buildSnapshotPayload(ctx) {
-  const messageBlocks = ctx.modelContext?.messageBlocks || {};
-  return {
-    systemMessageCount: arrayLength(messageBlocks.system),
-    historyMessageCount: arrayLength(messageBlocks.history),
-  };
-}
-
-export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion = "" } = {}) {
-  const context = (ctx.agentContext || {}).context || {};
-  const execution = context.execution || {};
-  const environment = context.environment || {};
-  const runtime = extractRuntime(ctx) || {};
-
+export function buildContextSnapshot({ ctx, pluginName, pluginVersion }) {
+  const { context, bindings } = ctx.agentContext;
+  const { identity, environment, execution, modelContext } = context;
   return {
     plugin: pluginName,
     version: pluginVersion,
     createdAt: nowIso(),
-    ...buildSnapshotIdentity(ctx, context.identity || {}, execution),
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    parentSessionId: identity.parentSessionId,
+    dialogProcessId: identity.dialogProcessId,
+    caller: execution.caller,
     environment: {
-      os: environment.os || {},
-      workspace: environment.workspace || {},
+      os: environment.os,
+      workspace: environment.workspace,
     },
-    execution: buildSnapshotExecution(execution, runtime),
+    execution: {
+      flags: execution.flags,
+      runtimeModel: execution.model.runtimeModel,
+    },
     session: {
-      attachmentCount: arrayLength(runtime.userMessageAttachments),
-      connectorIds: execution.selectedConnectorIds || [],
+      attachmentCount: bindings.runtime.userMessageAttachments.length,
+      connectorIds: execution.selectedConnectorIds,
     },
-    payload: buildSnapshotPayload(ctx),
+    payload: {
+      systemMessageCount: modelContext.messageBlocks.system.length,
+      historyMessageCount: modelContext.messageBlocks.history.length,
+    },
   };
 }
 

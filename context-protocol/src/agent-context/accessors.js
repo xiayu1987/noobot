@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveAgentContextIdentity } from "./identity.js";
+import { isPlainObject } from "@noobot/shared/value";
 
-export function getAgentContextIdentity(context = {}) {
-  return resolveAgentContextIdentity(context);
+export function getAgentContextIdentity(context) {
+  if (!isPlainObject(context) || !isPlainObject(context.identity)) {
+    throw new TypeError("agent context identity is required");
+  }
+  return { ...context.identity };
 }

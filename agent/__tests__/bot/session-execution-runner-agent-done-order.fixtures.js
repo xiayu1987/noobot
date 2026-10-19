@@ -135,7 +135,16 @@ export function createRunner({
         ? await prepareAgentTurnExecution(payload)
         : await (async () => {
             const agentContext = createTestAgentExecutionScope(defaultRuntime, {
-              identity: { dialogProcessId: "dialog-1", turnScopeId: "turn-default" },
+              identity: {
+                dialogProcessId: "dialog-1",
+                turnScopeId: "turn-default",
+                userId: "u-test",
+                sessionId: "s-1",
+                rootSessionId: "s-1",
+                parentSessionId: "",
+                runId: "r-1",
+                messageId: "m-1",
+              },
             });
             return { agentContext, userMessageAttachments: [] };
           })();

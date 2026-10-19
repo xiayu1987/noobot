@@ -22,7 +22,16 @@ function createMessageBlockScope(identity, runtime, messageBlocks) {
 test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {
   const blocks = buildContextMessageBlocks(
     createMessageBlockScope(
-      { userId: "u1", sessionId: "s1", dialogProcessId: "dlg1" },
+      {
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dlg1",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        turnScopeId: "t-1",
+        runId: "r-1",
+        messageId: "m-1",
+      },
       { systemRuntime: { sessionId: "s1", dialogProcessId: "dlg1" } },
       {
         system: ["sys-1"],
@@ -30,6 +39,7 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
           { role: "user", content: "h-u", dialogProcessId: "dlg-history" },
           { role: "assistant", content: "h-1", dialogProcessId: "dlg-history" },
         ],
+        incremental: [],
       },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("u-1") },
@@ -63,6 +73,9 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
         parentSessionId: "parent-s1",
         dialogProcessId: "dlg-resume-new",
         turnScopeId: "turn-resume-new",
+        rootSessionId: "parent-s1",
+        runId: "r-1",
+        messageId: "m-1",
       },
       {
         userMessageAttachments: [
@@ -100,6 +113,7 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
             turnScopeId: "turn-stopped",
           },
         ],
+        incremental: [],
       },
     ),
     {
@@ -154,6 +168,10 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
         sessionId: "s1",
         dialogProcessId: "dlg-current",
         turnScopeId: "turn-current",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        runId: "r-1",
+        messageId: "m-1",
       },
       {
         userMessageAttachments: [
@@ -187,6 +205,7 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
             turnScopeId: "turn-stopped",
           },
         ],
+        incremental: [],
       },
     ),
     {
@@ -240,6 +259,10 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
         sessionId: "s1",
         dialogProcessId: "dlg-current",
         turnScopeId: "turn-current",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        runId: "r-1",
+        messageId: "m-1",
       },
       {
         userMessageAttachments: [],
@@ -265,6 +288,7 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
             dialogProcessId: "dlg-stopped",
           },
         ],
+        incremental: [],
       },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("resume user input") },
@@ -293,6 +317,10 @@ test("buildContextMessageBlocks removes current turn user residue from history",
         sessionId: "s1",
         dialogProcessId: "dlg-current",
         turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        runId: "r-1",
+        messageId: "m-1",
       },
       {
         systemRuntime: {
@@ -323,6 +351,7 @@ test("buildContextMessageBlocks removes current turn user residue from history",
             turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
           },
         ],
+        incremental: [],
       },
     ),
     {
@@ -362,6 +391,10 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
         sessionId: "s1",
         dialogProcessId: "dlg-current",
         turnScopeId: "client-turn:current",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        runId: "r-1",
+        messageId: "m-1",
       },
       {
         systemRuntime: {

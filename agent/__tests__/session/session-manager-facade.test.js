@@ -8,80 +8,36 @@ import assert from "node:assert/strict";
 
 import { createSessionFacade } from "../../src/session/index.js";
 
-test("createSessionFacade should delegate getContextRecords to sessionContextService", async () => {
+test("createSessionFacade delegates getContextProjection with normalized scope fields", async () => {
   let captured = null;
+  const projection = { scope: {}, messages: [{ role: "user", content: "hi" }] };
   const session = createSessionFacade({
     sessionTreeService: {},
     sessionCrudService: {},
     sessionMessageService: {},
     sessionContextService: {
-      async getContextRecords(payload = {}) {
+      async getContextProjection(payload) {
         captured = payload;
-        return [{ role: "user", content: "hi" }];
+        return projection;
       },
     },
     taskService: {},
     executionLogService: {},
   });
 
-  const result = await session.getContextRecords({
+  const result = await session.getContextProjection({
     userId: "u1",
     sessionId: "s1",
-    userConfig: { x: 1 },
     currentTurnScopeId: "turn-current",
-    contractSentinel: "keep-me",
   });
 
   assert.deepEqual(captured, {
     userId: "u1",
     sessionId: "s1",
-    userConfig: { x: 1 },
     currentDialogProcessId: "",
     currentTurnScopeId: "turn-current",
-    contractSentinel: "keep-me",
   });
-  assert.deepEqual(result, [{ role: "user", content: "hi" }]);
-});
-
-test("createSessionFacade preserves context contract payload fields for session context APIs", async () => {
-  const captured = {};
-  const session = createSessionFacade({
-    sessionTreeService: {},
-    sessionCrudService: {},
-    sessionMessageService: {},
-    sessionContextService: {
-      async getRecentSessionMessages(payload = {}) {
-        captured.getRecentSessionMessages = payload;
-        return [];
-      },
-      async getContextRecords(payload = {}) {
-        captured.getContextRecords = payload;
-        return [];
-      },
-    },
-    taskService: {},
-    executionLogService: {},
-  });
-  const payload = {
-    userId: "u1",
-    sessionId: "s1",
-    userConfig: { session: { customContextFlag: true } },
-    currentDialogProcessId: "dp-current",
-    currentTurnScopeId: "turn-current",
-    futureContractField: "must-not-drop",
-  };
-
-  await session.getRecentSessionMessages(payload);
-  await session.getContextRecords(payload);
-
-  for (const [name, item] of Object.entries(captured)) {
-    assert.equal(item.userId, "u1", name);
-    assert.equal(item.sessionId, "s1", name);
-    assert.equal(item.currentDialogProcessId, "dp-current", name);
-    assert.equal(item.currentTurnScopeId, "turn-current", name);
-    assert.equal(item.futureContractField, "must-not-drop", name);
-  }
-  assert.deepEqual(captured.getContextRecords.userConfig, payload.userConfig);
+  assert.equal(result, projection);
 });
 
 test("createSessionFacade should delegate appendExecutionLog to executionLogService", async () => {

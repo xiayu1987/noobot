@@ -311,7 +311,7 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
     userId: "u15",
     sessionId: "s15",
     dialogProcessId: "dp15",
-    messages: [{ role: "user", content: "hello" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
   });
 
   const eventsFile = path.join(
@@ -377,7 +377,6 @@ test("harness full engineering capability flow plans, guides, accepts and review
   const agentContext = {
     bindings: { tools: [], extensions: { harness: {} } },
   };
-  const messages = [{ role: "user", content: "请处理附件并验收" }];
 
   await hookManager.emit("agent.before_turn", {
     userId: "flow-user",
@@ -391,13 +390,19 @@ test("harness full engineering capability flow plans, guides, accepts and review
     true,
   );
 
-  await hookManager.emit("agent.before_llm_call", {
+  const messagesCtx = {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
-    messages,
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "请处理附件并验收" }],
+    },
     agentContext,
-  });
+  };
+  await hookManager.emit("agent.before_llm_call", messagesCtx);
+  const messages = messagesCtx.modelContext.messageBlocks.incremental;
   const planningPromptMessage = messages.find((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
   );
@@ -430,14 +435,16 @@ test("harness full engineering capability flow plans, guides, accepts and review
     "consecutive_failures",
   );
 
-  await hookManager.emit("agent.before_llm_call", {
+  const guidanceCtx = {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
-    messages,
+    messageBlocks: { system: [], history: [], incremental: [...messages] },
     agentContext,
-  });
-  const guidancePromptMessage = messages[messages.length - 1] || {};
+  };
+  await hookManager.emit("agent.before_llm_call", guidanceCtx);
+  const guidanceMessages = guidanceCtx.modelContext.messageBlocks.incremental;
+  const guidancePromptMessage = guidanceMessages[guidanceMessages.length - 1];
   assert.equal(String(guidancePromptMessage?.role || ""), "user");
   assert.match(String(guidancePromptMessage?.content || ""), /harness-guidance/);
   assert.match(String(guidancePromptMessage?.content || ""), /工具失败达到阈值/);
@@ -457,7 +464,20 @@ test("harness full engineering capability flow plans, guides, accepts and review
   const acceptanceTool = agentContext.bindings.tools.find(
     (tool) => tool?.name === "request_task_acceptance",
   );
-  const acceptanceResult = await acceptanceTool.func({ mode: "active" });
+  const acceptanceResult = await acceptanceTool.invoke(
+    { mode: "active" },
+    {
+      signal: new AbortController().signal,
+      configurable: {
+        noobotHookContext: {
+          userId: "flow-user",
+          sessionId: "flow-session",
+          dialogProcessId: "flow-dp",
+          agentContext,
+        },
+      },
+    },
+  );
   assert.equal(acceptanceResult.ok, true);
   assert.equal(agentContext.bindings.extensions.harness.state.flags.acceptanceRequested, true);
 

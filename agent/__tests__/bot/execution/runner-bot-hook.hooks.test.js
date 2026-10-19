@@ -37,6 +37,8 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
             { role: "user", content: "history user" },
             { role: "assistant", content: "history assistant" },
           ],
+          system: [],
+          incremental: [],
         },
       });
       return { agentContext: runtimeAgentContext, userMessageAttachments: [] };

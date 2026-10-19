@@ -5,12 +5,48 @@
  */
 
 import {
+  AGENT_CONTEXT_ENVELOPE_KEYS,
+  AGENT_CONTEXT_ENVIRONMENT_SHAPE,
+  AGENT_CONTEXT_EXECUTION_SHAPE,
+  AGENT_CONTEXT_IDENTITY_SHAPE,
   AGENT_CONTEXT_KIND,
+  AGENT_CONTEXT_MODEL_CONTEXT_SHAPE,
   AGENT_CONTEXT_PROTOCOL_VERSION,
   MODEL_CONTEXT_PROTOCOL_VERSION,
 } from "./schema.js";
-import { validateAgentContextIdentity } from "./identity.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
+
+const FIELD_TYPES = Object.freeze({
+  string: { label: "string", check: (value) => typeof value === "string" },
+  nonEmptyString: {
+    label: "a non-empty string",
+    check: (value) => typeof value === "string" && value !== "",
+  },
+  boolean: { label: "boolean", check: (value) => typeof value === "boolean" },
+  array: { label: "array", check: (value) => Array.isArray(value) },
+  object: { label: "object", check: (value) => isPlainObject(value) },
+  modelContextProtocolVersion: {
+    label: `equal to ${MODEL_CONTEXT_PROTOCOL_VERSION}`,
+    check: (value) => value === MODEL_CONTEXT_PROTOCOL_VERSION,
+  },
+});
+
+function validateShape(value, shape, path) {
+  if (!isPlainObject(value)) return [`${path} must be a plain object`];
+  const errors = Object.keys(value)
+    .filter((key) => !Object.prototype.hasOwnProperty.call(shape, key))
+    .map((key) => `${path}.${key} is not part of the protocol`);
+  for (const [key, spec] of Object.entries(shape)) {
+    const fieldPath = `${path}.${key}`;
+    if (typeof spec === "string") {
+      const fieldType = FIELD_TYPES[spec];
+      if (!fieldType.check(value[key])) errors.push(`${fieldPath} must be ${fieldType.label}`);
+    } else {
+      errors.push(...validateShape(value[key], spec, fieldPath));
+    }
+  }
+  return errors;
+}
 
 function findSerializationError(value, path = "context", seen = new Set()) {
   if (value == null || ["string", "number", "boolean"].includes(typeof value)) return "";
@@ -34,49 +70,33 @@ function findSerializationError(value, path = "context", seen = new Set()) {
   return "";
 }
 
-export function validateAgentContextEnvelope(context = {}) {
+export function validateAgentContextEnvelope(context) {
+  if (!isPlainObject(context)) {
+    return { success: false, errors: ["agent context envelope must be a plain object"] };
+  }
   const errors = [];
-  if (context?.kind !== AGENT_CONTEXT_KIND) errors.push(`kind must equal ${AGENT_CONTEXT_KIND}`);
-  if (Number(context?.protocolVersion) !== AGENT_CONTEXT_PROTOCOL_VERSION) {
+  if (context.kind !== AGENT_CONTEXT_KIND) errors.push(`kind must equal ${AGENT_CONTEXT_KIND}`);
+  if (context.protocolVersion !== AGENT_CONTEXT_PROTOCOL_VERSION) {
     errors.push(`protocolVersion must equal ${AGENT_CONTEXT_PROTOCOL_VERSION}`);
   }
-  if (Object.prototype.hasOwnProperty.call(context, "runtime")) errors.push("runtime is forbidden");
-  if (context?.execution?.controllers != null) errors.push("execution.controllers is forbidden");
-  if (context?.payload?.tools != null) errors.push("payload.tools is forbidden");
-  const identityResult = validateAgentContextIdentity(context?.identity);
-  errors.push(...identityResult.errors);
-  const modelContext = context?.modelContext;
-  if (!isObjectLike(modelContext)) {
-    errors.push("modelContext is required");
-  } else {
-    if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
-      errors.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
-    }
-    if (!Number.isInteger(modelContext.checkpointRevision) || modelContext.checkpointRevision < 0) {
-      errors.push("modelContext.checkpointRevision must be a non-negative integer");
-    }
-    if (!Array.isArray(modelContext.userMetaBackwrites)) {
-      errors.push("modelContext.userMetaBackwrites must be an array");
-    }
-    const active = modelContext.activeTurnIdentity || {};
-    if (text(active.dialogProcessId) !== identityResult.identity.dialogProcessId) {
-      errors.push(
-        "modelContext.activeTurnIdentity.dialogProcessId must match identity.dialogProcessId",
-      );
-    }
-    if (text(active.turnScopeId) !== identityResult.identity.turnScopeId) {
-      errors.push("modelContext.activeTurnIdentity.turnScopeId must match identity.turnScopeId");
-    }
-    if (!isObjectLike(modelContext.messageBlocks)) {
-      errors.push("modelContext.messageBlocks is required");
-    }
+  for (const key of Object.keys(context)) {
+    if (!AGENT_CONTEXT_ENVELOPE_KEYS.includes(key))
+      errors.push(`${key} is not part of the protocol`);
   }
+  errors.push(
+    ...validateShape(context.environment, AGENT_CONTEXT_ENVIRONMENT_SHAPE, "environment"),
+  );
+  errors.push(...validateShape(context.execution, AGENT_CONTEXT_EXECUTION_SHAPE, "execution"));
+  errors.push(...validateShape(context.identity, AGENT_CONTEXT_IDENTITY_SHAPE, "identity"));
+  errors.push(
+    ...validateShape(context.modelContext, AGENT_CONTEXT_MODEL_CONTEXT_SHAPE, "modelContext"),
+  );
   const serializationError = findSerializationError(context);
   if (serializationError) errors.push(serializationError);
   return { success: errors.length === 0, errors };
 }
 
-export function assertValidAgentContextEnvelope(context = {}) {
+export function assertValidAgentContextEnvelope(context) {
   const result = validateAgentContextEnvelope(context);
   if (!result.success) {
     throw new TypeError(`invalid agent context envelope: ${result.errors.join("; ")}`);

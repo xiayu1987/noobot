@@ -13,6 +13,7 @@ import {
   buildAgentContext,
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
+import { createTestAgentEnvironment } from "../helpers/agent-execution-scope.js";
 import { parseUnifiedDiff } from "../../src/tools/execution/file-patch.js";
 
 test("patch_file: unified_diff 保留 Windows 绝对路径与 file URL 语义", () => {
@@ -197,8 +198,8 @@ test("patch_file: sharedTools cannot remap a Windows host path", async () => {
         },
       },
     },
+    environment: createTestAgentEnvironment({ basePath, platform: "win32" }),
   });
-  agentContext.context.environment.os = { platform: "win32" };
   const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "patch_file");
   assert.ok(tool);
@@ -254,8 +255,8 @@ test("patch_file: apply_patch also rejects sharedTools host remapping", async ()
         },
       },
     },
+    environment: createTestAgentEnvironment({ basePath, platform: "win32" }),
   });
-  agentContext.context.environment.os = { platform: "win32" };
   const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "patch_file");
   assert.ok(tool);

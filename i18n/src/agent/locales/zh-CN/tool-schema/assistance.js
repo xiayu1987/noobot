@@ -41,8 +41,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.experienceHint": "以下为经验记忆路径，需再用 read_file 或 search 读取具体内容。",
       "tools.help.memoryHint": "以下为记忆与摘要路径，需再用 read_file 或 search 读取具体内容。",
       "tools.help.attachmentServiceMissing": "附件服务未装配，无法查询附件",
-      "tools.help.attachmentUserIdMissing": "当前上下文缺少用户身份，无法查询附件",
-      "tools.help.attachmentSessionIdMissing": "当前上下文缺少会话身份，无法查询附件",
       "tools.help.unknownAttachmentSource": "附件来源不存在，请从 attachmentSources 中选择",
       "tools.help.attachmentNotFound": "附件不存在或不属于当前会话",
       "tools.help.parseError.unknown_command": "命令不存在，请从 commands 中选择",

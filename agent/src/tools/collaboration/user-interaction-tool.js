@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
@@ -197,18 +197,8 @@ export function createUserInteractionTool({ agentContext }) {
       .describe(tTool(runtime, "tools.user_interaction.fieldFields")),
   });
 
-  const userInteractionTool = new DynamicStructuredTool({
-    name: TOOL_NAME.USER_INTERACTION,
-    description: tTool(runtime, "tools.user_interaction.description"),
-    schema: z.object({
-      content: z.string().min(1).describe(tTool(runtime, "tools.user_interaction.fieldContent")),
-      timeoutMs: z.number().int().positive().optional(),
-      fields: z
-        .union([z.string(), fieldsPayloadSchema])
-        .optional()
-        .describe(tTool(runtime, "tools.user_interaction.fieldFieldsPayload")),
-    }),
-    func: async ({ content, timeoutMs, fields }, _runManager, config = {}) => {
+  const userInteractionTool = structuredTool(
+    async ({ content, timeoutMs, fields }, config = {}) => {
       if (!bridge?.requestUserInteraction) {
         throw recoverableToolError(tUserInteraction(runtime, "bridgeMissing"), {
           code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING,
@@ -302,7 +292,19 @@ export function createUserInteractionTool({ agentContext }) {
         response: String(result?.response || ""),
       });
     },
-  });
+    {
+      name: TOOL_NAME.USER_INTERACTION,
+      description: tTool(runtime, "tools.user_interaction.description"),
+      schema: z.object({
+        content: z.string().min(1).describe(tTool(runtime, "tools.user_interaction.fieldContent")),
+        timeoutMs: z.number().int().positive().optional(),
+        fields: z
+          .union([z.string(), fieldsPayloadSchema])
+          .optional()
+          .describe(tTool(runtime, "tools.user_interaction.fieldFieldsPayload")),
+      }),
+    },
+  );
 
   return [userInteractionTool];
 }

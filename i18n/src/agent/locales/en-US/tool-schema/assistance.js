@@ -55,10 +55,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "The following are memory and summary paths. Use read_file or search to inspect content.",
       "tools.help.attachmentServiceMissing":
         "Attachment service is not assembled, cannot query attachments",
-      "tools.help.attachmentUserIdMissing":
-        "Current context has no user identity, cannot query attachments",
-      "tools.help.attachmentSessionIdMissing":
-        "Current context has no session identity, cannot query attachments",
       "tools.help.unknownAttachmentSource":
         "Unknown attachment source, pick one from attachmentSources",
       "tools.help.attachmentNotFound":

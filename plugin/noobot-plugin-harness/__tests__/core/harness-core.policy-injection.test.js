@@ -64,7 +64,7 @@ test("harness policy prompt is promoted to system when stale policy exists in me
 test("harness policy prompt matrix exposes scenario without workflow mode", async () => {
   const buildInjectedPolicy = async (extraOptions = {}, ctxPatch = {}) => {
     const ctx = createTestHookContext(ctxPatch, {
-      messages: [{ role: "user", content: "hello" }],
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
     });
     await injectPrompt("agent.before_llm_call", ctx, {
       enabled: true,
@@ -136,10 +136,11 @@ test("harness policy prompt is not reinjected during stopped snapshot resume ini
       resumeFromStoppedSnapshot: true,
     },
     {
-      messages: [
-        { role: "system", content: existingPolicy },
-        { role: "user", content: "ID: dialog-a\nPATCH: continue" },
-      ],
+      messageBlocks: {
+        system: [{ role: "system", content: existingPolicy }],
+        history: [],
+        incremental: [{ role: "user", content: "ID: dialog-a\nPATCH: continue" }],
+      },
     },
   );
 
@@ -171,10 +172,11 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
       resumeFromStoppedSnapshot: true,
     },
     {
-      messages: [
-        { role: "system", content: existingPolicy },
-        { role: "user", content: "继续" },
-      ],
+      messageBlocks: {
+        system: [{ role: "system", content: existingPolicy }],
+        history: [],
+        incremental: [{ role: "user", content: "继续" }],
+      },
     },
   );
 
@@ -199,7 +201,9 @@ test("harness policy prompt is injected for normal first llm call", async () => 
       turn: 1,
       resumeFromStoppedSnapshot: false,
     },
-    { messages: [{ role: "user", content: "hello" }] },
+    {
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
+    },
   );
 
   await injectPrompt("agent.before_llm_call", ctx, {

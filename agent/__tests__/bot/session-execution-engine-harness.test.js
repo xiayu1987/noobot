@@ -323,7 +323,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       return sessionId;
     },
     async getContextProjection() {
-      return { messages: [], sourceRevision: "" };
+      return { scope: {}, messages: [] };
     },
     async getSessionBundle() {
       return { exists: false, session: {} };

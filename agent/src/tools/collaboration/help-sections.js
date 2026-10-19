@@ -23,9 +23,9 @@ import { resolveToolBindings } from "@noobot/agent-config-protocol";
 import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
-  getSystemRuntimeFromAgentContext,
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
+import { getAgentContextEnvelope } from "../../context/agent-execution-scope.js";
 import { mergeConfig } from "../../config/index.js";
 import { resolveModelSection } from "../../context/providers/model-provider.js";
 import { text } from "@noobot/shared/value";
@@ -126,19 +126,16 @@ export function buildRuntimeSection(agentContext) {
 }
 
 export function buildContextSection(agentContext) {
-  const systemRuntime = getSystemRuntimeFromAgentContext(agentContext);
+  const { environment, execution } = getAgentContextEnvelope(agentContext);
   const sessionIds = getSessionIdsFromAgentContext(agentContext);
   const identity = Object.fromEntries(
-    CONTEXT_IDENTITY_FIELDS.map((field) => [
-      field,
-      text(systemRuntime?.[field] || sessionIds?.[field]),
-    ]).filter(([, value]) => value),
+    CONTEXT_IDENTITY_FIELDS.map((field) => [field, sessionIds[field]]),
   );
   return {
     identity,
-    caller: text(systemRuntime?.caller),
-    timestamp: text(systemRuntime?.now),
-    isSuperUser: systemRuntime?.isSuperUser === true,
+    caller: execution.caller,
+    timestamp: execution.timestamp,
+    isSuperUser: environment.permissions.isSuperUser,
   };
 }
 

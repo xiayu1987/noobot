@@ -7,7 +7,12 @@ import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { invokeWithToolsTurn } from "../../../src/runtime/turn/turn-executor.js";
-import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
+import {
+  createTestModelPort,
+  createLoopTurnIdentity,
+  prepareTestTurnExecution,
+} from "./turn-runtime-test-helper.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 const MODEL = normalizeRuntimeModelSpec({
   model: "gpt-4o",
@@ -32,11 +37,10 @@ test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () =
   const current = { role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2" };
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: { systemRuntime: {} },
+    runtime: createTestRuntimeContext(),
     activeModelSpec: MODEL,
   };
   const loopState = {
-    messages: [current, { role: "system", content: "misplaced" }, history, system, current],
     messageBlocks: {
       system: [system],
       history: [current, { role: "system", content: "misplaced" }, history],
@@ -46,7 +50,12 @@ test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () =
     dialogProcessId: "d2",
     maxTurns: 1,
   };
-  prepareTestTurnExecution(modelState, loopState, "block-normalization");
+  prepareTestTurnExecution(
+    modelState,
+    loopState,
+    createLoopTurnIdentity(loopState),
+    "presentation-message-block-normalization",
+  );
   await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
   assert.deepEqual(
     captured.map((item) => `${item.role}:${item.content}`),

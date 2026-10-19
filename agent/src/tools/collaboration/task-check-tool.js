@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { TASK_STATUS } from "../../bot/config/constants.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
@@ -30,16 +30,8 @@ export function createTaskCheckTool(ctx = {}) {
   const systemRuntime = runtime?.systemRuntime || {};
 
   return [
-    new DynamicStructuredTool({
-      name: TASK_CHECK_TOOL_NAME,
-      description: tTool(runtime, "tools.task_check.description"),
-      schema: z.object({
-        checkContent: z.string().describe(tTool(runtime, "tools.task_check.fieldCheckContent")),
-      }),
-      metadata: {
-        contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
-      },
-      func: async ({ checkContent }) => {
+    structuredTool(
+      async ({ checkContent }) => {
         const content = text(checkContent);
         if (!content) {
           throw recoverableToolError(tTool(runtime, "tools.task_check.checkContentRequired"), {
@@ -68,6 +60,16 @@ export function createTaskCheckTool(ctx = {}) {
           true,
         );
       },
-    }),
+      {
+        name: TASK_CHECK_TOOL_NAME,
+        description: tTool(runtime, "tools.task_check.description"),
+        schema: z.object({
+          checkContent: z.string().describe(tTool(runtime, "tools.task_check.fieldCheckContent")),
+        }),
+        metadata: {
+          contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
+        },
+      },
+    ),
   ];
 }

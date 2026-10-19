@@ -204,7 +204,11 @@ test("historical user content and metadata remain distinct canonical projections
   );
 
   const context = createModelContext({
-    messageBlocks: blocks,
+    messageBlocks: {
+      system: blocks.system,
+      history: blocks.history,
+      incremental: blocks.incremental,
+    },
   });
   const historicalUsers = context.messageBlocks.history;
 
@@ -238,7 +242,13 @@ test("persisted history keeps messageUid as its canonical model context identity
       },
     }),
   );
-  const context = createModelContext({ messageBlocks: blocks });
+  const context = createModelContext({
+    messageBlocks: {
+      system: blocks.system,
+      history: blocks.history,
+      incremental: blocks.incremental,
+    },
+  });
 
   assert.equal(
     context.messageBlocks.history[0]?.additional_kwargs?.noobotMessageId,

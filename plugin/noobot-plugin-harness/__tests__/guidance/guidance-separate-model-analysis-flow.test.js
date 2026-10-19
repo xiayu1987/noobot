@@ -37,8 +37,8 @@ test("separate_model analysis uses aligned agent context then user request and u
   };
 
   const ctx = {
-    messages: [{ role: "user", content: "旧ctx消息不应覆盖messageBlocks" }],
     messageBlocks: {
+      system: [],
       history: [{ role: "user", content: "历史上下文" }],
       incremental: [{ role: "assistant", content: "当前增量" }],
     },
@@ -120,7 +120,11 @@ test("separate_model analysis relays canonical Responses continuation output to 
   ];
   const responseReasoning = responseOutput[0];
   const ctx = {
-    messages: [{ role: "assistant", content: "工具执行完成" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "assistant", content: "工具执行完成" }],
+    },
     agentContext,
   };
   const meta = {
@@ -163,13 +167,17 @@ test("separate_model skips analysis when trailing assistant tool call has conten
   const invocations = [];
   const agentContext = createAgentContext({ pending: { analysis: true } });
   const ctx = {
-    messages: [
-      {
-        role: "assistant",
-        content: "先检查相关代码。",
-        tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
-      },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        {
+          role: "assistant",
+          content: "先检查相关代码。",
+          tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
+        },
+      ],
+    },
     agentContext,
   };
   const meta = {
@@ -197,7 +205,7 @@ test("separate_model skips analysis when trailing assistant tool call has conten
   assert.equal(invocations.length, 0);
   assert.equal(agentContext.bindings.extensions.harness.state.pending.analysis, true);
 
-  ctx.modelContext.messages[0].content = "";
+  ctx.modelContext.messageBlocks.incremental[0].content = "";
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 1);
@@ -214,7 +222,14 @@ test("separate_model skips analysis for LangChain AIMessage tool call with conte
     type: "ai",
   };
   const ctx = {
-    messages: [aiMessage, { content: "读取完成", tool_call_id: "call-langchain", type: "tool" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        aiMessage,
+        { content: "读取完成", tool_call_id: "call-langchain", type: "tool" },
+      ],
+    },
     agentContext,
   };
   const meta = {
@@ -238,18 +253,22 @@ test("separate_model skip guard uses canonical Anthropic text and tool-use proje
   const invocations = [];
   const agentContext = createAgentContext({ pending: { analysis: true } });
   const ctx = {
-    messages: [
-      {
-        role: "assistant",
-        content: [
-          { type: "thinking", thinking: "先判断应调用哪个工具", signature: "sig-1" },
-          { type: "text", text: "先确认当前真实状态。" },
-          { type: "tool_use", id: "toolu-1", name: "read_file", input: {} },
-        ],
-        tool_calls: [{ id: "toolu-1", name: "read_file", args: {} }],
-      },
-      { role: "tool", tool_call_id: "toolu-1", content: "读取完成" },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "先判断应调用哪个工具", signature: "sig-1" },
+            { type: "text", text: "先确认当前真实状态。" },
+            { type: "tool_use", id: "toolu-1", name: "read_file", input: {} },
+          ],
+          tool_calls: [{ id: "toolu-1", name: "read_file", args: {} }],
+        },
+        { role: "tool", tool_call_id: "toolu-1", content: "读取完成" },
+      ],
+    },
     agentContext,
   };
   const meta = {
@@ -273,32 +292,36 @@ test("separate_model skip guard uses canonical OpenAI Responses text and functio
   const invocations = [];
   const agentContext = createAgentContext({ pending: { analysis: true } });
   const ctx = {
-    messages: [
-      {
-        role: "assistant",
-        content: [{ type: "output_text", text: "先确认当前真实状态。" }],
-        tool_calls: [{ id: "call-1", name: "read_file", args: {} }],
-        response_metadata: {
-          output: [
-            { id: "rs-1", type: "reasoning", summary: [] },
-            {
-              id: "msg-1",
-              type: "message",
-              role: "assistant",
-              content: [{ type: "output_text", text: "先确认当前真实状态。" }],
-            },
-            {
-              id: "fc-1",
-              type: "function_call",
-              call_id: "call-1",
-              name: "read_file",
-              arguments: "{}",
-            },
-          ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        {
+          role: "assistant",
+          content: [{ type: "output_text", text: "先确认当前真实状态。" }],
+          tool_calls: [{ id: "call-1", name: "read_file", args: {} }],
+          response_metadata: {
+            output: [
+              { id: "rs-1", type: "reasoning", summary: [] },
+              {
+                id: "msg-1",
+                type: "message",
+                role: "assistant",
+                content: [{ type: "output_text", text: "先确认当前真实状态。" }],
+              },
+              {
+                id: "fc-1",
+                type: "function_call",
+                call_id: "call-1",
+                name: "read_file",
+                arguments: "{}",
+              },
+            ],
+          },
         },
-      },
-      { role: "tool", tool_call_id: "call-1", content: "读取完成" },
-    ],
+        { role: "tool", tool_call_id: "call-1", content: "读取完成" },
+      ],
+    },
     agentContext,
   };
   const meta = {
@@ -322,17 +345,21 @@ test("separate_model analyzes when canonical assistant tool call has no visible 
   const invocations = [];
   const agentContext = createAgentContext({ pending: { analysis: true } });
   const ctx = {
-    messages: [
-      {
-        role: "assistant",
-        content: [
-          { type: "thinking", thinking: "内部推理", signature: "sig-1" },
-          { type: "tool_use", id: "toolu-1", name: "read_file", input: {} },
-        ],
-        tool_calls: [{ id: "toolu-1", name: "read_file", args: {} }],
-      },
-      { role: "tool", tool_call_id: "toolu-1", content: "读取完成" },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "内部推理", signature: "sig-1" },
+            { type: "tool_use", id: "toolu-1", name: "read_file", input: {} },
+          ],
+          tool_calls: [{ id: "toolu-1", name: "read_file", args: {} }],
+        },
+        { role: "tool", tool_call_id: "toolu-1", content: "读取完成" },
+      ],
+    },
     agentContext,
   };
   const meta = {
@@ -355,7 +382,11 @@ test("analysis waits for the separate model before the before_llm_call hook comp
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({ pending: { analysis: true } });
   const ctx = {
-    messages: [{ role: "assistant", content: "工具已完成" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "assistant", content: "工具已完成" }],
+    },
     agentContext,
   };
   let resolveInvocation;
@@ -395,7 +426,11 @@ test("separate_model analysis is not successful when relay injection is blocked"
   const agentContext = createAgentContext({ pending: { analysis: true } });
   agentContext.bindings.extensions.harness.state.flags.agentTurnEnded = true;
   const ctx = {
-    messages: [{ role: "assistant", content: "工具已完成" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "assistant", content: "工具已完成" }],
+    },
     agentContext,
   };
   const meta = {
@@ -446,7 +481,7 @@ test("separate_model guidance pending triggers guidance invoker without analysis
 
   const ctx = {
     sessionId: "guidance-failure-request-role",
-    messages: [{ role: "user", content: "继续" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });

@@ -168,7 +168,6 @@ test("explicit blocks hydrate one stable identity for projections with the same 
     },
   };
   const context = createModelContext({
-    messages: [{ role: "assistant", content: "stale-flat-message" }],
     messageBlocks: {
       system: [],
       history: [historyUser],
@@ -178,10 +177,6 @@ test("explicit blocks hydrate one stable identity for projections with the same 
 
   assert.equal(context.messageBlocks.history[0], context.messageBlocks.incremental[0]);
   assert.equal(context.messages.includes(context.messageBlocks.history[0]), true);
-  assert.equal(
-    context.messages.some((message) => message.content === "stale-flat-message"),
-    false,
-  );
 });
 
 test("same text in different dialog processes remains distinct", () => {

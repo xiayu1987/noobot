@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { runPlanningRefinementBySeparateModel } from "./refinement-runner.js";
@@ -19,7 +19,7 @@ import {
   syncPlanRefinementPolicyFlag,
   translateI18nText,
 } from "./deps.js";
-import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
+import { requireToolHookContext } from "../shared/tool-hook-context.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -28,29 +28,13 @@ import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
-function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
-  const locale = state?.locale || LOCALE.ZH_CN;
-  return new DynamicStructuredTool({
-    name: PLAN_REFINEMENT_TOOL_NAME,
-    description: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.DESCRIPTION),
-    schema: z.object({
-      targetMainStepIndexes: z
-        .array(z.number().int().positive())
-        .optional()
-        .describe(
-          translateI18nText(
-            locale,
-            HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.TARGET_MAIN_STEP_INDEXES_DESCRIPTION,
-          ),
-        ),
-    }),
-    metadata: {
-      contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
-    },
-    async func(args = {}, _runManager, config = {}) {
-      const toolCtx = config?.configurable?.noobotHookContext || ctx;
-      const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
-      if (state?.flags?.planningCaptured !== true) {
+function createPlanRefinementTool({ state, meta }) {
+  const locale = state.locale || LOCALE.ZH_CN;
+  return structuredTool(
+    async (args, config) => {
+      const toolCtx = requireToolHookContext(config);
+      const toolMeta = meta.harness.bindSignal(config.signal);
+      if (state.flags.planningCaptured !== true) {
         return {
           ok: false,
           status: "not_ready",
@@ -70,7 +54,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           reason: "plan_refinement_disabled",
         };
       }
-      if (state?.flags?.planRefinementRequested === true) {
+      if (state.flags.planRefinementRequested === true) {
         throw new Error("request_plan_refinement may be called only once per agent turn");
       }
       state.flags.planRefinementRequested = true;
@@ -106,20 +90,37 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
         targetMainStepIndexes: refinementResult.targetMainStepIndexes,
       };
     },
-  });
+    {
+      name: PLAN_REFINEMENT_TOOL_NAME,
+      description: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.DESCRIPTION),
+      schema: z.object({
+        targetMainStepIndexes: z
+          .array(z.number().int().positive())
+          .optional()
+          .describe(
+            translateI18nText(
+              locale,
+              HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.TARGET_MAIN_STEP_INDEXES_DESCRIPTION,
+            ),
+          ),
+      }),
+      metadata: {
+        contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
+      },
+    },
+  );
 }
 
-export function synchronizePlanRefinementTool(ctx = {}, meta = {}) {
+export function synchronizePlanRefinementTool(ctx, meta) {
   const holder = ensureHarnessBucket(ctx);
-  if (!holder) return false;
+  if (!holder) throw new TypeError("synchronizePlanRefinementTool requires ctx.agentContext");
   const { state } = holder;
   if (!shouldUseSeparateModel(meta) || syncPlanRefinementPolicyFlag(ctx, state, meta) !== true) {
     clearPendingPlanRefinement(state);
     return false;
   }
-  const registry = ctx?.agentContext?.bindings?.tools;
-  if (!Array.isArray(registry)) return false;
-  if (state?.flags?.planRefinementRequested === true) {
+  const registry = ctx.agentContext.bindings.tools;
+  if (state.flags.planRefinementRequested === true) {
     const next = registry.filter((tool) => text(tool?.name) !== PLAN_REFINEMENT_TOOL_NAME);
     if (next.length === registry.length) return false;
     registry.splice(0, registry.length, ...next);
@@ -128,7 +129,7 @@ export function synchronizePlanRefinementTool(ctx = {}, meta = {}) {
   if (registry.some((tool) => text(tool?.name) === PLAN_REFINEMENT_TOOL_NAME)) {
     return false;
   }
-  registry.push(createPlanRefinementTool({ state, ctx, meta }));
+  registry.push(createPlanRefinementTool({ state, meta }));
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: PLANNING_EVENTS.refinementToolInjected,

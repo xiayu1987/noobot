@@ -18,7 +18,10 @@ import {
   buildScriptExecutionMeta,
   createScriptTool,
 } from "../../../src/tools/execution/script-tool.js";
-import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import {
+  TEST_AGENT_ENVIRONMENT,
+  createTestAgentExecutionScope,
+} from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 const TEST_RUN_IDENTITY = Object.freeze({
@@ -27,12 +30,11 @@ const TEST_RUN_IDENTITY = Object.freeze({
   messageId: "m-1",
 });
 
-function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
-  const runtimeOverrides =
-    overrides?.runtime && typeof overrides.runtime === "object" ? overrides.runtime : {};
+function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
+  const { runtime: runtimeOverrides = {}, environment = TEST_AGENT_ENVIRONMENT } = overrides;
   const { turnScopeId, executionId, messageId } = TEST_RUN_IDENTITY;
-  const systemRuntimeOverrides = runtimeOverrides.systemRuntime || {};
-  const sessionId = String(systemRuntimeOverrides.sessionId || "s-1");
+  const { systemRuntime: systemRuntimeOverrides = {} } = runtimeOverrides;
+  const { sessionId = "s-1", rootSessionId = "s-1" } = systemRuntimeOverrides;
   const runtime = createTestRuntimeContext({
     basePath,
     globalConfig: {
@@ -49,15 +51,25 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
     runConfig: { turnScopeId, executionId, messageId },
     systemRuntime: {
       userId,
-      rootSessionId: sessionId,
       config: {},
       sessionDir: path.join(basePath, "runtime", "session", sessionId),
       ...systemRuntimeOverrides,
       sessionId,
+      rootSessionId,
     },
   });
   return createTestAgentExecutionScope(runtime, {
-    identity: { userId, sessionId, turnScopeId, runId: executionId, messageId },
+    identity: {
+      userId,
+      sessionId,
+      rootSessionId,
+      parentSessionId: "",
+      dialogProcessId: "d-1",
+      turnScopeId,
+      runId: executionId,
+      messageId,
+    },
+    environment,
   });
 }
 

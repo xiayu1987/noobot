@@ -9,7 +9,10 @@ import assert from "node:assert/strict";
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { appendMessage } from "../../src/core/message-store.js";
 import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestHookContext,
+  invokeTestHookHandler,
+} from "../helpers/public-runtime-fixtures.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
   const blocks =
@@ -68,15 +71,23 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
   const ctx = createTestHookContext(
     {},
     {
-      messages: [
-        { role: "system", content: "system context" },
-        { role: "user", content: "h1" },
-        { role: "user", content: "h2" },
-        { role: "user", content: "h3" },
-      ],
+      messageBlocks: {
+        system: [{ role: "system", content: "system context" }],
+        history: [],
+        incremental: [
+          { role: "user", content: "h1" },
+          { role: "user", content: "h2" },
+          { role: "user", content: "h3" },
+        ],
+      },
     },
   );
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
     ["system context", "h1", "h2", "h3", "harness prompt"],
@@ -143,7 +154,12 @@ test("createRegisterHarnessHooks composes by system history incremental message 
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -206,7 +222,12 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   const toolCallMessage = ctx.modelContext.messages.find((message) =>
     Array.isArray(message?.tool_calls),
@@ -267,7 +288,12 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),

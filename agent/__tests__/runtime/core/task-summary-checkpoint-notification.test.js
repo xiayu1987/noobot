@@ -31,6 +31,11 @@ function createSummaryModelState(runtime) {
         sessionId: runtime.systemRuntime.sessionId,
         dialogProcessId: runtime.systemRuntime.dialogProcessId,
         turnScopeId: runtime.runConfig.turnScopeId,
+        userId: "u-test",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        runId: "r-1",
+        messageId: "m-1",
       },
     }),
   };

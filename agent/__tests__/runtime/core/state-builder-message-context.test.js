@@ -42,8 +42,6 @@ test("state-builder canonicalizes model messages and block views through one sto
     additional_kwargs: { noobotMessageId: "sm_current_task" },
   };
   const buildAgentState = createStateBuilder({
-    mergeConfigFn: () => ({}),
-    emitEventFn: () => {},
     buildContextMessageBlocksFn: () => ({
       system: [system],
       history: [history],
@@ -65,6 +63,9 @@ test("state-builder canonicalizes model messages and block views through one sto
       parentSessionId: "parent-s1",
       dialogProcessId: "dlg-1",
       turnScopeId: "turn-1",
+      rootSessionId: "parent-s1",
+      runId: "r-1",
+      messageId: "m-1",
     },
   });
 

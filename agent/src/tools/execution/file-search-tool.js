@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, PATH_CAPABILITIES, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   projectToolPathRef,
@@ -353,12 +353,14 @@ async function runSearch({ agentContext, runtime, workspaceIo, args, abortSignal
 }
 
 export function createSearchTool({ agentContext, runtime, workspaceIo }) {
-  return new DynamicStructuredTool({
-    name: TOOL_NAME.SEARCH,
-    metadata: { pathContract: TOOL_PATH_CONTRACTS.fileSearch },
-    description: buildFileToolDescription(runtime, "tools.search.description"),
-    schema: buildSearchSchema(runtime),
-    func: (args, _runManager, toolConfig) =>
+  return structuredTool(
+    (args, toolConfig) =>
       runSearch({ agentContext, runtime, workspaceIo, args, abortSignal: toolConfig.signal }),
-  });
+    {
+      name: TOOL_NAME.SEARCH,
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.fileSearch },
+      description: buildFileToolDescription(runtime, "tools.search.description"),
+      schema: buildSearchSchema(runtime),
+    },
+  );
 }

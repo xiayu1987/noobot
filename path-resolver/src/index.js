@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./platform.js";
-export * from "./view.js";
 export * from "./tool-path.js";
 export * from "./sandbox-mapping.js";
 export * from "./runtime-context.js";

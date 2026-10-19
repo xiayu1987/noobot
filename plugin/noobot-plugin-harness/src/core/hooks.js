@@ -48,6 +48,37 @@ export function shouldInjectPromptAtPoint(point = "", options = {}) {
   return point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false;
 }
 
+function requireParentSignal(signal) {
+  if (!(signal instanceof AbortSignal)) {
+    throw new TypeError("harness capability meta requires an AbortSignal");
+  }
+  return signal;
+}
+
+export function createHarnessMeta({ plugin, options, parentSignal, globalBootstrap }) {
+  const signal = requireParentSignal(parentSignal);
+  const capabilityModelInvoker = options.capabilityModelInvoker
+    ? (payload = {}) =>
+        invokeCapabilityModelWithinDeadline({
+          invoker: options.capabilityModelInvoker,
+          payload,
+          parentSignal: signal,
+          timeoutMs: options.capabilityModelTimeoutMs,
+        })
+    : null;
+  return {
+    pluginName: plugin.name,
+    pluginVersion: plugin.version,
+    harness: {
+      ...options,
+      capabilityModelInvoker,
+      globalBootstrap,
+      bindSignal: (toolSignal) =>
+        createHarnessMeta({ plugin, options, parentSignal: toolSignal, globalBootstrap: null }),
+    },
+  };
+}
+
 export function createRegisterHarnessHooks(deps = {}) {
   const tracePoints = deps.tracePoints || HARNESS_TRACE_POINTS;
   const flushPoints = deps.flushPoints || HARNESS_FLUSH_POINTS;
@@ -71,7 +102,7 @@ export function createRegisterHarnessHooks(deps = {}) {
       disposers.push(
         hookManager.on(
           point,
-          async (ctx = {}, invocation = {}) => {
+          async (ctx, invocation) => {
             if (!isPrimaryExecutionScopeFn(ctx)) return;
             migrateHarnessBucket(ctx);
             const startedAt = Date.now();
@@ -84,24 +115,16 @@ export function createRegisterHarnessHooks(deps = {}) {
                 await injectPromptFn(point, ctx, options);
                 emitHarnessHookProgressFn(ctx, "global_bootstrap_done", { point });
               };
-              const capabilityModelInvoker = options.capabilityModelInvoker
-                ? (payload = {}) =>
-                    invokeCapabilityModelWithinDeadline({
-                      invoker: options.capabilityModelInvoker,
-                      payload,
-                      parentSignal: invocation.signal || null,
-                      timeoutMs: options.capabilityModelTimeoutMs,
-                    })
-                : null;
-              await capabilityRuntime.runHook(point, ctx, {
-                pluginName: plugin.name,
-                pluginVersion: plugin.version,
-                harness: {
-                  ...options,
-                  capabilityModelInvoker,
+              await capabilityRuntime.runHook(
+                point,
+                ctx,
+                createHarnessMeta({
+                  plugin,
+                  options,
+                  parentSignal: invocation.signal,
                   globalBootstrap,
-                },
-              });
+                }),
+              );
               if (point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
                 lockPolicyPromptForMainFlow(ctx);
               }

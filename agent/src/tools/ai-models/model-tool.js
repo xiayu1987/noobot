@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -35,13 +35,8 @@ export function createModelTool({ agentContext, sessionId }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const allEnabledProviders = runtime.allEnabledProviders || {};
 
-  const switchModelTool = new DynamicStructuredTool({
-    name: TOOL_NAME.SWITCH_MODEL,
-    description: tTool(runtime, "tools.model.description"),
-    schema: z.object({
-      modelName: z.string().describe(tTool(runtime, "tools.model.fieldModelName")),
-    }),
-    func: async ({ modelName }) => {
+  const switchModelTool = structuredTool(
+    async ({ modelName }) => {
       if (!runtime || !sessionId) {
         throw recoverableToolError(tModel(runtime, "sessionContextMissing"), {
           code: ERROR_CODE.RECOVERABLE_SESSION_CONTEXT_MISSING,
@@ -85,7 +80,14 @@ export function createModelTool({ agentContext, sessionId }) {
         message: tTool(runtime, "tools.model.switchApplied"),
       });
     },
-  });
+    {
+      name: TOOL_NAME.SWITCH_MODEL,
+      description: tTool(runtime, "tools.model.description"),
+      schema: z.object({
+        modelName: z.string().describe(tTool(runtime, "tools.model.fieldModelName")),
+      }),
+    },
+  );
 
   return [switchModelTool];
 }

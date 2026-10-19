@@ -15,7 +15,11 @@ import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtur
 test("phase acceptance injects context, revised plan checklist, then phase request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const ctx = {
-    messages: [{ role: "user", content: "阶段上下文：已完成核心实现" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "阶段上下文：已完成核心实现" }],
+    },
     agentContext: {
       bindings: {
         extensions: {
@@ -105,7 +109,11 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const ctx = {
-    messages: [{ role: "user", content: "阶段上下文：继续审查" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "阶段上下文：继续审查" }],
+    },
     agentContext: {
       bindings: {
         extensions: {
@@ -198,23 +206,7 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   const resolverCalls = [];
   const ctx = {
     dialogProcessId: "dlg_current",
-    messages: [
-      { role: "user", content: "当前阶段继续", dialogProcessId: "dlg_current" },
-      {
-        role: "assistant",
-        content: "",
-        dialogProcessId: "dlg_current",
-        tool_calls: [
-          { id: "call-ctx", function: { name: "execute_script", arguments: '{"cmd":"pwd"}' } },
-        ],
-      },
-      {
-        role: "tool",
-        content: '{"ok":true,"stdout":"/workspace"}',
-        tool_call_id: "call-ctx",
-        dialogProcessId: "dlg_current",
-      },
-    ],
+
     messageBlocks: {
       system: [{ role: "system", content: "agent-system", dialogProcessId: "dlg_current" }],
       history: [
@@ -342,10 +334,6 @@ test("phase acceptance separate model drops historical summary relays and passes
   const resolveModelMessages = new ModelMessageRuntimeHelpers().createResolveModelMessages();
   const invocations = [];
   const ctx = {
-    messages: [
-      { role: "user", content: "阶段上下文：继续验收当前阶段" },
-      { role: "assistant", content: "继续处理当前阶段" },
-    ],
     messageBlocks: {
       system: [],
       history: [
@@ -450,13 +438,6 @@ test("phase acceptance separate model uses messageBlocks incremental when ctx.mo
   const resolveModelMessages = new ModelMessageRuntimeHelpers().createResolveModelMessages();
   const invocations = [];
   const ctx = {
-    messages: [
-      {
-        role: "user",
-        content: "history-only-visible-in-ctx.modelContext.messages",
-        dialogProcessId: "dlg_old",
-      },
-    ],
     messageBlocks: {
       system: [],
       history: [

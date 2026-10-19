@@ -17,7 +17,7 @@ function createTurnScope() {
   const loopState = {
     dialogProcessId: "dlg_control",
     modelContext: createModelContext({
-      messages: [],
+      messageBlocks: { system: [], history: [], incremental: [] },
       activeTurnIdentity: { dialogProcessId: "dlg_control", turnScopeId: "turn_control" },
     }),
   };

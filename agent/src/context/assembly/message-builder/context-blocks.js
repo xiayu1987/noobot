@@ -19,20 +19,17 @@ import { text } from "@noobot/shared/value";
 export function buildContextMessageBlocks(agentContext, { currentUserMessage = null } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const context = getAgentContextEnvelope(agentContext);
-  const messageBlocks = context.modelContext.messageBlocks;
-  const systemMessages = Array.isArray(messageBlocks?.system) ? messageBlocks.system : [];
-  const rawHistoryMessages = Array.isArray(messageBlocks?.history) ? messageBlocks.history : [];
-  const restoredIncrementalMessages = Array.isArray(messageBlocks?.incremental)
-    ? messageBlocks.incremental
-    : [];
-  const historyMessages = rawHistoryMessages;
-  const resolvedDialogProcessId = context.identity.dialogProcessId;
+  const {
+    system: systemMessages,
+    history: historyMessages,
+    incremental: restoredIncrementalMessages,
+  } = context.modelContext.messageBlocks;
   const currentCanonicalId = resolveContextMessageId(currentUserMessage);
   emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", {
     messageUid: text(currentUserMessage?.messageUid),
     currentCanonicalId,
     systemCount: systemMessages.length,
-    historyCount: rawHistoryMessages.length,
+    historyCount: historyMessages.length,
     restoredIncrementalCount: restoredIncrementalMessages.length,
     attachmentCount: Array.isArray(currentUserMessage?.attachments)
       ? currentUserMessage.attachments.length
@@ -89,7 +86,6 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     history,
     incremental,
     messages: [...system, ...history, ...incremental],
-    resolvedDialogProcessId,
   };
 }
 

@@ -245,7 +245,10 @@ test("golden: phase_acceptance can run when only summary is pending", async () =
       phaseAcceptance: true,
     },
   });
-  const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
+  const ctx = {
+    agentContext,
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+  };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) =>
@@ -266,7 +269,10 @@ test("golden: overflow force acceptance wins priority at before_llm_call", async
       overflowForceAcceptancePending: true,
     },
   });
-  const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
+  const ctx = {
+    agentContext,
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+  };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) =>
@@ -287,7 +293,10 @@ test("golden: planningCaptured=false blocks phase_acceptance execution", async (
       planningCaptured: false,
     },
   });
-  const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
+  const ctx = {
+    agentContext,
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+  };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.bindings.extensions.harness.logs.acceptance.find(
     (item = {}) =>

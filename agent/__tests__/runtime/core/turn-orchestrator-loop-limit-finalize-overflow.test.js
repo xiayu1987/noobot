@@ -12,11 +12,18 @@ import { createHookManager } from "@noobot/hook-protocol";
 import {
   createTestTurnMessagesStore,
   createTestModelPort,
+  createLoopTurnIdentity,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 function runFunctionCallLoop(args = {}) {
-  prepareTestTurnExecution(args.modelState, args.loopState, "orchestrator-overflow");
+  prepareTestTurnExecution(
+    args.modelState,
+    args.loopState,
+    createLoopTurnIdentity(args.loopState),
+    "presentation-orchestrator-overflow",
+  );
   return runFunctionCallLoopProduction(args);
 }
 
@@ -54,7 +61,6 @@ function createToolCallingLlm(responses = []) {
 function createLoopState({ maxTurns = 1, tool = null } = {}) {
   return {
     tools: tool ? [tool] : [],
-    messages: [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
     turnMessages: [],
@@ -89,12 +95,7 @@ function createModelState(llm, defaultModelSpec = null) {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    runtime: {
-      abortSignal: new AbortController().signal,
-      systemRuntime: {
-        config: { safeConfirm: true },
-      },
-    },
+    runtime: createTestRuntimeContext({ systemRuntime: { config: { safeConfirm: true } } }),
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,
@@ -296,7 +297,12 @@ test("post-summary char overflow enters final no-tools before the next with-tool
 
   const modelState = createModelState(llm);
   const loopState = createLoopState({ maxTurns: 3, tool: taskSummaryTool });
-  prepareTestTurnExecution(modelState, loopState, "post-summary-char-overflow");
+  prepareTestTurnExecution(
+    modelState,
+    loopState,
+    createLoopTurnIdentity(loopState),
+    "presentation-orchestrator-overflow",
+  );
   loopState.phaseSummaryMessageCharsThreshold = 10;
   loopState.modelContext.messages.push(longUserMessage);
   loopState.modelContext.messageBlocks.incremental.push(longUserMessage);

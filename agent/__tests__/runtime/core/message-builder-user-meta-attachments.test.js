@@ -46,7 +46,7 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
           turnScopeId: "turn-a",
         },
       },
-      { messageBlocks: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
       currentUserMessage: createPersistedCurrentUserMessage("hello", {
@@ -81,7 +81,7 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
           turnScopeId: "turn-a",
         },
       },
-      { messageBlocks: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
@@ -105,7 +105,7 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
           turnScopeId: "turn-a",
         },
       },
-      { messageBlocks: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
@@ -134,7 +134,7 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
           turnScopeId: "turn-a",
         },
       },
-      { messageBlocks: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
       currentUserMessage: createPersistedCurrentUserMessage("hello", {
@@ -187,6 +187,7 @@ test("buildContextMessages does not use fallback meta attachments as current use
               ],
             },
           ],
+          incremental: [],
         },
       },
     ),
@@ -225,7 +226,7 @@ test("buildContextMessages projects only model attachment metadata", () => {
           dialogProcessId: "dialog-rich",
         },
       },
-      { messageBlocks: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
       currentUserMessage: createPersistedCurrentUserMessage("hello", {
@@ -336,6 +337,7 @@ test("buildContextMessages keeps complete metadata per historical user turn with
               turnScopeId: "legacy-turn",
             },
           ],
+          incremental: [],
         },
       },
     ),
@@ -439,7 +441,7 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
           turnScopeId: "turn-current",
         },
       },
-      { messageBlocks: { system: [], history } },
+      { messageBlocks: { system: [], history, incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
@@ -507,6 +509,7 @@ test("buildContextMessages discards classified user_meta without inferring from 
               content: "[用户元信息]\n{}\n[/用户元信息]",
             },
           ],
+          incremental: [],
         },
       },
     ),
@@ -568,6 +571,7 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
               },
             },
           ],
+          incremental: [],
         },
       },
     ),
@@ -654,6 +658,7 @@ test("buildContextMessages does not project frontend user metadata for internal 
               turnScopeId: "internal-turn:1",
             },
           ],
+          incremental: [],
         },
       },
     ),
@@ -674,7 +679,7 @@ test("buildContextMessages does not project frontend user metadata for internal 
         userMessageAttachments: [],
         systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child", caller: "bot" },
       },
-      { messageBlocks: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
       currentUserMessage: createPersistedCurrentUserMessage("current internal task", {

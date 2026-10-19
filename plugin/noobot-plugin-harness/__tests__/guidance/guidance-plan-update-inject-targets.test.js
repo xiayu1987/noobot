@@ -22,7 +22,7 @@ function createRefinementInjectContext(planText) {
   });
   const ctx = createTestHookContext({
     agentContext,
-    messages: [{ role: "user", content: "继续" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
   });
   return { ctx, ...ensureHarnessBucket(ctx) };
 }

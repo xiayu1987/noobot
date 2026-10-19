@@ -10,7 +10,13 @@ import { createModelContext, writeMessageBlocks } from "@noobot/context-protocol
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 
 import { invokeWithToolsTurn as invokeWithToolsTurnProduction } from "../../../src/runtime/turn/turn-executor.js";
-import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
+import {
+  createLoopTurnIdentity,
+  createTestModelPort,
+  prepareTestTurnExecution,
+} from "./turn-runtime-test-helper.js";
+import { overrideTestTurnIdentity } from "../../helpers/test-turn-identity.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 const TEST_MODEL_SPEC = Object.freeze(
   normalizeRuntimeModelSpec({
@@ -22,32 +28,34 @@ const TEST_MODEL_SPEC = Object.freeze(
   }),
 );
 
-function invokeWithToolsTurn(args = {}) {
+function invokeWithToolsTurn({ identity, ...turnArgs }) {
   prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    `with-tools-${args.loopState?.dialogProcessId || "turn"}`,
+    turnArgs.modelState,
+    turnArgs.loopState,
+    identity,
+    "presentation-message-filter-cases-b",
   );
-  return invokeWithToolsTurnProduction(args);
+  return invokeWithToolsTurnProduction(turnArgs);
 }
 
 test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invoke", async () => {
   let capturedMessages = [];
   const harnessSystem = { role: "developer", content: "harness-policy" };
-  const runtime = {
-    systemRuntime: {},
-    hookManager: {
-      async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
-        writeMessageBlocks(ctx.modelContext, {
-          system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
-          history: [...ctx.modelContext.messageBlocks.history],
-          incremental: [...ctx.modelContext.messageBlocks.incremental],
-        });
-        return createEmptyHookResult(point, ctx);
+  const runtime = createTestRuntimeContext({
+    runConfig: {
+      hookManager: {
+        async emit(point, ctx = {}) {
+          if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
+          writeMessageBlocks(ctx.modelContext, {
+            system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
+            history: [...ctx.modelContext.messageBlocks.history],
+            incremental: [...ctx.modelContext.messageBlocks.incremental],
+          });
+          return createEmptyHookResult(point, ctx);
+        },
       },
     },
-  };
+  });
   const llm = {
     bindTools() {
       return {
@@ -73,7 +81,6 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [system, history, current],
     messageBlocks: {
       system: [system],
       history: [history],
@@ -89,7 +96,12 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     maxTurns: 1,
   };
 
-  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+  await invokeWithToolsTurn({
+    modelState,
+    loopState,
+    turn: 1,
+    identity: createLoopTurnIdentity(loopState),
+  });
 
   assert.deepEqual(capturedMessages, [
     { role: "system", content: "constructed-system" },
@@ -119,21 +131,22 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     dialogProcessId: "d-resume",
     turnScopeId: "turn-current",
   };
-  const runtime = {
-    resumeFromStoppedSnapshot: true,
-    systemRuntime: {},
-    hookManager: {
-      async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
-        writeMessageBlocks(ctx.modelContext, {
-          system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
-          history: [...ctx.modelContext.messageBlocks.history],
-          incremental: [...ctx.modelContext.messageBlocks.incremental, latestGuidance],
-        });
-        return createEmptyHookResult(point, ctx);
+  const runtime = createTestRuntimeContext({
+    runConfig: {
+      hookManager: {
+        async emit(point, ctx = {}) {
+          if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
+          writeMessageBlocks(ctx.modelContext, {
+            system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
+            history: [...ctx.modelContext.messageBlocks.history],
+            incremental: [...ctx.modelContext.messageBlocks.incremental, latestGuidance],
+          });
+          return createEmptyHookResult(point, ctx);
+        },
       },
     },
-  };
+  });
+  runtime.resumeFromStoppedSnapshot = true;
   const llm = {
     bindTools() {
       return {
@@ -190,7 +203,6 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [snapshotSystem, snapshotHistory, staleGuidance, resumedUser, userMeta],
     messageBlocks: {
       system: [snapshotSystem],
       history: [snapshotHistory],
@@ -206,7 +218,6 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     maxTurns: 1,
   };
   loopState.modelContext = createModelContext({
-    messages: loopState.messages,
     messageBlocks: loopState.messageBlocks,
     activeTurnIdentity: {
       dialogProcessId: "d-resume",
@@ -214,7 +225,14 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     },
   });
 
-  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+  await invokeWithToolsTurn({
+    modelState,
+    loopState,
+    turn: 1,
+    identity: overrideTestTurnIdentity(createLoopTurnIdentity(loopState), {
+      turnScopeId: "turn-current",
+    }),
+  });
 
   assert.deepEqual(capturedMessages, [
     {
@@ -294,14 +312,15 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
 
 test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentContext payload", async () => {
   let capturedMessages = [];
-  const runtime = {
-    systemRuntime: { sessionId: "s1", dialogProcessId: "d-current" },
-    hookManager: {
-      async emit(point, ctx = {}) {
-        return createEmptyHookResult(point, ctx);
+  const runtime = createTestRuntimeContext({
+    runConfig: {
+      hookManager: {
+        async emit(point, ctx = {}) {
+          return createEmptyHookResult(point, ctx);
+        },
       },
     },
-  };
+  });
   const llm = {
     bindTools() {
       return {
@@ -339,7 +358,6 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
     },
   };
   const loopState = {
-    messages: [current],
     messageBlocks: {
       system: [],
       history: [],
@@ -355,7 +373,12 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
     maxTurns: 1,
   };
 
-  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+  await invokeWithToolsTurn({
+    modelState,
+    loopState,
+    turn: 1,
+    identity: createLoopTurnIdentity(loopState),
+  });
 
   assert.deepEqual(capturedMessages, [{ role: "user", content: "current-user" }]);
 });
@@ -381,13 +404,12 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
 
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: { systemRuntime: {} },
+    runtime: createTestRuntimeContext(),
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messages: [{ role: "user", content: "run tool" }],
     messageBlocks: {
       system: [],
       history: [],
@@ -403,7 +425,12 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     maxTurns: 1,
   };
 
-  const result = await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+  const result = await invokeWithToolsTurn({
+    modelState,
+    loopState,
+    turn: 1,
+    identity: createLoopTurnIdentity(loopState),
+  });
 
   assert.equal(result.calls.length, 1);
   const assistantToolCall = loopState.modelContext.messages.at(-1);

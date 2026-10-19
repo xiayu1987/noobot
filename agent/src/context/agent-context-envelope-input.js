@@ -4,77 +4,60 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
-import { safeNum } from "../shared/utils/shared-utils.js";
-import { text } from "@noobot/shared/value";
 
 export function createAgentContextEnvelopeInput({
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  rootSessionId = "",
-  dialogProcessId = "",
-  runConfig = {},
-  caller = "user",
-  staticAgentContext = {},
-  systemRuntime = {},
-  runtimeModel = "",
-  allEnabledProviders = {},
-  contextBuild = {},
-  systemMessages = [],
-  conversationMessages = [],
-  incrementalMessages = [],
-} = {}) {
+  identity,
+  runConfig,
+  staticInfo,
+  workspaceDirectories,
+  systemRuntime,
+  runtimeModel,
+  allEnabledProviders,
+  systemMessages,
+  conversationMessages,
+  incrementalMessages,
+}) {
   return {
     identity: {
-      userId,
-      sessionId,
-      rootSessionId,
-      parentSessionId: normalizeParentSessionId(parentSessionId),
-      dialogProcessId,
-      turnScopeId: text(runConfig?.turnScopeId),
-      runId: text(runConfig?.executionId),
-      messageId: text(runConfig?.messageId),
+      userId: identity.userId,
+      sessionId: identity.sessionId,
+      rootSessionId: identity.rootSessionId,
+      parentSessionId: normalizeParentSessionId(identity.parentSessionId),
+      dialogProcessId: identity.dialogProcessId,
+      turnScopeId: runConfig.turnScopeId,
+      runId: runConfig.executionId,
+      messageId: runConfig.messageId,
     },
     environment: {
       os: {
-        platform: staticAgentContext.platform || "",
-        arch: staticAgentContext.arch || "",
-        timezone: staticAgentContext.timezone || "",
-        nodeVersion: staticAgentContext.nodeVersion || "",
+        platform: staticInfo.platform,
+        arch: staticInfo.arch,
+        timezone: staticInfo.timezone,
+        nodeVersion: staticInfo.nodeVersion,
       },
       workspace: {
-        cwd: staticAgentContext.cwd || "",
-        basePath: staticAgentContext.basePath || "",
-        workspaceDirectories: Array.isArray(staticAgentContext.workspaceDirectories)
-          ? staticAgentContext.workspaceDirectories
-          : [],
-        globalDefaults:
-          staticAgentContext.globalDefaults && typeof staticAgentContext.globalDefaults === "object"
-            ? staticAgentContext.globalDefaults
-            : {},
+        cwd: staticInfo.cwd,
+        basePath: staticInfo.basePath,
+        workspaceDirectories,
+        globalDefaults: staticInfo.globalDefaults,
       },
-      permissions: { isSuperUser: systemRuntime.isSuperUser === true },
+      permissions: { isSuperUser: systemRuntime.isSuperUser },
     },
     execution: {
-      timestamp: text(systemRuntime.now || contextBuild.startedAt),
-      caller: String(systemRuntime.caller || caller || "user").trim(),
+      timestamp: systemRuntime.now,
+      caller: systemRuntime.caller,
       flags: {
-        allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
-        safeConfirm: systemRuntime?.config?.safeConfirm !== false,
-        maxToolLoopTurns: safeNum(systemRuntime?.config?.maxToolLoopTurns),
+        allowUserInteraction: systemRuntime.config.allowUserInteraction,
+        safeConfirm: systemRuntime.config.safeConfirm,
       },
       model: { runtimeModel, allEnabledProviders },
-      selectedConnectorIds: normalizeSelectedConnectorIds(
-        systemRuntime?.config?.selectedConnectorIds,
-      ),
+      selectedConnectorIds: systemRuntime.config.selectedConnectorIds,
     },
-    contextBuild,
     messageBlocks: {
-      system: Array.isArray(systemMessages) ? systemMessages : [],
-      history: Array.isArray(conversationMessages) ? conversationMessages : [],
-      incremental: Array.isArray(incrementalMessages) ? incrementalMessages : [],
+      system: systemMessages,
+      history: conversationMessages,
+      incremental: incrementalMessages,
     },
   };
 }

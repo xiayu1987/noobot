@@ -3,10 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isContextSystemMessage } from "../message/codec.js";
 import { canonicalizeMessageStore } from "../message/store.js";
 import { attachModelContextRuntime } from "./model-runtime.js";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
+import { MESSAGE_BLOCK_LANES, MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
@@ -15,23 +14,24 @@ function asObject(value) {
   return isPlainObject(value) ? value : null;
 }
 
-function normalizeBlocks(value) {
-  const blocks = asObject(value);
-  if (!blocks) return null;
-  return {
-    system: Array.isArray(blocks.system) ? blocks.system : [],
-    history: Array.isArray(blocks.history) ? blocks.history : [],
-    incremental: Array.isArray(blocks.incremental) ? blocks.incremental : [],
-  };
-}
-
-function resolveInitialBlocks(messages = []) {
-  const blocks = { system: [], history: [], incremental: [] };
-  for (const message of Array.isArray(messages) ? messages : []) {
-    const blockName = isContextSystemMessage(message) ? "system" : "incremental";
-    blocks[blockName].push(message);
+function requireMessageBlocks(messageBlocks) {
+  if (!isPlainObject(messageBlocks)) {
+    throw new TypeError("modelContext messageBlocks must be a plain object");
   }
-  return blocks;
+  const unexpected = Object.keys(messageBlocks).filter(
+    (lane) => !MESSAGE_BLOCK_LANES.includes(lane),
+  );
+  if (unexpected.length > 0) {
+    throw new TypeError(
+      `modelContext messageBlocks has unexpected lanes: ${unexpected.join(", ")}`,
+    );
+  }
+  for (const lane of MESSAGE_BLOCK_LANES) {
+    if (!Array.isArray(messageBlocks[lane])) {
+      throw new TypeError(`modelContext messageBlocks.${lane} must be an array`);
+    }
+  }
+  return Object.fromEntries(MESSAGE_BLOCK_LANES.map((lane) => [lane, messageBlocks[lane]]));
 }
 
 function normalizeActiveTurnIdentity(identity = null) {
@@ -47,49 +47,29 @@ function normalizeActiveTurnIdentity(identity = null) {
 }
 
 export function createModelContext({
-  messages = null,
-  messageBlocks = null,
+  messageBlocks,
   activeTurnIdentity = null,
   checkpointRevision = 0,
   userMetaBackwrites = [],
   onCanonicalMessageAdded = null,
   onMutationConsumed = null,
-} = {}) {
+}) {
   const normalizedCheckpointRevision = Number(checkpointRevision);
   if (!Number.isInteger(normalizedCheckpointRevision) || normalizedCheckpointRevision < 0) {
     throw new TypeError("modelContext checkpointRevision must be a non-negative integer");
   }
-  const explicitBlocks = normalizeBlocks(messageBlocks);
-  const blocks =
-    explicitBlocks || (Array.isArray(messages) ? resolveInitialBlocks(messages) : null);
-
-  const resolvedMessages = explicitBlocks
-    ? [...explicitBlocks.system, ...explicitBlocks.history, ...explicitBlocks.incremental]
-    : Array.isArray(messages)
-      ? messages
-      : blocks
-        ? [...blocks.system, ...blocks.history, ...blocks.incremental]
-        : null;
-  if (!blocks && !resolvedMessages) return null;
   const modelContext = {
     protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
     checkpointRevision: normalizedCheckpointRevision,
     activeTurnIdentity: normalizeActiveTurnIdentity(activeTurnIdentity),
     userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
-
-    messages: explicitBlocks ? null : resolvedMessages,
-    messageBlocks: blocks,
+    messages: null,
+    messageBlocks: requireMessageBlocks(messageBlocks),
   };
   attachModelContextRuntime(modelContext, { onCanonicalMessageAdded, onMutationConsumed });
   canonicalizeMessageStore(modelContext);
-  if (explicitBlocks) {
-    modelContext.messages = [
-      ...modelContext.messageBlocks.system,
-      ...modelContext.messageBlocks.history,
-      ...modelContext.messageBlocks.incremental,
-    ];
-    canonicalizeMessageStore(modelContext);
-  }
+  modelContext.messages = MESSAGE_BLOCK_LANES.flatMap((lane) => modelContext.messageBlocks[lane]);
+  canonicalizeMessageStore(modelContext);
   return modelContext;
 }
 

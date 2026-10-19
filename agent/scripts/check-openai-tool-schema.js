@@ -18,7 +18,7 @@ import {
   resolveConfigTemplates,
 } from "@noobot/agent-config-protocol";
 import { loadGlobalConfig } from "../src/config/core/global-config-loader.js";
-import { createAgentContextEnvelope, createModelContext } from "@noobot/context-protocol";
+import { createAgentContextEnvelope } from "@noobot/context-protocol";
 import { createAgentExecutionScope } from "../src/context/agent-execution-scope.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
 import { text, isFunction } from "@noobot/shared/value";
@@ -146,14 +146,9 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
       config: {
         allowUserInteraction: true,
         selectedConnectorIds: [],
-        maxToolLoopTurns: 4,
       },
     },
   };
-  const modelContext = createModelContext({
-    messageBlocks: { system: [], history: [], incremental: [] },
-    activeTurnIdentity: { dialogProcessId, turnScopeId },
-  });
   const context = createAgentContextEnvelope({
     identity: {
       userId,
@@ -165,13 +160,33 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
       runId: "schema-check:run",
       messageId,
     },
-    environment: {},
-    execution: {},
-    modelContext,
+    environment: {
+      os: {
+        platform: process.platform,
+        arch: process.arch,
+        timezone: "UTC",
+        nodeVersion: process.version,
+      },
+      workspace: {
+        cwd: "/tmp/schema-check",
+        basePath: "/tmp/schema-check",
+        workspaceDirectories: [],
+        globalDefaults: {},
+      },
+      permissions: { isSuperUser: false },
+    },
+    execution: {
+      timestamp: "2026-01-01T00:00:00.000Z",
+      caller: "user",
+      flags: { allowUserInteraction: true, safeConfirm: false },
+      model: { runtimeModel: "", allEnabledProviders: {} },
+      selectedConnectorIds: [],
+    },
+    messageBlocks: { system: [], history: [], incremental: [] },
   });
   return createAgentExecutionScope({
     context,
-    bindings: { runtime, tools: [] },
+    bindings: { runtime, tools: [], extensions: {} },
   });
 }
 

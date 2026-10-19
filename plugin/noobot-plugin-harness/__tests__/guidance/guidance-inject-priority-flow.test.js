@@ -22,7 +22,10 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   });
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
 
-  const firstCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const firstCtx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: firstCtx, meta });
   const decisionLog = agentContext.bindings.extensions.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_priority_decision",
@@ -55,7 +58,10 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
 
-  const secondCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const secondCtx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: secondCtx, meta });
   assert.equal(
     secondCtx.modelContext.messages.some((msg = {}) =>
@@ -77,7 +83,10 @@ test("inject mode: revision keeps higher priority than overflow summary for cach
   agentContext.bindings.extensions.harness.state.flags.summaryByCharsPrompted = true;
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
 
-  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(
     ctx.modelContext.messages.some((msg = {}) =>

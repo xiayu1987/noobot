@@ -6,7 +6,7 @@
 import { createRequire } from "node:module";
 import { readFile, stat } from "node:fs/promises";
 import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS, filePath as path } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   MULTIMODAL_CONFIG_OPERATION,
@@ -132,31 +132,8 @@ function resolveConfiguredParseModel({
 export function createMultimodalParseTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   if (!text(runtime?.basePath)) return [];
-  const tool = new DynamicStructuredTool({
-    name: TOOL_NAME.MULTIMODAL_PARSE,
-    metadata: { pathContract: TOOL_PATH_CONTRACTS.multimodalInput },
-    description: tTool(runtime, "tools.multimodalParse.description"),
-    schema: z.object({
-      inputs: z
-        .array(
-          createFileInputSchema({
-            filePathDescription: tTool(runtime, "tools.multimodalParse.fieldFilePath"),
-            attachmentRefDescription: tTool(runtime, "tools.multimodalParse.fieldAttachmentRef"),
-          }),
-        )
-        .min(1)
-        .describe(tTool(runtime, "tools.multimodalParse.fieldInputs")),
-      prompt: z.string().optional().describe(tTool(runtime, "tools.multimodalParse.fieldPrompt")),
-      model_name: z
-        .string()
-        .optional()
-        .describe(tTool(runtime, "tools.multimodalParse.fieldModelName")),
-    }),
-    func: async (
-      { inputs: requestedInputs, prompt = "", model_name = "" },
-      _runManager,
-      toolConfig = {},
-    ) => {
+  const tool = structuredTool(
+    async ({ inputs: requestedInputs, prompt = "", model_name = "" }, toolConfig) => {
       const fileInputs = Array.isArray(requestedInputs) ? requestedInputs : [];
       if (!fileInputs.length) {
         throw recoverableToolError(tTool(runtime, "tools.multimodalParse.filePathsRequired"), {
@@ -271,7 +248,7 @@ export function createMultimodalParseTool({ agentContext }) {
             attachments: inputAttachments,
           },
         },
-        options: { streaming: false, signal: runtime?.abortSignal || undefined },
+        options: { streaming: false, signal: toolConfig.signal },
         invocation: {
           flow: "tool.multimodal_parse",
           purpose: "multimodal_extraction",
@@ -285,7 +262,7 @@ export function createMultimodalParseTool({ agentContext }) {
         inputFile: inputFiles[0],
         text: textValue,
         mode: TOOL_DATA_MODE.MULTIMODAL_MODEL,
-        identity: toolConfig?.configurable?.transferIdentity,
+        identity: toolConfig.configurable.transferIdentity,
       });
       const attachments = normalizePersistedAttachments(persistedOutput);
       if (attachments.length !== 1) {
@@ -336,7 +313,28 @@ export function createMultimodalParseTool({ agentContext }) {
         true,
       );
     },
-  });
+    {
+      name: TOOL_NAME.MULTIMODAL_PARSE,
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.multimodalInput },
+      description: tTool(runtime, "tools.multimodalParse.description"),
+      schema: z.object({
+        inputs: z
+          .array(
+            createFileInputSchema({
+              filePathDescription: tTool(runtime, "tools.multimodalParse.fieldFilePath"),
+              attachmentRefDescription: tTool(runtime, "tools.multimodalParse.fieldAttachmentRef"),
+            }),
+          )
+          .min(1)
+          .describe(tTool(runtime, "tools.multimodalParse.fieldInputs")),
+        prompt: z.string().optional().describe(tTool(runtime, "tools.multimodalParse.fieldPrompt")),
+        model_name: z
+          .string()
+          .optional()
+          .describe(tTool(runtime, "tools.multimodalParse.fieldModelName")),
+      }),
+    },
+  );
   return [tool];
 }
 

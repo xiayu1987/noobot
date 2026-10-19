@@ -15,7 +15,7 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 
 function createMessageBuilderScope({ runtime = {}, history = [] } = {}) {
   return createTestAgentExecutionScope(createTestRuntimeContext(runtime), {
-    messageBlocks: { system: [], history },
+    messageBlocks: { system: [], history, incremental: [] },
   });
 }
 

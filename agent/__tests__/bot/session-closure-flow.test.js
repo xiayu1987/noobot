@@ -279,10 +279,15 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
               parentSessionId,
               dialogProcessId,
               turnScopeId: runConfig.turnScopeId,
+              userId: "u1",
+              rootSessionId: acceptedTurn.sessionId,
+              runId: "r-1",
+              messageId: "m-1",
             },
             messageBlocks: {
               system: ["[PROMPT_PATCHED] 你现在处于审计模式"],
               history: [{ role: "user", content: "历史记录" }],
+              incremental: [],
             },
             tools: [
               { name: "switch_model" },
@@ -404,6 +409,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     parentDialogProcessId: "dp-parent-1",
     content: "continue run",
   };
+  const parentRootSessionId = randomUUID();
   const persistedTurns = [];
   const persistedBatches = [];
   const upstreamEvents = [];
@@ -515,7 +521,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     }),
   });
 
-  engine._buildContextBuilder = ({ sessionId = "", runConfig = {} } = {}) => ({
+  engine._buildContextBuilder = ({ sessionId, parentSessionId, runConfig }) => ({
     attachmentService: engine.attach,
     async buildNewSessionContext({ dialogProcessId = "" } = {}) {
       return createTestAgentExecutionScope(
@@ -525,8 +531,17 @@ test("continue mode closed-loop: should build continue context and persist paren
           systemRuntime: { dialogProcessId },
         }),
         {
-          identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
-          messageBlocks: { system: ["initial"], history: [] },
+          identity: {
+            userId: "u1",
+            sessionId,
+            rootSessionId: parentRootSessionId,
+            parentSessionId,
+            dialogProcessId,
+            turnScopeId: runConfig.turnScopeId,
+            runId: "r-1",
+            messageId: "m-1",
+          },
+          messageBlocks: { system: ["initial"], history: [], incremental: [] },
         },
       );
     },
@@ -539,10 +554,20 @@ test("continue mode closed-loop: should build continue context and persist paren
           systemRuntime: { dialogProcessId, sessionId },
         }),
         {
-          identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
+          identity: {
+            userId: "u1",
+            sessionId,
+            rootSessionId: parentRootSessionId,
+            parentSessionId,
+            dialogProcessId,
+            turnScopeId: runConfig.turnScopeId,
+            runId: "r-1",
+            messageId: "m-1",
+          },
           messageBlocks: {
             system: ["continue prompt"],
             history: [{ role: "user", content: "history" }],
+            incremental: [],
           },
           tools: [{ name: "task_summary" }],
         },
@@ -554,7 +579,6 @@ test("continue mode closed-loop: should build continue context and persist paren
   bot.sessionRunner = engine;
 
   const { sessionId } = acceptedTurn;
-  const parentSessionId = randomUUID();
   const result = await bot.runSession({
     dialogProcessId: acceptedTurn.dialogProcessId,
     runConfig: createAcceptedRunIdentity(acceptedTurn.turnScopeId, {
@@ -570,7 +594,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     }),
     userId: "u1",
     sessionId,
-    parentSessionId,
+    parentSessionId: parentRootSessionId,
     caller: "bot",
     parentDialogProcessId: acceptedTurn.parentDialogProcessId,
     message: acceptedTurn.content,
@@ -595,9 +619,9 @@ test("continue mode closed-loop: should build continue context and persist paren
   assert.ok(assistantTurn);
   assert.ok(persistedBatches.length > 0);
   for (const batch of persistedBatches) {
-    assert.equal(batch.parentSessionId, parentSessionId);
+    assert.equal(batch.parentSessionId, parentRootSessionId);
   }
-  assert.equal(result.parentSessionId, parentSessionId);
+  assert.equal(result.parentSessionId, parentRootSessionId);
   assert.equal(result.parentDialogProcessId, "dp-parent-1");
   assert.equal(result.answer, "continue answer");
   assert.equal(upstreamEvents.length > 0, true);

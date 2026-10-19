@@ -63,23 +63,12 @@ function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
   return { messages: store.toArray(), accepted };
 }
 
-function buildDispatchModelContext({
-  context,
-  dispatchRuntime,
-  runtimeEventListener,
-  dialogProcessId,
-  resolvedTurnScopeId,
-}) {
-  const history = Array.isArray(context?.modelContext?.messageBlocks?.history)
-    ? context.modelContext.messageBlocks.history
-    : [];
+function buildDispatchModelContext({ context, dispatchRuntime, runtimeEventListener }) {
+  const { history } = context.modelContext.messageBlocks;
+  const { dialogProcessId, turnScopeId } = context.identity;
   return createModelContext({
-    messages: history,
-    checkpointRevision: Math.max(0, Number(dispatchRuntime?.summaryCheckpointRevision) || 0),
-    activeTurnIdentity: {
-      dialogProcessId: text(dialogProcessId),
-      turnScopeId: text(resolvedTurnScopeId),
-    },
+    checkpointRevision: dispatchRuntime.summaryCheckpointRevision,
+    activeTurnIdentity: { dialogProcessId, turnScopeId },
     onCanonicalMessageAdded(message, meta) {
       emitContextIdentityDebug(
         runtimeEventListener,
@@ -253,16 +242,12 @@ export async function dispatchAgentTurn({
   botHookRuntime,
   botHookBase,
   agentContextSummary,
-  dialogProcessId,
-  resolvedTurnScopeId,
   syncLifecycleRuntimeState,
 }) {
   const dispatchModelContext = buildDispatchModelContext({
     context: getAgentContextEnvelope(runtimeAgentContext),
     dispatchRuntime,
     runtimeEventListener,
-    dialogProcessId,
-    resolvedTurnScopeId,
   });
   const { state: claimState, claim } = createDispatchClaim({
     lifecycle,

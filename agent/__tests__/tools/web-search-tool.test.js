@@ -17,7 +17,6 @@ test("do_search_web: model_web_search 模式只通过 canonical ModelPort 发起
   let capturedRequest = null;
   const abortController = new AbortController();
   const runtime = {
-    abortSignal: abortController.signal,
     globalConfig: {
       tools: {
         do_search_web: { mode: "model_web_search", model_web_search: { model: "search-model" } },
@@ -54,7 +53,9 @@ test("do_search_web: model_web_search 模式只通过 canonical ModelPort 发起
     }),
   };
   const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
-  const result = JSON.parse(await tool.invoke({ query: "latest noobot news" }));
+  const result = JSON.parse(
+    await tool.invoke({ query: "latest noobot news" }, { signal: abortController.signal }),
+  );
 
   assert.equal(capturedRequest?.operation?.kind, "web_search");
   assert.equal(capturedRequest?.options?.signal, abortController.signal);
@@ -159,7 +160,8 @@ test("do_search_web: search_engine 模式直接请求搜索引擎地址", async 
 
   try {
     const result = await searchWithSearchEngine({
-      runtime: { abortSignal: abortController.signal },
+      runtime: {},
+      abortSignal: abortController.signal,
       toolCfg: {
         enabled: true,
         mode: "search_engine",

@@ -26,7 +26,11 @@ test("harness planning accepts numbered plain-text plan output", async () => {
   };
 
   await hookManager.emit("agent.before_llm_call", {
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -53,7 +57,11 @@ test("harness planning ignores wrapped non-plan payload even when non-empty", as
   };
 
   await hookManager.emit("agent.before_llm_call", {
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -107,7 +115,11 @@ test("harness planning rejects malformed non-plan json text", async () => {
   };
 
   await hookManager.emit("agent.before_llm_call", {
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
@@ -138,7 +150,11 @@ test("harness planning uses plan text flow without json repair", async () => {
   );
 
   const ctx = {
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext: {
       bindings: {
         runtime: { systemRuntime: { config: {} } },
@@ -178,7 +194,11 @@ test("harness planning requires parseable main plan payload", async () => {
   );
 
   const ctx = {
-    messages: [{ role: "user", content: "开始任务" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "开始任务" }],
+    },
     agentContext: {
       bindings: {
         tools: [{ name: "execute_script", invoke: async () => ({ ok: true }) }],

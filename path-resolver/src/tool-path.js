@@ -7,7 +7,6 @@ import {
   filePath,
   normalizePathForPlatform,
   isAbsolutePathAnyPlatform,
-  resolvePathPlatformFromContext,
   TOOL_PATH_VIEWS,
   normalizeSlashPath,
 } from "./platform.js";
@@ -49,7 +48,7 @@ function normalizeWorkspaceRootAlias(value = "") {
   return "";
 }
 
-export function classifyToolInputPath(inputPath = "", { agentContext = null } = {}) {
+export function classifyToolInputPath(inputPath = "") {
   const raw = text(inputPath);
   if (!raw) {
     return {
@@ -60,9 +59,7 @@ export function classifyToolInputPath(inputPath = "", { agentContext = null } = 
       sandboxRoot: "",
     };
   }
-  const normalized = normalizePathForPlatform(raw, {
-    platform: resolvePathPlatformFromContext(agentContext, ""),
-  });
+  const normalized = normalizePathForPlatform(raw);
   if (!normalized && (raw === "." || raw === "./")) {
     return {
       view: TOOL_PATH_VIEWS.WORKSPACE_RELATIVE,
@@ -112,7 +109,6 @@ export function classifyToolInputPath(inputPath = "", { agentContext = null } = 
 
 export function resolveToolInputPath({
   inputPath = "",
-  agentContext = null,
   runtime = {},
   workspacePath = "",
   workspaceRoot = "",
@@ -120,7 +116,7 @@ export function resolveToolInputPath({
   allowSandbox = false,
   allowVirtualRelative = false,
 } = {}) {
-  const classified = classifyToolInputPath(inputPath, { agentContext });
+  const classified = classifyToolInputPath(inputPath);
   const normalizedWorkspace = workspacePath ? filePath.resolve(workspacePath) : "";
   const normalizedWorkspaceRoot = workspaceRoot ? filePath.resolve(workspaceRoot) : "";
   if (!classified.normalized) {

@@ -100,7 +100,10 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     sharedTools: { fetch: createMcpFetch() },
   });
   const [tool] = createMcpTool({ agentContext: createTestAgentExecutionScope(runtime) });
-  const raw = await tool.invoke({ mcpName: "fake", task: "do something" });
+  const raw = await tool.invoke(
+    { mcpName: "fake", task: "do something" },
+    { signal: new AbortController().signal },
+  );
   const payload = JSON.parse(String(raw || "{}"));
   assert.equal(payload.ok, true);
   assert.equal(runCalls.length, 1);
@@ -143,7 +146,11 @@ test("call_mcp_task: 未配置的 mcp 服务以可恢复错误失败且不启动
     globalConfig: { mcpServers: {} },
   });
   const [tool] = createMcpTool({ agentContext: createTestAgentExecutionScope(runtime) });
-  await assert.rejects(tool.invoke({ mcpName: "missing", task: "do something" }), (error) => {
+  const invocation = tool.invoke(
+    { mcpName: "missing", task: "do something" },
+    { signal: new AbortController().signal },
+  );
+  await assert.rejects(invocation, (error) => {
     assert.match(String(error.message), /missing/);
     return true;
   });

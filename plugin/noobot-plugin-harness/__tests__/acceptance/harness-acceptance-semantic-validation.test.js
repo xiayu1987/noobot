@@ -164,7 +164,7 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
     userId: "relay-u",
     sessionId: "relay-s",
     dialogProcessId: "relay-dp",
-    messages: modelMessages,
+    messageBlocks: { system: [], history: [], incremental: modelMessages },
     result: {
       output: "任务完成",
       modelMessages,
@@ -260,6 +260,7 @@ test("harness acceptance semantic validation failure does not block active accep
   const raw = await tool.invoke(
     { mode: "active" },
     {
+      signal: new AbortController().signal,
       configurable: {
         noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
       },
@@ -332,6 +333,7 @@ test("request_task_acceptance returns a compact receipt while retaining the full
   const raw = await tool.invoke(
     { mode: "active" },
     {
+      signal: new AbortController().signal,
       configurable: {
         noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
       },
@@ -388,7 +390,14 @@ test("acceptance handler inject mode schedules and captures semantic validation 
     true,
   );
 
-  const injectCtx = { agentContext, messages: [{ role: "user", content: "continue" }] };
+  const injectCtx = {
+    agentContext,
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "continue" }],
+    },
+  };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx: injectCtx, meta });
   assert.equal(
     injectCtx.modelContext.messages.some((item) =>

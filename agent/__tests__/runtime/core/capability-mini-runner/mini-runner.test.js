@@ -5,6 +5,8 @@
  */
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
+import { tool as structuredTool } from "@langchain/core/tools";
+import { z } from "zod";
 import assert from "node:assert/strict";
 
 import {
@@ -126,6 +128,8 @@ function createContext({
           turnScopeId: "turn-test",
           runId: "agent:turn-test",
           messageId: "message-test",
+          rootSessionId: "session-test",
+          parentSessionId: "",
         },
       }),
     },
@@ -467,5 +471,47 @@ test("capability tool turns cancel the running tool when the plugin signal abort
     new Promise((resolve) => setTimeout(() => resolve("still-running"), 500)),
   ]);
   assert.equal(outcome, "rejected");
+  assert.equal(modelPort.requests.length, 1);
+});
+
+test("capability tool turns hand the plugin signal, not the main-turn signal, to tool()", async () => {
+  const modelPort = createModelPort([
+    { text: "", toolCalls: [{ id: "c-signal", name: "signal_probe", args: {} }] },
+    { text: "unreachable" },
+  ]);
+  let markStarted;
+  const started = new Promise((resolve) => {
+    markStarted = resolve;
+  });
+  let toolSignal;
+  const probe = structuredTool(
+    (_input, toolConfig) => {
+      toolSignal = toolConfig.signal;
+      markStarted();
+      return new Promise((_resolve, reject) => {
+        toolSignal.addEventListener("abort", () => reject(toolSignal.reason), { once: true });
+      });
+    },
+    { name: "signal_probe", description: "records its invocation signal", schema: z.object({}) },
+  );
+  const { ctx, runtime } = createContext({
+    modelPort,
+    tools: [probe],
+    sessionManager: createCanonicalMessageEventSessionManager(),
+  });
+  bindPresentation(runtime);
+  const controller = new AbortController();
+  const invocation = createInvoker({
+    enableToolBinding: true,
+    toolAllowlist: ["signal_probe"],
+    adaptToolsForBindingFn: () => ({ tools: [probe] }),
+    executeToolCallFn: executeToolCallInTurn,
+  })({ messages: [{ role: "user", content: "go" }], ctx, signal: controller.signal });
+  await started;
+  assert.equal(runtime.abortSignal.aborted, false);
+  controller.abort(new Error("plugin deadline"));
+  await assert.rejects(invocation);
+  assert.equal(toolSignal.aborted, true);
+  assert.equal(runtime.abortSignal.aborted, false);
   assert.equal(modelPort.requests.length, 1);
 });

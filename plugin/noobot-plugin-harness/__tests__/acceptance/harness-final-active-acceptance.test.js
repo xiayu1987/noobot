@@ -33,7 +33,11 @@ test("final acceptance separate model receives revised plan, all phase checklist
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const ctx = {
-    messages: [{ role: "assistant", content: "最终输出：done" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "assistant", content: "最终输出：done" }],
+    },
     result: { output: "最终输出：done" },
     agentContext: {
       bindings: {
@@ -165,6 +169,7 @@ test("harness active request_task_acceptance semantic validation receives agent 
   const raw = await tool.invoke(
     { mode: "active" },
     {
+      signal: new AbortController().signal,
       configurable: {
         noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
       },
@@ -251,7 +256,10 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     agentContext,
     result: { output: "work is not complete" },
   });
-  await tool.invoke({ mode: "active" }, { configurable: { noobotHookContext: toolCtx } });
+  await tool.invoke(
+    { mode: "active" },
+    { signal: new AbortController().signal, configurable: { noobotHookContext: toolCtx } },
+  );
 
   assert.equal(state.flags.acceptanceRequested, true);
   assert.equal(state.flags.acceptanceReviewing, false);
@@ -272,7 +280,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     createTestHookContext({
       agentContext,
       turn: 1,
-      modelContext: { messages: [] },
+      messageBlocks: { system: [], history: [], incremental: [] },
     }),
   );
   assert.equal(
@@ -331,9 +339,9 @@ test("harness active request_task_acceptance falls back to closure meta when con
   const raw = await tool.invoke(
     { mode: "active" },
     {
+      signal: new AbortController().signal,
       configurable: {
         noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
-        noobotHookMeta: { systemRuntime: { userId: "u1", sessionId: "s1" } },
       },
     },
   );

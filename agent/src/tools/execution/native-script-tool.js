@@ -18,7 +18,7 @@ import {
   projectTaskPathText,
   TOOL_PATH_CONTRACTS,
 } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   getRuntimeFromAgentContext,
@@ -466,36 +466,8 @@ export function createNativeScriptTool({ agentContext }) {
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const config = effectiveConfig?.tools?.[TOOL_NAME.EXECUTE_NATIVE_SCRIPT];
   if (config?.enabled !== true || !text(runtime?.basePath)) return [];
-  const tool = new DynamicStructuredTool({
-    name: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
-    metadata: { pathContract: TOOL_PATH_CONTRACTS.nativeInput },
-    description: tTool(runtime, "tools.nativeScript.description"),
-    schema: z.object({
-      script_body: z.string().describe(tTool(runtime, "tools.nativeScript.fieldScriptBody")),
-      inputs: z
-        .array(
-          createFileInputSchema({
-            filePathDescription: tTool(runtime, "tools.nativeScript.fieldFilePath"),
-            attachmentRefDescription: tTool(runtime, "tools.nativeScript.fieldAttachmentRef"),
-          }),
-        )
-        .optional()
-        .default([])
-        .describe(tTool(runtime, "tools.nativeScript.fieldInputs")),
-      arguments: z
-        .record(z.string(), z.unknown())
-        .optional()
-        .default({})
-        .describe(tTool(runtime, "tools.nativeScript.fieldArguments")),
-      riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel").default(
-        SECURITY_RISK_LEVEL.MEDIUM,
-      ),
-    }),
-    func: async (
-      { script_body, inputs, arguments: scriptArguments, riskLevel },
-      _runManager,
-      toolConfig = {},
-    ) => {
+  const tool = structuredTool(
+    async ({ script_body, inputs, arguments: scriptArguments, riskLevel }, toolConfig = {}) => {
       const identity = toolConfig?.configurable?.transferIdentity;
       if (!isObjectLike(identity)) throw new Error("native_script_identity_required");
       const body = validateScriptBody(script_body);
@@ -589,6 +561,32 @@ export function createNativeScriptTool({ agentContext }) {
       if (cleanup) resultPayload.cleanup = cleanup;
       return toToolJsonResult(TOOL_NAME.EXECUTE_NATIVE_SCRIPT, resultPayload);
     },
-  });
+    {
+      name: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.nativeInput },
+      description: tTool(runtime, "tools.nativeScript.description"),
+      schema: z.object({
+        script_body: z.string().describe(tTool(runtime, "tools.nativeScript.fieldScriptBody")),
+        inputs: z
+          .array(
+            createFileInputSchema({
+              filePathDescription: tTool(runtime, "tools.nativeScript.fieldFilePath"),
+              attachmentRefDescription: tTool(runtime, "tools.nativeScript.fieldAttachmentRef"),
+            }),
+          )
+          .optional()
+          .default([])
+          .describe(tTool(runtime, "tools.nativeScript.fieldInputs")),
+        arguments: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .default({})
+          .describe(tTool(runtime, "tools.nativeScript.fieldArguments")),
+        riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel").default(
+          SECURITY_RISK_LEVEL.MEDIUM,
+        ),
+      }),
+    },
+  );
   return [tool];
 }

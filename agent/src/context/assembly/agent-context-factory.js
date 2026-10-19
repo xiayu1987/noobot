@@ -9,7 +9,7 @@ import { ContextBuilder } from "../index.js";
 import { emitEvent } from "../../events/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { getRuntimeFromAgentContext } from "../agent-context-accessor.js";
+import { getAgentContextEnvelope, getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
 import { text } from "@noobot/shared/value";
@@ -176,9 +176,9 @@ export class AgentContextFactory {
     const scopedAgentContext = {
       ...agentContext,
       bindings: {
-        ...(agentContext?.bindings || {}),
+        ...agentContext.bindings,
         tools: resolveToolBindings({
-          sourceTools: agentContext?.bindings?.tools,
+          sourceTools: agentContext.bindings.tools,
           runConfig,
         }),
       },
@@ -195,13 +195,14 @@ export class AgentContextFactory {
         durationMs: completedAtMs - buildStartedAtMs,
         status: "success",
         messageCount:
-          scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
+          getAgentContextEnvelope(scopedAgentContext).modelContext.messageBlocks.history.length,
         agentContext: scopedAgentContext,
       },
     });
     emitEvent(eventListener, "context_ready", {
       sessionId,
-      messageCount: scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
+      messageCount:
+        getAgentContextEnvelope(scopedAgentContext).modelContext.messageBlocks.history.length,
     });
     return scopedAgentContext;
   }

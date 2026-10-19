@@ -294,8 +294,6 @@ export class SessionExecutionRunner {
         botHookRuntime,
         botHookBase,
         agentContextSummary,
-        dialogProcessId,
-        resolvedTurnScopeId,
         syncLifecycleRuntimeState,
       });
       await commitAuthoritativeFinalResult({

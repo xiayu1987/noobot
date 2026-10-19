@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, PATH_CAPABILITIES, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { assertValidFileNameFromPath, projectToolPathRef } from "../core/check-tool-input.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -29,23 +29,8 @@ import {
 } from "./file-tool-shared.js";
 
 export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
-  return new DynamicStructuredTool({
-    name: TOOL_NAME.WRITE_FILE,
-    metadata: { pathContract: TOOL_PATH_CONTRACTS.fileWrite },
-    description: buildFileToolDescription(runtime, "tools.file.writeDescription"),
-    schema: z.object({
-      filePath: createFileSourceSchema({
-        filePathDescription: tTool(runtime, "tools.file.writeFilePathField"),
-      }),
-      content: z.string().describe(tTool(runtime, "tools.file.writeContentField")),
-      overwrite: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(tTool(runtime, "tools.file.writeOverwriteField")),
-      riskLevel: createRiskLevelSchema(runtime, "tools.file.writeRiskLevelField"),
-    }),
-    func: async ({ filePath, content, overwrite = true, riskLevel }) => {
+  return structuredTool(
+    async ({ filePath, content, overwrite = true, riskLevel }) => {
       if (typeof filePath === "string")
         assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
       const resolvedInput = await resolveFileInput({
@@ -112,5 +97,22 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
         resources: [resource],
       });
     },
-  });
+    {
+      name: TOOL_NAME.WRITE_FILE,
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.fileWrite },
+      description: buildFileToolDescription(runtime, "tools.file.writeDescription"),
+      schema: z.object({
+        filePath: createFileSourceSchema({
+          filePathDescription: tTool(runtime, "tools.file.writeFilePathField"),
+        }),
+        content: z.string().describe(tTool(runtime, "tools.file.writeContentField")),
+        overwrite: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe(tTool(runtime, "tools.file.writeOverwriteField")),
+        riskLevel: createRiskLevelSchema(runtime, "tools.file.writeRiskLevelField"),
+      }),
+    },
+  );
 }

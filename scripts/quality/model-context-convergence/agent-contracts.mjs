@@ -79,8 +79,8 @@ export const AGENT_CONTRACTS = Object.freeze([
         /function\s+normalizeContextServicePayload[\s\S]*?currentDialogProcessId[\s\S]*?currentTurnScopeId/,
       ],
       [
-        "session facade passes normalized payload to getContextRecords",
-        /async\s+getContextRecords\(payload\s*=\s*\{\}\)[\s\S]*?sessionContextService\.getContextRecords\(\s*normalizeContextServicePayload\(payload\)/,
+        "session facade passes normalized payload to getContextProjection",
+        /async\s+getContextProjection\(payload\s*=\s*\{\}\)[\s\S]*?sessionContextService\.getContextProjection\(\s*normalizeContextServicePayload\(payload\)/,
       ],
     ],
     forbidden: [["direct session summarized-message mutation port", SUMMARIZED_PORT]],

@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
+import { createAgentContextEnvelope } from "@noobot/context-protocol";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
@@ -27,26 +28,40 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
   );
 
   const agentContext = {
-    environment: {
-      os: { platform: "linux" },
-      workspace: { basePath, cwd: "/project" },
-      identity: { userId: "u1" },
-    },
-    execution: {
-      dialogProcessId: "dp1",
-      flags: { allowUserInteraction: true },
-      models: { runtimeModel: "m1" },
-    },
-    session: {
-      current: { id: "s1", attachments: [], connectors: {} },
-      parent: { id: "", caller: "user" },
-    },
+    context: createAgentContextEnvelope({
+      identity: {
+        userId: "u1",
+        sessionId: "s1",
+        rootSessionId: "s1",
+        parentSessionId: "",
+        dialogProcessId: "dp1",
+        turnScopeId: "t1",
+        runId: "r1",
+        messageId: "m1",
+      },
+      environment: {
+        os: { platform: "linux", arch: "x64", timezone: "UTC", nodeVersion: "v0" },
+        workspace: { cwd: "/project", basePath, workspaceDirectories: [], globalDefaults: {} },
+        permissions: { isSuperUser: false },
+      },
+      execution: {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        caller: "user",
+        flags: { allowUserInteraction: true, safeConfirm: false },
+        model: { runtimeModel: "m1", allEnabledProviders: {} },
+        selectedConnectorIds: [],
+      },
+      messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
+    }),
     bindings: {
       runtime: {
         basePath,
         userId: "u1",
+        userMessageAttachments: [],
         systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
       },
+      tools: [],
+      extensions: {},
     },
   };
 

@@ -19,14 +19,17 @@ test("injectSystemMessages skips already injected prompt IDs and injects missing
   const ctx = createTestHookContext(
     {},
     {
-      messages: [
-        {
-          role: "system",
-          content: "policy",
-          [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-policy",
-        },
-        { role: "user", content: "hello" },
-      ],
+      messageBlocks: {
+        system: [
+          {
+            role: "system",
+            content: "policy",
+            [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-policy",
+          },
+        ],
+        history: [],
+        incremental: [{ role: "user", content: "hello" }],
+      },
     },
   );
   const messages = ctx.modelContext.messages;
@@ -61,19 +64,22 @@ test("replace mode refreshes cache after removing old harness prompts", () => {
   const ctx = createTestHookContext(
     {},
     {
-      messages: [
-        {
-          role: "system",
-          content: "policy",
-          [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-policy",
-        },
-        {
-          role: "system",
-          content: "final",
-          [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-final-response",
-        },
-        { role: "user", content: "hi" },
-      ],
+      messageBlocks: {
+        system: [
+          {
+            role: "system",
+            content: "policy",
+            [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-policy",
+          },
+          {
+            role: "system",
+            content: "final",
+            [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-final-response",
+          },
+        ],
+        history: [],
+        incremental: [{ role: "user", content: "hi" }],
+      },
     },
   );
   const messages = ctx.modelContext.messages;
@@ -92,10 +98,11 @@ test("after_system mode preserves leading system messages", () => {
   const ctx = createTestHookContext(
     {},
     {
-      messages: [
-        { role: "system", content: "system context" },
-        { role: "user", content: "user task" },
-      ],
+      messageBlocks: {
+        system: [{ role: "system", content: "system context" }],
+        history: [],
+        incremental: [{ role: "user", content: "user task" }],
+      },
     },
   );
   const messages = ctx.modelContext.messages;
@@ -114,11 +121,9 @@ test("after_system mode preserves leading system messages", () => {
 
 test("injectSystemMessages writes back through message store", () => {
   const userMessage = { role: "user", content: "user task" };
-  const messages = [{ role: "system", content: "system context" }, userMessage];
   const ctx = createTestHookContext(
     {},
     {
-      messages,
       messageBlocks: {
         system: [{ role: "system", content: "system context" }],
         history: [],
@@ -143,7 +148,6 @@ test("injectSystemMessages syncs system block arrays through message store", () 
   const ctx = createTestHookContext(
     {},
     {
-      messages: [{ role: "user", content: "user task" }],
       messageBlocks: {
         system: [],
         history: [],
@@ -184,7 +188,6 @@ test("injectSystemMessages keeps tool results that merely mention a prompt marke
   const ctx = createTestHookContext(
     {},
     {
-      messages: [...incremental],
       messageBlocks: { system: [], history: [], incremental: [...incremental] },
     },
   );

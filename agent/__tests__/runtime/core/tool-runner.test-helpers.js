@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import os from "node:os";
 import {
   executeToolCall as executeToolCallWithoutTurn,
   executeToolCallInTurn,
@@ -12,57 +11,28 @@ import { bindAssistantMessageEventStream } from "../../../src/events/message-eve
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import {
+  applyTestIdentityToRuntime,
+  createTestTurnIdentity,
+} from "../../helpers/test-turn-identity.js";
 
-export function executeToolCall(options = {}) {
-  const runtime = options.runtime || createTestRuntimeContext();
-  runtime.globalConfig =
-    runtime.globalConfig && typeof runtime.globalConfig === "object" ? runtime.globalConfig : {};
-  runtime.globalConfig.workspaceRoot = String(
-    runtime.globalConfig.workspaceRoot || runtime.basePath || os.tmpdir(),
-  );
-  const systemRuntime =
-    runtime.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : (runtime.systemRuntime = {});
-  const identity = String(options.identity || options.call?.id || "test-tool-call");
-  systemRuntime.userId = String(systemRuntime.userId || "test-user");
-  systemRuntime.sessionId = String(systemRuntime.sessionId || "test-session");
-  systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || "test-dialog");
-  const turnScopeId = String(systemRuntime.turnScopeId || "test-turn");
-  const messageId = String(options.messageId || `message-${identity}`);
-  systemRuntime.turnScopeId = turnScopeId;
-  runtime.runConfig = {
-    turnScopeId,
-    executionId: `agent:${turnScopeId}`,
-    messageId,
-    ...runtime.runConfig,
-  };
-  systemRuntime.messageEventStream =
-    systemRuntime.messageEventStream && typeof systemRuntime.messageEventStream === "object"
-      ? systemRuntime.messageEventStream
-      : { sequence: 0 };
-  if (!systemRuntime.messageEventStream.activeMessageId) {
-    bindAssistantMessageEventStream(runtime, {
-      messageId: runtime.runConfig.messageId,
-      presentationMessageId: String(options.presentationMessageId || `presentation-${identity}`),
-    });
-  }
+export function executeToolCall({
+  call,
+  runtime = createTestRuntimeContext(),
+  identity = createTestTurnIdentity(call.id),
+  presentationMessageId = `presentation-${identity.messageId}`,
+  ...options
+}) {
+  applyTestIdentityToRuntime(runtime, identity);
+  bindAssistantMessageEventStream(runtime, {
+    messageId: identity.messageId,
+    presentationMessageId,
+  });
   if (runtime.eventListener && !runtime.sessionManager) {
     runtime.sessionManager = createCanonicalMessageEventSessionManager();
   }
-  const agentContext = createTestAgentExecutionScope(runtime, {
-    identity: {
-      userId: systemRuntime.userId,
-      sessionId: systemRuntime.sessionId,
-      rootSessionId: systemRuntime.sessionId,
-      parentSessionId: String(systemRuntime.parentSessionId || ""),
-      dialogProcessId: systemRuntime.dialogProcessId,
-      turnScopeId: runtime.runConfig.turnScopeId,
-      runId: runtime.runConfig.executionId,
-      messageId: runtime.runConfig.messageId,
-    },
-  });
-  const execution = { abortSignal: runtime.abortSignal, ...options, runtime, agentContext };
+  const agentContext = createTestAgentExecutionScope(runtime, { identity });
+  const execution = { abortSignal: runtime.abortSignal, ...options, call, runtime, agentContext };
   return runtime.eventListener
     ? executeToolCallInTurn(execution)
     : executeToolCallWithoutTurn(execution);

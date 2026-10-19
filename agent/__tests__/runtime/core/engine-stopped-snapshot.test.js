@@ -69,6 +69,9 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       parentSessionId: "parent-session-engine-stop",
       dialogProcessId: "dialog-engine-stop",
       turnScopeId: "turn-engine-stop",
+      rootSessionId: "parent-session-engine-stop",
+      runId: "r-1",
+      messageId: "m-1",
     },
   });
 

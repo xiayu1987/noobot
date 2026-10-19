@@ -6,6 +6,7 @@
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { repairOrphanedTerminalTurns } from "@noobot/authoritative-state/application";
+import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { text } from "@noobot/shared/value";
 
 export async function getSessionTurns({
@@ -35,16 +36,12 @@ export async function getSessionContextSource({
     parentSessionId,
     persistenceContext,
   );
-  const messages = session ? session.messages : [];
+  if (!session) return { messages: [], turnLifecycle: normalizeTurnLifecycleEntity({}) };
   const repair = repairOrphanedTerminalTurns({
-    messages,
-    turnLifecycle: session?.turnLifecycle || {},
+    messages: session.messages,
+    turnLifecycle: session.turnLifecycle,
   });
-  return {
-    messages,
-    turnLifecycle: repair.turnLifecycle,
-    repairedOrphanedTurnScopeIds: repair.orphanedTurnScopeIds,
-  };
+  return { messages: session.messages, turnLifecycle: repair.turnLifecycle };
 }
 
 export async function getTurnSummaryCheckpointState({

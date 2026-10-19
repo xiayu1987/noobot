@@ -18,15 +18,15 @@ test("recoverable tool errors retain the complete execution identity", async () 
         throw error;
       },
     },
-    runtime: {
-      abortSignal: new AbortController().signal,
-      systemRuntime: {
-        userId: "user-1",
-        sessionId: "session-1",
-        parentSessionId: "parent-1",
-        dialogProcessId: "dialog-1",
-        turnScopeId: "turn-1",
-      },
+    identity: {
+      userId: "user-1",
+      sessionId: "session-1",
+      rootSessionId: "parent-1",
+      parentSessionId: "parent-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      runId: "agent:turn-1",
+      messageId: "message-call_identity",
     },
     errorLogger: {
       async log(entry) {

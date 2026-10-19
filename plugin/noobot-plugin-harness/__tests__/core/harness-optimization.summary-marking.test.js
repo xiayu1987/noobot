@@ -441,7 +441,7 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
       },
     },
     {
-      messages,
+      messageBlocks: { system: [], history: [], incremental: messages },
       activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
   );
@@ -524,7 +524,7 @@ test("guidance summary checkpoint retains classified Harness control-tool eviden
       },
     },
     {
-      messages,
+      messageBlocks: { system: [], history: [], incremental: messages },
       activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
   );

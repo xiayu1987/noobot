@@ -13,6 +13,7 @@ import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noo
 import {
   createTestHookContext,
   createTestResolveModelMessages,
+  invokeTestHookHandler,
 } from "../helpers/public-runtime-fixtures.js";
 
 test("dynamic harness main-flow system injections stay in system block", () => {
@@ -92,7 +93,6 @@ test("dynamic harness system injections compose before history", async () => {
   const ctx = createTestHookContext(
     {},
     {
-      messages: [system, history, currentUser],
       messageBlocks: {
         system: [system],
         history: [history],
@@ -101,7 +101,12 @@ test("dynamic harness system injections compose before history", async () => {
     },
   );
 
-  await handlers.get("agent.before_llm_call")(ctx);
+  await invokeTestHookHandler(
+    handlers.get("agent.before_llm_call"),
+    "agent.before_llm_call",
+    ctx,
+    new AbortController().signal,
+  );
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => `${item.role}:${item.content}`),
@@ -140,7 +145,6 @@ test("planning preserves typed base system context while adding harness prompts"
       },
     },
     {
-      messages: [baseSystem, currentUser],
       messageBlocks: {
         system: [baseSystem],
         history: [],

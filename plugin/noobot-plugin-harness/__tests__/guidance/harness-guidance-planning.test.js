@@ -52,7 +52,6 @@ test("harness summary relay without captured plan keeps final acceptance on defa
   );
 
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-summary-opdir-"));
-  const messages = [{ role: "user", content: "继续" }];
   const agentContext = {
     bindings: {
       runtime: {
@@ -80,7 +79,12 @@ test("harness summary relay without captured plan keeps final acceptance on defa
     },
   };
 
-  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
+  const messagesCtx = {
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    agentContext,
+  };
+  await hookManager.emit("agent.before_llm_call", messagesCtx);
+  const messages = messagesCtx.modelContext.messageBlocks.incremental;
 
   assert.deepEqual(
     invocations.map((item) => item.purpose),
@@ -169,7 +173,10 @@ test("summary separate_model invocation uses flat structured_v1 messages", async
     },
   };
 
-  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
+  await hookManager.emit("agent.before_llm_call", {
+    messageBlocks: { system: [], history: [], incremental: messages },
+    agentContext,
+  });
 
   assert.deepEqual(
     invocations.map((item) => item.purpose),
@@ -237,7 +244,10 @@ test("planning_refinement is scheduled independently after revision main-plan ch
     },
   };
 
-  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
+  await hookManager.emit("agent.before_llm_call", {
+    messageBlocks: { system: [], history: [], incremental: messages },
+    agentContext,
+  });
 
   assert.deepEqual(
     invocations.map((item = {}) => item.purpose),
@@ -284,7 +294,10 @@ test("harness summary without completion marker still triggers planning revision
     },
   };
 
-  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
+  await hookManager.emit("agent.before_llm_call", {
+    messageBlocks: { system: [], history: [], incremental: messages },
+    agentContext,
+  });
 
   assert.deepEqual(
     invocations.map((item) => item.purpose),
@@ -330,7 +343,7 @@ test("guidance handler inject mode does not schedule planning revision without c
   };
 
   const firstCtx = {
-    messages: [{ role: "user", content: "继续" }],
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: firstCtx, meta });
@@ -342,7 +355,7 @@ test("guidance handler inject mode does not schedule planning revision without c
   );
 
   const summaryCtx = {
-    messages: firstCtx.modelContext.messages,
+    messageBlocks: firstCtx.modelContext.messageBlocks,
     modelResponse: { text: "已完成：完成初始检查\n小结完成" },
     calls: [],
     agentContext,
@@ -358,7 +371,11 @@ test("guidance handler inject mode does not schedule planning revision without c
   );
 
   const secondCtx = {
-    messages: [{ role: "user", content: "继续执行" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "继续执行" }],
+    },
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: secondCtx, meta });
@@ -370,7 +387,7 @@ test("guidance handler inject mode does not schedule planning revision without c
   );
 
   const revisionCtx = {
-    messages: secondCtx.modelContext.messages,
+    messageBlocks: secondCtx.modelContext.messageBlocks,
     modelResponse: { text: "已完成：完成初始检查" },
     calls: [],
     agentContext,

@@ -100,10 +100,7 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
         policies,
         metadata: {
           context: {
-            summaryCheckpointRevision: Math.max(
-              0,
-              Number(modelState.runtime?.summaryCheckpointRevision) || 0,
-            ),
+            summaryCheckpointRevision: modelState.runtime.summaryCheckpointRevision,
           },
         },
         invocation: buildInvocation(modelState, { invocation }),

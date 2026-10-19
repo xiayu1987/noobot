@@ -18,7 +18,7 @@ function createContextSessionManager({ getContextProjection = null } = {}) {
     },
     async getContextProjection(payload = {}) {
       if (getContextProjection) return getContextProjection(payload);
-      return { messages: [], sourceRevision: "" };
+      return { scope: {}, messages: [] };
     },
   };
 }
@@ -180,13 +180,7 @@ test("buildNewSessionContext emits the default agent context debug structure", a
   assert.equal(event.data.turnScopeId, "turn-1");
   assert.equal(event.data.envelope.kind, "noobot.agent-context");
   assert.equal(event.data.envelope.protocolVersion, 1);
-  assert.equal(event.data.bindings.runtimeBound, true);
   assert.equal(Array.isArray(event.data.bindings.toolNames), true);
-  assert.deepEqual(event.data.separation, {
-    envelopeJsonSerializable: true,
-    runtimeOutsideEnvelope: true,
-    toolsOutsideEnvelope: true,
-  });
   assert.equal(JSON.stringify(event.data).includes("abortSignal"), false);
 });
 
@@ -473,7 +467,6 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
                 turnScopeId: "client-turn:old",
               },
             ],
-            sourceRevision: "ctxsrc:test",
           };
         },
       },

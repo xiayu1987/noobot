@@ -25,10 +25,14 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   const ctx = {
     userId: "admin",
     sessionId: "s1",
-    messages: [
-      { role: "user", content: "继续任务" },
-      { role: "assistant", content: "收到" },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "user", content: "继续任务" },
+        { role: "assistant", content: "收到" },
+      ],
+    },
     modelResponse: { text: fullSummary },
     calls: [],
     agentContext: {
@@ -89,10 +93,14 @@ test("inject-mode summary persists and injects the same complete Harness summary
   const ctx = {
     userId: "admin",
     sessionId: "s1",
-    messages: [
-      { role: "user", content: "继续任务" },
-      { role: "assistant", content: "收到" },
-    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "user", content: "继续任务" },
+        { role: "assistant", content: "收到" },
+      ],
+    },
     modelResponse: {
       text: [
         "[SUMMARY_OVERVIEW]",

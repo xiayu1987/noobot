@@ -18,14 +18,15 @@ test("harness plugin injects prompt into before_llm_call messages", async () => 
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
   registerHarnessCore({ hookManager }, { planningGuidanceMode: "inject", basePath, trace: false });
-  const messages = [{ role: "user", content: "hello" }];
 
-  await hookManager.emit("agent.before_llm_call", {
+  const messagesCtx = {
     userId: "u2",
     sessionId: "s2",
     dialogProcessId: "dp2",
-    messages,
-  });
+    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
+  };
+  await hookManager.emit("agent.before_llm_call", messagesCtx);
+  const messages = messagesCtx.modelContext.messageBlocks.system;
 
   assert.equal(messages[0].role, "system");
   assert.equal(messages[0]?.[HARNESS_PROMPT_INJECTION_ID_FIELD], "noobot-harness-policy");

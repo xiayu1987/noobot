@@ -11,10 +11,6 @@ export {
   isAbsolutePathForPlatform,
   normalizePathForPlatform,
 } from "./path-syntax.js";
-import {
-  isCaseInsensitivePlatform,
-  normalizePlatform,
-} from "@noobot/platform-compatibility/platform";
 import { text } from "@noobot/shared/value";
 
 export { PLATFORM as PATH_PLATFORMS } from "@noobot/platform-compatibility/platform";
@@ -46,14 +42,6 @@ export const TOOL_PATH_VIEWS = Object.freeze({
   VIRTUAL_RELATIVE: "virtual-relative",
   EMPTY: "",
 });
-export function resolvePathPlatformFromContext(agentContext = {}) {
-  return normalizePlatform(agentContext?.context?.environment?.os?.platform || "");
-}
-
-export function isCaseInsensitivePathPlatform(platform = "") {
-  return isCaseInsensitivePlatform(platform);
-}
-
 export function isAbsolutePathAnyPlatform(value = "", platform = "") {
   return nodePath.isAbsolute(String(value || "")) || isAbsolutePathForPlatform(value, platform);
 }

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context/envelope";
+import { createAgentContextEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { buildTools } from "../../tools/index.js";
 import { createRuntimeContext } from "../../runtime/runtime-context-factory.js";
@@ -13,29 +13,28 @@ import { createAgentContextEnvelopeInput } from "../agent-context-envelope-input
 import { createAgentExecutionScope } from "../agent-execution-scope.js";
 
 export async function buildAgentExecutionContext({
-  identity = {},
-  caller = "user",
-  globalConfig = {},
-  userConfig = {},
-  eventListener = null,
-  sessionManager = null,
-  attachmentService = null,
-  botManager = null,
-  userInteractionBridge = null,
+  identity,
+  globalConfig,
+  userConfig,
+  eventListener,
+  sessionManager,
+  attachmentService,
+  botManager,
+  userInteractionBridge,
   abortSignal,
-  parentAsyncResultContainer = null,
-  runConfig = {},
-  runtimeBasePath = "",
-  runtimeModel = "",
-  allEnabledProviders = {},
-  systemRuntime = {},
-  staticAgentContext = {},
-  systemMessages = [],
-  conversationMessages = [],
-  incrementalMessages = [],
-  attachments = [],
-  contextBuild = {},
-} = {}) {
+  parentAsyncResultContainer,
+  runConfig,
+  runtimeBasePath,
+  runtimeModel,
+  allEnabledProviders,
+  systemRuntime,
+  staticInfo,
+  workspaceDirectories,
+  systemMessages,
+  conversationMessages,
+  incrementalMessages,
+  attachments,
+}) {
   const runtime = createRuntimeContext({
     basePath: runtimeBasePath,
     globalConfig,
@@ -60,20 +59,15 @@ export async function buildAgentExecutionContext({
   });
   await initializeRuntimeEnvironment(runtime);
 
-  const envelope = createAgentContextBuildEnvelope(
+  const envelope = createAgentContextEnvelope(
     createAgentContextEnvelopeInput({
-      userId: identity.userId,
-      sessionId: identity.sessionId,
-      rootSessionId: identity.rootSessionId,
-      parentSessionId: identity.parentSessionId,
-      dialogProcessId: identity.dialogProcessId,
+      identity,
       runConfig,
-      caller,
-      staticAgentContext,
+      staticInfo,
+      workspaceDirectories,
       systemRuntime,
       runtimeModel,
       allEnabledProviders,
-      contextBuild,
       systemMessages,
       conversationMessages,
       incrementalMessages,
@@ -81,14 +75,15 @@ export async function buildAgentExecutionContext({
   );
   const executionScope = createAgentExecutionScope({
     context: envelope,
-    bindings: { runtime, tools: [] },
+    bindings: { runtime, tools: [], extensions: {} },
   });
   const tools = await buildTools({
     sessionId: identity.sessionId,
     parentSessionId: normalizeParentSessionId(identity.parentSessionId),
     agentContext: executionScope,
   });
-  executionScope.bindings.tools = Array.isArray(tools) ? tools : [];
+  if (!Array.isArray(tools)) throw new TypeError("buildTools must return an array of tools");
+  executionScope.bindings.tools = tools;
   emitAgentContextDebug(runtime.eventListener, executionScope);
   return executionScope;
 }

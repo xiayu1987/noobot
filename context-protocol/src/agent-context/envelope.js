@@ -9,72 +9,15 @@ import {
   AGENT_CONTEXT_PROTOCOL_VERSION,
   MODEL_CONTEXT_PROTOCOL_VERSION,
 } from "./schema.js";
-import { normalizeAgentContextIdentity } from "./identity.js";
 import { assertValidAgentContextEnvelope } from "./validation.js";
-import { createContextBuildReceipt } from "../assembly/build-receipt.js";
-import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
-import { isPlainObject } from "@noobot/shared/value";
 
-function plainObject(value, fallback = {}) {
-  return isPlainObject(value) ? value : fallback;
-}
-
-export function createAgentContextEnvelope({
-  identity = {},
-  environment = {},
-  execution = {},
-  modelContext = null,
-} = {}) {
-  const envelope = {
+export function createAgentContextEnvelope({ identity, environment, execution, messageBlocks }) {
+  return assertValidAgentContextEnvelope({
     kind: AGENT_CONTEXT_KIND,
     protocolVersion: AGENT_CONTEXT_PROTOCOL_VERSION,
-    identity: normalizeAgentContextIdentity(identity),
-    environment: plainObject(environment),
-    execution: plainObject(execution),
-    modelContext,
-  };
-  return assertValidAgentContextEnvelope(envelope);
-}
-
-export function createAgentContextBuildEnvelope({
-  identity = {},
-  environment = {},
-  execution = {},
-  messageBlocks = {},
-  contextBuild = {},
-  checkpointRevision = 0,
-  userMetaBackwrites = [],
-} = {}) {
-  const normalizedIdentity = normalizeAgentContextIdentity(identity);
-  const blocks = {
-    system: Array.isArray(messageBlocks.system) ? messageBlocks.system : [],
-    history: Array.isArray(messageBlocks.history) ? messageBlocks.history : [],
-    incremental: Array.isArray(messageBlocks.incremental) ? messageBlocks.incremental : [],
-  };
-  return createAgentContextEnvelope({
-    identity: normalizedIdentity,
+    identity,
     environment,
-    execution: {
-      ...plainObject(execution),
-      contextBuild: createContextBuildReceipt({
-        ...plainObject(contextBuild),
-        scope: {
-          sessionId: normalizedIdentity.sessionId,
-          dialogProcessId: normalizedIdentity.dialogProcessId,
-          turnScopeId: normalizedIdentity.turnScopeId,
-        },
-        messageCount: blocks.history.length,
-      }),
-    },
-    modelContext: {
-      protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
-      checkpointRevision,
-      userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
-      activeTurnIdentity: {
-        dialogProcessId: normalizedIdentity.dialogProcessId,
-        turnScopeId: normalizedIdentity.turnScopeId,
-      },
-      messageBlocks: blocks,
-    },
+    execution,
+    modelContext: { protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION, messageBlocks },
   });
 }

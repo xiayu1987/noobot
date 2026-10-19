@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, PATH_CAPABILITIES } from "@noobot/path-resolver";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
@@ -56,13 +56,8 @@ export function createSkillTool({ agentContext }) {
     }),
   });
 
-  const listSkillTool = new DynamicStructuredTool({
-    name: TOOL_NAME.LIST_SKILLS,
-    description: tTool(runtime, "tools.skill.listDescription"),
-    schema: z.object({
-      parentSkill: z.string().optional().describe(tTool(runtime, "tools.skill.fieldParentSkill")),
-    }),
-    func: async ({ parentSkill }) => {
+  const listSkillTool = structuredTool(
+    async ({ parentSkill }) => {
       let root;
       try {
         root = await resolveSkillPath({
@@ -124,7 +119,14 @@ export function createSkillTool({ agentContext }) {
 
       return toToolJsonResult(TOOL_NAME.LIST_SKILLS, { ok: true, items, resources }, true);
     },
-  });
+    {
+      name: TOOL_NAME.LIST_SKILLS,
+      description: tTool(runtime, "tools.skill.listDescription"),
+      schema: z.object({
+        parentSkill: z.string().optional().describe(tTool(runtime, "tools.skill.fieldParentSkill")),
+      }),
+    },
+  );
 
   return [listSkillTool];
 }

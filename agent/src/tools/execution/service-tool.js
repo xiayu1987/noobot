@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import {
@@ -63,27 +63,8 @@ function validateCustomParam(customParam, runtime) {
 
 export function createServiceTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const callServiceTool = new DynamicStructuredTool({
-    name: TOOL_NAME.CALL_SERVICE,
-    description: tTool(runtime, "tools.service.description"),
-    schema: z.object({
-      serviceName: z.string().describe(tTool(runtime, "tools.service.fieldServiceName")),
-      endpointName: z.string().describe(tTool(runtime, "tools.service.fieldEndpointName")),
-      custom_param: z
-        .string()
-        .optional()
-        .describe(tTool(runtime, "tools.service.fieldCustomParam")),
-      queryString: z
-        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
-        .optional()
-        .describe(tTool(runtime, "tools.service.fieldQueryString")),
-      body: z.unknown().optional().describe(tTool(runtime, "tools.service.fieldBody")),
-    }),
-    func: async (
-      { serviceName, endpointName, custom_param, queryString = {}, body },
-      _runManager,
-      toolConfig,
-    ) => {
+  const callServiceTool = structuredTool(
+    async ({ serviceName, endpointName, custom_param, queryString = {}, body }, toolConfig) => {
       const globalConfig = runtime?.globalConfig || {};
       const userId = resolveRuntimeUserId(runtime);
       const inputErr = validateInput({
@@ -173,7 +154,24 @@ export function createServiceTool({ agentContext }) {
         true,
       );
     },
-  });
+    {
+      name: TOOL_NAME.CALL_SERVICE,
+      description: tTool(runtime, "tools.service.description"),
+      schema: z.object({
+        serviceName: z.string().describe(tTool(runtime, "tools.service.fieldServiceName")),
+        endpointName: z.string().describe(tTool(runtime, "tools.service.fieldEndpointName")),
+        custom_param: z
+          .string()
+          .optional()
+          .describe(tTool(runtime, "tools.service.fieldCustomParam")),
+        queryString: z
+          .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+          .optional()
+          .describe(tTool(runtime, "tools.service.fieldQueryString")),
+        body: z.unknown().optional().describe(tTool(runtime, "tools.service.fieldBody")),
+      }),
+    },
+  );
 
   return [callServiceTool];
 }

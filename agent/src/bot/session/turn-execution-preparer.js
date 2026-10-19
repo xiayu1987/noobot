@@ -122,20 +122,13 @@ function prepareWithoutStoppedSnapshot(engine, { payload }) {
   });
 }
 
-function scopeResumedAgentContext(agentContext, userMetaBackwrites, runConfig) {
+function scopeResumedAgentContext(agentContext, runConfig) {
   return {
     ...agentContext,
-    context: {
-      ...(agentContext?.context || {}),
-      modelContext: {
-        ...(agentContext?.context?.modelContext || {}),
-        userMetaBackwrites,
-      },
-    },
     bindings: {
-      ...(agentContext?.bindings || {}),
+      ...agentContext.bindings,
       tools: resolveToolBindings({
-        sourceTools: agentContext?.bindings?.tools,
+        sourceTools: agentContext.bindings.tools,
         runConfig,
       }),
     },
@@ -183,7 +176,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, { payloa
       incrementalMessages: continuedIncrementalMessages,
     },
   );
-  const scopedAgentContext = scopeResumedAgentContext(agentContext, userMetaBackwrites, runConfig);
+  const scopedAgentContext = scopeResumedAgentContext(agentContext, runConfig);
   markRuntimeResumedFromSnapshot(getRuntimeFromAgentContext(scopedAgentContext), {
     identity,
     userMetaBackwrites,

@@ -6,12 +6,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentContextBuildEnvelope } from "@noobot/context-protocol";
+import { createAgentContextEnvelope } from "@noobot/context-protocol";
 import {
   NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS,
   NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
 } from "@noobot/execution-isolation-protocol/native-script";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
+import {
+  TEST_AGENT_EXECUTION,
+  createTestAgentEnvironment,
+} from "../helpers/agent-execution-scope.js";
 import { PATH_REF_VIEWS, isHostFilesystemSentinel } from "@noobot/path-resolver";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
 import { TOOL_NAME } from "../../src/tools/constants/index.js";
@@ -48,8 +52,11 @@ function isAbsoluteAnyPlatform(value) {
 const IDENTITY = Object.freeze({
   userId: "tester",
   sessionId: "sess-1",
+  rootSessionId: "sess-1",
+  parentSessionId: "",
   dialogProcessId: "dialog-1",
   turnScopeId: "client-turn:1",
+  runId: "run-1",
   messageId: "msg-1",
 });
 
@@ -63,9 +70,15 @@ function createScope({
   runConfig = {},
 } = {}) {
   return createAgentExecutionScope({
-    context: createAgentContextBuildEnvelope({ identity }),
+    context: createAgentContextEnvelope({
+      identity,
+      environment: createTestAgentEnvironment({ basePath: "/tmp/help-scope" }),
+      execution: TEST_AGENT_EXECUTION,
+      messageBlocks: { system: [], history: [], incremental: [] },
+    }),
     bindings: {
       tools: toolNames.map((name) => ({ name, func: async () => "" })),
+      extensions: {},
       runtime: {
         basePath: "/tmp/help-scope",
         globalConfig,
@@ -83,27 +96,6 @@ function createScope({
       },
     },
   });
-}
-
-function createStubScope({ attachmentService = null, identity = IDENTITY } = {}) {
-  return {
-    context: { identity },
-    bindings: {
-      tools: FIXTURE_TOOL_NAMES.map((name) => ({ name, func: async () => "" })),
-      extensions: {},
-      runtime: {
-        basePath: "/tmp/help-scope",
-        globalConfig: {},
-        ...(attachmentService ? { attachmentService } : {}),
-        systemRuntime: {
-          ...identity,
-          caller: "user",
-          now: "2026-01-01T00:00:00.000Z",
-          isSuperUser: true,
-        },
-      },
-    },
-  };
 }
 
 test("empty command resolves to the command index instead of failing", () => {
@@ -508,50 +500,15 @@ test("models section excludes providers disabled by enabled false", async () => 
   assert.equal(typeof parsed.current, "object");
 });
 
-test("attachs reports each missing precondition with its own reason", async () => {
-  const attachmentService = {
-    async readAttachmentMetas() {
-      return [];
-    },
-  };
-  async function attachsReason(scopeOptions) {
-    const [tool] = createHelpTool({ agentContext: createScope(scopeOptions) });
-    const parsed = JSON.parse(await tool.func({ command: `--${HELP_COMMAND.ATTACHS}` }));
-    assert.equal(parsed.ok, false);
-    assert.equal(parsed.command, HELP_COMMAND.ATTACHS);
-    assert.ok(parsed.reason.length > 0);
-    return parsed.reason;
-  }
-  async function stubAttachsReason(scopeOptions) {
-    const [tool] = createHelpTool({ agentContext: createStubScope(scopeOptions) });
-    const parsed = JSON.parse(await tool.func({ command: `--${HELP_COMMAND.ATTACHS}` }));
-    assert.equal(parsed.ok, false);
-    assert.equal(parsed.command, HELP_COMMAND.ATTACHS);
-    assert.ok(parsed.reason.length > 0);
-    return parsed.reason;
-  }
-
-  const serviceMissing = await attachsReason({ attachmentService: null });
-  const userIdMissing = await attachsReason({
-    attachmentService,
-    identity: { ...IDENTITY, userId: "" },
-  });
-  const sessionIdMissing = await stubAttachsReason({
-    attachmentService,
-    identity: { ...IDENTITY, sessionId: "" },
-  });
-
-  const reasons = [serviceMissing, userIdMissing, sessionIdMissing];
+test("attachs reports a translated reason when the attachment service is missing", async () => {
+  const [tool] = createHelpTool({ agentContext: createScope({ attachmentService: null }) });
+  const parsed = JSON.parse(await tool.func({ command: `--${HELP_COMMAND.ATTACHS}` }));
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.command, HELP_COMMAND.ATTACHS);
+  assert.ok(parsed.reason.length > 0);
   assert.equal(
-    new Set(reasons).size,
-    3,
-    "a missing attachment service and a missing identity need different handling, so they must not share one reason",
+    parsed.reason.startsWith("tools.help."),
+    false,
+    `${parsed.reason} must be a translated message, not a raw i18n key leaked by a missing entry`,
   );
-  for (const reason of reasons) {
-    assert.equal(
-      reason.startsWith("tools.help."),
-      false,
-      `${reason} must be a translated message, not a raw i18n key leaked by a missing entry`,
-    );
-  }
 });
