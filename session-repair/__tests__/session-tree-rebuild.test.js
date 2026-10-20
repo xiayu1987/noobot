@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
+  SESSION_TREE_REJECTION,
   SESSION_TREE_SHAPE,
-  SESSION_TREE_UNRECOVERABLE,
   buildSessionTree,
   classifySessionTree,
   listSessionTreePlacements,
@@ -17,6 +17,7 @@ import {
 
 const USER = SESSION_CALLER.USER;
 const BOT = SESSION_CALLER.BOT;
+const R = SESSION_TREE_REJECTION;
 
 test("session tree shape classification separates legacy, parent-only and current trees", () => {
   assert.equal(classifySessionTree("{bad"), SESSION_TREE_SHAPE.INVALID);
@@ -39,18 +40,40 @@ test("session tree placements follow the persisted parent chain", () => {
       roots: ["a"],
       nodes: { a: { parentSessionId: "", children: ["b"] }, b: { parentSessionId: "a" } },
     }),
-    [
-      { sessionId: "a", parentSessionId: "", segments: ["runtime/session", "a"] },
-      { sessionId: "b", parentSessionId: "a", segments: ["runtime/session", "a", "b"] },
-    ],
+    {
+      placements: [
+        { sessionId: "a", parentSessionId: "", segments: ["runtime/session", "a"] },
+        { sessionId: "b", parentSessionId: "a", segments: ["runtime/session", "a", "b"] },
+      ],
+      rejected: [],
+    },
   );
-  for (const tree of [
-    { nodes: { a: { parentSessionId: 1 } } },
-    { nodes: { a: { parentSessionId: "gone" } } },
-    { nodes: { "../a": { parentSessionId: "" } } },
-  ]) {
-    assert.throws(() => listSessionTreePlacements(tree), { code: SESSION_TREE_UNRECOVERABLE });
-  }
+});
+
+test("session tree placements reject only the sessions whose chain is invalid", () => {
+  const { placements, rejected } = listSessionTreePlacements({
+    nodes: {
+      a: { parentSessionId: "" },
+      bad: { parentSessionId: 1 },
+      "../x": { parentSessionId: "" },
+      lost: { parentSessionId: "gone" },
+      child: { parentSessionId: "lost" },
+      c1: { parentSessionId: "c2" },
+      c2: { parentSessionId: "c1" },
+    },
+  });
+  assert.deepEqual(
+    placements.map(({ sessionId }) => sessionId),
+    ["a"],
+  );
+  assert.deepEqual(rejected, [
+    { sessionId: "bad", reason: R.PLACEMENT_INVALID },
+    { sessionId: "../x", reason: R.PLACEMENT_INVALID },
+    { sessionId: "lost", reason: R.PARENT_MISSING },
+    { sessionId: "child", reason: R.PARENT_REJECTED },
+    { sessionId: "c1", reason: R.CYCLE },
+    { sessionId: "c2", reason: R.CYCLE },
+  ]);
 });
 
 test("session tree build takes caller from session documents and repairs it explicitly", () => {
@@ -75,26 +98,47 @@ test("session tree build takes caller from session documents and repairs it expl
   );
 });
 
-test("session tree rebuild requires recoverable session documents", () => {
+function sessionDocument(segments, parentSessionId, caller = USER) {
+  return { segments, document: { sessionId: segments.at(-1), parentSessionId, caller } };
+}
+
+test("session tree rebuild places nested session documents by their ancestor chain", () => {
   assert.deepEqual(
-    rebuildSessionTree([
-      { directoryName: "a", document: { sessionId: "a", parentSessionId: "", caller: USER } },
-      { directoryName: "b", document: { sessionId: "b", parentSessionId: "a", caller: BOT } },
-    ]).tree,
+    rebuildSessionTree([sessionDocument(["a"], ""), sessionDocument(["a", "b"], "a", BOT)]),
     {
-      nodes: {
-        a: { sessionId: "a", parentSessionId: "", caller: USER },
-        b: { sessionId: "b", parentSessionId: "a", caller: BOT },
+      tree: {
+        nodes: {
+          a: { sessionId: "a", parentSessionId: "", caller: USER },
+          b: { sessionId: "b", parentSessionId: "a", caller: BOT },
+        },
       },
+      repairedCallers: [],
+      rejected: [],
     },
   );
-  for (const documents of [
-    [{ directoryName: "a", document: null }],
-    [{ directoryName: "a", document: { sessionId: "other" } }],
-    [{ directoryName: "a", document: { sessionId: "a", parentSessionId: 1 } }],
-    [{ directoryName: "a", document: { sessionId: "a" } }],
-    [{ directoryName: "b", document: { sessionId: "b", parentSessionId: "missing" } }],
-  ]) {
-    assert.throws(() => rebuildSessionTree(documents), { code: SESSION_TREE_UNRECOVERABLE });
-  }
+});
+
+test("session tree rebuild rejects each unplaceable session and keeps the rest", () => {
+  const { tree, rejected } = rebuildSessionTree([
+    sessionDocument(["a"], ""),
+    { segments: ["broken"], document: null },
+    { segments: ["other"], document: { sessionId: "x", parentSessionId: "" } },
+    { segments: ["np"], document: { sessionId: "np" } },
+    sessionDocument(["dup"], ""),
+    sessionDocument(["a", "dup"], "a"),
+    sessionDocument(["lost"], "gone"),
+    sessionDocument(["lost", "child"], "lost"),
+    sessionDocument(["flat"], "a"),
+  ]);
+  assert.deepEqual(Object.keys(tree.nodes), ["a"]);
+  assert.deepEqual(rejected, [
+    { sessionId: "broken", reason: R.DOCUMENT_INVALID, segments: ["broken"] },
+    { sessionId: "other", reason: R.IDENTITY_MISMATCH, segments: ["other"] },
+    { sessionId: "dup", reason: R.DUPLICATE_SESSION, segments: ["a", "dup"] },
+    { sessionId: "dup", reason: R.DUPLICATE_SESSION, segments: ["dup"] },
+    { sessionId: "np", reason: R.PLACEMENT_INVALID, segments: ["np"] },
+    { sessionId: "lost", reason: R.PARENT_MISSING, segments: ["lost"] },
+    { sessionId: "child", reason: R.PARENT_REJECTED, segments: ["lost", "child"] },
+    { sessionId: "flat", reason: R.DIRECTORY_MISMATCH, segments: ["flat"] },
+  ]);
 });

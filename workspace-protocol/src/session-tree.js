@@ -79,10 +79,16 @@ function requireParentSessionId(value) {
   return value === "" ? value : requireSessionId(value);
 }
 
-export function createSessionTreeNode({ sessionId, parentSessionId, caller }) {
+export function createSessionTreePlacement({ sessionId, parentSessionId }) {
   return {
     sessionId: requireSessionId(sessionId),
     parentSessionId: requireParentSessionId(parentSessionId),
+  };
+}
+
+export function createSessionTreeNode({ sessionId, parentSessionId, caller }) {
+  return {
+    ...createSessionTreePlacement({ sessionId, parentSessionId }),
     caller: requireSessionCaller(caller),
   };
 }

@@ -11,6 +11,7 @@ import {
   WORKSPACE_LAYOUT,
   collectSessionTreeBranch,
   createSessionTreeNode,
+  createSessionTreePlacement,
   normalizeSessionTree,
   requireSessionTreeNode,
   resolveSessionDirSegments,
@@ -99,6 +100,28 @@ test("createSessionTreeNode is the single node constructor", () => {
     () => createSessionTreeNode({ sessionId: "s1", parentSessionId: "" }),
     (error) => error.code === "SESSION_CALLER_INVALID",
   );
+});
+
+test("createSessionTreePlacement validates only the session identity and parent", () => {
+  assert.deepEqual(createSessionTreePlacement(node("s1", "p1", SESSION_CALLER.BOT)), {
+    sessionId: "s1",
+    parentSessionId: "p1",
+  });
+  assert.deepEqual(createSessionTreePlacement({ sessionId: "s1", parentSessionId: "" }), {
+    sessionId: "s1",
+    parentSessionId: "",
+  });
+  for (const [candidate, code] of [
+    [{ sessionId: "", parentSessionId: "" }, SESSION_TREE_ERROR.SESSION_ID_REQUIRED],
+    [{ sessionId: "../s", parentSessionId: "" }, SESSION_TREE_ERROR.INVALID_SESSION_ID],
+    [{ sessionId: "s1", parentSessionId: 1 }, SESSION_TREE_ERROR.SESSION_ID_REQUIRED],
+    [{ sessionId: "s1" }, SESSION_TREE_ERROR.SESSION_ID_REQUIRED],
+  ]) {
+    assert.throws(
+      () => createSessionTreePlacement(candidate),
+      (error) => error.code === code,
+    );
+  }
 });
 
 test("normalizeSessionTree rejects legacy schema fields", () => {

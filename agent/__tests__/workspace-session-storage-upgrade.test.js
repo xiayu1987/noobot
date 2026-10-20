@@ -8,11 +8,7 @@ import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:f
 import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
-import {
-  WORKSPACE_LAYOUT,
-  WORKSPACE_LAYOUT_VERSION,
-  createEmptySessionTree,
-} from "@noobot/workspace-protocol";
+import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { EXECUTION_REPORT_VERSION } from "@noobot/session-protocol/execution-report";
 import { ensureUserWorkspace } from "../src/workspace-lifecycle/index.js";
@@ -169,9 +165,9 @@ async function upgradeFromV2(fixture, tree) {
   return readBackupStamp(fixture);
 }
 
-async function writeSessionDocument(fixture, sessionId, parentSessionId, caller) {
-  await fixture.write(`runtime/session/${sessionId}/session.json`, {
-    sessionId,
+async function writeSessionDocument(fixture, directory, parentSessionId, caller) {
+  await fixture.write(`runtime/session/${directory}/session.json`, {
+    sessionId: directory.split("/").at(-1),
     parentSessionId,
     caller,
   });
@@ -201,7 +197,7 @@ test("corrupt session tree is rebuilt from session documents", async () => {
   const fixture = await createFixture();
   try {
     await writeSessionDocument(fixture, "s-1", "", SESSION_CALLER.USER);
-    await writeSessionDocument(fixture, "s-2", "s-1", SESSION_CALLER.BOT);
+    await writeSessionDocument(fixture, "s-1/s-2", "s-1", SESSION_CALLER.BOT);
     await fixture.write("runtime/session/orphan/events/x.jsonl", "{}\n");
     const stamp = await upgradeFromV2(fixture, "{not json");
     assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
@@ -214,24 +210,94 @@ test("corrupt session tree is rebuilt from session documents", async () => {
       await readFile(fixture.at(`${stamp}/${WORKSPACE_LAYOUT.SESSION_TREE_FILE}`), "utf8"),
       "{not json",
     );
+    assert.equal(await fixture.exists("runtime/session/orphan/events/x.jsonl"), true);
   } finally {
     await fixture.restore();
   }
 });
 
-test("corrupt session tree is retired when session documents cannot rebuild it", async () => {
+test("corrupt session tree retires only the sessions whose documents cannot be placed", async () => {
   const fixture = await createFixture();
   try {
+    await writeSessionDocument(fixture, "s-1", "", SESSION_CALLER.USER);
     await writeSessionDocument(fixture, "s-2", "missing-parent", SESSION_CALLER.USER);
+    await writeSessionDocument(fixture, "s-2/s-3", "s-2", SESSION_CALLER.BOT);
+    await fixture.write("runtime/session/s-4/session.json", { sessionId: "other" });
+    await writeSessionDocument(fixture, "s-5", "s-1", SESSION_CALLER.BOT);
     const stamp = await upgradeFromV2(fixture, "{not json");
-    assert.deepEqual(
-      await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE),
-      createEmptySessionTree(),
-    );
+    assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
+      nodes: { "s-1": { sessionId: "s-1", parentSessionId: "", caller: SESSION_CALLER.USER } },
+    });
+    for (const directory of ["s-2", "s-4", "s-5"]) {
+      assert.equal(await fixture.exists(`runtime/session/${directory}`), false, directory);
+      assert.equal(
+        await fixture.exists(`${stamp}/runtime/session/${directory}/session.json`),
+        true,
+        directory,
+      );
+    }
+    assert.equal(await fixture.exists(`${stamp}/runtime/session/s-2/s-3/session.json`), true);
     assert.equal(
       await readFile(fixture.at(`${stamp}/${WORKSPACE_LAYOUT.SESSION_TREE_FILE}`), "utf8"),
       "{not json",
     );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("session tree rebuild reports rejected sessions and retires them from disk", async () => {
+  const fixture = await createFixture();
+  try {
+    await writeSessionDocument(fixture, "s-1", "", SESSION_CALLER.USER);
+    await writeSessionDocument(fixture, "s-2", "missing-parent", SESSION_CALLER.USER);
+    await writeSessionDocument(fixture, "s-2/s-3", "s-2", SESSION_CALLER.BOT);
+    await fixture.write(WORKSPACE_LAYOUT.SESSION_TREE_FILE, "{not json");
+    const backupBase = await mkdtemp(path.join(os.tmpdir(), "noobot-tree-rebuild-backup-"));
+    try {
+      const { sessionTree } = await upgradeSessionStorage({ base: fixture.userPath, backupBase });
+      assert.equal(sessionTree.nodes, 1);
+      assert.deepEqual(sessionTree.rejected, [
+        { sessionId: "s-2", reason: "parent-missing", segments: ["s-2"] },
+        { sessionId: "s-3", reason: "parent-rejected", segments: ["s-2", "s-3"] },
+      ]);
+      assert.deepEqual(sessionTree.retiredSessions, [
+        { path: "runtime/session/s-2", backupPath: path.join(backupBase, "runtime/session/s-2") },
+      ]);
+    } finally {
+      await rm(backupBase, { recursive: true, force: true });
+    }
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("legacy tree upgrade retires sessions whose persisted parent chain is broken", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write(WORKSPACE_LAYOUT.SESSION_TREE_FILE, {
+      nodes: {
+        root: { sessionId: "root", parentSessionId: "" },
+        lost: { sessionId: "lost", parentSessionId: "gone" },
+      },
+    });
+    await fixture.write("runtime/session/root/session.json", { caller: SESSION_CALLER.USER });
+    await fixture.write("runtime/session/gone/lost/session.json", { caller: SESSION_CALLER.BOT });
+    const backupBase = await mkdtemp(path.join(os.tmpdir(), "noobot-tree-legacy-backup-"));
+    try {
+      const { sessionTree } = await upgradeSessionStorage({ base: fixture.userPath, backupBase });
+      assert.equal(sessionTree.nodes, 1);
+      assert.deepEqual(sessionTree.rejected, [{ sessionId: "lost", reason: "parent-missing" }]);
+      assert.deepEqual(sessionTree.retiredSessions, [
+        {
+          path: "runtime/session/gone/lost",
+          backupPath: path.join(backupBase, "runtime/session/gone/lost"),
+        },
+      ]);
+      assert.equal(await fixture.exists("runtime/session/root/session.json"), true);
+    } finally {
+      await rm(backupBase, { recursive: true, force: true });
+    }
   } finally {
     await fixture.restore();
   }

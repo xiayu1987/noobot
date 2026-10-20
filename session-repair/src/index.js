@@ -15,8 +15,8 @@ export {
 export { reconcileExecutionSegmentIndex, reconcileSessionSummaryIndex } from "./index-reconcile.js";
 export { runAtomicSessionRepair } from "./atomic-repair.js";
 export {
+  SESSION_TREE_REJECTION,
   SESSION_TREE_SHAPE,
-  SESSION_TREE_UNRECOVERABLE,
   buildSessionTree,
   classifySessionTree,
   listSessionTreePlacements,
