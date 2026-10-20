@@ -160,7 +160,6 @@ test("detached sub-session delegates execution and persistence to the main runne
     true,
   );
   assert.equal("persisted" in result, false);
-  assert.equal(result.lifecycle.executionState, "completed");
   assert.equal(result.result.answer, "agent answer");
   assert.deepEqual(result.result.messages, [{ role: "assistant", content: "agent answer" }]);
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);

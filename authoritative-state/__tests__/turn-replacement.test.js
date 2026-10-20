@@ -32,6 +32,7 @@ function acceptedTurn() {
     event: {
       ...acceptedAgentExecution("turn-old"),
       eventType: TURN_EVENT.ACTION_ACCEPTED,
+      startedAt: "2026-07-18T00:00:00.000Z",
       commandId: "send-old",
       causationId: "send-old",
       sessionId: "session-1",
@@ -184,7 +185,6 @@ test("turn replacement removes the authoritative Continue edge when replacing it
       messageId: "source-old",
       presentationMessageId: "presentation-old",
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     },
     {
       eventType: TURN_EVENT.STOP_ACCEPTED,
@@ -221,6 +221,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
   const continued = transitionTurnLifecycle(sourceStopped, {
     ...acceptedAgentExecution("turn-target"),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    startedAt: "2026-07-18T00:00:00.000Z",
     commandId: "continue-target",
     causationId: "continue-target",
     turnScopeId: "turn-target",

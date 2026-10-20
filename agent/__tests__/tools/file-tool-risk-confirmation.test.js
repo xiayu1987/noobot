@@ -204,3 +204,19 @@ test("server-classified patch confirmation omits patch content", async () => {
     assert.equal(combined.includes(sensitive), false);
   }
 });
+
+test("unified delete patch confirms the deleted file instead of the absent side", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-delete-target-"));
+  await fs.writeFile(path.join(basePath, "gone.txt"), "one\n", "utf8");
+  const requests = [];
+  const patchTool = getTool(
+    createContext(basePath, { requests, safeConfirmLevel: "high" }),
+    "patch_file",
+  );
+  const patch = "--- a/gone.txt\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-one\n";
+  await patchTool.invoke({ format: "unified_diff", patch, dryRun: false, riskLevel: "low" });
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].content, /gone\.txt/);
+  assert.equal(requests[0].content.includes("/dev/null"), false);
+  await assert.rejects(() => fs.stat(path.join(basePath, "gone.txt")), /ENOENT/);
+});

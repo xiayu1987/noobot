@@ -118,8 +118,8 @@ describe("normalizeSessionRunEvent", () => {
     expect([zero.seq, zero.lifecycleSeq, zero.transportSeq]).toEqual([0, 0, 0]);
   });
 
-  it("falls back through timestamp, updatedAt then createdAt", () => {
-    expect(normalizeSessionRunEvent({ timestamp: 1000 }).timestamp).toBe(1000);
+  it("derives timestamp from updatedAt then createdAt without reading a timestamp alias", () => {
+    expect(normalizeSessionRunEvent({ timestamp: 1000, updatedAtMs: 2000 }).timestamp).toBe(2000);
     expect(normalizeSessionRunEvent({ updatedAtMs: 2000 }).timestamp).toBe(2000);
     const iso = "2026-01-02T03:04:05.000Z";
     expect(normalizeSessionRunEvent({ updatedAt: iso }).timestamp).toBe(Date.parse(iso));
@@ -127,11 +127,10 @@ describe("normalizeSessionRunEvent", () => {
     expect(normalizeSessionRunEvent({}).timestamp).toBeGreaterThan(0);
   });
 
-  it("defaults the type to the backend conversation state and retains the raw event", () => {
-    const rawEvent = { state: "running" };
-    const normalized = normalizeSessionRunEvent(rawEvent);
-    expect(normalized.type).toBe(SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
-    expect(normalized.raw).toBe(rawEvent);
+  it("reads type only from the protocol field and does not carry the raw event", () => {
+    const normalized = normalizeSessionRunEvent({ state: "running", event: "backend" });
+    expect(normalized.type).toBe("");
+    expect(normalized).not.toHaveProperty("raw");
   });
 
   it("does not carry a terminal materialization field", () => {

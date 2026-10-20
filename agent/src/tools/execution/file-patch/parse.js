@@ -9,6 +9,8 @@ import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { toPositiveInt } from "../file-utils.js";
 import { text } from "@noobot/shared/value";
 
+const UNIFIED_ABSENT_PATH = "/dev/null";
+
 function parseUnifiedHunkHeader(header = "") {
   const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(header);
   if (!match) {
@@ -28,10 +30,42 @@ function parseUnifiedHunkHeader(header = "") {
   };
 }
 
-function normalizePatchPathInput(rawPath = "") {
+export function normalizePatchPathInput(rawPath = "") {
   const trimmed = text(rawPath);
   if (!trimmed) return "";
   return normalizePathForPlatform(trimmed);
+}
+
+function resolveUnifiedPatchMode(oldPath, newPath) {
+  if (newPath === UNIFIED_ABSENT_PATH) return "delete";
+  if (oldPath === UNIFIED_ABSENT_PATH) return "add";
+  return oldPath === newPath ? "update" : "move";
+}
+
+function buildAddedFileContent(contentLines) {
+  return contentLines.join("\n") + (contentLines.length ? "\n" : "");
+}
+
+function readUnifiedAddedLines(hunks) {
+  const lines = hunks.flatMap((hunk) => hunk.lines);
+  const invalidIndex = lines.findIndex((line) => line.type !== "+");
+  if (invalidIndex >= 0) {
+    throw recoverableToolError("invalid unified diff add file line: expected + prefix", {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "patch", line: invalidIndex + 1 },
+    });
+  }
+  return lines.map((line) => line.text);
+}
+
+function buildUnifiedFilePatch({ oldPath, newPath, hunks }) {
+  const mode = resolveUnifiedPatchMode(oldPath, newPath);
+  if (mode === "add") {
+    const content = buildAddedFileContent(readUnifiedAddedLines(hunks));
+    return { mode, oldPath: "", newPath, hunks: [], content };
+  }
+  if (mode === "delete") return { mode, oldPath, newPath: "", hunks: [] };
+  return { mode, oldPath, newPath, hunks };
 }
 
 function parseApplyPatchHunk(lines, startIndex) {
@@ -54,7 +88,7 @@ function parseApplyPatchHunk(lines, startIndex) {
 function stripDiffPath(rawPath = "", strip = 1) {
   const pathToken = text(rawPath).split(/\s+/)[0] || "";
   const normalizedPath = normalizePatchPathInput(pathToken);
-  if (!normalizedPath || normalizedPath === "/dev/null") return normalizedPath;
+  if (!normalizedPath || normalizedPath === UNIFIED_ABSENT_PATH) return normalizedPath;
   if (isAbsoluteDiffPath(pathToken)) return normalizedPath;
 
   const parts = pathToken.replaceAll("\\", "/").split("/").filter(Boolean);
@@ -129,19 +163,7 @@ export function parseUnifiedDiff(patch = "", strip = 1) {
         lines: hunkLines,
       });
     }
-    filePatches.push({
-      oldPath,
-      newPath,
-      hunks,
-      mode:
-        newPath === "/dev/null"
-          ? "delete"
-          : oldPath === "/dev/null"
-            ? "add"
-            : oldPath !== newPath
-              ? "move"
-              : "update",
-    });
+    filePatches.push(buildUnifiedFilePatch({ oldPath, newPath, hunks }));
   }
   if (!filePatches.length) {
     throw recoverableToolError("invalid unified diff: no file patch found", {
@@ -181,13 +203,20 @@ export function parseApplyPatch(patch = "") {
       }
       patches.push({
         mode: "add",
+        oldPath: "",
         newPath: filePath,
-        content: contentLines.join("\n") + (contentLines.length ? "\n" : ""),
+        hunks: [],
+        content: buildAddedFileContent(contentLines),
       });
       continue;
     }
     if (line.startsWith("*** Delete File: ")) {
-      patches.push({ mode: "delete", oldPath: line.slice("*** Delete File: ".length).trim() });
+      patches.push({
+        mode: "delete",
+        oldPath: line.slice("*** Delete File: ".length).trim(),
+        newPath: "",
+        hunks: [],
+      });
       i += 1;
       continue;
     }

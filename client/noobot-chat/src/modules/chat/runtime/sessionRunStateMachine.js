@@ -52,11 +52,7 @@ export {
   TURN_RUNTIME_TERMINAL,
 } from "./run-state-machine/turnTerminal.js";
 export { resolveEventScope } from "./run-state-machine/runIdentity.js";
-export {
-  createInitialSessionRunState,
-  evaluateSessionRunState,
-  normalizeSessionRunEvent,
-} from "./run-state-machine/core.js";
+export { createInitialSessionRunState, evaluateSessionRunState } from "./run-state-machine/core.js";
 export {
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,

@@ -52,6 +52,7 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
     systemRuntime: {
       userId,
       config: {},
+      isSuperUser: false,
       sessionDir: path.join(basePath, "runtime", "session", sessionId),
       persistenceScope: null,
       ...systemRuntimeOverrides,

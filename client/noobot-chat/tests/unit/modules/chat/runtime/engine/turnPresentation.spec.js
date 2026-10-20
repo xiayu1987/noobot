@@ -228,7 +228,7 @@ describe("selectTurnPresentations", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       messageId: "assistant-canonical-a",
-      status: "user_stopped",
+      turnStatus: expect.objectContaining({ status: "user_stopped" }),
       turnStatusPlaceholder: true,
       toolTimeline: [{ key: "tool-a" }],
       activityTimeline: [{ eventId: "activity-a" }],
@@ -269,7 +269,7 @@ describe("selectTurnPresentations", () => {
 
     expect(result[1]).toMatchObject({
       messageId: "assistant-runtime-stop",
-      status: "user_stopped",
+      turnStatus: expect.objectContaining({ status: "user_stopped" }),
       turnStatusPlaceholder: true,
     });
   });
@@ -304,7 +304,9 @@ describe("selectTurnPresentations", () => {
       },
     });
     const presentation = result.find((message) => message.turnStatusPlaceholder === true);
-    expect(presentation).toMatchObject({ status: testCase.terminal });
+    expect(presentation).toMatchObject({
+      turnStatus: expect.objectContaining({ status: testCase.terminal }),
+    });
     expect(presentation.content.split("\n")).toHaveLength(testCase.detail ? 2 : 1);
     expect(presentation.content.includes("provider down")).toBe(testCase.detail);
   });
@@ -340,7 +342,7 @@ describe("selectTurnPresentations", () => {
     expect(result[0]).toMatchObject({
       messageId: "assistant-partial-a",
       content: expect.stringMatching(/^partial answer\n\n.+model_failed/s),
-      status: "error",
+      turnStatus: expect.objectContaining({ status: "error" }),
     });
   });
 

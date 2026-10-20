@@ -52,7 +52,7 @@ async function mkWorkspace(prefix) {
 }
 
 function modifyPatch(target) {
-  return [{ oldPath: target, newPath: target, mode: "modify" }];
+  return [{ oldPath: target, newPath: target, mode: "update", hunks: [] }];
 }
 
 test("resolvePatchRoot: 空 root 落在工作区默认根", async () => {

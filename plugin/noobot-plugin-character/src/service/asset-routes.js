@@ -54,7 +54,13 @@ function canonicalResource(assetId, version, size) {
 }
 
 function parseDescriptor(req = {}) {
-  const descriptor = AnimationAssetSchema.parse(req.body);
+  const parsed = AnimationAssetSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const error = new Error(`invalid character asset descriptor: ${parsed.error.message}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const descriptor = parsed.data;
   const assetId = text(req.params?.assetId);
   const expectedUrl = `/api/internal/character/assets/${encodeURIComponent(assetId)}/${descriptor.resource.version}`;
   if (descriptor.assetId !== assetId || descriptor.resource.url !== expectedUrl) {

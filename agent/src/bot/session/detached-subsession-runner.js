@@ -370,7 +370,6 @@ async function commitDetachedStart(lifecycle, startedAt, message, identity, runC
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: TURN_ACTION.SEND,
-    executionState: "accepted",
     startedAt,
     createSessionIfAbsent: true,
     parentSessionId: identity.parentSessionId,
@@ -389,7 +388,6 @@ async function commitDetachedStart(lifecycle, startedAt, message, identity, runC
     causationId: lifecycle.commandId,
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: TURN_PHASE.PROCESSING,
-    executionState: "sending",
   });
   return accepted;
 }
@@ -459,7 +457,6 @@ async function commitDetachedStop(dependencies, lifecycle) {
     causationId: lifecycle.commandId,
     eventType: TURN_EVENT.STOP_ACCEPTED,
     phase: TURN_PHASE.STOP,
-    action: TURN_ACTION.STOP,
   });
   await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_PROCESSING_COMPLETED),
@@ -473,7 +470,6 @@ async function commitDetachedStop(dependencies, lifecycle) {
     causationId: lifecycle.commandId,
     eventType: TURN_EVENT.STOP_COMPLETED,
     phase: TURN_PHASE.STOP,
-    executionState: "user_stopped",
     terminalStatus: { command: "user_stopped" },
     finishedAt: String(dependencies.now()).trim(),
   });
@@ -525,7 +521,6 @@ async function commitDetachedCompletion(dependencies, lifecycle) {
     causationId: lifecycle.commandId,
     eventType: TURN_EVENT.COMPLETED,
     phase: TURN_PHASE.COMPLETION,
-    executionState: "completed",
     terminalStatus: { command: "completed" },
     finishedAt: String(dependencies.now()).trim(),
   });

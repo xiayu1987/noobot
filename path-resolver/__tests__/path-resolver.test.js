@@ -31,8 +31,8 @@ import {
   resolvePathPolicy,
   resolvePathRef,
   resolveToolInputPath,
-  resolveHostPath,
-  resolveRuntimeUserId,
+  resolveSandboxMount,
+  SANDBOX_MOUNT_KIND,
   TOOL_PATH_CONTRACTS,
 } from "../src/index.js";
 
@@ -56,28 +56,98 @@ const mountRuntime = {
   },
 };
 
-test("resolveHostPath maps the longest sandbox mount target back to its host source", () => {
+function sandboxRuntime(scope) {
+  return {
+    ...mountRuntime,
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          ...mountRuntime.globalConfig.security.executionIsolation,
+          sandbox: { ...mountRuntime.globalConfig.security.executionIsolation.sandbox, scope },
+        },
+      },
+    },
+  };
+}
+
+test("resolveSandboxMount maps the longest configured mount target back to its host source", () => {
+  const assets = resolveSandboxMount({ sandboxPath: "/data/assets/a.png", runtime: mountRuntime });
+  assert.equal(assets.hostPath, "/srv/assets/a.png");
+  assert.equal(assets.kind, SANDBOX_MOUNT_KIND.CONFIGURED);
   assert.equal(
-    resolveHostPath({ sandboxPath: "/data/assets/a.png", runtime: mountRuntime }),
-    "/srv/assets/a.png",
-  );
-  assert.equal(
-    resolveHostPath({ sandboxPath: "/data/x.txt", runtime: mountRuntime }),
+    resolveSandboxMount({ sandboxPath: "/data/x.txt", runtime: mountRuntime }).hostPath,
     "C:/data/x.txt",
   );
-  assert.equal(resolveHostPath({ sandboxPath: "/data", runtime: mountRuntime }), "C:/data");
-});
-
-test("resolveHostPath reads only sandboxPath", () => {
-  assert.equal(resolveHostPath({ path: "/data/x.txt", runtime: mountRuntime }), "");
-});
-
-test("resolveRuntimeUserId reads runtime identity only from systemRuntime", () => {
   assert.equal(
-    resolveRuntimeUserId({ runtime: { userId: "stale", systemRuntime: { userId: "u1" } } }),
-    "u1",
+    resolveSandboxMount({ sandboxPath: "/data", runtime: mountRuntime }).hostPath,
+    "C:/data",
   );
-  assert.equal(resolveRuntimeUserId({ runtime: { userId: "stale" } }), "");
+});
+
+test("resolveSandboxMount projects /workspace only through the workspace mount protocol", () => {
+  const userScoped = resolveSandboxMount({
+    sandboxPath: "/workspace/a.txt",
+    runtime: sandboxRuntime("user"),
+  });
+  assert.equal(userScoped.kind, SANDBOX_MOUNT_KIND.WORKSPACE);
+  assert.equal(userScoped.hostPath, "/srv/workspaces/u1/a.txt");
+  assert.equal(
+    resolveSandboxMount({ sandboxPath: "/workspace/u1/a.txt", runtime: sandboxRuntime("global") })
+      .hostPath,
+    "/srv/workspaces/u1/a.txt",
+  );
+});
+
+test("resolveSandboxMount has no mapping outside sandbox mode", () => {
+  const hostRuntime = {
+    ...mountRuntime,
+    globalConfig: { security: { executionIsolation: { mode: "host" } } },
+  };
+  assert.equal(
+    resolveSandboxMount({ sandboxPath: "/workspace/a.txt", runtime: hostRuntime }),
+    null,
+  );
+});
+
+test("resolveSandboxMount requires explicit runtime identity and basePath in sandbox mode", () => {
+  assert.throws(
+    () =>
+      resolveSandboxMount({
+        sandboxPath: "/workspace/a.txt",
+        runtime: { ...mountRuntime, systemRuntime: {}, userId: "stale" },
+      }),
+    /systemRuntime\.userId/,
+  );
+  assert.throws(
+    () =>
+      resolveSandboxMount({
+        sandboxPath: "/workspace/a.txt",
+        runtime: { ...mountRuntime, basePath: "" },
+      }),
+    /basePath/,
+  );
+});
+
+test("resolveToolInputPath authorizes workspace mount paths as host workspace paths", () => {
+  const result = resolveToolInputPath({
+    inputPath: "/workspace/runtime/a.txt",
+    runtime: sandboxRuntime("user"),
+    workspacePath: mountRuntime.basePath,
+    allowSandbox: true,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedPath, "/srv/workspaces/u1/runtime/a.txt");
+  assert.equal(result.mountTarget, undefined);
+  assert.equal(result.executionRoot, undefined);
+  const mounted = resolveToolInputPath({
+    inputPath: "/data/assets/a.png",
+    runtime: mountRuntime,
+    workspacePath: mountRuntime.basePath,
+    allowHostAbsolute: true,
+    allowSandbox: true,
+  });
+  assert.equal(mounted.mountTarget, "/data/assets");
+  assert.equal(mounted.executionRoot, "/srv/assets");
 });
 
 test("normalizes cross-platform path syntax through the protocol", () => {
@@ -125,7 +195,7 @@ test("rejects workspace-relative traversal before it can be reclassified as a ho
 test("sandbox mode treats unmapped absolute paths as execution paths, never host refs", () => {
   const runtime = {
     basePath: "/srv/workspaces/alice",
-    userId: "alice",
+    systemRuntime: { userId: "alice" },
     globalConfig: {
       security: {
         executionIsolation: {
@@ -139,7 +209,6 @@ test("sandbox mode treats unmapped absolute paths as execution paths, never host
     inputPath: "/tmp/container-private.txt",
     runtime,
     workspacePath: runtime.basePath,
-    workspaceRoot: "/srv/workspaces",
     allowHostAbsolute: true,
     allowSandbox: true,
   });

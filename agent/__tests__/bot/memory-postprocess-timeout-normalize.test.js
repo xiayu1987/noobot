@@ -15,6 +15,9 @@ test("memory-postprocess: resolveMemorySummaryTimeoutMs supports canonical keys"
         summarizeTimeoutMs: 11111,
       },
     },
+    session: {},
+    memory: {},
+    errorLogger: null,
   });
 
   const fromUser = service.resolveMemorySummaryTimeoutMs({

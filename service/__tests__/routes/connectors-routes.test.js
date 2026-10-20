@@ -282,7 +282,7 @@ test("delete preserves the connector when Session reference cleanup fails", asyn
       method: "DELETE",
     });
     const payload = await response.json();
-    assert.equal(response.status, 400);
+    assert.equal(response.status, 500);
     assert.equal(payload.error, "session_selection_cleanup_failed");
     assert.deepEqual(
       records.map((record) => record.connectorId),

@@ -37,12 +37,7 @@ function getMessagePrimaryId(messageItem = {}) {
 }
 function getMessageDialogProcessId(messageItem = {}) {
   return normalizeIdentityValue(
-    firstIdentityValue(
-      messageItem?.dialogProcessId,
-      messageItem?.dialogId,
-      messageItem?.channelState?.dialogProcessId,
-      messageItem?.channelState?.dialogId,
-    ),
+    firstIdentityValue(messageItem?.dialogProcessId, messageItem?.channelState?.dialogProcessId),
   );
 }
 function getMessageTurnScopeId(messageItem = {}) {
@@ -100,7 +95,7 @@ export function isMonotonicMessage(messageItem = {}) {
   if (normalizeText(messageItem.monotonicState) === "monotonic") return true;
   if (normalizeText(messageItem.stopState) === "user_stopped") return true;
   const channelState = getMessageRuntimeChannelState(messageItem);
-  const state = normalizeText(channelState?.state || messageItem.state || messageItem.status);
+  const state = normalizeText(channelState.state);
   return isLegacyTerminalDiscoveryState(state) || isTerminalOutcome(messageItem.terminalOutcome);
 }
 function isPlainUserMessage(messageItem = {}) {
@@ -145,7 +140,7 @@ export function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
 }
 
 function isTerminalTurnStatusPlaceholder(messageItem = {}) {
-  const status = normalizeText(messageItem?.turnStatus?.status || messageItem?.status);
+  const status = normalizeText(messageItem?.turnStatus?.status);
   return messageItem?.turnStatusPlaceholder === true && isTurnTerminalNotice(status);
 }
 
@@ -154,7 +149,7 @@ function isMonotonicSource(messageItem = {}) {
 }
 
 function hasAuthoritativeTerminalFact(messageItem = {}, context = {}) {
-  const runtimeState = context?.messageRuntime?.state || context?.messageRuntime?.backendState;
+  const runtimeState = context?.messageRuntime?.state;
   return (
     Boolean(getMessageTurnScopeId(messageItem)) && isLegacyTerminalDiscoveryState(runtimeState)
   );

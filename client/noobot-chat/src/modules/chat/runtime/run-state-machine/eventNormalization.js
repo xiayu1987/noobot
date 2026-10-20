@@ -44,9 +44,7 @@ function resolveRuntimeAuthority(type, rawEvent = {}) {
 }
 
 function normalizeTimestamp(rawEvent = {}) {
-  const numericTimestamp = Number(
-    rawEvent?.timestamp || rawEvent?.updatedAtMs || rawEvent?.createdAtMs || 0,
-  );
+  const numericTimestamp = Number(rawEvent.updatedAtMs || rawEvent.createdAtMs || 0);
   if (Number.isFinite(numericTimestamp) && numericTimestamp > 0) return numericTimestamp;
   const parsedUpdatedAt = rawEvent?.updatedAt ? Date.parse(rawEvent.updatedAt) : 0;
   if (Number.isFinite(parsedUpdatedAt) && parsedUpdatedAt > 0) return parsedUpdatedAt;
@@ -66,9 +64,11 @@ function resolveEventState(type, rawEvent, wireState) {
 
 function resolveIdentityFields(rawEvent, turnMeta, type) {
   return {
+    eventId: trim(rawEvent.eventId),
     action: trim(rawEvent?.action),
     commandId: trim(rawEvent?.commandId),
     sessionId: trim(rawEvent?.sessionId),
+    parentSessionId: trim(rawEvent.parentSessionId),
     dialogProcessId: TURN_START_EVENT_TYPES.includes(type) ? "" : trim(rawEvent?.dialogProcessId),
     turnScopeId: turnMeta.turnScopeId,
     source: trim(rawEvent?.source || type),
@@ -94,6 +94,7 @@ function resolveTurnPayloadFields(rawEvent, type) {
     failure: rawEvent?.failure || null,
     continuationSource: rawEvent?.continuationSource || null,
     continuedByTurnScopeId: trim(rawEvent?.continuedByTurnScopeId),
+    canStop: rawEvent.capabilities?.canStop === true,
   };
 }
 
@@ -104,14 +105,14 @@ function resolveTimeFields(rawEvent) {
     updatedAtMs: Number(rawEvent?.updatedAtMs || 0),
     createdAt: trim(rawEvent?.createdAt),
     updatedAt: trim(rawEvent?.updatedAt),
+    startedAt: trim(rawEvent.startedAt),
+    finishedAt: trim(rawEvent.finishedAt),
   };
 }
 
 export function normalizeSessionRunEvent(rawEvent = {}) {
   const turnMeta = normalizeTurnMeta(rawEvent);
-  const type = trim(
-    rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-  );
+  const type = trim(rawEvent.type);
   const wireState = normalizeState(rawEvent?.state);
   return {
     type,
@@ -127,6 +128,5 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     eventType: trim(rawEvent?.eventType),
     phase: trim(rawEvent?.phase),
     ...resolveTimeFields(rawEvent),
-    raw: rawEvent,
   };
 }

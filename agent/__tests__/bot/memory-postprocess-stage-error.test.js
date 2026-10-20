@@ -12,6 +12,8 @@ function createHarness(maybeSummarize) {
   const events = [];
   const logs = [];
   const service = new MemoryPostProcessService({
+    globalConfig: {},
+    session: {},
     memory: { maybeSummarize },
     errorLogger: { log: async (entry) => logs.push(entry) },
   });

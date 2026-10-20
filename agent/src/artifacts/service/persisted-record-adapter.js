@@ -19,11 +19,11 @@ import { safeStr } from "../../shared/utils/shared-utils.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
 import { attachScopeRoot } from "./attachment-storage-layout.js";
 
-function identityFor(record, scope) {
+function identityFor(record) {
   return {
-    attachmentId: safeStr(record?.attachmentId),
-    sessionId: safeStr(record?.sessionId || scope?.sessionId),
-    attachmentSource: safeStr(record?.attachmentSource || scope?.attachmentSource),
+    attachmentId: safeStr(record.attachmentId),
+    sessionId: safeStr(record.sessionId),
+    attachmentSource: safeStr(record.attachmentSource),
   };
 }
 
@@ -61,12 +61,11 @@ function storageRef(basePath, identity, value) {
     .join("/");
 }
 
-export function toPersistedAttachmentRecord(basePath, record, scope) {
-  const identity = identityFor(record, scope);
-  const now = new Date().toISOString();
-  const createdAt = safeStr(record?.createdAt) || now;
-  const updatedAt = safeStr(record?.updatedAt || record?.createdAt) || createdAt;
-  const sourcePath = safeStr(record?.path || record?.relativePath);
+export function toPersistedAttachmentRecord(basePath, record) {
+  const identity = identityFor(record);
+  const createdAt = safeStr(record.createdAt);
+  const updatedAt = safeStr(record.updatedAt);
+  const sourcePath = safeStr(record.path);
   if (!sourcePath) return null;
   const ref = storageRef(basePath, identity, sourcePath);
   const persisted = {

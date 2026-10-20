@@ -7,7 +7,6 @@ import {
   filePath as path,
   classifyToolInputPath,
   isAbsolutePathAnyPlatform,
-  normalizePathForPlatform,
   isPathWithinRoot,
   resolvePathRef,
   PATH_CAPABILITIES,
@@ -32,13 +31,7 @@ import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
 } from "../../../context/agent-context-accessor.js";
-import { text } from "@noobot/shared/value";
-
-function normalizePatchPathInput(rawPath = "") {
-  const trimmed = text(rawPath);
-  if (!trimmed) return "";
-  return normalizePathForPlatform(trimmed);
-}
+import { normalizePatchPathInput } from "./parse.js";
 
 function resolvePatchDefaultRoot(agentContext = {}) {
   return path.resolve(getBasePathFromAgentContext(agentContext) || ".");
@@ -240,9 +233,12 @@ async function resolveWorkspacePatchPath({
   };
 }
 
-export async function resolvePatchTargets({ patches = [], agentContext = {} } = {}) {
-  return resolvePatchTargetsWithOptions({ patches, agentContext });
-}
+const ABSENT_PATCH_PATH = Object.freeze({
+  displayPath: "",
+  resolvedPath: "",
+  resourcePath: "",
+  pathRef: null,
+});
 
 export async function resolvePatchTargetsWithOptions({
   patches = [],
@@ -253,8 +249,7 @@ export async function resolvePatchTargetsWithOptions({
   for (const item of patches) {
     const oldPath = normalizePatchPathInput(item.oldPath);
     const newPath = normalizePatchPathInput(item.newPath);
-    const normalizedItem = { ...item, oldPath, newPath };
-    const targetPath = newPath && newPath !== "/dev/null" ? newPath : oldPath;
+    const targetPath = item.mode === "delete" ? oldPath : newPath;
     assertValidFileNameFromPath({ filePath: targetPath, fieldName: "patch.path", agentContext });
     if (isForbiddenWorkspaceRelativePath(targetPath)) {
       throw recoverableToolError(`patch path is not allowed: ${targetPath}`, {
@@ -262,38 +257,38 @@ export async function resolvePatchTargetsWithOptions({
         details: { field: "patch", filePath: targetPath },
       });
     }
-    const oldInfo =
-      oldPath && oldPath !== "/dev/null"
-        ? await resolveWorkspacePatchPath({
-            filePath: oldPath,
-            agentContext,
-            fieldName: "patch.oldPath",
-            mustExist: normalizedItem.mode !== "add",
-            root,
-          })
-        : { displayPath: oldPath, resolvedPath: "" };
+    const oldInfo = oldPath
+      ? await resolveWorkspacePatchPath({
+          filePath: oldPath,
+          agentContext,
+          fieldName: "patch.oldPath",
+          mustExist: true,
+          root,
+        })
+      : ABSENT_PATCH_PATH;
     const newInfo =
-      newPath && newPath !== "/dev/null"
-        ? normalizedItem.mode !== "add" && oldPath === newPath && oldInfo.resolvedPath
-          ? oldInfo
-          : await resolveWorkspacePatchPath({
+      item.mode === "update"
+        ? oldInfo
+        : newPath
+          ? await resolveWorkspacePatchPath({
               filePath: newPath,
               agentContext,
               fieldName: "patch.newPath",
               mustExist: false,
               root,
             })
-        : { displayPath: newPath, resolvedPath: "" };
+          : ABSENT_PATCH_PATH;
     resolved.push({
-      ...normalizedItem,
-      oldPath: oldInfo.displayPath || oldPath,
-      newPath: newInfo.displayPath || newPath,
+      ...item,
+      oldPath: oldInfo.displayPath,
+      newPath: newInfo.displayPath,
+      targetPath: (item.mode === "delete" ? oldInfo : newInfo).displayPath,
       resolvedOldPath: oldInfo.resolvedPath,
       resolvedNewPath: newInfo.resolvedPath,
-      oldResourcePath: oldInfo.resourcePath || "",
-      newResourcePath: newInfo.resourcePath || "",
-      oldPathRef: oldInfo.pathRef || null,
-      newPathRef: newInfo.pathRef || null,
+      oldResourcePath: oldInfo.resourcePath,
+      newResourcePath: newInfo.resourcePath,
+      oldPathRef: oldInfo.pathRef,
+      newPathRef: newInfo.pathRef,
     });
   }
   return resolved;

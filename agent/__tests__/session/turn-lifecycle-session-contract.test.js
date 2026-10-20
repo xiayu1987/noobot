@@ -106,7 +106,6 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   const started = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "c2", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   assert.equal(started.turn.state, TURN_STATE.PROCESSING);
@@ -161,7 +160,6 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "atomic-p", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -198,7 +196,6 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "materialize-p", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -242,7 +239,6 @@ test("terminal resolution reads status from the Turn without returning messages"
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "r2", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -327,7 +323,7 @@ test("command replay is idempotent and conflicting reuse is rejected", async () 
   const replay = await h.service.applyTurnLifecycleEvent(input);
   const conflict = await h.service.applyTurnLifecycleEvent({
     ...input,
-    executionState: "conflicting",
+    action: "continue",
   });
   assert.equal(replay.deduplicated, true);
   assert.equal(conflict.reason, "idempotency_key_reused");
@@ -346,7 +342,6 @@ test("accepted Turn message identities are immutable", async () => {
   const messageConflict = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "identity-message-conflict", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
       messageId: "other-message",
     }),
   );
@@ -354,7 +349,6 @@ test("accepted Turn message identities are immutable", async () => {
   const presentationConflict = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "identity-presentation-conflict", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
       presentationMessageId: "other-presentation",
     }),
   );
@@ -400,13 +394,11 @@ test("session mutex, turn revision and session version conflicts do not mutate s
   const stale = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "c3", 0, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   const sessionStale = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "c4", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
       expectedAggregateVersion: 2,
     }),
   );
@@ -416,26 +408,7 @@ test("session mutex, turn revision and session version conflicts do not mutate s
   assert.equal(h.reload().turnLifecycle.sequence, 1);
 });
 
-test("stop is accepted only while authoritative execution state is sending", async () => {
-  for (const executionState of ["reconnecting", "interaction_pending"]) {
-    const h = harness();
-    await h.service.applyTurnLifecycleEvent(
-      event(TURN_EVENT.ACTION_ACCEPTED, `a-${executionState}`, 0, {
-        action: "send",
-        phase: TURN_PHASE.ACTION,
-      }),
-    );
-    await h.service.applyTurnLifecycleEvent(
-      event(TURN_EVENT.PROCESSING_STARTED, `p-${executionState}`, 1, {
-        phase: TURN_PHASE.PROCESSING,
-        executionState,
-      }),
-    );
-    const denied = await h.service.applyTurnLifecycleEvent(
-      event(TURN_EVENT.STOP_ACCEPTED, `s-${executionState}`, 2, { phase: TURN_PHASE.STOP }),
-    );
-    assert.equal(denied.reason, "stop_not_allowed");
-  }
+test("stop is accepted while authoritative processing is sending", async () => {
   const h = harness();
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
@@ -443,7 +416,6 @@ test("stop is accepted only while authoritative execution state is sending", asy
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "p", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   const accepted = await h.service.applyTurnLifecycleEvent(
@@ -461,7 +433,6 @@ test("snapshot reloads authoritative state without mutating sequence and support
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "c2", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   const before = h.reload().turnLifecycle.sequence;
@@ -491,7 +462,6 @@ test("summary and reconnect snapshots share action-failure presentation scope", 
   const failed = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.FAILED, "action-failed", 1, {
       phase: TURN_PHASE.ACTION,
-      executionState: "error",
       failure: { code: "attachment_rejected", message: "attachment rejected", retryable: false },
       terminalStatus: {
         command: "error",
@@ -537,7 +507,6 @@ test("retryable finalize failure keeps the session locked and completes idempote
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "p", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -593,7 +562,6 @@ test("retryable stop finalize failure keeps intent and can recover once", async 
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "p-stop", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -634,7 +602,6 @@ test("stop completed materializes partial assistant with authoritative identity"
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "p-partial", 1, {
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     }),
   );
   await h.service.applyTurnLifecycleEvent(

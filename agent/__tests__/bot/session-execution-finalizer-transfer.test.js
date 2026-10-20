@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createNoopMemoryPostProcessService } from "../helpers/memory-postprocess-service.js";
 
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
@@ -69,8 +70,8 @@ test("SessionExecutionFinalizer waits for execution event durability before read
       buildDefaultAssistantTurn: () => ({ role: "assistant", type: "message", content: "done" }),
       async appendAgentMessages() {},
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   await finalizer.finalizeRunSession({
@@ -112,8 +113,8 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
       buildDefaultAssistantTurn: () => ({ role: "assistant", type: "message", content: "done" }),
       async appendAgentMessages() {},
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   await assert.rejects(
@@ -164,8 +165,8 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -228,8 +229,8 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -297,8 +298,8 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -360,8 +361,8 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -405,8 +406,8 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -455,8 +456,8 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -530,8 +531,8 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
   await finalizer.finalizeRunSession({
     userId: "u1",
@@ -609,8 +610,8 @@ test("completed turn summary policy marks are durably upserted before the next d
         appendedMessages.push(...messages);
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
   await finalizer.finalizeRunSession({
     userId: "u1",
@@ -650,8 +651,8 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
         appendCalled = true;
       },
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
+    now: () => new Date().toISOString(),
   });
 
   await assert.rejects(

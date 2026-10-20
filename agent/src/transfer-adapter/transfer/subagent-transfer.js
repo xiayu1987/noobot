@@ -121,15 +121,7 @@ export async function transferBotPluginSubagentResult({
   const transferEnvelopes = persistedItems
     .flatMap((item = {}) => (Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : []))
     .filter(isPlainObject);
-  await emitSemanticTransferValidation({
-    runtime,
-    scenario: "workflow",
-    stats: {
-      inputCount: transferEnvelopes.length,
-      outputCount: transferEnvelopes.length,
-      enforceProtocol: true,
-    },
-  });
+  await emitSemanticTransferValidation({ runtime, scenario: "workflow", transferEnvelopes });
 
   return { transferEnvelopes };
 }

@@ -11,9 +11,10 @@ import { resolveExecutionIsolation } from "@noobot/execution-isolation-protocol"
 
 test("buildDockerCommand validates mounts through docker inspect template equality", () => {
   const built = buildDockerCommand({
-    userRoot: "/home/xiayu/projects/noobot/workspace/primary-user",
+    basePath: "/home/xiayu/projects/noobot/workspace/primary-user",
     userId: "primary-user",
     command: "echo ok",
+    workdir: "/workspace/primary-user",
     isolation: resolveExecutionIsolation({
       security: {
         executionIsolation: {
@@ -70,15 +71,16 @@ test("buildDockerCommand uses protocol-owned user and global workspace projectio
     },
   });
   const userBuilt = buildDockerCommand({
-    userRoot: "/srv/workspaces/alice",
+    basePath: "/srv/workspaces/alice",
     userId: "alice",
     command: "pwd",
     isolation: userIsolation,
+    workdir: "/workspace/runtime/ops_workdir",
   });
   assert.equal(userBuilt.containerName, "noobot-script-sandbox-alice");
   assert.equal(userBuilt.workspaceSource, "/srv/workspaces/alice");
   assert.equal(userBuilt.workspaceTarget, "/workspace");
-  assert.equal(userBuilt.workdir, "/workspace");
+  assert.equal(userBuilt.workdir, "/workspace/runtime/ops_workdir");
 
   const globalIsolation = resolveExecutionIsolation({
     security: {
@@ -89,13 +91,29 @@ test("buildDockerCommand uses protocol-owned user and global workspace projectio
     },
   });
   const globalBuilt = buildDockerCommand({
-    userRoot: "/srv/workspaces/alice",
+    basePath: "/srv/workspaces/alice",
     userId: "alice",
     command: "pwd",
     isolation: globalIsolation,
+    workdir: "/workspace/alice",
   });
   assert.equal(globalBuilt.containerName, "noobot-script-sandbox");
   assert.equal(globalBuilt.workspaceSource, "/srv/workspaces");
   assert.equal(globalBuilt.workspaceTarget, "/workspace");
   assert.equal(globalBuilt.workdir, "/workspace/alice");
+});
+
+test("buildDockerCommand requires explicit userId and workdir", () => {
+  const isolation = resolveExecutionIsolation({
+    security: { executionIsolation: { mode: "sandbox", sandbox: { scope: "user" } } },
+  });
+  const input = {
+    basePath: "/srv/workspaces/alice",
+    userId: "alice",
+    command: "pwd",
+    isolation,
+    workdir: "/workspace",
+  };
+  assert.throws(() => buildDockerCommand({ ...input, userId: "" }), /requires userId/);
+  assert.throws(() => buildDockerCommand({ ...input, workdir: "" }), /requires workdir/);
 });

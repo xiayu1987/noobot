@@ -14,8 +14,8 @@ vi.mock("../../../../src/infrastructure/api/chat/chatApi.js", () => ({
 const { executionReportService } =
   await import("../../../../src/infrastructure/api/thinking/executionReportService.js");
 
-function jsonResponse(payload, { ok = true, status = 200 } = {}) {
-  return { ok, status, json: async () => payload };
+function apiError(message, { status, errorCode = "" }) {
+  return Object.assign(new Error(message), { status, errorCode });
 }
 
 describe("executionReportService.getReport", () => {
@@ -33,7 +33,7 @@ describe("executionReportService.getReport", () => {
       dialogProcessId: "dp-1",
       summaryError: { message: "summary unavailable" },
     });
-    getSessionExecutionReportApi.mockResolvedValue(jsonResponse({ ok: true, report }));
+    getSessionExecutionReportApi.mockResolvedValue({ ok: true, report });
     await expect(
       executionReportService.getReport({ userId: "u1", sessionId: "s1", dialogProcessId: "dp-1" }),
     ).resolves.toEqual(report);
@@ -44,28 +44,26 @@ describe("executionReportService.getReport", () => {
   });
 
   it("returns null when the report has not been generated (404)", async () => {
-    getSessionExecutionReportApi.mockResolvedValue(jsonResponse({}, { ok: false, status: 404 }));
+    getSessionExecutionReportApi.mockRejectedValue(apiError("not found", { status: 404 }));
     await expect(executionReportService.getReport()).resolves.toBeNull();
   });
 
   it("rejects reports that violate the execution report protocol", async () => {
-    getSessionExecutionReportApi.mockResolvedValue(
-      jsonResponse({ ok: true, report: { status: "completed", dialogProcessId: "dp-1" } }),
-    );
+    getSessionExecutionReportApi.mockResolvedValue({
+      ok: true,
+      report: { status: "completed", dialogProcessId: "dp-1" },
+    });
     await expect(executionReportService.getReport()).rejects.toMatchObject({
       code: "EXECUTION_REPORT_INVALID",
     });
   });
 
-  it("throws with the HTTP status for other failures", async () => {
-    getSessionExecutionReportApi.mockResolvedValue(jsonResponse({}, { ok: false, status: 400 }));
-    await expect(executionReportService.getReport()).rejects.toThrow(
-      "failed to load execution report: 400",
-    );
-  });
-
-  it("surfaces the server error when ok is false", async () => {
-    getSessionExecutionReportApi.mockResolvedValue(jsonResponse({ ok: false, error: "denied" }));
-    await expect(executionReportService.getReport()).rejects.toThrow("denied");
+  it("rethrows other API failures with server error, status and errorCode", async () => {
+    const failure = apiError("missing_persistence_scope", {
+      status: 400,
+      errorCode: "SESSION_SCOPE_INVALID",
+    });
+    getSessionExecutionReportApi.mockRejectedValue(failure);
+    await expect(executionReportService.getReport()).rejects.toBe(failure);
   });
 });

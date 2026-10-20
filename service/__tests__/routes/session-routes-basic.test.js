@@ -94,7 +94,7 @@ for (const [label, query] of [
     assert.equal(called, false);
   });
 }
-test("session-routes: 会话查询异常返回 400 + 标准错误体", async () => {
+test("session-routes: 会话查询异常返回 500 + 标准错误体", async () => {
   const app = express();
   registerSessionRoutes(app, {
     bot: {
@@ -114,7 +114,7 @@ test("session-routes: 会话查询异常返回 400 + 标准错误体", async () 
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/internal/session/u1/s1`);
     const payload = await response.json();
-    assert.equal(response.status, 400);
+    assert.equal(response.status, 500);
     assert.equal(payload.ok, false);
     assert.equal(payload.error, "session-read-failed");
   });
@@ -193,6 +193,7 @@ test("session-routes: terminal resolution uses only canonical Session identity",
       sessionId: "child-session",
       turnScopeId: "turn-a",
       commandId: "terminal-command",
+      persistenceScope: null,
     },
   ]);
 });

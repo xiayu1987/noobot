@@ -7,7 +7,6 @@ import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { withJsonError } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { isSuperAdminRole } from "#agent/utils";
-import { text } from "@noobot/shared/value";
 
 export function registerConfigAndTemplateRoutes(
   app,
@@ -18,9 +17,6 @@ export function registerConfigAndTemplateRoutes(
     readScopedConfigParams,
     writeScopedConfigParams,
     buildScopedConfigParamsResponse,
-    normalizeConfigParams,
-    readWorkspaceConfigParams,
-    readUserConfigParams,
     collectConfigTemplateKeys,
     collectUserConfigTemplateKeys,
     buildConfigParamCatalog,
@@ -85,17 +81,11 @@ export function registerConfigAndTemplateRoutes(
     withJsonError(
       async (req, res) => {
         const scope = resolveConfigParamScope(req);
-        let payload = normalizeConfigParams({});
-        if (scope === "system") {
-          payload = await readWorkspaceConfigParams({ createIfMissing: true });
-        } else {
-          const userId = text(req?.auth?.userId);
-          payload = await readUserConfigParams({ userId, createIfMissing: true });
-        }
+        const { payload, userId } = await readScopedConfigParams({ req, createIfMissing: true });
         const keys =
           scope === "system"
             ? await collectConfigTemplateKeys()
-            : await collectUserConfigTemplateKeys(text(req?.auth?.userId));
+            : await collectUserConfigTemplateKeys(userId);
         const catalog = buildConfigParamCatalog({
           keys,
           descriptions: payload?.descriptions || {},

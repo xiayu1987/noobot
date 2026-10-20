@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir } from "node:fs/promises";
-import { resolveRuntimePathContext, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
+import { TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
+import { resolveAgentRuntimePathContext } from "../../context/runtime-path-context.js";
 import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
@@ -22,7 +23,6 @@ import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
 import { tTool } from "../core/tool-i18n.js";
 import {
   EXECUTE_SCRIPT_TOOL_NAME,
-  ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   SANDBOX_PROVIDER_NAME,
   SCRIPT_EXECUTION_MODE,
 } from "./script-tool/constants.js";
@@ -53,12 +53,9 @@ export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
 export function createScriptTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath = getBasePathFromAgentContext(agentContext);
-  const globalConfig = runtime.globalConfig || {};
-  if (!basePath) return [];
+  const { globalConfig } = runtime;
 
-  const workspace = basePath;
-  const userRoot = basePath;
-  const userId = text(runtime?.systemRuntime?.userId);
+  const userId = text(runtime.systemRuntime.userId);
   const executionPolicy = resolveToolExecutionPolicy({
     toolName: EXECUTE_SCRIPT_TOOL_NAME,
     globalConfig,
@@ -71,21 +68,12 @@ export function createScriptTool({ agentContext }) {
   const sandboxEnabled = isSandboxExecutionView(executionPolicy.view);
   const sandboxConfig = executionPolicy.isolation.sandbox;
   const sandboxProvider = sandboxConfig.provider;
-  const lockWaitTimeoutMs = sandboxConfig.lockWaitTimeoutMs || ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS;
-  const pathContext = resolveRuntimePathContext({
-    runtime,
-    agentContext,
-    runtimeBasePath: basePath,
-    workspaceRoot: globalConfig?.workspaceRoot || "",
-    userId,
-    globalConfig,
-    executionPolicy,
-  });
+  const pathContext = resolveAgentRuntimePathContext(runtime, EXECUTE_SCRIPT_TOOL_NAME);
   const description = buildScriptToolDescription({
     runtime,
     sandboxEnabled,
     sandboxProvider,
-    workspace,
+    basePath,
     pathContext,
     executionView: executionPolicy.view,
   });
@@ -100,13 +88,13 @@ export function createScriptTool({ agentContext }) {
       },
       toolConfig = {},
     ) => {
-      await mkdir(workspace, { recursive: true });
+      await mkdir(basePath, { recursive: true });
       const normalizedCommand = String(command || "");
       const requestedExecutionMode = normalizeExecutionMode(executionMode);
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
       const abortSignal = toolConfig.signal;
-      const generatedDataRoot = text(runtime?.systemRuntime?.sessionDir);
+      const generatedDataRoot = text(runtime.systemRuntime.sessionDir);
       if (!generatedDataRoot) throw new Error("session directory is required for script output");
       const identity = toolConfig?.configurable?.transferIdentity;
       if (!isObjectLike(identity)) {
@@ -132,10 +120,10 @@ export function createScriptTool({ agentContext }) {
       if (!sandboxEnabled) {
         const runResult =
           requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-            ? await runFileBacked(normalizedCommand, workspace, timeout, abortSignal, {
+            ? await runFileBacked(normalizedCommand, basePath, timeout, abortSignal, {
                 generatedDataRoot,
               })
-            : await run(normalizedCommand, workspace, timeout, abortSignal, {
+            : await run(normalizedCommand, basePath, timeout, abortSignal, {
                 generatedDataRoot,
               });
         if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
@@ -161,14 +149,12 @@ export function createScriptTool({ agentContext }) {
         throw missingCommandError(SANDBOX_PROVIDER_NAME.DOCKER, sandboxExecutable, runtime);
       }
       const runResult = await runDockerCommand({
-        userRoot,
+        basePath,
         userId,
         command: normalizedCommand,
-        workspace,
         timeout,
         isolation: executionPolicy.isolation,
-        workdir: pathContext.currentDirectory,
-        lockWaitTimeoutMs,
+        workdir: pathContext.directories.currentDirectory,
         abortSignal,
         runnerOptions: { generatedDataRoot },
         runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,

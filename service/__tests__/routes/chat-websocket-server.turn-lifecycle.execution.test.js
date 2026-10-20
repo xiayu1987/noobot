@@ -330,6 +330,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
     commandId: "command-deduplicated-ack",
     causationId: "command-deduplicated-ack",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    startedAt: "2026-07-18T00:00:00.000Z",
     ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-deduplicated-ack" }),
     phase: TURN_PHASE.ACTION,
     action: "send",

@@ -4,10 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export {
-  createSessionPluginRuntimeBundle,
-  createRunConfigPluginPreparerFromRuntimeBundle,
-  getDefaultSessionPluginRuntime,
-  getDefaultLoadedDynamicPlugins,
-  createDefaultRunConfigPluginPreparer,
-} from "noobot-agent/plugin";
+export { createSessionPluginRuntimeBundle } from "noobot-agent/plugin";

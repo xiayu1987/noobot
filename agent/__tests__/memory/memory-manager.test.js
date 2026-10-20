@@ -12,11 +12,6 @@ import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experi
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 import { MemoryManager } from "../../src/memory/index.js";
-import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
-import {
-  applySessionMessageFacts,
-  createTestSessionRequiredFields,
-} from "../helpers/session-message-facts.js";
 
 function createMemoryConfig(workspaceRoot, alias = "mock-memory-model") {
   return {
@@ -572,73 +567,70 @@ test("logs raw model output when daily patch parse fails", async () => {
   assert.match(logContent, /raw:/);
 });
 
-test("captureSessionToShortMemory skips injected messages", async () => {
+test("captureDialogToShortMemory records only the given dialog and skips injected messages", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
-  const parentSessionId = ` ${"p".repeat(220)} `;
-  const normalizedParentSessionId = "p".repeat(200);
-  await mkdir(path.join(userRoot, "runtime/session", normalizedParentSessionId, "s1"), {
-    recursive: true,
-  });
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
-  await writeSessionArtifact({
-    sessionDir: path.join(userRoot, "runtime/session", normalizedParentSessionId, "s1"),
-    sessionPayload: applySessionMessageFacts({
-      ...createTestSessionRequiredFields(),
-      sessionId: "s1",
-      aggregateVersion: 0,
-      messages: [
-        {
-          messageUid: "sm_memory_user",
-          role: "user",
-          content: "真实用户消息",
-          dialogProcessId: "d1",
-          turnScopeId: "t1",
-        },
-        {
-          messageUid: "sm_memory_injected",
-          role: "user",
-          content: "注入消息",
-          dialogProcessId: "d1",
-          turnScopeId: "t1",
-          injectedMessage: true,
-          injectedBy: "agentPlugin",
-        },
-        ...[
-          CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
-          CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
-          CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
-        ].map((internalType, index) => ({
-          messageUid: `sm_memory_control_${index}`,
-          role: "user",
-          type: "context_control",
-          content: "已达到周期任务检查阈值。",
-          dialogProcessId: "d1",
-          turnScopeId: "t1",
-          injectedMessage: true,
-          injectedMessageType: internalType,
-          noobotInternalMessageType: internalType,
-        })),
-      ],
-    }),
-  });
+  const messages = [
+    { role: "user", content: "上一轮消息", dialogProcessId: "d0", turnScopeId: "t0" },
+    { role: "user", content: "真实用户消息", dialogProcessId: "d1", turnScopeId: "t1" },
+    {
+      role: "user",
+      content: "注入消息",
+      dialogProcessId: "d1",
+      turnScopeId: "t1",
+      injectedMessage: true,
+      injectedBy: "agentPlugin",
+    },
+    ...[
+      CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
+      CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+      CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
+    ].map((internalType) => ({
+      role: "user",
+      type: "context_control",
+      content: "已达到周期任务检查阈值。",
+      dialogProcessId: "d1",
+      turnScopeId: "t1",
+      injectedMessage: true,
+      injectedMessageType: internalType,
+      noobotInternalMessageType: internalType,
+    })),
+  ];
 
   const service = new MemoryManager({ workspaceRoot });
-  const ok = await service.captureSessionToShortMemory({
+  const ok = await service.captureDialogToShortMemory({
     userId,
     sessionId: "s1",
-    parentSessionId,
+    parentSessionId: "parent-1",
+    dialogProcessId: "d1",
+    messages,
   });
   assert.equal(ok, true);
   const shortDoc = JSON.parse(
     await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
   );
-  const records = shortDoc?.items?.[0]?.records || [];
-  assert.equal(shortDoc?.items?.[0]?.sessionId, "s1");
-  assert.equal(shortDoc?.items?.[0]?.parentSessionId, normalizedParentSessionId);
-  assert.equal(records.length, 1);
-  assert.equal(records[0]?.content, "真实用户消息");
+  assert.equal(shortDoc.items.length, 1);
+  assert.equal(shortDoc.items[0].sessionId, "s1");
+  assert.equal(shortDoc.items[0].parentSessionId, "parent-1");
+  assert.deepEqual(
+    shortDoc.items[0].records.map((record) => record.content),
+    ["真实用户消息"],
+  );
+});
+
+test("captureDialogToShortMemory writes nothing when the dialog has no records", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const service = new MemoryManager({ workspaceRoot });
+  const ok = await service.captureDialogToShortMemory({
+    userId: "primary-user",
+    sessionId: "s1",
+    parentSessionId: "",
+    dialogProcessId: "d-missing",
+    messages: [{ role: "user", content: "其他轮次", dialogProcessId: "d1" }],
+  });
+  assert.equal(ok, false);
 });
 
 test("deleteSessionMemoryBySessionIds removes only memory with an explicit session identity", async () => {

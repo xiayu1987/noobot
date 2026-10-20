@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import { filePath as path, resolveRuntimeWorkspaceRoot } from "@noobot/path-resolver";
+import { filePath as path } from "@noobot/path-resolver";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -22,7 +22,7 @@ export function buildToolCompatibilityLogLine({ modelState, runtime, event, tool
 }
 
 export async function appendToolCompatibilityLog({ modelState, runtime, event, tools }) {
-  const workspaceRoot = resolveRuntimeWorkspaceRoot({ runtime });
+  const workspaceRoot = text(runtime.globalConfig.workspaceRoot);
   if (!workspaceRoot) {
     throw new Error("tool compatibility log requires an authoritative workspace root");
   }

@@ -22,6 +22,7 @@ export function buildPublicRecord(basePath, record) {
   const identity = projectCanonicalAttachmentIdentity(record);
   const owner = normalizeAttachmentOwnerMeta(record);
   const turnScope = normalizeAttachmentTurnScopeMeta(record, owner);
+  const createdAt = safeStr(record.createdAt, new Date().toISOString());
   return {
     attachmentId: identity.attachmentId,
     ...(safeStr(record.clientAttachmentId)
@@ -34,7 +35,8 @@ export function buildPublicRecord(basePath, record) {
     path: safeStr(record.path),
     relativePath:
       safeStr(record.relativePath) || normalizeRelativePath(basePath, safeStr(record.path)),
-    createdAt: safeStr(record.createdAt, new Date().toISOString()),
+    createdAt,
+    updatedAt: safeStr(record.updatedAt, createdAt),
     sessionId: identity.sessionId,
     attachmentSource: identity.attachmentSource,
     generatedByModel: record?.generatedByModel === true,

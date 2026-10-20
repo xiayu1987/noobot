@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createJsonRouteWrapper } from "./route-wrapper.js";
+import {
+  createBadRequestError,
+  createJsonRouteWrapper,
+  decodeRequestInput,
+} from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { normalizeSessionThinkingRouteText as normalizeRouteText } from "noobot-agent/session";
 import {
@@ -20,12 +24,14 @@ import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 import { pipeline } from "node:stream/promises";
 import { text } from "@noobot/shared/value";
 
+const HTTP_SESSION_PERSISTENCE_SCOPE = null;
+
 function decodeSessionCommand(body, { type, userId, sessionId }) {
-  const command = assertSessionCommand(body);
+  const command = decodeRequestInput(() => assertSessionCommand(body));
   if (command.type !== type)
-    throw new TypeError(`unexpected session command type: ${command.type}`);
+    throw createBadRequestError(`unexpected session command type: ${command.type}`);
   if (command.scope.userId !== userId || command.scope.sessionId !== sessionId) {
-    throw new TypeError("session command scope does not match route identity");
+    throw createBadRequestError("session command scope does not match route identity");
   }
   return command;
 }
@@ -237,9 +243,13 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
       if (Object.keys(req.body || {}).length) {
-        throw new TypeError("session protocol repair does not accept a request body");
+        throw createBadRequestError("session protocol repair does not accept a request body");
       }
-      const result = await bot.session.repairSession({ userId, sessionId });
+      const result = await bot.session.repairSession({
+        userId,
+        sessionId,
+        persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
+      });
       res.json({ ok: true, userId, sessionId, ...result });
     }),
   );
@@ -247,15 +257,16 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
   const resolveTurnTerminalHandler = jsonRoute(async (req, res) => {
     const { userId, sessionId, turnScopeId } = req.params;
     if (Object.keys(req.query || {}).some((key) => key !== "commandId")) {
-      throw new TypeError("unsupported terminal resolution query field");
+      throw createBadRequestError("unsupported terminal resolution query field");
     }
     const commandId = text(req.query?.commandId);
-    if (!commandId) throw new TypeError("terminal resolution requires commandId");
+    if (!commandId) throw createBadRequestError("terminal resolution requires commandId");
     const resolution = await bot.session.resolveTurnTerminalState({
       userId,
       sessionId,
       turnScopeId,
       commandId,
+      persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
     });
     await writeRuntimeEvent({
       scope: "session",
@@ -298,9 +309,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
       const turnScopeId = normalizeRouteText(req.query?.turnScopeId);
       if (!dialogProcessId && !turnScopeId) {
-        const error = new Error("dialogProcessId or turnScopeId is required");
-        error.statusCode = HTTP_STATUS.BAD_REQUEST;
-        throw error;
+        throw createBadRequestError("dialogProcessId or turnScopeId is required");
       }
       const detail = await bot.session.getSessionThinkingDetail({
         userId,
@@ -318,11 +327,14 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       const { userId, sessionId } = req.params;
       const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
       if (!isDialogProcessKey(dialogProcessId)) {
-        const error = new Error("valid dialogProcessId is required");
-        error.statusCode = HTTP_STATUS.BAD_REQUEST;
-        throw error;
+        throw createBadRequestError("valid dialogProcessId is required");
       }
-      const report = await bot.session.getExecutionReport({ userId, sessionId, dialogProcessId });
+      const report = await bot.session.getExecutionReport({
+        userId,
+        sessionId,
+        dialogProcessId,
+        persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
+      });
       if (!report) {
         const error = new Error(translateText("common.notFound", req.locale));
         error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -344,10 +356,10 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       const payload = {
         userId,
         sessionId,
-        parentSessionId: command.scope.parentSessionId,
         anchor: command.payload.anchor || {},
         expectedAggregateVersion: command.expectedAggregateVersion,
         commandId: command.commandId,
+        persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
       };
       const logDeleteMutation = (event, data = {}, level = "debug") =>
         writeRuntimeEvent({
@@ -365,7 +377,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
           data,
         });
       await logDeleteMutation("service.messageDelete.requestReceived", {
-        parentSessionId: payload.parentSessionId,
+        parentSessionId: command.scope.parentSessionId,
         anchor: payload.anchor,
         expectedAggregateVersion: payload.expectedAggregateVersion ?? null,
         commandId: payload.commandId,
@@ -426,12 +438,12 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
     const payload = {
       userId,
       sessionId,
-      parentSessionId: command.scope.parentSessionId,
       anchor: command.payload.anchor || {},
       newContent: text(command.payload.newContent),
       turnScopeId: text(command.payload.turnScopeId),
       expectedAggregateVersion: command.expectedAggregateVersion,
       commandId: command.commandId,
+      persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
     };
     if (Array.isArray(command.payload.attachments))
       payload.attachments = command.payload.attachments;
@@ -477,11 +489,14 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
     const { userId, sessionId } = req.params;
     const title = text(req.body?.title);
     if (!title) {
-      const error = new Error("Session title is required");
-      error.statusCode = HTTP_STATUS.BAD_REQUEST;
-      throw error;
+      throw createBadRequestError("Session title is required");
     }
-    const session = await bot.session.renameSession({ userId, sessionId, title });
+    const session = await bot.session.renameSession({
+      userId,
+      sessionId,
+      title,
+      persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
+    });
     res.json({ ok: true, sessionId: session.sessionId, title: session.customTitle || title });
   });
 

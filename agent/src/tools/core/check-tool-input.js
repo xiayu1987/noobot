@@ -57,13 +57,13 @@ function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName 
     [TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE]:
       "tools.file.pathErrorWorkspaceOutOfScope",
   };
-  const key = keyMap[resolution?.error];
+  const key = keyMap[resolution.error];
   return key
     ? tTool(getRuntimeFromAgentContext(agentContext), key, {
         field: fieldName,
-        virtualRoot: String(resolution?.virtualRoot || ""),
-        suggestedPath: String(resolution?.candidateWorkspaceRelativePath || ""),
-        suggestedSandboxPath: String(resolution?.candidateSandboxPath || ""),
+        virtualRoot: resolution.virtualRoot,
+        suggestedPath: resolution.candidateWorkspaceRelativePath,
+        suggestedSandboxPath: resolution.candidateSandboxPath,
       })
     : tCheckInput(agentContext, "pathOutOfScope");
 }
@@ -87,14 +87,8 @@ function resolveRuntimeBasePath(agentContext = {}) {
   return path.resolve(basePath);
 }
 
-function resolveWorkspaceRoot(agentContext = {}) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const workspaceRoot = text(runtime?.globalConfig?.workspaceRoot);
-  return workspaceRoot ? path.resolve(workspaceRoot) : "";
-}
-
 function resolveRuntimeIsolation(runtime = {}) {
-  return resolveExecutionIsolation(runtime?.globalConfig || {});
+  return resolveExecutionIsolation(runtime.globalConfig);
 }
 
 export function canUseHostPathsForWorkspaceTools(agentContext = {}) {
@@ -193,14 +187,13 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
 
   const workspacePath = resolveRuntimeBasePath(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
+  const userId = text(runtime.systemRuntime.userId);
   const isolation = resolveRuntimeIsolation(runtime);
   const isSuperUser = isSuperUserAgentContext(agentContext);
-  const workspaceRoot = resolveWorkspaceRoot(agentContext);
   const resolvedToolPath = resolveToolInputPath({
     inputPath: normalizedPath,
     runtime,
     workspacePath,
-    workspaceRoot,
     allowHostAbsolute: true,
     allowSandbox: isSandboxIsolationMode(isolation.mode),
     allowVirtualRelative: false,
@@ -217,10 +210,8 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
         pathView: resolvedToolPath.view,
         error: resolvedToolPath.error,
         hint: localizedHint,
-        suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
-        ...(resolvedToolPath.candidateSandboxPath
-          ? { suggestedSandboxPath: resolvedToolPath.candidateSandboxPath }
-          : {}),
+        suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath,
+        suggestedSandboxPath: resolvedToolPath.candidateSandboxPath,
       },
     });
   }
@@ -246,13 +237,13 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
         input: {
           view: "workspace",
           path: resolvedToolPath.logicalPath,
-          owner: text(runtime?.systemRuntime?.userId),
+          owner: userId,
         },
       })
     : resolvePathRef({
         input: resolvedTargetPath,
         workspaceRoot: workspacePath,
-        owner: text(runtime?.systemRuntime?.userId),
+        owner: userId,
       });
   if (
     resolvedToolPath.mountReadOnly === true &&
@@ -268,22 +259,23 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
       },
     });
   }
-  const configuredPathPolicy = resolveConfiguredPathPolicy(runtime?.globalConfig);
+  const configuredPathPolicy = resolveConfiguredPathPolicy(runtime.globalConfig);
   const principal = {
-    userId: text(runtime?.systemRuntime?.userId),
+    userId,
     role: isSuperUser ? "super_admin" : "regular_user",
   };
-  const authorization = authorizePathRef({
-    pathRef: logicalPathRef,
-    principal,
-    capability,
-    pathPolicy: configuredPathPolicy,
-    executionPath: resolvedTargetPath,
-    workspaceRoot: workspacePath,
-    executionRoots: [resolvedToolPath.executionRoot].filter(Boolean),
-  });
+  const authorizeExecutionPath = (executionPath) =>
+    authorizePathRef({
+      pathRef: logicalPathRef,
+      principal,
+      capability,
+      pathPolicy: configuredPathPolicy,
+      executionPath,
+      workspaceRoot: workspacePath,
+      executionRoots: resolvedToolPath.executionRoot ? [resolvedToolPath.executionRoot] : [],
+    });
 
-  if (!authorization.allowed) {
+  if (!authorizeExecutionPath(resolvedTargetPath).allowed) {
     throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -296,8 +288,10 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
   }
 
   const existingInfo = await lstat(resolvedTargetPath).catch(() => null);
-  const resolutionPolicy = configuredPathPolicy.resolution || {};
-  if (existingInfo?.isSymbolicLink() && resolutionPolicy.followSymbolicLinks !== true) {
+  if (
+    existingInfo?.isSymbolicLink() &&
+    configuredPathPolicy.resolution.followSymbolicLinks !== true
+  ) {
     throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -343,16 +337,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
         },
       });
     }
-    const realDecision = authorizePathRef({
-      pathRef: logicalPathRef,
-      principal,
-      capability,
-      pathPolicy: configuredPathPolicy,
-      executionPath: realTarget,
-      workspaceRoot: workspacePath,
-      executionRoots: [resolvedToolPath.executionRoot].filter(Boolean),
-    });
-    if (!realDecision.allowed)
+    if (!authorizeExecutionPath(realTarget).allowed)
       throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
         code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
         details: {
@@ -371,16 +356,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
     const realParent = await resolveExistingParent(resolvedTargetPath);
     const projectedTarget = path.join(realParent, path.basename(resolvedTargetPath));
     resourcePath = projectedTarget;
-    const parentDecision = authorizePathRef({
-      pathRef: logicalPathRef,
-      principal,
-      capability,
-      pathPolicy: configuredPathPolicy,
-      executionPath: projectedTarget,
-      workspaceRoot: workspacePath,
-      executionRoots: [resolvedToolPath.executionRoot].filter(Boolean),
-    });
-    if (!parentDecision.allowed)
+    if (!authorizeExecutionPath(projectedTarget).allowed)
       throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
         code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
         details: {

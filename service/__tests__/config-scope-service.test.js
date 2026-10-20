@@ -54,3 +54,23 @@ test("config scope persists params from the authoritative template catalog", asy
   assert.deepEqual(result.payload.values, { API_KEY: "value" });
   assert.deepEqual(writes, [{ values: { API_KEY: "value" }, descriptions: {} }]);
 });
+
+test("config scope rejects an unauthenticated user scope as a caller error", async () => {
+  const { service } = createService();
+  await assert.rejects(
+    service.readScopedConfigParams({ req: { query: { scope: "user" } } }),
+    (error) => error.message === "auth.missingUserAuth" && error.statusCode === 400,
+  );
+});
+
+test("config scope marks invalid caller params as a caller error without writing", async () => {
+  const { service, writes } = createService();
+  await assert.rejects(
+    service.writeScopedConfigParams({
+      req: { auth: { userId: "admin" }, query: { scope: "user" } },
+      values: { "bad key!": "value" },
+    }),
+    (error) => /invalid config param key/.test(error.message) && error.statusCode === 400,
+  );
+  assert.deepEqual(writes, []);
+});

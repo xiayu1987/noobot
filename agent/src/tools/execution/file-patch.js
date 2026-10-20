@@ -5,4 +5,4 @@
  */
 export { parseApplyPatch, parseUnifiedDiff } from "./file-patch/parse.js";
 export { applySearchHunks, applyUnifiedHunks } from "./file-patch/apply.js";
-export { resolvePatchTargets, resolvePatchTargetsWithOptions } from "./file-patch/resolve.js";
+export { resolvePatchTargetsWithOptions } from "./file-patch/resolve.js";

@@ -47,7 +47,7 @@ function resolveTurnRuntimeConflict({
   return "";
 }
 
-function createObservation({ registry, event, rawEvent, requestedSessionId, turnScopeId }) {
+function createObservation({ registry, event, requestedSessionId, turnScopeId }) {
   return (values = {}) => {
     const canonicalId = text(values.turn?.sessionId || values.canonicalSessionId);
     return {
@@ -55,7 +55,7 @@ function createObservation({ registry, event, rawEvent, requestedSessionId, turn
       requestedSessionId,
       canonicalSessionId: canonicalId,
       turnKey: executionTurnKey(canonicalId, turnScopeId),
-      eventId: text(rawEvent.eventId),
+      eventId: event.eventId,
       sequence: event.seq,
       source: event.source,
       authority: event.authority,
@@ -64,34 +64,34 @@ function createObservation({ registry, event, rawEvent, requestedSessionId, turn
   };
 }
 
-function resolveProjectedStart(currentValue, event, rawEvent) {
-  const observed = rawEvent.startedAt;
+function resolveProjectedStart(currentValue, event) {
+  const observed = event.startedAt;
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return observed || currentValue.startedAt;
   }
   return currentValue.startedAt || observed;
 }
 
-function resolveProjectedFinish(currentValue, event, rawEvent, terminal) {
+function resolveProjectedFinish(currentValue, event, terminal) {
   if (!terminal) return currentValue.finishedAt;
-  const observed = rawEvent.finishedAt;
+  const observed = event.finishedAt;
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return observed || currentValue.finishedAt || event.updatedAt;
   }
   return currentValue.finishedAt || observed || event.updatedAt;
 }
 
-function projectTurn({ current, transition, event, rawEvent, sessionId, turnScopeId }) {
+function projectTurn({ current, transition, event, sessionId, turnScopeId }) {
   const currentValue = current || {};
-  const nowMs = Number(event.timestamp || Date.now());
+  const nowMs = event.timestamp;
   const terminal = transition.next.terminal;
-  const startedAt = resolveProjectedStart(currentValue, event, rawEvent);
-  const finishedAt = resolveProjectedFinish(currentValue, event, rawEvent, terminal);
+  const startedAt = resolveProjectedStart(currentValue, event);
+  const finishedAt = resolveProjectedFinish(currentValue, event, terminal);
   return {
     ...currentValue,
     ...transition.next,
     sessionId,
-    parentSessionId: text(rawEvent.parentSessionId || currentValue.parentSessionId),
+    parentSessionId: text(event.parentSessionId || currentValue.parentSessionId),
     turnScopeId,
     dialogProcessId: text(event.dialogProcessId || currentValue.dialogProcessId),
     action: transition.next.action,
@@ -145,7 +145,6 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   const observe = createObservation({
     registry: next,
     event,
-    rawEvent,
     requestedSessionId: routedSessionId,
     turnScopeId,
   });
@@ -176,10 +175,10 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   if (!current && activeTurn && !isFinalTurnState(activeTurn.state, activeTurn)) {
     return result({ turn: activeTurn, applied: false, reason: "active_turn_conflict" });
   }
-  const transition = reduceTurnRuntimeEvent(current, rawEvent);
+  const transition = reduceTurnRuntimeEvent(current, event);
   if (!transition.applied)
     return result({ turn: current, applied: false, reason: transition.reason });
-  const turn = projectTurn({ current, transition, event, rawEvent, sessionId, turnScopeId });
+  const turn = projectTurn({ current, transition, event, sessionId, turnScopeId });
   commitProjectedTurn(next, turn);
   return result({ turn, applied: true, reason: transition.reason });
 }

@@ -10,8 +10,8 @@ export function buildScriptToolDescription({
   runtime,
   sandboxEnabled,
   sandboxProvider,
-  workspace,
-  pathContext = {},
+  basePath,
+  pathContext,
   executionView,
   platform = process.platform,
 }) {
@@ -20,38 +20,24 @@ export function buildScriptToolDescription({
     return [
       tTool(runtime, "tools.script.localModeTitle"),
       tTool(runtime, "tools.script.concise.lineShell", { shell: commandShell }),
-      tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: workspace }),
+      tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: basePath }),
       tTool(runtime, "tools.script.localModePathHint"),
     ].join("\n");
   }
 
-  const directories =
-    pathContext?.directories && typeof pathContext.directories === "object"
-      ? pathContext.directories
-      : {};
-  const sandboxWorkdir = directories.currentDirectory || pathContext?.currentDirectory || workspace;
-  const sandboxRoot = pathContext?.sandboxRoot || directories.rootDirectory || "";
-  const allowedRoots = Array.isArray(directories.allowedRoots)
-    ? directories.allowedRoots
-    : Array.isArray(pathContext?.allowedRoots)
-      ? pathContext.allowedRoots
-      : [sandboxRoot].filter(Boolean);
-  const extraMountRoots = Array.isArray(directories.extraMountTargets)
-    ? directories.extraMountTargets
-    : Array.isArray(pathContext?.extraMountTargets)
-      ? pathContext.extraMountTargets
-      : [];
-
+  const { directories, sandbox } = pathContext;
+  const sandboxWorkdir = directories.currentDirectory;
+  const extraMountRoots = directories.extraMountTargets;
   return [
     `${tTool(runtime, "tools.script.workspaceSandboxTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.workspaceSandboxTitleSuffix")}`,
     tTool(runtime, "tools.script.concise.lineShell", { shell: commandShell }),
     tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.lineRelativeBase", { workdir: sandboxWorkdir }),
-    tTool(runtime, "tools.script.concise.linePaths", { root: sandboxRoot }),
+    tTool(runtime, "tools.script.concise.linePaths", { root: sandbox.root }),
     ...(extraMountRoots.length
       ? [
           tTool(runtime, "tools.script.concise.lineExtraRoots", {
-            roots: allowedRoots.join(", "),
+            roots: directories.allowedRoots.join(", "),
           }),
         ]
       : []),

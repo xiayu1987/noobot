@@ -29,7 +29,7 @@ const {
 
 const desktopFrontendRoot = startupContext.paths.frontendRoot;
 const shouldServeDesktopFrontend =
-  process.env.NOOBOT_DESKTOP === "1" &&
+  startupContext.app.platform === "desktop" &&
   Boolean(desktopFrontendRoot) &&
   fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
 
@@ -105,7 +105,7 @@ try {
       defaultLocale,
       translateText,
       openVSCodeService,
-      host: startupContext.service.host || undefined,
+      host: startupContext.service.host,
       port: startupContext.service.port,
     });
     await writeRuntimeEvent({

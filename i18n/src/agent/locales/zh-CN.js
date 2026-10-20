@@ -36,13 +36,10 @@ export default {
   "tools.file.pathErrorHostAbsoluteNotAllowed": "当前身份不允许访问宿主绝对路径。",
   "tools.file.pathErrorSandboxNotAllowed": "当前执行视角不接受沙箱绝对路径。",
   "tools.file.pathErrorSandboxNotMapped": "该沙箱路径未映射到共享文件根目录。",
-  "tools.file.pathErrorVirtualRelativeAmbiguous": (params = {}) => {
-    const relative = String(params.suggestedPath || "");
-    const sandbox = String(params.suggestedSandboxPath || "");
-    return sandbox
-      ? `路径含有歧义。工作区相对路径请使用 ${relative}，沙箱绝对路径请使用 ${sandbox}。`
-      : `路径含有歧义。工作区相对路径请使用 ${relative}。`;
-  },
+  "tools.file.pathErrorVirtualRelativeAmbiguous": ({ suggestedPath, suggestedSandboxPath }) =>
+    suggestedSandboxPath
+      ? `路径含有歧义。工作区相对路径请使用 ${suggestedPath}，沙箱绝对路径请使用 ${suggestedSandboxPath}。`
+      : `路径含有歧义。工作区相对路径请使用 ${suggestedPath}。`,
   "tools.file.pathErrorWorkspaceOutOfScope": "工作区相对路径超出了工作区根目录。",
   "tools.file.writeAlreadyExists": "文件已存在；如需替换，请将 overwrite 设置为 true。",
   "tools.file.readRiskLevelField":

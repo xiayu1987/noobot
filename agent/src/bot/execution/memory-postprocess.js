@@ -14,8 +14,9 @@ import { isAbortError } from "../../shared/utils/error-utils.js";
 const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = TIME_THRESHOLDS.memory.summaryTimeoutMs;
 
 export class MemoryPostProcessService {
-  constructor({ globalConfig = {}, memory = null, errorLogger = null } = {}) {
+  constructor({ globalConfig, session, memory, errorLogger }) {
     this.globalConfig = globalConfig;
+    this.session = session;
     this.memory = memory;
     this.errorLogger = errorLogger;
   }
@@ -136,17 +137,25 @@ export class MemoryPostProcessService {
   async runMemoryPostProcessFlow({
     userId,
     sessionId,
-    parentSessionId = "",
-    userConfig = {},
-    runtimeEventListener = null,
-    mode = "sync",
-  } = {}) {
+    parentSessionId,
+    dialogProcessId,
+    persistenceScope,
+    userConfig,
+    runtimeEventListener,
+    mode,
+  }) {
     try {
-      await this.memory.captureSessionToShortMemory({
+      const messages = await this.session.getSessionTurns({
+        userId,
+        sessionId,
+        persistenceScope,
+      });
+      await this.memory.captureDialogToShortMemory({
         userId,
         sessionId,
         parentSessionId,
-        userConfig,
+        dialogProcessId,
+        messages,
       });
       emitEvent(runtimeEventListener, "short_memory_captured", {
         sessionId,

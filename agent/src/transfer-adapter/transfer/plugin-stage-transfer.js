@@ -41,21 +41,7 @@ export async function transferAgentPluginStageMessage({
   });
 
   if (!normalizedDetail) {
-    await emitSemanticTransferValidation({
-      runtime,
-      scenario: "harness",
-      stats: {
-        inputCount: 0,
-        outputCount: 0,
-        filteredCount: 0,
-        invalidCount: 0,
-        strict: Boolean(
-          runtime?.userConfig?.semanticTransfer?.strictEnvelopeValidation ??
-          runtime?.globalConfig?.semanticTransfer?.strictEnvelopeValidation,
-        ),
-        enforceProtocol: true,
-      },
-    });
+    await emitSemanticTransferValidation({ runtime, scenario: "harness", transferEnvelopes: [] });
     return { transferEnvelopes: [] };
   }
 
@@ -88,15 +74,7 @@ export async function transferAgentPluginStageMessage({
     ? persisted.transferEnvelopes
     : [];
   transferEnvelopes.forEach((envelope) => validateTransferEnvelope(envelope, { strict: true }));
-  await emitSemanticTransferValidation({
-    runtime,
-    scenario: "harness",
-    stats: {
-      inputCount: transferEnvelopes.length,
-      outputCount: transferEnvelopes.length,
-      enforceProtocol: true,
-    },
-  });
+  await emitSemanticTransferValidation({ runtime, scenario: "harness", transferEnvelopes });
   return { transferEnvelopes };
 }
 

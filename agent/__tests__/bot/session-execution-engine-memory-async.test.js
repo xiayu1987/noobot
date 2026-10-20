@@ -6,15 +6,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 const TEST_SHORT_DELAY_MS = 5;
 const TEST_MEDIUM_DELAY_MS = 20;
 
 function createEngine({
-  captureSessionToShortMemory,
-  maybeSummarize,
+  captureDialogToShortMemory = async () => true,
+  maybeSummarize = async () => undefined,
   globalConfig = {},
   appendTurns = async (payload = {}) => ({ appended: true, reason: "", turns: payload.turns }),
 } = {}) {
@@ -27,22 +27,12 @@ function createEngine({
       return [];
     },
     async saveExecutionReport() {},
-  };
-  const memory = {
-    async captureSessionToShortMemory(...args) {
-      if (typeof captureSessionToShortMemory === "function") {
-        return captureSessionToShortMemory(...args);
-      }
-      return undefined;
-    },
-    async maybeSummarize(...args) {
-      if (typeof maybeSummarize === "function") {
-        return maybeSummarize(...args);
-      }
-      return undefined;
+    async getSessionTurns() {
+      return [];
     },
   };
-  return new SessionExecutionEngine({
+  const memory = { captureDialogToShortMemory, maybeSummarize };
+  return createTestSessionExecutionEngine({
     globalConfig,
     session,
     memory,
@@ -55,6 +45,9 @@ function createEngine({
     },
     workspaceService: {
       async ensureUserWorkspace() {
+        return "/tmp";
+      },
+      getWorkspacePath() {
         return "/tmp";
       },
     },
@@ -81,6 +74,7 @@ function buildFinalizeInput(userConfig = {}) {
     },
     runtimeEventListener: null,
     userConfig,
+    persistenceScope: null,
   };
 }
 
@@ -117,7 +111,7 @@ test("_finalizeRunSession does not block on memory postprocess when async enable
   let captureStarted = false;
   let summarizeStarted = false;
   const engine = createEngine({
-    captureSessionToShortMemory: async () => {
+    captureDialogToShortMemory: async () => {
       captureStarted = true;
       await new Promise((resolve) => {
         resolveCapture = resolve;
@@ -148,7 +142,7 @@ test("_finalizeRunSession blocks on memory postprocess when postprocess async di
   let finalizeCompleted = false;
   let resolveCapture = null;
   const engine = createEngine({
-    captureSessionToShortMemory: async () => {
+    captureDialogToShortMemory: async () => {
       await new Promise((resolve) => {
         resolveCapture = resolve;
       });
@@ -183,7 +177,7 @@ test("_finalizeRunSession does not block on memory summarize when only summary a
   let summarizeStarted = false;
   let resolveSummarize = null;
   const engine = createEngine({
-    captureSessionToShortMemory: async () => {
+    captureDialogToShortMemory: async () => {
       captureCompleted = true;
     },
     maybeSummarize: async () => {

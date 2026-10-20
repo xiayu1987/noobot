@@ -93,7 +93,6 @@ function buildToolInputTransferMeta({
           textLength,
         }
       : undefined,
-    ...(callOverflow?.message ? { message: callOverflow.message } : {}),
   };
 }
 

@@ -44,13 +44,10 @@ export default {
   "tools.file.pathErrorSandboxNotAllowed":
     "The current execution view does not accept sandbox absolute paths.",
   "tools.file.pathErrorSandboxNotMapped": "The sandbox path is not mapped to a shared file root.",
-  "tools.file.pathErrorVirtualRelativeAmbiguous": (params = {}) => {
-    const relative = String(params.suggestedPath || "");
-    const sandbox = String(params.suggestedSandboxPath || "");
-    return sandbox
-      ? `The path is ambiguous. Use ${relative} as a workspace-relative path or ${sandbox} as a sandbox absolute path.`
-      : `The path is ambiguous. Use ${relative} as a workspace-relative path.`;
-  },
+  "tools.file.pathErrorVirtualRelativeAmbiguous": ({ suggestedPath, suggestedSandboxPath }) =>
+    suggestedSandboxPath
+      ? `The path is ambiguous. Use ${suggestedPath} as a workspace-relative path or ${suggestedSandboxPath} as a sandbox absolute path.`
+      : `The path is ambiguous. Use ${suggestedPath} as a workspace-relative path.`,
   "tools.file.pathErrorWorkspaceOutOfScope":
     "The workspace-relative path resolves outside the workspace root.",
   "tools.file.writeAlreadyExists": "The file already exists; set overwrite to true to replace it.",

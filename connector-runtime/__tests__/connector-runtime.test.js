@@ -62,7 +62,7 @@ test("runtime rejects unregistered instances and owns their lifecycle", async ()
   });
   await assert.rejects(
     runtime.createConnector({ userId: "u1", name: "x", instanceType: "missing" }),
-    /not registered/,
+    (error) => /not registered/.test(error.message) && error.statusCode === 400,
   );
   let disposed = false;
   runtime.register({
@@ -100,7 +100,7 @@ test("runtime rejects unregistered instances and owns their lifecycle", async ()
       userId: "u2",
       request: { connectorId: record.connectorId, operation: "execute", input: {} },
     }),
-    /not found/,
+    (error) => /not found/.test(error.message) && error.statusCode === 400,
   );
   await runtime.disconnect({ userId: "u1", connectorId: record.connectorId });
   assert.equal(disposed, true);
@@ -140,7 +140,7 @@ test("runtime resolves workspace fields inside the authoritative user workspace"
       instanceType: "test.file",
       parameters: { file: "../outside.db" },
     }),
-    /outside user workspace/,
+    (error) => /outside user workspace/.test(error.message) && error.statusCode === 400,
   );
 });
 

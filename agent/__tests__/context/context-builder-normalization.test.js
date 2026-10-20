@@ -11,6 +11,7 @@ import { buildSystemRuntime } from "../../src/context/application/build-system-c
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { createTestBotManager, testHeadlessStartupContext } from "../helpers/test-bot-manager.js";
 
 function createContextSessionManager() {
   return {
@@ -105,7 +106,7 @@ test("ContextBuilder binds Session persistence authority before constructing too
     promptSections: [],
     runtimeAttachments: true,
     eventListener: null,
-    botManager: null,
+    botManager: createTestBotManager(),
     selectedConnectorIds: [],
   });
 
@@ -130,7 +131,7 @@ test("buildNewSessionContext always projects explicitly selected connectors", as
   const builder = createBuilderForAttachmentRuntimeTest({
     promptSections: ["base_prompt", "system_runtime"],
     selectedConnectorIds: ["con_db"],
-    botManager: {
+    botManager: createTestBotManager({
       connectorAccessPort: {
         async access() {
           return { ok: true };
@@ -147,7 +148,7 @@ test("buildNewSessionContext always projects explicitly selected connectors", as
           ];
         },
       },
-    },
+    }),
     userMessageAttachments: [],
     runtimeAttachments: true,
     eventListener: null,
@@ -173,7 +174,7 @@ test("buildNewSessionContext emits the default agent context debug structure", a
     },
     userMessageAttachments: [],
     runtimeAttachments: true,
-    botManager: null,
+    botManager: createTestBotManager(),
     selectedConnectorIds: [],
     userInteractionBridge: null,
     persistenceScope: null,
@@ -210,7 +211,7 @@ test("buildNewSessionContext binds userMessageAttachments into runtime", async (
     promptSections: ["base_prompt", "system_runtime", "scenario"],
     runtimeAttachments: true,
     eventListener: null,
-    botManager: null,
+    botManager: createTestBotManager(),
     selectedConnectorIds: [],
     userInteractionBridge: null,
     persistenceScope: null,
@@ -242,7 +243,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
       },
       skillService: null,
       eventListener: null,
-      botManager: null,
+      botManager: createTestBotManager(),
       userInteractionBridge: null,
       errorLogger: null,
     },
@@ -280,7 +281,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
 
 test("buildNewSessionContext keeps turn identity in runtime but excludes it from system text", async () => {
   const builder = new ContextBuilder({
-    config: { globalConfig: {}, userConfig: {} },
+    config: { globalConfig: { workspaceRoot: "/tmp/noobot-test-workspace" }, userConfig: {} },
     serviceContainer: {
       sessionManager: createContextSessionManager(),
       memoryService: null,
@@ -291,7 +292,7 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
       },
       skillService: null,
       eventListener: null,
-      botManager: null,
+      botManager: createTestBotManager(),
       userInteractionBridge: null,
       errorLogger: null,
     },
@@ -340,7 +341,7 @@ test("buildNewSessionContext keeps super user identity in system message when sy
       },
       skillService: null,
       eventListener: null,
-      botManager: null,
+      botManager: createTestBotManager(),
       userInteractionBridge: null,
       errorLogger: null,
     },
@@ -440,7 +441,7 @@ test("buildNewSessionContext keeps user message attachments separate from runtim
     promptSections: ["base_prompt", "system_runtime", "scenario"],
     runtimeAttachments: true,
     eventListener: null,
-    botManager: null,
+    botManager: createTestBotManager(),
     selectedConnectorIds: [],
     userInteractionBridge: null,
     persistenceScope: null,
@@ -497,7 +498,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
       },
       skillService: null,
       eventListener: null,
-      botManager: null,
+      botManager: createTestBotManager(),
       userInteractionBridge: null,
       errorLogger: null,
     },
@@ -528,11 +529,12 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
   assert.equal(context.context.modelContext.messageBlocks.system.length > 0, true);
 });
 
-test("buildSystemRuntime derives isSuperUser from configured super user id", () => {
+test("buildSystemRuntime projects the explicit isSuperUser identity fact", () => {
   const runtime = buildSystemRuntime({
-    globalConfig: { superAdmin: { userId: "super-root-user" } },
     userId: "super-root-user",
     dialogProcessId: "dp-super",
+    botManager: createTestBotManager(),
+    isSuperUser: true,
   });
 
   assert.equal(runtime.isSuperUser, true);
@@ -558,28 +560,46 @@ test("buildSystemRuntime injects redacted desktop dependency source summary", ()
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp-deps",
-    botManager: { startupContext: { runtime: { dependencies: { sourceSummary } } } },
+    isSuperUser: false,
+    botManager: {
+      startupContext: {
+        ...testHeadlessStartupContext,
+        runtime: {
+          ...testHeadlessStartupContext.runtime,
+          dependencies: {
+            hasPlaywrightChromium: false,
+            hasFfmpeg: true,
+            hasFfprobe: false,
+            hasLibreOffice: false,
+            ffmpegPath: "/managed/bin/ffmpeg",
+            ffprobePath: "",
+            libreOfficePath: "",
+            playwrightChromiumPath: "",
+            pathPrefix: "",
+            sourceSummary,
+          },
+        },
+      },
+    },
   });
 
   assert.deepEqual(runtime.desktopDependencySources, sourceSummary);
   assert.equal(JSON.stringify(runtime.desktopDependencySources).includes("http"), false);
 });
 
-test("buildSystemRuntime defaults isSuperUser to false when config is missing", () => {
-  const runtime = buildSystemRuntime({
-    globalConfig: {},
-    userId: "super-root-user",
-    dialogProcessId: "dp-regular",
-  });
-
-  assert.equal(runtime.isSuperUser, false);
+test("buildSystemRuntime requires an explicit boolean isSuperUser", () => {
+  assert.throws(
+    () => buildSystemRuntime({ userId: "super-root-user", dialogProcessId: "dp-regular" }),
+    /requires boolean isSuperUser/,
+  );
 });
 
 test("buildSystemRuntime ignores runConfig identity overrides", () => {
   const runtime = buildSystemRuntime({
-    globalConfig: { superAdmin: { userId: "super-root-user" } },
     userId: "regular-user",
     dialogProcessId: "dp-guard",
+    botManager: createTestBotManager(),
+    isSuperUser: false,
     runConfig: {
       systemRuntimePatch: { isSuperUser: true, userId: "super-root-user" },
     },
@@ -623,7 +643,7 @@ function createBuilderForLongMemoryTest(
       },
       skillService: null,
       eventListener: { onEvent: (event) => events.push(event) },
-      botManager: null,
+      botManager: createTestBotManager(),
       userInteractionBridge: null,
     },
     sessionContext: {
@@ -728,7 +748,7 @@ test("a builder with memoryService requires an error logger", () => {
           memoryService: { readLongMemory: async () => "" },
           attachmentService: null,
           skillService: null,
-          botManager: null,
+          botManager: createTestBotManager(),
           errorLogger: null,
           userInteractionBridge: null,
         },

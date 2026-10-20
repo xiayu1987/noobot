@@ -23,6 +23,23 @@ const requiredText = (value, label) => {
   return normalized;
 };
 
+const CALLER_INPUT_STATUS_CODE = 400;
+
+function decodeCallerInput(decode) {
+  try {
+    return decode();
+  } catch (error) {
+    if (error instanceof Error && error.statusCode === undefined) {
+      error.statusCode = CALLER_INPUT_STATUS_CODE;
+    }
+    throw error;
+  }
+}
+
+function callerInputError(message) {
+  return Object.assign(new TypeError(message), { statusCode: CALLER_INPUT_STATUS_CODE });
+}
+
 export class ConnectorRuntime {
   constructor({
     repository,
@@ -88,8 +105,10 @@ export class ConnectorRuntime {
   }
 
   _normalizeParameters(userId, definition, parameters) {
-    const normalized = { ...normalizeConnectorParameters(definition, parameters) };
-    const ownerUserId = requiredText(userId, "connector owner userId");
+    const normalized = {
+      ...decodeCallerInput(() => normalizeConnectorParameters(definition, parameters)),
+    };
+    const ownerUserId = decodeCallerInput(() => requiredText(userId, "connector owner userId"));
     const ownerWorkspace = path.resolve(
       typeof this.resolveUserWorkspacePath === "function"
         ? this.resolveUserWorkspacePath(ownerUserId)
@@ -98,7 +117,7 @@ export class ConnectorRuntime {
     for (const field of definition.fields.filter((item) => item.kind === "workspace_path")) {
       const resolvedPath = path.resolve(ownerWorkspace, normalized[field.name]);
       if (!isPathWithinRoot(ownerWorkspace, resolvedPath)) {
-        throw new TypeError(`connector workspace path is outside user workspace: ${field.name}`);
+        throw callerInputError(`connector workspace path is outside user workspace: ${field.name}`);
       }
       normalized[field.name] = resolvedPath;
     }
@@ -106,18 +125,19 @@ export class ConnectorRuntime {
   }
 
   async createConnector({ userId = "", name = "", instanceType = "", parameters = {} } = {}) {
-    const ownerUserId = requiredText(userId, "connector owner userId");
-    const implementation = this.registry.require(instanceType);
+    const ownerUserId = decodeCallerInput(() => requiredText(userId, "connector owner userId"));
+    const implementation = decodeCallerInput(() => this.registry.require(instanceType));
     const connectorId = `con_${randomUUID()}`;
     const normalizedParameters = this._normalizeParameters(
       ownerUserId,
       implementation.definition,
       parameters,
     );
+    const connectorName = decodeCallerInput(() => requiredText(name, "connector name"));
     const record = await this.repository.create({
       userId: ownerUserId,
       connectorId,
-      name: requiredText(name, "connector name"),
+      name: connectorName,
       instanceType: implementation.definition.instanceType,
       sealedParameters: this.secretStore.seal({
         userId: ownerUserId,
@@ -137,16 +157,16 @@ export class ConnectorRuntime {
     instanceType = "",
     parameters = {},
   } = {}) {
-    const ownerUserId = requiredText(userId, "connector owner userId");
-    const normalizedId = requiredText(connectorId, "connectorId");
-    const implementation = this.registry.require(instanceType);
+    const ownerUserId = decodeCallerInput(() => requiredText(userId, "connector owner userId"));
+    const normalizedId = decodeCallerInput(() => requiredText(connectorId, "connectorId"));
+    const implementation = decodeCallerInput(() => this.registry.require(instanceType));
     const key = this._key(ownerUserId, normalizedId);
     return this._withConnectorLock(key, async () => {
       await this._disconnectActive(key);
       return this.repository.update({
         userId: ownerUserId,
         connectorId: normalizedId,
-        name: requiredText(name, "connector name"),
+        name: decodeCallerInput(() => requiredText(name, "connector name")),
         instanceType: implementation.definition.instanceType,
         sealedParameters: this.secretStore.seal({
           userId: ownerUserId,
@@ -160,7 +180,7 @@ export class ConnectorRuntime {
   }
 
   async deleteConnector({ userId = "", connectorId = "" } = {}) {
-    const key = this._key(userId, connectorId);
+    const key = decodeCallerInput(() => this._key(userId, connectorId));
     return this._withConnectorLock(key, async () => {
       await this._disconnectActive(key);
       return this.repository.delete({ userId, connectorId });
@@ -169,9 +189,9 @@ export class ConnectorRuntime {
 
   async _record(userId, connectorId) {
     const record = await this.repository.get({ userId, connectorId });
-    if (!record) throw new TypeError("connector not found");
+    if (!record) throw callerInputError("connector not found");
     if (record.ownerUserId !== text(userId)) {
-      throw new TypeError("connector does not belong to current user");
+      throw callerInputError("connector does not belong to current user");
     }
     return Object.freeze({
       ...record,
@@ -185,7 +205,7 @@ export class ConnectorRuntime {
   }
 
   async connect({ userId = "", connectorId = "", context = {} } = {}) {
-    const key = this._key(userId, connectorId);
+    const key = decodeCallerInput(() => this._key(userId, connectorId));
     return this._withConnectorLock(key, async () => {
       const record = await this._record(userId, connectorId);
       await this._disconnectActive(key, context);
@@ -237,7 +257,7 @@ export class ConnectorRuntime {
   }
 
   async disconnect({ userId = "", connectorId = "", context = {} } = {}) {
-    const key = this._key(userId, connectorId);
+    const key = decodeCallerInput(() => this._key(userId, connectorId));
     return this._withConnectorLock(key, () => this._disconnectActive(key, context));
   }
 

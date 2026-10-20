@@ -322,6 +322,14 @@ function requireResolvedPathPolicy(pathPolicy) {
   return policy;
 }
 
+export function resolveSuperAdminHostRoots(pathPolicy) {
+  if (!RESOLVED_PATH_POLICIES.has(pathPolicy)) {
+    throw new TypeError("path policy must be created by resolvePathPolicy");
+  }
+  const hostRule = pathPolicy.roles.superAdmin.host;
+  return hostRule.access === "allow" ? hostRule.allowedRoots : [];
+}
+
 export function resolvePathPolicy({
   policyOverride = {},
   trustedDirectories = undefined,

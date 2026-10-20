@@ -92,7 +92,7 @@ export function useMessageMeta({ getMessageItem = () => ({}), getRuntimeView = n
       return (
         resolveStatusStepPresentation({
           turnRuntime: projectedRuntime,
-          runtimeDisplayState: projectedRuntime.state || STATUS_STEP_STAGE.SENDING,
+          runtimeDisplayState: projectedRuntime.displayState,
           projectedState: messageItem?.projectedStatusStepState,
         }).displayState || STATUS_STEP_STAGE.SENDING
       );

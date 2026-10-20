@@ -102,6 +102,7 @@ export function selectTurnMessageRuntime(
   const defaultRuntimeView = {
     state: "",
     backendState: "",
+    displayState: "",
     sessionId: normalizedSessionId,
     turnScopeId: canonicalTurnScopeId(turnScopeId),
     dialogProcessId: normalizedDialogProcessId,
@@ -141,6 +142,7 @@ export function selectTurnMessageRuntime(
   return {
     state,
     backendState: turn.backendState || "",
+    displayState: turnRuntimeDisplayState(turn),
     sessionId: turn.sessionId,
     parentSessionId: turn.parentSessionId || "",
     turnScopeId: turn.turnScopeId,

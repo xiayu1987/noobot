@@ -7,12 +7,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 
-import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
 
 const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
 
 test("plugin resolveModelMessages uses authoritative modelContext blocks", () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const engine = createTestSessionExecutionEngine({ globalConfig: {} });
   const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
@@ -51,7 +51,7 @@ test("plugin resolveModelMessages uses authoritative modelContext blocks", () =>
 });
 
 test("plugin resolveModelMessages keeps unsummarized injected blocks append-only", () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const engine = createTestSessionExecutionEngine({ globalConfig: {} });
   const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
@@ -90,7 +90,7 @@ test("plugin resolveModelMessages keeps unsummarized injected blocks append-only
 });
 
 test("plugin resolveModelMessages accepts a versioned modelContext", () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const engine = createTestSessionExecutionEngine({ globalConfig: {} });
   const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
 
   const resolved = resolver({
@@ -113,7 +113,7 @@ test("plugin resolveModelMessages accepts a versioned modelContext", () => {
 });
 
 test("plugin resolveModelMessages no longer clips agent context to plugin context window limit", () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const engine = createTestSessionExecutionEngine({ globalConfig: {} });
   const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
@@ -139,7 +139,7 @@ test("plugin resolveModelMessages no longer clips agent context to plugin contex
 });
 
 test("plugin resolveModelMessages uses main-flow blocks when available", () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const engine = createTestSessionExecutionEngine({ globalConfig: {} });
   const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
@@ -170,7 +170,7 @@ test("plugin resolveModelMessages uses main-flow blocks when available", () => {
 });
 
 test("plugin resolveModelMessages does not mutate source messages or messageBlocks when unsummarized", () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const engine = createTestSessionExecutionEngine({ globalConfig: {} });
   const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const ctx = {
     agentContext,

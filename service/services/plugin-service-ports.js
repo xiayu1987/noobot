@@ -32,6 +32,15 @@ function requireAssetToken(value, pattern, label) {
   return normalized;
 }
 
+function requireCallerAssetToken(value, pattern, label) {
+  try {
+    return requireAssetToken(value, pattern, label);
+  } catch (error) {
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
 function createWorkspaceAssetWriter({ resolveRoot }) {
   return async function write({
     userId,
@@ -40,7 +49,7 @@ function createWorkspaceAssetWriter({ resolveRoot }) {
     declaredBytes = 0,
     validate = null,
   } = {}) {
-    const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
+    const normalizedAssetId = requireCallerAssetToken(assetId, assetIdPattern, "ID");
     if (!source || !isFunction(source.pipe)) {
       throw new TypeError("workspace asset source stream is required");
     }
@@ -111,8 +120,8 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
   const resolveVersionPath = (userId, assetId, version) =>
     path.resolve(
       resolveRoot(userId),
-      requireAssetToken(assetId, assetIdPattern, "ID"),
-      requireAssetToken(version, assetVersionPattern, "version"),
+      requireCallerAssetToken(assetId, assetIdPattern, "ID"),
+      requireCallerAssetToken(version, assetVersionPattern, "version"),
     );
   const resolveCatalogPath = (userId) => path.resolve(resolveRoot(userId), "catalog.json");
   let catalogMutation = Promise.resolve();
@@ -167,7 +176,7 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
       return Object.freeze({ ...(await readCatalog(userId)) });
     },
     async writeMetadata({ userId, assetId, metadata } = {}) {
-      const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
+      const normalizedAssetId = requireCallerAssetToken(assetId, assetIdPattern, "ID");
       if (!isPlainObject(metadata)) {
         throw new TypeError("workspace asset metadata object is required");
       }
@@ -179,7 +188,7 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
       });
     },
     async delete({ userId, assetId } = {}) {
-      const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
+      const normalizedAssetId = requireCallerAssetToken(assetId, assetIdPattern, "ID");
       return mutateCatalog(async () => {
         const catalog = await readCatalog(userId);
         const existed = Object.prototype.hasOwnProperty.call(catalog, normalizedAssetId);

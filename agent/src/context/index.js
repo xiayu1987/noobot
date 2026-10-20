@@ -8,7 +8,8 @@ import { normalizeContextPolicy } from "@noobot/agent-config-protocol/enums";
 import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/message/session-projection";
 import {
   resolveRuntimeBasePath,
-  buildIdentityAwareStaticInfo,
+  buildStaticInfo,
+  resolveContextIdentityInfo,
 } from "./providers/environment-provider.js";
 import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
 import { resolveAllEnabledProviders } from "./providers/model-provider.js";
@@ -186,10 +187,10 @@ export class ContextBuilder {
   async buildAgentContext(
     systemMessages,
     conversationMessages,
-    { runtimeBasePath = "", dialogProcessId = "", attachments = [], incrementalMessages = [] } = {},
+    { dialogProcessId = "", attachments = [], incrementalMessages = [] } = {},
   ) {
     const effectiveSystemMessages = [...systemMessages, ...this.additionalSystemMessages];
-    const resolvedRuntimeBasePath = runtimeBasePath || this._resolveRuntimeBasePath();
+    const resolvedRuntimeBasePath = this._resolveRuntimeBasePath();
     const resolvedRootSessionId = await resolveRootSessionId({
       sessionManager: this.sessionManager,
       userId: this.userId,
@@ -197,9 +198,12 @@ export class ContextBuilder {
       parentSessionId: this.parentSessionId,
     });
 
-    const runtimeStaticInfo = buildIdentityAwareStaticInfo({
+    const runtimeStaticInfo = buildStaticInfo({
       runtimeBasePath: resolvedRuntimeBasePath,
-      userId: this.userId,
+      identity: resolveContextIdentityInfo({
+        userId: this.userId,
+        globalConfig: this.globalConfig,
+      }),
       globalConfig: this.globalConfig,
     });
     const workspaceDirectories =
@@ -216,9 +220,9 @@ export class ContextBuilder {
         dialogProcessId,
         rootSessionId: resolvedRootSessionId,
         runConfig: this.runConfig,
-        globalConfig: this.globalConfig,
         botManager: this.botManager,
         staticInfo: runtimeStaticInfo,
+        isSuperUser: runtimeStaticInfo.identity.isSuperUser,
         now: this._now(),
       }),
       persistenceScope: this.persistenceScope,
@@ -322,7 +326,7 @@ export class ContextBuilder {
       records: summarizeDiagnosticMessages(sessionRecords),
     });
     const longMemory = await this._resolveLongMemoryForInjection();
-    const { systemContext, runtimeBasePath, attachments } = await this._buildSystemContext({
+    const { systemContext, attachments } = await this._buildSystemContext({
       dialogProcessId,
       longMemory,
     });
@@ -330,7 +334,6 @@ export class ContextBuilder {
       systemContext,
       projectSessionRecordsToContextMessages(sessionRecords),
       {
-        runtimeBasePath,
         dialogProcessId,
         attachments,
       },

@@ -12,7 +12,8 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
+import { createTestBotManager } from "../helpers/test-bot-manager.js";
 import { createStateCommitter } from "../../src/runtime/tool-execution/state-committer.js";
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
@@ -37,7 +38,7 @@ async function createTempRoot() {
 }
 
 test("_prepareRunConfig attaches independent botHookManager", () => {
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
   });
   const prepared = engine._prepareRunConfig({
@@ -51,7 +52,7 @@ test("_prepareRunConfig attaches independent botHookManager", () => {
 });
 
 test("_finalizeRunSession preserves the child lifecycle terminal receipt", async () => {
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
   });
   const lifecycle = {
@@ -78,7 +79,7 @@ test("_finalizeRunSession preserves the child lifecycle terminal receipt", async
 });
 
 test("_finalizeRunSession forwards staged persistence state unchanged", async () => {
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
   });
   let forwarded = null;
@@ -104,7 +105,7 @@ test("_finalizeRunSession forwards staged persistence state unchanged", async ()
 
 test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id and resolves basePath", async () => {
   const tempRoot = await createTempRoot();
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService(tempRoot),
   });
 
@@ -181,7 +182,7 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
 
 test("Harness before_llm_call preserves canonical ids and block ownership across agent normalization", async () => {
   const tempRoot = await createTempRoot();
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService(tempRoot),
   });
   const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
@@ -262,7 +263,7 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
 test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager instead of replacing it", () => {
   const hookManager = createHookManager();
   hookManager.on(HOOK_POINT.AGENT.BEFORE_LLM_CALL, () => {}, { id: "existing.before_llm_call" });
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
   });
 
@@ -288,7 +289,7 @@ test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager inste
 
 test("global plugin defaults do not activate a plugin absent from selectedPlugins", () => {
   const tempRoot = "/tmp/noobot-global-plugin-test";
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     globalConfig: { plugins: { harness: { enabled: true, mode: "on", trace: false } } },
     workspaceService: createWorkspaceService(tempRoot),
   });
@@ -385,11 +386,11 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     producerId: "session-execution-engine-harness",
   });
 
-  const engine = new SessionExecutionEngine({
-    globalConfig: {},
+  const engine = createTestSessionExecutionEngine({
+    globalConfig: { workspaceRoot: tempRoot },
     session,
     memory: {
-      async captureSessionToShortMemory() {},
+      async captureDialogToShortMemory() {},
       async maybeSummarize() {},
     },
     attach: {
@@ -397,7 +398,11 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         throw new Error("harness smoke run carries no raw attachments");
       },
     },
-    skill: {},
+    skill: {
+      async listSkills() {
+        return [];
+      },
+    },
     configService: {
       async loadUserConfig() {
         return { memory: { postprocess_async: false } };
@@ -412,7 +417,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       },
     },
     errorLogger: { async log() {} },
-    botManager: {},
+    botManager: createTestBotManager(),
     agentRunner: async ({ agentContext, currentUserMessage }) => {
       capturedRuntime = agentContext?.bindings?.runtime || null;
       capturedAgentUserMessage = currentUserMessage.content;
@@ -549,7 +554,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
 test("harness records tool call and state commit hook artifacts", async () => {
   const tempRoot = await createTempRoot();
   const hookManager = createHookManager();
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService(tempRoot),
   });
   const dialogProcessId = "dp-tool-state-smoke";

@@ -33,6 +33,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     commandId: "start",
     causationId: "start",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    startedAt: "2026-07-18T00:00:00.000Z",
     phase: "action",
     action: "send",
   });
@@ -42,7 +43,6 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     causationId: "running",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: "processing",
-    executionState: "sending",
   });
   apply({
     turnScopeId: "turn-recover",

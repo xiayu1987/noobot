@@ -62,8 +62,6 @@ function buildMessageStatusFacet(canonicalMessage = {}) {
     synthetic: canonicalMessage.synthetic === true,
     placeholder: canonicalMessage.placeholder === true,
     turnPlaceholder: canonicalMessage.turnPlaceholder === true,
-    state: canonicalMessage.state || "",
-    status: canonicalMessage.status || "",
     channelState: canonicalMessage.channelState || "",
     terminalOutcome: canonicalMessage.terminalOutcome || "",
     statusTurnScopeId: text(canonicalMessage.statusTurnScopeId),

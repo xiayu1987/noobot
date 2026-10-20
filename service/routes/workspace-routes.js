@@ -11,7 +11,11 @@ import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 import { resolveFileMutationRoot } from "noobot-agent/file-mutation-service";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
-import { createJsonRouteWrapper } from "./route-wrapper.js";
+import {
+  classifyRequestedPathError,
+  createBadRequestError,
+  createJsonRouteWrapper,
+} from "./route-wrapper.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -103,22 +107,20 @@ export function registerWorkspaceRoutes(
   const resolveHostFilePath = async (req) => {
     const hostPath = text(req?.query?.path);
     if (!hostPath) {
-      const error = new Error(translateText("common.pathRequired", req.locale));
-      error.code = "missing_path";
-      throw error;
+      throw createBadRequestError(translateText("common.pathRequired", req.locale), {
+        code: "missing_path",
+      });
     }
     if (!path.isAbsolute(hostPath)) {
-      const error = new Error("Host file path must be absolute.");
-      error.statusCode = 400;
-      error.code = "not_absolute";
-      throw error;
+      throw createBadRequestError("Host file path must be absolute.", { code: "not_absolute" });
     }
-    const fileStats = await stat(hostPath);
+    const fileStats = await stat(hostPath).catch((error) => {
+      throw classifyRequestedPathError(error);
+    });
     if (!fileStats.isFile()) {
-      const error = new Error(translateText("common.pathIsNotFile", req.locale));
-      error.statusCode = 400;
-      error.code = "not_file";
-      throw error;
+      throw createBadRequestError(translateText("common.pathIsNotFile", req.locale), {
+        code: "not_file",
+      });
     }
     return { hostPath, fileStats };
   };
@@ -229,24 +231,28 @@ export function registerWorkspaceRoutes(
     trackMutations: false,
     readMutations: true,
     resolveMutationRoot: async (req) => {
-      const userId = text(req?.params?.userId);
-      const sessionId = text(req?.query?.sessionId || req?.body?.sessionId);
-      const parentSessionId = text(req?.query?.parentSessionId || req?.body?.parentSessionId);
-      const scopeId = text(req?.query?.scopeId || req?.body?.scopeId);
-      const relativeDir = text(req?.query?.relativeDir || req?.body?.relativeDir);
-      const allowedRoot = text(req?.query?.allowedRoot || req?.body?.allowedRoot);
-      if (!userId || !sessionId) throw new Error("session id is required for file mutations");
+      const userId = text(req.params.userId);
+      const sessionId = text(req.query.sessionId);
+      const parentSessionId = text(req.query.parentSessionId);
+      const scopeId = text(req.query.scopeId);
+      const relativeDir = text(req.query.relativeDir);
+      const allowedRoot = text(req.query.allowedRoot);
+      if (!userId || !sessionId) {
+        throw createBadRequestError("session id is required for file mutations");
+      }
       const scopeValues = [scopeId, relativeDir, allowedRoot];
       const hasPersistenceScope = scopeValues.some(Boolean);
       if (hasPersistenceScope && !scopeValues.every(Boolean)) {
-        throw new Error("complete session persistence scope is required for file mutations");
+        throw createBadRequestError(
+          "complete session persistence scope is required for file mutations",
+        );
       }
       const scope = await workspaceService.locateSessionScope({
         userId,
         sessionId,
-        ...(hasPersistenceScope
-          ? { persistenceScope: { scopeId, parentSessionId, relativeDir, allowedRoot } }
-          : {}),
+        persistenceScope: hasPersistenceScope
+          ? { scopeId, parentSessionId, relativeDir, allowedRoot }
+          : null,
       });
       return resolveFileMutationRoot(scope?.sessionDir);
     },

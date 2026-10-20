@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
 import { createAgentDetachedSubSessionStrategy } from "../../src/bot/session/detached-subsession-strategy.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
@@ -15,7 +15,7 @@ import { createTestSessionRequiredFields } from "../helpers/session-message-fact
 import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 test("SessionExecutionEngine forwards the authoritative dialog identity to runtime initialization", async () => {
-  const engine = new SessionExecutionEngine({});
+  const engine = createTestSessionExecutionEngine({});
   let captured = null;
   engine.initializer = {
     async initializeRunSessionRuntime(payload = {}) {
@@ -35,7 +35,7 @@ test("SessionExecutionEngine forwards the authoritative dialog identity to runti
 });
 
 test("SessionExecutionEngine forwards only the cross-layer persistence scope", async () => {
-  const engine = new SessionExecutionEngine({});
+  const engine = createTestSessionExecutionEngine({});
   const persistenceScope = { scopeId: "agent:child" };
   const userInterjectionPort = {
     consume: async () => [],
@@ -85,7 +85,7 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
     },
   };
   let lifecycleSequence = 0;
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: { getWorkspacePath: () => "/tmp" },
     configService: {
       async loadUserConfig() {
@@ -138,4 +138,19 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
   assert.equal(capturedRunSessionPayload?.userInteractionBridge, bridge);
   assert.match(capturedRunSessionPayload?.turnScopeId, /^internal-turn:/);
   assert.equal(capturedRunSessionPayload?.turnAcceptance?.messageUid, "detached-user-message");
+});
+
+test("SessionExecutionEngine rejects incomplete dependencies at construction", () => {
+  assert.throws(
+    () => createTestSessionExecutionEngine({ pluginRuntimeBundle: undefined }),
+    /SessionExecutionEngine requires: pluginRuntimeBundle/,
+  );
+  assert.throws(
+    () => createTestSessionExecutionEngine({ agentRunner: {} }),
+    /agentRunner must be a function/,
+  );
+  assert.throws(
+    () => createTestSessionExecutionEngine({ pluginRuntimeBundle: {} }),
+    /pluginRuntimeBundle requires loadedPlugins,pluginRuntime/,
+  );
 });

@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.js";
-import { resolveSandboxPathMappings, resolveRuntimeUserId } from "./sandbox-mapping.js";
-import { HOST_FILESYSTEM_ROOT } from "./path-contract.js";
+import { filePath, normalizeSlashPath } from "./platform.js";
+import { resolveSandboxPathMappings } from "./sandbox-mapping.js";
+import { HOST_FILESYSTEM_ROOT, resolveSuperAdminHostRoots } from "./path-contract.js";
 import {
   WORKSPACE_SANDBOX_PATHS,
   assertToolExecutionPolicy,
@@ -14,215 +14,121 @@ import {
 } from "@noobot/execution-isolation-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
-function resolveRuntimeHostRoot({
-  runtime = {},
-  agentContext = null,
-  runtimeBasePath = "",
-  workspacePath = "",
-} = {}) {
-  return text(
-    runtimeBasePath ||
-      workspacePath ||
-      runtime?.basePath ||
-      agentContext?.context?.environment?.workspace?.basePath,
-  );
-}
-
-export function resolveRuntimeWorkspaceRoot({
-  runtime = {},
-  globalConfig = {},
-  workspaceRoot = "",
-} = {}) {
-  return text(workspaceRoot || globalConfig?.workspaceRoot || runtime?.globalConfig?.workspaceRoot);
-}
-
 function uniqueNormalizedPaths(paths = []) {
   return Array.from(new Set(paths.map((item) => normalizeSlashPath(item)).filter(Boolean)));
 }
 
-function objectOrEmpty(value) {
-  return isPlainObject(value) ? value : {};
-}
-
-function resolveStaticPathDirectories({ runtime = {}, agentContext = null } = {}) {
-  const contextStaticInfo = objectOrEmpty(agentContext?.context?.environment?.staticInfo);
-  const runtimeStaticInfo = objectOrEmpty(runtime?.systemRuntime?.staticInfo);
-  return objectOrEmpty(contextStaticInfo.directories || runtimeStaticInfo.directories);
+function requireTextInput(value, label) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(`resolveRuntimePathContext requires ${label}`);
+  }
+  return value.trim();
 }
 
 export function isHostFilesystemSentinel(value = "") {
   return text(value) === HOST_FILESYSTEM_ROOT;
 }
 
-export function resolveRuntimePathContext({
-  runtime = {},
-  agentContext = null,
-  runtimeBasePath = "",
-  workspacePath = "",
-  workspaceRoot = "",
-  userId = "",
-  globalConfig = {},
-  executionPolicy,
-} = {}) {
-  const resolvedUserId = resolveRuntimeUserId({ runtime, agentContext, userId });
-  const hostRootDirectory = resolveRuntimeHostRoot({
-    runtime,
-    agentContext,
-    runtimeBasePath,
-    workspacePath,
-  });
-  const hostWorkspaceRoot = resolveRuntimeWorkspaceRoot({
-    runtime,
-    globalConfig,
-    workspaceRoot,
-  });
-  const hostOpsWorkdir = hostRootDirectory
-    ? filePath.join(hostRootDirectory, WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE)
-    : "";
-  const resolvedGlobalConfig = Object.keys(globalConfig).length
-    ? globalConfig
-    : objectOrEmpty(runtime?.globalConfig);
-  const resolvedExecutionPolicy = assertToolExecutionPolicy(executionPolicy);
-  const isolation = resolvedExecutionPolicy.isolation;
-  const sandboxEnabled = isSandboxExecutionView(resolvedExecutionPolicy.view);
-  const sandboxProvider = sandboxEnabled ? isolation.sandbox.provider : "";
-  const mappingRuntime = {
-    ...runtime,
-    globalConfig: resolvedGlobalConfig,
-    userConfig: {},
-  };
-  const sandboxPathMappings = sandboxEnabled ? resolveSandboxPathMappings(mappingRuntime) : [];
-  const hostMountSources = uniqueNormalizedPaths(
-    sandboxPathMappings.map((item = {}) => item.source),
-  );
-  const sandboxMountTargets = uniqueNormalizedPaths(
-    sandboxPathMappings.map((item = {}) => item.target),
-  );
-  const hostDirectories = {
-    view: "host",
-    currentDirectory: hostRootDirectory,
-    rootDirectory: hostRootDirectory,
-    opsWorkdir: hostOpsWorkdir,
-    relativePathBase: "rootDirectory",
-    allowedRoots: uniqueNormalizedPaths([hostRootDirectory]),
-  };
-  const hostContext = {
-    view: "host",
-    sandboxEnabled: false,
-    sandboxProvider: "",
-    sandboxScope: "",
-    isDockerGlobal: false,
-    currentDirectory: hostDirectories.currentDirectory,
-    rootDirectory: hostDirectories.rootDirectory,
-    opsWorkdir: hostDirectories.opsWorkdir,
-    sandboxRoot: "",
-    userRoot: hostRootDirectory,
-    relativePathBase: hostDirectories.relativePathBase,
-    allowedRoots: hostDirectories.allowedRoots,
-    extraMountTargets: [],
-    hostRootDirectory,
-    hostWorkspaceRoot,
-    hostOpsWorkdir,
-    hostAllowedRoots: [],
-    hostMountSources,
-    sandboxMountTargets,
-    sandboxPathMappings,
-    directories: hostDirectories,
-  };
-  if (!sandboxEnabled) return hostContext;
-
-  const layout = resolveWorkspaceSandboxLayout({ isolation, userId: resolvedUserId });
-  const sandboxScope = isolation.sandbox.scope;
-  const sandboxRoot = layout.root;
-  const isDockerGlobal = !layout.userIsolated;
-  const userRoot = layout.userRoot;
-  const opsWorkdir = layout.opsWorkdir;
-  const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
-  const directories = {
-    view: "sandbox",
-    currentDirectory: userRoot,
-    rootDirectory: userRoot,
-    opsWorkdir,
-    relativePathBase: "rootDirectory",
-    allowedRoots,
-    ...(sandboxMountTargets.length ? { extraMountTargets: sandboxMountTargets } : {}),
-  };
+export function resolveRuntimeOpsWorkdir({ hostRootDirectory, userId, executionPolicy }) {
+  const hostRoot = requireTextInput(hostRootDirectory, "hostRootDirectory");
+  const resolvedUserId = requireTextInput(userId, "userId");
+  const policy = assertToolExecutionPolicy(executionPolicy);
+  if (!isSandboxExecutionView(policy.view)) {
+    return {
+      view: "host",
+      opsWorkdir: filePath.join(hostRoot, WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE),
+    };
+  }
   return {
-    ...hostContext,
     view: "sandbox",
-    sandboxEnabled: true,
-    sandboxProvider,
-    sandboxScope,
-    isDockerGlobal,
-    currentDirectory: userRoot,
-    rootDirectory: userRoot,
-    opsWorkdir,
-    sandboxRoot,
-    userRoot,
-    allowedRoots,
-    extraMountTargets: sandboxMountTargets,
-    directories,
+    opsWorkdir: resolveWorkspaceSandboxLayout({
+      isolation: policy.isolation,
+      userId: resolvedUserId,
+    }).opsWorkdir,
   };
 }
 
-export function resolveAgentPathContext({
-  runtime = {},
-  agentContext = null,
-  runtimeBasePath = "",
-  workspacePath = "",
-  workspaceRoot = "",
-  userId = "",
-  globalConfig = {},
-  executionPolicy,
-} = {}) {
-  const baseContext = resolveRuntimePathContext({
-    runtime,
-    agentContext,
-    runtimeBasePath,
-    workspacePath,
-    workspaceRoot,
-    userId,
-    globalConfig,
-    executionPolicy,
-  });
-  const staticDirectories = resolveStaticPathDirectories({ runtime, agentContext });
-  if (!Object.keys(staticDirectories).length) return baseContext;
-
-  const directoryView = text(
-    staticDirectories.view || baseContext.directories.view || baseContext.view,
-  );
-  const directories = {
-    ...baseContext.directories,
-    ...staticDirectories,
-    view: directoryView || baseContext.directories.view,
-    allowedRoots: Array.isArray(staticDirectories.allowedRoots)
-      ? uniqueNormalizedPaths(staticDirectories.allowedRoots)
-      : baseContext.directories.allowedRoots,
-  };
-  const isSandboxView = directories.view === PATH_VIEWS.SANDBOX;
-  const staticRootDirectory = text(directories.rootDirectory);
-  const hostRootDirectory =
-    !isSandboxView && staticRootDirectory ? staticRootDirectory : baseContext.hostRootDirectory;
-  const hostAllowedRoots =
-    !isSandboxView && Array.isArray(directories.allowedRoots)
-      ? uniqueNormalizedPaths(
-          directories.allowedRoots.filter((item) => !isHostFilesystemSentinel(item)),
-        )
-      : [];
-
+function resolveHostDirectories({ hostRootDirectory, opsWorkdir, superUserHostRoots }) {
+  const hostAbsolutePaths = superUserHostRoots.length > 0;
   return {
-    ...baseContext,
-    view: directories.view || baseContext.view,
-    currentDirectory: directories.currentDirectory || baseContext.currentDirectory,
-    rootDirectory: directories.rootDirectory || baseContext.rootDirectory,
-    opsWorkdir: directories.opsWorkdir || baseContext.opsWorkdir,
-    relativePathBase: directories.relativePathBase || baseContext.relativePathBase,
-    allowedRoots: directories.allowedRoots || baseContext.allowedRoots,
-    extraMountTargets: Array.isArray(directories.extraMountTargets)
-      ? directories.extraMountTargets
-      : baseContext.extraMountTargets,
-    hostRootDirectory,
-    hostAllowedRoots,
-    directories,
+    view: "host",
+    currentDirectory: hostRootDirectory,
+    rootDirectory: hostRootDirectory,
+    opsWorkdir,
+    relativePathBase: "rootDirectory",
+    allowedRoots: hostAbsolutePaths
+      ? [...superUserHostRoots]
+      : uniqueNormalizedPaths([hostRootDirectory]),
+    extraMountTargets: [],
+    ...(hostAbsolutePaths ? { hostAbsolutePaths } : {}),
+  };
+}
+
+function resolveSandboxContext({ globalConfig, isolation, userId, opsWorkdir }) {
+  const pathMappings = resolveSandboxPathMappings({ globalConfig });
+  const mountTargets = uniqueNormalizedPaths(pathMappings.map((item) => item.target));
+  const layout = resolveWorkspaceSandboxLayout({ isolation, userId });
+  return {
+    directories: {
+      view: "sandbox",
+      currentDirectory: layout.userRoot,
+      rootDirectory: layout.userRoot,
+      opsWorkdir,
+      relativePathBase: "rootDirectory",
+      allowedRoots: uniqueNormalizedPaths([layout.root, ...mountTargets]),
+      extraMountTargets: mountTargets,
+    },
+    sandbox: {
+      provider: isolation.sandbox.provider,
+      scope: isolation.sandbox.scope,
+      root: layout.root,
+      pathMappings,
+    },
+  };
+}
+
+export function resolveRuntimePathContext({
+  hostRootDirectory,
+  userId,
+  globalConfig,
+  executionPolicy,
+  isSuperUser,
+  pathPolicy,
+}) {
+  const hostRoot = requireTextInput(hostRootDirectory, "hostRootDirectory");
+  const resolvedUserId = requireTextInput(userId, "userId");
+  if (!isPlainObject(globalConfig)) {
+    throw new TypeError("resolveRuntimePathContext requires globalConfig");
+  }
+  if (typeof isSuperUser !== "boolean") {
+    throw new TypeError("resolveRuntimePathContext requires boolean isSuperUser");
+  }
+  const policy = assertToolExecutionPolicy(executionPolicy);
+  const configuredHostRoots = resolveSuperAdminHostRoots(pathPolicy);
+  const { view, opsWorkdir } = resolveRuntimeOpsWorkdir({
+    hostRootDirectory: hostRoot,
+    userId: resolvedUserId,
+    executionPolicy: policy,
+  });
+  if (view === "host") {
+    const superUserHostRoots = isSuperUser ? configuredHostRoots : [];
+    return {
+      view,
+      directories: resolveHostDirectories({
+        hostRootDirectory: hostRoot,
+        opsWorkdir,
+        superUserHostRoots,
+      }),
+      sandbox: null,
+    };
+  }
+  return {
+    view,
+    ...resolveSandboxContext({
+      globalConfig,
+      isolation: policy.isolation,
+      userId: resolvedUserId,
+      opsWorkdir,
+    }),
   };
 }

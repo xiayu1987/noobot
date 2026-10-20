@@ -44,8 +44,8 @@ export function mutationLogicalPath(pathRef) {
   return projected.path;
 }
 
-export function resolveRuntimeFileMutationRoot(runtime = {}) {
-  return resolveFileMutationRoot(runtime?.systemRuntime?.sessionDir);
+export function resolveRuntimeFileMutationRoot(runtime) {
+  return resolveFileMutationRoot(runtime.systemRuntime.sessionDir);
 }
 
 export function resolveFileResourceRiskScope({ pathRef, resourcePath, runtime } = {}) {

@@ -3,94 +3,29 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
-import { resolveRuntimePathContext } from "@noobot/path-resolver";
+import { resolveRuntimeOpsWorkdir } from "@noobot/path-resolver";
 import {
-  isSandboxIsolationMode,
   WORKSPACE_SANDBOX_PATHS,
-  resolveExecutionIsolation,
   resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
-import { text } from "@noobot/shared/value";
 
-const DEFAULT_OPERATION_RELATIVE_PATH = WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE;
-
-function normalizePath(value = "") {
-  return text(value).replaceAll("\\", "/");
-}
-
-function resolveRuntime(ctx = {}) {
-  return ctx?.agentContext?.bindings?.runtime || null;
-}
-
-function resolveHostBasePath(ctx = {}, runtime = null) {
-  return normalizePath(
-    runtime?.basePath ||
-      runtime?.systemRuntime?.staticInfo?.basePath ||
-      ctx?.basePath ||
-      ctx?.agentContext?.context?.environment?.workspace?.hostBasePath ||
-      ctx?.agentContext?.context?.environment?.workspace?.basePath ||
-      "",
-  );
-}
-
-export function resolveOperationDirectoryContext(ctx = {}) {
-  const runtime = resolveRuntime(ctx) || {};
-  const hostBasePath = resolveHostBasePath(ctx, runtime);
-  const relativePath = DEFAULT_OPERATION_RELATIVE_PATH;
-  const hostWorkdir = hostBasePath
-    ? normalizePath(path.join(hostBasePath, relativePath))
-    : normalizePath(ctx?.agentContext?.context?.environment?.workspace?.cwd || "");
-  const isolation = resolveExecutionIsolation(runtime.globalConfig || {});
-  const sandboxEnabled = isSandboxIsolationMode(isolation.mode);
-  const pathContext = resolveRuntimePathContext({
-    runtime,
-    agentContext: ctx?.agentContext || null,
-    runtimeBasePath: hostBasePath,
-    userId: text(runtime?.systemRuntime?.userId),
-    globalConfig: runtime.globalConfig || {},
+export function resolveOperationDirectoryContext(ctx) {
+  const { runtime } = ctx.agentContext.bindings;
+  const { view, opsWorkdir } = resolveRuntimeOpsWorkdir({
+    hostRootDirectory: runtime.basePath,
+    userId: runtime.systemRuntime.userId,
     executionPolicy: resolveToolExecutionPolicy({
       toolName: "execute_script",
-      globalConfig: runtime.globalConfig || {},
+      globalConfig: runtime.globalConfig,
     }),
   });
-  const sandboxWorkdir = sandboxEnabled ? normalizePath(pathContext.opsWorkdir) : "";
-  const activeView = sandboxEnabled ? "sandbox" : "non_sandbox";
-  const activeAbsolutePath = activeView === "sandbox" ? sandboxWorkdir : hostWorkdir;
-
   return {
-    relativePath,
-    absolutePath: activeAbsolutePath,
-    view: activeView,
-    sandboxEnabled,
-    sandboxView: {
-      relativePath,
-      absolutePath: sandboxWorkdir || "",
-    },
-    nonSandboxView: {
-      relativePath,
-      absolutePath: hostWorkdir || "",
-    },
+    relativePath: WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE,
+    absolutePath: opsWorkdir.replaceAll("\\", "/"),
+    view,
   };
 }
 
-export function compactOperationDirectoryForPrompt(operationDirectory = {}) {
-  const source =
-    operationDirectory && typeof operationDirectory === "object" ? operationDirectory : {};
-  return {
-    relativePath: text(source.relativePath) || DEFAULT_OPERATION_RELATIVE_PATH,
-    absolutePath: text(source.absolutePath),
-    view: text(source.view) === "sandbox" ? "sandbox" : "non_sandbox",
-  };
-}
-
-export function formatOperationDirectoryForRelay(operationDirectory = {}) {
-  const compact = compactOperationDirectoryForPrompt(operationDirectory);
-  const viewLabel = compact.view === "sandbox" ? "sandbox" : "non-sandbox";
-  return [
-    `[Harness operation dir] ${compact.relativePath}`,
-    compact.absolutePath ? `Use (${viewLabel}): ${compact.absolutePath}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+export function formatOperationDirectoryForRelay({ relativePath, absolutePath, view }) {
+  return `[Harness operation dir] ${relativePath}\nUse (${view}): ${absolutePath}`;
 }

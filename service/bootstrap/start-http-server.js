@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { createServer } from "node:http";
-import { RUNTIME_PORT_TOPOLOGY } from "@noobot/runtime-topology-protocol/ports";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -24,9 +23,9 @@ export async function startHttpServer({
   defaultLocale,
   translateText,
   openVSCodeService,
-  port = process.env.PORT || RUNTIME_PORT_TOPOLOGY.servicePort,
-  host = process.env.NOOBOT_SERVICE_HOST || undefined,
-} = {}) {
+  port,
+  host,
+}) {
   const server = createServer(app);
   server.on("upgrade", (request, socket, head) => {
     if (

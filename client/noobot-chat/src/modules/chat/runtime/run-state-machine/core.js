@@ -10,4 +10,3 @@ export {
   isStopLockedSessionRunState,
   isTerminalSessionRunState,
 } from "./evaluation.js";
-export { normalizeSessionRunEvent } from "./eventNormalization.js";

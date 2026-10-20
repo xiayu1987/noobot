@@ -398,7 +398,7 @@ test("harness separate-model plan relay includes operation directory for main ag
   );
   const relayText = String(relayMessage?.content || "");
   assert.match(relayText, /\[Harness operation dir\] runtime\/ops_workdir/);
-  assert.match(relayText, /Use \(non-sandbox\): \/host\/user-b\/runtime\/ops_workdir/);
+  assert.match(relayText, /Use \(host\): \/host\/user-b\/runtime\/ops_workdir/);
   assert.doesNotMatch(relayText, /Sandbox:/);
   assert.match(relayText, /1\. 解析附件/);
   assert.equal(

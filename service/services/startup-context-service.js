@@ -5,175 +5,225 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+import { isPlainObject } from "@noobot/shared/value";
 
 const STARTUP_CONTEXT_ARG = "--startup-context";
 const SCHEMA_VERSION = 1;
+const APP_PLATFORMS = Object.freeze(["desktop", "web"]);
+const LOGGED_ENV_KEYS = Object.freeze([
+  "NOOBOT_FFMPEG_PATH",
+  "NOOBOT_FFPROBE_PATH",
+  "NOOBOT_PLAYWRIGHT_CHROMIUM_PATH",
+  "LIBRE_OFFICE_EXE",
+]);
 
-function normalizePath(value = "") {
-  const normalizedText = text(value);
-  return normalizedText ? path.resolve(normalizedText) : "";
+function fail(field, expectation) {
+  throw new TypeError(`[startup-context] ${field} must be ${expectation}`);
 }
 
-function normalizeEnvMap(value = {}) {
-  const source = isPlainObject(value) ? value : {};
+function requireObject(value, field) {
+  if (!isPlainObject(value)) fail(field, "an object");
+  return value;
+}
+
+function requireString(value, field) {
+  if (typeof value !== "string") fail(field, "a string");
+  return value;
+}
+
+function requireNonEmptyString(value, field) {
+  if (!requireString(value, field)) fail(field, "a non-empty string");
+  return value;
+}
+
+function requireBoolean(value, field) {
+  if (typeof value !== "boolean") fail(field, "a boolean");
+  return value;
+}
+
+function requireArray(value, field) {
+  if (!Array.isArray(value)) fail(field, "an array");
+  return value;
+}
+
+function requirePort(value, field) {
+  if (!Number.isInteger(value) || value < 0 || value > 65535) fail(field, "a port integer");
+  return value;
+}
+
+function requireOneOf(value, allowed, field) {
+  if (!allowed.includes(value)) fail(field, `one of ${allowed.join(", ")}`);
+  return value;
+}
+
+function readPath(value, field) {
+  const normalized = requireString(value, field);
+  return normalized ? path.resolve(normalized) : "";
+}
+
+function readRequiredPath(value, field) {
+  return path.resolve(requireNonEmptyString(value, field));
+}
+
+function readStringList(value, field) {
+  return requireArray(value, field).map((item, index) => requireString(item, `${field}[${index}]`));
+}
+
+function readEnvMap(value, field) {
   const output = {};
-  for (const [key, rawValue] of Object.entries(source)) {
-    const normalizedKey = text(key);
-    if (!normalizedKey) continue;
-    const normalizedValue = text(rawValue);
-    if (!normalizedValue) continue;
-    output[normalizedKey] = normalizedValue;
+  for (const [key, rawValue] of Object.entries(requireObject(value, field))) {
+    const envValue = requireString(rawValue, `${field}.${key}`);
+    if (envValue) output[key] = envValue;
   }
   return output;
 }
 
-function normalizeDependencySourceSummary(value = {}) {
-  const source = isPlainObject(value) ? value : {};
-  const dependencies = Array.isArray(source.dependencies) ? source.dependencies : [];
+function readDependencySourceItem(value, field) {
+  const item = requireObject(value, field);
   return {
-    platform: String(source.platform || ""),
-    dependencies: dependencies
-      .map((item) => {
-        const dependency = item && typeof item === "object" ? item : {};
-        const customSourceEnvKeys = Array.isArray(dependency.customSourceEnvKeys)
-          ? dependency.customSourceEnvKeys.map((key) => text(key)).filter(Boolean)
-          : [];
-        const configKeys = Array.isArray(dependency.configKeys)
-          ? dependency.configKeys.map((key) => text(key)).filter(Boolean)
-          : [];
-        return {
-          key: String(dependency.key || ""),
-          name: String(dependency.name || ""),
-          available: Boolean(dependency.available),
-          installMode: String(dependency.installMode || ""),
-          sourceType: String(dependency.sourceType || ""),
-          hasCustomSource: Boolean(dependency.hasCustomSource),
-          customSourceEnvKeys,
-          configKeys,
-        };
-      })
-      .filter((item) => item.key || item.name),
+    key: requireNonEmptyString(item.key, `${field}.key`),
+    name: requireString(item.name, `${field}.name`),
+    available: requireBoolean(item.available, `${field}.available`),
+    installMode: requireString(item.installMode, `${field}.installMode`),
+    sourceType: requireString(item.sourceType, `${field}.sourceType`),
+    hasCustomSource: requireBoolean(item.hasCustomSource, `${field}.hasCustomSource`),
+    customSourceEnvKeys: readStringList(item.customSourceEnvKeys, `${field}.customSourceEnvKeys`),
+    configKeys: readStringList(item.configKeys, `${field}.configKeys`),
   };
 }
 
-function resolveDefaultBackendRoot(cwd = process.cwd()) {
-  const normalizedCwd = normalizePath(cwd) || process.cwd();
-  if (path.basename(normalizedCwd) === "service") return path.dirname(normalizedCwd);
-  return normalizedCwd;
+function readDependencySourceSummary(value, field) {
+  const summary = requireObject(value, field);
+  return {
+    platform: requireNonEmptyString(summary.platform, `${field}.platform`),
+    dependencies: requireArray(summary.dependencies, `${field}.dependencies`).map((item, index) =>
+      readDependencySourceItem(item, `${field}.dependencies[${index}]`),
+    ),
+  };
 }
 
-function pickArgValue(argv = [], name = "") {
-  const items = Array.isArray(argv) ? argv : [];
-  for (let index = 0; index < items.length; index += 1) {
-    const item = String(items[index] || "");
-    if (item === name) return text(items[index + 1]);
-    if (item.startsWith(`${name}=`)) return item.slice(name.length + 1).trim();
+function readDependencies(value, field) {
+  if (value === null) return null;
+  const dependencies = requireObject(value, field);
+  return {
+    hasPlaywrightChromium: requireBoolean(
+      dependencies.hasPlaywrightChromium,
+      `${field}.hasPlaywrightChromium`,
+    ),
+    hasFfmpeg: requireBoolean(dependencies.hasFfmpeg, `${field}.hasFfmpeg`),
+    hasFfprobe: requireBoolean(dependencies.hasFfprobe, `${field}.hasFfprobe`),
+    hasLibreOffice: requireBoolean(dependencies.hasLibreOffice, `${field}.hasLibreOffice`),
+    ffmpegPath: requireString(dependencies.ffmpegPath, `${field}.ffmpegPath`),
+    ffprobePath: requireString(dependencies.ffprobePath, `${field}.ffprobePath`),
+    libreOfficePath: requireString(dependencies.libreOfficePath, `${field}.libreOfficePath`),
+    playwrightChromiumPath: requireString(
+      dependencies.playwrightChromiumPath,
+      `${field}.playwrightChromiumPath`,
+    ),
+    pathPrefix: requireString(dependencies.pathPrefix, `${field}.pathPrefix`),
+    sourceSummary: readDependencySourceSummary(
+      dependencies.sourceSummary,
+      `${field}.sourceSummary`,
+    ),
+  };
+}
+
+export function normalizeStartupContext(input) {
+  const raw = requireObject(input, "startupContext");
+  if (raw.schemaVersion !== SCHEMA_VERSION) fail("schemaVersion", String(SCHEMA_VERSION));
+  const app = requireObject(raw.app, "app");
+  const paths = requireObject(raw.paths, "paths");
+  const service = requireObject(raw.service, "service");
+  const runtime = requireObject(raw.runtime, "runtime");
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    app: {
+      name: requireNonEmptyString(app.name, "app.name"),
+      platform: requireOneOf(app.platform, APP_PLATFORMS, "app.platform"),
+      channel: requireNonEmptyString(app.channel, "app.channel"),
+      packaged: requireBoolean(app.packaged, "app.packaged"),
+    },
+    paths: {
+      backendRoot: readRequiredPath(paths.backendRoot, "paths.backendRoot"),
+      frontendRoot: readPath(paths.frontendRoot, "paths.frontendRoot"),
+      pluginRootDir: readRequiredPath(paths.pluginRootDir, "paths.pluginRootDir"),
+      userDataDir: readPath(paths.userDataDir, "paths.userDataDir"),
+    },
+    service: {
+      port: requirePort(service.port, "service.port"),
+      host: requireString(service.host, "service.host"),
+      origin: requireString(service.origin, "service.origin"),
+    },
+    runtime: {
+      node: requireNonEmptyString(runtime.node, "runtime.node"),
+      cwd: readRequiredPath(runtime.cwd, "runtime.cwd"),
+      execPath: readRequiredPath(runtime.execPath, "runtime.execPath"),
+      resourcesPath: readPath(runtime.resourcesPath, "runtime.resourcesPath"),
+      env: readEnvMap(runtime.env, "runtime.env"),
+      dependencies: readDependencies(runtime.dependencies, "runtime.dependencies"),
+    },
+    createdAt: requireNonEmptyString(raw.createdAt, "createdAt"),
+  };
+}
+
+function resolveHeadlessBackendRoot(cwd) {
+  const resolvedCwd = path.resolve(cwd);
+  return path.basename(resolvedCwd) === "service" ? path.dirname(resolvedCwd) : resolvedCwd;
+}
+
+export function createDefaultStartupContext({ cwd, env }) {
+  const backendRoot = resolveHeadlessBackendRoot(cwd);
+  return normalizeStartupContext({
+    schemaVersion: SCHEMA_VERSION,
+    app: { name: "Noobot", platform: "web", channel: process.platform, packaged: false },
+    paths: {
+      backendRoot,
+      frontendRoot: "",
+      pluginRootDir: path.join(backendRoot, "plugin"),
+      userDataDir: "",
+    },
+    service: { port: Number(resolveRuntimeTopology(env).servicePort), host: "", origin: "" },
+    runtime: {
+      node: process.version,
+      cwd,
+      execPath: process.execPath,
+      resourcesPath: "",
+      env: {},
+      dependencies: null,
+    },
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function pickArgValue(argv, name) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const item = argv[index];
+    if (item === name) return argv[index + 1];
+    if (item.startsWith(`${name}=`)) return item.slice(name.length + 1);
   }
   return "";
 }
 
-export function resolveStartupContextPath(argv = process.argv) {
-  return normalizePath(pickArgValue(argv, STARTUP_CONTEXT_ARG));
+export function resolveStartupContextPath(argv) {
+  return readPath(pickArgValue(argv, STARTUP_CONTEXT_ARG), STARTUP_CONTEXT_ARG);
 }
 
-export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}) {
-  const raw = input && typeof input === "object" ? input : {};
-  const paths = raw.paths && typeof raw.paths === "object" ? raw.paths : {};
-  const service = raw.service && typeof raw.service === "object" ? raw.service : {};
-  const runtime = raw.runtime && typeof raw.runtime === "object" ? raw.runtime : {};
-  const dependencies =
-    runtime.dependencies && typeof runtime.dependencies === "object" ? runtime.dependencies : {};
-  const app = raw.app && typeof raw.app === "object" ? raw.app : {};
-  const backendRoot = normalizePath(paths.backendRoot || resolveDefaultBackendRoot(cwd));
-  return {
-    schemaVersion: Number(raw.schemaVersion || SCHEMA_VERSION),
-    app: {
-      name: String(app.name || "Noobot"),
-      platform: String(app.platform || (process.env.NOOBOT_DESKTOP === "1" ? "desktop" : "web")),
-      channel: String(app.channel || process.platform),
-      packaged: Boolean(app.packaged),
-    },
-    paths: {
-      backendRoot,
-      frontendRoot: normalizePath(paths.frontendRoot),
-      pluginRootDir: normalizePath(paths.pluginRootDir || path.join(backendRoot, "plugin")),
-      userDataDir: normalizePath(paths.userDataDir),
-    },
-    service: {
-      port: Number(service.port || process.env.PORT || 3000),
-      host: text(service.host || process.env.NOOBOT_SERVICE_HOST),
-      origin: String(service.origin || ""),
-    },
-    runtime: {
-      node: String(runtime.node || process.version),
-      cwd: normalizePath(runtime.cwd || cwd),
-      execPath: normalizePath(runtime.execPath || process.execPath),
-      resourcesPath: normalizePath(runtime.resourcesPath),
-      env: normalizeEnvMap(runtime.env),
-      dependencies: {
-        hasFfmpeg: Boolean(dependencies.hasFfmpeg),
-        hasFfprobe: Boolean(dependencies.hasFfprobe),
-        hasLibreOffice: Boolean(dependencies.hasLibreOffice),
-        ffmpegPath: String(dependencies.ffmpegPath || ""),
-        ffprobePath: String(dependencies.ffprobePath || ""),
-        libreOfficePath: String(dependencies.libreOfficePath || ""),
-        pathPrefix: String(dependencies.pathPrefix || ""),
-        sourceSummary: normalizeDependencySourceSummary(dependencies.sourceSummary),
-      },
-    },
-    createdAt: String(raw.createdAt || new Date().toISOString()),
-  };
-}
-
-export function createDefaultStartupContext({ cwd = process.cwd() } = {}) {
-  return normalizeStartupContext(
-    {
-      app: {
-        platform: process.env.NOOBOT_DESKTOP === "1" ? "desktop" : "web",
-        channel: process.platform,
-        packaged: false,
-      },
-      paths: { backendRoot: resolveDefaultBackendRoot(cwd) },
-    },
-    { cwd },
-  );
-}
-
-export async function loadStartupContext({ argv = process.argv, cwd = process.cwd() } = {}) {
+export async function loadStartupContext({ argv, cwd, env }) {
   const startupContextPath = resolveStartupContextPath(argv);
-  if (!startupContextPath) return createDefaultStartupContext({ cwd });
+  if (!startupContextPath) return createDefaultStartupContext({ cwd, env });
   const content = await fs.readFile(startupContextPath, "utf8");
-  const parsed = JSON.parse(content);
-  return normalizeStartupContext(parsed, { cwd });
+  return normalizeStartupContext(JSON.parse(content));
 }
 
-export function applyStartupRuntimeEnv(context = {}, { env = process.env } = {}) {
-  const runtimeEnv = normalizeEnvMap(context?.runtime?.env || {});
-  for (const [key, value] of Object.entries(runtimeEnv)) {
-    env[key] = value;
-  }
-  return runtimeEnv;
+export function applyStartupRuntimeEnv(context, { env }) {
+  Object.assign(env, context.runtime.env);
+  return context.runtime.env;
 }
 
-export function safeStartupContextForLog(context = {}) {
-  const normalized = normalizeStartupContext(context);
-  return {
-    schemaVersion: normalized.schemaVersion,
-    app: normalized.app,
-    paths: normalized.paths,
-    service: normalized.service,
-    runtime: {
-      ...normalized.runtime,
-      env: {
-        PATH: normalized.runtime.env.PATH ? "[set]" : "",
-        NOOBOT_FFMPEG_PATH: normalized.runtime.env.NOOBOT_FFMPEG_PATH || "",
-        NOOBOT_FFPROBE_PATH: normalized.runtime.env.NOOBOT_FFPROBE_PATH || "",
-        NOOBOT_PLAYWRIGHT_CHROMIUM_PATH:
-          normalized.runtime.env.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH || "",
-        LIBRE_OFFICE_EXE: normalized.runtime.env.LIBRE_OFFICE_EXE || "",
-      },
-    },
-    createdAt: normalized.createdAt,
-  };
+export function safeStartupContextForLog(context) {
+  const runtimeEnv = context.runtime.env;
+  const loggedEnv = { PATH: runtimeEnv.PATH ? "[set]" : "" };
+  for (const key of LOGGED_ENV_KEYS) loggedEnv[key] = runtimeEnv[key] || "";
+  return { ...context, runtime: { ...context.runtime, env: loggedEnv } };
 }

@@ -5,7 +5,6 @@
  */
 import { PLUGIN_LIFECYCLE_EVENT, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { getNoobotPluginRuntime } from "@noobot/plugin-runtime";
-import { createRunConfigPluginPreparer } from "../../bot/session/session-plugin-runtime-adapter.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -31,17 +30,12 @@ function reportRuntimeLifecycle(runtime) {
   }
 }
 
-const loadedDynamicPlugins = await getNoobotPluginRuntime({ surface: PLUGIN_SURFACE.AGENT });
-reportRuntimeLifecycle(loadedDynamicPlugins);
-
 function runtimeDescriptor(loadedPlugins) {
   return Object.freeze({
     pluginIds: Object.freeze(Array.from(loadedPlugins.registry.keys())),
     surface: PLUGIN_SURFACE.AGENT,
   });
 }
-
-const defaultRuntimeDescriptor = runtimeDescriptor(loadedDynamicPlugins);
 
 export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = {}) {
   const loadedPlugins = await getNoobotPluginRuntime({
@@ -55,26 +49,4 @@ export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = 
   }
   reportRuntimeLifecycle(loadedPlugins);
   return { loadedPlugins, pluginRuntime: runtimeDescriptor(loadedPlugins) };
-}
-
-export function createRunConfigPluginPreparerFromRuntimeBundle({
-  loadedPlugins = loadedDynamicPlugins,
-  ...options
-} = {}) {
-  return createRunConfigPluginPreparer({ ...options, loadedPlugins });
-}
-
-export function getDefaultSessionPluginRuntime() {
-  return defaultRuntimeDescriptor;
-}
-
-export function getDefaultLoadedDynamicPlugins() {
-  return loadedDynamicPlugins;
-}
-
-export function createDefaultRunConfigPluginPreparer(options = {}) {
-  return createRunConfigPluginPreparerFromRuntimeBundle({
-    ...options,
-    loadedPlugins: loadedDynamicPlugins,
-  });
 }

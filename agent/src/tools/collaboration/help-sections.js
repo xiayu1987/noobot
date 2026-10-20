@@ -4,17 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  PATH_VIEWS,
-  isHostFilesystemSentinel,
-  resolveAgentPathContext,
-} from "@noobot/path-resolver";
+import { PATH_VIEWS, isHostFilesystemSentinel } from "@noobot/path-resolver";
+import { resolveAgentRuntimePathContext } from "../../context/runtime-path-context.js";
 import {
   EXECUTION_ISOLATION_MODE,
   TOOL_EXECUTION_CLASS,
   TOOL_EXECUTION_REGISTRY,
-  WORKSPACE_SANDBOX_PATHS,
-  resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
 import { projectToolPathRef } from "../core/check-tool-input.js";
 import { MEMORY_RELATIVE_PATHS } from "../../memory/storage/paths.js";
@@ -75,53 +70,37 @@ export function projectPathFields(fields = {}) {
 }
 
 export function buildRuntimeSection(agentContext) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const globalConfig = runtime?.globalConfig || {};
-  const executionPolicy = resolveToolExecutionPolicy({ toolName: "execute_script", globalConfig });
-  const pathContext = resolveAgentPathContext({
-    runtime,
-    agentContext,
-    globalConfig,
-    executionPolicy,
-  });
-
-  const directories = Object.fromEntries(
-    RUNTIME_DIRECTORY_FIELDS.filter((field) => pathContext[field]).map((field) => [
-      field,
-      projectToolPathRef(pathContext[field]),
-    ]),
+  const { view, directories, sandbox } = resolveAgentRuntimePathContext(
+    getRuntimeFromAgentContext(agentContext),
+    "execute_script",
   );
-  const allowedRoots = (pathContext.allowedRoots || []).map((item) =>
+  const directoryRefs = Object.fromEntries(
+    RUNTIME_DIRECTORY_FIELDS.map((field) => [field, projectToolPathRef(directories[field])]),
+  );
+  const allowedRoots = directories.allowedRoots.map((item) =>
     isHostFilesystemSentinel(item)
       ? Object.freeze({ view: PATH_VIEWS.HOST, scope: item })
       : projectToolPathRef(item),
   );
-  const extraMountTargets = (pathContext.extraMountTargets || []).map((item) =>
-    projectToolPathRef(item),
-  );
-  const sandboxPathMappings = (pathContext.sandboxPathMappings || []).map((item = {}) => ({
-    source: projectToolPathRef(item.source || ""),
-    target: projectToolPathRef(item.target || ""),
-  }));
-  const sandboxEnabled = pathContext.sandboxEnabled === true;
-
+  const extraMountTargets = directories.extraMountTargets.map(projectToolPathRef);
   return {
-    view: pathContext.view,
-    relativePathBase: pathContext.relativePathBase,
-    directories,
+    view,
+    relativePathBase: directories.relativePathBase,
+    directories: directoryRefs,
     allowedRoots,
-    ...(extraMountTargets.length ? { extraMountTargets } : {}),
-    sandbox: {
-      enabled: sandboxEnabled,
-      ...(sandboxEnabled
-        ? {
-            provider: pathContext.sandboxProvider,
-            scope: pathContext.sandboxScope,
-            root: projectToolPathRef(pathContext.sandboxRoot || WORKSPACE_SANDBOX_PATHS.ROOT),
-            pathMappings: sandboxPathMappings,
-          }
-        : {}),
-    },
+    extraMountTargets,
+    sandbox: sandbox
+      ? {
+          enabled: true,
+          provider: sandbox.provider,
+          scope: sandbox.scope,
+          root: projectToolPathRef(sandbox.root),
+          pathMappings: sandbox.pathMappings.map((item) => ({
+            source: projectToolPathRef(item.source),
+            target: projectToolPathRef(item.target),
+          })),
+        }
+      : { enabled: false },
   };
 }
 

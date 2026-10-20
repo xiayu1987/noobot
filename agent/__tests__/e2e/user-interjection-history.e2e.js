@@ -10,7 +10,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 
-import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
 import { appendUserInterjectionMessage } from "../../src/runtime/turn/turn-context-message-appender.js";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
@@ -103,11 +103,11 @@ test("session execution preserves every user interjection into the next model hi
     async saveCurrentTurnTasks() {},
   };
 
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     globalConfig: {},
     session,
     memory: {
-      async captureSessionToShortMemory() {},
+      async captureDialogToShortMemory() {},
       async maybeSummarize() {},
     },
     attach: {

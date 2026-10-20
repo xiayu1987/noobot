@@ -8,10 +8,7 @@ import { ACTIVITY_EVENT_TYPES } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
 
 const ERROR_EVENT_SUFFIX_RE = /(_error|_aborted)$/i;
-const SEMANTIC_TRANSFER_EVENTS = new Set([
-  "semantic_transfer_validation",
-  "semantic_transfer_legacy_input_warning",
-]);
+const SEMANTIC_TRANSFER_EVENTS = new Set(["semantic_transfer_validation"]);
 
 function resolveErrorType(rawEvent = "") {
   const normalized = String(rawEvent || "").toLowerCase();

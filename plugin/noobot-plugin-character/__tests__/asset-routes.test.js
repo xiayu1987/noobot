@@ -167,7 +167,18 @@ test("character asset descriptor rejects mismatched identity", async () => {
   req.body = { ...descriptor(), assetId: "asset.two" };
   await assert.rejects(
     () => handlers["character.asset.commit"](req, response()),
-    /does not match its resource identity/,
+    (error) =>
+      /does not match its resource identity/.test(error.message) && error.statusCode === 400,
+  );
+});
+
+test("character asset descriptor rejects a schema-invalid body as a caller error", async () => {
+  const handlers = createCharacterAssetRouteHandlers({ workspaceAssets: workspaceAssets() });
+  const req = request(glbBuffer());
+  req.body = { assetId: "asset.one" };
+  await assert.rejects(
+    () => handlers["character.asset.commit"](req, response()),
+    (error) => /invalid character asset descriptor/.test(error.message) && error.statusCode === 400,
   );
 });
 

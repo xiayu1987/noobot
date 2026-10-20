@@ -7,14 +7,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import { initializeRuntimeEnvironment } from "../../src/runtime/capabilities/runtime-capability-initializer.js";
-import { buildStaticInfo } from "../../src/context/providers/environment-provider.js";
+import {
+  buildStaticInfo,
+  resolveContextIdentityInfo,
+} from "../../src/context/providers/environment-provider.js";
+
+function buildStaticInfoFor({ runtimeBasePath, userId, globalConfig }) {
+  return buildStaticInfo({
+    runtimeBasePath,
+    identity: resolveContextIdentityInfo({ userId, globalConfig }),
+    globalConfig,
+  });
+}
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-test("createRuntimeContext keeps sharedTools passthrough and creates turn stores", () => {
+test("createRuntimeContext passes inputs through and creates turn stores", () => {
   const hookManager = { emit() {} };
   const runtime = createTestRuntimeContext({
-    basePath: " /workspace/u1 ",
+    basePath: "/workspace/u1",
     sharedTools: {
       customFetch: true,
     },
@@ -39,8 +51,21 @@ test("createRuntimeContext keeps sharedTools passthrough and creates turn stores
   assert.deepEqual(runtime.attachments, []);
 });
 
+test("createRuntimeContext rejects missing or mistyped inputs", () => {
+  assert.throws(() => createRuntimeContext({}), /createRuntimeContext requires: basePath,/);
+  assert.throws(
+    () => createTestRuntimeContext({ runConfig: null }),
+    /runConfig must be a plain object/,
+  );
+  assert.throws(
+    () => createTestRuntimeContext({ userMessageAttachments: null }),
+    /userMessageAttachments must be an array/,
+  );
+  assert.throws(() => createTestRuntimeContext({ basePath: null }), /basePath must be a string/);
+});
+
 test("buildStaticInfo exposes host default directories", () => {
-  const staticInfo = buildStaticInfo({
+  const staticInfo = buildStaticInfoFor({
     runtimeBasePath: "/host/workspaces/u1",
     userId: "u1",
     globalConfig: { workspaceRoot: "/host/workspaces" },
@@ -54,7 +79,7 @@ test("buildStaticInfo exposes host default directories", () => {
 });
 
 test("buildStaticInfo exposes only the sandbox workspace view when isolation is enabled", () => {
-  const staticInfo = buildStaticInfo({
+  const staticInfo = buildStaticInfoFor({
     runtimeBasePath: "/host/workspaces/admin",
     userId: "admin",
     globalConfig: {
@@ -231,13 +256,8 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
   assert.equal(JSON.stringify(envelope).includes("/project/workspace"), false);
 });
 
-test("initializeRuntimeEnvironment passes semantic-transfer strict envelope validation config", async () => {
+test("initializeRuntimeEnvironment exposes only transfer entry points on semantic-transfer tools", async () => {
   const runtime = createTestRuntimeContext({
-    globalConfig: {
-      semanticTransfer: {
-        strictEnvelopeValidation: true,
-      },
-    },
     systemRuntime: {
       sessionId: "s1",
       rootSessionId: "r1",

@@ -13,7 +13,12 @@ import {
 } from "@noobot/file-mutation-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { safeJoin } from "#agent/utils";
-import { createJsonRouteWrapper } from "./route-wrapper.js";
+import {
+  classifyRequestedPathError,
+  createBadRequestError,
+  createJsonRouteWrapper,
+  decodeRequestInput,
+} from "./route-wrapper.js";
 import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 import { text, isFunction } from "@noobot/shared/value";
 
@@ -29,10 +34,9 @@ const UNSAFE_TEXT_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\
 
 function validateWorkspaceText(content) {
   if (typeof content !== "string") {
-    const error = new TypeError("workspace file content must be a string");
-    error.statusCode = 400;
-    error.code = "INVALID_WORKSPACE_FILE_CONTENT";
-    throw error;
+    throw createBadRequestError("workspace file content must be a string", {
+      code: "INVALID_WORKSPACE_FILE_CONTENT",
+    });
   }
   if (Buffer.byteLength(content, "utf8") > LENGTH_THRESHOLDS.serviceHttp.workspaceFileBytes) {
     const error = new Error("workspace file content exceeds the configured size limit");
@@ -41,10 +45,9 @@ function validateWorkspaceText(content) {
     throw error;
   }
   if (UNSAFE_TEXT_CONTROL_CHARACTERS.test(content)) {
-    const error = new TypeError("workspace file content contains unsafe control characters");
-    error.statusCode = 400;
-    error.code = "INVALID_WORKSPACE_FILE_CONTENT";
-    throw error;
+    throw createBadRequestError("workspace file content contains unsafe control characters", {
+      code: "INVALID_WORKSPACE_FILE_CONTENT",
+    });
   }
   return content;
 }
@@ -54,12 +57,10 @@ function validateJsonDocumentWrite(relativePath, content) {
   try {
     JSON.parse(content);
   } catch (error) {
-    const parseError = new Error(
+    throw createBadRequestError(
       `${path.basename(relativePath)} parse failed: ${error?.message || String(error)}`,
+      { code: "INVALID_JSON_DOCUMENT" },
     );
-    parseError.statusCode = 400;
-    parseError.code = "INVALID_JSON_DOCUMENT";
-    throw parseError;
   }
 }
 
@@ -122,7 +123,7 @@ export function registerFileCrudRoutes(
     if (isAbsolutePathAllowed(req) && path.isAbsolute(normalizedPath)) {
       return path.resolve(normalizedPath);
     }
-    return safeJoin(root, normalizedPath);
+    return decodeRequestInput(() => safeJoin(root, normalizedPath));
   };
 
   const resolveRequestMutationRoot = async (req, root) => {
@@ -158,7 +159,9 @@ export function registerFileCrudRoutes(
           hasPath: Boolean(relativePath),
           relativePath: maskWorkspacePath(relativePath),
         });
-        if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
+        if (!relativePath) {
+          throw createBadRequestError(translateText("common.pathRequired", req.locale));
+        }
         const root = await resolveRootPath(req);
         const absolutePath = resolveRequestFilePath(req, root, relativePath);
         let handle;
@@ -169,14 +172,14 @@ export function registerFileCrudRoutes(
             relativePath: maskWorkspacePath(relativePath),
             error: String(error?.code || error?.message || error || ""),
           });
-          throw error;
+          throw classifyRequestedPathError(error);
         }
         let fileStats;
         let contentBuffer;
         try {
           fileStats = await handle.stat();
           if (!fileStats.isFile()) {
-            throw new Error(translateText("common.pathIsNotFile", req.locale));
+            throw createBadRequestError(translateText("common.pathIsNotFile", req.locale));
           }
           contentBuffer = await handle.readFile();
         } finally {
@@ -209,7 +212,9 @@ export function registerFileCrudRoutes(
     jsonRoute(
       async (req, res) => {
         const relativePath = String(req.body?.path || "");
-        if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
+        if (!relativePath) {
+          throw createBadRequestError(translateText("common.pathRequired", req.locale));
+        }
         const content = validateWorkspaceText(req.body?.content);
         validateJsonDocumentWrite(relativePath, content);
         const root = await resolveRootPath(req);
@@ -292,10 +297,14 @@ export function registerFileCrudRoutes(
             hasPath: Boolean(relativePath),
             relativePath: maskWorkspacePath(relativePath),
           });
-          if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
+          if (!relativePath) {
+            throw createBadRequestError(translateText("common.pathRequired", req.locale));
+          }
           const root = await resolveRootPath(req);
           const absolutePath = resolveRequestFilePath(req, root, relativePath);
-          const fileStats = await stat(absolutePath);
+          const fileStats = await stat(absolutePath).catch((error) => {
+            throw classifyRequestedPathError(error);
+          });
           if (fileStats.isFile()) {
             logFileAccess(req, "download.fileResponse", {
               relativePath: maskWorkspacePath(relativePath),
@@ -305,7 +314,7 @@ export function registerFileCrudRoutes(
             return;
           }
           if (!fileStats.isDirectory())
-            throw new Error(translateText("common.pathIsNotFile", req.locale));
+            throw createBadRequestError(translateText("common.pathIsNotFile", req.locale));
           logFileAccess(req, "download.directoryArchive", {
             relativePath: maskWorkspacePath(relativePath),
             size: fileStats.size,

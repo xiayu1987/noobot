@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createNoopMemoryPostProcessService } from "../helpers/memory-postprocess-service.js";
 
 import { EXECUTION_REPORT_STATUS } from "@noobot/session-protocol/execution-report";
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
@@ -25,8 +26,7 @@ function createFinalizer(session) {
       buildDefaultAssistantTurn: () => ({ role: "assistant", type: "message", content: "done" }),
       async appendAgentMessages() {},
     },
-    resolveMemoryPostProcessAsyncEnabled: () => true,
-    runMemoryPostProcessFlow: async () => {},
+    memoryPostProcessService: createNoopMemoryPostProcessService(),
     now: () => "2026-01-01T00:00:02.000Z",
   });
 }

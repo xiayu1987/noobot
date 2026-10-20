@@ -64,6 +64,7 @@ function buildAgentContext({
         sessionDir: path.join(basePath, "runtime/session", "session:e2e:execution-isolation"),
         isSuperUser,
         config: { safeConfirm: false },
+        persistenceScope: null,
       },
     },
     {

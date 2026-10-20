@@ -107,7 +107,7 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
           parentSessionId: "parent-1",
           commandId: "idem-1",
           expectedAggregateVersion: 2,
-          anchor: { dialogProcessId: "dp-1" },
+          anchor: { turnScopeId: "turn-1" },
         }),
       }),
     });
@@ -120,10 +120,10 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",
-      parentSessionId: "parent-1",
-      anchor: { dialogProcessId: "dp-1" },
+      anchor: { turnScopeId: "turn-1" },
       expectedAggregateVersion: 2,
       commandId: "idem-1",
+      persistenceScope: null,
     });
   });
 });
@@ -209,7 +209,12 @@ test("session-routes: rename 路由 trim 标题并返回成功", async () => {
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.deepEqual(payload, { ok: true, sessionId: "s1", title: "new title" });
-    assert.deepEqual(calls[0], { userId: "u1", sessionId: "s1", title: "new title" });
+    assert.deepEqual(calls[0], {
+      userId: "u1",
+      sessionId: "s1",
+      title: "new title",
+      persistenceScope: null,
+    });
   });
 });
 test("session-routes: rename 空标题返回 400，session 不存在返回 404", async () => {
@@ -300,12 +305,12 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",
-      parentSessionId: "parent-1",
       anchor: { turnScopeId: "scope-old" },
       newContent: "edited content",
       turnScopeId: "turn-scope-replace",
       expectedAggregateVersion: 3,
       commandId: "idem-2",
+      persistenceScope: null,
     });
   });
 });

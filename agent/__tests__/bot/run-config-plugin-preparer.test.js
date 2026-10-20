@@ -48,16 +48,22 @@ function activation(id, hostAction = () => {}) {
   };
 }
 
-function preparer(entries) {
+function preparer(entries, { globalConfig = {} } = {}) {
   return new RunConfigPluginPreparer({
+    globalConfig,
+    workspaceService: { getWorkspacePath: (userId) => `/tmp/noobot-preparer/${userId}` },
     loadedDynamicPlugins: { registry: new Map(entries.map((item) => [item.pluginId, item])) },
     createPluginResolveModelMessages: () => () => [],
+    createDetachedSubSessionRunner: () => async () => {
+      throw new Error("detached runner not provided");
+    },
   });
 }
 
 test("pluginPolicy none disables plugin selection for tool sub-sessions", () => {
   const demo = entry({ id: "demo", activate: activation("demo") });
   const prepared = preparer([demo]).prepareRunConfig({
+    userId: "u1",
     runConfig: {
       selectedPlugins: ["demo"],
       pluginPolicy: { mode: "none" },
@@ -78,6 +84,7 @@ test("activates selected Manifest ids and scopes declared hook registrations", (
     }),
   });
   const prepared = preparer([demo]).prepareRunConfig({
+    userId: "u1",
     runConfig: { selectedPlugins: ["demo"], plugins: { demo: { trace: false } } },
   });
 
@@ -97,7 +104,8 @@ test("rejects registration of an undeclared hook", () => {
     ),
   });
   assert.throws(
-    () => preparer([demo]).prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } }),
+    () =>
+      preparer([demo]).prepareRunConfig({ userId: "u1", runConfig: { selectedPlugins: ["demo"] } }),
     /did not declare hook/,
   );
 });
@@ -112,7 +120,10 @@ test("routes declared bot hooks and workflow emissions through the orchestration
       void host.hooks.emit("workflow.node_agent_execute", {});
     }),
   });
-  const prepared = preparer([demo]).prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } });
+  const prepared = preparer([demo]).prepareRunConfig({
+    userId: "u1",
+    runConfig: { selectedPlugins: ["demo"] },
+  });
   assert.equal(prepared.botHookManager.list("bot.before_agent_dispatch")[0].id, "demo:dispatch");
   assert.equal(prepared.hookManager.list("bot.before_agent_dispatch").length, 0);
 });
@@ -152,10 +163,8 @@ test("configuration mode cannot select a workflow omitted from the turn protocol
     },
     activate: activation("workflow"),
   });
-  const instance = new RunConfigPluginPreparer({
+  const instance = preparer([workflow], {
     globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
-    loadedDynamicPlugins: { registry: new Map([["workflow", workflow]]) },
-    createPluginResolveModelMessages: () => () => [],
   });
 
   const intent = instance.resolveExecutionIntent({
@@ -163,6 +172,7 @@ test("configuration mode cannot select a workflow omitted from the turn protocol
     turnScopeId: "turn-plain",
   });
   const prepared = instance.prepareRunConfig({
+    userId: "u1",
     runConfig: { selectedPlugins: [], turnScopeId: "turn-plain" },
   });
 
@@ -178,13 +188,12 @@ test("an unavailable plugin cannot be activated by selectedPlugins", () => {
     hooks: ["agent.before_turn"],
     activate: activation("demo"),
   });
-  const instance = new RunConfigPluginPreparer({
+  const instance = preparer([demo], {
     globalConfig: { plugins: { demo: { enabled: false, mode: "on" } } },
-    loadedDynamicPlugins: { registry: new Map([["demo", demo]]) },
-    createPluginResolveModelMessages: () => () => [],
   });
 
   const prepared = instance.prepareRunConfig({
+    userId: "u1",
     runConfig: { selectedPlugins: ["demo"] },
   });
 
@@ -200,7 +209,7 @@ test("agent lifecycle capability invoker prefixes flow with the plugin id", asyn
       host.hooks.register("agent.before_turn", () => {}, { id: "before" }),
     ),
   });
-  const instance = new RunConfigPluginPreparer({
+  const instance = preparer([demo], {
     globalConfig: {
       defaultProvider: "openai",
       providers: {
@@ -212,10 +221,11 @@ test("agent lifecycle capability invoker prefixes flow with the plugin id", asyn
         },
       },
     },
-    loadedDynamicPlugins: { registry: new Map([["demo", demo]]) },
-    createPluginResolveModelMessages: () => () => [],
   });
-  const prepared = instance.prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } });
+  const prepared = instance.prepareRunConfig({
+    userId: "u1",
+    runConfig: { selectedPlugins: ["demo"] },
+  });
   const requests = [];
   const modelPort = {
     async invoke(request) {
@@ -239,4 +249,30 @@ test("agent lifecycle capability invoker prefixes flow with the plugin id", asyn
   );
   assert.equal(requests[0].options.headers["X-Plugin-Flow"], "demo.plan");
   assert.equal(requests[0].invocation.flow, "demo.plan");
+});
+
+test("RunConfigPluginPreparer rejects incomplete dependencies and missing userId", () => {
+  const complete = {
+    globalConfig: {},
+    workspaceService: { getWorkspacePath: () => "/tmp/noobot-preparer" },
+    loadedDynamicPlugins: { registry: new Map() },
+    createPluginResolveModelMessages: () => () => [],
+    createDetachedSubSessionRunner: () => async () => ({}),
+  };
+  for (const key of Object.keys(complete)) {
+    assert.throws(
+      () => new RunConfigPluginPreparer({ ...complete, [key]: undefined }),
+      TypeError,
+      key,
+    );
+  }
+  assert.throws(
+    () => new RunConfigPluginPreparer({ ...complete, workspaceService: {} }),
+    /getWorkspacePath/,
+  );
+  const demo = entry({ id: "demo", activate: activation("demo") });
+  assert.throws(
+    () => preparer([demo]).prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } }),
+    /requires userId/,
+  );
 });

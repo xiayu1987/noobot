@@ -32,7 +32,6 @@ import {
   getPlanningSeparateModelEmptyRelay,
 } from "../shared/workflow/prompts.js";
 import {
-  compactOperationDirectoryForPrompt,
   formatOperationDirectoryForRelay,
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
@@ -148,7 +147,7 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
     latestUserGoal: compactText(latestUserGoalText, PLANNING_CONTEXT_GOAL_MAX_CHARS),
-    operationDirectory: compactOperationDirectoryForPrompt(resolveOperationDirectoryContext(ctx)),
+    operationDirectory: resolveOperationDirectoryContext(ctx),
     sceneTools: resolveSceneToolNames(ctx),
     toolAllowlist: resolvePlanningToolAllowlist(meta),
   };

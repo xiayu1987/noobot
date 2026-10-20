@@ -10,6 +10,7 @@ import { SkillService } from "../skills/index.js";
 import { ConfigService, WORKSPACE_SANDBOX_PATHS } from "../config/index.js";
 import { SystemErrorLogger } from "../observability/index.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
+import { runAgentTurn } from "../runtime/index.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { rm } from "node:fs/promises";
@@ -23,8 +24,8 @@ export class BotManager {
     globalConfig,
     {
       globalConfigRaw = null,
-      startupContext = {},
-      pluginRuntimeBundle = null,
+      startupContext,
+      pluginRuntimeBundle,
       connectorAccessPort = null,
     } = {},
   ) {
@@ -60,6 +61,7 @@ export class BotManager {
       workspaceService: this.workspaceService,
       errorLogger: this.errorLogger,
       botManager: this,
+      agentRunner: runAgentTurn,
       pluginRuntimeBundle: this.pluginRuntimeBundle,
     });
   }

@@ -31,7 +31,9 @@ test("session-routes: execution-report 按 dialogProcessId 返回单轮报告", 
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.report.status, "completed");
-    assert.deepEqual(calls, [{ userId: "u1", sessionId: "s1", dialogProcessId: "dp-1" }]);
+    assert.deepEqual(calls, [
+      { userId: "u1", sessionId: "s1", dialogProcessId: "dp-1", persistenceScope: null },
+    ]);
   });
 });
 

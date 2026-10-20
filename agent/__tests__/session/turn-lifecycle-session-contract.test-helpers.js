@@ -150,7 +150,10 @@ const event = (eventType, commandId, expectedRevision, extra = {}) => {
     causationId: commandId,
     expectedRevision,
     ...(eventType === TURN_EVENT.ACTION_ACCEPTED
-      ? createAcceptedAgentExecution(extra.turnScopeId ?? "t1", extra.sessionId ?? "s1")
+      ? {
+          ...createAcceptedAgentExecution(extra.turnScopeId ?? "t1", extra.sessionId ?? "s1"),
+          startedAt: "2026-07-18T00:00:00.000Z",
+        }
       : {}),
     ...extra,
     ...(eventType === TURN_EVENT.ACTION_ACCEPTED && action !== "resend"

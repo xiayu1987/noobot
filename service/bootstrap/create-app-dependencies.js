@@ -25,7 +25,7 @@ import { text, isFunction } from "@noobot/shared/value";
 
 export async function createAppDependencies({
   serviceDir,
-  startupContext = {},
+  startupContext,
   globalConfigBuilder,
   buildWorkspaceTree,
   connectorAccessPort,
@@ -60,7 +60,6 @@ export async function createAppDependencies({
     getGlobalConfigRaw: () => globalConfigRaw,
   });
   const {
-    normalizeConfigParams,
     readWorkspaceConfigParams,
     writeWorkspaceConfigParams,
     readUserConfigParams,
@@ -169,7 +168,7 @@ export async function createAppDependencies({
     readSessionUserIds,
     openVSCodeService,
     buildHttpModuleDependencies: () => ({
-      pluginRootDir: text(startupContext?.paths?.pluginRootDir),
+      pluginRootDir: startupContext.paths.pluginRootDir,
       bot,
       openVSCodeService,
       globalConfigProvider: () => globalConfig,
@@ -185,9 +184,6 @@ export async function createAppDependencies({
       readScopedConfigParams,
       writeScopedConfigParams,
       buildScopedConfigParamsResponse,
-      normalizeConfigParams,
-      readWorkspaceConfigParams,
-      readUserConfigParams,
       collectConfigTemplateKeys,
       collectUserConfigTemplateKeys,
       buildConfigParamCatalog,

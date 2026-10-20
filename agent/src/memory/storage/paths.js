@@ -8,7 +8,6 @@ import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { text } from "@noobot/shared/value";
 
 const MEMORY_DIR_RELATIVE_PATH = WORKSPACE_LAYOUT.MEMORY_DIR;
-const SESSION_DIR_RELATIVE_PATH = WORKSPACE_LAYOUT.SESSION_DIR;
 
 export const MEMORY_RELATIVE_PATHS = Object.freeze({
   MEMORY_DIR: MEMORY_DIR_RELATIVE_PATH,
@@ -83,10 +82,4 @@ export function yearlySummaryDir(basePath) {
 
 export function dailySummaryDateDir(basePath, dateKey = "") {
   return path.join(dailySummaryDir(basePath), dateKey);
-}
-
-export function sessionFile(basePath, sessionId, parentSessionId = "") {
-  return parentSessionId
-    ? path.join(basePath, SESSION_DIR_RELATIVE_PATH, parentSessionId, sessionId, "session.json")
-    : path.join(basePath, SESSION_DIR_RELATIVE_PATH, sessionId, "session.json");
 }

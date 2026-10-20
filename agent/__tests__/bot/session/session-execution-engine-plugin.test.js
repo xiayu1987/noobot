@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { SessionExecutionEngine } from "../../../src/bot/session/session-execution-engine.js";
+import { createTestSessionExecutionEngine } from "../../helpers/session-execution-engine.js";
 import {
   AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS,
   AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS,
@@ -21,7 +21,7 @@ function createWorkspaceService(basePath) {
 
 test("SessionExecutionEngine activates harness by Manifest id", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-engine-plugin-"));
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService(basePath),
   });
 
@@ -51,8 +51,9 @@ test("SessionExecutionEngine activates harness by Manifest id", async () => {
 
 test("SessionExecutionEngine owns the harness model invoker instead of run config", () => {
   const capabilityModelInvoker = async () => ({ output: "ok" });
-  const engine = new SessionExecutionEngine({});
+  const engine = createTestSessionExecutionEngine({});
   const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
+    userId: "u1",
     runConfig: {
       selectedPlugins: ["harness"],
       plugins: {
@@ -69,8 +70,9 @@ test("SessionExecutionEngine owns the harness model invoker instead of run confi
 });
 
 test("plugin policy declarations merge through the single policy.patch port", () => {
-  const engine = new SessionExecutionEngine({});
+  const engine = createTestSessionExecutionEngine({});
   const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
+    userId: "u1",
     runConfig: {
       selectedPlugins: ["harness", "workflow"],
       toolPolicy: { denyToolNames: ["base_tool"] },
@@ -89,8 +91,9 @@ test("plugin policy declarations merge through the single policy.patch port", ()
 });
 
 test("plugin model config is keyed only by Manifest id", () => {
-  const engine = new SessionExecutionEngine({});
+  const engine = createTestSessionExecutionEngine({});
   const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
+    userId: "u1",
     runConfig: {
       selectedPlugins: ["harness", "workflow"],
       pluginModelConfig: {

@@ -237,7 +237,7 @@ test("runtime section projects every directory through the path resolver", () =>
   const refs = [
     ...Object.values(runtime.directories),
     ...runtime.allowedRoots,
-    ...(runtime.extraMountTargets || []),
+    ...runtime.extraMountTargets,
   ];
   for (const ref of refs) {
     assert.ok(Object.values(PATH_REF_VIEWS).includes(ref.view), "view must be a declared view");

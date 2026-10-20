@@ -81,13 +81,19 @@ export class MemoryManager {
     return this.longMemory.read(basePath);
   }
 
-  async captureSessionToShortMemory({ userId, sessionId, parentSessionId = "", userConfig = {} }) {
-    const basePath = this.storage.resolveBasePath(userId);
-    return this.shortMemory.captureSessionToShortMemory({
-      basePath,
+  async captureDialogToShortMemory({
+    userId,
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    messages,
+  }) {
+    return this.shortMemory.captureDialogToShortMemory({
+      basePath: this.storage.resolveBasePath(userId),
       sessionId,
       parentSessionId,
-      userConfig,
+      dialogProcessId,
+      messages,
     });
   }
 

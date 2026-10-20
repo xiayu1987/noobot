@@ -20,7 +20,7 @@ async function completeTurn(service, turnScopeId) {
     presentationMessageId: `presentation-${turnScopeId}`,
   };
   const steps = [
-    [TURN_EVENT.PROCESSING_STARTED, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }],
+    [TURN_EVENT.PROCESSING_STARTED, { phase: TURN_PHASE.PROCESSING }],
     [
       TURN_EVENT.PROCESSING_COMPLETED,
       {

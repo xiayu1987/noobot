@@ -7,10 +7,9 @@ import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { splitLines } from "../file-utils.js";
 
-function readTextFormat(originalContent = "") {
-  const rawContent = String(originalContent || "");
-  const byteOrderMark = rawContent.startsWith("\uFEFF") ? "\uFEFF" : "";
-  const content = byteOrderMark ? rawContent.slice(1) : rawContent;
+function readTextFormat(originalContent) {
+  const byteOrderMark = originalContent.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const content = byteOrderMark ? originalContent.slice(1) : originalContent;
   return {
     byteOrderMark,
     content,
@@ -19,32 +18,31 @@ function readTextFormat(originalContent = "") {
   };
 }
 
-function joinPatchedLines(lines = [], textFormat = {}) {
-  const lineEnding = textFormat.lineEnding === "\r\n" ? "\r\n" : "\n";
+function joinPatchedLines(lines, textFormat) {
   return (
-    String(textFormat.byteOrderMark || "") +
-    lines.join(lineEnding) +
-    (textFormat.hadFinalNewline ? lineEnding : "")
+    textFormat.byteOrderMark +
+    lines.join(textFormat.lineEnding) +
+    (textFormat.hadFinalNewline ? textFormat.lineEnding : "")
   );
 }
 
-export function applyUnifiedHunks(originalContent = "", hunks = []) {
+export function applyUnifiedHunks(originalContent, hunks) {
   const textFormat = readTextFormat(originalContent);
   const originalLines = splitLines(textFormat.content);
   if (textFormat.hadFinalNewline) originalLines.pop();
   const output = [];
   let pointer = 0;
   for (const hunk of hunks) {
-    const hunkStart = Math.max(0, Number(hunk.oldStart || 1) - 1);
+    const hunkStart = Math.max(0, hunk.oldStart - 1);
     if (hunkStart < pointer) {
       throw recoverableToolError("patch hunks overlap or are out of order", {
         code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-        details: { field: "patch" },
+        details: { field: "patch", line: hunkStart + 1 },
       });
     }
     output.push(...originalLines.slice(pointer, hunkStart));
     pointer = hunkStart;
-    for (const line of hunk.lines || []) {
+    for (const line of hunk.lines) {
       if (line.type === " ") {
         if (originalLines[pointer] !== line.text) {
           throw recoverableToolError("patch context does not match target file", {
@@ -96,17 +94,17 @@ function findSubsequence(lines = [], pattern = [], startIndex = 0) {
   return -1;
 }
 
-export function applySearchHunks(originalContent = "", hunks = []) {
+export function applySearchHunks(originalContent, hunks) {
   const textFormat = readTextFormat(originalContent);
   const originalLines = splitLines(textFormat.content);
   if (textFormat.hadFinalNewline) originalLines.pop();
   let output = [...originalLines];
   let searchStart = 0;
   for (const hunk of hunks) {
-    const oldPattern = (hunk.lines || [])
+    const oldPattern = hunk.lines
       .filter((line) => line.type === " " || line.type === "-")
       .map((line) => line.text);
-    const newBlock = (hunk.lines || [])
+    const newBlock = hunk.lines
       .filter((line) => line.type === " " || line.type === "+")
       .map((line) => line.text);
     const hit = findSubsequence(output, oldPattern, searchStart);

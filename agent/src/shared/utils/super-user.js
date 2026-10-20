@@ -8,18 +8,9 @@ import { isPlainObject, text } from "@noobot/shared/value";
 
 export const SUPER_ADMIN_ROLE = "super_admin";
 
-function asObject(value) {
-  return isPlainObject(value) ? value : null;
-}
-
-function resolveRuntimeFromAgentContext(agentContext = {}) {
-  const context = asObject(agentContext) || {};
-  return asObject(context?.bindings?.runtime) || {};
-}
-
 export function resolveConfiguredSuperUserId(globalConfig = {}) {
-  const config = asObject(globalConfig) || {};
-  return text(config?.superAdmin?.userId);
+  if (!isPlainObject(globalConfig)) return "";
+  return text(globalConfig.superAdmin?.userId);
 }
 
 export function isConfiguredSuperUser({ globalConfig = {}, userId = "" } = {}) {
@@ -33,19 +24,5 @@ export function isSuperAdminRole(role = "") {
 }
 
 export function isSuperUserAgentContext(agentContext = {}) {
-  const context = asObject(agentContext) || {};
-  const runtime = resolveRuntimeFromAgentContext(context);
-  const systemRuntime = asObject(runtime?.systemRuntime) || {};
-  if (systemRuntime?.isSuperUser === true) return true;
-  if (
-    isSuperAdminRole(
-      context?.environment?.identity?.role ||
-        context?.auth?.role ||
-        runtime?.role ||
-        systemRuntime?.role,
-    )
-  ) {
-    return true;
-  }
-  return false;
+  return agentContext?.bindings?.runtime?.systemRuntime?.isSuperUser === true;
 }

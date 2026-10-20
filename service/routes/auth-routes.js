@@ -6,7 +6,7 @@
 import { resolveLocalizedBuiltinScenarios } from "#agent/config";
 import { getEnabledProviders, pickAlias } from "#agent/model";
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
-import { withJsonError } from "./route-wrapper.js";
+import { createBadRequestError, withJsonError } from "./route-wrapper.js";
 import { createClientModelCatalog, normalizePluginMode } from "@noobot/agent-config-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -87,7 +87,9 @@ export function registerAuthRoutes(
         const userId = text(req.body?.userId);
         const connectCode = text(req.body?.connectCode);
         if (!userId || !connectCode) {
-          throw new Error(translateText("connect.userIdConnectCodeRequired", req.locale));
+          throw createBadRequestError(
+            translateText("connect.userIdConnectCodeRequired", req.locale),
+          );
         }
 
         const globalConfig =
@@ -150,14 +152,15 @@ export function registerAuthRoutes(
           return;
         }
         if (superAdminUserId && userId === superAdminUserId) {
-          throw new Error(translateText("connect.codeVerifyFailed", req.locale));
+          throw createBadRequestError(translateText("connect.codeVerifyFailed", req.locale));
         }
 
         const users = await readWorkspaceUsers();
         const matchedUser = users.find(
           (userItem) => userItem.userId === userId && userItem.connectCode === connectCode,
         );
-        if (!matchedUser) throw new Error(translateText("connect.codeVerifyFailed", req.locale));
+        if (!matchedUser)
+          throw createBadRequestError(translateText("connect.codeVerifyFailed", req.locale));
 
         await workspaceService.ensureUserWorkspace(userId);
         await connectorRuntime.unlockUser({ userId, connectCode });
@@ -215,7 +218,7 @@ export function registerAuthRoutes(
       async (req, res) => {
         const normalized = normalizeWorkspaceUsersConfig(req.body || {});
         if (!normalized.users.length) {
-          throw new Error(translateText("common.atLeastOneUserRequired", req.locale));
+          throw createBadRequestError(translateText("common.atLeastOneUserRequired", req.locale));
         }
         const duplicateUserId = normalized.users.find(
           (userItem, index) =>
@@ -224,7 +227,7 @@ export function registerAuthRoutes(
             ) !== index,
         );
         if (duplicateUserId) {
-          throw new Error(
+          throw createBadRequestError(
             translateText("common.duplicateUserId", req.locale, {
               userId: duplicateUserId.userId,
             }),

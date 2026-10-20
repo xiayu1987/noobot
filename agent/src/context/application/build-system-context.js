@@ -9,13 +9,12 @@ import {
 } from "@noobot/agent-config-protocol/enums";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
-import { isConfiguredSuperUser } from "../../shared/utils/super-user.js";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "../formatters/system-prompt-formatter.js";
 import { resolveConnectorStatusSection } from "../providers/connector-status-provider.js";
 import {
   buildDynamicInfo,
-  buildIdentityAwareStaticInfo,
+  buildStaticInfo,
   resolveContextIdentityInfo,
 } from "../providers/environment-provider.js";
 import { resolveAvailableMcpServers } from "../providers/mcp-provider.js";
@@ -34,11 +33,14 @@ export function buildSystemRuntime({
   dialogProcessId = "",
   rootSessionId = "",
   runConfig = {},
-  globalConfig = {},
-  botManager = null,
+  botManager,
   staticInfo = null,
+  isSuperUser,
   now = new Date().toISOString(),
 } = {}) {
+  if (typeof isSuperUser !== "boolean") {
+    throw new TypeError("buildSystemRuntime requires boolean isSuperUser");
+  }
   const dynamicInfo = buildDynamicInfo({
     userId,
     sessionId,
@@ -49,14 +51,11 @@ export function buildSystemRuntime({
     rootSessionId,
     parentSessionId,
   });
-  const dependencySourceSummary =
-    botManager?.startupContext?.runtime?.dependencies?.sourceSummary &&
-    typeof botManager.startupContext.runtime.dependencies.sourceSummary === "object"
-      ? botManager.startupContext.runtime.dependencies.sourceSummary
-      : null;
-  const runtimeWithStartup = dependencySourceSummary
-    ? { ...dynamicInfo, desktopDependencySources: dependencySourceSummary }
-    : dynamicInfo;
+  const startupDependencies = botManager.startupContext.runtime.dependencies;
+  const runtimeWithStartup =
+    startupDependencies === null
+      ? dynamicInfo
+      : { ...dynamicInfo, desktopDependencySources: startupDependencies.sourceSummary };
   const protectedDialogProcessId = text(dynamicInfo?.dialogProcessId);
   return {
     ...runtimeWithStartup,
@@ -67,10 +66,7 @@ export function buildSystemRuntime({
           currentDialogProcessId: protectedDialogProcessId,
         }
       : {}),
-    isSuperUser: isConfiguredSuperUser({
-      globalConfig,
-      userId: dynamicInfo.userId,
-    }),
+    isSuperUser,
     parentSessionId: normalizeParentSessionId(runtimeWithStartup?.parentSessionId),
   };
 }
@@ -83,7 +79,7 @@ export async function buildSystemContext({
   runConfig = {},
   contextPolicy = {},
   effectiveConfig = {},
-  runtimeBasePath = "",
+  runtimeBasePath,
   longMemory = null,
   sessionManager = null,
   skillService = null,
@@ -109,9 +105,7 @@ export async function buildSystemContext({
   const [systemPrompt, skills, attachments, workspaceDirectories, connectorStatusSection] =
     await Promise.all([
       enabled("base_prompt") ? loadSystemPrompt({ locale }) : "",
-      enabled("skills")
-        ? resolveSkills({ skillService, runtimeBasePath, userId: identity.userId })
-        : [],
+      enabled("skills") ? resolveSkills({ skillService, userId: identity.userId }) : [],
       attachmentsAvailableToRuntime ? userMessageAttachments : [],
       enabled("system_runtime") ? resolveWorkspaceDirectories(runtimeBasePath) : [],
       includeConnectors
@@ -141,16 +135,16 @@ export async function buildSystemContext({
     : {};
   const identityInfo = resolveContextIdentityInfo({ userId: identity.userId, globalConfig });
   const staticInfo = enabled("system_runtime")
-    ? buildIdentityAwareStaticInfo({ runtimeBasePath, userId: identity.userId, globalConfig })
+    ? buildStaticInfo({ runtimeBasePath, identity: identityInfo, globalConfig })
     : { identity: identityInfo };
   const dynamicInfo = enabled("system_runtime")
     ? buildSystemRuntime({
         ...identity,
         caller,
         runConfig,
-        globalConfig,
         botManager,
         rootSessionId,
+        isSuperUser: identityInfo.isSuperUser,
         now: now(),
       })
     : {};
@@ -170,7 +164,6 @@ export async function buildSystemContext({
       attachments: enabled("attachments") ? attachments : [],
       connectorStatusSection,
     }),
-    runtimeBasePath,
     attachments,
   };
 }

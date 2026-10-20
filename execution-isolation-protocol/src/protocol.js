@@ -13,6 +13,7 @@ import {
   isSandboxExecutionView,
 } from "./execution-views.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export {
   TOOL_EXECUTION_VIEW,
@@ -55,6 +56,7 @@ const EXECUTION_ISOLATION_DEFAULTS = Object.freeze({
     scope: DOCKER_CONTAINER_SCOPE.USER,
     containerName: "noobot-workspace-sandbox",
     image: "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
+    lockWaitTimeoutMs: TIME_THRESHOLDS.tools.dockerLockWaitTimeoutMs,
   }),
 });
 
@@ -165,8 +167,8 @@ function normalizeMountTarget(value, field) {
   return target;
 }
 
-function normalizeOptionalLockWaitTimeout(value) {
-  if (value === undefined) return undefined;
+function normalizeLockWaitTimeout(value) {
+  if (value === undefined) return EXECUTION_ISOLATION_DEFAULTS.sandbox.lockWaitTimeoutMs;
   const timeout = Number(value);
   if (!Number.isInteger(timeout) || timeout < 100) {
     throw new Error(
@@ -232,7 +234,6 @@ export function resolveExecutionIsolation(globalConfig = {}) {
     throw new Error(`invalid execution isolation mode: ${mode}`);
   }
   const sandbox = objectOrEmpty(configured.sandbox);
-  const lockWaitTimeoutMs = normalizeOptionalLockWaitTimeout(sandbox.lockWaitTimeoutMs);
   const resolvedSandbox = Object.freeze({
     provider: normalizeSandboxProvider(
       sandbox.provider || EXECUTION_ISOLATION_DEFAULTS.sandbox.provider,
@@ -248,7 +249,7 @@ export function resolveExecutionIsolation(globalConfig = {}) {
       "security.executionIsolation.sandbox.image",
     ),
     mounts: normalizeSandboxMounts(sandbox.mounts || []),
-    ...(lockWaitTimeoutMs === undefined ? {} : { lockWaitTimeoutMs }),
+    lockWaitTimeoutMs: normalizeLockWaitTimeout(sandbox.lockWaitTimeoutMs),
   });
   return Object.freeze({
     protocol: EXECUTION_ISOLATION_PROTOCOL_NAME,
@@ -264,6 +265,9 @@ export function assertExecutionIsolationProtocol(isolation) {
     isolation?.version !== EXECUTION_ISOLATION_PROTOCOL_VERSION
   ) {
     throw new Error("resolved execution isolation protocol required");
+  }
+  if (!Number.isInteger(isolation.sandbox?.lockWaitTimeoutMs)) {
+    throw new Error("resolved execution isolation sandbox.lockWaitTimeoutMs required");
   }
   return isolation;
 }
@@ -315,9 +319,10 @@ export function resolveToolExecutionAuthorization({ policy, isSuperAdmin = false
   return Object.freeze({ allowed: true, code: "" });
 }
 
-export function resolveWorkspaceSandboxLayout({ isolation, userId = "" } = {}) {
+export function resolveWorkspaceSandboxLayout({ isolation, userId } = {}) {
   const resolved = assertExecutionIsolationProtocol(isolation);
-  const userPart = sanitizeExecutionIdentity(userId || "user") || "user";
+  const userPart = sanitizeExecutionIdentity(requiredString(userId, "userId"));
+  if (!userPart) throw new Error("userId is not a valid execution identity");
   const scope = resolved.sandbox.scope;
   const userIsolated = scope === DOCKER_CONTAINER_SCOPE.USER;
   const root = WORKSPACE_SANDBOX_PATHS.ROOT;

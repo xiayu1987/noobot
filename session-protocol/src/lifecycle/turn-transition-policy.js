@@ -67,11 +67,15 @@ export function deriveTurnEventType(state = "", { action = "" } = {}) {
   return "";
 }
 
-export function deriveTurnExecutionState(eventType = "", current = "") {
-  if (eventType === TURN_EVENT.COMPLETED) return TURN_EXECUTION_STATE.COMPLETED;
-  if (eventType === TURN_EVENT.STOP_COMPLETED) return TURN_EXECUTION_STATE.USER_STOPPED;
-  if (eventType === TURN_EVENT.FAILED) return TURN_EXECUTION_STATE.ERROR;
-  return normalizeTurnExecutionState(current);
+const EVENT_EXECUTION_STATE = Object.freeze({
+  [TURN_EVENT.PROCESSING_STARTED]: TURN_EXECUTION_STATE.SENDING,
+  [TURN_EVENT.COMPLETED]: TURN_EXECUTION_STATE.COMPLETED,
+  [TURN_EVENT.STOP_COMPLETED]: TURN_EXECUTION_STATE.USER_STOPPED,
+  [TURN_EVENT.FAILED]: TURN_EXECUTION_STATE.ERROR,
+});
+
+export function deriveTurnExecutionState(eventType, current) {
+  return EVENT_EXECUTION_STATE[eventType] ?? normalizeTurnExecutionState(current);
 }
 
 export function decideTurnTransition({ current = null, eventType = "", phase = "" } = {}) {

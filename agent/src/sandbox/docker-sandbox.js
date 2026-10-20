@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
 import {
   assertExecutionIsolationProtocol,
   resolveSandboxProviderExecutable,
@@ -13,22 +12,29 @@ import {
 import { randomUUID } from "node:crypto";
 import { text } from "@noobot/shared/value";
 
-export function buildDockerCommand({ userRoot, userId = "", command, isolation, workdir = "" }) {
+function requireDockerInput(value, fieldName) {
+  const normalized = text(value);
+  if (!normalized) throw new TypeError(`buildDockerCommand requires ${fieldName}`);
+  return normalized;
+}
+
+export function buildDockerCommand({ basePath, userId, command, isolation, workdir }) {
   const resolvedIsolation = assertExecutionIsolationProtocol(isolation);
+  const resolvedUserId = requireDockerInput(userId, "userId");
+  const resolvedWorkdir = requireDockerInput(workdir, "workdir");
   const layout = resolveWorkspaceSandboxLayout({
     isolation: resolvedIsolation,
-    userId: userId || path.basename(userRoot),
+    userId: resolvedUserId,
   });
   const { scope, image, mounts, provider } = resolvedIsolation.sandbox;
   const containerName = layout.containerName;
   const workspaceMount = resolveWorkspaceSandboxMountProjection({
     isolation: resolvedIsolation,
-    userId: userId || path.basename(userRoot),
-    hostUserRoot: userRoot,
+    userId: resolvedUserId,
+    hostUserRoot: basePath,
   });
   const workspaceSource = workspaceMount.source;
   const workspaceTarget = workspaceMount.target;
-  const resolvedWorkdir = text(workdir) || layout.userRoot;
   const encodedCommand = Buffer.from(String(command || ""), "utf8").toString("base64");
   const executionToken = randomUUID();
   const mountArgs = [

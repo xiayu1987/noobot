@@ -5,45 +5,61 @@
  */
 import { normalizeSlashPath } from "./platform.js";
 import {
-  WORKSPACE_SANDBOX_PATHS,
   isSandboxIsolationMode,
   resolveExecutionIsolation,
   resolveSandboxMountMappings,
-  resolveWorkspaceSandboxLayout,
+  resolveWorkspaceSandboxMountProjection,
 } from "@noobot/execution-isolation-protocol";
 import { text } from "@noobot/shared/value";
 
-export function resolveRuntimeUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
-  return text(userId || runtime?.systemRuntime?.userId || agentContext?.context?.identity?.userId);
+export const SANDBOX_MOUNT_KIND = Object.freeze({
+  WORKSPACE: "workspace",
+  CONFIGURED: "configured",
+});
+
+function normalizeMountMappings(mappings = []) {
+  return mappings.map((item) => ({
+    source: normalizeSlashPath(item.source),
+    target: item.target,
+    readOnly: item.readOnly,
+  }));
 }
 
-function resolveConfiguredMountMappings(runtime = {}) {
-  return resolveSandboxMountMappings(resolveExecutionIsolation(runtime?.globalConfig || {}));
+export function resolveSandboxPathMappings({ globalConfig }) {
+  return normalizeMountMappings(
+    resolveSandboxMountMappings(resolveExecutionIsolation(globalConfig)),
+  ).sort((leftItem, rightItem) => rightItem.source.length - leftItem.source.length);
 }
 
-export function resolveSandboxUserRoot(runtime = {}) {
-  const isolation = resolveExecutionIsolation(runtime?.globalConfig || {});
-  if (!isSandboxIsolationMode(isolation.mode)) return "";
-  return resolveWorkspaceSandboxLayout({
+function requireRuntimeText(value, fieldName) {
+  const normalized = text(value);
+  if (!normalized) throw new TypeError(`resolveSandboxMount requires runtime ${fieldName}`);
+  return normalized;
+}
+
+function resolveSandboxMountTable(runtime) {
+  const isolation = resolveExecutionIsolation(runtime.globalConfig);
+  if (!isSandboxIsolationMode(isolation.mode)) return [];
+  const workspaceMount = resolveWorkspaceSandboxMountProjection({
     isolation,
-    userId: resolveRuntimeUserId({ runtime }),
-  }).userRoot;
+    userId: requireRuntimeText(runtime.systemRuntime?.userId, "systemRuntime.userId"),
+    hostUserRoot: requireRuntimeText(runtime.basePath, "basePath"),
+  });
+  const withKind = (kind) => (item) => ({ ...item, kind });
+  return [
+    ...normalizeMountMappings([
+      { source: workspaceMount.source, target: workspaceMount.target, readOnly: false },
+    ]).map(withKind(SANDBOX_MOUNT_KIND.WORKSPACE)),
+    ...normalizeMountMappings(resolveSandboxMountMappings(isolation)).map(
+      withKind(SANDBOX_MOUNT_KIND.CONFIGURED),
+    ),
+  ];
 }
 
-export function resolveSandboxPathMappings(runtime = {}) {
-  return resolveConfiguredMountMappings(runtime)
-    .map((item) => ({
-      source: normalizeSlashPath(item.source),
-      target: item.target,
-      readOnly: item.readOnly,
-    }))
-    .sort((leftItem, rightItem) => rightItem.source.length - leftItem.source.length);
-}
-
-export function resolveSandboxMount({ sandboxPath = "", runtime = {} } = {}) {
+export function resolveSandboxMount({ sandboxPath, runtime }) {
   const normalizedPath = normalizeSlashPath(sandboxPath);
   if (!normalizedPath) return null;
-  const mapping = resolveSandboxPathMappings(runtime)
+  const mapping = resolveSandboxMountTable(runtime)
     .sort((leftItem, rightItem) => rightItem.target.length - leftItem.target.length)
     .find((item) => normalizedPath === item.target || normalizedPath.startsWith(`${item.target}/`));
   if (!mapping) return null;
@@ -55,36 +71,4 @@ export function resolveSandboxMount({ sandboxPath = "", runtime = {} } = {}) {
         ? mapping.source
         : `${mapping.source}${normalizedPath.slice(mapping.target.length)}`,
   });
-}
-
-export function resolveHostPath({ sandboxPath = "", runtime = {} } = {}) {
-  const isolation = resolveExecutionIsolation(runtime?.globalConfig || {});
-  if (!isSandboxIsolationMode(isolation.mode)) return "";
-  const normalizedSandboxPath = normalizeSlashPath(sandboxPath);
-  if (!normalizedSandboxPath) return "";
-
-  const mount = resolveSandboxMount({ sandboxPath: normalizedSandboxPath, runtime });
-  if (mount) return mount.hostPath;
-
-  const sandboxUserRoot = resolveSandboxUserRoot(runtime);
-  const hostBasePath = text(runtime?.basePath);
-  const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
-  const normalizedSandboxUserRoot = normalizeSlashPath(sandboxUserRoot);
-  if (normalizedSandboxUserRoot && normalizedHostBasePath) {
-    if (normalizedSandboxPath === normalizedSandboxUserRoot) return normalizedHostBasePath;
-    if (normalizedSandboxPath.startsWith(`${normalizedSandboxUserRoot}/`)) {
-      return `${normalizedHostBasePath}${normalizedSandboxPath.slice(normalizedSandboxUserRoot.length)}`;
-    }
-  }
-
-  const sandboxRoot = WORKSPACE_SANDBOX_PATHS.ROOT;
-  const normalizedSandboxRoot = normalizeSlashPath(sandboxRoot);
-  if (normalizedSandboxRoot && normalizedHostBasePath) {
-    if (normalizedSandboxPath === normalizedSandboxRoot) return normalizedHostBasePath;
-    if (normalizedSandboxPath.startsWith(`${normalizedSandboxRoot}/`)) {
-      return `${normalizedHostBasePath}${normalizedSandboxPath.slice(normalizedSandboxRoot.length)}`;
-    }
-  }
-
-  return "";
 }

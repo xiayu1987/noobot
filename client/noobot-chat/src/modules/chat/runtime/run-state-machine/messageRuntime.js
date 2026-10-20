@@ -32,8 +32,6 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   FrontendRunState.USER_STOPPING,
 ]);
 
-const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([AGENT_CHANNEL_STATE.SENDING]);
-
 function isFinalizedAssistantMessage(messageItem = {}) {
   if (getMessageRole(messageItem) !== "assistant") return false;
   const channelState = getMessageChannelState(messageItem);
@@ -100,66 +98,49 @@ function buildSessionRunMessageRuntimeKey(stateItem = {}) {
 
 function getMessageChannelState(messageItem = {}) {
   const channelState = messageItem?.channelState;
-  if (isPlainObject(channelState)) {
-    return { ...channelState, state: normalizeState(channelState.state || channelState.status) };
-  }
-  const state = normalizeState(
-    typeof channelState === "string" ? channelState : messageItem?.status || messageItem?.state,
-  );
-  return state ? { state } : {};
+  if (!isPlainObject(channelState)) return {};
+  return { ...channelState, state: normalizeState(channelState.state) };
 }
 
 export const getMessageRuntimeChannelState = getMessageChannelState;
 
-export function resolveTurnRuntimeView({
-  messageItem = {},
-  turnTiming = null,
-  turnStatus = null,
-  realtimeState = null,
-} = {}) {
+const EMPTY_TURN_RUNTIME = Object.freeze({
+  state: "",
+  backendState: "",
+  displayState: "",
+  startedAt: "",
+  finishedAt: "",
+  modelLoopRound: 0,
+});
+
+export function resolveTurnRuntimeView({ messageItem = {}, runtime = EMPTY_TURN_RUNTIME } = {}) {
   const channelState = getMessageChannelState(messageItem);
-  const realtimeStatus = normalizeState(
-    realtimeState?.backendState || realtimeState?.state || channelState?.state,
-  );
-  const persistedStatus = normalizeState(turnStatus?.status || turnStatus?.state);
-  const messageStatus = normalizeState(messageItem?.status || messageItem?.state);
-  const state = isTerminalRunState(persistedStatus)
-    ? persistedStatus
-    : realtimeStatus || persistedStatus || messageStatus;
+  const runtimeState = normalizeState(runtime.state);
+  const state = isTerminalRunState(runtimeState)
+    ? runtimeState
+    : normalizeState(runtime.backendState || runtime.state || channelState?.state);
   const pending = messageItem?.pending === true;
   const terminal = isTerminalRunState(state);
   const running = !terminal && (pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
   const inFlightAssistant =
     getMessageRole(messageItem) === "assistant" &&
     (running || (!terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state)));
-  const canStopTarget = inFlightAssistant && MESSAGE_CAN_STOP_TARGET_STATES.includes(state);
   return {
     state,
+    displayState: runtime.displayState,
     channelState,
     pending,
     running,
     terminal,
     inFlightAssistant,
-    canStopTarget,
-    startedAt: turnTiming?.startedAt || "",
-    finishedAt: turnTiming?.finishedAt || "",
-    modelLoopRound: Number(turnTiming?.modelLoopRound || 0),
-    source: isTerminalRunState(persistedStatus)
-      ? "persisted"
-      : realtimeStatus
-        ? "realtime"
-        : persistedStatus
-          ? "persisted"
-          : "message",
+    startedAt: runtime.startedAt,
+    finishedAt: runtime.finishedAt,
+    modelLoopRound: runtime.modelLoopRound,
   };
 }
 
-export function resolveSessionRunMessageRuntimeView(
-  messageItem = {},
-  turnTiming = null,
-  turnStatus = null,
-) {
-  return resolveTurnRuntimeView({ messageItem, turnTiming, turnStatus });
+export function resolveSessionRunMessageRuntimeView(messageItem = {}) {
+  return resolveTurnRuntimeView({ messageItem });
 }
 
 export function isMessageRunning(messageItem = {}) {

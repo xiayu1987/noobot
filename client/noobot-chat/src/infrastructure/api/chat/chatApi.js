@@ -32,12 +32,22 @@ function runFileFetch(fetcher, path, { traceId = "", query = {} } = {}) {
   );
 }
 
+async function readResponsePayload(response) {
+  if (response.ok !== false) return response.json();
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 async function decodeJsonResponse(response, operation) {
   if (response && typeof response.json === "function") {
-    const payload = await response.json();
+    const payload = await readResponsePayload(response);
     if (response.ok === false || payload?.ok === false) {
       const error = new Error(payload?.error || payload?.message || `${operation}_failed`);
       error.status = Number(response.status || 0);
+      error.errorCode = text(payload?.errorCode);
       const retryAfter = response.headers?.get?.("retry-after");
       const retryAfterSeconds = Number(retryAfter);
       error.retryAfterMs =
@@ -173,9 +183,10 @@ export async function getSessionExecutionReportApi(
 ) {
   const runFetch = resolveFetcher(fetcher);
   const query = `?dialogProcessId=${encodeURIComponent(text(dialogProcessId))}`;
-  return runFetch(
+  const response = await runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/execution-report${query}`,
   );
+  return decodeJsonResponse(response, "execution_report");
 }
 
 export async function deleteSessionMessagesFromApi(

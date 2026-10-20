@@ -55,6 +55,36 @@ function requireTurnScopeId(turnScopeId = "") {
   return scopeId;
 }
 
+function requireUserId(userId = "") {
+  const normalized = text(userId);
+  if (!normalized) throw new TypeError("plugin basePath resolution requires userId");
+  return normalized;
+}
+
+function assertPreparerInput({
+  globalConfig,
+  workspaceService,
+  loadedDynamicPlugins,
+  createPluginResolveModelMessages,
+  createDetachedSubSessionRunner,
+}) {
+  if (!isPlainObject(globalConfig)) {
+    throw new TypeError("RunConfigPluginPreparer requires globalConfig object");
+  }
+  if (!isFunction(workspaceService?.getWorkspacePath)) {
+    throw new TypeError("RunConfigPluginPreparer requires workspaceService.getWorkspacePath");
+  }
+  if (!(loadedDynamicPlugins?.registry instanceof Map)) {
+    throw new TypeError("RunConfigPluginPreparer requires loadedDynamicPlugins.registry Map");
+  }
+  if (!isFunction(createPluginResolveModelMessages)) {
+    throw new TypeError("RunConfigPluginPreparer requires createPluginResolveModelMessages");
+  }
+  if (!isFunction(createDetachedSubSessionRunner)) {
+    throw new TypeError("RunConfigPluginPreparer requires createDetachedSubSessionRunner");
+  }
+}
+
 function createRootExecutionIntent({ executionId, executionKind, origin, stage }) {
   return Object.freeze({
     executionId,
@@ -74,13 +104,15 @@ function managerForPoint(point = "", agentHooks, orchestrationHooks) {
 }
 
 export class RunConfigPluginPreparer {
-  constructor({
-    globalConfig = {},
-    workspaceService = null,
-    loadedDynamicPlugins = null,
-    createPluginResolveModelMessages = null,
-    createDetachedSubSessionRunner = null,
-  } = {}) {
+  constructor(input) {
+    assertPreparerInput(input);
+    const {
+      globalConfig,
+      workspaceService,
+      loadedDynamicPlugins,
+      createPluginResolveModelMessages,
+      createDetachedSubSessionRunner,
+    } = input;
     this.globalConfig = globalConfig;
     this.workspaceService = workspaceService;
     this.loadedDynamicPlugins = loadedDynamicPlugins;
@@ -95,7 +127,7 @@ export class RunConfigPluginPreparer {
   }
 
   createConfigPlan({ runConfig = {}, userConfig = {} } = {}) {
-    const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
+    const effectiveConfig = mergeConfig(this.globalConfig, plainObject(userConfig));
     const entries = listLoadedNoobotPluginEntries(this.loadedDynamicPlugins);
     const plan = createPluginConfigPlan({
       runConfig,
@@ -138,7 +170,7 @@ export class RunConfigPluginPreparer {
   }
 
   resolveOptions({ entry, userId = "", runConfig = {}, userConfig = {} }) {
-    const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
+    const effectiveConfig = mergeConfig(this.globalConfig, plainObject(userConfig));
     const configSnapshot = createConfigSnapshot({
       config: effectiveConfig,
       scope: { kind: "agent_turn", userId: text(userId) },
@@ -151,8 +183,7 @@ export class RunConfigPluginPreparer {
     const options =
       plan.plugins.find((plugin) => plugin.pluginId === entry.pluginId)?.options || {};
     const basePath =
-      text(options.basePath) ||
-      (this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : "");
+      text(options.basePath) || this.workspaceService.getWorkspacePath(requireUserId(userId));
     const next = { ...options, enabled: true, mode: "on", basePath };
     next.frontendThresholdsEnabled = runConfig?.frontendThresholdsEnabled === true;
     const agentContributions = contributionsForSurface(entry.manifest, PLUGIN_SURFACE.AGENT);

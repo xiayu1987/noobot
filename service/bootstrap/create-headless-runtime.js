@@ -46,8 +46,8 @@ export async function createHeadlessRuntime({
   cwd = process.cwd(),
   startupSource = "service",
 } = {}) {
-  const startupContext = await loadStartupContext({ argv, cwd });
-  applyStartupRuntimeEnv(startupContext);
+  const startupContext = await loadStartupContext({ argv, cwd, env: process.env });
+  applyStartupRuntimeEnv(startupContext, { env: process.env });
   void writeRuntimeEvent({
     scope: "startup",
     source: startupSource,

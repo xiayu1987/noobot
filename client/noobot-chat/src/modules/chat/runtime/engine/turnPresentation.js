@@ -133,8 +133,6 @@ function buildTerminalPresentation(status = {}, sessionId = "") {
     turnPlaceholder: true,
     turnStatusPlaceholder: true,
     turnStatus: { ...status },
-    status: status?.status,
-    state: status?.status,
     turnScopeId,
     dialogProcessId,
     ts: timestamp,

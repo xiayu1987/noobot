@@ -9,7 +9,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { buildDockerCommand } from "../../../sandbox/docker-sandbox.js";
 import { logWarn } from "../../../observability/console/logger.js";
-import { DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS, SANDBOX_PROVIDER_NAME } from "./constants.js";
+import { SANDBOX_PROVIDER_NAME } from "./constants.js";
 import { enqueueDockerContainerTask } from "./docker-queue.js";
 import { run } from "./process-exec.js";
 import { scriptRuntimeError } from "./script-errors.js";
@@ -123,19 +123,17 @@ function terminateDockerExecution(built) {
 }
 
 export async function runDockerCommand({
-  userRoot,
-  userId = "",
+  basePath,
+  userId,
   command,
-  workspace,
   timeout,
   isolation,
-  workdir = "",
-  lockWaitTimeoutMs = DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+  workdir,
   runner = run,
   abortSignal = null,
   runnerOptions = {},
 }) {
-  const built = buildDockerCommand({ userRoot, userId, command, isolation, workdir });
+  const built = buildDockerCommand({ basePath, userId, command, isolation, workdir });
   let result = null;
   try {
     result = await enqueueDockerContainerTask({
@@ -144,7 +142,7 @@ export async function runDockerCommand({
         await ensureDockerContainer(built);
         return runner(
           { command: built.executable, args: built.execArgs },
-          workspace,
+          basePath,
           timeout,
           abortSignal,
           {
@@ -153,25 +151,24 @@ export async function runDockerCommand({
           },
         );
       },
-      lockWaitTimeoutMs,
+      lockWaitTimeoutMs: isolation.sandbox.lockWaitTimeoutMs,
       abortSignal,
     });
   } catch (error) {
     if (String(error?.code || "") === "DOCKER_CONTAINER_QUEUE_LOCK_TIMEOUT") {
       logWarn("[execute_script][docker_queue_timeout]", {
         containerName: built.containerName,
-        lockWaitTimeoutMs: error?.details?.lockWaitTimeoutMs || DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+        lockWaitTimeoutMs: isolation.sandbox.lockWaitTimeoutMs,
       });
       throw scriptRuntimeError(
-        `Docker container lock wait timeout (${error?.details?.lockWaitTimeoutMs || DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS}ms): ${built.containerName}`,
+        `Docker container lock wait timeout (${isolation.sandbox.lockWaitTimeoutMs}ms): ${built.containerName}`,
         {
           code: ERROR_CODE.RECOVERABLE_SCRIPT_RUNTIME_ERROR,
           details: {
             mode: SANDBOX_PROVIDER_NAME.DOCKER,
             reason: "container_lock_wait_timeout",
             containerName: built.containerName,
-            lockWaitTimeoutMs:
-              error?.details?.lockWaitTimeoutMs || DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+            lockWaitTimeoutMs: isolation.sandbox.lockWaitTimeoutMs,
           },
         },
       );

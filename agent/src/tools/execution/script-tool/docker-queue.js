@@ -3,12 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTimeMs } from "../../../config/index.js";
 import { logDebug } from "../../../observability/console/logger.js";
-import {
-  DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
-  ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
-} from "./constants.js";
 import { text } from "@noobot/shared/value";
 
 const dockerContainerQueueMap = new Map();
@@ -16,7 +11,7 @@ const dockerContainerQueueMap = new Map();
 export function enqueueDockerContainerTask({
   containerName = "",
   task = async () => ({}),
-  lockWaitTimeoutMs = ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+  lockWaitTimeoutMs: waitTimeout,
   abortSignal = null,
 } = {}) {
   const key = text(containerName) || "__default__";
@@ -24,10 +19,9 @@ export function enqueueDockerContainerTask({
   const queueDepthBefore = dockerContainerQueueMap.has(key) ? 1 : 0;
   const waitStartedAt = Date.now();
   const waitForPrevious = previousTail.catch(() => undefined);
-  const waitTimeout = normalizeTimeMs(lockWaitTimeoutMs, {
-    fallback: DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
-    min: 100,
-  });
+  if (!Number.isInteger(waitTimeout) || waitTimeout < 100) {
+    throw new TypeError("enqueueDockerContainerTask requires protocol lockWaitTimeoutMs");
+  }
   const waitPromise = Promise.race([
     waitForPrevious,
     new Promise((_, reject) => {

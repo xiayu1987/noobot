@@ -22,7 +22,7 @@ test("super-user: configured super user id alone does not grant super user", () 
   assert.equal(resolveConfiguredSuperUserId({ super_admin: { user_id: configuredUserId } }), "");
 });
 
-test("super-user: role and agent context checks share the same helper", () => {
+test("super-user: agent context grants only via systemRuntime.isSuperUser", () => {
   assert.equal(isSuperAdminRole(SUPER_ADMIN_ROLE), true);
   assert.equal(
     isSuperUserAgentContext({
@@ -37,5 +37,18 @@ test("super-user: role and agent context checks share the same helper", () => {
       },
     }),
     true,
+  );
+  assert.equal(
+    isSuperUserAgentContext({
+      environment: { identity: { role: SUPER_ADMIN_ROLE } },
+      auth: { role: SUPER_ADMIN_ROLE },
+      bindings: {
+        runtime: {
+          role: SUPER_ADMIN_ROLE,
+          systemRuntime: { sessionId: "s1", role: SUPER_ADMIN_ROLE },
+        },
+      },
+    }),
+    false,
   );
 });

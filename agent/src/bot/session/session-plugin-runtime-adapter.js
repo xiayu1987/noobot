@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { RunConfigPluginPreparer } from "./run-config-plugin-preparer.js";
+
 export function createRunConfigPluginPreparer({
-  globalConfig = {},
-  workspaceService = null,
-  loadedPlugins = null,
-  createPluginResolveModelMessages = null,
-  createDetachedSubSessionRunner = null,
-} = {}) {
+  globalConfig,
+  workspaceService,
+  loadedPlugins,
+  createPluginResolveModelMessages,
+  createDetachedSubSessionRunner,
+}) {
   return new RunConfigPluginPreparer({
     globalConfig,
     workspaceService,

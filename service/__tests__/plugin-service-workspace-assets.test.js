@@ -53,7 +53,15 @@ test("workspace asset port rejects invalid identity before filesystem access", a
         source: Readable.from("x"),
         declaredBytes: 1,
       }),
-    /invalid workspace asset ID/,
+    (error) => /invalid workspace asset ID/.test(error.message) && error.statusCode === 400,
+  );
+});
+
+test("workspace asset port treats an invalid plugin ID as a server contract error", () => {
+  const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => "/tmp/unreachable" } });
+  assert.throws(
+    () => ports.workspaceAssets.forPlugin("../bad"),
+    (error) => /invalid workspace asset plugin ID/.test(error.message) && !error.statusCode,
   );
 });
 

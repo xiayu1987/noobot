@@ -43,17 +43,16 @@ import {
 } from "@noobot/security-assessment-protocol";
 import { text } from "@noobot/shared/value";
 
-function buildPatchFailurePayload({ error, original = "", pathRef = null } = {}) {
-  const details = error?.details && typeof error.details === "object" ? error.details : {};
-  const line = Number(details?.line || 1);
+function buildPatchFailurePayload({ error, original, pathRef }) {
+  const { details } = error;
   return {
     ok: false,
-    code: String(error?.code || ERROR_CODE.RECOVERABLE_INVALID_INPUT),
-    error: error?.message || String(error),
-    message: error?.message || String(error),
-    ...(pathRef ? { path: projectToolPathRef(pathRef) } : {}),
+    code: error.code,
+    error: error.message,
+    message: error.message,
+    path: projectToolPathRef(pathRef),
     details,
-    ...buildLineNumberedNearbyContent(original, line, 3),
+    ...buildLineNumberedNearbyContent(original, details.line, 3),
   };
 }
 
@@ -144,9 +143,7 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
       }
       writePlans.push({
         filePath: item.resolvedNewPath,
-        content: Object.prototype.hasOwnProperty.call(item, "content")
-          ? item.content
-          : applyUnifiedHunks("", item.hunks || []),
+        content: item.content,
         pathRef: item.newPathRef,
         expectedSha256: null,
       });
@@ -172,9 +169,9 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
     let nextContent = "";
     try {
       nextContent =
-        normalizedFormat === "unified_diff" && !(item.hunks || []).some((hunk) => hunk?.searchOnly)
-          ? applyUnifiedHunks(original, item.hunks || [])
-          : applySearchHunks(original, item.hunks || []);
+        normalizedFormat === "unified_diff" && !item.hunks.some((hunk) => hunk.searchOnly)
+          ? applyUnifiedHunks(original, item.hunks)
+          : applySearchHunks(original, item.hunks);
     } catch (error) {
       return {
         failure: toToolJsonResult(
@@ -183,12 +180,11 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
         ),
       };
     }
-    const outputPath = item.resolvedNewPath || item.resolvedOldPath;
+    const outputPath = item.resolvedNewPath;
     writePlans.push({
       filePath: outputPath,
       content: nextContent,
-      displayPath: item.newPath || item.oldPath,
-      pathRef: item.newPathRef || item.oldPathRef,
+      pathRef: item.newPathRef,
       expectedSha256: hash(await readContent(outputPath)),
     });
     plannedContents.set(outputPath, Buffer.from(nextContent, "utf8"));
@@ -315,7 +311,7 @@ function buildPatchResult({
     strip: normalizedFormat === "unified_diff" ? resolvedStrip : undefined,
     dryRun: dryRun === true,
     root: projectToolPathRef(
-      resolvePathRef({ input: resolvedRoot, workspaceRoot: runtime?.basePath || "" }),
+      resolvePathRef({ input: resolvedRoot, workspaceRoot: runtime.basePath }),
     ),
     changes: [
       ...writePlans.map((item) => ({
@@ -363,18 +359,12 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
     },
     toolName: TOOL_NAME.PATCH_FILE,
     operation: dryRun ? "validate file patch" : "apply file patch",
-    target: prepared.targets
-      .map((item) => item.newPath || item.oldPath)
-      .filter(Boolean)
-      .join(", "),
+    target: prepared.targets.map((item) => item.targetPath).join(", "),
     reason: "The final normalized resources require confirmation under the server path policy.",
   });
   const normalizedFormat = prepared.format;
   const stripAppliesToTargets = prepared.targets.some((item) =>
-    [item.oldPath, item.newPath]
-      .map((value) => String(value || ""))
-      .filter((value) => value && value !== "/dev/null")
-      .some((value) => !isAbsolutePathAnyPlatform(value)),
+    [item.oldPath, item.newPath].filter(Boolean).some((value) => !isAbsolutePathAnyPlatform(value)),
   );
   const { plans, mutations } = await withFileMutationLocks(
     prepared.targets

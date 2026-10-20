@@ -33,39 +33,54 @@ function installStorage() {
   });
 }
 
+function runtimeOf(fields = {}) {
+  return {
+    state: "",
+    backendState: "",
+    displayState: "",
+    startedAt: "",
+    finishedAt: "",
+    modelLoopRound: 0,
+    ...fields,
+  };
+}
+
 describe("sessionRunStateMachine message runtime", () => {
   beforeEach(() => installStorage());
 
-  it("uses persisted terminal turn status over stale realtime message state", () => {
+  it("uses the terminal registry runtime over a stale sending message", () => {
     const view = resolveTurnRuntimeView({
       messageItem: {
         role: "assistant",
         pending: true,
         channelState: { state: AGENT_CHANNEL_STATE.SENDING },
       },
-      turnStatus: { status: AGENT_CHANNEL_STATE.COMPLETED },
+      runtime: runtimeOf({ state: FrontendRunState.FRONTEND_COMPLETED }),
     });
 
     expect(view).toMatchObject({
-      state: AGENT_CHANNEL_STATE.COMPLETED,
+      state: FrontendRunState.FRONTEND_COMPLETED,
       running: false,
+      terminal: true,
       inFlightAssistant: false,
-      source: "persisted",
     });
   });
 
-  it("uses realtime state while persisted turn status has not caught up", () => {
+  it("uses the backend execution state while the registry turn is in flight", () => {
     const view = resolveTurnRuntimeView({
       messageItem: { role: "assistant", pending: false },
-      turnStatus: { status: "queued" },
-      realtimeState: { state: AGENT_CHANNEL_STATE.SENDING },
+      runtime: runtimeOf({
+        state: FrontendRunState.PROCESSING,
+        backendState: AGENT_CHANNEL_STATE.SENDING,
+        displayState: "sending",
+      }),
     });
 
     expect(view).toMatchObject({
       state: AGENT_CHANNEL_STATE.SENDING,
+      displayState: "sending",
       running: true,
       inFlightAssistant: true,
-      source: "realtime",
     });
   });
 
@@ -76,10 +91,7 @@ describe("sessionRunStateMachine message runtime", () => {
         pending: false,
         turnScopeId: "client-turn:stopped-history",
       },
-      turnTiming: {
-        startedAt: "2026-09-10T13:51:21.730Z",
-        finishedAt: "",
-      },
+      runtime: runtimeOf({ startedAt: "2026-09-10T13:51:21.730Z" }),
     });
 
     expect(view).toMatchObject({
@@ -244,7 +256,7 @@ describe("sessionRunStateMachine message runtime", () => {
     ).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
   });
 
-  it("applies persisted stopped turn status to a refreshed pending assistant", () => {
+  it("applies a stopped registry runtime to a refreshed pending assistant", () => {
     const assistant = {
       role: "assistant",
       pending: true,
@@ -255,16 +267,12 @@ describe("sessionRunStateMachine message runtime", () => {
     expect(
       resolveTurnRuntimeView({
         messageItem: assistant,
-        turnStatus: {
-          status: AGENT_CHANNEL_STATE.USER_STOPPED,
-          dialogProcessId: "d1",
-          turnScopeId: "turn-1",
-        },
+        runtime: runtimeOf({ state: FrontendRunState.USER_STOP_COMPLETED }),
       }),
     ).toMatchObject({
-      state: AGENT_CHANNEL_STATE.USER_STOPPED,
+      state: FrontendRunState.USER_STOP_COMPLETED,
       running: false,
-      source: "persisted",
+      terminal: true,
     });
   });
 
@@ -307,7 +315,7 @@ describe("sessionRunStateMachine message runtime", () => {
     });
   });
 
-  it("resolves message runtime selector from normalized and legacy message shapes", () => {
+  it("resolves message runtime selector from runtime-written channelState", () => {
     const sendingMessage = {
       role: "assistant",
       pending: true,
@@ -327,15 +335,15 @@ describe("sessionRunStateMachine message runtime", () => {
       turnScopeId: "turn-1",
     });
     expect(
-      resolveSessionRunMessageRuntimeView(sendingMessage, {
-        startedAt: "2026-01-01T00:00:00.000Z",
+      resolveTurnRuntimeView({
+        messageItem: sendingMessage,
+        runtime: runtimeOf({ startedAt: "2026-01-01T00:00:00.000Z" }),
       }),
     ).toMatchObject({
       state: AGENT_CHANNEL_STATE.SENDING,
       pending: true,
       running: true,
       inFlightAssistant: true,
-      canStopTarget: true,
       startedAt: "2026-01-01T00:00:00.000Z",
     });
     expect(isMessageRunning(sendingMessage)).toBe(true);
@@ -344,38 +352,35 @@ describe("sessionRunStateMachine message runtime", () => {
     expect(
       resolveSessionRunMessageRuntimeView({
         role: "assistant",
-        channelState: { status: "reconnecting" },
+        channelState: { state: "reconnecting" },
       }),
     ).toMatchObject({
       state: AGENT_CHANNEL_STATE.RECONNECTING,
       running: true,
       inFlightAssistant: true,
-      canStopTarget: false,
     });
 
     expect(
       resolveSessionRunMessageRuntimeView({
         role: "assistant",
-        channelState: "interaction_pending",
+        channelState: { state: "interaction_pending" },
       }),
     ).toMatchObject({
       state: AGENT_CHANNEL_STATE.INTERACTION_PENDING,
       running: true,
       inFlightAssistant: true,
-      canStopTarget: false,
     });
 
     expect(
       resolveSessionRunMessageRuntimeView({
         role: "assistant",
-        status: FrontendRunState.USER_STOPPING,
+        channelState: { state: FrontendRunState.USER_STOPPING },
         pending: true,
       }),
     ).toMatchObject({
       state: FrontendRunState.USER_STOPPING,
       running: true,
       inFlightAssistant: true,
-      canStopTarget: false,
     });
 
     expect(
@@ -386,7 +391,6 @@ describe("sessionRunStateMachine message runtime", () => {
     ).toMatchObject({
       running: true,
       inFlightAssistant: false,
-      canStopTarget: false,
     });
   });
 });

@@ -30,7 +30,11 @@ export function createConfigScopeService({
       return { scope, userId: "", payload };
     }
     const userId = text(req?.auth?.userId);
-    if (!userId) throw new Error(translateText("auth.missingUserAuth", req?.locale));
+    if (!userId) {
+      const error = new Error(translateText("auth.missingUserAuth", req?.locale));
+      error.statusCode = 400;
+      throw error;
+    }
     const payload = await readUserConfigParams({ userId, createIfMissing });
     return { scope, userId, payload };
   }
@@ -59,11 +63,16 @@ export function createConfigScopeService({
       scope === "system"
         ? await collectConfigTemplateKeys()
         : await collectUserConfigTemplateKeys(userId);
-    buildConfigParamCatalog({
-      keys,
-      descriptions: nextPayload.descriptions,
-      values: nextPayload.values,
-    });
+    try {
+      buildConfigParamCatalog({
+        keys,
+        descriptions: nextPayload.descriptions,
+        values: nextPayload.values,
+      });
+    } catch (error) {
+      error.statusCode = 400;
+      throw error;
+    }
     if (scope === "system") {
       const payload = await writeWorkspaceConfigParams(nextPayload);
       return { scope, userId: "", payload };

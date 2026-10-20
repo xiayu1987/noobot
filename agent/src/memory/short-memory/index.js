@@ -9,10 +9,6 @@ import {
   sortShortMemoryItems,
   toShortMemoryRecords,
 } from "@noobot/memory-protocol/short-memory";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
-import { filePath as path } from "@noobot/path-resolver";
-import { readSessionArtifact } from "../../session/session-artifact-store.js";
-import { text } from "@noobot/shared/value";
 
 export class ShortMemoryManager {
   constructor(storage) {
@@ -43,35 +39,23 @@ export class ShortMemoryManager {
     return { deletedCount };
   }
 
-  async captureSessionToShortMemory({ basePath = "", sessionId = "", parentSessionId = "" } = {}) {
-    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
-    const sessionFile = this.storage.sessionFile(basePath, sessionId, normalizedParentSessionId);
-    const sessionData = await readSessionArtifact({
-      storageService: this.storage,
-      sessionDir: path.dirname(sessionFile),
-      fallback: null,
-    });
-    if (!sessionData) return false;
-
-    const { messages } = sessionData;
-    if (!messages.length) return false;
-    const latestDialogProcessId =
-      [...messages]
-        .reverse()
-        .map((messageItem) => resolveContextMessageDialogProcessId(messageItem))
-        .find(Boolean) || "";
-    if (!latestDialogProcessId) return false;
-
+  async captureDialogToShortMemory({
+    basePath,
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    messages,
+  }) {
     const dialogRecords = messages.filter(
-      (messageItem) => resolveContextMessageDialogProcessId(messageItem) === latestDialogProcessId,
+      (messageItem) => resolveContextMessageDialogProcessId(messageItem) === dialogProcessId,
     );
     const records = toShortMemoryRecords(dialogRecords);
     if (!records.length) return false;
 
     const items = await this.readItems(basePath);
     items.push({
-      sessionId: text(sessionId),
-      parentSessionId: normalizedParentSessionId,
+      sessionId,
+      parentSessionId,
       records,
       createdAt: new Date().toISOString(),
     });

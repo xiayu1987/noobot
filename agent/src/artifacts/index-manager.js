@@ -86,7 +86,7 @@ export async function writeAttachIndex(basePath, indexData, scope) {
     for (const [key, value] of Object.entries(
       isPlainObject(indexData?.attachments) ? indexData.attachments : {},
     )) {
-      const persisted = toPersistedAttachmentRecord(basePath, value, scope);
+      const persisted = toPersistedAttachmentRecord(basePath, value);
       if (!persisted) throw new Error("invalid_persisted_attachment_record");
       assertAttachmentBelongsToScope(persisted.identity, scope);
       if (key !== persisted.identity.attachmentId) throw new Error("attachment_index_key_mismatch");

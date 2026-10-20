@@ -13,6 +13,7 @@ test("turn lifecycle commit rejects events without causationId", () => {
     lifecycle: {},
     event: {
       eventType: TURN_EVENT.ACTION_ACCEPTED,
+      startedAt: "2026-07-18T00:00:00.000Z",
       commandId: "missing-causation-command",
       userId: "user-1",
       sessionId: "session-1",

@@ -51,6 +51,7 @@ describe("authoritative message event end-to-end fidelity", () => {
         sessionId: "child-session",
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
+        persistenceScope: null,
       },
       sessionManager: {
         commitMessageEvent: async ({ payload, sessionId, turnScopeId, messageId }) => ({

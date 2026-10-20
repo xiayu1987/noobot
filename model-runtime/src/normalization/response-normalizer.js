@@ -34,71 +34,43 @@ function splitThinkContent(value = "") {
   return { visible: visible.join(""), reasoning };
 }
 
-function extractContentText(value) {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value))
-    return value
-      .map((item) => (typeof item === "string" ? item : item?.text || item?.content || ""))
-      .filter(Boolean)
-      .join("\n");
-  return value?.text || value?.content || "";
+function extractContentText(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((block) => block.type === "text" && block.text)
+    .map((block) => block.text)
+    .join("\n");
 }
 
-export function extractResponseText(response = {}) {
-  const raw = extractContentText(response.content) || response.text || response.output || "";
-  return splitThinkContent(raw).visible.trim();
+export function extractResponseText(response) {
+  return splitThinkContent(extractContentText(response.content)).visible.trim();
 }
 
-export function extractReasoningText(response = {}) {
-  for (const value of [
-    response.reasoning_content,
-    response.reasoningContent,
-    response.additional_kwargs?.reasoning_content,
-    response.additional_kwargs?.reasoningContent,
-    response.response_metadata?.reasoning_content,
-    response.response_metadata?.reasoningContent,
-    response.raw?.choices?.[0]?.message?.reasoning_content,
-  ]) {
-    const output = extractContentText(value);
-    if (output) return output;
-  }
-  const raw = extractContentText(response.content) || response.text || response.output || "";
-  return splitThinkContent(raw).reasoning.join("\n");
+export function extractReasoningText(response) {
+  const reasoning = text(response.additional_kwargs?.reasoning_content);
+  if (reasoning) return reasoning;
+  return splitThinkContent(extractContentText(response.content)).reasoning.join("\n");
 }
 
-export function resolveFinishReason(response = {}) {
-  for (const value of [
-    response.response_metadata?.finish_reason,
-    response.response_metadata?.finishReason,
-    response.additional_kwargs?.finish_reason,
-    response.finish_reason,
-    response.finishReason,
-  ]) {
-    const output = text(value).toLowerCase();
-    if (output) return output;
-  }
-  return "";
+export function resolveFinishReason(response) {
+  return text(response.response_metadata?.finish_reason).toLowerCase();
 }
 
-export function normalizeToolCalls(response = {}) {
-  const calls =
-    response.tool_calls ||
-    response.additional_kwargs?.tool_calls ||
-    response.raw?.choices?.[0]?.message?.tool_calls;
-  return Array.isArray(calls)
-    ? calls.map((call) => ({
-        id: String(call.id || call.call_id || ""),
-        name: String(call.name || call.function?.name || ""),
-        args: call.args ?? call.function?.arguments ?? {},
-      }))
-    : [];
+export function normalizeToolCalls(response) {
+  if (!Array.isArray(response.tool_calls)) return [];
+  return response.tool_calls.map((call) => ({
+    id: text(call.id),
+    name: text(call.name),
+    args: call.args,
+  }));
 }
 
-export function normalizeModelOutput(response = {}) {
-  const responseOutput = Array.isArray(response?.response_metadata?.output)
+export function normalizeModelOutput(response) {
+  const responseOutput = Array.isArray(response.response_metadata?.output)
     ? response.response_metadata.output
     : null;
-  const responseReasoning = isPlainObject(response?.additional_kwargs?.reasoning)
+  const responseReasoning = isPlainObject(response.additional_kwargs?.reasoning)
     ? response.additional_kwargs.reasoning
     : null;
   return Object.freeze({
@@ -111,8 +83,6 @@ export function normalizeModelOutput(response = {}) {
     reasoning: extractReasoningText(response),
     toolCalls: normalizeToolCalls(response),
     finishReason: resolveFinishReason(response),
-    usage: Object.freeze({
-      ...(response.usage_metadata || response.response_metadata?.tokenUsage || {}),
-    }),
+    usage: Object.freeze({ ...response.usage_metadata }),
   });
 }

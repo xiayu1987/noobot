@@ -187,19 +187,14 @@ function responseFromAnthropic(raw = {}) {
     .join("\n");
   const tool_calls = blocks
     .filter((b) => b?.type === "tool_use")
-    .map((b) => ({
-      id: b.id,
-      type: "function",
-      function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
-    }));
+    .map((b) => ({ id: b.id, name: b.name, args: b.input }));
   const usage = raw.usage || {};
   return {
     content: blocks.map((block) => ({ ...block })),
-    reasoning_content: reasoning,
+    additional_kwargs: { reasoning_content: reasoning },
     tool_calls,
     response_metadata: {
       finish_reason: raw.stop_reason || "",
-      tokenUsage: usage,
       raw,
     },
     usage_metadata: {
@@ -274,7 +269,6 @@ function createClient({
               },
             ],
           ],
-          llmOutput: { tokenUsage: result.usage_metadata },
         });
         return result;
       } catch (error) {

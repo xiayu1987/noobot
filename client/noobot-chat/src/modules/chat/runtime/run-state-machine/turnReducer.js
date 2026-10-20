@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AGENT_CHANNEL_STATE, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
-import {
-  AUTHORITATIVE_EVENT_TYPES,
-  normalizeSessionRunEvent,
-  TRANSPORT_EVENT_TYPES,
-} from "./eventNormalization.js";
+import { AUTHORITATIVE_EVENT_TYPES, TRANSPORT_EVENT_TYPES } from "./eventNormalization.js";
 import { deriveTurnEventType, TURN_EVENT } from "@noobot/session-protocol";
 import {
   projectAuthoritativeTerminalTurnState,
@@ -218,7 +214,7 @@ function allowsUserStopping(currentState, current, event) {
   return (
     currentState === FrontendRunState.PROCESSING &&
     new Set([AGENT_CHANNEL_STATE.STOPPING, AGENT_CHANNEL_STATE.USER_STOPPED]).has(
-      lowerToken(event.backendState || event.raw?.state),
+      event.backendState,
     )
   );
 }
@@ -349,11 +345,7 @@ function projectAuthorityFields(currentValue, event) {
 
 function projectNextTurn(current, event, facts, state, sequences) {
   const currentValue = current || {};
-  const eventRaw = event.raw || {};
-  const rawCapabilities = eventRaw.capabilities || {};
-  const capabilities = deriveTurnCapabilities(state, {
-    canStop: rawCapabilities.canStop === true,
-  });
+  const capabilities = deriveTurnCapabilities(state, { canStop: event.canStop });
   const authoritative = AUTHORITATIVE_EVENT_TYPES.has(event.type);
   return {
     ...currentValue,
@@ -381,8 +373,7 @@ function projectNextTurn(current, event, facts, state, sequences) {
   };
 }
 
-export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
-  const event = normalizeSessionRunEvent(rawEvent);
+export function reduceTurnRuntimeEvent(current, event) {
   const sequences = {
     transportSeq: event.transportSeq,
     eventRevision: Number(event.revision || 0),

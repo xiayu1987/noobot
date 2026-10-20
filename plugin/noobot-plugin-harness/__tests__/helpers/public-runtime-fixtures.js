@@ -160,10 +160,8 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
     agentContext.bindings && typeof agentContext.bindings === "object"
       ? agentContext.bindings
       : (agentContext.bindings = {});
-  bindings.runtime ??= {};
-  bindings.tools ??= [];
-  bindings.extensions ??= {};
-  bindings.extensions.harness ??= {};
+  const runtime = isObjectLike(bindings.runtime) ? bindings.runtime : {};
+  const systemRuntime = isObjectLike(runtime.systemRuntime) ? runtime.systemRuntime : {};
   if (!isObjectLike(agentContext.context)) {
     testScopeSequence += 1;
     const scopeSuffix = String(testScopeSequence);
@@ -174,7 +172,7 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
       kind: "noobot.agent-context",
       protocolVersion: 1,
       identity: {
-        userId: text(ctx.userId) || `test-user-${scopeSuffix}`,
+        userId: text(systemRuntime.userId) || `test-user-${scopeSuffix}`,
         sessionId,
         rootSessionId: String(ctx.rootSessionId || sessionId).trim(),
         parentSessionId: text(ctx.parentSessionId),
@@ -187,8 +185,30 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
       modelContext: null,
     };
   }
+  bindings.runtime = createTestRuntimeBinding({
+    userId: agentContext.context.identity.userId,
+    runtime,
+    systemRuntime,
+  });
+  bindings.tools = Array.isArray(bindings.tools) ? bindings.tools : [];
+  bindings.extensions = isObjectLike(bindings.extensions) ? bindings.extensions : {};
+  bindings.extensions.harness = isObjectLike(bindings.extensions.harness)
+    ? bindings.extensions.harness
+    : {};
   initializeTestSemanticTransfer(agentContext);
   return agentContext;
+}
+
+function createTestRuntimeBinding({ userId, runtime, systemRuntime }) {
+  if (systemRuntime.userId !== undefined && systemRuntime.userId !== userId) {
+    throw new Error("test fixture systemRuntime.userId must equal context.identity.userId");
+  }
+  return {
+    basePath: `/test-workspace/${userId}`,
+    globalConfig: {},
+    ...runtime,
+    systemRuntime: { ...systemRuntime, userId },
+  };
 }
 
 export function ensureTestHookContext(ctx = {}) {

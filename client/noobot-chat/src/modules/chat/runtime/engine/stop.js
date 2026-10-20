@@ -5,11 +5,7 @@
  */
 import { RoleEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
-import {
-  FrontendRunState,
-  SESSION_RUN_EVENT,
-  normalizeSessionRunEvent,
-} from "../sessionRunStateMachine.js";
+import { FrontendRunState, SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import {
   getMessageParentDialogProcessId,
   getMessageRole,
@@ -162,7 +158,7 @@ export function stopSending({
     stopPayload,
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   }));
-  const stopEvent = normalizeSessionRunEvent({
+  const stopEvent = {
     type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
     state: FrontendRunState.USER_STOPPING,
     sessionId: stopPayload.identity.sessionId,
@@ -171,7 +167,7 @@ export function stopSending({
     commandId: stopPayload.commandId,
     createdAtMs: stopPayload.stop.partialAssistant.createdAtMs,
     source: "stop_sending",
-  });
+  };
   if (applyRunStateEvent) {
     applyRunStateEvent(stopEvent);
   }

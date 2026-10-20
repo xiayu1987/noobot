@@ -7,7 +7,7 @@ import {
   assertSelectedConnectorsOwned,
   normalizeSelectedConnectorIds,
 } from "@noobot/connector-protocol";
-import { withJsonError } from "./route-wrapper.js";
+import { decodeRequestInput, withJsonError } from "./route-wrapper.js";
 import { text } from "@noobot/shared/value";
 
 function assertOwner(req, userId = "") {
@@ -70,9 +70,11 @@ function registerConnectorSelectionRoutes(app, { bot, connectorRuntime, jsonOpti
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
       const connectors = await connectorRuntime.listUserConnectors(userId);
-      const selectedConnectorIds = assertSelectedConnectorsOwned(
-        normalizeSelectedConnectorIds(req.body?.selectedConnectorIds),
-        connectors,
+      const selectedConnectorIds = decodeRequestInput(() =>
+        assertSelectedConnectorsOwned(
+          normalizeSelectedConnectorIds(req.body?.selectedConnectorIds),
+          connectors,
+        ),
       );
       const connectedIds = new Set(
         connectors.filter((item) => item.status === "connected").map((item) => item.connectorId),

@@ -14,7 +14,7 @@ import path from "node:path";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
-import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
@@ -120,11 +120,11 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     producerId: "session-closure-flow",
   });
 
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     globalConfig: {},
     session,
     memory: {
-      async captureSessionToShortMemory() {},
+      async captureDialogToShortMemory() {},
       async maybeSummarize() {},
     },
     attach: {
@@ -158,6 +158,9 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     },
     workspaceService: {
       async ensureUserWorkspace() {
+        return workspaceRoot;
+      },
+      getWorkspacePath() {
         return workspaceRoot;
       },
     },
@@ -496,11 +499,11 @@ test("continue mode closed-loop: should build continue context and persist paren
     producerId: "session-closure-continue-flow",
   });
 
-  const engine = new SessionExecutionEngine({
+  const engine = createTestSessionExecutionEngine({
     globalConfig: {},
     session,
     memory: {
-      async captureSessionToShortMemory() {},
+      async captureDialogToShortMemory() {},
       async maybeSummarize() {},
     },
     attach: {
@@ -516,6 +519,9 @@ test("continue mode closed-loop: should build continue context and persist paren
     },
     workspaceService: {
       async ensureUserWorkspace() {
+        return workspaceRoot;
+      },
+      getWorkspacePath() {
         return workspaceRoot;
       },
     },

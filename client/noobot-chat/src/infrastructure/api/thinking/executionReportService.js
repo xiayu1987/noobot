@@ -13,16 +13,16 @@ export const executionReportService = Object.freeze({
     authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;
   },
   async getReport({ userId = "", sessionId = "", dialogProcessId = "" } = {}) {
-    const response = await getSessionExecutionReportApi(
-      { userId, sessionId, dialogProcessId },
-      authenticatedFetcher ? { fetcher: authenticatedFetcher } : {},
-    );
-    if (response.status === 404) return null;
-    if (!response.ok) {
-      throw new Error(`failed to load execution report: ${response.status}`);
+    let payload;
+    try {
+      payload = await getSessionExecutionReportApi(
+        { userId, sessionId, dialogProcessId },
+        authenticatedFetcher ? { fetcher: authenticatedFetcher } : {},
+      );
+    } catch (error) {
+      if (error?.status === 404) return null;
+      throw error;
     }
-    const payload = await response.json();
-    if (!payload?.ok) throw new Error(payload?.error || "failed to load execution report");
     return decodeExecutionReport(payload.report);
   },
 });

@@ -23,6 +23,7 @@ function processing() {
       messageId: "message-1",
       presentationMessageId: "presentation-1",
       eventType: TURN_EVENT.ACTION_ACCEPTED,
+      startedAt: "2026-07-18T00:00:00.000Z",
       commandId: "accepted",
       causationId: "accepted",
       phase: TURN_PHASE.ACTION,
@@ -33,7 +34,6 @@ function processing() {
       commandId: "started",
       causationId: "started",
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
     },
   ]) {
     const result = transitionTurnLifecycle(lifecycle, { turnScopeId, ...input });

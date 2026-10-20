@@ -37,13 +37,10 @@ test("desktop runtime event writer rejects session-scoped events", async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-runtime-events-session-"));
   try {
     const writer = createDesktopRuntimeEventWriter({ app: createApp(rootDir) });
-    const result = await writer.write(
-      { scope: "session", event: "desktop.test.session" },
-      {},
-      { scope: "session" },
+    await assert.rejects(
+      () => writer.write({ scope: "session", event: "desktop.test.session" }),
+      /owned by the workspace/,
     );
-    assert.equal(result.ok, false);
-    assert.match(String(result.error?.message), /owned by the workspace/);
   } finally {
     await rm(rootDir, { recursive: true, force: true });
   }

@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import assert from "node:assert/strict";
 import {
+  assertExecutionIsolationProtocol,
   assertToolExecutionPolicy,
   COMMAND_SHELL,
   EXECUTION_ISOLATION_PROTOCOL_NAME,
@@ -28,6 +30,27 @@ import {
   resolveWorkspaceSandboxLayout,
   resolveWorkspaceSandboxMountProjection,
 } from "../src/index.js";
+
+test("isolation protocol assertion requires sandbox.lockWaitTimeoutMs", () => {
+  const isolation = resolveExecutionIsolation({});
+  assert.equal(assertExecutionIsolationProtocol(isolation), isolation);
+  const { lockWaitTimeoutMs: _omitted, ...sandbox } = isolation.sandbox;
+  assert.throws(
+    () => assertExecutionIsolationProtocol({ ...isolation, sandbox }),
+    /sandbox\.lockWaitTimeoutMs required/,
+  );
+});
+
+test("sandbox layout requires an explicit valid userId", () => {
+  const isolation = resolveExecutionIsolation({
+    security: { executionIsolation: { mode: "sandbox" } },
+  });
+  assert.throws(() => resolveWorkspaceSandboxLayout({ isolation }), /userId is required/);
+  assert.throws(
+    () => resolveWorkspaceSandboxLayout({ isolation, userId: "---" }),
+    /userId is not a valid execution identity/,
+  );
+});
 
 test("native script source and result protocol is immutable and canonical", () => {
   assert.equal(NATIVE_SCRIPT_RESULT_FIELD, "script_result");
@@ -276,5 +299,18 @@ test("execution isolation rejects invalid provider, scope, mode, and queue timeo
         security: { executionIsolation: { sandbox: { lockWaitTimeoutMs: 99 } } },
       }),
     /integer >= 100/,
+  );
+});
+
+test("resolveExecutionIsolation always resolves one lockWaitTimeoutMs", () => {
+  assert.equal(
+    resolveExecutionIsolation({}).sandbox.lockWaitTimeoutMs,
+    TIME_THRESHOLDS.tools.dockerLockWaitTimeoutMs,
+  );
+  assert.equal(
+    resolveExecutionIsolation({
+      security: { executionIsolation: { sandbox: { lockWaitTimeoutMs: 250 } } },
+    }).sandbox.lockWaitTimeoutMs,
+    250,
   );
 });

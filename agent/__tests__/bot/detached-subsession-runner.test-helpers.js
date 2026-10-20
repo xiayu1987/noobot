@@ -40,7 +40,6 @@ export function createDeps(overrides = {}) {
           turnTasks: [{ taskId: "t1" }],
           messages: [{ role: "assistant", content: "agent answer" }],
           dialogProcessId: payload.dialogProcessId || "sub-dialog",
-          lifecycle: { executionState: "completed" },
         };
       },
     },

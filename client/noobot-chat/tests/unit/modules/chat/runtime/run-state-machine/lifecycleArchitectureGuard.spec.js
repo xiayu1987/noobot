@@ -236,7 +236,8 @@ describe("lifecycle architecture guard", () => {
     }
     expect(TURN_EVENT).not.toHaveProperty("CANCELLED");
     expect(reducer).toMatch(/isFinalTurnState\(currentState, current\)/);
-    expect(eventReducer).toMatch(/reduceTurnRuntimeEvent\(current, rawEvent\)/);
+    expect(eventReducer).toMatch(/reduceTurnRuntimeEvent\(current, event\)/);
+    expect(eventReducer.match(/normalizeSessionRunEvent\(/g)).toHaveLength(1);
   });
 
   it("keeps transport and local commands out of authoritative lifecycle projection", () => {

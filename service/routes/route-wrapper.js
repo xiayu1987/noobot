@@ -7,9 +7,38 @@
 import { HTTP_STATUS } from "#agent/constants";
 import { text } from "@noobot/shared/value";
 
+export function createBadRequestError(message, { code = "" } = {}) {
+  const error = new Error(message);
+  error.statusCode = HTTP_STATUS.BAD_REQUEST;
+  if (code) error.code = code;
+  return error;
+}
+
+export function decodeRequestInput(decode) {
+  try {
+    return decode();
+  } catch (error) {
+    if (error instanceof Error && !Number.isInteger(Number(error.statusCode))) {
+      error.statusCode = HTTP_STATUS.BAD_REQUEST;
+    }
+    throw error;
+  }
+}
+
+export function classifyRequestedPathError(error) {
+  if ((error?.code === "ENOENT" || error?.code === "ENOTDIR") && error.statusCode === undefined) {
+    error.statusCode = HTTP_STATUS.BAD_REQUEST;
+  }
+  return error;
+}
+
 export function withJsonError(
   handler,
-  { statusCode = HTTP_STATUS.BAD_REQUEST, fallbackErrorKey = "", translateText = () => "" } = {},
+  {
+    statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    fallbackErrorKey = "",
+    translateText = () => "",
+  } = {},
 ) {
   return async (req, res) => {
     try {
@@ -39,7 +68,7 @@ export function withJsonError(
 }
 
 export function createJsonRouteWrapper({
-  statusCode = HTTP_STATUS.BAD_REQUEST,
+  statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR,
   fallbackErrorKey = "",
   translateText = () => "",
 } = {}) {

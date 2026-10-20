@@ -22,13 +22,13 @@ function requireBasePath(basePath) {
 }
 
 export class PathResolver {
-  constructor(globalConfig = {}) {
-    this.globalConfig = globalConfig || {};
+  constructor(globalConfig) {
+    this.globalConfig = globalConfig;
   }
 
   resolveBasePath(userId = "") {
     const normalizedUserId = text(userId);
-    const workspaceRoot = text(this.globalConfig?.workspaceRoot);
+    const workspaceRoot = text(this.globalConfig.workspaceRoot);
     if (!normalizedUserId || !workspaceRoot) {
       throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
         code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,

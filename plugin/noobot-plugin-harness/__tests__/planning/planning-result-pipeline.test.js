@@ -187,11 +187,9 @@ test("planning result pipeline extracts current task goal from planning text pro
   };
   replaceMessages(ctx, [{ role: "user", content: "开始任务" }]);
   const persisted = [];
-  ctx.agentContext.bindings.runtime = {
-    currentTurnMessages: {
-      push(message) {
-        persisted.push(message);
-      },
+  ctx.agentContext.bindings.runtime.currentTurnMessages = {
+    push(message) {
+      persisted.push(message);
     },
   };
   const result = await processPlanningResult(

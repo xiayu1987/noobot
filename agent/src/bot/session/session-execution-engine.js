@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { runAgentTurn, AgentContextFactory, AgentRuntimeFacade } from "../../runtime/index.js";
+import { AgentContextFactory, AgentRuntimeFacade } from "../../runtime/index.js";
 import { SessionExecutionInitializer } from "../execution/initializer.js";
 import { SessionExecutionFinalizer } from "../execution/finalizer.js";
 import { SessionTurnPersister } from "../execution/turn-persister.js";
@@ -13,16 +13,46 @@ import { mergeRunConfigPluginPolicy, RunConfigResolver } from "@noobot/agent-con
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
-import {
-  createDefaultRunConfigPluginPreparer,
-  createRunConfigPluginPreparerFromRuntimeBundle,
-  getDefaultSessionPluginRuntime,
-} from "../../extensions/plugins/session-plugin-runtime-provider.js";
+import { createRunConfigPluginPreparer } from "./session-plugin-runtime-adapter.js";
 import { prepareTurnInput, prepareAgentTurnExecution } from "./turn-execution-preparer.js";
+import { isFunction } from "@noobot/shared/value";
 import { commitSummaryCheckpoint } from "./summary-checkpoint-committer.js";
 
+const ENGINE_DEPENDENCY_FIELDS = Object.freeze([
+  "globalConfig",
+  "session",
+  "memory",
+  "attach",
+  "skill",
+  "configService",
+  "workspaceService",
+  "errorLogger",
+  "botManager",
+  "agentRunner",
+  "pluginRuntimeBundle",
+]);
+
+function assertEngineDependencies(dependencies) {
+  const missing = ENGINE_DEPENDENCY_FIELDS.filter(
+    (field) => dependencies?.[field] === undefined || dependencies[field] === null,
+  );
+  if (missing.length) {
+    throw new TypeError(`SessionExecutionEngine requires: ${missing.join(",")}`);
+  }
+  if (!isFunction(dependencies.agentRunner)) {
+    throw new TypeError("SessionExecutionEngine agentRunner must be a function");
+  }
+  const { loadedPlugins, pluginRuntime } = dependencies.pluginRuntimeBundle;
+  if (!loadedPlugins || !pluginRuntime) {
+    throw new TypeError(
+      "SessionExecutionEngine pluginRuntimeBundle requires loadedPlugins,pluginRuntime",
+    );
+  }
+}
+
 export class SessionExecutionEngine {
-  constructor(dependencies = {}) {
+  constructor(dependencies) {
+    assertEngineDependencies(dependencies);
     this._assignCoreDependencies(dependencies);
     this._initializeCoreServices();
     this._initializeRuntimeServices();
@@ -31,18 +61,18 @@ export class SessionExecutionEngine {
   }
 
   _assignCoreDependencies({
-    globalConfig = {},
-    session = null,
-    memory = null,
-    attach = null,
-    skill = null,
-    configService = null,
-    workspaceService = null,
-    errorLogger = null,
-    botManager = null,
-    agentRunner = runAgentTurn,
-    pluginRuntimeBundle = null,
-  } = {}) {
+    globalConfig,
+    session,
+    memory,
+    attach,
+    skill,
+    configService,
+    workspaceService,
+    errorLogger,
+    botManager,
+    agentRunner,
+    pluginRuntimeBundle,
+  }) {
     this.globalConfig = globalConfig;
     this.session = session;
     this.memory = memory;
@@ -63,6 +93,7 @@ export class SessionExecutionEngine {
     });
     this.memoryPostProcessService = new MemoryPostProcessService({
       globalConfig: this.globalConfig,
+      session: this.session,
       memory: this.memory,
       errorLogger: this.errorLogger,
     });
@@ -92,9 +123,7 @@ export class SessionExecutionEngine {
     this.finalizer = new SessionExecutionFinalizer({
       session: this.session,
       turnPersister: this.turnPersister,
-      resolveMemoryPostProcessAsyncEnabled: (userConfig = {}) =>
-        this._resolveMemoryPostProcessAsyncEnabled(userConfig),
-      runMemoryPostProcessFlow: (payload = {}) => this._runMemoryPostProcessFlow(payload),
+      memoryPostProcessService: this.memoryPostProcessService,
       now: () => this._now(),
     });
   }
@@ -112,11 +141,8 @@ export class SessionExecutionEngine {
   }
 
   _createRunConfigPluginPreparer() {
-    const factory = this.pluginRuntimeBundle
-      ? createRunConfigPluginPreparerFromRuntimeBundle
-      : createDefaultRunConfigPluginPreparer;
-    return factory({
-      loadedPlugins: this.pluginRuntimeBundle?.loadedPlugins,
+    return createRunConfigPluginPreparer({
+      loadedPlugins: this.pluginRuntimeBundle.loadedPlugins,
       globalConfig: this.globalConfig,
       workspaceService: this.workspaceService,
       createPluginResolveModelMessages: () =>
@@ -184,28 +210,6 @@ export class SessionExecutionEngine {
     });
   }
 
-  _resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
-    return this.memoryPostProcessService.resolveMemoryPostProcessAsyncEnabled(userConfig);
-  }
-
-  async _runMemoryPostProcessFlow({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    userConfig = {},
-    runtimeEventListener = null,
-    mode = "sync",
-  } = {}) {
-    return this.memoryPostProcessService.runMemoryPostProcessFlow({
-      userId,
-      sessionId,
-      parentSessionId,
-      userConfig,
-      runtimeEventListener,
-      mode,
-    });
-  }
-
   _resolveScenarioRunConfig(runConfig = {}, userConfig = {}) {
     return this.runConfigResolver.resolveScenarioRunConfig(runConfig, userConfig);
   }
@@ -249,7 +253,7 @@ export class SessionExecutionEngine {
       sessionRunner: this.runner,
       session: this.session,
       attachmentService: this.attach,
-      pluginRuntime: this.pluginRuntimeBundle?.pluginRuntime || getDefaultSessionPluginRuntime(),
+      pluginRuntime: this.pluginRuntimeBundle.pluginRuntime,
       mergeRunConfigPluginPolicy: (payload = {}) => this._mergeRunConfigPluginPolicy(payload),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
     });

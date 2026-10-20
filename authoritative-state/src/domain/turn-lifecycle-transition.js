@@ -50,26 +50,23 @@ function pickExecutionIdentity(source) {
   };
 }
 
+function resolveRequestAction(eventType, input, current) {
+  if (eventType === TURN_EVENT.STOP_ACCEPTED) return TURN_ACTION.STOP;
+  return text(current ? current.action : input.action);
+}
+
 export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
-  const currentValue = current || {};
+  const identitySource = current || input;
   const turnScopeId = text(input.turnScopeId);
   const commandId = text(input.commandId);
   const eventType = text(input.eventType);
   const phase = text(input.phase);
-  const executionIdentity = current
-    ? pickExecutionIdentity(currentValue)
-    : pickExecutionIdentity(input);
-  const presentationMessageId = text(
-    input.presentationMessageId || currentValue.presentationMessageId,
-  );
-  const messageId = text(input.messageId || currentValue.messageId);
-  const action =
-    eventType === TURN_EVENT.STOP_ACCEPTED
-      ? TURN_ACTION.STOP
-      : text(input.action || currentValue.action);
-  const continuationSource = normalizeTurnContinuationSource(
-    input.continuationSource || currentValue.continuationSource,
-  );
+  const executionIdentity = pickExecutionIdentity(identitySource);
+  const presentationMessageId = text(identitySource.presentationMessageId);
+  const messageId = text(identitySource.messageId);
+  const dialogProcessId = text(identitySource.dialogProcessId);
+  const action = resolveRequestAction(eventType, input, current);
+  const continuationSource = normalizeTurnContinuationSource(identitySource.continuationSource);
   return {
     lifecycle,
     input,
@@ -81,9 +78,24 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
     executionIdentity,
     presentationMessageId,
     messageId,
+    dialogProcessId,
     action,
     continuationSource,
   };
+}
+
+const STORED_IDENTITY_CONFLICTS = Object.freeze([
+  ["messageId", "turn_message_identity_conflict"],
+  ["presentationMessageId", "turn_presentation_identity_conflict"],
+  ["dialogProcessId", "turn_dialog_process_identity_conflict"],
+]);
+
+function findStoredIdentityConflict(input, current) {
+  const conflict = STORED_IDENTITY_CONFLICTS.find(([field]) => {
+    const proposed = text(input[field]);
+    return current[field] && proposed && proposed !== current[field];
+  });
+  return conflict ? conflict[1] : "";
 }
 
 function validateRequestIdentity(request) {
@@ -94,24 +106,8 @@ function validateRequestIdentity(request) {
   if (lifecycle.replacedTurns[turnScopeId]) return "turn_replaced";
   if (!request.messageId || !request.presentationMessageId)
     return "turn_message_identity_incomplete";
-  if (current?.messageId && text(input.messageId) && text(input.messageId) !== current.messageId) {
-    return "turn_message_identity_conflict";
-  }
-  if (
-    current?.presentationMessageId &&
-    text(input.presentationMessageId) &&
-    text(input.presentationMessageId) !== current.presentationMessageId
-  ) {
-    return "turn_presentation_identity_conflict";
-  }
-  if (
-    current?.dialogProcessId &&
-    text(input.dialogProcessId) &&
-    text(input.dialogProcessId) !== current.dialogProcessId
-  ) {
-    return "turn_dialog_process_identity_conflict";
-  }
-  return "";
+  if (!current) return text(input.startedAt) ? "" : "turn_started_at_missing";
+  return findStoredIdentityConflict(input, current);
 }
 
 function requestHashFor(request) {
@@ -131,7 +127,6 @@ function requestHashFor(request) {
             userMetaMaterialized: input.userMessage.userMetaMaterialized === true,
           }
         : null,
-    executionState: text(input.executionState),
     startedAt: text(input.startedAt),
     finishedAt: text(input.finishedAt),
     presentationMessageId: request.presentationMessageId,
@@ -316,15 +311,12 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     messageId: request.messageId,
     presentationMessageId: request.presentationMessageId,
     ...request.executionIdentity,
-    dialogProcessId: text(input.dialogProcessId || currentValue.dialogProcessId),
+    dialogProcessId: request.dialogProcessId,
     commandId,
     action: request.action,
     state,
     phase,
-    executionState: deriveTurnExecutionState(
-      eventType,
-      input.executionState || currentValue.executionState,
-    ),
+    executionState: deriveTurnExecutionState(eventType, currentValue.executionState),
     revision,
     sequence,
     summaryVersion: integer(input.summaryVersion, integer(currentValue.summaryVersion)),
@@ -338,8 +330,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, nowValue }),
     continuationSource: request.continuationSource,
     continuedByTurnScopeId: text(currentValue.continuedByTurnScopeId),
-    startedAt:
-      text(input.startedAt || currentValue.startedAt) || text(currentValue.createdAt) || nowValue,
+    startedAt: current ? current.startedAt : text(input.startedAt),
     finishedAt: isTerminalTurnState(state)
       ? text(input.finishedAt) || nowValue
       : text(currentValue.finishedAt),

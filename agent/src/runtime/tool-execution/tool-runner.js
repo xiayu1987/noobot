@@ -177,24 +177,15 @@ async function materializeToolOutputArtifacts({
   };
 }
 
-function deriveToolInputTransferMeta(inputTransfer = {}) {
-  const transferEnvelopes = Array.isArray(inputTransfer?.transferEnvelopes)
-    ? inputTransfer.transferEnvelopes
-    : [];
-  const metas = transferEnvelopes
-    .flatMap((envelope = {}) => [envelope?.meta, envelope?.meta?.attributes])
-    .filter((meta = null) => isPlainObject(meta));
-  const overflowMeta = metas.find((meta = {}) => meta?.toolInputOverflow);
-  const exceededMeta = metas.find((meta = {}) => meta?.exceeded === true);
-  const messageMeta = metas.find((meta = {}) => text(meta?.message));
-  const sourceMeta = overflowMeta || exceededMeta || messageMeta || metas[0] || {};
-  const toolInputOverflow = isPlainObject(sourceMeta?.toolInputOverflow)
-    ? sourceMeta.toolInputOverflow
-    : null;
+function deriveToolInputTransferMeta(inputTransfer) {
+  const attributes = inputTransfer.transferEnvelopes
+    .map((envelope) => envelope.meta.attributes)
+    .find((meta) => isPlainObject(meta?.toolInputOverflow));
+  if (!attributes) return { exceeded: false, message: "", toolInputOverflow: null };
   return {
-    exceeded: sourceMeta?.exceeded === true || toolInputOverflow?.exceeded === true,
-    message: text(sourceMeta?.message || toolInputOverflow?.message),
-    toolInputOverflow,
+    exceeded: attributes.exceeded === true,
+    message: text(attributes.toolInputOverflow.message),
+    toolInputOverflow: attributes.toolInputOverflow,
   };
 }
 
@@ -501,7 +492,7 @@ function uniqueByField(items, field) {
 async function finalizeToolExecution(state) {
   const failureState = detectToolCallFailure({
     rawResult: state.rawResult,
-    toolResultText: state.rawToolResultText || state.toolResultText,
+    toolResultText: state.rawToolResultText,
     invokeError: state.invokeError,
   });
   const structuredTransferEnvelopes = transferEnvelopesFromStructuredResult(state.rawResult);
@@ -537,7 +528,7 @@ async function finalizeToolExecution(state) {
   );
   const internalResources = uniqueByField(
     [
-      ...resourceRefsFromResult(state.rawToolResultText || state.toolResultText),
+      ...resourceRefsFromResult(state.rawToolResultText),
       ...registerTransferAttachmentResources({
         agentContext: state.agentContext,
         transferEnvelopes,
@@ -552,7 +543,7 @@ async function finalizeToolExecution(state) {
     args: state.call?.args || {},
     success: failureState.success,
     failureReason: failureState.reason || "",
-    toolResultText: state.rawToolResultText || state.toolResultText,
+    toolResultText: state.rawToolResultText,
     internalResources,
   });
   return projectToolExecutionResult(state, {

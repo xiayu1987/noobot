@@ -8,7 +8,7 @@ import { assertConnectorAccessPort } from "@noobot/connector-protocol";
 import { isFunction } from "@noobot/shared/value";
 
 export function createRuntimeConfigService({
-  startupContext = {},
+  startupContext,
   readWorkspaceConfigParams,
   globalConfigBuilder,
   BotManager,
@@ -31,7 +31,7 @@ export function createRuntimeConfigService({
     const resolvedGlobalConfig = builtConfig?.resolvedConfig || {};
     setApiKeyTtlMs(Number(resolvedGlobalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000));
     const pluginRuntimeBundle = await createSessionPluginRuntimeBundle({
-      pluginRootDir: startupContext?.paths?.pluginRootDir,
+      pluginRootDir: startupContext.paths.pluginRootDir,
     });
     const bot = new BotManager(resolvedGlobalConfig, {
       globalConfigRaw: persistedGlobalConfig,

@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { RUNTIME_INSTANCE_PATH_ENV_KEYS } from "@noobot/runtime-topology-protocol/instance-paths";
 import { clientFilePath as path } from "../../path-resolver.js";
@@ -185,8 +185,8 @@ test("desktop startup uses npm.cmd for Windows development service launch", asyn
       assert.deepEqual(fixture.calls[0].args.slice(0, 4), ["run", "-w", "service", "start"]);
       assert.equal(fixture.calls[0].options.cwd, fixture.repoRoot);
       assert.equal(fixture.calls[0].options.env.PORT, "10061");
-      assert.equal(fixture.calls[0].options.env.NOOBOT_SERVICE_HOST, "127.0.0.1");
-      assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
+      assert.equal("NOOBOT_SERVICE_HOST" in fixture.calls[0].options.env, false);
+      assert.equal("NOOBOT_DESKTOP" in fixture.calls[0].options.env, false);
       assert.match(fixture.calls[0].options.env.NOOBOT_GLOBAL_CONFIG_PATH, /global\.config\.json$/);
       assert.equal(
         fixture.calls[0].options.env.NOOBOT_CONFIG_DIR,
@@ -265,8 +265,8 @@ test("desktop startup uses npm for macOS development service launch", async () =
       assert.deepEqual(fixture.calls[0].args.slice(0, 4), ["run", "-w", "service", "start"]);
       assert.equal(fixture.calls[0].options.cwd, fixture.repoRoot);
       assert.equal(fixture.calls[0].options.env.PORT, "10061");
-      assert.equal(fixture.calls[0].options.env.NOOBOT_SERVICE_HOST, "127.0.0.1");
-      assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
+      assert.equal("NOOBOT_SERVICE_HOST" in fixture.calls[0].options.env, false);
+      assert.equal("NOOBOT_DESKTOP" in fixture.calls[0].options.env, false);
     } finally {
       await fixture.restore();
     }
@@ -285,6 +285,12 @@ test("packaged desktop startup uses Electron node runtime for service and agent 
       assert.match(serviceCall.args[0], /service[/\\]app\.js$/);
       assert.equal(serviceCall.args[1], "--startup-context");
       assert.match(serviceCall.args[2], /startup-context\.json$/);
+      const startupContext = JSON.parse(await readFile(serviceCall.args[2], "utf8"));
+      assert.equal(startupContext.app.platform, "desktop");
+      assert.equal(startupContext.service.host, "127.0.0.1");
+      assert.equal(startupContext.service.port, 10061);
+      assert.equal("agentProxy" in startupContext, false);
+      assert.equal("electron" in startupContext.runtime, false);
       assert.equal(serviceCall.options.cwd, fixture.packagedBackendRoot);
       assert.equal(serviceCall.options.env.ELECTRON_RUN_AS_NODE, "1");
 

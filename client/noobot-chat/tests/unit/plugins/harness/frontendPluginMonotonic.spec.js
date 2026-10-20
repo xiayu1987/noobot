@@ -40,19 +40,30 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(isUserMessage({ role: "user" })).toBe(true);
   });
 
-  it("matches frontend stopped markers and backend completed session messages", () => {
+  it("matches frontend stopped markers and runtime-written terminal facts", () => {
     const action = getMonotonicAction();
 
     expect(action.match({ isMonotonic: true })).toBe(true);
     expect(action.match({ monotonic: true })).toBe(true);
     expect(action.match({ monotonicState: "monotonic" })).toBe(true);
     expect(action.match({ stopState: "user_stopped" })).toBe(true);
-    expect(action.match({ status: "completed" })).toBe(true);
-    expect(action.match({ channelState: "user_stopped" })).toBe(true);
     expect(action.match({ channelState: { state: "user_stopped" } })).toBe(true);
-    expect(action.match({ channelState: { status: "user_stopped" } })).toBe(true);
-    expect(action.match({ terminalOutcome: "generated" })).toBe(true);
-    expect(action.match({ status: "running" })).toBe(false);
+    expect(
+      action.match({
+        channelState: { state: "frontend_completed" },
+        terminalOutcome: "generated",
+      }),
+    ).toBe(true);
+    expect(action.match({ channelState: { state: "running" } })).toBe(false);
+  });
+
+  it("ignores message fields that have no runtime writer", () => {
+    const action = getMonotonicAction();
+
+    expect(action.match({ status: "completed" })).toBe(false);
+    expect(action.match({ state: "user_stopped" })).toBe(false);
+    expect(action.match({ channelState: "user_stopped" })).toBe(false);
+    expect(action.match({ channelState: { status: "user_stopped" } })).toBe(false);
   });
 
   it("shows actions after stop when assistant channelState is an object", () => {
@@ -109,7 +120,6 @@ describe("noobot-chat monotonic message action rules", () => {
       sessionId: oldSessionId,
       turnScopeId: "client-turn:history-1",
       dialogProcessId: "dp-history-1",
-      status: "completed",
       content: "history answer",
     };
     const targetUser = {
@@ -173,7 +183,8 @@ describe("noobot-chat monotonic message action rules", () => {
       id: "m1",
       role: "assistant",
       dialogProcessId: "dp-1",
-      status: "completed",
+      channelState: { state: "frontend_completed" },
+      terminalOutcome: "generated",
     };
     const allMessages = [userMessage, messageItem];
 
@@ -193,8 +204,10 @@ describe("noobot-chat monotonic message action rules", () => {
     ).toBe(true);
     expect(action.resolveProps({ messageItem }).visible).toBe(false);
     expect(
-      action.resolveProps({ messageItem: { id: "m2", status: "running" }, deleteMonotonicMessage })
-        .visible,
+      action.resolveProps({
+        messageItem: { id: "m2", channelState: { state: "running" } },
+        deleteMonotonicMessage,
+      }).visible,
     ).toBe(false);
 
     const props = action.resolveProps({
@@ -215,14 +228,17 @@ describe("noobot-chat monotonic message action rules", () => {
     const userMessage = {
       id: "u-reload-1",
       role: "user",
+      turnScopeId: "client-turn:reload-1",
       dialogProcessId: "dp-reload-1",
       content: "你好",
     };
     const stoppedAssistant = {
-      id: "a-reload-1",
+      messageId: "turn-status-placeholder:client-turn:reload-1",
       role: "assistant",
+      turnStatusPlaceholder: true,
+      turnStatus: { status: "user_stopped" },
+      turnScopeId: "client-turn:reload-1",
       dialogProcessId: "dp-reload-1",
-      state: "user_stopped",
     };
     const allMessages = [userMessage, stoppedAssistant];
 
@@ -275,42 +291,62 @@ describe("noobot-chat monotonic message action rules", () => {
     const firstUser = {
       id: "u-1",
       role: "user",
+      turnScopeId: "client-turn:multi-1",
       dialogProcessId: "dp-1",
       content: "first",
     };
     const firstAssistant = {
       id: "a-1",
       role: "assistant",
+      turnScopeId: "client-turn:multi-1",
       dialogProcessId: "dp-1",
-      status: "completed",
     };
     const targetUser = {
       id: "u-2",
       role: "user",
+      turnScopeId: "client-turn:multi-2",
       dialogProcessId: "dp-2",
       content: "second",
     };
     const targetAssistant = {
       id: "a-2",
       role: "assistant",
+      turnScopeId: "client-turn:multi-2",
       dialogProcessId: "dp-2",
-      status: "completed",
     };
     const allMessages = [firstUser, firstAssistant, targetUser, targetAssistant];
     const deleteMonotonicMessage = vi.fn();
+    const resolve = (messageItem) =>
+      action.resolveProps({
+        messageItem,
+        allMessages,
+        messageRuntime: { state: "completed" },
+        deleteMonotonicMessage,
+      }).visible;
+
+    expect(resolve(firstUser)).toBe(false);
+    expect(resolve(targetUser)).toBe(true);
+    expect(resolve(firstAssistant)).toBe(false);
+    expect(resolve(targetAssistant)).toBe(false);
+  });
+
+  it("does not treat reloaded rounds as terminal without an authoritative runtime fact", () => {
+    const action = getMonotonicAction();
+    const userMessage = {
+      role: "user",
+      turnScopeId: "client-turn:no-runtime",
+      content: "question",
+    };
+    const assistantMessage = {
+      role: "assistant",
+      turnScopeId: "client-turn:no-runtime",
+      content: "answer",
+    };
+    const allMessages = [userMessage, assistantMessage];
+    const deleteMonotonicMessage = vi.fn();
 
     expect(
-      action.resolveProps({ messageItem: firstUser, allMessages, deleteMonotonicMessage }).visible,
-    ).toBe(false);
-    expect(
-      action.resolveProps({ messageItem: targetUser, allMessages, deleteMonotonicMessage }).visible,
-    ).toBe(true);
-    expect(
-      action.resolveProps({ messageItem: firstAssistant, allMessages, deleteMonotonicMessage })
-        .visible,
-    ).toBe(false);
-    expect(
-      action.resolveProps({ messageItem: targetAssistant, allMessages, deleteMonotonicMessage })
+      action.resolveProps({ messageItem: userMessage, allMessages, deleteMonotonicMessage })
         .visible,
     ).toBe(false);
   });
@@ -333,7 +369,7 @@ describe("noobot-chat monotonic message action rules", () => {
       turnScopeId: "client-turn:message-id",
       role: "assistant",
       dialogProcessId: "dp-message-id",
-      channelState: "user_stopped",
+      channelState: { state: "user_stopped" },
     };
     const allMessages = [userMessage, assistantMessage];
     const deleteMonotonicMessage = vi.fn();
@@ -397,25 +433,27 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(props.visible).toBe(true);
   });
 
-  it("matches persisted sources by timestamp when ids are unavailable", () => {
+  it("matches reloaded render copies by dialogProcessId with authoritative runtime state", () => {
     const action = getMonotonicAction();
     const userMessage = {
       ts: 1710000000000,
       role: "user",
+      turnScopeId: "client-turn:ts",
       dialogProcessId: "dp-ts",
       content: "question",
     };
     const sameUserRenderItem = {
       ts: 1710000000000,
       role: "user",
+      turnScopeId: "client-turn:ts",
       dialogProcessId: "dp-ts",
       content: "question",
     };
     const assistantMessage = {
       ts: 1710000001000,
       role: "assistant",
+      turnScopeId: "client-turn:ts",
       dialogProcessId: "dp-ts",
-      status: "completed",
     };
     const allMessages = [userMessage, assistantMessage];
     const deleteMonotonicMessage = vi.fn();
@@ -424,6 +462,7 @@ describe("noobot-chat monotonic message action rules", () => {
       action.resolveProps({
         messageItem: sameUserRenderItem,
         allMessages,
+        messageRuntime: { state: "completed" },
         deleteMonotonicMessage,
       }).visible,
     ).toBe(true);
@@ -439,7 +478,7 @@ describe("noobot-chat monotonic message action rules", () => {
     const assistantMessage = {
       id: "a-adjacent",
       role: "assistant",
-      state: "user_stopped",
+      channelState: { state: "user_stopped" },
     };
     const allMessages = [userMessage, assistantMessage];
 

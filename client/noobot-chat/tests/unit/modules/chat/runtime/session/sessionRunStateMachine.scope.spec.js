@@ -11,10 +11,14 @@ import {
   resolveEventScope,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
-  reduceTurnRuntimeEvent,
+  reduceTurnRuntimeEvent as reduceNormalizedTurnRuntimeEvent,
   TURN_TRANSITION_REASON,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
+import { normalizeSessionRunEvent } from "../../../../../../src/modules/chat/runtime/run-state-machine/eventNormalization.js";
+
+const reduceTurnRuntimeEvent = (current, rawEvent) =>
+  reduceNormalizedTurnRuntimeEvent(current, normalizeSessionRunEvent(rawEvent));
 
 const processingStarted = {
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,

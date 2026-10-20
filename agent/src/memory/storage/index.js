@@ -17,7 +17,6 @@ import {
   monthlySummaryDir,
   yearlySummaryDir,
   dailySummaryDateDir,
-  sessionFile,
 } from "./paths.js";
 import {
   fileExists,
@@ -98,10 +97,6 @@ export class StorageManager {
 
   dailySummaryDateDir(basePath, dateKey = "") {
     return dailySummaryDateDir(basePath, dateKey);
-  }
-
-  sessionFile(basePath, sessionId, parentSessionId = "") {
-    return sessionFile(basePath, sessionId, parentSessionId);
   }
 
   async fileExists(filePath = "") {

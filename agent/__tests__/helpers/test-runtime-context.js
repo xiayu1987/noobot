@@ -6,5 +6,22 @@
 import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 
 export function createTestRuntimeContext(options = {}) {
-  return createRuntimeContext({ abortSignal: new AbortController().signal, ...options });
+  return createRuntimeContext({
+    basePath: "",
+    globalConfig: {},
+    userConfig: {},
+    eventListener: null,
+    sessionManager: null,
+    attachmentService: null,
+    botManager: null,
+    userInteractionBridge: null,
+    abortSignal: new AbortController().signal,
+    runtimeModel: "",
+    allEnabledProviders: {},
+    runConfig: {},
+    systemRuntime: {},
+    userMessageAttachments: [],
+    sharedTools: {},
+    ...options,
+  });
 }

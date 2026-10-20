@@ -25,17 +25,10 @@ function summarizedMessageIds(messages = []) {
 }
 
 export class SessionExecutionFinalizer {
-  constructor({
-    session = null,
-    turnPersister = null,
-    resolveMemoryPostProcessAsyncEnabled = () => true,
-    runMemoryPostProcessFlow = async () => {},
-    now = () => new Date().toISOString(),
-  } = {}) {
+  constructor({ session, turnPersister, memoryPostProcessService, now }) {
     this.session = session;
     this.turnPersister = turnPersister;
-    this.resolveMemoryPostProcessAsyncEnabled = resolveMemoryPostProcessAsyncEnabled;
-    this.runMemoryPostProcessFlow = runMemoryPostProcessFlow;
+    this.memoryPostProcessService = memoryPostProcessService;
     this.now = now;
   }
 
@@ -179,7 +172,17 @@ export class SessionExecutionFinalizer {
     });
 
     lifecycle?.enterMemory?.();
-    const memoryPostProcessAsyncEnabled = this.resolveMemoryPostProcessAsyncEnabled(userConfig);
+    const memoryPostProcessAsyncEnabled =
+      this.memoryPostProcessService.resolveMemoryPostProcessAsyncEnabled(userConfig);
+    const memoryPostProcessInput = {
+      userId,
+      sessionId,
+      parentSessionId,
+      dialogProcessId,
+      persistenceScope,
+      userConfig,
+      runtimeEventListener,
+    };
     if (memoryPostProcessAsyncEnabled) {
       emitEvent(runtimeEventListener, "memory_postprocess_scheduled", {
         sessionId,
@@ -187,26 +190,16 @@ export class SessionExecutionFinalizer {
       });
       void runBestEffort(
         () =>
-          this.runMemoryPostProcessFlow({
-            userId,
-            sessionId,
-            parentSessionId,
-            userConfig,
-            runtimeEventListener,
+          this.memoryPostProcessService.runMemoryPostProcessFlow({
+            ...memoryPostProcessInput,
             mode: "async",
-            persistenceScope,
           }),
         { operationName: "executionFinalizer.runAsyncMemoryPostProcess", context: { sessionId } },
       );
     } else {
-      await this.runMemoryPostProcessFlow({
-        userId,
-        sessionId,
-        parentSessionId,
-        userConfig,
-        runtimeEventListener,
+      await this.memoryPostProcessService.runMemoryPostProcessFlow({
+        ...memoryPostProcessInput,
         mode: "sync",
-        persistenceScope,
       });
     }
 

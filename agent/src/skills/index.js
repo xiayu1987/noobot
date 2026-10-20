@@ -17,7 +17,7 @@ export class SkillService {
 
   _resolveBasePath(userId = "") {
     const normalizedUserId = text(userId);
-    const workspaceRoot = text(this.globalConfig?.workspaceRoot);
+    const workspaceRoot = text(this.globalConfig.workspaceRoot);
     if (!normalizedUserId || !workspaceRoot) {
       throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
         code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,

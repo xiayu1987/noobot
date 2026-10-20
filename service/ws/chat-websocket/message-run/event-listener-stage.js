@@ -131,7 +131,6 @@ function startProcessing(context, run, accepted, lifecycleData) {
       causationId: accepted.commandId,
       eventType: TURN_EVENT.PROCESSING_STARTED,
       phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
       executionId: lifecycleData?.executionId,
       executionKind: lifecycleData?.executionKind,
       parentExecutionId: lifecycleData?.parentExecutionId,

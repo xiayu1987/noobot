@@ -524,12 +524,14 @@ test("execute_script: aborted Docker queue entry never starts after lock release
   const containerName = `script-queue-abort-${Date.now()}`;
   const first = enqueueDockerContainerTask({
     containerName,
+    lockWaitTimeoutMs: 1000,
     task: async () => firstGate,
   });
   const controller = new AbortController();
   let secondInvoked = false;
   const second = enqueueDockerContainerTask({
     containerName,
+    lockWaitTimeoutMs: 1000,
     abortSignal: controller.signal,
     task: async () => {
       secondInvoked = true;

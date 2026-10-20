@@ -41,7 +41,7 @@ const CONSUMERS = Object.freeze([
   [SANDBOX_MAPPING, ISOLATION_PROTOCOL_PACKAGE],
   [CHECK_TOOL_INPUT, "resolveExecutionIsolation"],
   ["agent/src/tools/core/workspace-io-executor.js", "assertToolExecutionPolicy"],
-  [OPERATION_DIRECTORY, "resolveRuntimePathContext"],
+  [OPERATION_DIRECTORY, "resolveRuntimeOpsWorkdir"],
 ]);
 const LEGACY_FIELD =
   /\b(?:dockerMounts|dockerContainerScope|dockerContainerName|dockerImage|dockerWorkdir|dockerLockWaitTimeoutMs|mountSource|mountTarget|mountDescription|dockerProjectMountSource|dockerProjectMountTarget|sandboxPathMappings)\b/;

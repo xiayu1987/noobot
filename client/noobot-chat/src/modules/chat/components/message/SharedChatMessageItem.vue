@@ -259,15 +259,7 @@ const messageRuntime = computed(() => {
   });
   return resolveTurnRuntimeView({
     messageItem: props.messageItem,
-    turnTiming: realtimeRuntime
-      ? {
-          startedAt: realtimeRuntime.startedAt,
-          finishedAt: realtimeRuntime.finishedAt,
-          modelLoopRound: realtimeRuntime.modelLoopRound,
-        }
-      : null,
-    turnStatus: realtimeRuntime?.state ? { status: realtimeRuntime.state } : null,
-    realtimeState: realtimeRuntime,
+    runtime: realtimeRuntime ?? undefined,
   });
 });
 const assistantContentExpanded = computed(() => {
