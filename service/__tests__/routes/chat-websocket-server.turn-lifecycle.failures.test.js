@@ -13,7 +13,7 @@ import {
 } from "@noobot/agent-transport-protocol";
 
 import {
-  startServerWithWs,
+  startAuthoritativeServerWithWs,
   closeServer,
   callChatWs,
 } from "./chat-websocket-server.test-helpers.js";
@@ -28,8 +28,8 @@ useProvisionedRuntimeEventsWorkspace(["primary-user"]);
 
 test("processing-start persistence rejection is observed while Agent execution is still active", async () => {
   const authoritative = createAuthoritativeBot();
-  const applyLifecycle = authoritative.bot.applyTurnLifecycleEvent;
-  authoritative.bot.applyTurnLifecycleEvent = async (input) => {
+  const applyLifecycle = authoritative.bot.session.applyTurnLifecycleEvent;
+  authoritative.bot.session.applyTurnLifecycleEvent = async (input) => {
     if (input.eventType === TURN_EVENT.PROCESSING_STARTED) {
       return { applied: false, reason: "session_not_found" };
     }
@@ -48,7 +48,9 @@ test("processing-start persistence rejection is observed while Agent execution i
     await new Promise((resolve) => setTimeout(resolve, 20));
     return { sessionId, dialogProcessId: "dp-processing-rejected", messages: [] };
   };
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await callChatWs({
       port: server.address().port,
@@ -83,7 +85,9 @@ test("message listener boundary contains failures raised by terminal error persi
   authoritative.bot.materializeTerminal = async () => {
     throw new Error("terminal_status_storage_failed");
   };
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await callChatWs({
       port: server.address().port,
@@ -118,7 +122,9 @@ test("message listener boundary contains failures raised by terminal error persi
 
 test("summary persistence failure never commits authoritative completed", async () => {
   const authoritative = createAuthoritativeBot({ persistSummary: false });
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await callChatWs({
       port: server.address().port,
@@ -161,7 +167,9 @@ for (const [failureAt, expectedPhase] of [
       turnScopeId: `turn-${failureAt}-failure`,
       config: { turnScopeId: `turn-${failureAt}-failure` },
     };
-    const server = await startServerWithWs({ bot: authoritative.bot });
+    const server = await startAuthoritativeServerWithWs({
+      bot: authoritative.bot,
+    });
     try {
       const events = await callChatWs({ port: server.address().port, payload: scopedPayload });
       const lifecycleEvents = events

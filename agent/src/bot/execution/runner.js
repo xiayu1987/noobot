@@ -7,7 +7,6 @@
 import { emitEvent } from "../../events/index.js";
 import { runBotRuntimeHook } from "../hook/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { SESSION_ASYNC_STATUS } from "../config/constants.js";
 import { syncLifecycleRuntimeState } from "../../runtime/lifecycle/state-machine.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "../../runtime/resume/model-message-snapshot-store.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
@@ -42,7 +41,6 @@ const SESSION_RUN_PAYLOAD_FIELDS = Object.freeze([
   "runConfig",
   "turnAcceptance",
   "turnScopeId",
-  "parentAsyncResultContainer",
   "persistenceScope",
 ]);
 
@@ -81,7 +79,6 @@ export class SessionExecutionRunner {
     errorLogger,
     normalizeRunMessage,
     validateRunInput,
-    ensureParentAsyncResultContainer,
     initializeRunSessionRuntime,
     resolveScenarioRunConfig,
     prepareRunConfig,
@@ -97,7 +94,6 @@ export class SessionExecutionRunner {
     finalizeRunSession,
     saveExecutionReport,
     getExecutionTurnLogs,
-    upsertParentAsyncTask,
     now,
   } = {}) {
     for (const [name, dependency] of Object.entries({
@@ -115,7 +111,6 @@ export class SessionExecutionRunner {
     this.errorLogger = errorLogger;
     this.normalizeRunMessage = normalizeRunMessage;
     this.validateRunInput = validateRunInput;
-    this.ensureParentAsyncResultContainer = ensureParentAsyncResultContainer;
     this.initializeRunSessionRuntime = initializeRunSessionRuntime;
     this.resolveScenarioRunConfig = resolveScenarioRunConfig;
     this.prepareRunConfig = prepareRunConfig;
@@ -131,7 +126,6 @@ export class SessionExecutionRunner {
     this.finalizeRunSession = finalizeRunSession;
     this.saveExecutionReport = saveExecutionReport;
     this.getExecutionTurnLogs = getExecutionTurnLogs;
-    this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
   }
 
@@ -154,7 +148,6 @@ export class SessionExecutionRunner {
       runConfig,
       turnAcceptance,
       turnScopeId,
-      parentAsyncResultContainer,
       persistenceScope,
     } = payload;
     if (typeof parentSessionId !== "string") {
@@ -166,7 +159,6 @@ export class SessionExecutionRunner {
         `invalid Session persistence scope: ${persistenceScopeValidation.errors.join(",")}`,
       );
     }
-    let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     let resolvedRunConfig = runConfig;
     let resolvedUsedSessionId = sessionId;
     let resolvedDialogProcessId = "";
@@ -189,7 +181,6 @@ export class SessionExecutionRunner {
         normalizeRunMessage: this.normalizeRunMessage,
         validateRunInput: this.validateRunInput,
         assertReusedUserTurnIdentity: this.assertReusedUserTurnIdentity,
-        ensureParentAsyncResultContainer: this.ensureParentAsyncResultContainer,
         initializeRunSessionRuntime: async (payload) => {
           const initialized = await this.initializeRunSessionRuntime(payload);
           executionEventListener = initialized.runtimeEventListener;
@@ -207,17 +198,14 @@ export class SessionExecutionRunner {
         eventListener,
         caller,
         parentSessionId,
-        parentDialogProcessId,
         requestedDialogProcessId,
         abortSignal,
         runConfig,
         requestedTurnScopeId: turnScopeId,
-        parentAsyncResultContainer,
         persistenceScope,
       });
       const {
         normalizedMessage,
-        resolvedParentAsyncResultContainer: initializedParentAsyncResultContainer,
         usedSessionId,
         parentSessionId: resolvedParentSessionId,
         dialogProcessId,
@@ -237,7 +225,6 @@ export class SessionExecutionRunner {
         botHookRuntime,
         botHookBase,
       } = initializedRun;
-      resolvedParentAsyncResultContainer = initializedParentAsyncResultContainer;
       resolvedRunConfig = initializedRunConfig;
       pluginActivationScope = initializedRunConfig?.pluginActivationScope || null;
       delete initializedRunConfig.pluginActivationScope;
@@ -258,7 +245,6 @@ export class SessionExecutionRunner {
           eventListener: runtimeEventListener,
           userInteractionBridge,
           abortSignal,
-          parentAsyncResultContainer: resolvedParentAsyncResultContainer,
           persistenceScope: persistenceScopeValidation.scope,
           contextMode,
           userId,
@@ -378,24 +364,7 @@ export class SessionExecutionRunner {
       lifecycle.complete();
       await runtimeEventListener.flush();
       syncLifecycleRuntimeState(lifecycleRuntime, lifecycle);
-      const result = { ...finalizedResult, lifecycle: lifecycle.snapshot };
-      this.upsertParentAsyncTask({
-        parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-        sessionId: usedSessionId,
-        parentSessionId: resolvedParentSessionId,
-        patch: {
-          status: SESSION_ASYNC_STATUS.COMPLETED,
-          endedAt: this.now(),
-          error: "",
-          result,
-        },
-      });
-      return {
-        ...result,
-        ...(resolvedParentAsyncResultContainer
-          ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }
-          : {}),
-      };
+      return { ...finalizedResult, lifecycle: lifecycle.snapshot };
     } catch (error) {
       return await handleSessionRunFailure({
         error,
@@ -408,8 +377,6 @@ export class SessionExecutionRunner {
         resolvedRunConfig,
         resolvedUsedSessionId,
         resolvedDialogProcessId,
-        resolvedParentAsyncResultContainer,
-        upsertParentAsyncTask: this.upsertParentAsyncTask,
         saveExecutionReport: this.saveExecutionReport,
         getExecutionTurnLogs: this.getExecutionTurnLogs,
         persistenceScope,

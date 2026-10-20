@@ -22,7 +22,7 @@ export async function readAnnotatedTurnSnapshot({
   ...identityInput
 }) {
   const identity = identityOf(identityInput);
-  const result = await bot.getTurnLifecycleSnapshot({
+  const result = await bot.session.getTurnLifecycleSnapshot({
     ...identity,
     persistenceScope,
     commandId,
@@ -57,7 +57,7 @@ export async function finalizeTurnSnapshot({
   ...identityInput
 }) {
   const identity = identityOf(identityInput);
-  const initial = await bot.getTurnLifecycleSnapshot({
+  const initial = await bot.session.getTurnLifecycleSnapshot({
     ...identity,
     persistenceScope,
     commandId,

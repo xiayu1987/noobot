@@ -107,6 +107,8 @@ export function createTestLifecycleEnvelope({
   });
 }
 
+const AUTHORITATIVE_ROOT_PARENT_SESSION_ID = "";
+
 export function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) {
   let lifecycle = {};
   let eventOutbox = [];
@@ -120,101 +122,6 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
   const bot = {
     async resolveExecutionIntent({ turnScopeId } = {}) {
       return createAcceptedAgentExecutionIdentity({ turnScopeId });
-    },
-    async applyTurnLifecycleEvent(input) {
-      if (
-        input.eventType === TURN_EVENT.ACTION_ACCEPTED &&
-        input.action !== "resend" &&
-        !text(input.dialogProcessId)
-      ) {
-        input.dialogProcessId = `dialog:${input.turnScopeId}`;
-      }
-      commitInputs.push(structuredClone(input));
-      const result = commitTurnLifecycle({
-        lifecycle,
-        event: input,
-        eventOutbox,
-        createEventId: () => `authority-event-${++eventIdSequence}`,
-        materializeTerminal: input.terminalStatus
-          ? ({ terminalStatus, previousSummaryVersion }) =>
-              persistSummary
-                ? {
-                    materialized: true,
-                    terminalStatus,
-                    messages: [],
-                    summaryVersion: previousSummaryVersion + 1,
-                  }
-                : { materialized: false, reason: "summary_persistence_failed" }
-          : undefined,
-      });
-      if (result.applied) {
-        lifecycle = result.lifecycle;
-        if (result.committedEvent) {
-          eventOutbox = [...eventOutbox, result.committedEvent];
-        }
-        committed.push(input.eventType);
-      }
-      let userMessage = null;
-      if (input.eventType === TURN_EVENT.ACTION_ACCEPTED && input.action !== "resend") {
-        userMessage = userMessages.get(input.turnScopeId) || {
-          messageUid: `session-message:${input.turnScopeId}`,
-          messageId: String(input.userMessage?.messageId || `user-message:${input.turnScopeId}`),
-          role: "user",
-          type: "message",
-          content: String(input.userMessage?.content || ""),
-          sessionId: input.sessionId,
-          parentSessionId: String(input.parentSessionId || ""),
-          dialogProcessId: input.dialogProcessId,
-          parentDialogProcessId: String(input.userMessage?.parentDialogProcessId || ""),
-          turnScopeId: input.turnScopeId,
-          messageOrigin: input.userMessage?.messageOrigin || "natural",
-          userMetaMaterialized: input.userMessage?.userMetaMaterialized === true,
-          attachments: [],
-        };
-        userMessages.set(input.turnScopeId, userMessage);
-      }
-      return {
-        ...result,
-        ...(input.terminalStatus && result.applied
-          ? { turnStatus: result.turn.terminalStatus }
-          : {}),
-        ...(userMessage
-          ? { userMessage, dialogProcessId: input.dialogProcessId, aggregateVersion: 1 }
-          : {}),
-      };
-    },
-    async getPendingAuthorityEvents({ consumerId } = {}) {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-    },
-    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-      for (const eventId of eventIds) {
-        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
-        if (!result.found) return { recorded: false, reason: result.reason };
-        eventOutbox = result.outbox;
-      }
-      return { recorded: true };
-    },
-    async compactAuthorityEvents({ retainDeliveredAfter }) {
-      const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
-      eventOutbox = result.outbox;
-      return { compacted: result.compacted, removed: result.removed };
-    },
-    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
-      let deduplicated = 0;
-      for (const receipt of acknowledgements) {
-        const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-          eventId: receipt.eventId,
-          consumerId,
-          orderingDomain: receipt.orderingDomain,
-          orderingScopeId: receipt.orderingScopeId,
-          sequence: receipt.sequence,
-          deliveredAt: new Date().toISOString(),
-        });
-        if (!result.found) return { acknowledged: false, reason: result.reason };
-        if (result.deduplicated) deduplicated += 1;
-        eventOutbox = result.outbox;
-      }
-      return { acknowledged: true, deduplicated };
     },
     async runSession({ sessionId, turnScopeId, runConfig, turnAcceptance, eventListener }) {
       runCount += 1;
@@ -246,6 +153,106 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         executionLogs: [],
       };
     },
+    session: {
+      async getRootSessionSelectedConnectorIds() {
+        return [];
+      },
+      async applyTurnLifecycleEvent(input) {
+        if (
+          input.eventType === TURN_EVENT.ACTION_ACCEPTED &&
+          input.action !== "resend" &&
+          !text(input.dialogProcessId)
+        ) {
+          input.dialogProcessId = `dialog:${input.turnScopeId}`;
+        }
+        commitInputs.push(structuredClone(input));
+        const result = commitTurnLifecycle({
+          lifecycle,
+          event: input,
+          eventOutbox,
+          createEventId: () => `authority-event-${++eventIdSequence}`,
+          materializeTerminal: input.terminalStatus
+            ? ({ terminalStatus, previousSummaryVersion }) =>
+                persistSummary
+                  ? {
+                      materialized: true,
+                      terminalStatus,
+                      messages: [],
+                      summaryVersion: previousSummaryVersion + 1,
+                    }
+                  : { materialized: false, reason: "summary_persistence_failed" }
+            : undefined,
+        });
+        if (result.applied) {
+          lifecycle = result.lifecycle;
+          if (result.committedEvent) {
+            eventOutbox = [...eventOutbox, result.committedEvent];
+          }
+          committed.push(input.eventType);
+        }
+        let userMessage = null;
+        if (input.eventType === TURN_EVENT.ACTION_ACCEPTED && input.action !== "resend") {
+          userMessage = userMessages.get(input.turnScopeId) || {
+            messageUid: `session-message:${input.turnScopeId}`,
+            messageId: input.userMessage.messageId,
+            role: "user",
+            type: "message",
+            content: input.userMessage.content,
+            sessionId: input.sessionId,
+            parentSessionId: AUTHORITATIVE_ROOT_PARENT_SESSION_ID,
+            dialogProcessId: input.dialogProcessId,
+            parentDialogProcessId: input.userMessage.parentDialogProcessId,
+            turnScopeId: input.turnScopeId,
+            messageOrigin: input.userMessage.messageOrigin,
+            userMetaMaterialized: input.userMessage.userMetaMaterialized,
+            attachments: [],
+          };
+          userMessages.set(input.turnScopeId, userMessage);
+        }
+        return {
+          ...result,
+          ...(input.terminalStatus && result.applied
+            ? { turnStatus: result.turn.terminalStatus }
+            : {}),
+          ...(userMessage
+            ? { userMessage, dialogProcessId: input.dialogProcessId, aggregateVersion: 1 }
+            : {}),
+        };
+      },
+      async getPendingAuthorityEvents({ consumerId } = {}) {
+        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
+      },
+      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
+        for (const eventId of eventIds) {
+          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
+          if (!result.found) return { recorded: false, reason: result.reason };
+          eventOutbox = result.outbox;
+        }
+        return { recorded: true };
+      },
+      async compactAuthorityEvents({ retainDeliveredAfter }) {
+        const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
+        eventOutbox = result.outbox;
+        return { compacted: result.compacted, removed: result.removed };
+      },
+      async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
+        let deduplicated = 0;
+        for (const receipt of acknowledgements) {
+          const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+            eventId: receipt.eventId,
+            consumerId,
+            orderingDomain: receipt.orderingDomain,
+            orderingScopeId: receipt.orderingScopeId,
+            sequence: receipt.sequence,
+            deliveredAt: new Date().toISOString(),
+          });
+          if (!result.found) return { acknowledged: false, reason: result.reason };
+          if (result.deduplicated) deduplicated += 1;
+          eventOutbox = result.outbox;
+        }
+        return { acknowledged: true, deduplicated };
+      },
+    },
   };
   return {
     bot,
@@ -272,7 +279,7 @@ export const payload = {
 };
 
 export function installLifecycleSnapshotReader(authoritative) {
-  authoritative.bot.getTurnLifecycleSnapshot = async ({
+  authoritative.bot.session.getTurnLifecycleSnapshot = async ({
     userId,
     sessionId,
     commandId,

@@ -41,7 +41,6 @@ export async function initializeSessionRun({
   normalizeRunMessage,
   validateRunInput,
   assertReusedUserTurnIdentity,
-  ensureParentAsyncResultContainer,
   initializeRunSessionRuntime,
   resolveScenarioRunConfig,
   prepareRunConfig,
@@ -52,12 +51,10 @@ export async function initializeSessionRun({
   eventListener,
   caller,
   parentSessionId,
-  parentDialogProcessId,
   requestedDialogProcessId,
   abortSignal,
   runConfig,
   requestedTurnScopeId,
-  parentAsyncResultContainer,
   persistenceScope,
 }) {
   const normalizedMessage = normalizeRunMessage(message);
@@ -108,12 +105,6 @@ export async function initializeSessionRun({
     sessionDir,
     runtimeEventListener,
   } = initialized;
-  const resolvedParentAsyncResultContainer = ensureParentAsyncResultContainer({
-    parentAsyncResultContainer,
-    caller,
-    parentSessionId: resolvedParentSessionId,
-    parentDialogProcessId,
-  });
   const requestRunConfig = {
     ...(isPlainObject(runConfig) ? runConfig : {}),
     turnScopeId: normalizedRequestTurnScopeId,
@@ -198,7 +189,6 @@ export async function initializeSessionRun({
   });
   return {
     normalizedMessage,
-    resolvedParentAsyncResultContainer,
     usedSessionId,
     parentSessionId: resolvedParentSessionId,
     dialogProcessId,

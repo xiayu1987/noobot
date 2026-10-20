@@ -22,7 +22,6 @@ const NEUTRAL_TEST_RUN_FIELDS = Object.freeze({
   userInterjectionPort: null,
   runConfig: {},
   turnAcceptance: null,
-  parentAsyncResultContainer: null,
   persistenceScope: null,
 });
 

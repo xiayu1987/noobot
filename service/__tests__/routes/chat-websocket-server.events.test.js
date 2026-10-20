@@ -41,26 +41,28 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   const identities = [];
   let delivered = false;
   const bot = {
-    async getPendingAuthorityEvents(identity) {
-      identities.push(identity);
-      return {
-        found: true,
-        events: delivered ? [] : [{ eventId: envelope.identity.eventId, envelope }],
-      };
-    },
-    async recordAuthorityEventAttempts(identity) {
-      identities.push(identity);
-      return { recorded: identity.eventIds.includes(envelope.identity.eventId) };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents(identity) {
-      identities.push(identity);
-      delivered = identity.acknowledgements.some(
-        (receipt) => receipt.eventId === envelope.identity.eventId,
-      );
-      return { acknowledged: delivered };
+    session: {
+      async getPendingAuthorityEvents(identity) {
+        identities.push(identity);
+        return {
+          found: true,
+          events: delivered ? [] : [{ eventId: envelope.identity.eventId, envelope }],
+        };
+      },
+      async recordAuthorityEventAttempts(identity) {
+        identities.push(identity);
+        return { recorded: identity.eventIds.includes(envelope.identity.eventId) };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents(identity) {
+        identities.push(identity);
+        delivered = identity.acknowledgements.some(
+          (receipt) => receipt.eventId === envelope.identity.eventId,
+        );
+        return { acknowledged: delivered };
+      },
     },
   };
   const events = [];
@@ -100,19 +102,21 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
     sessionId: "session-invalid",
   };
   const bot = {
-    async getPendingAuthorityEvents() {
-      return {
-        found: true,
-        events: [{ eventId: invalidEnvelope.eventId, envelope: invalidEnvelope }],
-      };
-    },
-    async recordAuthorityEventAttempts() {
-      calls.attempts += 1;
-      return { recorded: true };
-    },
-    async acknowledgeAuthorityEvents() {
-      calls.acknowledgements += 1;
-      return { acknowledged: true };
+    session: {
+      async getPendingAuthorityEvents() {
+        return {
+          found: true,
+          events: [{ eventId: invalidEnvelope.eventId, envelope: invalidEnvelope }],
+        };
+      },
+      async recordAuthorityEventAttempts() {
+        calls.attempts += 1;
+        return { recorded: true };
+      },
+      async acknowledgeAuthorityEvents() {
+        calls.acknowledgements += 1;
+        return { acknowledged: true };
+      },
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({

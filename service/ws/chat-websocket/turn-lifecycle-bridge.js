@@ -16,7 +16,7 @@ export function createTurnLifecycleBridge({
     if (Object.hasOwn(event, "persistenceScope")) {
       throw new TypeError("turn lifecycle event must not carry persistenceScope");
     }
-    const result = await resolveBot().applyTurnLifecycleEvent({
+    const result = await resolveBot().session.applyTurnLifecycleEvent({
       ...event,
       userId: clean(event.userId),
       sessionId: clean(event.sessionId),

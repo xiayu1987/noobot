@@ -52,7 +52,6 @@ const CONTEXT_BUILDER_INPUT_FIELDS = Object.freeze({
     "systemMessages",
     "runConfig",
     "abortSignal",
-    "parentAsyncResultContainer",
     "persistenceScope",
   ]),
 });
@@ -116,7 +115,6 @@ export class ContextBuilder {
       runConfig,
       systemMessages,
       abortSignal,
-      parentAsyncResultContainer,
       persistenceScope,
     } = { ...input.config, ...input.serviceContainer, ...input.sessionContext };
     this.globalConfig = globalConfig;
@@ -147,7 +145,6 @@ export class ContextBuilder {
     this.contextPolicy = normalizeContextPolicy(runConfig.contextPolicy);
     this.additionalSystemMessages = normalizeAdditionalSystemMessages(systemMessages);
     this.abortSignal = abortSignal;
-    this.parentAsyncResultContainer = parentAsyncResultContainer;
     const persistenceScopeValidation = validateSessionPersistenceScope(persistenceScope);
     if (!persistenceScopeValidation.valid) {
       throw new TypeError(
@@ -242,7 +239,6 @@ export class ContextBuilder {
       botManager: this.botManager,
       userInteractionBridge: this.userInteractionBridge,
       abortSignal: this.abortSignal,
-      parentAsyncResultContainer: this.parentAsyncResultContainer,
       runConfig: this.runConfig,
       runtimeBasePath: resolvedRuntimeBasePath,
       runtimeModel,

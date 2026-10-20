@@ -9,16 +9,13 @@ import {
   INTERACTION_SEQUENCE_DOMAIN,
   validateInteractionRequestPayload,
 } from "@noobot/event-protocol";
-import { text as clean, isFunction } from "@noobot/shared/value";
+import { text as clean } from "@noobot/shared/value";
 
-export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents } = {}) {
+export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents }) {
   return async function commitInteractionRequest({ userId, payload, persistenceScope }) {
     const validation = validateInteractionRequestPayload(payload);
     if (!validation.valid) throw new TypeError(`invalid interaction request: ${validation.reason}`);
-    const bot = resolveBot?.();
-    if (!isFunction(bot?.commitAuthorityEvent)) {
-      throw new Error("commitAuthorityEvent is required");
-    }
+    const { session } = resolveBot();
     const sessionId = clean(payload.sessionId);
     const turnScopeId = clean(payload.turnScopeId);
     const requestId = clean(payload.requestId);
@@ -32,7 +29,7 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
     };
     delete domainPayload.sessionId;
     delete domainPayload.turnScopeId;
-    const committed = await bot.commitAuthorityEvent({
+    const committed = await session.commitAuthorityEvent({
       userId: clean(userId),
       sessionId,
       family: EVENT_FAMILY.INTERACTION_REQUEST,

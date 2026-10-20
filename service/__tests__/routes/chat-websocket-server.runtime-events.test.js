@@ -27,7 +27,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime event", () =>
   withRuntimeEventsRoot("noobot-chat-ws-system-", async (workspaceRoot) => {
-    const server = await startServerWithWs();
+    const server = await startServerWithWs({ runSession: async () => ({}) });
     try {
       const { port } = server.address();
       const response = await requestRawUpgrade({

@@ -31,7 +31,7 @@ import {
 } from "../../ws/chat-websocket/run-registry.js";
 import {
   createAcceptedAgentExecutionIdentity,
-  startServerWithWs,
+  startAuthoritativeServerWithWs,
   closeServer,
   callChatWs,
 } from "./chat-websocket-server.test-helpers.js";
@@ -71,7 +71,7 @@ test("run event publishing awaits the actual transport send result", async () =>
 
 test("authoritative lifecycle follows accepted -> running -> processed -> summary completed", async () => {
   const authoritative = createAuthoritativeBot();
-  const server = await startServerWithWs({
+  const server = await startAuthoritativeServerWithWs({
     bot: authoritative.bot,
     resolveAuthByApiKey: () => ({ userId: "u1" }),
   });
@@ -127,7 +127,7 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
 
 test("declared workflow execution identity is stable from acceptance through completion", async () => {
   const authoritative = createAuthoritativeBot();
-  authoritative.bot.resolveExecutionIntent = async ({ turnScopeId = "" } = {}) => ({
+  authoritative.bot.resolveExecutionIntent = async ({ turnScopeId }) => ({
     executionId: `workflow:${turnScopeId}`,
     executionKind: "workflow",
     parentExecutionId: "",
@@ -135,7 +135,7 @@ test("declared workflow execution identity is stable from acceptance through com
     origin: { type: "workflow", workflowRunId: `workflow:${turnScopeId}` },
     stage: "planning",
   });
-  const server = await startServerWithWs({
+  const server = await startAuthoritativeServerWithWs({
     bot: authoritative.bot,
     resolveAuthByApiKey: () => ({ userId: "u1" }),
   });
@@ -166,12 +166,14 @@ test("declared workflow execution identity is stable from acceptance through com
 
 test("rejected initial provision does not start Agent execution", async () => {
   const authoritative = createAuthoritativeBot();
-  authoritative.bot.applyTurnLifecycleEvent = async (input) => {
+  authoritative.bot.session.applyTurnLifecycleEvent = async (input) => {
     assert.equal(input.eventType, TURN_EVENT.ACTION_ACCEPTED);
     assert.equal(input.createSessionIfAbsent, true);
     return { applied: false, reason: "session_identity_conflict" };
   };
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await callChatWs({
       port: server.address().port,
@@ -200,7 +202,7 @@ test("rejected initial provision does not start Agent execution", async () => {
 test("stale aggregate version is rejected before lifecycle state and Agent execution", async () => {
   const authoritative = createAuthoritativeBot();
   let lifecycleCalls = 0;
-  authoritative.bot.applyTurnLifecycleEvent = async (input) => {
+  authoritative.bot.session.applyTurnLifecycleEvent = async (input) => {
     lifecycleCalls += 1;
     assert.equal(input.eventType, TURN_EVENT.ACTION_ACCEPTED);
     assert.equal(input.expectedAggregateVersion, 2);
@@ -210,7 +212,9 @@ test("stale aggregate version is rejected before lifecycle state and Agent execu
       currentVersion: 3,
     };
   };
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await callChatWs({
       port: server.address().port,
@@ -252,56 +256,58 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   let eventOutbox = [];
   let eventIdSequence = 0;
   const bot = {
-    applyTurnLifecycleEvent: async (event = {}) => {
-      const result = commitTurnLifecycle({
-        lifecycle,
-        event,
-        eventOutbox,
-        createEventId: () => `deduplicated-event-${++eventIdSequence}`,
-      });
-      if (result.applied) {
-        lifecycle = result.lifecycle;
-        if (result.committedEvent) {
-          eventOutbox = [...eventOutbox, result.committedEvent];
-        }
-      }
-      return result;
-    },
-    async getPendingAuthorityEvents({ consumerId } = {}) {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-    },
-    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-      for (const eventId of eventIds) {
-        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
-        if (!result.found) return { recorded: false, reason: result.reason };
-        eventOutbox = result.outbox;
-      }
-      return { recorded: true };
-    },
-    async compactAuthorityEvents({ retainDeliveredAfter }) {
-      const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
-      eventOutbox = result.outbox;
-      return { compacted: result.compacted, removed: result.removed };
-    },
-    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
-      let result = { found: true };
-      for (const receipt of acknowledgements) {
-        result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-          eventId: receipt.eventId,
-          consumerId,
-          orderingDomain: receipt.orderingDomain,
-          orderingScopeId: receipt.orderingScopeId,
-          sequence: receipt.sequence,
-          deliveredAt: new Date().toISOString(),
+    session: {
+      applyTurnLifecycleEvent: async (event = {}) => {
+        const result = commitTurnLifecycle({
+          lifecycle,
+          event,
+          eventOutbox,
+          createEventId: () => `deduplicated-event-${++eventIdSequence}`,
         });
-        if (!result.found) break;
+        if (result.applied) {
+          lifecycle = result.lifecycle;
+          if (result.committedEvent) {
+            eventOutbox = [...eventOutbox, result.committedEvent];
+          }
+        }
+        return result;
+      },
+      async getPendingAuthorityEvents({ consumerId } = {}) {
+        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
+      },
+      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
+        for (const eventId of eventIds) {
+          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
+          if (!result.found) return { recorded: false, reason: result.reason };
+          eventOutbox = result.outbox;
+        }
+        return { recorded: true };
+      },
+      async compactAuthorityEvents({ retainDeliveredAfter }) {
+        const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
         eventOutbox = result.outbox;
-      }
-      return {
-        acknowledged: result.found,
-        deduplicated: result.deduplicated,
-        reason: result.reason,
-      };
+        return { compacted: result.compacted, removed: result.removed };
+      },
+      async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
+        let result = { found: true };
+        for (const receipt of acknowledgements) {
+          result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+            eventId: receipt.eventId,
+            consumerId,
+            orderingDomain: receipt.orderingDomain,
+            orderingScopeId: receipt.orderingScopeId,
+            sequence: receipt.sequence,
+            deliveredAt: new Date().toISOString(),
+          });
+          if (!result.found) break;
+          eventOutbox = result.outbox;
+        }
+        return {
+          acknowledged: result.found,
+          deduplicated: result.deduplicated,
+          reason: result.reason,
+        };
+      },
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({

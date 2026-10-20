@@ -19,7 +19,6 @@ function createInput(overrides = {}) {
     eventListener: null,
     userInteractionBridge: null,
     abortSignal: null,
-    parentAsyncResultContainer: null,
     persistenceContext: null,
     contextMode: "conversation",
     userId: "u1",
@@ -146,6 +145,7 @@ test("accepted user message binds canonical attachments before Context construct
   assert.deepEqual(result.currentUserMessage, bound);
   assert.deepEqual(result.buildContextPayload.currentUserMessage, bound);
   assert.deepEqual(result.buildContextPayload.userMessageAttachments, [attachment]);
+  assert.equal(result.buildContextPayload.turnScopeId, "t1");
 });
 
 test("reused user turn canonicalizes attachments once before Context construction", async () => {

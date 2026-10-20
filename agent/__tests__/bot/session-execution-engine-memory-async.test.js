@@ -81,7 +81,6 @@ function buildFinalizeInput(userConfig = {}) {
     },
     runtimeEventListener: null,
     userConfig,
-    resolvedParentAsyncResultContainer: null,
   };
 }
 

@@ -110,7 +110,6 @@ export function createRunner({
     },
     normalizeRunMessage: (message) => message,
     validateRunInput: () => {},
-    ensureParentAsyncResultContainer: () => null,
 
     initializeRunSessionRuntime: async ({ parentSessionId }) => ({
       usedSessionId: "session-used",
@@ -167,9 +166,6 @@ export function createRunner({
     finalizeRunSession,
     saveExecutionReport: async () => {},
     getExecutionTurnLogs: async () => [],
-    upsertParentAsyncTask: () => {
-      callOrder.push("upsertParentAsyncTask");
-    },
     now: () => "2026-05-21T00:00:00.000Z",
   });
   runner.runAcceptedSession = (request) => {

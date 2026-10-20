@@ -74,7 +74,6 @@ test("runSession does not emit agent_done when finalizeRunSession fails", async 
   );
 
   assert.equal(callOrder.includes("event:agent_done"), false);
-  assert.equal(callOrder.includes("upsertParentAsyncTask"), true);
   assert.equal(callOrder.includes("errorLogger.log"), true);
 });
 

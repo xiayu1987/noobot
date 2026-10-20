@@ -177,44 +177,4 @@ export class BotManager {
   async resolveExecutionIntent(payload = {}) {
     return this.sessionRunner.resolveExecutionIntent(payload);
   }
-
-  async applyTurnLifecycleEvent(payload = {}) {
-    return this.sessionRunner.applyTurnLifecycleEvent(payload);
-  }
-
-  async getTurnLifecycleSnapshot(payload = {}) {
-    return this.sessionRunner.getTurnLifecycleSnapshot(payload);
-  }
-
-  async commitAuthorityEvent(payload = {}) {
-    return this.sessionRunner.commitAuthorityEvent(payload);
-  }
-
-  async getPendingAuthorityEvents(payload = {}) {
-    return this.sessionRunner.getPendingAuthorityEvents(payload);
-  }
-
-  async recordAuthorityEventAttempts(payload = {}) {
-    return this.sessionRunner.recordAuthorityEventAttempts(payload);
-  }
-
-  async acknowledgeAuthorityEvents(payload = {}) {
-    return this.sessionRunner.acknowledgeAuthorityEvents(payload);
-  }
-
-  async compactAuthorityEvents(payload = {}) {
-    return this.sessionRunner.compactAuthorityEvents(payload);
-  }
-
-  async getExecution(payload = {}) {
-    return this.sessionRunner.getExecution(payload);
-  }
-
-  async getExecutionChildren(payload = {}) {
-    return this.sessionRunner.getExecutionChildren(payload);
-  }
-
-  async getExecutionTree(payload = {}) {
-    return this.sessionRunner.getExecutionTree(payload);
-  }
 }

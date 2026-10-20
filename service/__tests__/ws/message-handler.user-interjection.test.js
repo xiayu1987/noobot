@@ -39,20 +39,22 @@ function createFixture() {
   };
   attachRunTransport(handle, sendEvent);
   const bot = {
-    async commitAuthorityEvent(input = {}) {
-      authoritySequence += 1;
-      const envelope = createEventEnvelope({
-        ...input,
-        identity: {
-          ...input.identity,
-          eventId: `interjection-event-${authoritySequence}`,
-          sessionId: input.sessionId,
-        },
-        ordering: { ...input.ordering, sequence: authoritySequence },
-        occurredAt: `2026-09-18T01:00:0${authoritySequence}.000Z`,
-      });
-      outbox.push(envelope);
-      return { committed: true, envelope };
+    session: {
+      async commitAuthorityEvent(input = {}) {
+        authoritySequence += 1;
+        const envelope = createEventEnvelope({
+          ...input,
+          identity: {
+            ...input.identity,
+            eventId: `interjection-event-${authoritySequence}`,
+            sessionId: input.sessionId,
+          },
+          ordering: { ...input.ordering, sequence: authoritySequence },
+          occurredAt: `2026-09-18T01:00:0${authoritySequence}.000Z`,
+        });
+        outbox.push(envelope);
+        return { committed: true, envelope };
+      },
     },
   };
   const commitUserInterjection = createUserInterjectionAuthorityBridge({

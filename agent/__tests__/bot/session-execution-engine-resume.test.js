@@ -40,7 +40,6 @@ test("prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapsh
           runConfig: {
             resumeFromStoppedSnapshot: true,
             resumeTurnScopeId: "turn-stopped",
-            turnScopeId: "turn-current",
           },
         },
       }),
@@ -152,8 +151,10 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
 
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = { workspaceRoot };
+  const sourceCalls = [];
   engine.session = {
-    async getSessionContextSource() {
+    async getSessionContextSource(input) {
+      sourceCalls.push(input);
       return {
         messages: [
           {
@@ -204,8 +205,8 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
           resumeFromStoppedSnapshot: true,
           resumeDialogProcessId: stoppedIdentity.dialogProcessId,
           resumeTurnScopeId: stoppedIdentity.turnScopeId,
-          turnScopeId: "turn-current",
         },
+        persistenceScope: null,
       },
     });
 
@@ -221,6 +222,8 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
       captured[0].options.incrementalMessages.map((message) => message.content),
       ["incremental"],
     );
+    assert.deepEqual(sourceCalls, [{ userId: "u1", sessionId: "s1", persistenceScope: null }]);
+    assert.equal(captured[0].options.dialogProcessId, "dialog-current");
     assert.equal(captured[0].history[0].dialogProcessId, "dialog-history");
     assert.equal(captured[0].history[0].turnScopeId, "turn-history");
     assert.equal(captured[0].options.incrementalMessages[0].dialogProcessId, "dialog-stopped");
@@ -339,8 +342,8 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
           resumeFromStoppedSnapshot: true,
           resumeDialogProcessId: stoppedIdentity.dialogProcessId,
           resumeTurnScopeId: stoppedIdentity.turnScopeId,
-          turnScopeId: "turn-current",
         },
+        persistenceScope: null,
       },
     });
 

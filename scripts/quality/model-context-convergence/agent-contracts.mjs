@@ -156,12 +156,13 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/bot/session/turn-execution-preparer.js",
     required: [
       ["stopped resume loads the authoritative snapshot", /loadStoppedModelMessageSnapshot\s*\(/],
-      ["stopped resume reads snapshot system block", /snapshot\?\.messageBlocks\?\.system/],
-      ["stopped resume reads snapshot history block", /snapshot\?\.messageBlocks\?\.history/],
       [
-        "stopped resume reads snapshot incremental block",
-        /snapshot\?\.messageBlocks\?\.incremental/,
+        "stopped resume hydrates blocks from the snapshot only",
+        /restoreSnapshotUserAttachmentFacts\(\s*engine,\s*payload,\s*snapshot\.messageBlocks,?\s*\)/,
       ],
+      ["stopped resume reads snapshot system block", /hydratedMessageBlocks\.system/],
+      ["stopped resume reads snapshot history block", /hydratedMessageBlocks\.history/],
+      ["stopped resume reads snapshot incremental block", /hydratedMessageBlocks\.incremental/],
     ],
     forbidden: [
       [

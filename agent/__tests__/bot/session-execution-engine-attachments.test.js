@@ -12,6 +12,7 @@ import path from "node:path";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 
 const CONTEXT_BUILDER = Object.freeze({ kind: "context-builder" });
+const NON_RESUME_RUN_CONFIG = Object.freeze({ resumeFromStoppedSnapshot: false });
 
 async function createAttachmentWorkspaceService() {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-workspace-"));
@@ -44,7 +45,10 @@ test("_prepareAgentTurnExecution takes canonical payload attachments as the sing
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
       contextBuilder: CONTEXT_BUILDER,
+      runConfig: NON_RESUME_RUN_CONFIG,
+      persistenceScope: null,
       userId: "admin",
+      sessionId: "session-payload-1",
       userMessageAttachments: [
         {
           attachmentId: "att-payload-1",
@@ -86,6 +90,8 @@ test("_prepareAgentTurnExecution preserves explicit empty payload userMessageAtt
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
       contextBuilder: CONTEXT_BUILDER,
+      runConfig: NON_RESUME_RUN_CONFIG,
+      persistenceScope: null,
       userId: "admin",
       userMessageAttachments: [],
     },
@@ -145,6 +151,8 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
       contextBuilder: CONTEXT_BUILDER,
+      runConfig: NON_RESUME_RUN_CONFIG,
+      persistenceScope: null,
       userId: "admin",
       sessionId,
       userMessageAttachments: [
@@ -172,68 +180,6 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
   assert.equal(meta.parsedResult, undefined);
 });
 
-test("_prepareAgentTurnExecution enriches raw resend payload from existing session message attachments", async () => {
-  const richAttachment = {
-    attachmentId: "att-session-rich",
-    sessionId: "session-existing-a",
-    attachmentSource: "user",
-    name: "需求说明.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    size: 2048,
-    path: "/workspace/admin/runtime/attach/scoped/session-existing-a/user/att-session-rich/需求说明.docx",
-    relativePath: "runtime/attach/scoped/session-existing-a/user/att-session-rich/需求说明.docx",
-    sandboxPath:
-      "/workspace/admin/runtime/attach/scoped/session-existing-a/user/att-session-rich/需求说明.docx",
-    previewUrl: "/preview/att-session-rich",
-    downloadUrl: "/download/att-session-rich",
-  };
-  const engine = Object.create(SessionExecutionEngine.prototype);
-  engine.workspaceService = await createAttachmentWorkspaceService();
-  engine.session = {
-    async findById() {
-      return {
-        messages: [
-          {
-            role: "user",
-            turnScopeId: "turn-existing",
-            dialogProcessId: "dp-existing",
-            attachments: [richAttachment],
-          },
-        ],
-      };
-    },
-  };
-  engine.agentRuntimeFacade = {
-    async prepareTurnExecution() {
-      return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
-    },
-  };
-
-  const prepared = await engine._prepareAgentTurnExecution({
-    buildContextPayload: {
-      contextBuilder: CONTEXT_BUILDER,
-      userId: "admin",
-      sessionId: "session-existing-a",
-      turnScopeId: "turn-existing",
-      dialogProcessId: "dp-existing",
-      userMessageAttachments: [
-        {
-          attachmentId: richAttachment.attachmentId,
-          sessionId: richAttachment.sessionId,
-          attachmentSource: richAttachment.attachmentSource,
-          name: "需求说明.docx",
-          mimeType: richAttachment.mimeType,
-          size: 2048,
-        },
-      ],
-    },
-  });
-
-  assert.equal(prepared.userMessageAttachments.length, 1);
-  assert.equal(prepared.userMessageAttachments[0].attachmentId, "att-session-rich");
-  assert.equal(prepared.userMessageAttachments[0].path, richAttachment.path);
-});
-
 test("_prepareAgentTurnExecution fails closed when attachment enrichment has no WorkspaceService", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.agentRuntimeFacade = {
@@ -246,6 +192,8 @@ test("_prepareAgentTurnExecution fails closed when attachment enrichment has no 
     engine._prepareAgentTurnExecution({
       buildContextPayload: {
         contextBuilder: CONTEXT_BUILDER,
+        runConfig: NON_RESUME_RUN_CONFIG,
+        persistenceScope: null,
         userId: "admin",
         sessionId: "session-missing-workspace-service",
         userMessageAttachments: [
@@ -262,21 +210,8 @@ test("_prepareAgentTurnExecution fails closed when attachment enrichment has no 
   );
 });
 
-test("_prepareAgentTurnExecution does not restore old rich attachments when payload explicitly deletes all", async () => {
+test("_prepareAgentTurnExecution keeps explicit empty payload attachments without session lookup", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
-  engine.session = {
-    async findById() {
-      return {
-        messages: [
-          {
-            role: "user",
-            turnScopeId: "turn-delete",
-            attachments: [{ attachmentId: "old", name: "old.txt" }],
-          },
-        ],
-      };
-    },
-  };
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
       return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
@@ -286,6 +221,8 @@ test("_prepareAgentTurnExecution does not restore old rich attachments when payl
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
       contextBuilder: CONTEXT_BUILDER,
+      runConfig: NON_RESUME_RUN_CONFIG,
+      persistenceScope: null,
       userId: "admin",
       sessionId: "session-delete",
       turnScopeId: "turn-delete",

@@ -53,12 +53,14 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     completionCommitId: "stable-finalize",
   });
   const bot = {
-    async getTurnLifecycleSnapshot({ commandId }) {
-      const turn = lifecycle.turns["turn-recover"];
-      return {
-        found: true,
-        snapshot: { commandId, activeTurn: lifecycle.activeTurnScopeId ? turn : null },
-      };
+    session: {
+      async getTurnLifecycleSnapshot({ commandId }) {
+        const turn = lifecycle.turns["turn-recover"];
+        return {
+          found: true,
+          snapshot: { commandId, activeTurn: lifecycle.activeTurnScopeId ? turn : null },
+        };
+      },
     },
   };
   const commitTurnLifecycle = async (input) =>
@@ -106,26 +108,28 @@ test("execution queries expose authoritative snapshot, children and tree envelop
   };
   const generatedAt = "2026-10-17T00:00:00.000Z";
   const bot = {
-    async getExecution() {
-      return { found: true, execution: root, generatedAt };
-    },
-    async getExecutionChildren() {
-      return { found: true, execution: root, children: [child], generatedAt };
-    },
-    async getExecutionTree() {
-      return {
-        found: true,
-        execution: root,
-        rootExecutionId: root.executionId,
-        tree: {
-          executions: {
-            [root.executionId]: { ...root, childExecutionIds: [child.executionId] },
-            [child.executionId]: { ...child, childExecutionIds: [] },
+    session: {
+      async getExecution() {
+        return { found: true, execution: root, generatedAt };
+      },
+      async getExecutionChildren() {
+        return { found: true, execution: root, children: [child], generatedAt };
+      },
+      async getExecutionTree() {
+        return {
+          found: true,
+          execution: root,
+          rootExecutionId: root.executionId,
+          tree: {
+            executions: {
+              [root.executionId]: { ...root, childExecutionIds: [child.executionId] },
+              [child.executionId]: { ...child, childExecutionIds: [] },
+            },
+            rootExecutionIds: [root.executionId],
           },
-          rootExecutionIds: [root.executionId],
-        },
-        generatedAt,
-      };
+          generatedAt,
+        };
+      },
     },
   };
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
@@ -188,18 +192,17 @@ test("execution queries expose authoritative snapshot, children and tree envelop
   assert.deepEqual(Object.keys(sent[2].data.payload).sort(), ["rootExecutionId", "tree"]);
 });
 
-test("execution query rejects malformed and unavailable requests", async () => {
+test("execution query rejects a malformed target", async () => {
   const sent = [];
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
-  const create = ({ bot = {} } = {}) =>
-    createMessageHandler({
-      state: {},
-      authInfo: { userId: "u1" },
-      webSocket: { close() {} },
-      sendEvent: (event, data) => sent.push({ event, data }),
-      resolveBot: () => bot,
-    });
-  await create()(
+  const handleMessage = createMessageHandler({
+    state: {},
+    authInfo: { userId: "u1" },
+    webSocket: { close() {} },
+    sendEvent: (event, data) => sent.push({ event, data }),
+    resolveBot: () => ({ session: {} }),
+  });
+  await handleMessage(
     JSON.stringify({
       ...createProtocolTestCommand({
         commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
@@ -211,22 +214,8 @@ test("execution query rejects malformed and unavailable requests", async () => {
       query: { executionId: "", rootExecutionId: "" },
     }),
   );
-  await create()(
-    JSON.stringify(
-      createProtocolTestCommand({
-        commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
-        sessionId: "s1",
-        executionId: "agent:x",
-        rootExecutionId: "",
-        commandId: "missing-reader",
-      }),
-    ),
-  );
   assert.deepEqual(
     sent.map(({ data }) => ({ commandId: data.commandId, code: data.error?.code })),
-    [
-      { commandId: "bad", code: "invalid_execution_query_target" },
-      { commandId: "missing-reader", code: "execution_query_unavailable" },
-    ],
+    [{ commandId: "bad", code: "invalid_execution_query_target" }],
   );
 });

@@ -412,7 +412,6 @@ async function executeDetachedSession(dependencies, identity, prepared, lifecycl
     userInterjectionPort: null,
     runConfig: prepared.effectiveRunConfig,
     turnScopeId: identity.turnScopeId,
-    parentAsyncResultContainer: null,
     persistenceScope: lifecycle.persistenceScope,
   });
   assertDetachedDialogIdentity(result, identity, lifecycle);

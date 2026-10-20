@@ -11,10 +11,7 @@ import {
 } from "../../bootstrap/create-in-process-chat-transport.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import { createChatRunService } from "../../services/chat-run-service.js";
-import {
-  createProtocolTestCommand,
-  withTestBotAuthorities,
-} from "../routes/chat-websocket-server.test-helpers.js";
+import { createProtocolTestCommand } from "../routes/chat-websocket-server.test-helpers.js";
 import {
   createAuthoritativeBot,
   payload,
@@ -99,7 +96,7 @@ test("in-process close aborts the running turn and releases the session", async 
       );
     });
   };
-  const bot = withTestBotAuthorities(authoritative.bot);
+  const { bot } = authoritative;
   const { mapAgentRunCommand } = createChatRunService({
     getBot: () => bot,
     normalizeLocale: (locale = "") => String(locale || "en-US"),

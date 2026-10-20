@@ -11,33 +11,6 @@ import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-
 
 const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
 
-test("ModelMessageRuntimeHelpers deep-merges selected plugin option objects", () => {
-  const helpers = new ModelMessageRuntimeHelpers();
-
-  const merged = helpers.mergePluginOptions(
-    {
-      stepModels: { plan: "m1" },
-      capabilityModelByPurpose: { review: "m2" },
-      acceptance: { enabled: true },
-      nestedReplace: { a: 1 },
-      scalar: "a",
-    },
-    {
-      stepModels: { execute: "m3" },
-      capabilityModelByPurpose: { plan: "m4" },
-      acceptance: { threshold: 2 },
-      nestedReplace: { b: 2 },
-      scalar: "b",
-    },
-  );
-
-  assert.deepEqual(merged.stepModels, { plan: "m1", execute: "m3" });
-  assert.deepEqual(merged.capabilityModelByPurpose, { review: "m2", plan: "m4" });
-  assert.deepEqual(merged.acceptance, { enabled: true, threshold: 2 });
-  assert.deepEqual(merged.nestedReplace, { b: 2 });
-  assert.equal(merged.scalar, "b");
-});
-
 test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();

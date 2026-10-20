@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { TURN_EVENT } from "@noobot/session-protocol";
 
 import {
-  startServerWithWs,
+  startAuthoritativeServerWithWs,
   closeServer,
   callChatWs,
   stopChatWs,
@@ -31,7 +31,9 @@ test("summary failure is classified as completion without authoritative complete
     sessionId: "s-completion-failure",
     turnScopeId: "turn-completion-failure",
   };
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await callChatWs({ port: server.address().port, payload: scopedPayload });
     const lifecycleEvents = events
@@ -69,7 +71,9 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     error.name = "AbortError";
     throw error;
   };
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await stopChatWs({
       port: server.address().port,

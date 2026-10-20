@@ -18,12 +18,6 @@ export class RunConfigResolver {
     return normalizeStringList(input);
   }
 
-  normalizeToolItems(input = []) {
-    return Array.isArray(input)
-      ? input.filter((item) => isPlainObject(item) && (item?.name ?? "").trim())
-      : [];
-  }
-
   mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
     if (!Array.isArray(scenarioItems) || !scenarioItems.length) return [];
     if (hasWildcard) return ["*"];

@@ -17,7 +17,7 @@ import { text } from "@noobot/shared/value";
 export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceScope }) {
   const scope = createSessionPersistenceScope(persistenceScope);
   return async function commitUserInterjection({ activeRun, interjection }) {
-    const bot = resolveBot();
+    const { session } = resolveBot();
     const userId = text(activeRun.userId);
     const sessionId = text(activeRun.sessionId);
     const dialogProcessId = text(activeRun.dialogProcessId);
@@ -54,7 +54,7 @@ export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceS
       contentFact,
     });
     assertMessageEventPayload(payload);
-    const committed = await bot.commitAuthorityEvent({
+    const committed = await session.commitAuthorityEvent({
       userId,
       sessionId,
       persistenceScope: scope,

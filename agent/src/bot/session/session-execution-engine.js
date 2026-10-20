@@ -9,7 +9,6 @@ import { SessionExecutionFinalizer } from "../execution/finalizer.js";
 import { SessionTurnPersister } from "../execution/turn-persister.js";
 import { SessionExecutionRunner } from "../execution/runner.js";
 import { BotManageValidator } from "../config/validator.js";
-import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.js";
 import { mergeRunConfigPluginPolicy, RunConfigResolver } from "@noobot/agent-config-protocol";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
@@ -19,10 +18,6 @@ import {
   createRunConfigPluginPreparerFromRuntimeBundle,
   getDefaultSessionPluginRuntime,
 } from "../../extensions/plugins/session-plugin-runtime-provider.js";
-import {
-  resolveExistingUserMessageAttachments,
-  enrichUserInputAttachmentsFromIndex,
-} from "./turn-attachment-enricher.js";
 import { prepareTurnInput, prepareAgentTurnExecution } from "./turn-execution-preparer.js";
 import { commitSummaryCheckpoint } from "./summary-checkpoint-committer.js";
 
@@ -63,9 +58,6 @@ export class SessionExecutionEngine {
 
   _initializeCoreServices() {
     this.validator = new BotManageValidator();
-    this.parentAsyncTaskManager = new ParentAsyncTaskManager({
-      now: () => this._now(),
-    });
     this.runConfigResolver = new RunConfigResolver({
       globalConfig: this.globalConfig,
     });
@@ -127,8 +119,8 @@ export class SessionExecutionEngine {
       loadedPlugins: this.pluginRuntimeBundle?.loadedPlugins,
       globalConfig: this.globalConfig,
       workspaceService: this.workspaceService,
-      createPluginResolveModelMessages: (payload) =>
-        this._createPluginResolveModelMessages(payload),
+      createPluginResolveModelMessages: () =>
+        this.modelMessageRuntimeHelpers.createResolveModelMessages(),
       createDetachedSubSessionRunner: () => this._createDetachedSubSessionRunner(),
     });
   }
@@ -139,8 +131,6 @@ export class SessionExecutionEngine {
       validateRunInput: (payload) => this._validateRunInput(payload),
     };
     const runnerRuntimeDeps = {
-      ensureParentAsyncResultContainer: (payload = {}) =>
-        this._ensureParentAsyncResultContainer(payload),
       initializeRunSessionRuntime: (payload) => this._initializeRunSessionRuntime(payload),
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
@@ -166,7 +156,6 @@ export class SessionExecutionEngine {
       finalizeRunSession: (payload) => this._finalizeRunSession(payload),
       saveExecutionReport: (payload = {}) => this.session.saveExecutionReport(payload),
       getExecutionTurnLogs: (payload = {}) => this.session.getExecutionTurnLogs(payload),
-      upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };
     return new SessionExecutionRunner({
       agentRunner: (payload = {}) => this.agentRuntimeFacade.runTurn(payload),
@@ -195,73 +184,8 @@ export class SessionExecutionEngine {
     });
   }
 
-  _upsertParentAsyncTask({
-    parentAsyncResultContainer = null,
-    sessionId = "",
-    parentSessionId = "",
-    task = "",
-    sharedTaskSpec = "",
-    patch = {},
-  }) {
-    return this.parentAsyncTaskManager.upsertParentAsyncTask({
-      parentAsyncResultContainer,
-      sessionId,
-      parentSessionId,
-      task,
-      sharedTaskSpec,
-      patch,
-    });
-  }
-
-  _ensureParentAsyncResultContainer({
-    parentAsyncResultContainer = null,
-    caller,
-    parentSessionId = "",
-    parentDialogProcessId = "",
-    dialogProcessId = "",
-  }) {
-    return this.parentAsyncTaskManager.ensureParentAsyncResultContainer({
-      parentAsyncResultContainer,
-      caller,
-      parentSessionId,
-      parentDialogProcessId,
-      dialogProcessId,
-    });
-  }
-
-  _normalizeToolItems(input = []) {
-    return this.runConfigResolver.normalizeToolItems(input);
-  }
-
-  _buildDefaultAssistantTurn({ agentResult = {}, dialogProcessId = "" }) {
-    return this.turnPersister.buildDefaultAssistantTurn({
-      agentResult,
-      dialogProcessId,
-    });
-  }
-
-  _resolveMemorySummaryTimeoutMs(userConfig = {}) {
-    return this.memoryPostProcessService.resolveMemorySummaryTimeoutMs(userConfig);
-  }
-
   _resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
     return this.memoryPostProcessService.resolveMemoryPostProcessAsyncEnabled(userConfig);
-  }
-
-  async _runMemorySummarizeFlow({
-    userId,
-    sessionId,
-    userConfig = {},
-    runtimeEventListener = null,
-    mode = "sync",
-  } = {}) {
-    return this.memoryPostProcessService.runMemorySummarizeFlow({
-      userId,
-      sessionId,
-      userConfig,
-      runtimeEventListener,
-      mode,
-    });
   }
 
   async _runMemoryPostProcessFlow({
@@ -279,14 +203,6 @@ export class SessionExecutionEngine {
       userConfig,
       runtimeEventListener,
       mode,
-    });
-  }
-
-  _mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
-    return this.runConfigResolver.mergeScenarioRestrictedList({
-      scenarioItems,
-      currentItems,
-      hasWildcard,
     });
   }
 
@@ -355,7 +271,6 @@ export class SessionExecutionEngine {
     userInteractionBridge,
     runConfig,
     abortSignal,
-    parentAsyncResultContainer,
     persistenceScope,
   }) {
     return this.agentContextFactory.buildContextBuilder({
@@ -370,43 +285,12 @@ export class SessionExecutionEngine {
       userInteractionBridge,
       runConfig,
       abortSignal,
-      parentAsyncResultContainer,
       persistenceScope,
     });
   }
 
   async _prepareAgentTurnExecution({ buildContextPayload }) {
     return prepareAgentTurnExecution(this, { buildContextPayload });
-  }
-
-  async _resolveExistingUserMessageAttachments({
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    turnScopeId = "",
-    dialogProcessId = "",
-  } = {}) {
-    return resolveExistingUserMessageAttachments(this, {
-      userId,
-      sessionId,
-      parentSessionId,
-      turnScopeId,
-      dialogProcessId,
-    });
-  }
-
-  async _enrichUserInputAttachmentsFromIndex({
-    userId = "",
-    sessionId = "",
-    attachments = [],
-    existingAttachments = [],
-  } = {}) {
-    return enrichUserInputAttachmentsFromIndex(this, {
-      userId,
-      sessionId,
-      attachments,
-      existingAttachments,
-    });
   }
 
   async _appendAgentMessages({
@@ -435,60 +319,12 @@ export class SessionExecutionEngine {
     return this.session.assertReusedUserTurnIdentity(payload);
   }
 
-  async applyTurnLifecycleEvent(payload = {}) {
-    return this.session.applyTurnLifecycleEvent(payload);
-  }
-
-  async getTurnLifecycleSnapshot(payload = {}) {
-    return this.session.getTurnLifecycleSnapshot(payload);
-  }
-
-  async commitAuthorityEvent(payload = {}) {
-    return this.session.commitAuthorityEvent(payload);
-  }
-
-  async getPendingAuthorityEvents(payload = {}) {
-    return this.session.getPendingAuthorityEvents(payload);
-  }
-
-  async recordAuthorityEventAttempts(payload = {}) {
-    return this.session.recordAuthorityEventAttempts(payload);
-  }
-
-  async acknowledgeAuthorityEvents(payload = {}) {
-    return this.session.acknowledgeAuthorityEvents(payload);
-  }
-
-  async compactAuthorityEvents(payload = {}) {
-    return this.session.compactAuthorityEvents(payload);
-  }
-
-  async getExecution(payload = {}) {
-    return this.session.getExecution(payload);
-  }
-
-  async getExecutionChildren(payload = {}) {
-    return this.session.getExecutionChildren(payload);
-  }
-
-  async getExecutionTree(payload = {}) {
-    return this.session.getExecutionTree(payload);
-  }
-
   async _initializeRunSessionRuntime(payload) {
     return this.initializer.initializeRunSessionRuntime(payload);
   }
 
   async _finalizeRunSession(payload) {
     return this.finalizer.finalizeRunSession(payload);
-  }
-
-  _mergePluginOptions(...items) {
-    return this.modelMessageRuntimeHelpers.mergePluginOptions(...items);
-  }
-
-  _createPluginResolveModelMessages(payload) {
-    return this.modelMessageRuntimeHelpers.createResolveModelMessages(payload);
   }
 
   async runSession(payload) {

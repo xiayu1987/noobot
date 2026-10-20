@@ -22,7 +22,6 @@ export function createRuntimeContext({
   abortSignal,
   runtimeModel = "",
   allEnabledProviders = {},
-  parentAsyncResultContainer = null,
   runConfig = {},
   systemRuntime = {},
   userMessageAttachments = [],
@@ -48,11 +47,6 @@ export function createRuntimeContext({
     hookManager:
       normalizedRunConfig.hookManager && typeof normalizedRunConfig.hookManager === "object"
         ? normalizedRunConfig.hookManager
-        : null,
-    childAsyncResultContainers: [],
-    parentAsyncResultContainer:
-      parentAsyncResultContainer && typeof parentAsyncResultContainer === "object"
-        ? parentAsyncResultContainer
         : null,
     systemRuntime: systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {},
     currentTurnMessages: createCurrentTurnMessagesStore(),

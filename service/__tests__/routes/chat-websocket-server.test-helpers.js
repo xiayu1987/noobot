@@ -37,7 +37,7 @@ import {
   EXECUTION_KIND,
 } from "@noobot/session-protocol/execution-lifecycle";
 import { createChatRunService } from "../../services/chat-run-service.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 export function createAcceptedAgentExecutionIdentity({ turnScopeId } = {}) {
   const executionId = deriveAgentExecutionId({ turnScopeId });
@@ -156,155 +156,172 @@ export function createProtocolTestCommand(payload = {}) {
   });
 }
 
-export function withTestBotAuthorities(suppliedBot = {}) {
-  return {
-    ...suppliedBot,
-    session: {
-      ...(suppliedBot.session || {}),
-      getRootSessionSelectedConnectorIds:
-        suppliedBot.session?.getRootSessionSelectedConnectorIds || (async () => []),
-    },
-    resolveExecutionIntent:
-      suppliedBot.resolveExecutionIntent ||
-      (async ({ turnScopeId } = {}) => createAcceptedAgentExecutionIdentity({ turnScopeId })),
+function createInMemoryTerminalMaterializer() {
+  const terminalSummaryVersions = new Map();
+  return ({ event, terminalStatus, previousSummaryVersion }) => {
+    assert.ok(terminalStatus, `unexpected terminal command: ${event.terminalStatus?.command}`);
+    const materialization = materializeTurnTerminalMessages({
+      messages: [],
+      terminalStatus,
+      previousSummaryVersion:
+        terminalSummaryVersions.get(event.turnScopeId) || previousSummaryVersion,
+    });
+    if (materialization.materialized) {
+      terminalSummaryVersions.set(event.turnScopeId, materialization.summaryVersion);
+    }
+    return materialization;
   };
 }
 
-export async function startServerWithWs({
-  runSession = async () => ({}),
-  bot = null,
-  initialTurnLifecycle = {},
-  resolveAuthByApiKey = () => ({ userId: "primary-user" }),
-} = {}) {
+async function listenChatWebSocketServer({ bot, resolveAuthByApiKey }) {
   const server = createServer((_req, res) => {
     res.statusCode = 404;
     res.end("not-found");
   });
+  const { mapAgentRunCommand } = createChatRunService({
+    normalizeLocale: (locale = "") => String(locale || "zh-CN"),
+    defaultLocale: "zh-CN",
+  });
+  const registered = registerChatWebSocketServer(server, {
+    getBot: () => bot,
+    resolveRequestLocale: () => "zh-CN",
+    resolveAuthByApiKey,
+    mapAgentRunCommand,
+    normalizeLocale: (locale = "") => String(locale || "zh-CN"),
+    defaultLocale: "zh-CN",
+    translateText: (key = "") => String(key || ""),
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    server,
+    bot,
+    registered,
+    address: (...args) => server.address(...args),
+  };
+}
 
-  const suppliedBot = bot || { runSession };
+export function startAuthoritativeServerWithWs({
+  bot,
+  resolveAuthByApiKey = () => ({ userId: "primary-user" }),
+}) {
+  return listenChatWebSocketServer({ bot, resolveAuthByApiKey });
+}
+
+export async function startServerWithWs({
+  runSession,
+  materializeTerminalMessages = createInMemoryTerminalMaterializer(),
+  initialTurnLifecycle = {},
+  resolveAuthByApiKey = () => ({ userId: "primary-user" }),
+}) {
   let turnLifecycle = structuredClone(initialTurnLifecycle);
   let authorityEventOutbox = [];
   let authorityEventSequence = 0;
-  const terminalSummaryVersions = new Map();
-  const testBot = {
-    ...withTestBotAuthorities(suppliedBot),
-    applyTurnLifecycleEvent:
-      suppliedBot.applyTurnLifecycleEvent ||
-      (async (event = {}) => {
-        const acceptsUserMessage =
-          event.eventType === TURN_EVENT.ACTION_ACCEPTED && event.action !== "resend";
-        if (acceptsUserMessage && !text(event.dialogProcessId)) {
-          event.dialogProcessId = `dialog:${event.turnScopeId}`;
+  const sessionAuthorities = {
+    applyTurnLifecycleEvent: async (event = {}) => {
+      const acceptsUserMessage =
+        event.eventType === TURN_EVENT.ACTION_ACCEPTED && event.action !== "resend";
+      if (acceptsUserMessage && !text(event.dialogProcessId)) {
+        event.dialogProcessId = `dialog:${event.turnScopeId}`;
+      }
+      const result = commitTurnLifecycle({
+        lifecycle: turnLifecycle,
+        event,
+        eventOutbox: authorityEventOutbox,
+        createEventId: () => `test-authority-event-${++authorityEventSequence}`,
+        materializeTerminal: event.terminalStatus
+          ? ({ terminalStatus, previousSummaryVersion }) =>
+              materializeTerminalMessages({ event, terminalStatus, previousSummaryVersion })
+          : undefined,
+      });
+      if (result.applied) {
+        turnLifecycle = result.lifecycle;
+        if (result.committedEvent) {
+          authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
         }
-        const result = commitTurnLifecycle({
-          lifecycle: turnLifecycle,
-          event,
-          eventOutbox: authorityEventOutbox,
-          createEventId: () => `test-authority-event-${++authorityEventSequence}`,
-          materializeTerminal: event.terminalStatus
-            ? ({ terminalStatus, previousSummaryVersion }) => {
-                if (typeof suppliedBot.materializeTerminalMessages === "function") {
-                  return suppliedBot.materializeTerminalMessages({
-                    event,
-                    terminalStatus,
-                    previousSummaryVersion,
-                  });
-                }
-                assert.ok(
-                  terminalStatus,
-                  `unexpected terminal command: ${event.terminalStatus?.command}`,
-                );
-                const materialization = materializeTurnTerminalMessages({
-                  messages: [],
-                  terminalStatus,
-                  previousSummaryVersion:
-                    terminalSummaryVersions.get(event.turnScopeId) || previousSummaryVersion,
-                });
-                if (materialization.materialized) {
-                  terminalSummaryVersions.set(event.turnScopeId, materialization.summaryVersion);
-                }
-                return materialization;
-              }
-            : undefined,
+      }
+      return {
+        ...result,
+        dialogProcessId: text(result.turn?.dialogProcessId),
+        ...(acceptsUserMessage
+          ? {
+              aggregateVersion: 1,
+              userMessage: {
+                messageUid: `session-message:${event.turnScopeId}`,
+                messageId: event.userMessage.messageId,
+                role: "user",
+                type: "message",
+                content: text(event.userMessage?.content),
+                sessionId: event.sessionId,
+                dialogProcessId: event.dialogProcessId,
+                turnScopeId: event.turnScopeId,
+                messageOrigin: "natural",
+                userMetaMaterialized: true,
+                attachments: [],
+              },
+            }
+          : {}),
+      };
+    },
+    getPendingAuthorityEvents: async ({ consumerId } = {}) => ({
+      found: true,
+      events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
+    }),
+    recordAuthorityEventAttempts: async ({ consumerId, eventIds = [] } = {}) => {
+      let recorded = 0;
+      for (const eventId of eventIds) {
+        const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
+          eventId,
+          consumerId,
         });
-        if (result.applied) {
-          turnLifecycle = result.lifecycle;
-          if (result.committedEvent) {
-            authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
-          }
-        }
-        return {
-          ...result,
-          dialogProcessId: text(result.turn?.dialogProcessId),
-          ...(acceptsUserMessage
-            ? {
-                aggregateVersion: 1,
-                userMessage: {
-                  messageUid: `session-message:${event.turnScopeId}`,
-                  messageId: event.userMessage.messageId,
-                  role: "user",
-                  type: "message",
-                  content: text(event.userMessage?.content),
-                  sessionId: event.sessionId,
-                  dialogProcessId: event.dialogProcessId,
-                  turnScopeId: event.turnScopeId,
-                  messageOrigin: "natural",
-                  userMetaMaterialized: true,
-                  attachments: [],
-                },
-              }
-            : {}),
-        };
-      }),
-    getPendingAuthorityEvents:
-      suppliedBot.getPendingAuthorityEvents ||
-      (async ({ consumerId } = {}) => ({
-        found: true,
-        events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
-      })),
-    recordAuthorityEventAttempts:
-      suppliedBot.recordAuthorityEventAttempts ||
-      (async ({ consumerId, eventIds = [] } = {}) => {
-        let recorded = 0;
-        for (const eventId of eventIds) {
-          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
-            eventId,
-            consumerId,
-          });
-          if (!result.found) return { recorded: false, reason: result.reason, attempted: recorded };
-          authorityEventOutbox = result.outbox;
-          recorded += 1;
-        }
-        return { recorded: true, attempted: recorded };
-      }),
-    acknowledgeAuthorityEvents:
-      suppliedBot.acknowledgeAuthorityEvents ||
-      (async ({ consumerId, acknowledgements = [] } = {}) => {
-        let delivered = 0;
-        for (const receipt of acknowledgements) {
-          const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
-            eventId: receipt?.eventId,
-            consumerId,
-            orderingDomain: receipt?.orderingDomain,
-            orderingScopeId: receipt?.orderingScopeId,
-            sequence: receipt?.sequence,
-            deliveredAt: new Date().toISOString(),
-          });
-          if (!result.found) {
-            return { acknowledged: false, reason: result.reason, delivered };
-          }
-          authorityEventOutbox = result.outbox;
-          delivered += 1;
-        }
-        return { acknowledged: true, delivered };
-      }),
-    compactAuthorityEvents:
-      suppliedBot.compactAuthorityEvents ||
-      (async ({ retainDeliveredAfter }) => {
-        const result = compactAuthorityEventOutbox(authorityEventOutbox, { retainDeliveredAfter });
+        if (!result.found) return { recorded: false, reason: result.reason, attempted: recorded };
         authorityEventOutbox = result.outbox;
-        return { compacted: result.compacted, removed: result.removed };
-      }),
+        recorded += 1;
+      }
+      return { recorded: true, attempted: recorded };
+    },
+    acknowledgeAuthorityEvents: async ({ consumerId, acknowledgements = [] } = {}) => {
+      let delivered = 0;
+      for (const receipt of acknowledgements) {
+        const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
+          eventId: receipt?.eventId,
+          consumerId,
+          orderingDomain: receipt?.orderingDomain,
+          orderingScopeId: receipt?.orderingScopeId,
+          sequence: receipt?.sequence,
+          deliveredAt: new Date().toISOString(),
+        });
+        if (!result.found) {
+          return { acknowledged: false, reason: result.reason, delivered };
+        }
+        authorityEventOutbox = result.outbox;
+        delivered += 1;
+      }
+      return { acknowledged: true, delivered };
+    },
+    compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
+      const result = compactAuthorityEventOutbox(authorityEventOutbox, { retainDeliveredAfter });
+      authorityEventOutbox = result.outbox;
+      return { compacted: result.compacted, removed: result.removed };
+    },
+  };
+  const testBot = {
+    resolveExecutionIntent: async ({ turnScopeId }) =>
+      createAcceptedAgentExecutionIdentity({ turnScopeId }),
+    runSession: async (payload) => {
+      payload.eventListener.onEvent({
+        event: "agent_lifecycle_state_changed",
+        data: {
+          state: "running",
+          sessionId: payload.sessionId,
+          turnScopeId: payload.turnScopeId,
+        },
+      });
+      return runSession(payload);
+    },
+    session: {
+      getRootSessionSelectedConnectorIds: async () => [],
+      ...sessionAuthorities,
+    },
     commitTestAuthorityEvent: async ({
       family,
       identity,
@@ -338,40 +355,7 @@ export async function startServerWithWs({
       return envelope;
     },
   };
-  const { mapAgentRunCommand } = createChatRunService({
-    normalizeLocale: (locale = "") => String(locale || "zh-CN"),
-    defaultLocale: "zh-CN",
-  });
-  if (!isFunction(suppliedBot.applyTurnLifecycleEvent)) {
-    testBot.runSession = async (payload = {}) => {
-      payload?.eventListener?.onEvent?.({
-        event: "agent_lifecycle_state_changed",
-        data: {
-          state: "running",
-          sessionId: String(payload?.sessionId || ""),
-          turnScopeId: payload.turnScopeId,
-        },
-      });
-      return suppliedBot.runSession(payload);
-    };
-  }
-  const registered = registerChatWebSocketServer(server, {
-    getBot: () => testBot,
-    resolveRequestLocale: () => "zh-CN",
-    resolveAuthByApiKey,
-    mapAgentRunCommand,
-    normalizeLocale: (locale = "") => String(locale || "zh-CN"),
-    defaultLocale: "zh-CN",
-    translateText: (key = "") => String(key || ""),
-  });
-
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return {
-    server,
-    bot: testBot,
-    registered,
-    address: (...args) => server.address(...args),
-  };
+  return listenChatWebSocketServer({ bot: testBot, resolveAuthByApiKey });
 }
 
 export async function readJsonl(filePath) {

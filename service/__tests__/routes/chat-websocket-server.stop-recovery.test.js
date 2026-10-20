@@ -32,29 +32,27 @@ useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"]);
 test("chat-websocket-server: stop closes run and next websocket run can start", async () => {
   let runCount = 0;
   const server = await startServerWithWs({
-    bot: {
-      runSession: async ({ abortSignal }) => {
-        runCount += 1;
-        if (runCount === 1) {
-          await new Promise((resolve) => {
-            if (abortSignal?.aborted) {
-              resolve();
-              return;
-            }
-            abortSignal?.addEventListener?.("abort", resolve, { once: true });
-          });
-          const error = new Error("aborted by user");
-          error.name = "AbortError";
-          throw error;
-        }
-        return {
-          sessionId: "s1",
-          answer: "next ok",
-          messages: [],
-          traces: [],
-          executionLogs: [],
-        };
-      },
+    runSession: async ({ abortSignal }) => {
+      runCount += 1;
+      if (runCount === 1) {
+        await new Promise((resolve) => {
+          if (abortSignal?.aborted) {
+            resolve();
+            return;
+          }
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        const error = new Error("aborted by user");
+        error.name = "AbortError";
+        throw error;
+      }
+      return {
+        sessionId: "s1",
+        answer: "next ok",
+        messages: [],
+        traces: [],
+        executionLogs: [],
+      };
     },
   });
   try {
@@ -114,52 +112,50 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
   let runCalls = 0;
   const server = await startServerWithWs({
     resolveAuthByApiKey: () => ({ userId: "u1" }),
-    bot: {
-      runSession: async ({ eventListener }) => {
-        runCalls += 1;
-        await new Promise((resolve) => {
-          emitAfterRefresh = resolve;
-        });
-        await new Promise((resolve) => setTimeout(resolve, 25));
-        const envelope = await server.bot.commitTestAuthorityEvent({
-          family: EVENT_FAMILY.MESSAGE_TIMELINE,
-          identity: {
-            eventId: "evt-refresh-tool",
-            eventType: MESSAGE_EVENT_WIRE_EVENT,
-            sessionId: "s-refresh",
-            turnScopeId: "turn-refresh",
-            messageId: "msg-refresh",
-          },
-          causality: { correlationId: "turn-refresh" },
-          ordering: {
-            domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-            scopeId: "msg-refresh",
-            sequence: 1,
-          },
-          producer: { type: "agent", id: "test-agent" },
-          payload: {
-            eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_START,
-            presentationMessageId: "msg-refresh-presentation",
-            dialogProcessId: "dp-refresh",
-            toolCallId: "call-refresh",
-            tool: "read_file",
-            args: {},
-          },
-        });
-        await eventListener.onEvent({
-          event: "authority_event_committed",
-          data: { envelope, persistenceScope: null },
-        });
-        await new Promise((resolve) => {
-          finishRun = resolve;
-        });
-        return {
+    runSession: async ({ eventListener }) => {
+      runCalls += 1;
+      await new Promise((resolve) => {
+        emitAfterRefresh = resolve;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const envelope = await server.bot.commitTestAuthorityEvent({
+        family: EVENT_FAMILY.MESSAGE_TIMELINE,
+        identity: {
+          eventId: "evt-refresh-tool",
+          eventType: MESSAGE_EVENT_WIRE_EVENT,
           sessionId: "s-refresh",
+          turnScopeId: "turn-refresh",
+          messageId: "msg-refresh",
+        },
+        causality: { correlationId: "turn-refresh" },
+        ordering: {
+          domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+          scopeId: "msg-refresh",
+          sequence: 1,
+        },
+        producer: { type: "agent", id: "test-agent" },
+        payload: {
+          eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_START,
+          presentationMessageId: "msg-refresh-presentation",
           dialogProcessId: "dp-refresh",
-          answer: "ok",
-          messages: [],
-        };
-      },
+          toolCallId: "call-refresh",
+          tool: "read_file",
+          args: {},
+        },
+      });
+      await eventListener.onEvent({
+        event: "authority_event_committed",
+        data: { envelope, persistenceScope: null },
+      });
+      await new Promise((resolve) => {
+        finishRun = resolve;
+      });
+      return {
+        sessionId: "s-refresh",
+        dialogProcessId: "dp-refresh",
+        answer: "ok",
+        messages: [],
+      };
     },
   });
   const sockets = [];

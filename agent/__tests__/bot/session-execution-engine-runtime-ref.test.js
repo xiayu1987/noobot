@@ -78,51 +78,6 @@ test("SessionExecutionEngine forwards only the cross-layer persistence scope", a
   assert.equal(captured.turnAcceptance, turnAcceptance);
   assert.equal(captured.userInterjectionPort, userInterjectionPort);
 });
-
-test("SessionExecutionEngine exposes the complete authority event repository port", async () => {
-  const calls = [];
-  const session = {
-    async commitAuthorityEvent(payload) {
-      calls.push(["commit", payload]);
-      return { committed: true };
-    },
-    async getPendingAuthorityEvents(payload) {
-      calls.push(["pending", payload]);
-      return { found: true, events: [] };
-    },
-    async recordAuthorityEventAttempts(payload) {
-      calls.push(["attempt", payload]);
-      return { recorded: true, attempted: 1 };
-    },
-    async acknowledgeAuthorityEvents(payload) {
-      calls.push(["acknowledge", payload]);
-      return { acknowledged: true, delivered: 1 };
-    },
-    async compactAuthorityEvents(payload) {
-      calls.push(["compact", payload]);
-      return { compacted: true };
-    },
-  };
-  const engine = new SessionExecutionEngine({ session });
-  const payload = { sessionId: "session-1" };
-
-  assert.deepEqual(await engine.commitAuthorityEvent(payload), { committed: true });
-  assert.deepEqual(await engine.getPendingAuthorityEvents(payload), { found: true, events: [] });
-  assert.deepEqual(await engine.recordAuthorityEventAttempts(payload), {
-    recorded: true,
-    attempted: 1,
-  });
-  assert.deepEqual(await engine.acknowledgeAuthorityEvents(payload), {
-    acknowledged: true,
-    delivered: 1,
-  });
-  assert.deepEqual(await engine.compactAuthorityEvents(payload), { compacted: true });
-  assert.deepEqual(
-    calls.map(([operation]) => operation),
-    ["commit", "pending", "attempt", "acknowledge", "compact"],
-  );
-});
-
 test("detached sub-session runner inherits userInteractionBridge from parent runtime", async () => {
   const bridge = {
     async requestUserInteraction() {

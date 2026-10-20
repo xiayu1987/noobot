@@ -137,7 +137,6 @@ async function executeAcceptedRun(context, run, accepted, active) {
       sealIfEmpty: () => sealUserInterjectionQueueIfEmpty(active.runHandle),
     }),
     runConfig: run.normalizedRunConfig,
-    parentAsyncResultContainer: null,
   });
   if (listener.lifecycle.processingStarted) await listener.lifecycle.processingStarted;
   await finalizeRunResult(context, run, accepted, active);

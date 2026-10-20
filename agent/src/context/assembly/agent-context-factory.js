@@ -35,7 +35,6 @@ export class AgentContextFactory {
     userInteractionBridge,
     runConfig,
     abortSignal,
-    parentAsyncResultContainer,
     persistenceScope,
   }) {
     return new ContextBuilder({
@@ -62,7 +61,6 @@ export class AgentContextFactory {
         systemMessages,
         runConfig,
         abortSignal,
-        parentAsyncResultContainer,
         persistenceScope,
       },
     });

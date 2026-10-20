@@ -6,11 +6,7 @@
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { runBotRuntimeHook, withBotHookRuntimeMeta } from "../../hook/index.js";
-import {
-  BOT_MANAGE_LOG_EVENT,
-  BOT_MANAGE_LOG_SOURCE,
-  SESSION_ASYNC_STATUS,
-} from "../../config/constants.js";
+import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../../config/constants.js";
 import { isAbortError, isUserStopAbort } from "../../../shared/utils/error-utils.js";
 import {
   resolveExecutionAbortMessage,
@@ -82,10 +78,7 @@ async function recordSessionRunFailure({
   resolvedRunConfig,
   resolvedUsedSessionId,
   resolvedDialogProcessId,
-  resolvedParentAsyncResultContainer,
-  upsertParentAsyncTask,
   errorLogger,
-  now,
   userId,
   sessionId,
   parentSessionId,
@@ -148,21 +141,6 @@ async function recordSessionRunFailure({
       },
       { message, runConfig: resolvedRunConfig, error: executionFailure },
     ),
-  });
-  upsertParentAsyncTask({
-    parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-    sessionId,
-    parentSessionId,
-    patch: {
-      status: userStopped ? SESSION_ASYNC_STATUS.USER_STOPPED : SESSION_ASYNC_STATUS.FAILED,
-      endedAt: now(),
-      error: userStopped
-        ? tSystem("ws.dialogStoppedByUser")
-        : aborted
-          ? resolveExecutionAbortMessage({ error, abortSignal })
-          : executionFailure.message,
-      result: null,
-    },
   });
   if (!aborted) {
     await errorLogger.log({

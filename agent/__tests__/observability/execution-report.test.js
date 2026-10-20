@@ -81,8 +81,6 @@ function failureContext(overrides = {}) {
       resolvedRunConfig: { thinkingStartedAt: "2026-01-01T00:00:00.000Z" },
       resolvedUsedSessionId: "s1",
       resolvedDialogProcessId: "dp1",
-      resolvedParentAsyncResultContainer: null,
-      upsertParentAsyncTask() {},
       errorLogger: { async log() {} },
       now: () => "2026-01-01T00:00:03.000Z",
       userId: "u1",

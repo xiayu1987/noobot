@@ -11,9 +11,9 @@ import { SessionExecutionEngine } from "../../src/bot/session/session-execution-
 
 const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
 
-test("_createPluginResolveModelMessages uses authoritative modelContext blocks", () => {
+test("plugin resolveModelMessages uses authoritative modelContext blocks", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages();
+  const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
       agentContext,
@@ -50,9 +50,9 @@ test("_createPluginResolveModelMessages uses authoritative modelContext blocks",
   );
 });
 
-test("_createPluginResolveModelMessages keeps unsummarized injected blocks append-only", () => {
+test("plugin resolveModelMessages keeps unsummarized injected blocks append-only", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages();
+  const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
       agentContext,
@@ -89,9 +89,9 @@ test("_createPluginResolveModelMessages keeps unsummarized injected blocks appen
   );
 });
 
-test("_createPluginResolveModelMessages accepts a versioned modelContext", () => {
+test("plugin resolveModelMessages accepts a versioned modelContext", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages();
+  const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
 
   const resolved = resolver({
     ctx: {
@@ -112,9 +112,9 @@ test("_createPluginResolveModelMessages accepts a versioned modelContext", () =>
   );
 });
 
-test("_createPluginResolveModelMessages no longer clips agent context to plugin context window limit", () => {
+test("plugin resolveModelMessages no longer clips agent context to plugin context window limit", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages();
+  const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
       agentContext,
@@ -138,9 +138,9 @@ test("_createPluginResolveModelMessages no longer clips agent context to plugin 
   );
 });
 
-test("_createPluginResolveModelMessages uses main-flow blocks when available", () => {
+test("plugin resolveModelMessages uses main-flow blocks when available", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages();
+  const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const resolved = resolver({
     ctx: {
       agentContext,
@@ -169,9 +169,9 @@ test("_createPluginResolveModelMessages uses main-flow blocks when available", (
   );
 });
 
-test("_createPluginResolveModelMessages does not mutate source messages or messageBlocks when unsummarized", () => {
+test("plugin resolveModelMessages does not mutate source messages or messageBlocks when unsummarized", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages({ agentPluginOptions: {} });
+  const resolver = engine.modelMessageRuntimeHelpers.createResolveModelMessages();
   const ctx = {
     agentContext,
     modelContext: createModelContext({

@@ -15,13 +15,6 @@ export const TASK_STATUS = Object.freeze({
   UNKNOWN: "unknown",
 });
 
-export const SESSION_ASYNC_STATUS = {
-  RUNNING: TASK_STATUS.RUNNING,
-  COMPLETED: TASK_STATUS.COMPLETED,
-  FAILED: TASK_STATUS.FAILED,
-  USER_STOPPED: TASK_STATUS.USER_STOPPED,
-};
-
 export const MESSAGE_ROLE = {
   USER: "user",
   ASSISTANT: "assistant",
@@ -39,8 +32,8 @@ export const EXECUTION_LOG_EVENT = {
 
 export const BOT_MANAGE_LOG_SOURCE = {
   RUN_SESSION: "BotManager.runSession",
-  MEMORY_SUMMARIZE: "SessionExecutionEngine._runMemorySummarizeFlow",
-  MEMORY_POSTPROCESS: "SessionExecutionEngine._runMemoryPostProcessFlow",
+  MEMORY_SUMMARIZE: "MemoryPostProcessService.runMemorySummarizeFlow",
+  MEMORY_POSTPROCESS: "MemoryPostProcessService.runMemoryPostProcessFlow",
   MEMORY_INJECTION: "ContextBuilder._resolveLongMemoryForInjection",
 };
 

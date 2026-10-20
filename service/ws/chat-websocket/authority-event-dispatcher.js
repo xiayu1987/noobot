@@ -57,7 +57,7 @@ async function compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession
   ) {
     return;
   }
-  await bot.compactAuthorityEvents({
+  await bot.session.compactAuthorityEvents({
     ...identity,
     retainDeliveredAfter: new Date(
       now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
@@ -90,7 +90,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
     let delivered = 0;
     const consumerId = normalizedConsumerId;
     while (true) {
-      const pending = await bot.getPendingAuthorityEvents({
+      const pending = await bot.session.getPendingAuthorityEvents({
         ...identity,
         consumerId,
       });
@@ -112,7 +112,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
           errors: invalid.errors,
         };
       }
-      const attempt = await bot.recordAuthorityEventAttempts({
+      const attempt = await bot.session.recordAuthorityEventAttempts({
         ...identity,
         consumerId,
         eventIds: events.map((item) => clean(item.eventId)),
@@ -126,7 +126,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
       }
       const { acknowledgements, sendFailed } = await publishAuthorityEvents(events, publishEvent);
       if (acknowledgements.length) {
-        const acknowledged = await bot.acknowledgeAuthorityEvents({
+        const acknowledged = await bot.session.acknowledgeAuthorityEvents({
           ...identity,
           consumerId,
           acknowledgements,

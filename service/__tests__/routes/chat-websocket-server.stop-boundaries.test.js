@@ -23,12 +23,10 @@ useProvisionedRuntimeEventsWorkspace(["primary-user", "authenticated-user"]);
 
 test("chat-websocket-server: non-user abort emits only authoritative failure and failed receipt", async () => {
   const server = await startServerWithWs({
-    bot: {
-      runSession: async () => {
-        const error = new Error("upstream aborted unexpectedly");
-        error.name = "AbortError";
-        throw error;
-      },
+    runSession: async () => {
+      const error = new Error("upstream aborted unexpectedly");
+      error.name = "AbortError";
+      throw error;
     },
   });
   try {
@@ -64,28 +62,20 @@ test("chat-websocket-server: non-user abort emits only authoritative failure and
 });
 
 test("chat-websocket-server: client disconnect detaches the transport without aborting execution", async () => {
-  let terminalStatusWrites = 0;
   let runAborted = false;
   let releaseRun = null;
   const server = await startServerWithWs({
-    bot: {
-      upsertTurnStatus: async () => {
-        terminalStatusWrites += 1;
-        return null;
-      },
-      runSession: async ({ abortSignal }) =>
-        new Promise((resolve) => {
-          abortSignal.addEventListener(
-            "abort",
-            () => {
-              runAborted = true;
-            },
-            { once: true },
-          );
-          releaseRun = () =>
-            resolve({ answer: "done", messages: [], traces: [], executionLogs: [] });
-        }),
-    },
+    runSession: async ({ abortSignal }) =>
+      new Promise((resolve) => {
+        abortSignal.addEventListener(
+          "abort",
+          () => {
+            runAborted = true;
+          },
+          { once: true },
+        );
+        releaseRun = () => resolve({ answer: "done", messages: [], traces: [], executionLogs: [] });
+      }),
   });
   try {
     const { port } = server.address();
@@ -112,7 +102,6 @@ test("chat-websocket-server: client disconnect detaches the transport without ab
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     assert.equal(runAborted, false);
-    assert.equal(terminalStatusWrites, 0);
     releaseRun?.();
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(runAborted, false);
@@ -123,19 +112,12 @@ test("chat-websocket-server: client disconnect detaches the transport without ab
 
 test("chat-websocket-server: request userId cannot override the authenticated owner", async () => {
   let runCalls = 0;
-  let turnStatusWrites = 0;
   const server = await startServerWithWs({
-    bot: {
-      runSession: async () => {
-        runCalls += 1;
-        return {};
-      },
-      upsertTurnStatus: async () => {
-        turnStatusWrites += 1;
-        return null;
-      },
-    },
     resolveAuthByApiKey: () => ({ userId: "authenticated-user" }),
+    runSession: async () => {
+      runCalls += 1;
+      return {};
+    },
   });
   try {
     const { port } = server.address();
@@ -151,7 +133,6 @@ test("chat-websocket-server: request userId cannot override the authenticated ow
     });
 
     assert.equal(runCalls, 1);
-    assert.equal(turnStatusWrites, 0);
     assert.equal(
       events.some(
         (item) =>

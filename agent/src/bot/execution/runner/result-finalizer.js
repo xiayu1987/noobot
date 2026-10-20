@@ -37,7 +37,6 @@ export async function finalizeAgentTurn({
   const durableCheckpointState = await getTurnSummaryCheckpointState({
     userId,
     sessionId: usedSessionId,
-    parentSessionId,
     dialogProcessId,
     turnScopeId: resolvedTurnScopeId,
     persistenceScope,
@@ -64,7 +63,6 @@ export async function finalizeAgentTurn({
   const persistedSessionMessages = await getSessionTurns({
     userId,
     sessionId: usedSessionId,
-    parentSessionId,
     persistenceScope,
   });
   const scopedPersistedTurnMessages = persistedSessionMessages.filter(

@@ -44,20 +44,22 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
   let pending = [{ eventId: envelope.identity.eventId, envelope }];
   let acknowledged = 0;
   const bot = {
-    async getPendingAuthorityEvents() {
-      return { found: true, events: pending };
-    },
-    async recordAuthorityEventAttempts() {
-      return { recorded: true };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
-      acknowledged += acknowledgements.length;
-      const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
-      pending = pending.filter((item) => !ackedIds.has(item.eventId));
-      return { acknowledged: true };
+    session: {
+      async getPendingAuthorityEvents() {
+        return { found: true, events: pending };
+      },
+      async recordAuthorityEventAttempts() {
+        return { recorded: true };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
+        acknowledged += acknowledgements.length;
+        const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
+        pending = pending.filter((item) => !ackedIds.has(item.eventId));
+        return { acknowledged: true };
+      },
     },
   };
   const packets = [];
@@ -135,38 +137,40 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   const sent = [];
   let socketAvailable = false;
   const bot = {
-    async getPendingAuthorityEvents({ consumerId } = {}) {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-    },
-    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-      for (const eventId of eventIds) {
-        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
-          eventId,
-          consumerId,
-          attemptedAt: new Date().toISOString(),
-        });
-        if (!result.found) return { recorded: false, reason: result.reason };
-        eventOutbox = result.outbox;
-      }
-      return { recorded: true };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
-      for (const receipt of acknowledgements) {
-        const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-          eventId: receipt.eventId,
-          consumerId,
-          orderingDomain: receipt.orderingDomain,
-          orderingScopeId: receipt.orderingScopeId,
-          sequence: receipt.sequence,
-          deliveredAt: new Date().toISOString(),
-        });
-        if (!result.found) return { acknowledged: false, reason: result.reason };
-        eventOutbox = result.outbox;
-      }
-      return { acknowledged: true };
+    session: {
+      async getPendingAuthorityEvents({ consumerId } = {}) {
+        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
+      },
+      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
+        for (const eventId of eventIds) {
+          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+            eventId,
+            consumerId,
+            attemptedAt: new Date().toISOString(),
+          });
+          if (!result.found) return { recorded: false, reason: result.reason };
+          eventOutbox = result.outbox;
+        }
+        return { recorded: true };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
+        for (const receipt of acknowledgements) {
+          const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+            eventId: receipt.eventId,
+            consumerId,
+            orderingDomain: receipt.orderingDomain,
+            orderingScopeId: receipt.orderingScopeId,
+            sequence: receipt.sequence,
+            deliveredAt: new Date().toISOString(),
+          });
+          if (!result.found) return { acknowledged: false, reason: result.reason };
+          eventOutbox = result.outbox;
+        }
+        return { acknowledged: true };
+      },
     },
   };
   const createDispatcher = () =>
@@ -239,25 +243,27 @@ test("authority dispatcher preserves the child persistence scope across every ou
     persistenceScope,
   });
   const bot = {
-    async getPendingAuthorityEvents(input) {
-      calls.push({ method: "get", input });
-      return {
-        found: true,
-        events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
-      };
-    },
-    async recordAuthorityEventAttempts(input) {
-      calls.push({ method: "attempt", input });
-      return { recorded: true };
-    },
-    async acknowledgeAuthorityEvents(input) {
-      calls.push({ method: "acknowledge", input });
-      pending = false;
-      return { acknowledged: true };
-    },
-    async compactAuthorityEvents(input) {
-      calls.push({ method: "compact", input });
-      return { compacted: true };
+    session: {
+      async getPendingAuthorityEvents(input) {
+        calls.push({ method: "get", input });
+        return {
+          found: true,
+          events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
+        };
+      },
+      async recordAuthorityEventAttempts(input) {
+        calls.push({ method: "attempt", input });
+        return { recorded: true };
+      },
+      async acknowledgeAuthorityEvents(input) {
+        calls.push({ method: "acknowledge", input });
+        pending = false;
+        return { acknowledged: true };
+      },
+      async compactAuthorityEvents(input) {
+        calls.push({ method: "compact", input });
+        return { compacted: true };
+      },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
@@ -327,23 +333,25 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   const calls = [];
   const sent = [];
   const bot = {
-    async getPendingAuthorityEvents(input) {
-      calls.push({ method: "get", input });
-      return { found: true, events: pending };
-    },
-    async recordAuthorityEventAttempts(input) {
-      calls.push({ method: "attempt", input });
-      const pendingIds = new Set(pending.map((item) => item.eventId));
-      return { recorded: input.eventIds.every((eventId) => pendingIds.has(eventId)) };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents(input) {
-      calls.push({ method: "acknowledge", input });
-      const ackedIds = new Set(input.acknowledgements.map((receipt) => receipt.eventId));
-      pending = pending.filter((item) => !ackedIds.has(item.eventId));
-      return { acknowledged: true };
+    session: {
+      async getPendingAuthorityEvents(input) {
+        calls.push({ method: "get", input });
+        return { found: true, events: pending };
+      },
+      async recordAuthorityEventAttempts(input) {
+        calls.push({ method: "attempt", input });
+        const pendingIds = new Set(pending.map((item) => item.eventId));
+        return { recorded: input.eventIds.every((eventId) => pendingIds.has(eventId)) };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents(input) {
+        calls.push({ method: "acknowledge", input });
+        const ackedIds = new Set(input.acknowledgements.map((receipt) => receipt.eventId));
+        pending = pending.filter((item) => !ackedIds.has(item.eventId));
+        return { acknowledged: true };
+      },
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
@@ -409,24 +417,26 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
     parentSessionId: "root-session",
   });
   const bot = {
-    async getPendingAuthorityEvents() {
-      calls.get += 1;
-      return {
-        found: true,
-        events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
-      };
-    },
-    async recordAuthorityEventAttempts() {
-      calls.attempt += 1;
-      return { recorded: true };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents() {
-      calls.acknowledge += 1;
-      pending = false;
-      return { acknowledged: true };
+    session: {
+      async getPendingAuthorityEvents() {
+        calls.get += 1;
+        return {
+          found: true,
+          events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
+        };
+      },
+      async recordAuthorityEventAttempts() {
+        calls.attempt += 1;
+        return { recorded: true };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents() {
+        calls.acknowledge += 1;
+        pending = false;
+        return { acknowledged: true };
+      },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
@@ -483,26 +493,28 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
   let reads = 0;
   const sent = [];
   const bot = {
-    async getPendingAuthorityEvents() {
-      reads += 1;
-      const events = pending.slice();
-      if (reads === 2) {
-        emptyReadStarted();
-        await emptyReadBarrier;
-      }
-      return { found: true, events };
-    },
-    async recordAuthorityEventAttempts({ eventIds = [] }) {
-      const pendingIds = new Set(pending.map((item) => item.eventId));
-      return { recorded: eventIds.every((eventId) => pendingIds.has(eventId)) };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
-      const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
-      pending = pending.filter((item) => !ackedIds.has(item.eventId));
-      return { acknowledged: true };
+    session: {
+      async getPendingAuthorityEvents() {
+        reads += 1;
+        const events = pending.slice();
+        if (reads === 2) {
+          emptyReadStarted();
+          await emptyReadBarrier;
+        }
+        return { found: true, events };
+      },
+      async recordAuthorityEventAttempts({ eventIds = [] }) {
+        const pendingIds = new Set(pending.map((item) => item.eventId));
+        return { recorded: eventIds.every((eventId) => pendingIds.has(eventId)) };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
+        const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
+        pending = pending.filter((item) => !ackedIds.has(item.eventId));
+        return { acknowledged: true };
+      },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
@@ -573,40 +585,42 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   let acknowledgementAvailable = false;
   const sentEventIds = [];
   const bot = {
-    async getPendingAuthorityEvents({ consumerId } = {}) {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-    },
-    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-      for (const eventId of eventIds) {
-        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+    session: {
+      async getPendingAuthorityEvents({ consumerId } = {}) {
+        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
+      },
+      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
+        for (const eventId of eventIds) {
+          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+            eventId,
+            consumerId,
+            attemptedAt: new Date().toISOString(),
+          });
+          if (!result.found) return { recorded: false, reason: result.reason };
+          eventOutbox = result.outbox;
+        }
+        return { recorded: true };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
+        if (!acknowledgementAvailable) {
+          return { acknowledged: false, reason: "session_save_failed" };
+        }
+        const [receipt = {}] = acknowledgements;
+        const { eventId, orderingDomain, orderingScopeId, sequence } = receipt;
+        const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
           eventId,
           consumerId,
-          attemptedAt: new Date().toISOString(),
+          orderingDomain,
+          orderingScopeId,
+          sequence,
+          deliveredAt: new Date().toISOString(),
         });
-        if (!result.found) return { recorded: false, reason: result.reason };
-        eventOutbox = result.outbox;
-      }
-      return { recorded: true };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
-      if (!acknowledgementAvailable) {
-        return { acknowledged: false, reason: "session_save_failed" };
-      }
-      const [receipt = {}] = acknowledgements;
-      const { eventId, orderingDomain, orderingScopeId, sequence } = receipt;
-      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-        eventId,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        sequence,
-        deliveredAt: new Date().toISOString(),
-      });
-      if (result.found) eventOutbox = result.outbox;
-      return { acknowledged: result.found, reason: result.reason };
+        if (result.found) eventOutbox = result.outbox;
+        return { acknowledged: result.found, reason: result.reason };
+      },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
@@ -673,25 +687,27 @@ test("CLI dispatcher acknowledges and compacts as the CLI consumer", async () =>
   const calls = [];
   let pending = true;
   const bot = {
-    async getPendingAuthorityEvents(input) {
-      calls.push({ method: "get", input });
-      return {
-        found: true,
-        events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
-      };
-    },
-    async recordAuthorityEventAttempts(input) {
-      calls.push({ method: "attempt", input });
-      return { recorded: true };
-    },
-    async acknowledgeAuthorityEvents(input) {
-      calls.push({ method: "acknowledge", input });
-      pending = false;
-      return { acknowledged: true };
-    },
-    async compactAuthorityEvents(input) {
-      calls.push({ method: "compact", input });
-      return { compacted: true };
+    session: {
+      async getPendingAuthorityEvents(input) {
+        calls.push({ method: "get", input });
+        return {
+          found: true,
+          events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
+        };
+      },
+      async recordAuthorityEventAttempts(input) {
+        calls.push({ method: "attempt", input });
+        return { recorded: true };
+      },
+      async acknowledgeAuthorityEvents(input) {
+        calls.push({ method: "acknowledge", input });
+        pending = false;
+        return { acknowledged: true };
+      },
+      async compactAuthorityEvents(input) {
+        calls.push({ method: "compact", input });
+        return { compacted: true };
+      },
     },
   };
   const dispatch = createAuthorityEventDispatcher({

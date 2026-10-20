@@ -12,7 +12,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { registerActiveRun, unregisterActiveRun } from "../../ws/chat-websocket/run-registry.js";
 import {
   createAcceptedAgentExecutionIdentity,
-  startServerWithWs,
+  startAuthoritativeServerWithWs,
   closeServer,
   callChatWs,
   createProtocolTestCommand,
@@ -60,7 +60,9 @@ test("socket close detaches an accepted turn which still completes and releases 
       traces: [],
     };
   };
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const scopedPayload = {
       ...payload,
@@ -114,7 +116,7 @@ test("socket close detaches an accepted turn which still completes and releases 
 
 test("a new action recovers a stale persisted turn lost after service restart", async () => {
   const authoritative = createAuthoritativeBot();
-  await authoritative.bot.applyTurnLifecycleEvent({
+  await authoritative.bot.session.applyTurnLifecycleEvent({
     sessionId: "s-before-restart",
     turnScopeId: "turn-before-restart",
     messageId: "turn-message-before-restart",
@@ -126,8 +128,15 @@ test("a new action recovers a stale persisted turn lost after service restart", 
     ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-before-restart" }),
     phase: "action",
     action: "send",
+    userMessage: {
+      content: "hello",
+      messageId: "user-message:turn-before-restart",
+      parentDialogProcessId: "",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    },
   });
-  await authoritative.bot.applyTurnLifecycleEvent({
+  await authoritative.bot.session.applyTurnLifecycleEvent({
     sessionId: "s-before-restart",
     turnScopeId: "turn-before-restart",
     dialogProcessId: "dialog-before-restart",
@@ -141,7 +150,9 @@ test("a new action recovers a stale persisted turn lost after service restart", 
     Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
   ).toISOString();
 
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startAuthoritativeServerWithWs({
+    bot: authoritative.bot,
+  });
   try {
     const events = await callChatWs({
       port: server.address().port,
@@ -177,7 +188,7 @@ test("a new action recovers a stale persisted turn lost after service restart", 
 test("snapshot get only annotates an orphan; finalize settles it exactly once", async () => {
   const authoritative = createAuthoritativeBot();
   installLifecycleSnapshotReader(authoritative);
-  await authoritative.bot.applyTurnLifecycleEvent({
+  await authoritative.bot.session.applyTurnLifecycleEvent({
     userId: "u1",
     sessionId: "s-snapshot-restart",
     turnScopeId: "turn-snapshot-restart",
@@ -190,8 +201,15 @@ test("snapshot get only annotates an orphan; finalize settles it exactly once", 
     ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-snapshot-restart" }),
     phase: TURN_PHASE.ACTION,
     action: "send",
+    userMessage: {
+      content: "hello",
+      messageId: "user-message:turn-snapshot-restart",
+      parentDialogProcessId: "",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    },
   });
-  await authoritative.bot.applyTurnLifecycleEvent({
+  await authoritative.bot.session.applyTurnLifecycleEvent({
     userId: "u1",
     sessionId: "s-snapshot-restart",
     turnScopeId: "turn-snapshot-restart",
@@ -206,7 +224,7 @@ test("snapshot get only annotates an orphan; finalize settles it exactly once", 
     Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
   ).toISOString();
 
-  const server = await startServerWithWs({
+  const server = await startAuthoritativeServerWithWs({
     bot: authoritative.bot,
     resolveAuthByApiKey: () => ({ userId: "u1" }),
   });
@@ -258,7 +276,7 @@ test("snapshot get only annotates an orphan; finalize settles it exactly once", 
 test("snapshot reconnect does not terminate a matching live execution", async () => {
   const authoritative = createAuthoritativeBot();
   installLifecycleSnapshotReader(authoritative);
-  await authoritative.bot.applyTurnLifecycleEvent({
+  await authoritative.bot.session.applyTurnLifecycleEvent({
     userId: "u1",
     sessionId: "s-live-snapshot",
     turnScopeId: "turn-live-snapshot",
@@ -271,8 +289,15 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
     ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-live-snapshot" }),
     phase: TURN_PHASE.ACTION,
     action: "send",
+    userMessage: {
+      content: "hello",
+      messageId: "user-message:turn-live-snapshot",
+      parentDialogProcessId: "",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    },
   });
-  await authoritative.bot.applyTurnLifecycleEvent({
+  await authoritative.bot.session.applyTurnLifecycleEvent({
     userId: "u1",
     sessionId: "s-live-snapshot",
     turnScopeId: "turn-live-snapshot",
@@ -293,7 +318,7 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
     dialogProcessId: "dialog-live-snapshot",
   });
 
-  const server = await startServerWithWs({
+  const server = await startAuthoritativeServerWithWs({
     bot: authoritative.bot,
     resolveAuthByApiKey: () => ({ userId: "u1" }),
   });

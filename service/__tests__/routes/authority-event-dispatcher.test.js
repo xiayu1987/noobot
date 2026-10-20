@@ -20,14 +20,16 @@ function createPendingEvent(eventId, sessionId) {
 test("authority dispatcher reports ack failure without counting the sent events", async () => {
   const item = createPendingEvent("authority-event-ack-failed", "s-ack-failed");
   const bot = {
-    async getPendingAuthorityEvents() {
-      return { found: true, events: [item] };
-    },
-    async recordAuthorityEventAttempts() {
-      return { recorded: true };
-    },
-    async acknowledgeAuthorityEvents() {
-      return { acknowledged: false, reason: "ack_rejected" };
+    session: {
+      async getPendingAuthorityEvents() {
+        return { found: true, events: [item] };
+      },
+      async recordAuthorityEventAttempts() {
+        return { recorded: true };
+      },
+      async acknowledgeAuthorityEvents() {
+        return { acknowledged: false, reason: "ack_rejected" };
+      },
     },
   };
   const sent = [];
@@ -56,21 +58,23 @@ test("authority dispatcher drains again when dispatch is requested while a drain
     releaseFirstGet = resolve;
   });
   const bot = {
-    async getPendingAuthorityEvents() {
-      getCalls += 1;
-      if (getCalls === 1) await firstGetGate;
-      return { found: true, events: pending };
-    },
-    async recordAuthorityEventAttempts() {
-      return { recorded: true };
-    },
-    async compactAuthorityEvents() {
-      return { compacted: false, removed: 0 };
-    },
-    async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
-      const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
-      pending = pending.filter((entry) => !ackedIds.has(entry.eventId));
-      return { acknowledged: true };
+    session: {
+      async getPendingAuthorityEvents() {
+        getCalls += 1;
+        if (getCalls === 1) await firstGetGate;
+        return { found: true, events: pending };
+      },
+      async recordAuthorityEventAttempts() {
+        return { recorded: true };
+      },
+      async compactAuthorityEvents() {
+        return { compacted: false, removed: 0 };
+      },
+      async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
+        const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
+        pending = pending.filter((entry) => !ackedIds.has(entry.eventId));
+        return { acknowledged: true };
+      },
     },
   };
   const dispatch = createAuthorityEventDispatcher({

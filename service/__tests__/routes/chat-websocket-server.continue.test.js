@@ -194,15 +194,8 @@ test("chat-websocket-server: a consumed stopped source is rejected before a seco
 });
 
 test("chat-websocket-server: continue action requires stopped dialogProcessId and turnScopeId", async () => {
-  let turnStatusWrites = 0;
   const server = await startServerWithWs({
-    bot: {
-      runSession: async () => ({}),
-      upsertTurnStatus: async () => {
-        turnStatusWrites += 1;
-        return null;
-      },
-    },
+    runSession: async () => ({}),
   });
   try {
     const { port } = server.address();
@@ -229,7 +222,6 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
     )?.data;
     assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
     assert.equal(receipt?.error?.code, "missing_continuation_dialog_process_id");
-    assert.equal(turnStatusWrites, 0);
   } finally {
     await closeServer(server);
   }
@@ -237,17 +229,10 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
 
 test("chat-websocket-server: continue action does not fallback to current dialogProcessId", async () => {
   let runSessionCalled = false;
-  let turnStatusWrites = 0;
   const server = await startServerWithWs({
-    bot: {
-      runSession: async () => {
-        runSessionCalled = true;
-        return { sessionId: "s1", dialogProcessId: "dp-current", answer: "unexpected" };
-      },
-      upsertTurnStatus: async () => {
-        turnStatusWrites += 1;
-        return null;
-      },
+    runSession: async () => {
+      runSessionCalled = true;
+      return { sessionId: "s1", dialogProcessId: "dp-current", answer: "unexpected" };
     },
   });
   try {
@@ -277,7 +262,6 @@ test("chat-websocket-server: continue action does not fallback to current dialog
     assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
     assert.equal(receipt?.error?.code, "missing_continuation_dialog_process_id");
     assert.equal(runSessionCalled, false);
-    assert.equal(turnStatusWrites, 0);
   } finally {
     await closeServer(server);
   }
@@ -287,25 +271,23 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
   let capturedStopPayload = null;
   const server = await startServerWithWs({
     initialTurnLifecycle: stoppedLifecycle({ sessionId: "s-continue-stop" }),
-    bot: {
-      materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
-        capturedStopPayload = { event, terminalStatus };
-        return {
-          materialized: true,
-          terminalStatus,
-          messages: [],
-          summaryVersion: previousSummaryVersion + 1,
-        };
-      },
-      runSession: async ({ abortSignal }) => {
-        await new Promise((resolve) => {
-          if (abortSignal?.aborted) return resolve();
-          abortSignal?.addEventListener?.("abort", resolve, { once: true });
-        });
-        const error = new Error("continue aborted");
-        error.name = "AbortError";
-        throw error;
-      },
+    materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
+      capturedStopPayload = { event, terminalStatus };
+      return {
+        materialized: true,
+        terminalStatus,
+        messages: [],
+        summaryVersion: previousSummaryVersion + 1,
+      };
+    },
+    runSession: async ({ abortSignal }) => {
+      await new Promise((resolve) => {
+        if (abortSignal?.aborted) return resolve();
+        abortSignal?.addEventListener?.("abort", resolve, { once: true });
+      });
+      const error = new Error("continue aborted");
+      error.name = "AbortError";
+      throw error;
     },
   });
   try {

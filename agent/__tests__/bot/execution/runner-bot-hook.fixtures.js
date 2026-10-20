@@ -130,7 +130,6 @@ export function createRunner({
   finalizeRunSession = async () => ({ answer: "ok" }),
   saveExecutionReport = async () => {},
   getExecutionTurnLogs = async () => [],
-  upsertParentAsyncTask = () => {},
 } = {}) {
   let authorityEventSequence = 0;
   const acceptedUserMessages = new Map();
@@ -302,8 +301,6 @@ export function createRunner({
     errorLogger: { async log() {} },
     normalizeRunMessage: (message = "") => text(message),
     validateRunInput() {},
-    ensureParentAsyncResultContainer: ({ parentAsyncResultContainer = null } = {}) =>
-      parentAsyncResultContainer,
     initializeRunSessionRuntime: initializeCanonicalRunSessionRuntime,
     resolveScenarioRunConfig,
     prepareRunConfig,
@@ -318,7 +315,6 @@ export function createRunner({
     finalizeRunSession,
     saveExecutionReport,
     getExecutionTurnLogs,
-    upsertParentAsyncTask,
     now: () => new Date().toISOString(),
   });
   runner.runAcceptedSession = (request, receipt) =>

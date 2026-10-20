@@ -85,7 +85,6 @@ export async function prepareCurrentUserTurn({
   eventListener,
   userInteractionBridge,
   abortSignal,
-  parentAsyncResultContainer,
   persistenceScope,
   contextMode,
   userId,
@@ -111,10 +110,10 @@ export async function prepareCurrentUserTurn({
     systemMessages,
     eventListener,
     dialogProcessId,
+    turnScopeId,
     userInteractionBridge,
     runConfig: resolvedRunConfig,
     abortSignal,
-    parentAsyncResultContainer,
     persistenceScope,
   };
   emitPreparedTurnDebug({

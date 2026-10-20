@@ -9,6 +9,7 @@ import { WebSocket } from "ws";
 import {
   createAcceptedAgentExecutionIdentity,
   startServerWithWs,
+  startAuthoritativeServerWithWs,
   closeServer,
   stopChatWs,
   createProtocolTestCommand,
@@ -33,28 +34,26 @@ useProvisionedRuntimeEventsWorkspace(["primary-user"]);
 test("chat-websocket-server: stop persists and emits authoritative stop completion identity", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
-    bot: {
-      materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
-        capturedStopPayload = { event, terminalStatus };
-        return {
-          materialized: true,
-          terminalStatus,
-          messages: [],
-          summaryVersion: previousSummaryVersion + 1,
-        };
-      },
-      runSession: async ({ abortSignal }) => {
-        await new Promise((resolve) => {
-          if (abortSignal?.aborted) {
-            resolve();
-            return;
-          }
-          abortSignal?.addEventListener?.("abort", resolve, { once: true });
-        });
-        const error = new Error("aborted by user");
-        error.name = "AbortError";
-        throw error;
-      },
+    materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
+      capturedStopPayload = { event, terminalStatus };
+      return {
+        materialized: true,
+        terminalStatus,
+        messages: [],
+        summaryVersion: previousSummaryVersion + 1,
+      };
+    },
+    runSession: async ({ abortSignal }) => {
+      await new Promise((resolve) => {
+        if (abortSignal?.aborted) {
+          resolve();
+          return;
+        }
+        abortSignal?.addEventListener?.("abort", resolve, { once: true });
+      });
+      const error = new Error("aborted by user");
+      error.name = "AbortError";
+      throw error;
     },
   });
   try {
@@ -105,18 +104,16 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
     resolveRun = resolve;
   });
   const server = await startServerWithWs({
-    bot: {
-      runSession: async ({ abortSignal }) => {
-        await new Promise((resolve) => {
-          if (abortSignal?.aborted) {
-            resolve();
-            return;
-          }
-          abortSignal?.addEventListener?.("abort", resolve, { once: true });
-        });
-        await runWait;
-        return { sessionId: "s1", dialogProcessId: "dp-slow", answer: "" };
-      },
+    runSession: async ({ abortSignal }) => {
+      await new Promise((resolve) => {
+        if (abortSignal?.aborted) {
+          resolve();
+          return;
+        }
+        abortSignal?.addEventListener?.("abort", resolve, { once: true });
+      });
+      await runWait;
+      return { sessionId: "s1", dialogProcessId: "dp-slow", answer: "" };
     },
   });
   try {
@@ -192,28 +189,26 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
 test("chat-websocket-server: stop request emits authoritative stop completion when runSession completes normally", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
-    bot: {
-      materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
-        capturedStopPayload = { event, terminalStatus };
-        return {
-          materialized: true,
-          terminalStatus,
-          messages: [],
-          summaryVersion: previousSummaryVersion + 1,
-        };
-      },
-      runSession: async ({ abortSignal }) => {
-        await new Promise((resolve) => {
-          abortSignal?.addEventListener?.("abort", resolve, { once: true });
-        });
-        return {
-          sessionId: "s1",
-          dialogProcessId: "dp-normal-after-stop",
-          answer: "completed",
-          messages: [],
-          traces: [],
-        };
-      },
+    materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
+      capturedStopPayload = { event, terminalStatus };
+      return {
+        materialized: true,
+        terminalStatus,
+        messages: [],
+        summaryVersion: previousSummaryVersion + 1,
+      };
+    },
+    runSession: async ({ abortSignal }) => {
+      await new Promise((resolve) => {
+        abortSignal?.addEventListener?.("abort", resolve, { once: true });
+      });
+      return {
+        sessionId: "s1",
+        dialogProcessId: "dp-normal-after-stop",
+        answer: "completed",
+        messages: [],
+        traces: [],
+      };
     },
   });
   try {
@@ -262,26 +257,24 @@ test("chat-websocket-server: stop request emits authoritative stop completion wh
 test("chat-websocket-server: authoritative stop completion uses the accepted assistant identity", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
-    bot: {
-      materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
-        capturedStopPayload = { event, terminalStatus };
-        return {
-          materialized: true,
-          terminalStatus,
-          messages: [],
-          summaryVersion: previousSummaryVersion + 1,
-        };
-      },
-      runSession: async ({ abortSignal }) => {
-        await new Promise((resolve) => {
-          abortSignal?.addEventListener?.("abort", resolve, { once: true });
-        });
-        return {
-          sessionId: "s-backfill",
-          answer: "ignored-after-stop",
-          messages: [],
-        };
-      },
+    materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
+      capturedStopPayload = { event, terminalStatus };
+      return {
+        materialized: true,
+        terminalStatus,
+        messages: [],
+        summaryVersion: previousSummaryVersion + 1,
+      };
+    },
+    runSession: async ({ abortSignal }) => {
+      await new Promise((resolve) => {
+        abortSignal?.addEventListener?.("abort", resolve, { once: true });
+      });
+      return {
+        sessionId: "s-backfill",
+        answer: "ignored-after-stop",
+        messages: [],
+      };
     },
   });
   try {
@@ -392,76 +385,83 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
     assert.equal(seeded.applied, true);
     lifecycle = seeded.lifecycle;
   }
-  const server = await startServerWithWs({
+  const server = await startAuthoritativeServerWithWs({
     bot: {
+      resolveExecutionIntent: async ({ turnScopeId }) =>
+        createAcceptedAgentExecutionIdentity({ turnScopeId }),
       runSession: async () => ({}),
-      applyTurnLifecycleEvent: async (event = {}) => {
-        lifecycleEvents.push(event);
-        const terminalMaterialization = event.terminalStatus
-          ? await persistStoppedTurn({
-              sessionId: event.sessionId,
-              turnScopeId: event.turnScopeId,
-              dialogProcessId: event.dialogProcessId,
-              parentDialogProcessId: event.parentDialogProcessId,
-              partialAssistant: event.terminalStatus.assistantMessage || {},
-            })
-          : null;
-        const result = commitTurnLifecycle({
-          lifecycle,
-          event,
-          eventOutbox: authorityEventOutbox,
-          createEventId: () => `idle-stop-authority-event-${++authorityEventSequence}`,
-          materializeTerminal: event.terminalStatus
-            ? ({ terminalStatus }) => ({
-                materialized: true,
-                summaryVersion: terminalMaterialization.version,
-                terminalStatus,
-                messages: [],
+      session: {
+        getRootSessionSelectedConnectorIds: async () => [],
+        applyTurnLifecycleEvent: async (event = {}) => {
+          lifecycleEvents.push(event);
+          const terminalMaterialization = event.terminalStatus
+            ? await persistStoppedTurn({
+                sessionId: event.sessionId,
+                turnScopeId: event.turnScopeId,
+                dialogProcessId: event.dialogProcessId,
+                parentDialogProcessId: event.parentDialogProcessId,
+                partialAssistant: event.terminalStatus.assistantMessage || {},
               })
-            : undefined,
-        });
-        if (result.applied) {
-          lifecycle = result.lifecycle;
-          if (result.committedEvent) {
-            authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
+            : null;
+          const result = commitTurnLifecycle({
+            lifecycle,
+            event,
+            eventOutbox: authorityEventOutbox,
+            createEventId: () => `idle-stop-authority-event-${++authorityEventSequence}`,
+            materializeTerminal: event.terminalStatus
+              ? ({ terminalStatus }) => ({
+                  materialized: true,
+                  summaryVersion: terminalMaterialization.version,
+                  terminalStatus,
+                  messages: [],
+                })
+              : undefined,
+          });
+          if (result.applied) {
+            lifecycle = result.lifecycle;
+            if (result.committedEvent) {
+              authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
+            }
           }
-        }
-        return result;
-      },
-      getPendingAuthorityEvents: async ({ consumerId } = {}) => ({
-        found: true,
-        events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
-      }),
-      recordAuthorityEventAttempts: async ({ consumerId, eventIds = [] } = {}) => {
-        for (const eventId of eventIds) {
-          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
-            eventId,
-            consumerId,
+          return result;
+        },
+        getPendingAuthorityEvents: async ({ consumerId } = {}) => ({
+          found: true,
+          events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
+        }),
+        recordAuthorityEventAttempts: async ({ consumerId, eventIds = [] } = {}) => {
+          for (const eventId of eventIds) {
+            const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
+              eventId,
+              consumerId,
+            });
+            if (!result.found) return { recorded: false, reason: result.reason };
+            authorityEventOutbox = result.outbox;
+          }
+          return { recorded: true };
+        },
+        compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
+          const result = compactAuthorityEventOutbox(authorityEventOutbox, {
+            retainDeliveredAfter,
           });
-          if (!result.found) return { recorded: false, reason: result.reason };
           authorityEventOutbox = result.outbox;
-        }
-        return { recorded: true };
-      },
-      compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
-        const result = compactAuthorityEventOutbox(authorityEventOutbox, { retainDeliveredAfter });
-        authorityEventOutbox = result.outbox;
-        return { compacted: result.compacted, removed: result.removed };
-      },
-      acknowledgeAuthorityEvents: async ({ consumerId, acknowledgements = [] } = {}) => {
-        for (const receipt of acknowledgements) {
-          const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
-            eventId: receipt.eventId,
-            consumerId,
-            orderingDomain: receipt.orderingDomain,
-            orderingScopeId: receipt.orderingScopeId,
-            sequence: receipt.sequence,
-            deliveredAt: new Date().toISOString(),
-          });
-          if (!result.found) return { acknowledged: false, reason: result.reason };
-          authorityEventOutbox = result.outbox;
-        }
-        return { acknowledged: true };
+          return { compacted: result.compacted, removed: result.removed };
+        },
+        acknowledgeAuthorityEvents: async ({ consumerId, acknowledgements = [] } = {}) => {
+          for (const receipt of acknowledgements) {
+            const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
+              eventId: receipt.eventId,
+              consumerId,
+              orderingDomain: receipt.orderingDomain,
+              orderingScopeId: receipt.orderingScopeId,
+              sequence: receipt.sequence,
+              deliveredAt: new Date().toISOString(),
+            });
+            if (!result.found) return { acknowledged: false, reason: result.reason };
+            authorityEventOutbox = result.outbox;
+          }
+          return { acknowledged: true };
+        },
       },
     },
   });
@@ -576,7 +576,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
 });
 
 test("chat-websocket-server: stop without an authoritative Turn is rejected", async () => {
-  const server = await startServerWithWs();
+  const server = await startServerWithWs({ runSession: async () => ({}) });
   try {
     const { port } = server.address();
     const events = await new Promise((resolve, reject) => {

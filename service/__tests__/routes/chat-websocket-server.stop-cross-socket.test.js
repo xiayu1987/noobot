@@ -24,33 +24,31 @@ useProvisionedRuntimeEventsWorkspace(["primary-user", "owner-a", "owner-b", "can
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
-    bot: {
-      materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
-        capturedStopPayload = { event, terminalStatus };
-        return {
-          materialized: true,
-          terminalStatus,
-          messages: [],
-          summaryVersion: previousSummaryVersion + 1,
-        };
-      },
-      runSession: async ({ abortSignal, sessionId, turnScopeId, eventListener }) => {
-        eventListener.onEvent({
-          event: "agent_lifecycle_state_changed",
-          data: {
-            state: "running",
-            sessionId,
-            turnScopeId,
-          },
-        });
-        await new Promise((resolve) => {
-          if (abortSignal?.aborted) return resolve();
-          abortSignal?.addEventListener?.("abort", resolve, { once: true });
-        });
-        const error = new Error("aborted by cross websocket stop");
-        error.name = "AbortError";
-        throw error;
-      },
+    materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
+      capturedStopPayload = { event, terminalStatus };
+      return {
+        materialized: true,
+        terminalStatus,
+        messages: [],
+        summaryVersion: previousSummaryVersion + 1,
+      };
+    },
+    runSession: async ({ abortSignal, sessionId, turnScopeId, eventListener }) => {
+      eventListener.onEvent({
+        event: "agent_lifecycle_state_changed",
+        data: {
+          state: "running",
+          sessionId,
+          turnScopeId,
+        },
+      });
+      await new Promise((resolve) => {
+        if (abortSignal?.aborted) return resolve();
+        abortSignal?.addEventListener?.("abort", resolve, { once: true });
+      });
+      const error = new Error("aborted by cross websocket stop");
+      error.name = "AbortError";
+      throw error;
     },
   });
   try {
@@ -60,6 +58,17 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
       headers: { authorization: "Bearer test-key" },
     });
     await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("cross websocket run start timeout")), 1000);
+      runWs.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw || "{}"));
+        if (
+          parsed?.event === "turn_lifecycle" &&
+          parsed?.data?.payload?.eventType === TURN_EVENT.PROCESSING_STARTED
+        ) {
+          clearTimeout(timer);
+          resolve();
+        }
+      });
       runWs.on("open", () => {
         runWs.send(
           JSON.stringify(
@@ -72,7 +81,6 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
             }),
           ),
         );
-        resolve();
       });
       runWs.on("error", reject);
     });
@@ -170,39 +178,37 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
     resolveAuthByApiKey: (request) => ({
       userId: request.headers.authorization === "Bearer owner-a-key" ? "owner-a" : "owner-b",
     }),
-    bot: {
-      runSession: async ({ abortSignal, sessionId, turnScopeId, eventListener }) => {
-        eventListener.onEvent({
-          event: "agent_lifecycle_state_changed",
-          data: {
-            state: "running",
-            sessionId,
-            turnScopeId,
+    runSession: async ({ abortSignal, sessionId, turnScopeId, eventListener }) => {
+      eventListener.onEvent({
+        event: "agent_lifecycle_state_changed",
+        data: {
+          state: "running",
+          sessionId,
+          turnScopeId,
+        },
+      });
+      await new Promise((resolve) => {
+        releaseActiveRun = resolve;
+        abortSignal?.addEventListener?.(
+          "abort",
+          () => {
+            activeRunAborted = true;
+            resolve();
           },
-        });
-        await new Promise((resolve) => {
-          releaseActiveRun = resolve;
-          abortSignal?.addEventListener?.(
-            "abort",
-            () => {
-              activeRunAborted = true;
-              resolve();
-            },
-            { once: true },
-          );
-        });
-        if (activeRunAborted) {
-          const error = new Error("owner-a run aborted");
-          error.name = "AbortError";
-          throw error;
-        }
-        return {
-          sessionId: "s-owner-isolation",
-          dialogProcessId: "dp-owner-isolation",
-          answer: "owner-a completed",
-          messages: [],
-        };
-      },
+          { once: true },
+        );
+      });
+      if (activeRunAborted) {
+        const error = new Error("owner-a run aborted");
+        error.name = "AbortError";
+        throw error;
+      }
+      return {
+        sessionId: "s-owner-isolation",
+        dialogProcessId: "dp-owner-isolation",
+        answer: "owner-a completed",
+        messages: [],
+      };
     },
   });
   const sockets = [];
@@ -282,31 +288,29 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
   let aborted = false;
   const server = await startServerWithWs({
     resolveAuthByApiKey: () => ({ userId: "canonical-owner" }),
-    bot: {
-      runSession: async ({ abortSignal, sessionId, turnScopeId, eventListener }) => {
-        eventListener.onEvent({
-          event: "agent_lifecycle_state_changed",
-          data: {
-            state: "running",
-            sessionId,
-            turnScopeId,
+    runSession: async ({ abortSignal, sessionId, turnScopeId, eventListener }) => {
+      eventListener.onEvent({
+        event: "agent_lifecycle_state_changed",
+        data: {
+          state: "running",
+          sessionId,
+          turnScopeId,
+        },
+      });
+      await new Promise((resolve) => {
+        if (abortSignal?.aborted) return resolve();
+        abortSignal?.addEventListener?.(
+          "abort",
+          () => {
+            aborted = true;
+            resolve();
           },
-        });
-        await new Promise((resolve) => {
-          if (abortSignal?.aborted) return resolve();
-          abortSignal?.addEventListener?.(
-            "abort",
-            () => {
-              aborted = true;
-              resolve();
-            },
-            { once: true },
-          );
-        });
-        const error = new Error("stopped by canonical owner");
-        error.name = "AbortError";
-        throw error;
-      },
+          { once: true },
+        );
+      });
+      const error = new Error("stopped by canonical owner");
+      error.name = "AbortError";
+      throw error;
     },
   });
   const sockets = [];

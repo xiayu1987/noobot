@@ -360,7 +360,6 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
       ],
     },
     userConfig: {},
-    resolvedParentAsyncResultContainer: null,
     lifecycle: null,
     persistenceContext: null,
   });

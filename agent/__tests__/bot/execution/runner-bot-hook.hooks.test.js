@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { TEST_ACCEPTED_DIALOG_PROCESS_ID } from "../../helpers/session-run-payload.js";
 import assert from "node:assert/strict";
 import {
   createRunner,
@@ -240,9 +241,20 @@ test("after_session_run hook failures stay isolated and keep the completed repor
 
 test("a failure after finalize overwrites the completed report with a failed report", async () => {
   const { reports, runner } = createReportingRunner({
-    upsertParentAsyncTask: () => {
-      throw new Error("post finalize failed");
-    },
+    initializeRunSessionRuntime: async ({ parentSessionId }) => ({
+      usedSessionId: "s1",
+      parentSessionId,
+      dialogProcessId: TEST_ACCEPTED_DIALOG_PROCESS_ID,
+      sessionLoadState: "created",
+      userConfig: {},
+      currentSessionModelAlias: "",
+      runtimeEventListener: {
+        onEvent() {},
+        async flush() {
+          throw new Error("post finalize failed");
+        },
+      },
+    }),
   });
 
   await assert.rejects(() => runner.runAcceptedSession(reportRunPayload), /post finalize failed/);

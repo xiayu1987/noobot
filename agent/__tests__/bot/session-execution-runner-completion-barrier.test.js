@@ -11,12 +11,11 @@ import { createRunner } from "./session-execution-runner-agent-done-order.fixtur
 
 const input = { userId: "u1", sessionId: "s1", message: "hello", turnScopeId: "turn-default" };
 
-test("runSession waits for post-run hook events before completing and publishing parent success", async () => {
+test("runSession waits for post-run hook events before completing and publishing success", async () => {
   const writeStarted = Promise.withResolvers();
   const releaseWrite = Promise.withResolvers();
   const records = [];
   const states = [];
-  const parentUpdates = [];
   const listener = createExecutionEventListener({
     sessionManager: {
       async appendExecutionLog(record) {
@@ -48,7 +47,6 @@ test("runSession waits for post-run hook events before completing and publishing
     runConfig: { botHookManager: createHookManager() },
     finalizeRunSession: async () => ({ answer: "done" }),
   });
-  runner.upsertParentAsyncTask = ({ patch }) => parentUpdates.push(patch);
   let returned = false;
   const completion = runner.runAcceptedSession(input).then((result) => {
     returned = true;
@@ -57,13 +55,9 @@ test("runSession waits for post-run hook events before completing and publishing
   await writeStarted.promise;
   assert.equal(returned, false);
   assert.equal(states.includes("completed"), false);
-  assert.deepEqual(parentUpdates, []);
   releaseWrite.resolve();
   const result = await completion;
   assert.equal(result.lifecycle.state, "completed");
-  assert.equal(parentUpdates.length, 1);
-  assert.equal(parentUpdates[0].status, "completed");
-  assert.deepEqual(parentUpdates[0].result, result);
   assert.equal(records.at(-1).data.state, "completed");
   assert.equal(
     records.some((record) => record.event === "agent_done"),
@@ -73,7 +67,6 @@ test("runSession waits for post-run hook events before completing and publishing
 
 test("post-run hook failure never publishes completed and drains the failed lifecycle", async () => {
   const records = [];
-  const parentUpdates = [];
   const hookError = new Error("post-run hook failed");
   const hookManager = createHookManager();
   const listener = createExecutionEventListener({
@@ -102,23 +95,17 @@ test("post-run hook failure never publishes completed and drains the failed life
     },
     finalizeRunSession: async () => ({ answer: "done" }),
   });
-  runner.upsertParentAsyncTask = ({ patch }) => parentUpdates.push(patch);
   await assert.rejects(runner.runAcceptedSession(input), { message: hookError.message });
   const states = records
     .filter((record) => record.event === "agent_lifecycle_state_changed")
     .map((record) => record.data.state);
   assert.equal(states.includes("completed"), false);
   assert.equal(states.at(-1), "failed");
-  assert.deepEqual(
-    parentUpdates.map((patch) => patch.status),
-    ["failed"],
-  );
   assert.equal(records.at(-1).data.point, HOOK_POINT.BOT.SESSION_RUN_ERROR);
 });
 
-test("completion event persistence failure rejects the run without parent success", async () => {
+test("completion event persistence failure rejects the run as failed", async () => {
   const records = [];
-  const parentUpdates = [];
   const listener = createExecutionEventListener({
     sessionManager: {
       async appendExecutionLog(record) {
@@ -140,12 +127,7 @@ test("completion event persistence failure rejects the run without parent succes
     eventListener: listener,
     finalizeRunSession: async () => ({ answer: "done" }),
   });
-  runner.upsertParentAsyncTask = ({ patch }) => parentUpdates.push(patch);
   await assert.rejects(runner.runAcceptedSession(input), /completion write failed/);
-  assert.deepEqual(
-    parentUpdates.map((patch) => patch.status),
-    ["failed"],
-  );
   assert.equal(records.at(-1).data.state, "failed");
 });
 
@@ -200,24 +182,4 @@ test("failed runs drain error-hook events before disposing the plugin activation
   releaseWrite.resolve();
   await failure;
   assert.equal(disposed, true);
-});
-
-test("parent task stores the completed result without storing its own container", async () => {
-  const container = {};
-  const runner = createRunner({
-    callOrder: [],
-    finalizeRunSession: async () => ({ answer: "done" }),
-  });
-  runner.ensureParentAsyncResultContainer = () => container;
-  runner.upsertParentAsyncTask = ({ parentAsyncResultContainer, patch }) => {
-    parentAsyncResultContainer.task = patch;
-  };
-  const result = await runner.runAcceptedSession({
-    ...input,
-    parentAsyncResultContainer: container,
-  });
-  assert.equal(result.parentAsyncResultContainer, container);
-  assert.equal(container.task.result.parentAsyncResultContainer, undefined);
-  assert.equal(container.task.result.lifecycle.state, "completed");
-  assert.doesNotThrow(() => JSON.stringify(result));
 });

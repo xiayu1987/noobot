@@ -167,10 +167,7 @@ export class RunConfigPluginPreparer {
         Number.isFinite(Number(next.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
           ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)
           : AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS;
-      next.resolveModelMessages = this.createPluginResolveModelMessages({
-        pluginId: entry.pluginId,
-        pluginOptions: next,
-      });
+      next.resolveModelMessages = this.createPluginResolveModelMessages();
     }
 
     if (hasAgentLifecycle) {

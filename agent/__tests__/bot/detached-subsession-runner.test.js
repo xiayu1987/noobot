@@ -96,7 +96,6 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.rootExecutionId, "workflow:root");
   assert.equal(payload.runConfig.runtimeModel, "gpt_5_4");
   assert.equal(payload.runConfig.systemRuntimePatch, undefined);
-  assert.equal(payload.parentAsyncResultContainer, null);
   assert.equal(Object.hasOwn(payload, "persistenceContext"), false);
   assert.deepEqual(payload.persistenceScope, {
     scopeId: "agent:turn-1",

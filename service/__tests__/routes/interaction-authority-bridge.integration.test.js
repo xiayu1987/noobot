@@ -56,7 +56,7 @@ test("child interaction authority commits through the protocol persistence scope
 
     const dispatched = [];
     const commitInteractionRequest = createInteractionAuthorityBridge({
-      resolveBot: () => session,
+      resolveBot: () => ({ session }),
       async dispatchAuthorityEvents(identity) {
         dispatched.push(identity);
         return { dispatched: true };
