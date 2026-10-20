@@ -5,7 +5,6 @@
  */
 
 import { shouldRecordRuntimeExecutionLog } from "@noobot/shared/runtime-events-config";
-import { readRepositoryParentSessionId } from "../../session/services/session-scope-resolution.js";
 
 export class ExecutionLogService {
   constructor({ executionRepo, sessionRepo } = {}) {
@@ -13,41 +12,10 @@ export class ExecutionLogService {
     this.sessionRepo = sessionRepo;
   }
 
-  async _resolveParentSessionId(
-    userId,
-    sessionId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    return readRepositoryParentSessionId(
-      this.sessionRepo,
-      userId,
-      sessionId,
-      parentSessionId,
+  async getTurnLogs({ userId, sessionId, dialogProcessId, persistenceContext }) {
+    return this.executionRepo.getTurnLogs(userId, sessionId, dialogProcessId, {
       persistenceContext,
-    );
-  }
-
-  async getTurnLogs({
-    userId,
-    sessionId,
-    dialogProcessId,
-    parentSessionId = "",
-    persistenceContext = null,
-  }) {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    return this.executionRepo.getTurnLogs(
-      userId,
-      sessionId,
-      dialogProcessId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
+    });
   }
 
   async appendExecutionLog({
@@ -60,25 +28,19 @@ export class ExecutionLogService {
     type = "",
     data = {},
     ts = "",
-    parentSessionId = "",
-    persistenceContext = null,
+    persistenceContext,
   }) {
     if (!shouldRecordRuntimeExecutionLog({ event, category, type, data })) {
       return { appended: false, skipped: true, reason: "runtime_event_policy" };
     }
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+    const scope = await this.sessionRepo.requireSessionScope(userId, sessionId, persistenceContext);
     await this.executionRepo.appendLog(
       userId,
       sessionId,
       {
         userId,
         sessionId,
-        parentSessionId: resolvedParentSessionId,
+        parentSessionId: scope.resolvedParentSessionId,
         dialogProcessId,
         turnScopeId,
         event,
@@ -87,53 +49,18 @@ export class ExecutionLogService {
         data,
         ts,
       },
-      resolvedParentSessionId,
-      persistenceContext,
+      { persistenceContext },
     );
     return { appended: true, skipped: false };
   }
 
-  async saveExecutionReport({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    report = {},
-    persistenceContext = null,
-  }) {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    return this.executionRepo.saveReport(
-      userId,
-      sessionId,
-      report,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
+  async saveExecutionReport({ userId, sessionId, report = {}, persistenceContext }) {
+    return this.executionRepo.saveReport(userId, sessionId, report, { persistenceContext });
   }
 
-  async getExecutionReport({
-    userId,
-    sessionId,
-    dialogProcessId,
-    parentSessionId = "",
-    persistenceContext = null,
-  }) {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
+  async getExecutionReport({ userId, sessionId, dialogProcessId, persistenceContext }) {
+    return this.executionRepo.getReport(userId, sessionId, dialogProcessId, {
       persistenceContext,
-    );
-    return this.executionRepo.getReport(
-      userId,
-      sessionId,
-      dialogProcessId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
+    });
   }
 }

@@ -33,6 +33,7 @@ function createContext({
       systemRuntime: {
         sessionId: "s-1",
         rootSessionId: "s-1",
+        persistenceScope: null,
         config: { allowUserInteraction: true },
       },
       ...runtimePatch,

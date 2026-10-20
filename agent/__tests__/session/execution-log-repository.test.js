@@ -82,21 +82,19 @@ test("getTurnLogs and appendLog preserve scoped persistence context", async (t) 
   };
   const repo = new ExecutionLogRepository({ executionRepository });
 
-  await repo.getTurnLogs("u1", "child-1", "d1", "parent-1", persistenceContext);
+  await repo.getTurnLogs("u1", "child-1", "d1", { persistenceContext });
   await repo.appendLog(
     "u1",
     "child-1",
     { event: "start", dialogProcessId: "d1" },
-    "parent-1",
-    persistenceContext,
+    { persistenceContext },
   );
 
   assert.equal(calls[0][0], "getTurnLogs");
   assert.equal(calls[0][1][2], "d1");
-  assert.equal(calls[0][1][4], persistenceContext);
+  assert.equal(calls[0][1][3].persistenceContext, persistenceContext);
   assert.equal(calls[1][0], "appendLog");
-  assert.equal(calls[1][1][3], "parent-1");
-  assert.equal(calls[1][1][4], persistenceContext);
+  assert.equal(calls[1][1][3].persistenceContext, persistenceContext);
 });
 
 test("appendLog forwards logs without deriving a dialogProcessId", async (t) => {

@@ -148,7 +148,7 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
         });
         await eventListener.onEvent({
           event: "authority_event_committed",
-          data: { envelope },
+          data: { envelope, persistenceScope: null },
         });
         await new Promise((resolve) => {
           finishRun = resolve;

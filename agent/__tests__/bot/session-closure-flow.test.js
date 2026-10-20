@@ -14,13 +14,13 @@ import path from "node:path";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
-import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
@@ -41,7 +41,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   let capturedAgentContext = null;
 
   const session = {
-    assertPersistenceContextIdentity,
     async getSessionBundle() {
       return { exists: false, session: { messages: [] } };
     },
@@ -49,8 +48,13 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     async getExecutionTurnLogs() {
       return [...appendedExecutionLogs];
     },
-    async resolveSessionScope({ userId, sessionId }) {
-      return { sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId) };
+    async locateSessionScope({ userId, sessionId }) {
+      return {
+        sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId),
+        resolvedParentSessionId: "",
+        indexed: true,
+        registered: true,
+      };
     },
     async saveExecutionReport() {},
     async appendExecutionLog(payload = {}) {
@@ -315,39 +319,42 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   bot.sessionRunner = engine;
 
   const { sessionId } = acceptedTurn;
-  const result = await bot.runSession({
-    dialogProcessId: acceptedTurn.dialogProcessId,
-    runConfig: createAcceptedRunIdentity(acceptedTurn.turnScopeId, {
-      commandId: acceptedTurn.turnScopeId,
-    }),
-    turnAcceptance: createTurnAcceptanceReceipt({
-      ...createTestSessionRequiredFields(),
-      commandId: acceptedTurn.turnScopeId,
-      sessionId,
-      turnScopeId: acceptedTurn.turnScopeId,
+  const result = await bot.runSession(
+    createTestSessionRunPayload({
       dialogProcessId: acceptedTurn.dialogProcessId,
-      messageUid: `sm_${acceptedTurn.turnScopeId}`,
-      aggregateVersion: 1,
+      runConfig: createAcceptedRunIdentity(acceptedTurn.turnScopeId, {
+        commandId: acceptedTurn.turnScopeId,
+      }),
+      turnAcceptance: createTurnAcceptanceReceipt({
+        ...createTestSessionRequiredFields(),
+        commandId: acceptedTurn.turnScopeId,
+        sessionId,
+        turnScopeId: acceptedTurn.turnScopeId,
+        dialogProcessId: acceptedTurn.dialogProcessId,
+        messageUid: `sm_${acceptedTurn.turnScopeId}`,
+        aggregateVersion: 1,
+      }),
+      userId: "u1",
+      sessionId,
+      persistenceScope: null,
+      message: "请切换模型并输出附件",
+      turnScopeId: acceptedTurn.turnScopeId,
+      attachments: [
+        {
+          name: "input.png",
+          mimeType: "image/png",
+          size: 1024,
+        },
+      ],
+      eventListener: {
+        onEvent(evt = {}) {
+          upstreamEvents.push(evt);
+        },
+      },
+      caller: SESSION_CALLER.USER,
+      parentSessionId: "",
     }),
-    userId: "u1",
-    sessionId,
-    message: "请切换模型并输出附件",
-    turnScopeId: acceptedTurn.turnScopeId,
-    attachments: [
-      {
-        name: "input.png",
-        mimeType: "image/png",
-        size: 1024,
-      },
-    ],
-    eventListener: {
-      onEvent(evt = {}) {
-        upstreamEvents.push(evt);
-      },
-    },
-    caller: SESSION_CALLER.USER,
-    parentSessionId: "",
-  });
+  );
 
   assert.equal(capturedBuildContextInput?.runConfig?.scenario, "programming");
   assert.equal(capturedBuildContextInput?.runConfig?.runtimeModel, undefined);
@@ -426,7 +433,6 @@ test("continue mode closed-loop: should build continue context and persist paren
   let capturedRunConfig = null;
 
   const session = {
-    assertPersistenceContextIdentity,
     async getSessionBundle() {
       return {
         exists: true,
@@ -440,8 +446,13 @@ test("continue mode closed-loop: should build continue context and persist paren
     async getExecutionTurnLogs() {
       return [];
     },
-    async resolveSessionScope({ userId, sessionId }) {
-      return { sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId) };
+    async locateSessionScope({ userId, sessionId }) {
+      return {
+        sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId),
+        resolvedParentSessionId: parentRootSessionId,
+        indexed: true,
+        registered: true,
+      };
     },
     async saveExecutionReport() {},
     async appendExecutionLog() {},
@@ -588,34 +599,37 @@ test("continue mode closed-loop: should build continue context and persist paren
   bot.sessionRunner = engine;
 
   const { sessionId } = acceptedTurn;
-  const result = await bot.runSession({
-    dialogProcessId: acceptedTurn.dialogProcessId,
-    runConfig: createAcceptedRunIdentity(acceptedTurn.turnScopeId, {
-      commandId: acceptedTurn.turnScopeId,
-    }),
-    turnAcceptance: createTurnAcceptanceReceipt({
-      ...createTestSessionRequiredFields(),
-      commandId: acceptedTurn.turnScopeId,
-      sessionId,
-      turnScopeId: acceptedTurn.turnScopeId,
+  const result = await bot.runSession(
+    createTestSessionRunPayload({
       dialogProcessId: acceptedTurn.dialogProcessId,
-      messageUid: `sm_${acceptedTurn.turnScopeId}`,
-      aggregateVersion: 1,
-    }),
-    userId: "u1",
-    sessionId,
-    parentSessionId: parentRootSessionId,
-    caller: SESSION_CALLER.BOT,
-    parentDialogProcessId: acceptedTurn.parentDialogProcessId,
-    message: acceptedTurn.content,
-    turnScopeId: acceptedTurn.turnScopeId,
-    attachments: [],
-    eventListener: {
-      onEvent(evt = {}) {
-        upstreamEvents.push(evt);
+      runConfig: createAcceptedRunIdentity(acceptedTurn.turnScopeId, {
+        commandId: acceptedTurn.turnScopeId,
+      }),
+      turnAcceptance: createTurnAcceptanceReceipt({
+        ...createTestSessionRequiredFields(),
+        commandId: acceptedTurn.turnScopeId,
+        sessionId,
+        turnScopeId: acceptedTurn.turnScopeId,
+        dialogProcessId: acceptedTurn.dialogProcessId,
+        messageUid: `sm_${acceptedTurn.turnScopeId}`,
+        aggregateVersion: 1,
+      }),
+      userId: "u1",
+      sessionId,
+      parentSessionId: parentRootSessionId,
+      persistenceScope: null,
+      caller: SESSION_CALLER.BOT,
+      parentDialogProcessId: acceptedTurn.parentDialogProcessId,
+      message: acceptedTurn.content,
+      turnScopeId: acceptedTurn.turnScopeId,
+      attachments: [],
+      eventListener: {
+        onEvent(evt = {}) {
+          upstreamEvents.push(evt);
+        },
       },
-    },
-  });
+    }),
+  );
 
   assert.equal(continueContextBuilt, true, "continue 模式应走 buildExistingSessionContext");
   assert.equal(
@@ -628,8 +642,10 @@ test("continue mode closed-loop: should build continue context and persist paren
   assert.ok(userTurn);
   assert.ok(assistantTurn);
   assert.ok(persistedBatches.length > 0);
+
   for (const batch of persistedBatches) {
-    assert.equal(batch.parentSessionId, parentRootSessionId);
+    assert.equal(Object.hasOwn(batch, "parentSessionId"), false);
+    for (const turn of batch.turns) assert.equal(Object.hasOwn(turn, "parentSessionId"), false);
   }
   assert.equal(result.parentSessionId, parentRootSessionId);
   assert.equal(result.parentDialogProcessId, "dp-parent-1");

@@ -24,7 +24,7 @@ export async function finalizeAgentTurn({
   agentResult,
   userConfig,
   lifecycle,
-  persistenceContext,
+  persistenceScope,
 }) {
   const finalizeThinkingStartedAt = text(resolvedRunConfig?.thinkingStartedAt);
   emitEvent(runtimeEventListener, "debug_resend_runner_finalize", {
@@ -40,7 +40,7 @@ export async function finalizeAgentTurn({
     parentSessionId,
     dialogProcessId,
     turnScopeId: resolvedTurnScopeId,
-    persistenceContext,
+    persistenceScope,
   });
   const durablePersistedMessageUids = (
     Array.isArray(durableCheckpointState?.receipts) ? durableCheckpointState.receipts : []
@@ -65,7 +65,7 @@ export async function finalizeAgentTurn({
     userId,
     sessionId: usedSessionId,
     parentSessionId,
-    persistenceContext,
+    persistenceScope,
   });
   const scopedPersistedTurnMessages = persistedSessionMessages.filter(
     (message) =>
@@ -122,6 +122,6 @@ export async function finalizeAgentTurn({
         : {}),
     },
     lifecycle,
-    persistenceContext,
+    persistenceScope,
   });
 }

@@ -86,7 +86,6 @@ async function handleInteractionTimeout({
   try {
     await commitInteractionRequest({
       userId: interactionAuthority.session.userId,
-      parentSessionId: interactionAuthority.session.parentSessionId,
       persistenceScope: interactionAuthority.persistenceScope,
       payload: terminalPayload,
     });
@@ -295,7 +294,6 @@ export function createUserInteractionBridge({
         }
         void commitInteractionRequest({
           userId: interactionAuthority.session.userId,
-          parentSessionId: interactionAuthority.session.parentSessionId,
           persistenceScope: interactionAuthority.persistenceScope,
           payload: requestItem.payload,
         }).catch((error) => {

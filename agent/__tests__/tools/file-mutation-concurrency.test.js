@@ -24,6 +24,7 @@ async function fixture(t) {
     filePath,
     logicalPath: "file.txt",
     mutationRoot: path.join(root, "session-1", "file-mutations"),
+    sessionScope: null,
     writeText: (target, value) => writeFile(target, value, "utf8"),
   };
 }
@@ -45,6 +46,7 @@ test("different sessions, turns and logical paths serialize writes to the same p
   const results = await Promise.allSettled(
     Array.from({ length: 4 }, (_, index) =>
       applyFileMutation({
+        sessionScope: null,
         ...options,
         writeText,
         logicalPath: index % 2 ? options.filePath : options.logicalPath,

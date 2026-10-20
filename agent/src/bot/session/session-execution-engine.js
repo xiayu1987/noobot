@@ -127,7 +127,7 @@ export class SessionExecutionEngine {
       loadedPlugins: this.pluginRuntimeBundle?.loadedPlugins,
       globalConfig: this.globalConfig,
       workspaceService: this.workspaceService,
-      createPluginResolveModelMessages: (payload = {}) =>
+      createPluginResolveModelMessages: (payload) =>
         this._createPluginResolveModelMessages(payload),
       createDetachedSubSessionRunner: () => this._createDetachedSubSessionRunner(),
     });
@@ -136,16 +136,16 @@ export class SessionExecutionEngine {
   _createRunner() {
     const runnerValidationDeps = {
       normalizeRunMessage: (message) => this._normalizeRunMessage(message),
-      validateRunInput: (payload = {}) => this._validateRunInput(payload),
+      validateRunInput: (payload) => this._validateRunInput(payload),
     };
     const runnerRuntimeDeps = {
       ensureParentAsyncResultContainer: (payload = {}) =>
         this._ensureParentAsyncResultContainer(payload),
-      initializeRunSessionRuntime: (payload = {}) => this._initializeRunSessionRuntime(payload),
+      initializeRunSessionRuntime: (payload) => this._initializeRunSessionRuntime(payload),
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
-      buildContextBuilder: (payload = {}) => this._buildContextBuilder(payload),
+      buildContextBuilder: (payload) => this._buildContextBuilder(payload),
       prepareTurnInput: ({ buildContextPayload }) =>
         prepareTurnInput({ attachmentService: this.attach, buildContextPayload }),
       prepareAgentTurnExecution: (payload = {}) => this._prepareAgentTurnExecution(payload),
@@ -157,15 +157,13 @@ export class SessionExecutionEngine {
         }),
     };
     const runnerPersistenceDeps = {
-      assertPersistenceContextIdentity: (context = null, identity = {}) =>
-        this.session.assertPersistenceContextIdentity(context, identity),
       appendAgentMessages: (payload = {}) => this._appendAgentMessages(payload),
       bindSessionTurnAttachments: (payload = {}) => this.session.bindTurnAttachments(payload),
       assertReusedUserTurnIdentity: (payload = {}) => this._assertReusedUserTurnIdentity(payload),
       getSessionTurns: (payload = {}) => this.session.getSessionTurns(payload),
       getTurnSummaryCheckpointState: (payload = {}) =>
         this.session.getTurnSummaryCheckpointState(payload),
-      finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
+      finalizeRunSession: (payload) => this._finalizeRunSession(payload),
       saveExecutionReport: (payload = {}) => this.session.saveExecutionReport(payload),
       getExecutionTurnLogs: (payload = {}) => this.session.getExecutionTurnLogs(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
@@ -184,11 +182,11 @@ export class SessionExecutionEngine {
     return new Date().toISOString();
   }
 
-  _normalizeRunMessage(message = "") {
+  _normalizeRunMessage(message) {
     return this.validator.normalizeRunMessage(message);
   }
 
-  _validateRunInput({ userId, sessionId, caller, parentSessionId = "" }) {
+  _validateRunInput({ userId, sessionId, caller, parentSessionId }) {
     this.validator.validateRunInput({
       userId,
       sessionId,
@@ -351,16 +349,14 @@ export class SessionExecutionEngine {
     caller,
     parentSessionId,
     userConfig,
-    userMessageAttachments = [],
-    systemMessages = [],
+    userMessageAttachments,
+    systemMessages,
     eventListener,
-    userInteractionBridge = null,
-    userInterjectionPort = null,
-    runConfig = {},
+    userInteractionBridge,
+    runConfig,
     abortSignal,
-    parentAsyncResultContainer = null,
-    persistenceContext = null,
-    persistenceScope = null,
+    parentAsyncResultContainer,
+    persistenceScope,
   }) {
     return this.agentContextFactory.buildContextBuilder({
       userId,
@@ -372,11 +368,9 @@ export class SessionExecutionEngine {
       systemMessages,
       eventListener,
       userInteractionBridge,
-      userInterjectionPort,
       runConfig,
       abortSignal,
       parentAsyncResultContainer,
-      persistenceContext,
       persistenceScope,
     });
   }
@@ -418,24 +412,22 @@ export class SessionExecutionEngine {
   async _appendAgentMessages({
     userId,
     sessionId,
-    parentSessionId = "",
     messages = [],
     dialogProcessId = "",
     parentDialogProcessId = "",
     turnScopeId = "",
     eventListener,
-    persistenceContext = null,
+    persistenceScope,
   }) {
     return this.turnPersister.appendAgentMessages({
       userId,
       sessionId,
-      parentSessionId,
       messages,
       dialogProcessId,
       parentDialogProcessId,
       turnScopeId,
       eventListener,
-      persistenceContext,
+      persistenceScope,
     });
   }
 
@@ -483,11 +475,11 @@ export class SessionExecutionEngine {
     return this.session.getExecutionTree(payload);
   }
 
-  async _initializeRunSessionRuntime(payload = {}) {
+  async _initializeRunSessionRuntime(payload) {
     return this.initializer.initializeRunSessionRuntime(payload);
   }
 
-  async _finalizeRunSession(payload = {}) {
+  async _finalizeRunSession(payload) {
     return this.finalizer.finalizeRunSession(payload);
   }
 
@@ -495,51 +487,11 @@ export class SessionExecutionEngine {
     return this.modelMessageRuntimeHelpers.mergePluginOptions(...items);
   }
 
-  _createPluginResolveModelMessages(payload = {}) {
+  _createPluginResolveModelMessages(payload) {
     return this.modelMessageRuntimeHelpers.createResolveModelMessages(payload);
   }
 
-  async runSession({
-    userId,
-    sessionId,
-    message,
-    attachments = [],
-    systemMessages = [],
-    eventListener = null,
-    caller,
-    parentSessionId = "",
-    parentDialogProcessId = "",
-    dialogProcessId = "",
-    abortSignal,
-    userInteractionBridge = null,
-    userInterjectionPort = null,
-    runConfig = {},
-    turnAcceptance = null,
-    turnScopeId = "",
-    parentAsyncResultContainer = null,
-    persistenceContext = null,
-    persistenceScope = null,
-  }) {
-    return this.runner.runSession({
-      userId,
-      sessionId,
-      message,
-      attachments,
-      systemMessages,
-      eventListener,
-      caller,
-      parentSessionId,
-      parentDialogProcessId,
-      dialogProcessId,
-      abortSignal,
-      userInteractionBridge,
-      userInterjectionPort,
-      runConfig,
-      turnAcceptance,
-      turnScopeId,
-      parentAsyncResultContainer,
-      persistenceContext,
-      persistenceScope,
-    });
+  async runSession(payload) {
+    return this.runner.runSession(payload);
   }
 }

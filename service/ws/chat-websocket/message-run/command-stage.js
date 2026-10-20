@@ -83,10 +83,10 @@ export async function bindExistingRun(context, run, onRunBound) {
     onDiagnostic: context.recordRunTransportDiagnostic(runningTurn),
   });
   onRunBound?.(runningTurn);
-  await context.dispatchAuthorityEvents?.({
+  await context.dispatchAuthorityEvents({
     userId: run.userId,
     sessionId: run.sessionId,
-    parentSessionId: run.parentSessionId,
+    persistenceScope: context.persistenceScope,
   });
   void recordServiceWebSocketLifecycle({
     event: "service.websocket.run.transportRebound",
@@ -110,7 +110,6 @@ function createActionEvent(command, run, executionIntent, startedAt) {
   return {
     userId: run.userId,
     sessionId: run.sessionId,
-    parentSessionId: run.parentSessionId,
     turnScopeId: run.turnScopeId,
     dialogProcessId: run.dialogProcessId,
     commandId: createTurnLifecycleCommandId({
@@ -126,6 +125,7 @@ function createActionEvent(command, run, executionIntent, startedAt) {
     presentationMessageId: run.normalizedRunConfig.presentationMessageId,
     startedAt,
     createSessionIfAbsent: run.createSessionIfAbsent,
+    ...(run.createSessionIfAbsent === true ? { parentSessionId: run.parentSessionId } : {}),
     sessionCaller: SESSION_CALLER.USER,
     expectedRevision: run.expectedRevision,
     expectedAggregateVersion: run.normalizedRunConfig.expectedAggregateVersion,
@@ -169,7 +169,6 @@ async function commitAction(context, actionEvent, run) {
       accepted,
       userId: run.userId,
       sessionId: run.sessionId,
-      parentSessionId: run.parentSessionId,
     }))
   ) {
     accepted = await context.commitTurnLifecycle(actionEvent);
@@ -189,7 +188,6 @@ export async function acceptRunCommand(context, command, run) {
   const executionIntent = await agentApplication.resolveExecutionIntent({
     userId: run.userId,
     sessionId: run.sessionId,
-    parentSessionId: run.parentSessionId,
     turnScopeId: run.turnScopeId,
     runConfig: run.normalizedRunConfig,
   });

@@ -5,78 +5,57 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
-import { requireSessionTombstoneSessions } from "@noobot/workspace-protocol/session-tombstone";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import {
-  normalizeSessionTree,
+  parseWorkspaceSessionTombstones,
+  parseWorkspaceSessionTree,
+} from "@noobot/workspace-protocol/session-store";
+import {
+  isSessionTreeNodeRegistered,
   resolveSessionDirSegments,
   resolveSessionTreeChain,
 } from "@noobot/workspace-protocol/session-tree";
 import { text } from "@noobot/shared/value";
 
-function normalizeId(value) {
-  return text(value);
-}
-
-function userRootOf({ workspaceRoot, userId } = {}) {
-  const normalizedWorkspaceRoot = normalizeId(workspaceRoot);
-  const normalizedUserId = normalizeId(userId);
+function userRootOf({ workspaceRoot, userId }) {
+  const normalizedWorkspaceRoot = text(workspaceRoot);
+  const normalizedUserId = text(userId);
   if (!normalizedWorkspaceRoot || !normalizedUserId) {
     throw new TypeError("workspace session location requires workspaceRoot and userId");
   }
   return path.join(path.resolve(normalizedWorkspaceRoot), normalizedUserId);
 }
 
-async function readOptionalJsonFile(file) {
-  let raw;
+async function readTextOrNull(file) {
   try {
-    raw = await fs.readFile(file, "utf8");
+    return await fs.readFile(file, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT") return null;
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
     throw error;
   }
-  return JSON.parse(raw);
 }
 
-async function readWorkspaceSessionTree(userRoot) {
-  const treeFile = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
-  return normalizeSessionTree(JSON.parse(await fs.readFile(treeFile, "utf8")));
+export async function readWorkspaceSessionTree(userRoot) {
+  const file = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
+  return parseWorkspaceSessionTree({ raw: await readTextOrNull(file), file });
 }
 
-async function readWorkspaceSessionTombstones(userRoot) {
-  const tombstoneFile = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
-  const tombstone = await readOptionalJsonFile(tombstoneFile);
-  if (tombstone === null) return {};
-  return requireSessionTombstoneSessions(tombstone, { persistencePath: tombstoneFile });
+export async function readWorkspaceSessionTombstones(userRoot) {
+  const file = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
+  return parseWorkspaceSessionTombstones({ raw: await readTextOrNull(file), file });
 }
 
-export async function resolveWorkspaceSessionLocation({
-  workspaceRoot,
-  userId,
-  sessionId,
-  parentSessionId = "",
-} = {}) {
-  const normalizedSessionId = normalizeId(sessionId);
+export async function resolveWorkspaceSessionLocation({ workspaceRoot, userId, sessionId }) {
+  const normalizedSessionId = text(sessionId);
   if (!normalizedSessionId) throw new TypeError("workspace session location requires sessionId");
   const userRoot = userRootOf({ workspaceRoot, userId });
-  const tombstones = await readWorkspaceSessionTombstones(userRoot);
   const tree = await readWorkspaceSessionTree(userRoot);
-  const node = tree.nodes[normalizedSessionId];
-  const normalizedParentSessionId = normalizeId(parentSessionId);
-  if (!node) {
-    const declared = [normalizedSessionId, normalizedParentSessionId].filter(Boolean);
-    return declared.some((declaredId) => Object.hasOwn(tombstones, declaredId))
-      ? { deleted: true }
-      : { missingSession: true };
-  }
+  const tombstones = await readWorkspaceSessionTombstones(userRoot);
+  if (Object.hasOwn(tombstones, normalizedSessionId)) return { deleted: true };
+  if (!isSessionTreeNodeRegistered(tree, normalizedSessionId)) return { missingSession: true };
   const chain = resolveSessionTreeChain(tree, normalizedSessionId);
   if (chain.some((chainSessionId) => Object.hasOwn(tombstones, chainSessionId))) {
     return { deleted: true };
-  }
-  if (normalizedParentSessionId && normalizedParentSessionId !== node.parentSessionId) {
-    throw new Error(
-      `session ${normalizedSessionId} is registered under "${node.parentSessionId}", not "${normalizedParentSessionId}"`,
-    );
   }
   const sessionDir = path.join(userRoot, ...resolveSessionDirSegments(tree, normalizedSessionId));
   if (!(await isPersistedSessionDir(sessionDir))) return { missingSession: true };

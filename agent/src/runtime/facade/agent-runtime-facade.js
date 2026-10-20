@@ -7,7 +7,7 @@
 import { isFunction } from "@noobot/shared/value";
 
 export class AgentRuntimeFacade {
-  constructor({ contextFactory, turnRunner } = {}) {
+  constructor({ contextFactory, turnRunner }) {
     if (!isFunction(contextFactory?.buildAgentContextFromBuilder)) {
       throw new TypeError(
         "AgentRuntimeFacade requires contextFactory.buildAgentContextFromBuilder",
@@ -37,7 +37,7 @@ export class AgentRuntimeFacade {
     return { agentContext };
   }
 
-  async runTurn({ agentContext, currentUserMessage, errorLogger = null } = {}) {
+  async runTurn({ agentContext, currentUserMessage, errorLogger }) {
     return this.turnRunner({ agentContext, currentUserMessage, errorLogger });
   }
 }

@@ -38,8 +38,7 @@ export async function commitPluginArtifact({
     ...request,
     userId,
     sessionId,
-    parentSessionId: text(system.parentSessionId),
-    persistenceScope: system.persistenceScope || null,
+    persistenceScope: system.persistenceScope,
   });
   if (!committed?.committed || !committed.envelope) {
     return Object.freeze({
@@ -51,7 +50,7 @@ export async function commitPluginArtifact({
   }
   await emitEvent(runtime.eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope: committed.envelope,
-    persistenceScope: system.persistenceScope || null,
+    persistenceScope: system.persistenceScope,
   });
   return Object.freeze({
     committed: true,
@@ -69,8 +68,7 @@ export async function getPluginArtifact({ pluginId = "", artifact = {}, toolCont
   return runtime.sessionManager.getPluginArtifact({
     userId: text(system.userId),
     sessionId: text(system.sessionId),
-    parentSessionId: text(system.parentSessionId),
-    persistenceScope: system.persistenceScope || null,
+    persistenceScope: system.persistenceScope,
     pluginId,
     artifactType: text(artifact?.artifactType),
     artifactId: text(artifact?.artifactId),

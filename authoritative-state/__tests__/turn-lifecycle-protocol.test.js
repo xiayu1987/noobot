@@ -146,7 +146,10 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
     { eventId: envelope.identity.eventId, envelope, committedAt: envelope.occurredAt },
   ]);
   const consumerId = "service-websocket";
-  assert.deepEqual(listPendingAuthorityEvents(initial), []);
+  assert.throws(
+    () => listPendingAuthorityEvents(initial, { consumerId: "" }),
+    /require a delivery consumer/,
+  );
   assert.equal(listPendingAuthorityEvents(initial, { consumerId }).length, 1);
   assert.equal(
     recordAuthorityEventDeliveryAttempt(initial, { eventId: envelope.identity.eventId }).reason,

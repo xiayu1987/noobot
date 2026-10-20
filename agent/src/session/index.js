@@ -22,26 +22,20 @@ import { ExecutionLogRepository } from "../observability/execution-log/execution
 import { ExecutionLogService } from "../observability/execution-log/execution-log-service.js";
 import {
   ScopedSessionLocationResolver,
-  assertPersistenceContextIdentity,
   createPersistenceContext,
+  createSessionTreePersistenceContext,
 } from "./session-location-resolver.js";
 import { randomUUID } from "node:crypto";
 import { isWorkspaceRuntimeRelativePath } from "@noobot/workspace-protocol";
-import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import {
+  validateSessionPersistenceScope,
+  validateSessionProvisionIntent,
+} from "@noobot/session-protocol";
+import { isFunction } from "@noobot/shared/value";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
 } from "./session-generated-data.js";
-
-function normalizeContextServicePayload(payload = {}) {
-  const source = isPlainObject(payload) ? payload : {};
-  return {
-    ...source,
-    currentDialogProcessId: text(source.currentDialogProcessId),
-    currentTurnScopeId: text(source.currentTurnScopeId),
-  };
-}
 
 function createSessionLifecycleAccess(sessionRepository) {
   return {
@@ -54,30 +48,29 @@ function createSessionLifecycleAccess(sessionRepository) {
   };
 }
 
-function createScopedPersistenceContextFactory(pathResolver) {
-  return function createScopedPersistenceContext({
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    scopeId = "",
-    relativeDir = "",
-    allowedRoot = "",
-    metadataContributor = null,
-  } = {}) {
-    if (!text(sessionId) || !text(scopeId)) {
-      throw new TypeError("scoped persistence context requires sessionId and scopeId");
+function createSessionPersistenceContextFactory({ pathResolver, sessionPathResolver }) {
+  return function createSessionPersistenceContext({ userId, sessionId, persistenceScope }) {
+    const validation = validateSessionPersistenceScope(persistenceScope);
+    if (!validation.valid) {
+      throw new TypeError(`invalid Session persistence scope: ${validation.errors.join(",")}`);
+    }
+    const scope = validation.scope;
+    if (!scope) {
+      return createSessionTreePersistenceContext({ sessionPathResolver, userId, sessionId });
+    }
+    if (!isWorkspaceRuntimeRelativePath(scope.allowedRoot) || !scope.scopeId.startsWith("agent:")) {
+      throw new Error("scoped session access requires an Agent-owned runtime persistence scope");
     }
     return createPersistenceContext({
       locationResolver: new ScopedSessionLocationResolver({
         pathResolver,
         userId,
         sessionId,
-        parentSessionId,
-        scopeId,
-        relativeDir,
-        allowedRoot,
+        parentSessionId: scope.parentSessionId,
+        scopeId: scope.scopeId,
+        relativeDir: scope.relativeDir,
+        allowedRoot: scope.allowedRoot,
       }),
-      metadataContributor,
     });
   };
 }
@@ -115,16 +108,12 @@ export function createSessionServices(
   });
 
   const taskRepository = new FileSystemTaskRepository({
-    pathResolver,
-    sessionPathResolver,
     storageService,
     normalizeTask: normalizeTaskEntity,
     sessionRepository,
   });
 
   const fileSystemExecutionRepository = new FileSystemExecutionRepository({
-    pathResolver,
-    sessionPathResolver,
     storageService,
     sessionRepository,
   });
@@ -178,7 +167,10 @@ export function createSessionServices(
     ...createSessionLifecycleAccess(sessionRepository),
     storageService,
     attachmentService,
-    createScopedPersistenceContext: createScopedPersistenceContextFactory(pathResolver),
+    createSessionPersistenceContext: createSessionPersistenceContextFactory({
+      pathResolver,
+      sessionPathResolver,
+    }),
     sessionTreeService,
     sessionCrudService,
     sessionMessageService,
@@ -194,20 +186,10 @@ export function createSessionServices(
       executionRepository,
       connectorInstanceRepository,
     },
-    services: {
-      sessionTreeService,
-      sessionCrudService,
-      sessionMessageService,
-      executionReadService,
-      sessionContextService,
-      taskService,
-      executionLogService,
-    },
   };
 }
 
-export function createSessionFacade(runtime = {}) {
-  const services = runtime.services || runtime;
+export function createSessionFacade(runtime) {
   const {
     sessionTreeService,
     sessionCrudService,
@@ -216,55 +198,31 @@ export function createSessionFacade(runtime = {}) {
     sessionContextService,
     taskService,
     executionLogService,
-  } = services;
-  const connectorInstanceRepository = runtime?.repositories?.connectorInstanceRepository || null;
+  } = runtime;
+  const { connectorInstanceRepository } = runtime.repositories;
 
-  const bindPersistenceScope = (payload = {}) => {
-    const validation = validateSessionPersistenceScope(payload?.persistenceScope);
-    if (!validation.valid) {
-      throw new TypeError(`invalid Session persistence scope: ${validation.errors.join(",")}`);
-    }
-    const persistenceScope = validation.scope;
-    if (!persistenceScope) return payload;
-    const allowedRoot = text(persistenceScope.allowedRoot).replaceAll("\\", "/");
-    const scopeId = text(persistenceScope.scopeId);
-    const scopeParentSessionId = text(persistenceScope.parentSessionId);
-    const requestedParentSessionId = text(payload.parentSessionId);
-    if (!isWorkspaceRuntimeRelativePath(allowedRoot) || !scopeId.startsWith("agent:")) {
-      throw new Error("scoped session access requires an Agent-owned runtime persistence scope");
-    }
-    if (requestedParentSessionId && requestedParentSessionId !== scopeParentSessionId) {
-      throw new Error("scoped session parent does not match its authority protocol scope");
-    }
-    if (!isFunction(runtime.createScopedPersistenceContext)) {
-      throw new Error("scoped persistence context factory is unavailable");
+  const bindPlacementScope = ({ persistenceScope, ...payload }) => {
+    if (Object.hasOwn(payload, "persistenceContext")) {
+      throw new TypeError("session facade derives persistence context from persistenceScope");
     }
     return {
       ...payload,
-      parentSessionId: scopeParentSessionId,
-      persistenceContext: runtime.createScopedPersistenceContext({
+      persistenceContext: runtime.createSessionPersistenceContext({
         userId: payload.userId,
         sessionId: payload.sessionId,
-        parentSessionId: scopeParentSessionId,
-        scopeId: persistenceScope.scopeId,
-        relativeDir: persistenceScope.relativeDir,
-        allowedRoot: persistenceScope.allowedRoot,
+        persistenceScope,
       }),
     };
   };
 
+  const bindPersistenceScope = (payload) => {
+    if (Object.hasOwn(payload, "parentSessionId")) {
+      throw new TypeError("session facade locates existing sessions without parentSessionId");
+    }
+    return bindPlacementScope(payload);
+  };
+
   return {
-    createScopedPersistenceContext(payload = {}) {
-      if (!isFunction(runtime.createScopedPersistenceContext)) {
-        throw new Error("scoped persistence context factory is unavailable");
-      }
-      return runtime.createScopedPersistenceContext(payload);
-    },
-
-    assertPersistenceContextIdentity(context = null, identity = {}) {
-      return assertPersistenceContextIdentity(context, identity);
-    },
-
     async assertSessionWritable(payload = {}) {
       return runtime.assertSessionWritable(payload);
     },
@@ -281,12 +239,12 @@ export function createSessionFacade(runtime = {}) {
       return sessionTreeService.getRootSessionId({ userId, sessionId });
     },
 
-    async getSessionData({ userId, sessionId }) {
-      return sessionCrudService.getSessionData({ userId, sessionId });
+    async getSessionData(payload = {}) {
+      return sessionCrudService.getSessionData(payload);
     },
 
-    async getSessionDisplayData({ userId, sessionId }) {
-      return sessionCrudService.getSessionDisplayData({ userId, sessionId });
+    async getSessionDisplayData(payload = {}) {
+      return sessionCrudService.getSessionDisplayData(payload);
     },
 
     async getSessionThinkingDetail(payload = {}) {
@@ -309,20 +267,24 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.listSessionIds({ userId });
     },
 
-    async createSession(payload) {
-      return sessionCrudService.createSession(payload);
+    async createSession(payload = {}) {
+      return sessionCrudService.createSession(bindPlacementScope(payload));
     },
 
     async repairSession(payload = {}) {
-      return sessionCrudService.repairSession(payload);
+      return sessionCrudService.repairSession(bindPersistenceScope(payload));
     },
 
     async getSessionBundle(payload = {}) {
-      return sessionCrudService.getSessionBundle(payload);
+      return sessionCrudService.getSessionBundle(bindPersistenceScope(payload));
     },
 
-    async resolveSessionScope(payload = {}) {
-      return sessionCrudService.resolveSessionScope(bindPersistenceScope(payload));
+    async writeSessionMetadata(payload = {}) {
+      return sessionCrudService.writeSessionMetadata(bindPersistenceScope(payload));
+    },
+
+    async locateSessionScope(payload = {}) {
+      return sessionCrudService.locateSessionScope(bindPersistenceScope(payload));
     },
 
     async resolveTurnTerminalState(payload = {}) {
@@ -330,7 +292,7 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async appendTurns(payload = {}) {
-      return sessionMessageService.appendTurns(payload);
+      return sessionMessageService.appendTurns(bindPersistenceScope(payload));
     },
 
     async commitMessageEvent(payload = {}) {
@@ -345,23 +307,26 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async bindTurnAttachments(payload = {}) {
-      return sessionMessageService.bindTurnAttachments(payload);
+      return sessionMessageService.bindTurnAttachments(bindPersistenceScope(payload));
     },
 
     async deleteFromMessage(payload = {}) {
-      return sessionMessageService.deleteFromMessage(payload);
+      return sessionMessageService.deleteFromMessage(bindPersistenceScope(payload));
     },
 
     async replaceTurn(payload = {}) {
-      return sessionMessageService.replaceTurn(payload);
+      return sessionMessageService.replaceTurn(bindPersistenceScope(payload));
     },
 
     async applyTurnLifecycleEvent(payload = {}) {
-      return sessionMessageService.applyTurnLifecycleEvent(payload);
+      const bindScope = validateSessionProvisionIntent(payload).requested
+        ? bindPlacementScope
+        : bindPersistenceScope;
+      return sessionMessageService.applyTurnLifecycleEvent(bindScope(payload));
     },
 
     async getTurnLifecycleSnapshot(payload = {}) {
-      return sessionMessageService.getTurnLifecycleSnapshot(payload);
+      return sessionMessageService.getTurnLifecycleSnapshot(bindPersistenceScope(payload));
     },
 
     async getPendingAuthorityEvents(payload = {}) {
@@ -393,83 +358,79 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async upsertTurnTiming(payload = {}) {
-      return sessionMessageService.upsertTurnTiming(payload);
+      return sessionMessageService.upsertTurnTiming(bindPersistenceScope(payload));
     },
 
     async assertReusedUserTurnIdentity(payload = {}) {
-      return sessionMessageService.assertReusedUserTurnIdentity(payload);
+      return sessionMessageService.assertReusedUserTurnIdentity(bindPersistenceScope(payload));
     },
 
     async commitTurnSummaryCheckpoint(payload = {}) {
-      return sessionMessageService.commitTurnSummaryCheckpoint(payload);
+      return sessionMessageService.commitTurnSummaryCheckpoint(bindPersistenceScope(payload));
     },
 
     async getSessionTurns(payload = {}) {
-      return sessionMessageService.getSessionTurns(payload);
+      return sessionMessageService.getSessionTurns(bindPersistenceScope(payload));
     },
 
     async getSessionContextSource(payload = {}) {
-      return sessionMessageService.getSessionContextSource(payload);
+      return sessionMessageService.getSessionContextSource(bindPersistenceScope(payload));
     },
 
     async getTurnSummaryCheckpointState(payload = {}) {
-      return sessionMessageService.getTurnSummaryCheckpointState(payload);
+      return sessionMessageService.getTurnSummaryCheckpointState(bindPersistenceScope(payload));
     },
 
     async hasDialogProcessIdInSession(payload = {}) {
-      return sessionMessageService.hasDialogProcessIdInSession(payload);
+      return sessionMessageService.hasDialogProcessIdInSession(bindPersistenceScope(payload));
     },
 
     async getExecutionTurnLogs(payload = {}) {
-      return executionLogService.getTurnLogs(payload);
+      return executionLogService.getTurnLogs(bindPersistenceScope(payload));
     },
 
     async appendExecutionLog(payload = {}) {
-      return executionLogService.appendExecutionLog(payload);
+      return executionLogService.appendExecutionLog(bindPersistenceScope(payload));
     },
 
     async saveExecutionReport(payload = {}) {
-      return executionLogService.saveExecutionReport(payload);
+      return executionLogService.saveExecutionReport(bindPersistenceScope(payload));
     },
 
     async getExecutionReport(payload = {}) {
-      return executionLogService.getExecutionReport(payload);
+      return executionLogService.getExecutionReport(bindPersistenceScope(payload));
     },
 
     async getContextProjection(payload = {}) {
-      return sessionContextService.getContextProjection(normalizeContextServicePayload(payload));
+      return sessionContextService.getContextProjection(bindPersistenceScope(payload));
     },
 
     async startSkillTask(payload = {}) {
-      return taskService.startSkillTask(payload);
+      return taskService.startSkillTask(bindPersistenceScope(payload));
     },
 
     async finishSkillTask(payload = {}) {
-      return taskService.finishSkillTask(payload);
+      return taskService.finishSkillTask(bindPersistenceScope(payload));
     },
 
     async saveCurrentTurnTasks(payload = {}) {
-      return taskService.saveCurrentTurnTasks(payload);
+      return taskService.saveCurrentTurnTasks(bindPersistenceScope(payload));
     },
 
-    async setSessionModelAlias({ userId, sessionId, modelAlias }) {
-      return sessionCrudService.setSessionModelAlias({ userId, sessionId, modelAlias });
+    async setSessionModelAlias(payload = {}) {
+      return sessionCrudService.setSessionModelAlias(bindPersistenceScope(payload));
     },
 
-    async renameSession({ userId, sessionId, title }) {
-      return sessionCrudService.renameSession({ userId, sessionId, title });
+    async renameSession(payload = {}) {
+      return sessionCrudService.renameSession(bindPersistenceScope(payload));
     },
 
-    async getRootSessionSelectedConnectorIds({ userId, sessionId }) {
-      return sessionCrudService.getRootSessionSelectedConnectorIds({ userId, sessionId });
+    async getRootSessionSelectedConnectorIds(payload = {}) {
+      return sessionCrudService.getRootSessionSelectedConnectorIds(payload);
     },
 
-    async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
-      return sessionCrudService.setRootSessionSelectedConnectorIds({
-        userId,
-        sessionId,
-        selectedConnectorIds,
-      });
+    async setRootSessionSelectedConnectorIds(payload = {}) {
+      return sessionCrudService.setRootSessionSelectedConnectorIds(payload);
     },
 
     async listConnectorInstances({ userId }) {

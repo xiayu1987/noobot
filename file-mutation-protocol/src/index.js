@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const FILE_MUTATION_PROTOCOL = "noobot.file-mutation-result";
 export const FILE_MUTATION_VERSION = 2;
@@ -83,9 +83,12 @@ export function createFileMutationResult({
   after,
   diff,
   aggregate = null,
-  sessionScope = null,
+  sessionScope,
   updatedAt,
 }) {
+  if (sessionScope !== null && !isPlainObject(sessionScope)) {
+    throw new TypeError("file mutation sessionScope must be null or a persistence scope object");
+  }
   const { lines: _lines, ...diffSummary } = diff || {};
   const mutation = {
     id,
@@ -96,7 +99,7 @@ export function createFileMutationResult({
     after,
     diff: diff ? diffSummary : null,
     aggregate: aggregate || null,
-    ...(sessionScope && typeof sessionScope === "object" ? { sessionScope } : {}),
+    ...(sessionScope ? { sessionScope } : {}),
     updatedAt: updatedAt || new Date().toISOString(),
   };
   return {

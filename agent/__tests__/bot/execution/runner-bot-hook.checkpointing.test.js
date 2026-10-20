@@ -15,7 +15,6 @@ import {
 test("SessionExecutionRunner checkpoints current turn messages with scoped persistence identity", async () => {
   const checkpointPayloads = [];
   const events = [];
-  const persistenceContext = { kind: "noobot.session_persistence_scope", scope: "running-turn" };
   const persistenceScope = {
     scopeId: "agent:turn-checkpoint",
     parentSessionId: "root-1",
@@ -65,7 +64,6 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     parentDialogProcessId: "parent-dp-1",
     message: "task",
     turnScopeId: "turn-checkpoint",
-    persistenceContext,
     persistenceScope,
     eventListener: { onEvent: (event) => events.push(event) },
   });
@@ -73,10 +71,9 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
   assert.equal(checkpointPayloads.length, 1);
   assert.equal(checkpointPayloads[0].userId, "u1");
   assert.equal(checkpointPayloads[0].sessionId, "s1");
-  assert.equal(checkpointPayloads[0].parentSessionId, "root-1");
   assert.equal(checkpointPayloads[0].parentDialogProcessId, "parent-dp-1");
   assert.equal(checkpointPayloads[0].turnScopeId, "turn-checkpoint");
-  assert.equal(checkpointPayloads[0].persistenceContext, persistenceContext);
+  assert.deepEqual(checkpointPayloads[0].persistenceScope, persistenceScope);
   assert.equal(checkpointPayloads[0].messages[0].presentationMessageId, "msg_chat_checkpoint");
   assert.deepEqual(
     events.find((event) => event?.event === "timeline_checkpoint_persisted")?.data?.messages?.[0],
@@ -271,39 +268,64 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
   assert.deepEqual(runtime.timelineCheckpointPersistedMessageUids, ["sm_retry"]);
 });
 
-test("SessionExecutionRunner validates scoped persistence identity before execution", async () => {
-  const calls = [];
-  const persistenceContext = { kind: "noobot.session_persistence_scope" };
+test("SessionExecutionRunner rejects invalid persistence scopes before execution", async () => {
+  let initialized = false;
+  const runner = createRunner({
+    initializeRunSessionRuntime: async () => {
+      initialized = true;
+      throw new Error("must not initialize");
+    },
+  });
+
+  await assert.rejects(
+    runner.runAcceptedSession({
+      turnScopeId: "turn-invalid-scope",
+      userId: "u1",
+      sessionId: "child-1",
+      parentSessionId: "root-1",
+      message: "task",
+      persistenceScope: { scopeId: "agent:child-1", parentSessionId: "root-1" },
+    }),
+    /invalid Session persistence scope: incomplete_persistence_scope/,
+  );
+  assert.equal(initialized, false);
+});
+
+test("SessionExecutionRunner hands the validated persistence scope to session initialization", async () => {
   const persistenceScope = {
     scopeId: "agent:child-1",
     parentSessionId: "root-1",
     relativeDir: "runtime/agent/session/child-1",
     allowedRoot: "runtime/agent/session",
   };
+  const initializedScopes = [];
   const runner = createRunner({
-    assertPersistenceContextIdentity: (context, identity) => calls.push({ context, identity }),
-  });
-
-  await runner.runAcceptedSession({
-    turnScopeId: "turn-default",
-    userId: "u1",
-    sessionId: "child-1",
-    parentSessionId: "root-1",
-    message: "task",
-    runConfig: { executionId: "agent:child-1" },
-    persistenceContext,
-    persistenceScope,
-  });
-
-  assert.deepEqual(calls, [
-    {
-      context: persistenceContext,
-      identity: {
-        userId: "u1",
-        sessionId: "child-1",
-        parentSessionId: "root-1",
-        scopeId: "agent:child-1",
-      },
+    initializeRunSessionRuntime: async (payload = {}) => {
+      initializedScopes.push(payload.persistenceScope);
+      return {
+        usedSessionId: "child-1",
+        parentSessionId: payload.parentSessionId,
+        dialogProcessId: "dp1",
+        sessionLoadState: "created",
+        userConfig: {},
+        currentSessionModelAlias: "",
+        runtimeEventListener: payload.eventListener,
+      };
     },
-  ]);
+  });
+
+  await runner.runAcceptedSession(
+    {
+      turnScopeId: "turn-default",
+      userId: "u1",
+      sessionId: "child-1",
+      parentSessionId: "root-1",
+      message: "task",
+      runConfig: { executionId: "agent:child-1" },
+      persistenceScope,
+    },
+    { dialogProcessId: "dp1", committedEventPublished: false },
+  );
+
+  assert.deepEqual(initializedScopes, [persistenceScope]);
 });

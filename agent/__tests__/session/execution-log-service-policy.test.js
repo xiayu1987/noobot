@@ -19,7 +19,7 @@ function createService() {
       },
     },
     sessionRepo: {
-      async resolveSessionScope() {
+      async requireSessionScope() {
         resolvedScopeCount += 1;
         return { resolvedParentSessionId: "parent-1" };
       },

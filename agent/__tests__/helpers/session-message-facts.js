@@ -9,6 +9,7 @@ import { registerSessionMessageFacts } from "../../src/session/entities/session-
 
 export function createTestSessionRequiredFields() {
   return {
+    parentSessionId: "",
     caller: SESSION_CALLER.USER,
     messages: [],
     dialogOrder: [],

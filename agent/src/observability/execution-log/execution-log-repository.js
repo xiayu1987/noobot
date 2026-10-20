@@ -7,7 +7,6 @@ import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -32,7 +31,7 @@ export class ExecutionLogRepository {
     this.appendQueues = new Map();
   }
 
-  async _appendSessionChannelLog(userId, sessionId, normalizedLog = {}, parentSessionId = "") {
+  async _appendSessionChannelLog(userId, sessionId, normalizedLog) {
     const route = mapExecutionLogToSessionChannel(normalizedLog);
     const logData =
       normalizedLog.data && typeof normalizedLog.data === "object" ? normalizedLog.data : {};
@@ -40,7 +39,7 @@ export class ExecutionLogRepository {
       scope: "session",
       userId,
       sessionId,
-      parentSessionId,
+      parentSessionId: normalizedLog.parentSessionId,
       dialogProcessId: normalizedLog.dialogProcessId,
       turnScopeId: normalizedLog.turnScopeId,
       source: "agent",
@@ -57,8 +56,8 @@ export class ExecutionLogRepository {
     });
   }
 
-  _appendQueueKey(userId = "", sessionId = "", parentSessionId = "") {
-    return [text(userId), normalizeParentSessionId(parentSessionId), text(sessionId)].join("::");
+  _appendQueueKey(userId, sessionId) {
+    return [text(userId), text(sessionId)].join("::");
   }
 
   async _withAppendQueue(queueKey = "", operation = async () => {}) {
@@ -84,83 +83,46 @@ export class ExecutionLogRepository {
     return normalizedSessionId;
   }
 
-  _withSessionAppendQueue(userId, sessionId, parentSessionId, operation) {
-    return this._withAppendQueue(
-      this._appendQueueKey(userId, sessionId, parentSessionId),
-      operation,
-    );
+  _withSessionAppendQueue(userId, sessionId, operation) {
+    return this._withAppendQueue(this._appendQueueKey(userId, sessionId), operation);
   }
 
-  async getTurnLogs(
-    userId,
-    sessionId,
-    dialogProcessId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
+  async getTurnLogs(userId, sessionId, dialogProcessId, { persistenceContext } = {}) {
     return this.executionRepository.getTurnLogs(
       userId,
       this._requireSessionId(sessionId),
       dialogProcessId,
-      parentSessionId,
-      persistenceContext,
+      { persistenceContext },
     );
   }
 
-  async getReport(
-    userId,
-    sessionId,
-    dialogProcessId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
+  async getReport(userId, sessionId, dialogProcessId, { persistenceContext } = {}) {
     return this.executionRepository.getReport(
       userId,
       this._requireSessionId(sessionId),
       dialogProcessId,
-      parentSessionId,
-      persistenceContext,
+      { persistenceContext },
     );
   }
 
-  async saveReport(
-    userId,
-    sessionId,
-    report = {},
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
+  async saveReport(userId, sessionId, report, { persistenceContext } = {}) {
     const normalizedSessionId = this._requireSessionId(sessionId);
-    return this._withSessionAppendQueue(userId, normalizedSessionId, parentSessionId, () =>
-      this.executionRepository.saveReport(
-        userId,
-        normalizedSessionId,
-        report,
-        parentSessionId,
+    return this._withSessionAppendQueue(userId, normalizedSessionId, () =>
+      this.executionRepository.saveReport(userId, normalizedSessionId, report, {
         persistenceContext,
-      ),
+      }),
     );
   }
 
-  async appendLog(
-    userId,
-    sessionId,
-    executionLog = {},
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
+  async appendLog(userId, sessionId, executionLog, { persistenceContext } = {}) {
     const normalizedSessionId = this._requireSessionId(sessionId);
-    return this._withSessionAppendQueue(userId, normalizedSessionId, parentSessionId, async () => {
+    return this._withSessionAppendQueue(userId, normalizedSessionId, async () => {
       const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
       await Promise.all([
-        this.executionRepository.appendLog(
-          userId,
-          normalizedSessionId,
-          normalizedLog,
-          parentSessionId,
+        this.executionRepository.appendLog(userId, normalizedSessionId, normalizedLog, {
           persistenceContext,
-        ),
-        this._appendSessionChannelLog(userId, normalizedSessionId, normalizedLog, parentSessionId),
+        }),
+        this._appendSessionChannelLog(userId, normalizedSessionId, normalizedLog),
       ]);
     });
   }

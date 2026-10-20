@@ -75,15 +75,17 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/session/index.js",
     required: [
       [
-        "session facade uses context payload normalizer",
-        /function\s+normalizeContextServicePayload[\s\S]*?currentDialogProcessId[\s\S]*?currentTurnScopeId/,
-      ],
-      [
-        "session facade passes normalized payload to getContextProjection",
-        /async\s+getContextProjection\(payload\s*=\s*\{\}\)[\s\S]*?sessionContextService\.getContextProjection\(\s*normalizeContextServicePayload\(payload\)/,
+        "session facade binds persistence scope before getContextProjection",
+        /async\s+getContextProjection\(payload\s*=\s*\{\}\)[\s\S]*?sessionContextService\.getContextProjection\(\s*bindPersistenceScope\(payload\)/,
       ],
     ],
-    forbidden: [["direct session summarized-message mutation port", SUMMARIZED_PORT]],
+    forbidden: [
+      ["direct session summarized-message mutation port", SUMMARIZED_PORT],
+      [
+        "session facade re-normalizes context scope owned by context-protocol",
+        /normalizeContextServicePayload/,
+      ],
+    ],
   },
   {
     file: "agent/src/tools/collaboration/task-summary-tool.js",
@@ -231,7 +233,7 @@ export const AGENT_CONTRACTS = Object.freeze([
       ],
       [
         "context passes current turnScopeId to session history",
-        /currentTurnScopeId:\s*text\(this\.runConfig\?\.turnScopeId\)/,
+        /currentTurnScopeId:\s*text\(this\.runConfig\.turnScopeId\)/,
       ],
     ],
   },

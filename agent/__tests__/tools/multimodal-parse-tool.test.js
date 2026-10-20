@@ -80,7 +80,6 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   let ingestRequest = null;
   const linkRequests = [];
   const authorityRequests = [];
-  const parentSessionId = ` ${"p".repeat(220)} `;
   const runtime = {
     basePath,
     currentUserMessageUid: "user-source",
@@ -106,10 +105,10 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
     },
     userConfig: {},
     systemRuntime: {
+      persistenceScope: null,
       userId: "admin",
       sessionId: "session-1",
       rootSessionId: "session-1",
-      parentSessionId,
     },
     userMessageAttachments: [
       {
@@ -252,7 +251,12 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
     ["source-1", "source-2"],
   );
   assert.ok(linkRequests.every((request) => request.producerId === "multimodal_parse"));
-  assert.ok(authorityRequests.every((request) => request.parentSessionId === "p".repeat(200)));
+  assert.ok(authorityRequests.length > 0);
+  assert.ok(
+    authorityRequests.every(
+      (request) => request.persistenceScope === null && !Object.hasOwn(request, "parentSessionId"),
+    ),
+  );
   assert.equal(
     runtime.userMessageAttachments[0].relations[0].targetIdentity.attachmentId,
     "parsed-1",
@@ -297,7 +301,12 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
       },
     },
     userConfig: {},
-    systemRuntime: { userId: "admin", sessionId: "session-1", rootSessionId: "session-1" },
+    systemRuntime: {
+      persistenceScope: null,
+      userId: "admin",
+      sessionId: "session-1",
+      rootSessionId: "session-1",
+    },
     userMessageAttachments: [],
     modelHost: createTestModelHost({
       modelPort: {
@@ -349,7 +358,7 @@ test("multimodal_parse rejects directly readable text before invoking a model", 
   let modelCalled = false;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    systemRuntime: { userId: "admin" },
+    systemRuntime: { persistenceScope: null, userId: "admin" },
     userMessageAttachments: [],
     modelHost: createTestModelHost({
       modelPort: {
@@ -392,7 +401,12 @@ test("multimodal_parse passes audio and video files to the configured model", as
       },
     },
     userConfig: {},
-    systemRuntime: { userId: "admin", sessionId: "session-1", rootSessionId: "session-1" },
+    systemRuntime: {
+      persistenceScope: null,
+      userId: "admin",
+      sessionId: "session-1",
+      rootSessionId: "session-1",
+    },
     userMessageAttachments: [],
     modelHost: createTestModelHost({
       modelPort: {
@@ -456,7 +470,7 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
   let modelCalled = false;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    systemRuntime: { userId: "admin" },
+    systemRuntime: { persistenceScope: null, userId: "admin" },
     userMessageAttachments: [],
     modelHost: createTestModelHost({
       modelPort: {
@@ -481,7 +495,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
   await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    systemRuntime: { userId: "admin" },
+    systemRuntime: { persistenceScope: null, userId: "admin" },
     runtimeModel: "parse-model",
     globalConfig: {
       multimodal: { parsing: { default_models: { document: "parse-model" } } },
@@ -521,7 +535,7 @@ test("multimodal_parse uses the configured modality default instead of the runti
   let invokedModel = null;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    systemRuntime: { userId: "admin" },
+    systemRuntime: { persistenceScope: null, userId: "admin" },
     runtimeModel: "conversation-model",
     globalConfig: {
       multimodal: { parsing: { default_models: { document: "parse-model" } } },

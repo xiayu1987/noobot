@@ -23,7 +23,6 @@ test("context source projection excludes only the active canonical scope", () =>
       turnLifecycle: { turns: {} },
     },
     scope: createContextScope({
-      sessionId: "s",
       dialogProcessId: "d-active",
       turnScopeId: "t-active",
     }),

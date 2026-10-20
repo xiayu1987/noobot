@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 
-import { createTestSessionServices } from "../helpers/session-services.js";
+import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
@@ -32,8 +32,18 @@ test("session display summary should keep chat view lightweight and rebuild stal
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
 
-    await runtime.sessionCrudService.ensureSession(userId, "A", "", SESSION_CALLER.USER);
-    await runtime.sessionCrudService.ensureSession(userId, "B", "A", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "A",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "B",
+      parentSessionId: "A",
+      caller: SESSION_CALLER.USER,
+    });
 
     const userContentTail = "__USER_CONTENT_COMPLETE_TAIL__";
     const assistantContentTail = "__ASSISTANT_CONTENT_COMPLETE_TAIL__";
@@ -74,7 +84,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
       meta: { persisted: true },
     };
 
-    const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
+    const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", {
+      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+        userId,
+        "B",
+      ),
+    });
     sessionB.messages = canonicalMessages(
       [
         {
@@ -285,17 +300,23 @@ test("session display summary should keep chat view lightweight and rebuild stal
       ],
       "lightweight_b",
     );
-    await runtime.repositories.sessionRepository.save(
-      userId,
-      applySessionMessageFacts(sessionB),
-      "A",
-    );
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "B", "A");
+    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionB), {
+      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+        userId,
+        sessionB.sessionId,
+      ),
+    });
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "B", {
+      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+        userId,
+        "B",
+      ),
+    });
 
-    const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(
+    const scopeB = await runtime.repositories.sessionRepository.requireSessionScope(
       userId,
       "B",
-      "A",
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, "B"),
     );
     const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
     const persistedSession = await readSessionArtifact({ sessionDir: scopeB.sessionDir });
@@ -332,7 +353,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
       userId,
       "B",
-      "A",
+      {
+        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+          userId,
+          "B",
+        ),
+      },
     );
     const assistantMessage = hydratedSummary.messages.find((item) => item.messageId === "a1");
     assert.equal(assistantMessage.toolTimeline.length, 1);
@@ -458,7 +484,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
       sessionId: "B",
     });
     assert.equal(displayBeforeMaintenance.sessions[0].messages.length, 6);
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "A", "");
+    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "A", {
+      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+        userId,
+        "A",
+      ),
+    });
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
       userId,
     });

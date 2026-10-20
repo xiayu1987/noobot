@@ -4,53 +4,38 @@
  * SPDX-License-Identifier: MIT
  */
 import { fsMkdir } from "../../shared/storage/fs-adapter.js";
-import { buildSessionArtifactFileMap, writeTaskArtifact } from "../session-artifact-store.js";
+import { writeTaskArtifact } from "../session-artifact-store.js";
 import { text } from "@noobot/shared/value";
 
 export class FileSystemTaskRepository {
   constructor({
-    pathResolver,
-    sessionPathResolver,
     storageService,
     normalizeTask,
     sessionRepository,
     now = () => new Date().toISOString(),
   } = {}) {
-    this.pathResolver = pathResolver;
-    this.sessionPathResolver = sessionPathResolver;
     this.storageService = storageService;
     this.normalizeTask = normalizeTask;
     this.sessionRepository = sessionRepository;
     this.now = now;
   }
 
-  _basePath(userId = "") {
-    return this.pathResolver.resolveBasePath(userId);
-  }
-
-  async _resolveTaskScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
-    const { sessionDir, taskFile } = await resolver.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-    );
-    return { sessionDir, taskFile: taskFile || buildSessionArtifactFileMap(sessionDir).task };
-  }
-
-  async findBySessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
+  async findBySessionId(userId, sessionId, { persistenceContext } = {}) {
+    const bundle = await this.getBundle(userId, sessionId, { persistenceContext });
     return bundle.tasks;
   }
 
-  async getBundle(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const { taskFile } = await this._resolveTaskScope(
+  async getBundle(userId, sessionId, { persistenceContext } = {}) {
+    const scope = await this.sessionRepository.requireSessionScope(
       userId,
       sessionId,
-      parentSessionId,
       persistenceContext,
     );
-    const bundle = await this.storageService.readJson(taskFile, {
+    return this._readBundle(scope, sessionId);
+  }
+
+  async _readBundle(scope, sessionId) {
+    const bundle = await this.storageService.readJson(scope.taskFile, {
       sessionId,
       currentTaskId: "",
       tasks: [],
@@ -66,50 +51,36 @@ export class FileSystemTaskRepository {
     };
   }
 
-  async save(userId, sessionId, task, parentSessionId = "", persistenceContext = null) {
+  async save(userId, sessionId, task, { persistenceContext } = {}) {
     const normalizedTask = this.normalizeTask(task);
-    return this._mutateBundle(userId, sessionId, parentSessionId, persistenceContext, (bundle) => {
+    return this._mutateBundle(userId, sessionId, persistenceContext, (bundle) => {
       upsertTasks(bundle.tasks, [normalizedTask]);
       return normalizedTask.taskId;
     });
   }
 
-  async saveBatch(
-    userId,
-    sessionId,
-    tasks = [],
-    parentSessionId = "",
-    currentTaskId = "",
-    persistenceContext = null,
-  ) {
+  async saveBatch(userId, sessionId, tasks, { currentTaskId = "", persistenceContext } = {}) {
     const normalizedTasks = tasks
       .map((task) => this.normalizeTask(task))
       .filter((task) => task.taskId);
-    return this._mutateBundle(userId, sessionId, parentSessionId, persistenceContext, (bundle) => {
+    return this._mutateBundle(userId, sessionId, persistenceContext, (bundle) => {
       upsertTasks(bundle.tasks, normalizedTasks);
       return currentTaskId;
     });
   }
 
-  async _mutateBundle(userId, sessionId, parentSessionId, persistenceContext, mutate) {
+  async _mutateBundle(userId, sessionId, persistenceContext, mutate) {
     await this.sessionRepository.withSessionMutation(
       userId,
       sessionId,
-      parentSessionId,
-      async () => {
-        const { sessionDir } = await this._resolveTaskScope(
-          userId,
-          sessionId,
-          parentSessionId,
-          persistenceContext,
-        );
-        await fsMkdir(sessionDir, { recursive: true });
-        const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
+      async (scope) => {
+        await fsMkdir(scope.sessionDir, { recursive: true });
+        const bundle = await this._readBundle(scope, sessionId);
         bundle.currentTaskId = text(mutate(bundle));
         bundle.updatedAt = this.now();
         await writeTaskArtifact({
           storageService: this.storageService,
-          sessionDir,
+          sessionDir: scope.sessionDir,
           taskPayload: {
             sessionId,
             currentTaskId: bundle.currentTaskId,
@@ -118,7 +89,7 @@ export class FileSystemTaskRepository {
           },
         });
       },
-      persistenceContext,
+      { persistenceContext },
     );
     return true;
   }

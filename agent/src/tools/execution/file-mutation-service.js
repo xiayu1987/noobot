@@ -275,7 +275,7 @@ async function applyFileMutationInternal({
   mutationRoot,
   expectedSha256 = undefined,
   rollbackState = null,
-  sessionScope = null,
+  sessionScope,
   writeText,
   removeFile = async (target) => unlink(target),
 } = {}) {

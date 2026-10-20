@@ -11,14 +11,13 @@ export const DETACHED_REQUEST_METADATA = Object.freeze({ scope: TOOL_NAME.CALL_M
 export function createDeps(overrides = {}) {
   const calls = {
     runSessionPayloads: [],
-    persistencePayloads: [],
+    metadataWrites: [],
     mergePayload: null,
     prepareRunConfigPayload: null,
     loadedWorkspacePath: "",
     emitted: [],
     lifecyclePayloads: [],
     executionLogs: [],
-    persistenceContexts: [],
   };
   const deps = {
     workspaceService: {
@@ -75,14 +74,8 @@ export function createDeps(overrides = {}) {
             : null;
         return { applied: true, envelope: turn, turn, userMessage, aggregateVersion: sequence };
       },
-      createScopedPersistenceContext(payload = {}) {
-        calls.persistencePayloads.push(payload);
-        const context = Object.freeze({
-          locationResolver: { marker: payload.relativeDir },
-          metadataContributor: payload.metadataContributor,
-        });
-        calls.persistenceContexts.push(context);
-        return context;
+      async writeSessionMetadata(payload = {}) {
+        calls.metadataWrites.push(payload);
       },
     },
     mergeRunConfigPluginPolicy(payload = {}) {

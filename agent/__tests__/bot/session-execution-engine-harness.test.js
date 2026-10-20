@@ -12,7 +12,6 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createStateCommitter } from "../../src/runtime/tool-execution/state-committer.js";
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
@@ -23,6 +22,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -320,7 +320,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   const sessionId = randomUUID();
 
   const session = {
-    assertPersistenceContextIdentity,
     async getRootSessionId({ sessionId }) {
       return sessionId;
     },
@@ -334,8 +333,13 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     async getExecutionTurnLogs() {
       return executionLogs;
     },
-    async resolveSessionScope({ userId, sessionId }) {
-      return { sessionDir: path.join(tempRoot, userId, "runtime", "session", sessionId) };
+    async locateSessionScope({ userId, sessionId }) {
+      return {
+        sessionDir: path.join(tempRoot, userId, "runtime", "session", sessionId),
+        resolvedParentSessionId: "",
+        indexed: true,
+        registered: true,
+      };
     },
     async saveExecutionReport() {},
     async appendExecutionLog(payload = {}) {
@@ -462,35 +466,39 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     };
   };
 
-  const result = await engine.runSession({
-    abortSignal: new AbortController().signal,
-    userId: "u1",
-    sessionId,
-    caller: SESSION_CALLER.USER,
-    dialogProcessId: "dp-scope-smoke",
-    turnAcceptance: createTurnAcceptanceReceipt({
-      ...createTestSessionRequiredFields(),
-      commandId: "turn-scope-smoke",
+  const result = await engine.runSession(
+    createTestSessionRunPayload({
+      abortSignal: new AbortController().signal,
+      userId: "u1",
       sessionId,
-      turnScopeId: "turn-scope-smoke",
+      parentSessionId: "",
+      persistenceScope: null,
+      caller: SESSION_CALLER.USER,
       dialogProcessId: "dp-scope-smoke",
-      messageUid: "sm_turn-scope-smoke",
-      aggregateVersion: 1,
-    }),
-    message: "hello plugin",
-    turnScopeId: "turn-scope-smoke",
-    runConfig: {
-      ...createAcceptedRunIdentity("turn-scope-smoke", { commandId: "turn-scope-smoke" }),
-      executionKind: "agent",
-      selectedPlugins: ["harness"],
-      plugins: {
-        harness: {
-          manifestDebounceMs: 0,
-          jsonlFlushStrategy: { maxSize: 1, maxTime: 0, onTerminal: true, onError: true },
+      turnAcceptance: createTurnAcceptanceReceipt({
+        ...createTestSessionRequiredFields(),
+        commandId: "turn-scope-smoke",
+        sessionId,
+        turnScopeId: "turn-scope-smoke",
+        dialogProcessId: "dp-scope-smoke",
+        messageUid: "sm_turn-scope-smoke",
+        aggregateVersion: 1,
+      }),
+      message: "hello plugin",
+      turnScopeId: "turn-scope-smoke",
+      runConfig: {
+        ...createAcceptedRunIdentity("turn-scope-smoke", { commandId: "turn-scope-smoke" }),
+        executionKind: "agent",
+        selectedPlugins: ["harness"],
+        plugins: {
+          harness: {
+            manifestDebounceMs: 0,
+            jsonlFlushStrategy: { maxSize: 1, maxTime: 0, onTerminal: true, onError: true },
+          },
         },
       },
-    },
-  });
+    }),
+  );
 
   assert.equal(result.answer, "ok from fake agent");
   assert.equal(capturedAgentUserMessage, "hello plugin");

@@ -22,7 +22,7 @@ export class BotManageValidator {
     return normalizedMessage;
   }
 
-  validateRunInput({ userId, sessionId, caller, parentSessionId = "" }) {
+  validateRunInput({ userId, sessionId, caller, parentSessionId }) {
     if (!userId || !sessionId) {
       throw recoverableToolError(tSystem("common.userSessionRequired"), {
         code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -38,7 +38,11 @@ export class BotManageValidator {
         code: ERROR_CODE.RECOVERABLE_INVALID_CALLER,
       });
     }
-    if (parentSessionId && !isValidSessionId(parentSessionId)) {
+
+    if (
+      typeof parentSessionId !== "string" ||
+      (parentSessionId !== "" && !isValidSessionId(parentSessionId))
+    ) {
       throw recoverableToolError(tSystem("bot.invalidParentSessionIdFormat"), {
         code: ERROR_CODE.RECOVERABLE_INVALID_PARENT_SESSION_ID,
       });

@@ -144,6 +144,10 @@ export function resolveSessionTreeChain(tree, sessionId) {
   return chain.reverse();
 }
 
+export function isSessionTreeNodeRegistered(tree, sessionId) {
+  return Object.hasOwn(tree.nodes, requireSessionId(sessionId));
+}
+
 export function requireSessionTreeNode(tree, sessionId) {
   const node = tree.nodes[requireSessionId(sessionId)];
   if (!node) {
@@ -180,12 +184,11 @@ export function collectSessionTreeBranch(tree, sessionId) {
   return branch;
 }
 
-export function resolveSessionTreePlacement(tree, sessionId, parentSessionId) {
-  const leafId = requireSessionId(sessionId);
-  const parentId = requireParentSessionId(parentSessionId);
+export function placeSessionTreeChain(tree, placement) {
+  const { sessionId: leafId, parentSessionId: parentId } = createSessionTreePlacement(placement);
   const node = tree.nodes[leafId];
   if (node) {
-    if (parentId && parentId !== node.parentSessionId) {
+    if (parentId !== node.parentSessionId) {
       throw sessionTreeError(
         SESSION_TREE_ERROR.PARENT_MISMATCH,
         `session ${leafId} is registered under "${node.parentSessionId}", not "${parentId}"`,

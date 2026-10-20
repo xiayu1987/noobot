@@ -35,20 +35,10 @@ import {
   withAuthorityOutboxMutation,
   writeAuthorityOutboxCheckpoint,
 } from "../../authority-outbox-store/outbox-journal.js";
-import { requireOutboxSessionDir, resolveOutboxSessionDir } from "./outbox-scope.js";
+import { locateOutboxSessionDir } from "./outbox-scope.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
-import { decideAggregateConcurrency } from "@noobot/session-protocol";
-
-async function readOutboxSessionDir(service, userId, sessionId, parentSessionId, context) {
-  const resolvedParentSessionId = await service._resolveParentSessionId(
-    userId,
-    sessionId,
-    parentSessionId,
-    context,
-  );
-  return resolveOutboxSessionDir(service, userId, sessionId, resolvedParentSessionId, context);
-}
+import { SESSION_NOT_FOUND_REASON, decideAggregateConcurrency } from "@noobot/session-protocol";
 
 function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "", floor = 0) {
   const envelopes = [
@@ -103,7 +93,6 @@ function decidePluginArtifactRevision(session, payload) {
 export async function commitAuthorityEvent({
   userId,
   sessionId,
-  parentSessionId = "",
   family,
   schemaVersion = 1,
   identity = {},
@@ -111,7 +100,7 @@ export async function commitAuthorityEvent({
   ordering = {},
   producer = {},
   payload = {},
-  persistenceContext = null,
+  persistenceContext,
 } = {}) {
   const owner = {
     userId: text(userId),
@@ -125,17 +114,14 @@ export async function commitAuthorityEvent({
   if (!orderingDomain || !orderingScopeId) {
     throw new TypeError("authority event commit requires ordering domain and scope");
   }
-  const mutation = this._withSessionMutation(
+  const mutation = this.sessionRepo.withSessionMutation(
     owner.userId,
     owner.sessionId,
-    async () => {
-      const { session, resolvedParentSessionId } = await this._findSession(
-        owner.userId,
-        owner.sessionId,
-        parentSessionId,
+    async (scope) => {
+      const session = await this.sessionRepo.findById(owner.userId, owner.sessionId, {
         persistenceContext,
-      );
-      if (!session) return { committed: false, reason: "session_not_found" };
+      });
+      if (!session) return { committed: false, reason: SESSION_NOT_FOUND_REASON };
       const eventPayload = { ...payload };
       const descriptor = getEventFamily(family);
       const isArtifact = descriptor?.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
@@ -156,13 +142,7 @@ export async function commitAuthorityEvent({
       }
       const baseAggregateVersion = session.aggregateVersion;
       const occurredAt = this.now();
-      const outboxSessionDir = await requireOutboxSessionDir(
-        this,
-        owner.userId,
-        owner.sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
+      const outboxSessionDir = scope.sessionDir;
       const persistedOutbox = await readAuthorityOutbox(outboxSessionDir);
       const outboxCheckpoint = await readAuthorityOutboxCheckpoint(outboxSessionDir);
       const sequence = nextSequence(
@@ -216,7 +196,7 @@ export async function commitAuthorityEvent({
       if (!isSessionArtifactEvent) {
         return { committed: true, envelope };
       }
-      await this.sessionRepo.save(owner.userId, session, resolvedParentSessionId, {
+      await this.sessionRepo.save(owner.userId, session, {
         expectedAggregateVersion: baseAggregateVersion,
         persistenceContext,
       });
@@ -226,8 +206,7 @@ export async function commitAuthorityEvent({
         aggregateVersion: concurrency.nextAggregateVersion,
       };
     },
-    parentSessionId,
-    persistenceContext,
+    { persistenceContext },
   );
   return resolveDeletedSessionAs(mutation, { committed: false });
 }
@@ -235,49 +214,34 @@ export async function commitAuthorityEvent({
 export async function getPendingAuthorityEvents({
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
-  consumerId = "",
-  limit = 100,
-} = {}) {
+  persistenceContext,
+  consumerId,
+}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session", events: [] };
   if (!text(consumerId)) return { found: false, reason: "missing_consumer", events: [] };
-  const sessionDir = await readOutboxSessionDir(
-    this,
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
-  if (!sessionDir) return { found: false, reason: "session_not_found", events: [] };
+  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
+  if (!sessionDir) return { found: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
   const outbox = await readAuthorityOutbox(sessionDir);
   return {
     found: true,
-    events: listPendingAuthorityEvents(outbox, { consumerId, limit }),
+    events: listPendingAuthorityEvents(outbox, { consumerId }),
   };
 }
 
 export async function recordAuthorityEventAttempts({
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
-  consumerId = "",
-  eventIds = [],
-} = {}) {
-  const requested = (Array.isArray(eventIds) ? eventIds : []).map(text).filter(Boolean);
+  persistenceContext,
+  consumerId,
+  eventIds,
+}) {
+  const requested = eventIds.map(text).filter(Boolean);
   const normalizedConsumerId = text(consumerId);
   if (!userId || !sessionId || !normalizedConsumerId || !requested.length) {
     return { recorded: false, reason: "missing_identity", events: [] };
   }
-  const sessionDir = await readOutboxSessionDir(
-    this,
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
-  if (!sessionDir) return { recorded: false, reason: "session_not_found", events: [] };
+  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
+  if (!sessionDir) return { recorded: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const attemptedAt = this.now();
     let outbox = await readAuthorityOutbox(sessionDir);
@@ -306,24 +270,17 @@ export async function recordAuthorityEventAttempts({
 export async function acknowledgeAuthorityEvents({
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
-  consumerId = "",
-  acknowledgements = [],
-} = {}) {
-  const requested = Array.isArray(acknowledgements) ? acknowledgements : [];
-  if (!userId || !sessionId || !consumerId || !requested.length) {
+  persistenceContext,
+  consumerId,
+  acknowledgements,
+}) {
+  const requested = acknowledgements;
+  if (!userId || !sessionId || !text(consumerId) || !requested.length) {
     return { acknowledged: false, reason: "missing_identity", delivered: 0, deduplicated: 0 };
   }
-  const sessionDir = await readOutboxSessionDir(
-    this,
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
+  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
   if (!sessionDir) {
-    return { acknowledged: false, reason: "session_not_found", delivered: 0, deduplicated: 0 };
+    return { acknowledged: false, reason: SESSION_NOT_FOUND_REASON, delivered: 0, deduplicated: 0 };
   }
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const deliveredAt = this.now();
@@ -332,10 +289,10 @@ export async function acknowledgeAuthorityEvents({
     let delivered = 0;
     let deduplicated = 0;
     for (const entry of requested) {
-      const eventId = text(entry?.eventId);
-      const orderingDomain = text(entry?.orderingDomain);
-      const orderingScopeId = text(entry?.orderingScopeId);
-      const sequence = Number(entry?.sequence);
+      const eventId = text(entry.eventId);
+      const orderingDomain = text(entry.orderingDomain);
+      const orderingScopeId = text(entry.orderingScopeId);
+      const sequence = Number(entry.sequence);
       if (!eventId || !orderingDomain || !orderingScopeId) {
         return { acknowledged: false, reason: "missing_identity", delivered, deduplicated };
       }
@@ -377,21 +334,14 @@ export async function acknowledgeAuthorityEvents({
 export async function compactAuthorityEvents({
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
-  retainDeliveredAfter = "",
-} = {}) {
+  persistenceContext,
+  retainDeliveredAfter,
+}) {
   if (!userId || !sessionId) {
     return { compacted: false, reason: "missing_compaction_identity" };
   }
-  const sessionDir = await readOutboxSessionDir(
-    this,
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
-  if (!sessionDir) return { compacted: false, reason: "session_not_found" };
+  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
+  if (!sessionDir) return { compacted: false, reason: SESSION_NOT_FOUND_REASON };
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const outbox = await readAuthorityOutbox(sessionDir);
     const result = compactAuthorityEventOutbox(outbox, { retainDeliveredAfter });

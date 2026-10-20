@@ -695,7 +695,7 @@ function extractLegacyAuthorityEventOutbox(context) {
   return legacyAuthorityEventOutbox;
 }
 
-function createDocumentMigrationContext(document, suppliedSessionId) {
+function createDocumentMigrationContext(document) {
   if (!isPlainObject(document)) {
     throw migrationError(
       "Session repair source must be an object",
@@ -704,7 +704,7 @@ function createDocumentMigrationContext(document, suppliedSessionId) {
   }
   const next = structuredClone(document);
   const sourceSchemaVersion = resolveSessionArtifactSchemaVersion(next.schemaVersion);
-  const sessionId = text(next.sessionId || suppliedSessionId);
+  const sessionId = text(next.sessionId);
   const transferMigration = createSemanticTransferMigration(next);
   const migrations = [];
   const changed = migrateArtifactSchema(next, migrations, sourceSchemaVersion);
@@ -743,8 +743,8 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateSessionCaller,
 ]);
 
-export function migrateSessionDocument(document = {}, { sessionId: suppliedSessionId = "" } = {}) {
-  const context = createDocumentMigrationContext(document, suppliedSessionId);
+export function migrateSessionDocument(document = {}) {
+  const context = createDocumentMigrationContext(document);
   for (const step of DOCUMENT_MIGRATION_STEPS) step(context);
   const legacyAuthorityEventOutbox = extractLegacyAuthorityEventOutbox(context);
   if (context.changed && context.migrations.length === 0) {

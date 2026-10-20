@@ -68,7 +68,7 @@ export async function bindAgentDispatchRuntime({
   parentDialogProcessId,
   turnScopeId,
   eventListener,
-  persistenceContext,
+  persistenceScope,
   sessionDir,
   normalizedMessage,
   requestedAttachments,
@@ -169,12 +169,11 @@ export async function bindAgentDispatchRuntime({
     commitSummaryCheckpoint,
     userId,
     sessionId,
-    parentSessionId,
     dialogProcessId,
     parentDialogProcessId,
     turnScopeId,
     eventListener,
-    persistenceContext,
+    persistenceScope,
   });
   dispatchRuntime.consumeUserInterjections = async () => {
     if (!dispatchRuntime.userInterjectionPort) return [];

@@ -14,6 +14,7 @@ import {
   persistedUserMessage,
 } from "./runner-bot-hook.fixtures.js";
 import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
+import { createTestSessionRunPayload } from "../../helpers/session-run-payload.js";
 
 test("SessionExecutionRunner rejects a prepared turnScopeId that diverges from the accepted Turn", async () => {
   const runner = createRunner({
@@ -86,7 +87,8 @@ for (const { name, dialogProcessId, turnScopeId, runConfig, isContinue } of [
     });
     const runner = createRunner({
       botHookManager,
-      initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+      initializeRunSessionRuntime: async ({ eventListener = null, parentSessionId } = {}) => ({
+        parentSessionId,
         usedSessionId: "s1",
         dialogProcessId,
         sessionLoadState: "loaded",
@@ -98,7 +100,7 @@ for (const { name, dialogProcessId, turnScopeId, runConfig, isContinue } of [
 
     await runner.runAcceptedSession(
       { userId: "u1", sessionId: "s1", message: "next", turnScopeId, runConfig },
-      { dialogProcessId },
+      { dialogProcessId, committedEventPublished: false },
     );
 
     assert.equal(beforeRunContext?.sessionLoadState, "loaded");
@@ -110,7 +112,8 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
   const calls = [];
   let capturedBuildContextPayload = null;
   const runner = createRunner({
-    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+    initializeRunSessionRuntime: async ({ eventListener = null, parentSessionId } = {}) => ({
+      parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp-new",
       sessionLoadState: "loaded",
@@ -152,17 +155,21 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
     },
   });
 
-  await runner.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "dp-new",
-    message: "edited",
-    attachments: [{ name: "doc.docx", size: 12 }],
-    turnScopeId: "client-turn:edited",
-    runConfig: createAcceptedRunIdentity("client-turn:edited", {
-      reuseExistingUserTurn: true,
+  await runner.runSession(
+    createTestSessionRunPayload({
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "",
+      persistenceScope: null,
+      dialogProcessId: "dp-new",
+      message: "edited",
+      attachments: [{ name: "doc.docx", size: 12 }],
+      turnScopeId: "client-turn:edited",
+      runConfig: createAcceptedRunIdentity("client-turn:edited", {
+        reuseExistingUserTurn: true,
+      }),
     }),
-  });
+  );
 
   assert.deepEqual(
     calls.map((item) => item.type),
@@ -171,7 +178,6 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
   assert.deepEqual(calls[1].payload, {
     userId: "u1",
     sessionId: "s1",
-    parentSessionId: "",
     turnScopeId: "client-turn:edited",
     dialogProcessId: "dp-new",
     attachments: [
@@ -183,6 +189,7 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
         path: "/workspace/doc.docx",
       },
     ],
+    persistenceScope: null,
   });
   assert.equal(capturedBuildContextPayload?.dialogProcessId, "dp-new");
 });
@@ -190,7 +197,8 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
 test("SessionExecutionRunner preserves the precommitted reused Turn dialogProcessId", async () => {
   const calls = [];
   const runner = createRunner({
-    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+    initializeRunSessionRuntime: async ({ eventListener = null, parentSessionId } = {}) => ({
+      parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp-new",
       sessionLoadState: "loaded",
@@ -204,39 +212,47 @@ test("SessionExecutionRunner preserves the precommitted reused Turn dialogProces
     },
   });
 
-  await runner.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "dp-new",
-    message: "edited",
-    turnScopeId: "client-turn:edited",
-    runConfig: createAcceptedRunIdentity("client-turn:edited", {
-      reuseExistingUserTurn: true,
+  await runner.runSession(
+    createTestSessionRunPayload({
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "",
+      persistenceScope: null,
+      dialogProcessId: "dp-new",
+      message: "edited",
+      turnScopeId: "client-turn:edited",
+      runConfig: createAcceptedRunIdentity("client-turn:edited", {
+        reuseExistingUserTurn: true,
+      }),
     }),
-  });
+  );
 
   assert.deepEqual(calls[1], {
     userId: "u1",
     sessionId: "s1",
-    parentSessionId: "",
     turnScopeId: "client-turn:edited",
     dialogProcessId: "dp-new",
     attachments: [],
+    persistenceScope: null,
   });
 });
 
 test("SessionExecutionRunner rejects reused Turn execution without a precommitted dialogProcessId", async () => {
   const runner = createRunner();
   await assert.rejects(
-    runner.runSession({
-      userId: "u1",
-      sessionId: "s1",
-      message: "edited",
-      turnScopeId: "client-turn:edited",
-      runConfig: {
-        reuseExistingUserTurn: true,
-      },
-    }),
+    runner.runSession(
+      createTestSessionRunPayload({
+        userId: "u1",
+        sessionId: "s1",
+        parentSessionId: "",
+        persistenceScope: null,
+        message: "edited",
+        turnScopeId: "client-turn:edited",
+        runConfig: {
+          reuseExistingUserTurn: true,
+        },
+      }),
+    ),
     (error) => error?.cause?.code === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID",
   );
 });

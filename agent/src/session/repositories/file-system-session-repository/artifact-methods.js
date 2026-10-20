@@ -15,11 +15,9 @@ import {
   replaceAuthorityOutboxRecords,
 } from "../../authority-outbox-store/outbox-journal.js";
 import {
-  buildSessionArtifactFileMap,
   readSessionArtifact,
   readSessionArtifactForRepair,
   readSessionDisplaySummaryArtifact as readDisplaySummaryArtifact,
-  readSessionMessageCount,
   readSessionTurn,
   readSessionTurnView,
   rebuildSessionDisplaySummaryArtifact,
@@ -27,7 +25,10 @@ import {
   repairSessionArtifacts,
 } from "../../session-artifact-store.js";
 import { buildSessionListFacts } from "../../session-artifact-session/session-list-facts.js";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import {
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+  assertSessionScopeIdentity,
+} from "@noobot/session-protocol";
 import {
   reconcileCompletedTurnSummaryMarks,
   resegmentMigratedCheckpointBaselines,
@@ -38,64 +39,22 @@ import { text } from "@noobot/shared/value";
 const SESSION_ARTIFACT_NOT_FOUND = "SESSION_ARTIFACT_NOT_FOUND";
 
 class SessionArtifactMethods {
-  async repairSessionProtocol(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    return this._repairSessionToCurrentProtocol(
-      userId,
-      text(sessionId),
-      text(parentSessionId),
-      persistenceContext,
-    );
+  async repairSessionProtocol(userId, sessionId, { persistenceContext } = {}) {
+    return this._repairSessionToCurrentProtocol(userId, text(sessionId), persistenceContext);
   }
 
-  async _sessionDisplaySummaryFile(
-    userId,
-    sessionId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    const { sessionDir } = await this.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
+  async readSessionDisplaySummary(userId, sessionId, { persistenceContext } = {}) {
+    const result = await this.ensureSessionDisplaySummary(userId, sessionId, {
       persistenceContext,
-    );
-    return buildSessionArtifactFileMap(sessionDir).sessionSummary;
-  }
-
-  async readSessionDisplaySummary(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    const result = await this.ensureSessionDisplaySummary(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+    });
     return result.summary;
   }
 
-  async ensureSessionDisplaySummary(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
+  async ensureSessionDisplaySummary(userId, sessionId, { persistenceContext } = {}) {
     const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return { summary: null, migrated: false, rebuilt: false };
-    const scope = await this.resolveSessionScope(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+    const scope = await this.locateSessionScope(userId, normalizedSessionId, persistenceContext);
+    if (!scope) return { summary: null, migrated: false, rebuilt: false };
     try {
       const [manifest, summary] = await Promise.all([
         this.storageService.readJson(scope.sessionFile, null),
@@ -109,12 +68,7 @@ class SessionArtifactMethods {
         return { summary, migrated: false, rebuilt: false };
       }
       const migrated = manifest?.schemaVersion !== SESSION_ARTIFACT_SCHEMA_VERSION;
-      const session = await this.findById(
-        userId,
-        normalizedSessionId,
-        parentSessionId,
-        persistenceContext,
-      );
+      const session = await this.findById(userId, normalizedSessionId, { persistenceContext });
       if (!session) return { summary: null, migrated, rebuilt: false };
       let rebuilt = await readDisplaySummaryArtifact({
         storageService: this.storageService,
@@ -125,14 +79,13 @@ class SessionArtifactMethods {
       if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
         await this.upsertSessionSummary(userId, session, {
           listFacts: buildSessionListFacts(session),
-          persistenceContext,
+          scope,
         });
         return { summary: rebuilt, migrated, rebuilt: !migrated };
       }
       await this._refreshSessionDisplaySummary(
         userId,
         normalizedSessionId,
-        parentSessionId,
         session,
         persistenceContext,
       );
@@ -150,10 +103,7 @@ class SessionArtifactMethods {
       throw error;
     } catch (error) {
       try {
-        await this.markSessionSummaryUnavailable(userId, normalizedSessionId, {
-          error,
-          persistenceContext,
-        });
+        await this.markSessionSummaryUnavailable(userId, normalizedSessionId, { error, scope });
       } catch (projectionError) {
         error.unavailableProjectionCause = projectionError;
       }
@@ -161,31 +111,18 @@ class SessionArtifactMethods {
     }
   }
 
-  async _refreshSessionDisplaySummary(
-    userId,
-    sessionId,
-    parentSessionId,
-    candidateSession,
-    persistenceContext = null,
-  ) {
+  async _refreshSessionDisplaySummary(userId, sessionId, candidateSession, persistenceContext) {
     return this.withSessionMutation(
       userId,
       sessionId,
-      parentSessionId,
-      async () => {
-        const scope = await this.resolveSessionScope(
-          userId,
-          sessionId,
-          parentSessionId,
-          persistenceContext,
-        );
+      async (scope) => {
         const manifest = await this.storageService.readJson(scope.sessionFile, null);
         const session =
           manifest &&
           createSessionDisplaySourceRevision(candidateSession) ===
             createSessionDisplaySourceRevision(manifest)
             ? candidateSession
-            : await this._readNormalizedSession(scope, sessionId, parentSessionId);
+            : await this._readNormalizedSession(scope, sessionId);
         await rebuildSessionDisplaySummaryArtifact({
           storageService: this.storageService,
           sessionDir: scope.sessionDir,
@@ -193,57 +130,36 @@ class SessionArtifactMethods {
         });
         await this.upsertSessionSummary(userId, session, {
           listFacts: buildSessionListFacts(session),
-          persistenceContext,
+          scope,
         });
         return session;
       },
-      persistenceContext,
+      { persistenceContext },
     );
   }
 
   async readSessionTurn(
-    userId = "",
-    sessionId = "",
-    {
-      parentSessionId = "",
-      turnScopeId = "",
-      dialogProcessId = "",
-      persistenceContext = null,
-    } = {},
+    userId,
+    sessionId,
+    { turnScopeId = "", dialogProcessId = "", persistenceContext } = {},
   ) {
     const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return null;
-    const { sessionDir } = await this.resolveSessionScope(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    return readSessionTurn({ sessionDir, turnScopeId, dialogProcessId });
+    const scope = await this.locateSessionScope(userId, normalizedSessionId, persistenceContext);
+    if (!scope) return null;
+    return readSessionTurn({ sessionDir: scope.sessionDir, turnScopeId, dialogProcessId });
   }
 
-  async _repairSessionToCurrentProtocol(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
+  async _repairSessionToCurrentProtocol(userId, sessionId, persistenceContext) {
     return this.withSessionMutation(
       userId,
       sessionId,
-      parentSessionId,
-      async () => {
-        const scope = await this.resolveSessionScope(
-          userId,
-          sessionId,
-          parentSessionId,
-          persistenceContext,
-        );
+      async (scope) => {
         const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
         const repairPreviouslyFailed = lifecycle?.repair?.status === "failed";
         let repairTrigger = null;
         try {
-          await this._readNormalizedSession(scope, sessionId, parentSessionId);
+          await this._readNormalizedSession(scope, sessionId);
         } catch (validationError) {
           if (validationError?.code === SESSION_ARTIFACT_NOT_FOUND) throw validationError;
           repairTrigger = validationError;
@@ -270,8 +186,6 @@ class SessionArtifactMethods {
               }
               const migration = normalizeSessionDocumentForCurrentProtocol(source, {
                 now: this.now,
-                sessionId,
-                parentSessionId,
               });
               await writeSessionArtifact({
                 sessionDir: stagingDir,
@@ -307,7 +221,7 @@ class SessionArtifactMethods {
                 sessionDir: stagingDir,
                 sessionFile: path.join(stagingDir, "session.json"),
               };
-              await this._readNormalizedSession(repairedScope, sessionId, parentSessionId);
+              await this._readNormalizedSession(repairedScope, sessionId);
             },
           });
         } catch (error) {
@@ -318,41 +232,42 @@ class SessionArtifactMethods {
           throw error;
         }
       },
-      persistenceContext,
+      { persistenceContext },
     );
   }
 
-  async _readNormalizedSession(scope, sessionId = "", parentSessionId = "") {
+  async _readNormalizedSession(scope, sessionId) {
     const session = await readSessionArtifact({
       storageService: this.storageService,
       sessionDir: scope.sessionDir,
     });
-    return this._normalizeReadSession(session, sessionId, parentSessionId);
+    return this._normalizeReadSession(session, sessionId, scope);
   }
 
-  async _readNormalizedTurnView(scope, sessionId = "", parentSessionId = "", turnScopeIds = []) {
+  async _readNormalizedTurnView(scope, sessionId, turnScopeIds) {
     const view = await readSessionTurnView({
       storageService: this.storageService,
       sessionDir: scope.sessionDir,
       turnScopeIds,
     });
     return {
-      session: this._normalizeReadSession(view?.session, sessionId, parentSessionId),
+      session: this._normalizeReadSession(view?.session, sessionId, scope),
       turnScopeIds: view.turnScopeIds,
     };
   }
 
-  _normalizeReadSession(session, sessionId, parentSessionId) {
+  _normalizeReadSession(session, sessionId, scope) {
     if (!session) {
       const error = new Error("session not found");
       error.code = SESSION_ARTIFACT_NOT_FOUND;
       error.statusCode = 404;
       throw error;
     }
-    const normalized = normalizeSessionEntity(session, {
-      now: this.now,
+    const normalized = normalizeSessionEntity(session, { now: this.now });
+    assertSessionScopeIdentity({
+      session: normalized,
       sessionId,
-      parentSessionId,
+      parentSessionId: scope.resolvedParentSessionId,
     });
     const summaryRepair = reconcileCompletedTurnSummaryMarks(normalized);
     if (summaryRepair.changed) {
@@ -364,28 +279,16 @@ class SessionArtifactMethods {
     return normalized;
   }
 
-  async getTurnMessageCount(
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    const { sessionDir } = await this.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    return readSessionMessageCount({ sessionDir });
-  }
-
-  async removeSessionDisplaySummaries(userId = "", sessionIds = []) {
-    const ids = (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
-      .map((item) => text(item))
-      .filter(Boolean);
+  async removeSessionDisplaySummaries(userId, sessionIds) {
     let removed = 0;
-    for (const sessionId of ids) {
-      await fsRm(await this._sessionDisplaySummaryFile(userId, sessionId, ""), { force: true });
+    for (const sessionId of sessionIds) {
+      const scope = await this.locateSessionScope(
+        userId,
+        sessionId,
+        this.treePersistenceContext(userId, sessionId),
+      );
+      if (!scope) continue;
+      await fsRm(scope.sessionSummaryFile, { force: true });
       removed += 1;
     }
     return removed;

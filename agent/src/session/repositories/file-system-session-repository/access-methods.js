@@ -8,7 +8,8 @@ import { fatalSystemError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
-import { requireSessionTombstoneSessions } from "@noobot/workspace-protocol/session-tombstone";
+import { parseWorkspaceSessionTombstones } from "@noobot/workspace-protocol/session-store";
+import { createSessionTreePersistenceContext } from "../../session-location-resolver.js";
 
 function requireIdentity(value, message, code) {
   const normalized = text(value);
@@ -28,14 +29,18 @@ function requireSessionId(sessionId) {
   );
 }
 
+export function sessionTreeNodeMissingError(sessionId) {
+  return fatalSystemError(`${tSystem("session.treeNodeMissing")}: ${sessionId}`, {
+    code: ERROR_CODE.FATAL_SESSION_TREE_NODE_MISSING,
+    details: { sessionId },
+  });
+}
+
 class SessionAccessMethods {
   async _readDeletedSessions(userId) {
-    const tombstoneFile = this._sessionTombstoneFile(requireUserId(userId));
-    const tombstone = await this.storageService.readJson(tombstoneFile, null);
-    if (tombstone === null) return { sessions: {} };
-    return {
-      sessions: requireSessionTombstoneSessions(tombstone, { persistencePath: tombstoneFile }),
-    };
+    const file = this._sessionTombstoneFile(requireUserId(userId));
+    const raw = await this.storageService.readTextOrNull(file);
+    return { sessions: parseWorkspaceSessionTombstones({ raw, file }) };
   }
 
   async markSessionsDeleted(userId, sessionIds) {
@@ -70,9 +75,41 @@ class SessionAccessMethods {
     }
   }
 
-  async resolveSessionScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
-    return resolver.resolveSessionScope(userId, sessionId, parentSessionId);
+  _sessionLocation(persistenceContext) {
+    if (!persistenceContext?.locationResolver) {
+      throw new TypeError("session repository access requires a persistence context");
+    }
+    return persistenceContext.locationResolver;
+  }
+
+  treePersistenceContext(userId, sessionId) {
+    return createSessionTreePersistenceContext({
+      sessionPathResolver: this.sessionPathResolver,
+      userId,
+      sessionId,
+    });
+  }
+
+  async locateSessionScope(userId, sessionId, persistenceContext) {
+    return this._sessionLocation(persistenceContext).locateSessionScope(userId, sessionId);
+  }
+
+  async requireSessionScope(userId, sessionId, persistenceContext) {
+    const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
+    if (scope) return scope;
+    throw sessionTreeNodeMissingError(sessionId);
+  }
+
+  async placeSessionScope(userId, placement, persistenceContext) {
+    return this._sessionLocation(persistenceContext).placeSessionScope(userId, placement);
+  }
+
+  async commitSessionPlacement(userId, { sessionId, parentSessionId, caller }, persistenceContext) {
+    return this._sessionLocation(persistenceContext).commitSessionPlacement(userId, {
+      sessionId,
+      parentSessionId,
+      caller,
+    });
   }
 }
 

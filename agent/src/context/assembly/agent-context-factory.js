@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { ContextBuilder } from "../index.js";
 import { emitEvent } from "../../events/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
@@ -12,18 +11,9 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { getAgentContextEnvelope, getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
-import { text } from "@noobot/shared/value";
 
 export class AgentContextFactory {
-  constructor({
-    globalConfig = {},
-    session = null,
-    memory = null,
-    attach = null,
-    skill = null,
-    botManager = null,
-    errorLogger = null,
-  } = {}) {
+  constructor({ globalConfig, session, memory, attach, skill, botManager, errorLogger }) {
     this.globalConfig = globalConfig;
     this.session = session;
     this.memory = memory;
@@ -39,15 +29,14 @@ export class AgentContextFactory {
     caller,
     parentSessionId,
     userConfig,
-    userMessageAttachments = [],
-    systemMessages = [],
+    userMessageAttachments,
+    systemMessages,
     eventListener,
-    userInteractionBridge = null,
-    runConfig = {},
+    userInteractionBridge,
+    runConfig,
     abortSignal,
-    parentAsyncResultContainer = null,
-    persistenceContext = null,
-    persistenceScope = null,
+    parentAsyncResultContainer,
+    persistenceScope,
   }) {
     return new ContextBuilder({
       config: {
@@ -69,66 +58,37 @@ export class AgentContextFactory {
         sessionId,
         caller,
         parentSessionId,
-        userMessageAttachments: Array.isArray(userMessageAttachments) ? userMessageAttachments : [],
+        userMessageAttachments,
         systemMessages,
         runConfig,
         abortSignal,
         parentAsyncResultContainer,
-        persistenceContext,
         persistenceScope,
       },
     });
   }
 
-  _buildContextHookBase({
-    mode = "",
-    userId = "",
-    sessionId = "",
-    caller = "",
-    parentSessionId = "",
-    dialogProcessId = "",
-  } = {}) {
-    return {
-      mode: text(mode),
-      userId: text(userId),
-      sessionId: text(sessionId),
-      caller: text(caller),
-      parentSessionId: normalizeParentSessionId(parentSessionId),
-      dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-    };
-  }
-
   async buildAgentContextFromBuilder({
     mode,
-    userId = "",
+    userId,
     sessionId,
-    caller = "",
-    parentSessionId = "",
+    caller,
+    parentSessionId,
     eventListener,
-    dialogProcessId = "",
-    runConfig = {},
-    contextBuilder = null,
-  } = {}) {
+    dialogProcessId,
+    runConfig,
+    contextBuilder,
+  }) {
     if (!contextBuilder) {
       throw new Error(tSystem("context.contextBuilderRequired"));
     }
     const runtimeHookCarrier = {
       eventListener,
-      hookManager:
-        runConfig?.hookManager && typeof runConfig.hookManager === "object"
-          ? runConfig.hookManager
-          : null,
+      hookManager: runConfig.hookManager,
       abortSignal: contextBuilder.abortSignal,
     };
 
-    const contextHookBase = this._buildContextHookBase({
-      mode,
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      dialogProcessId,
-    });
+    const contextHookBase = { mode, userId, sessionId, caller, parentSessionId, dialogProcessId };
     const buildStartedAtMs = Date.now();
     const buildStartedAt = new Date(buildStartedAtMs).toISOString();
 

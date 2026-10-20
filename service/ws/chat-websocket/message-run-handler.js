@@ -25,7 +25,7 @@ import { finalizeRunResult } from "./message-run/terminal-stage.js";
 import { text } from "@noobot/shared/value";
 
 function createConflictTurnRecovery(context) {
-  return async ({ accepted = null, userId = "", sessionId = "", parentSessionId = "" } = {}) => {
+  return async ({ accepted = null, userId = "", sessionId = "" } = {}) => {
     if (accepted?.reason !== "session_action_conflict") return false;
     const lifecycle = accepted.lifecycle || {};
     const turn = lifecycle.turns?.[text(lifecycle.activeTurnScopeId)] || null;
@@ -33,7 +33,6 @@ function createConflictTurnRecovery(context) {
       turn,
       userId,
       sessionId,
-      parentSessionId,
       inspectExecution: createExecutionLivenessInspector({
         userId: context.canonicalRunOwnerId,
         sessionId,
@@ -61,7 +60,6 @@ function resolveFailureContext(context) {
     commandBase: meta.commandId,
     userId: meta.userId,
     sessionId: meta.sessionId,
-    parentSessionId: meta.parentSessionId,
     turnScopeId: meta.turnScopeId,
     dialogProcessId: meta.dialogProcessId,
   };
@@ -79,7 +77,6 @@ function createFailureCommitter(context) {
     return context.commitTurnLifecycle({
       userId: failureContext.userId,
       sessionId: failureContext.sessionId,
-      parentSessionId: failureContext.parentSessionId,
       turnScopeId: failureContext.turnScopeId,
       dialogProcessId: failureContext.dialogProcessId,
       commandId,
@@ -123,12 +120,14 @@ async function executeAcceptedRun(context, run, accepted, active) {
     userId: run.userId,
     sessionId: run.sessionId,
     parentSessionId: run.parentSessionId,
+    persistenceScope: context.persistenceScope,
     dialogProcessId: run.dialogProcessId,
     parentDialogProcessId: run.parentDialogProcessId,
     turnScopeId: run.turnScopeId,
     caller: SESSION_CALLER.USER,
     message: run.message,
     attachments: run.attachments,
+    systemMessages: [],
     turnAcceptance: run.turnAcceptance,
     eventListener: listener.eventListener,
     abortSignal: context.state.currentAbortSignal,
@@ -138,6 +137,7 @@ async function executeAcceptedRun(context, run, accepted, active) {
       sealIfEmpty: () => sealUserInterjectionQueueIfEmpty(active.runHandle),
     }),
     runConfig: run.normalizedRunConfig,
+    parentAsyncResultContainer: null,
   });
   if (listener.lifecycle.processingStarted) await listener.lifecycle.processingStarted;
   await finalizeRunResult(context, run, accepted, active);

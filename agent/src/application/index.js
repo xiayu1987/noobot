@@ -13,15 +13,15 @@ function requireMethod(target, methodName) {
   return method.bind(target);
 }
 
-export function createAgentApplication({ runtime } = {}) {
+export function createAgentApplication({ runtime }) {
   const runSession = requireMethod(runtime, "runSession");
   const resolveExecutionIntent = requireMethod(runtime, "resolveExecutionIntent");
 
   return Object.freeze({
-    async run(input = {}) {
+    async run(input) {
       return runSession(input);
     },
-    async resolveExecutionIntent(input = {}) {
+    async resolveExecutionIntent(input) {
       return resolveExecutionIntent(input);
     },
   });

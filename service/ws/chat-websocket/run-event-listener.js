@@ -19,9 +19,18 @@ import {
   assertTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { text, isFunction } from "@noobot/shared/value";
 
 const AUDIT_LIST_LIMIT = QUANTITY_THRESHOLDS.diagnostics.eventAuditListLimit;
+
+function committedDispatchContext(eventName, eventData) {
+  const validation = validateSessionPersistenceScope(eventData.persistenceScope);
+  if (!validation.valid) {
+    throw new TypeError(`invalid ${eventName} persistenceScope: ${validation.errors.join(",")}`);
+  }
+  return { persistenceScope: validation.scope };
+}
 
 function trimmedText(value) {
   return text(value);
@@ -175,15 +184,16 @@ export function createRunEventListener({
       const eventData = eventPayload?.data || {};
       onEventReceived?.(buildEventAudit(eventName, eventData));
       if (eventName === AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED) {
-        if (typeof onCommittedTurnLifecycle === "function") {
-          return onCommittedTurnLifecycle(eventData?.envelope || eventData, {
-            persistenceScope: eventData?.persistenceScope || null,
-          });
+        if (!isFunction(onCommittedTurnLifecycle)) {
+          throw new Error("turn lifecycle dispatcher is required");
         }
-        return;
+        return onCommittedTurnLifecycle(
+          eventData.envelope,
+          committedDispatchContext(eventName, eventData),
+        );
       }
       if (eventName === AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) {
-        const envelope = eventData?.envelope;
+        const envelope = eventData.envelope;
         const validation = validateProtocolEvent(envelope);
         if (!validation.valid) {
           throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
@@ -191,9 +201,7 @@ export function createRunEventListener({
         if (!isFunction(onAuthorityEventCommitted)) {
           throw new Error("authority event dispatcher is required");
         }
-        return onAuthorityEventCommitted(envelope, {
-          persistenceScope: eventData?.persistenceScope || null,
-        });
+        return onAuthorityEventCommitted(envelope, committedDispatchContext(eventName, eventData));
       }
       if (eventName === AGENT_RUN_EVENT.TURN_COMMITTED) {
         const committedTurn = assertTurnCommittedEventData(eventData);

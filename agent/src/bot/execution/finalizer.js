@@ -6,7 +6,7 @@
 
 import { emitEvent } from "../../events/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
-import { normalizeParentSessionId, requireDialogProcessKey } from "@noobot/session-protocol";
+import { requireDialogProcessKey } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
   buildExecutionReport,
@@ -42,7 +42,7 @@ export class SessionExecutionFinalizer {
   async finalizeRunSession({
     userId,
     sessionId,
-    parentSessionId = "",
+    parentSessionId,
     parentDialogProcessId = "",
     caller,
     dialogProcessId,
@@ -57,7 +57,7 @@ export class SessionExecutionFinalizer {
     runtimeEventListener = null,
     userConfig = {},
     lifecycle = null,
-    persistenceContext = null,
+    persistenceScope,
   }) {
     requireDialogProcessKey(dialogProcessId);
     const activeTurnMessages =
@@ -153,7 +153,6 @@ export class SessionExecutionFinalizer {
     await this.turnPersister.appendAgentMessages({
       userId,
       sessionId,
-      parentSessionId,
       messages: messagesToPersist,
       dialogProcessId,
       parentDialogProcessId,
@@ -161,24 +160,22 @@ export class SessionExecutionFinalizer {
       thinkingStartedAt,
       thinkingFinishedAt,
       eventListener: runtimeEventListener,
-      persistenceContext,
+      persistenceScope,
     });
     await this.session.upsertTurnTiming({
       userId,
       sessionId,
-      parentSessionId,
       turnScopeId,
       dialogProcessId,
       thinkingFinishedAt,
       modelLoopRound: agentResult?.modelLoopRound,
-      persistenceContext,
+      persistenceScope,
     });
     await this.session.saveCurrentTurnTasks({
       userId,
       sessionId,
-      parentSessionId,
       currentTurnTasks: agentResult?.turnTasks || [],
-      persistenceContext,
+      persistenceScope,
     });
 
     lifecycle?.enterMemory?.();
@@ -197,7 +194,7 @@ export class SessionExecutionFinalizer {
             userConfig,
             runtimeEventListener,
             mode: "async",
-            persistenceContext,
+            persistenceScope,
           }),
         { operationName: "executionFinalizer.runAsyncMemoryPostProcess", context: { sessionId } },
       );
@@ -209,7 +206,7 @@ export class SessionExecutionFinalizer {
         userConfig,
         runtimeEventListener,
         mode: "sync",
-        persistenceContext,
+        persistenceScope,
       });
     }
 
@@ -219,15 +216,14 @@ export class SessionExecutionFinalizer {
       userId,
       sessionId,
       dialogProcessId,
-      parentSessionId,
-      persistenceContext,
+      persistenceScope,
     });
     const executionSummary = summarizeExecutionLogs(executionLogs);
     await this.saveCompletedReport({
       userId,
       sessionId,
       parentSessionId,
-      persistenceContext,
+      persistenceScope,
       dialogProcessId,
       turnScopeId,
       caller,
@@ -236,7 +232,7 @@ export class SessionExecutionFinalizer {
     });
     return {
       sessionId,
-      parentSessionId: normalizeParentSessionId(parentSessionId),
+      parentSessionId,
       parentDialogProcessId: parentDialogProcessId || "",
       caller,
       answer: agentResult.output,
@@ -248,7 +244,7 @@ export class SessionExecutionFinalizer {
     };
   }
 
-  async saveCompletedReport({ userId, persistenceContext, ...reportFields }) {
+  async saveCompletedReport({ userId, persistenceScope, ...reportFields }) {
     const report = buildExecutionReport({
       ...reportFields,
       status: EXECUTION_REPORT_STATUS.COMPLETED,
@@ -257,8 +253,7 @@ export class SessionExecutionFinalizer {
     await this.session.saveExecutionReport({
       userId,
       sessionId: reportFields.sessionId,
-      parentSessionId: reportFields.parentSessionId,
-      persistenceContext,
+      persistenceScope,
       report,
     });
   }

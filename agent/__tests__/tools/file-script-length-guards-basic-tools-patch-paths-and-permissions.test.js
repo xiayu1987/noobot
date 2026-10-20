@@ -128,6 +128,7 @@ test("patch_file: super user can patch an absolute file outside workspace root",
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
       systemRuntime: {
+        persistenceScope: null,
         userId: "super-root-user",
         sessionId: "s-1",
         rootSessionId: "s-1",
@@ -183,6 +184,7 @@ test("patch_file: sharedTools cannot remap a Windows host path", async () => {
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
       systemRuntime: {
+        persistenceScope: null,
         userId: "super-root-user",
         sessionId: "s-1",
         rootSessionId: "s-1",
@@ -240,6 +242,7 @@ test("patch_file: apply_patch also rejects sharedTools host remapping", async ()
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
       systemRuntime: {
+        persistenceScope: null,
         userId: "super-root-user",
         sessionId: "s-1",
         rootSessionId: "s-1",
@@ -772,6 +775,7 @@ test("patch_file: staticInfo rootDirectory 不改变 workspace 相对路径基�
     agentContext: buildAgentContext(workspacePath, "u-test", {
       runtime: {
         systemRuntime: {
+          persistenceScope: null,
           staticInfo: {
             directories: {
               view: "host",
@@ -821,6 +825,7 @@ test("patch_file: 超级管理员也不扫描项目根解析虚拟路径", async
     agentContext: buildAgentContext(workspacePath, "admin", {
       runtime: {
         systemRuntime: {
+          persistenceScope: null,
           isSuperUser: true,
           userId: "admin",
           sessionId: "s-1",

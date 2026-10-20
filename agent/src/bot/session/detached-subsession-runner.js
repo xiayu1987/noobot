@@ -82,6 +82,12 @@ async function runDetachedSubSession(dependencies, request) {
     identity,
     prepared.effectiveRunConfig,
   );
+  await dependencies.session.writeSessionMetadata({
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    metadata: lifecycle.metadata,
+    persistenceScope: lifecycle.persistenceScope,
+  });
   prepared.turnAcceptance = createTurnAcceptanceReceipt({
     commandId: lifecycle.commandId,
     sessionId: identity.subSessionId,
@@ -105,8 +111,8 @@ function assertDetachedRunnerDependencies({ sessionRunner, session }) {
   if (!isFunction(sessionRunner?.runSession)) {
     throw new Error("detached sub-session runner requires the main SessionExecutionRunner");
   }
-  if (!isFunction(session?.createScopedPersistenceContext)) {
-    throw new Error("detached sub-session runner requires scoped persistence context support");
+  if (!isFunction(session?.writeSessionMetadata)) {
+    throw new Error("detached sub-session runner requires session metadata support");
   }
 }
 
@@ -282,31 +288,21 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
     relativeDir: identity.relativeDir,
     allowedRoot: identity.allowedRoot,
   });
-  const persistenceContext = session.createScopedPersistenceContext({
-    userId: identity.userId,
-    sessionId: identity.subSessionId,
-    parentSessionId: identity.parentSessionId,
-    scopeId: identity.executionId,
-    relativeDir: identity.relativeDir,
-    allowedRoot: identity.allowedRoot,
-    metadataContributor: () => createDetachedMetadata(request, identity, runtimePluginState),
-  });
   const lifecycleIdentity = createLifecycleIdentity(
     identity,
     prepared.mergedRunConfig,
-    persistenceContext,
     persistenceScope,
   );
   return {
-    persistenceContext,
     persistenceScope,
+    metadata: createDetachedMetadata(request, identity, runtimePluginState),
     factListener: createExecutionEventListener({
       sessionManager: session,
       userId: identity.userId,
       sessionId: identity.subSessionId,
       parentSessionId: identity.parentSessionId,
       turnScopeId: identity.turnScopeId,
-      persistenceContext,
+      persistenceScope,
       dialogProcessId: identity.subDialogProcessId,
     }),
     commandId: identity.commandId,
@@ -326,12 +322,10 @@ function createDetachedMetadata(request, identity, runtimePluginState) {
   };
 }
 
-function createLifecycleIdentity(identity, config, persistenceContext, persistenceScope) {
+function createLifecycleIdentity(identity, config, persistenceScope) {
   return {
     userId: identity.userId,
     sessionId: identity.subSessionId,
-    parentSessionId: identity.parentSessionId,
-    persistenceContext,
     persistenceScope,
     turnScopeId: identity.turnScopeId,
     dialogProcessId: identity.subDialogProcessId,
@@ -379,6 +373,7 @@ async function commitDetachedStart(lifecycle, startedAt, message, identity, runC
     executionState: "accepted",
     startedAt,
     createSessionIfAbsent: true,
+    parentSessionId: identity.parentSessionId,
     sessionCaller: SESSION_CALLER.BOT,
     expectedRevision: 0,
     userMessage: {
@@ -414,10 +409,10 @@ async function executeDetachedSession(dependencies, identity, prepared, lifecycl
     eventListener: identity.scopedEventListener,
     abortSignal: identity.abortSignal,
     userInteractionBridge: identity.userInteractionBridge,
+    userInterjectionPort: null,
     runConfig: prepared.effectiveRunConfig,
     turnScopeId: identity.turnScopeId,
     parentAsyncResultContainer: null,
-    persistenceContext: lifecycle.persistenceContext,
     persistenceScope: lifecycle.persistenceScope,
   });
   assertDetachedDialogIdentity(result, identity, lifecycle);

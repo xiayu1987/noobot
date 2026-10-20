@@ -39,27 +39,20 @@ test("child interaction authority commits through the protocol persistence scope
       relativeDir: "runtime/agent/session/child-session",
       allowedRoot: "runtime/agent/session",
     });
-    await runtime.sessionCrudService.ensureSession(
-      "user-1",
-      "root-session",
-      "",
-      SESSION_CALLER.USER,
-    );
-    const childPersistenceContext = runtime.createScopedPersistenceContext({
+    await session.createSession({
+      userId: "user-1",
+      sessionId: "root-session",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+      persistenceScope: null,
+    });
+    await session.createSession({
       userId: "user-1",
       sessionId: "child-session",
-      parentSessionId: persistenceScope.parentSessionId,
-      scopeId: persistenceScope.scopeId,
-      relativeDir: persistenceScope.relativeDir,
-      allowedRoot: persistenceScope.allowedRoot,
+      parentSessionId: "root-session",
+      caller: SESSION_CALLER.USER,
+      persistenceScope,
     });
-    await runtime.sessionCrudService.ensureSession(
-      "user-1",
-      "child-session",
-      "root-session",
-      SESSION_CALLER.USER,
-      childPersistenceContext,
-    );
 
     const dispatched = [];
     const commitInteractionRequest = createInteractionAuthorityBridge({
@@ -71,7 +64,6 @@ test("child interaction authority commits through the protocol persistence scope
     });
     const envelope = await commitInteractionRequest({
       userId: "user-1",
-      parentSessionId: "root-session",
       persistenceScope,
       payload: {
         interactionId: "interaction-child-1",
@@ -93,14 +85,12 @@ test("child interaction authority commits through the protocol persistence scope
       {
         userId: "user-1",
         sessionId: "child-session",
-        parentSessionId: "root-session",
         persistenceScope,
       },
     ]);
     const pending = await session.getPendingAuthorityEvents({
       userId: "user-1",
       sessionId: "child-session",
-      parentSessionId: "root-session",
       persistenceScope,
       consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     });

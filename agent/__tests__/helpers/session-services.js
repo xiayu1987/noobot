@@ -12,3 +12,24 @@ export function createTestSessionServices(globalConfig, options = {}) {
     attachmentService: new AttachmentService(globalConfig),
   });
 }
+
+export function withTreeContext(runtime, payload) {
+  return {
+    ...payload,
+    persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+      payload.userId,
+      payload.sessionId,
+    ),
+  };
+}
+
+export function provisionTestSession(runtime, { userId, sessionId, parentSessionId = "", caller }) {
+  const sessionRepository = runtime.repositories.sessionRepository;
+  return sessionRepository.ensureSession({
+    userId,
+    sessionId,
+    parentSessionId,
+    caller,
+    persistenceContext: sessionRepository.treePersistenceContext(userId, sessionId),
+  });
+}

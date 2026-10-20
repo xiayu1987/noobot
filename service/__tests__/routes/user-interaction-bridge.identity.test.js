@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { SESSION_STORE_ERROR } from "@noobot/workspace-protocol/session-store";
 import { createUserInteractionBridge } from "../../ws/chat-websocket/user-interaction-bridge.js";
 import { findPendingInteraction } from "../../ws/chat-websocket/pending-interaction-registry.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
@@ -194,7 +195,6 @@ test("child interaction commits with its explicit scoped authority instead of ro
 
   assert.equal(committedRequests.length, 1);
   assert.equal(committedRequests[0].userId, "user-1");
-  assert.equal(committedRequests[0].parentSessionId, "root-session");
   assert.deepEqual(committedRequests[0].persistenceScope, persistenceScope);
   assert.equal(committedRequests[0].payload.sessionId, "child-session");
   assert.equal(committedRequests[0].payload.turnScopeId, "child-turn");
@@ -229,7 +229,9 @@ test("lifecycle write failures reject the request with the outcome first", async
   }).resolve({ confirmed: true });
   await assert.rejects(request, (error) => {
     assert.ok(error instanceof AggregateError);
-    assert.ok(error.errors.every((item) => item.code === "ENOENT"));
+    assert.ok(
+      error.errors.every((item) => item.code === SESSION_STORE_ERROR.WORKSPACE_NOT_INITIALIZED),
+    );
     return true;
   });
 });

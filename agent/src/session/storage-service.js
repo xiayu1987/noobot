@@ -8,7 +8,10 @@ import {
   ATOMIC_RENAME_RETRY_DELAYS_MS,
   writeFileAtomic,
 } from "../shared/storage/atomic-file-write.js";
-import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
+import {
+  isMissingPersistencePathError,
+  readPersistedJsonFile,
+} from "../shared/storage/json-file-reader.js";
 
 export class StorageService {
   constructor({
@@ -42,8 +45,17 @@ export class StorageService {
     }
   }
 
-  async readJson(filePath, fallback = {}) {
+  async readJson(filePath, fallback) {
     return readPersistedJsonFile({ filePath, fallback, readFile: fsReadFile });
+  }
+
+  async readTextOrNull(filePath) {
+    try {
+      return await fsReadFile(filePath, "utf8");
+    } catch (error) {
+      if (isMissingPersistencePathError(error)) return null;
+      throw error;
+    }
   }
 
   async writeJson(filePath, data) {

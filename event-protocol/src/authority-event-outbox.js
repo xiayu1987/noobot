@@ -99,13 +99,16 @@ export function migrateLegacyAuthorityEventOutbox(source = []) {
   );
 }
 
-export function listPendingAuthorityEvents(source = [], { consumerId = "", limit = 100 } = {}) {
+const AUTHORITY_OUTBOX_PENDING_BATCH_SIZE = 100;
+
+export function listPendingAuthorityEvents(source, { consumerId }) {
   const normalizedConsumerId = text(consumerId);
-  if (!normalizedConsumerId) return [];
-  const normalizedLimit = Math.max(0, Math.min(1000, Number(limit) || 100));
+  if (!normalizedConsumerId) {
+    throw new TypeError("pending authority events require a delivery consumer");
+  }
   return normalizeAuthorityEventOutbox(source)
     .filter((item) => !item.deliveries[normalizedConsumerId]?.deliveredAt)
-    .slice(0, normalizedLimit);
+    .slice(0, AUTHORITY_OUTBOX_PENDING_BATCH_SIZE);
 }
 
 export const AUTHORITY_OUTBOX_JOURNAL_OP = Object.freeze({

@@ -17,7 +17,7 @@ export function resolveUserInteractionAuthority(agentContext = {}) {
   const authority = createInteractionAuthority({
     session: identity,
     turn: identity,
-    persistenceScope: systemRuntime.persistenceScope || null,
+    persistenceScope: systemRuntime.persistenceScope,
   });
   const validation = validateInteractionAuthority(authority);
   if (!validation.valid) {

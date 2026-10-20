@@ -62,7 +62,6 @@ export function createTurnFinalizer({
     const failed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: state.identity.sessionId,
-      parentSessionId: state.identity.parentSessionId,
       turnScopeId: state.identity.turnScopeId,
       dialogProcessId: state.identity.dialogProcessId,
       commandId,
@@ -104,7 +103,6 @@ export function createTurnFinalizer({
     const processed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: stoppedPartialAssistant.sessionId,
-      parentSessionId: state.identity.parentSessionId,
       turnScopeId: stoppedPartialAssistant.turnScopeId,
       dialogProcessId: stoppedPartialAssistant.dialogProcessId,
       commandId: createTurnLifecycleCommandId({
@@ -129,7 +127,6 @@ export function createTurnFinalizer({
     const completed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: stoppedPartialAssistant.sessionId,
-      parentSessionId: state.identity.parentSessionId,
       turnScopeId: stoppedPartialAssistant.turnScopeId,
       dialogProcessId: stoppedPartialAssistant.dialogProcessId,
       commandId: completionCommitId,
@@ -164,7 +161,6 @@ export function createTurnFinalizer({
     const completed = await commitTurnLifecycle({
       userId: state.identity.userId,
       sessionId: state.identity.sessionId,
-      parentSessionId: state.identity.parentSessionId,
       turnScopeId: state.identity.turnScopeId,
       dialogProcessId: state.identity.dialogProcessId,
       commandId: completionCommitId,
@@ -177,7 +173,6 @@ export function createTurnFinalizer({
       await commitTurnLifecycle({
         userId: state.identity.userId,
         sessionId: state.identity.sessionId,
-        parentSessionId: state.identity.parentSessionId,
         turnScopeId: state.identity.turnScopeId,
         dialogProcessId: state.identity.dialogProcessId,
         commandId: createTurnLifecycleCommandId({

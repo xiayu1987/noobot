@@ -4,34 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 import { upsertTurnInSession } from "./turn-upsert.js";
+import { SESSION_NOT_FOUND_REASON } from "@noobot/session-protocol";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
 
-export async function appendTurns({
-  userId,
-  sessionId,
-  parentSessionId = "",
-  turns = [],
-  persistenceContext = null,
-} = {}) {
+export async function appendTurns({ userId, sessionId, turns = [], persistenceContext } = {}) {
   const sourceTurns = Array.isArray(turns) ? turns : [];
   if (!sourceTurns.length) return { appended: false, reason: "empty_batch", turns: [] };
   const requestedTurnScopeIds = [...new Set(sourceTurns.map((turn) => text(turn?.turnScopeId)))];
-  const mutation = this._withSessionMutation(
+  const mutation = this.sessionRepo.withSessionMutation(
     userId,
     sessionId,
-    async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      const view = await this.sessionRepo.findTurnView(userId, sessionId, resolvedParentSessionId, {
+    async (scope) => {
+      const resolvedParentSessionId = scope.resolvedParentSessionId;
+      const view = await this.sessionRepo.findTurnView(userId, sessionId, {
         turnScopeIds: requestedTurnScopeIds,
         persistenceContext,
       });
-      if (!view) return { appended: false, reason: "session_not_found", turns: [] };
+      if (!view) return { appended: false, reason: SESSION_NOT_FOUND_REASON, turns: [] };
       const { session, turnScopeIds } = view;
 
       const persistedTurns = sourceTurns.map((turn = {}) =>
@@ -39,18 +29,15 @@ export async function appendTurns({
           ...turn,
           userId,
           sessionId,
-          parentSessionId: resolvedParentSessionId,
-          persistenceContext,
         }),
       );
-      await this.sessionRepo.saveTurnView(userId, session, resolvedParentSessionId, {
+      await this.sessionRepo.saveTurnView(userId, session, {
         turnScopeIds,
         persistenceContext,
       });
       return { appended: true, reason: "", turns: persistedTurns };
     },
-    parentSessionId,
-    persistenceContext,
+    { persistenceContext },
   );
   return resolveDeletedSessionAs(mutation, { appended: false, turns: [] });
 }

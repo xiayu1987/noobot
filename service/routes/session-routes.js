@@ -482,11 +482,6 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       throw error;
     }
     const session = await bot.session.renameSession({ userId, sessionId, title });
-    if (!session) {
-      const error = new Error("Session not found");
-      error.statusCode = HTTP_STATUS.NOT_FOUND;
-      throw error;
-    }
     res.json({ ok: true, sessionId: session.sessionId, title: session.customTitle || title });
   });
 

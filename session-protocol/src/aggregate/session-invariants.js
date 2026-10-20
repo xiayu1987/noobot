@@ -29,6 +29,10 @@ function isTurnLifecycleShape(lifecycle) {
 export function validateSessionAggregateShape(session) {
   if (!isPlainObject(session)) return ["invalid_session"];
   const errors = [];
+
+  if (typeof session.sessionId !== "string" || !session.sessionId)
+    errors.push("invalid_session_id");
+  if (typeof session.parentSessionId !== "string") errors.push("invalid_parent_session_id");
   if (!isSessionCaller(session.caller)) errors.push("invalid_caller");
   if (!Array.isArray(session.messages)) errors.push("invalid_messages");
   if (!Array.isArray(session.dialogOrder)) errors.push("invalid_dialog_order");

@@ -74,13 +74,11 @@ function normalizeTurnTimingsEntity(turnTimings) {
   return [...byKey.values()];
 }
 
-function resolveSessionNormalizationContext(session, { now, sessionId, parentSessionId }) {
+function resolveSessionNormalizationContext(session, { now }) {
   const nowValue = now();
   const shortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
   return {
     nowValue,
-    sessionId: firstText(session?.sessionId, sessionId),
-    parentSessionId: firstText(session?.parentSessionId, parentSessionId),
     customTitle: text(session?.customTitle),
     autoTitle: text(session?.autoTitle),
     shortMemoryCheckpoint: Number.isFinite(shortMemoryCheckpoint) ? shortMemoryCheckpoint : 0,
@@ -93,8 +91,8 @@ function createNormalizedSessionEntity(session, context, messages) {
   delete normalizedBase.sessionArtifacts;
   return {
     ...normalizedBase,
-    sessionId: context.sessionId,
-    parentSessionId: context.parentSessionId,
+    sessionId: session.sessionId,
+    parentSessionId: session.parentSessionId,
     aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     caller: session.caller,
     modelAlias: String(session?.modelAlias || ""),
@@ -104,7 +102,7 @@ function createNormalizedSessionEntity(session, context, messages) {
     dialogOrder: normalizeDialogOrderEntity(session.dialogOrder),
     turnTimings: normalizeTurnTimingsEntity(session.turnTimings),
     turnLifecycle: normalizeTurnLifecycleEntity(session.turnLifecycle),
-    sessionArtifactEvents: normalizeSessionArtifactEvents(session, context.sessionId),
+    sessionArtifactEvents: normalizeSessionArtifactEvents(session, session.sessionId),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstText(session?.createdAt, context.nowValue),
     updatedAt: firstText(session?.updatedAt, context.nowValue),
@@ -113,7 +111,7 @@ function createNormalizedSessionEntity(session, context, messages) {
 
 export function normalizeSessionEntity(
   session = {},
-  { now = () => new Date().toISOString(), sessionId = "", parentSessionId = "" } = {},
+  { now = () => new Date().toISOString() } = {},
 ) {
   if ("version" in session || "revision" in session) {
     throw new TypeError(
@@ -121,7 +119,7 @@ export function normalizeSessionEntity(
     );
   }
   assertSessionAggregateShape(session);
-  const context = resolveSessionNormalizationContext(session, { now, sessionId, parentSessionId });
+  const context = resolveSessionNormalizationContext(session, { now });
   const normalizedMessages = normalizeMessagesEntity(session.messages, now);
   const normalizedTurnSummaryCheckpoints = normalizeTurnSummaryCheckpoints(
     session?.turnSummaryCheckpoints || {},

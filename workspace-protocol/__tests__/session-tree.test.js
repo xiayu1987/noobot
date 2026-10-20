@@ -17,7 +17,7 @@ import {
   resolveSessionDirSegments,
   resolveSessionTreeChain,
   resolveSessionTreeDepth,
-  resolveSessionTreePlacement,
+  placeSessionTreeChain,
 } from "../src/index.js";
 
 function node(sessionId, parentSessionId, caller = SESSION_CALLER.USER) {
@@ -203,30 +203,27 @@ test("collectSessionTreeBranch returns the session and all descendants breadth-f
   );
 });
 
-test("resolveSessionTreePlacement places registered and unregistered sessions", () => {
-  assert.deepEqual(resolveSessionTreePlacement(tree, "leafC", ""), ["rootA", "branchB", "leafC"]);
-  assert.deepEqual(resolveSessionTreePlacement(tree, "leafC", "branchB"), [
-    "rootA",
-    "branchB",
-    "leafC",
-  ]);
-  assert.deepEqual(resolveSessionTreePlacement(tree, "newE", "leafC"), [
-    "rootA",
-    "branchB",
-    "leafC",
-    "newE",
-  ]);
-  assert.deepEqual(resolveSessionTreePlacement(tree, "draft", ""), ["draft"]);
+test("placeSessionTreeChain requires the exact parent for registered and new sessions", () => {
+  const place = (sessionId, parentSessionId) =>
+    placeSessionTreeChain(tree, { sessionId, parentSessionId });
+  assert.deepEqual(place("leafC", "branchB"), ["rootA", "branchB", "leafC"]);
+  assert.deepEqual(place("rootA", ""), ["rootA"]);
+  assert.deepEqual(place("newE", "leafC"), ["rootA", "branchB", "leafC", "newE"]);
+  assert.deepEqual(place("draft", ""), ["draft"]);
   assert.throws(
-    () => resolveSessionTreePlacement(tree, "draft"),
+    () => place("draft"),
     (error) => error.code === SESSION_TREE_ERROR.SESSION_ID_REQUIRED,
   );
   assert.throws(
-    () => resolveSessionTreePlacement(tree, "leafC", "rootA"),
+    () => place("leafC", ""),
     (error) => error.code === SESSION_TREE_ERROR.PARENT_MISMATCH,
   );
   assert.throws(
-    () => resolveSessionTreePlacement(tree, "newE", "ghost"),
+    () => place("leafC", "rootA"),
+    (error) => error.code === SESSION_TREE_ERROR.PARENT_MISMATCH,
+  );
+  assert.throws(
+    () => place("newE", "ghost"),
     (error) => error.code === SESSION_TREE_ERROR.PARENT_MISSING,
   );
 });
@@ -234,12 +231,12 @@ test("resolveSessionTreePlacement places registered and unregistered sessions", 
 test("session ids must be workspace path segments and are never rewritten", () => {
   for (const invalid of ["s:1", "../escape", "a/b", ".hidden"]) {
     assert.throws(
-      () => resolveSessionTreePlacement(tree, invalid, ""),
+      () => placeSessionTreeChain(tree, { sessionId: invalid, parentSessionId: "" }),
       (error) => error.code === SESSION_TREE_ERROR.INVALID_SESSION_ID,
     );
   }
   assert.throws(
-    () => resolveSessionTreePlacement(tree, "newE", "../rootA"),
+    () => placeSessionTreeChain(tree, { sessionId: "newE", parentSessionId: "../rootA" }),
     (error) => error.code === SESSION_TREE_ERROR.INVALID_SESSION_ID,
   );
   assert.throws(

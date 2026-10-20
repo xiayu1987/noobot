@@ -22,7 +22,7 @@ import {
 function runtimeForTurn({
   messageId = "turn-message-1",
   presentationMessageId = "presentation-1",
-  streamIdentity = {},
+  streamIdentity = { parentSessionId: "" },
 } = {}) {
   let sequence = 0;
   const runtime = {
@@ -101,34 +101,37 @@ test("authoritative message events declare the message-event sequence domain", a
   assert.equal(emitted[0]?.data?.envelope, envelope);
 });
 
-test("message events use the execution-bound persistence context", async () => {
+test("message events commit with the execution-bound persistence scope", async () => {
   const runtime = runtimeForTurn();
-  const persistenceContext = { kind: "noobot.session_persistence_scope", scope: "child" };
-  runtime.systemRuntime.persistenceContext = persistenceContext;
-  runtime.runConfig.persistenceContext = { scope: "stale-config-value" };
-  let committedContext = null;
-  const commit = runtime.sessionManager.commitMessageEvent;
-  runtime.sessionManager.commitMessageEvent = async (payload) => {
-    committedContext = payload.persistenceContext;
-    return commit(payload);
-  };
-
-  beginAssistantMessageEventStream(runtime);
-  await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "token" });
-
-  assert.equal(committedContext, persistenceContext);
-});
-
-test("message event delivery exposes only the cross-layer persistence scope", async () => {
-  const runtime = runtimeForTurn();
-  const persistenceContext = { kind: "noobot.session_persistence_context", secret: "agent-only" };
   const persistenceScope = {
     scopeId: "agent:child-1",
     parentSessionId: "parent-1",
     relativeDir: "parent-1/child-1",
     allowedRoot: "runtime/session/parent-1/child-1",
   };
-  runtime.systemRuntime.persistenceContext = persistenceContext;
+  runtime.systemRuntime.persistenceScope = persistenceScope;
+  let committed = null;
+  const commit = runtime.sessionManager.commitMessageEvent;
+  runtime.sessionManager.commitMessageEvent = async (payload) => {
+    committed = payload;
+    return commit(payload);
+  };
+
+  beginAssistantMessageEventStream(runtime);
+  await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "token" });
+
+  assert.equal(committed.persistenceScope, persistenceScope);
+  assert.equal(Object.hasOwn(committed, "persistenceContext"), false);
+});
+
+test("message event delivery exposes only the cross-layer persistence scope", async () => {
+  const runtime = runtimeForTurn();
+  const persistenceScope = {
+    scopeId: "agent:child-1",
+    parentSessionId: "parent-1",
+    relativeDir: "parent-1/child-1",
+    allowedRoot: "runtime/session/parent-1/child-1",
+  };
   runtime.systemRuntime.persistenceScope = persistenceScope;
   const emitted = [];
 
@@ -138,7 +141,7 @@ test("message event delivery exposes only the cross-layer persistence scope", as
   });
 
   assert.equal(emitted[0]?.data?.persistenceScope, persistenceScope);
-  assert.notEqual(emitted[0]?.data?.persistenceScope, persistenceContext);
+  assert.equal(Object.hasOwn(emitted[0]?.data || {}, "persistenceContext"), false);
 });
 
 test("one Turn Aggregate owns a contiguous event sequence across model messages", async () => {
@@ -185,6 +188,7 @@ test("Turn message event identity is immutable after binding", () => {
       bindAssistantMessageEventStream(runtime, {
         messageId: "other-message",
         presentationMessageId: "presentation-1",
+        parentSessionId: "",
       }),
     /messageId conflict/,
   );

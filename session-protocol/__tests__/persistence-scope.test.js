@@ -34,3 +34,20 @@ test("Session persistence scope rejects incomplete and alternate routing shapes"
     ["unknown_persistence_scope_field", "incomplete_persistence_scope"],
   );
 });
+
+test("Session persistence scope only treats explicit null as no scope", () => {
+  assert.deepEqual(validateSessionPersistenceScope(undefined), {
+    valid: false,
+    errors: ["missing_persistence_scope"],
+    scope: null,
+  });
+  assert.deepEqual(validateSessionPersistenceScope("agent:turn-1").errors, [
+    "invalid_persistence_scope",
+  ]);
+  assert.equal(createSessionPersistenceScope(null), null);
+  for (const source of [undefined, "agent:turn-1", { scopeId: "agent:turn-1" }]) {
+    assert.throws(() => createSessionPersistenceScope(source), {
+      code: "SESSION_PERSISTENCE_SCOPE_INVALID",
+    });
+  }
+});

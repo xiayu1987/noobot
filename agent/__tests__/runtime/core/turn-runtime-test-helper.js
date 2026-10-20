@@ -130,6 +130,7 @@ export function prepareTestTurnExecution(modelState, loopState, identity, presen
   bindAssistantMessageEventStream(runtime, {
     messageId: identity.messageId,
     presentationMessageId,
+    parentSessionId: identity.parentSessionId,
   });
   bindActiveTurnIdentity(loopState.modelContext, identity);
   modelState.agentContext = createTestAgentExecutionScope(runtime, {

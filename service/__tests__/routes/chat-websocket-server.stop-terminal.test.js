@@ -16,6 +16,7 @@ import {
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  compactAuthorityEventOutbox,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
@@ -441,6 +442,11 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
           authorityEventOutbox = result.outbox;
         }
         return { recorded: true };
+      },
+      compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
+        const result = compactAuthorityEventOutbox(authorityEventOutbox, { retainDeliveredAfter });
+        authorityEventOutbox = result.outbox;
+        return { compacted: result.compacted, removed: result.removed };
       },
       acknowledgeAuthorityEvents: async ({ consumerId, acknowledgements = [] } = {}) => {
         for (const receipt of acknowledgements) {

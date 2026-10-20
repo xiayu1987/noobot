@@ -590,15 +590,13 @@ test("session context reads messages and terminal statuses from the same parent-
     },
   });
 
+  const persistenceContext = { kind: "scoped-child" };
   await projectMessages(service, {
     userId: "u1",
     sessionId: "child-1",
-    parentSessionId: "parent-1",
+    persistenceContext,
   });
 
-  assert.deepEqual(received, {
-    userId: "u1",
-    sessionId: "child-1",
-    parentSessionId: "parent-1",
-  });
+  assert.deepEqual(received, { userId: "u1", sessionId: "child-1", persistenceContext });
+  assert.equal(received.persistenceContext, persistenceContext);
 });

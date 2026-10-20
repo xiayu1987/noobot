@@ -37,7 +37,6 @@ import {
   removeAuthorityOutboxTurnScopes,
   withAuthorityOutboxMutation,
 } from "../../authority-outbox-store/outbox-journal.js";
-import { requireOutboxSessionDir } from "./outbox-scope.js";
 import { text } from "@noobot/shared/value";
 
 function pruneTruncatedSessionFacts(session) {
@@ -69,7 +68,6 @@ function assertConcurrencyDecision(decision) {
 async function prepareSessionCommand({
   userId,
   sessionId,
-  parentSessionId,
   persistenceContext,
   commandId,
   type,
@@ -77,12 +75,7 @@ async function prepareSessionCommand({
   expectedAggregateVersion,
   matcher,
 }) {
-  const { session, resolvedParentSessionId } = await this._findSession(
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
+  const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
   if (!session) {
     const error = new Error("session not found");
     error.statusCode = 404;
@@ -121,7 +114,6 @@ async function prepareSessionCommand({
   }
   return {
     session,
-    resolvedParentSessionId,
     currentVersion,
     nextAggregateVersion: concurrency.nextAggregateVersion,
     messages: session.messages,
@@ -129,21 +121,8 @@ async function prepareSessionCommand({
   };
 }
 
-async function removeOutboxTurnScopes({
-  userId,
-  sessionId,
-  resolvedParentSessionId,
-  persistenceContext,
-  removedTurnScopeIds,
-}) {
+async function removeOutboxTurnScopes(sessionDir, removedTurnScopeIds) {
   if (!removedTurnScopeIds.length) return 0;
-  const sessionDir = await requireOutboxSessionDir(
-    this,
-    userId,
-    sessionId,
-    resolvedParentSessionId,
-    persistenceContext,
-  );
   return withAuthorityOutboxMutation(sessionDir, () =>
     removeAuthorityOutboxTurnScopes(sessionDir, removedTurnScopeIds),
   );
@@ -209,8 +188,7 @@ function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
 export async function deleteFromMessage({
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
+  persistenceContext,
   anchor = {},
   expectedAggregateVersion = null,
   commandId = "",
@@ -223,14 +201,13 @@ export async function deleteFromMessage({
   });
   const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
   const requestHash = createMessageDeleteFingerprint({ anchor });
-  return this._withSessionMutation(
+  return this.sessionRepo.withSessionMutation(
     userId,
     sessionId,
-    async () => {
+    async (scope) => {
       const prepared = await prepareSessionCommand.call(this, {
         userId,
         sessionId,
-        parentSessionId,
         persistenceContext,
         commandId: normalizedCommandId,
         type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
@@ -239,14 +216,7 @@ export async function deleteFromMessage({
         matcher,
       });
       if (prepared.deduplicatedResult) return prepared.deduplicatedResult;
-      const {
-        session,
-        resolvedParentSessionId,
-        currentVersion,
-        nextAggregateVersion,
-        messages,
-        anchorIndex,
-      } = prepared;
+      const { session, currentVersion, nextAggregateVersion, messages, anchorIndex } = prepared;
       const deletedMessages = messages.slice(anchorIndex);
       const deletedCount = deletedMessages.length;
       const deletedTurnScopeIds = uniqueValues(deletedMessages.map(resolveTurnScopeId));
@@ -273,17 +243,14 @@ export async function deleteFromMessage({
           committedAt: this.now(),
         },
       );
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
+      await this.sessionRepo.save(userId, session, {
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes.call(this, {
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-        removedTurnScopeIds: lifecycleDeletion.removedTurnScopeIds,
-      });
+      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes(
+        scope.sessionDir,
+        lifecycleDeletion.removedTurnScopeIds,
+      );
       return createCommandResult({
         session,
         receiptResult: result,
@@ -293,16 +260,14 @@ export async function deleteFromMessage({
         deduplicated: false,
       });
     },
-    parentSessionId,
-    persistenceContext,
+    { persistenceContext },
   );
 }
 
 export async function replaceTurn({
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
+  persistenceContext,
   anchor = {},
   newContent = "",
   turnScopeId = "",
@@ -327,14 +292,13 @@ export async function replaceTurn({
     turnScopeId: normalizedTurnScopeId,
     attachments,
   });
-  return this._withSessionMutation(
+  return this.sessionRepo.withSessionMutation(
     userId,
     sessionId,
-    async () => {
+    async (scope) => {
       const prepared = await prepareSessionCommand.call(this, {
         userId,
         sessionId,
-        parentSessionId,
         persistenceContext,
         commandId: normalizedCommandId,
         type: SESSION_COMMAND.TURN_REPLACE,
@@ -343,14 +307,7 @@ export async function replaceTurn({
         matcher,
       });
       if (prepared.deduplicatedResult) return prepared.deduplicatedResult;
-      const {
-        session,
-        resolvedParentSessionId,
-        currentVersion,
-        nextAggregateVersion,
-        messages,
-        anchorIndex,
-      } = prepared;
+      const { session, currentVersion, nextAggregateVersion, messages, anchorIndex } = prepared;
       const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
       const replacedMessages = messages.slice(turnStartIndex);
       const nowValue = this.now();
@@ -406,17 +363,14 @@ export async function replaceTurn({
         },
       );
       assertTurnReplacementMaterialization({ commit: turnReplacement, session });
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
+      await this.sessionRepo.save(userId, session, {
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes.call(this, {
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-        removedTurnScopeIds: lifecycleReplacement.removedTurnScopeIds,
-      });
+      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes(
+        scope.sessionDir,
+        lifecycleReplacement.removedTurnScopeIds,
+      );
       return createCommandResult({
         session,
         receiptResult: result,
@@ -426,7 +380,6 @@ export async function replaceTurn({
         deduplicated: false,
       });
     },
-    parentSessionId,
-    persistenceContext,
+    { persistenceContext },
   );
 }

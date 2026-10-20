@@ -39,51 +39,74 @@ const chainTree = {
   leafC: node("leafC", "branchB"),
 };
 
-test("resolveSessionScope rejects a parent that is not registered in the tree", async () => {
+test("placeSessionScope rejects a parent that is not registered in the tree", async () => {
   const resolver = createResolverWithTree({ s1: node("s1", "") });
   await assert.rejects(
-    () => resolver.resolveSessionScope("u1", "s2", "missing-parent"),
+    () => resolver.placeSessionScope("u1", { sessionId: "s2", parentSessionId: "missing-parent" }),
     (error) => error?.code === "FATAL_PARENT_SESSION_MISSING",
   );
 });
 
-test("resolveSessionScope reads the parent of a registered node from its tree chain", async () => {
+test("locateSessionScope reads the parent of a registered node from its tree chain", async () => {
   const resolver = createResolverWithTree(chainTree);
-  const scope = await resolver.resolveSessionScope("u1", "leafC", "");
+  const scope = await resolver.locateSessionScope("u1", "leafC");
   assert.equal(scope.resolvedParentSessionId, "branchB");
+  assert.equal(scope.registered, true);
+  assert.equal(scope.indexed, true);
   assert.equal(scope.sessionDir, path.join(SESSION_ROOT, "rootA", "branchB", "leafC"));
 });
 
-test("resolveSessionScope places an unregistered root session at the session root", async () => {
+test("locateSessionScope returns null for a session that is not registered", async () => {
   const resolver = createResolverWithTree(chainTree);
-  const scope = await resolver.resolveSessionScope("u1", "draft", "");
+  assert.equal(await resolver.locateSessionScope("u1", "draft"), null);
+});
+
+test("placeSessionScope places an unregistered root session at the session root", async () => {
+  const resolver = createResolverWithTree(chainTree);
+  const scope = await resolver.placeSessionScope("u1", { sessionId: "draft", parentSessionId: "" });
   assert.equal(scope.resolvedParentSessionId, "");
+  assert.equal(scope.registered, false);
   assert.equal(scope.sessionDir, path.join(SESSION_ROOT, "draft"));
 });
 
-test("resolveSessionScope places an unregistered child under its parent chain", async () => {
+test("placeSessionScope places an unregistered child under its parent chain", async () => {
   const resolver = createResolverWithTree(chainTree);
-  const scope = await resolver.resolveSessionScope("u1", "newD", "branchB");
+  const scope = await resolver.placeSessionScope("u1", {
+    sessionId: "newD",
+    parentSessionId: "branchB",
+  });
   assert.equal(scope.resolvedParentSessionId, "branchB");
+  assert.equal(scope.registered, false);
   assert.equal(scope.sessionDir, path.join(SESSION_ROOT, "rootA", "branchB", "newD"));
 });
 
-test("resolveSessionScope rejects a parent hint that contradicts the tree", async () => {
+test("placeSessionScope accepts a registered session only under its tree parent", async () => {
   const resolver = createResolverWithTree({ ...chainTree, otherD: node("otherD", "") });
+  const scope = await resolver.placeSessionScope("u1", {
+    sessionId: "branchB",
+    parentSessionId: "rootA",
+  });
+  assert.equal(scope.registered, true);
   await assert.rejects(
-    () => resolver.resolveSessionScope("u1", "branchB", "otherD"),
-    (error) => error?.code === "FATAL_PARENT_SESSION_MISSING",
+    () => resolver.placeSessionScope("u1", { sessionId: "branchB", parentSessionId: "otherD" }),
+    (error) =>
+      error?.code === "FATAL_PARENT_SESSION_MISSING" &&
+      error?.details?.protocolCode === "SESSION_TREE_PARENT_MISMATCH",
+  );
+  await assert.rejects(
+    () => resolver.placeSessionScope("u1", { sessionId: "branchB", parentSessionId: "" }),
+    (error) => error?.details?.protocolCode === "SESSION_TREE_PARENT_MISMATCH",
   );
 });
 
-test("resolveSessionScope requires an explicit sessionId and parent coordinate", async () => {
+test("placeSessionScope requires an explicit sessionId and parent coordinate", async () => {
   const resolver = createResolverWithTree(chainTree);
   await assert.rejects(
-    () => resolver.resolveSessionScope("u1", "", ""),
+    () => resolver.placeSessionScope("u1", { sessionId: "", parentSessionId: "" }),
     (error) => error?.code === "SESSION_TREE_SESSION_ID_REQUIRED",
   );
   await assert.rejects(
-    () => resolver.resolveSessionScope("u1", "leafC"),
+    () => resolver.placeSessionScope("u1", { sessionId: "leafC" }),
     (error) => error?.code === "SESSION_TREE_SESSION_ID_REQUIRED",
   );
 });

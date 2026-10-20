@@ -11,17 +11,15 @@ import {
   assertMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
 import { createUserInterjectionContentFact } from "@noobot/event-protocol/thinking-detail-content";
-import { text, isFunction } from "@noobot/shared/value";
+import { createSessionPersistenceScope } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
-export function createUserInterjectionAuthorityBridge({ resolveBot } = {}) {
-  return async function commitUserInterjection({ activeRun = {}, interjection = {} } = {}) {
-    const bot = resolveBot?.();
-    if (!isFunction(bot?.commitAuthorityEvent)) {
-      throw new Error("commitAuthorityEvent is required");
-    }
+export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceScope }) {
+  const scope = createSessionPersistenceScope(persistenceScope);
+  return async function commitUserInterjection({ activeRun, interjection }) {
+    const bot = resolveBot();
     const userId = text(activeRun.userId);
     const sessionId = text(activeRun.sessionId);
-    const parentSessionId = text(activeRun.parentSessionId);
     const dialogProcessId = text(activeRun.dialogProcessId);
     const turnScopeId = text(activeRun.turnScopeId);
     const messageId = text(activeRun.messageId);
@@ -59,7 +57,7 @@ export function createUserInterjectionAuthorityBridge({ resolveBot } = {}) {
     const committed = await bot.commitAuthorityEvent({
       userId,
       sessionId,
-      parentSessionId,
+      persistenceScope: scope,
       family: EVENT_FAMILY.MESSAGE_TIMELINE,
       identity: {
         eventType: MESSAGE_EVENT_WIRE_EVENT,

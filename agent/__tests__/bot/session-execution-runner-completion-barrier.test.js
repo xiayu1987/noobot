@@ -35,6 +35,12 @@ test("runSession waits for post-run hook events before completing and publishing
         if (event === "agent_lifecycle_state_changed") states.push(data.state);
       },
     },
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    turnScopeId: "turn-default",
+    dialogProcessId: "dialog-1",
+    persistenceScope: null,
   });
   const runner = createRunner({
     callOrder: [],
@@ -76,6 +82,12 @@ test("post-run hook failure never publishes completed and drains the failed life
         records.push(record);
       },
     },
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    turnScopeId: "turn-default",
+    dialogProcessId: "dialog-1",
+    persistenceScope: null,
   });
   const runner = createRunner({
     callOrder: [],
@@ -116,6 +128,12 @@ test("completion event persistence failure rejects the run without parent succes
         records.push(record);
       },
     },
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    turnScopeId: "turn-default",
+    dialogProcessId: "dialog-1",
+    persistenceScope: null,
   });
   const runner = createRunner({
     callOrder: [],
@@ -148,6 +166,12 @@ test("failed runs drain error-hook events before disposing the plugin activation
         }
       },
     },
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    turnScopeId: "turn-default",
+    dialogProcessId: "dialog-1",
+    persistenceScope: null,
   });
   const runner = createRunner({
     callOrder: [],

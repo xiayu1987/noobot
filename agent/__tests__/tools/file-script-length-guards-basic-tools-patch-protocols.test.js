@@ -35,6 +35,7 @@ test("patch_file: schema path hints only describe the active path view", async (
     agentContext: buildAgentContext(basePath, "super-root-user", {
       runtime: {
         systemRuntime: {
+          persistenceScope: null,
           userId: "super-root-user",
           sessionId: "s-1",
           rootSessionId: "s-1",
@@ -57,6 +58,7 @@ test("patch_file: schema path hints only describe the active path view", async (
     agentContext: buildAgentContext(basePath, "super-root-user", {
       runtime: {
         systemRuntime: {
+          persistenceScope: null,
           userId: "super-root-user",
           sessionId: "s-1",
           rootSessionId: "s-1",
@@ -280,6 +282,7 @@ test("patch_file: 超级管理员也不能使用虚拟 project 路径猜测项�
     agentContext: buildAgentContext(workspacePath, "admin", {
       runtime: {
         systemRuntime: {
+          persistenceScope: null,
           isSuperUser: true,
           userId: "admin",
           sessionId: "s-1",

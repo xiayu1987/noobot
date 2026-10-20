@@ -29,8 +29,10 @@ test("file diff preserves Git line semantics and mutation result omits full line
     before: { exists: true },
     after: { exists: true },
     diff,
+    sessionScope: null,
   });
   assert.equal(result.mutations[0].diff.lines, undefined);
+  assert.equal(Object.hasOwn(result.mutations[0], "sessionScope"), false);
   assert.equal(assertFileMutationResult(result), result);
 });
 
@@ -43,6 +45,7 @@ test("file mutation preview responses are projected from the canonical result", 
     before: { exists: true, isText: true, size: 4, sha256: "before" },
     after: { exists: true, isText: true, size: 3, sha256: "after" },
     diff: createFileDiff("old\n", "new\n"),
+    sessionScope: null,
   });
   const stored = {
     ...result,
@@ -70,4 +73,24 @@ test("file mutation preview responses are projected from the canonical result", 
     size: 3,
     content: "new\n",
   });
+});
+
+test("file mutation result requires an explicit sessionScope", () => {
+  const base = {
+    id: "mutation-id",
+    operation: "update",
+    path: "a.txt",
+    fileName: "a.txt",
+    before: { exists: true },
+    after: { exists: true },
+    diff: createFileDiff("a\n", "b\n"),
+  };
+  for (const sessionScope of [undefined, "", "scope", 0]) {
+    assert.throws(() => createFileMutationResult({ ...base, sessionScope }), TypeError);
+  }
+  const scope = { scopeId: "agent:x", parentSessionId: "p", relativeDir: "d", allowedRoot: "r" };
+  assert.deepEqual(
+    createFileMutationResult({ ...base, sessionScope: scope }).mutations[0].sessionScope,
+    scope,
+  );
 });

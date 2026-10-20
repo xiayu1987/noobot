@@ -29,7 +29,6 @@ export async function writeRuntimeEvent(event = {}, { desktopRoot = "" } = {}) {
       workspaceRoot: config.workspaceRoot,
       userId: record.userId,
       sessionId: record.sessionId,
-      parentSessionId: record.parentSessionId,
     });
     if (location.deleted) return { ok: true, skipped: true, deleted: true, record };
     if (location.missingSession) return { ok: true, skipped: true, missingSession: true, record };

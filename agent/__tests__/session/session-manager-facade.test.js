@@ -8,22 +8,37 @@ import assert from "node:assert/strict";
 
 import { createSessionFacade } from "../../src/session/index.js";
 
-test("createSessionFacade delegates getContextProjection with normalized scope fields", async () => {
-  let captured = null;
-  const projection = { scope: {}, messages: [{ role: "user", content: "hi" }] };
-  const session = createSessionFacade({
+function createFacadeRuntime(overrides = {}) {
+  const contexts = [];
+  const runtime = {
     sessionTreeService: {},
     sessionCrudService: {},
     sessionMessageService: {},
+    sessionContextService: {},
+    taskService: {},
+    executionLogService: {},
+    repositories: { connectorInstanceRepository: {} },
+    createSessionPersistenceContext(input) {
+      contexts.push(input);
+      return Object.freeze({ kind: "test-context", sessionId: input.sessionId });
+    },
+    ...overrides,
+  };
+  return { runtime, contexts };
+}
+
+test("createSessionFacade delegates getContextProjection with normalized scope fields", async () => {
+  let captured = null;
+  const projection = { scope: {}, messages: [{ role: "user", content: "hi" }] };
+  const { runtime } = createFacadeRuntime({
     sessionContextService: {
       async getContextProjection(payload) {
         captured = payload;
         return projection;
       },
     },
-    taskService: {},
-    executionLogService: {},
   });
+  const session = createSessionFacade(runtime);
 
   const result = await session.getContextProjection({
     userId: "u1",
@@ -31,23 +46,17 @@ test("createSessionFacade delegates getContextProjection with normalized scope f
     currentTurnScopeId: "turn-current",
   });
 
-  assert.deepEqual(captured, {
-    userId: "u1",
-    sessionId: "s1",
-    currentDialogProcessId: "",
-    currentTurnScopeId: "turn-current",
-  });
+  assert.equal(captured.userId, "u1");
+  assert.equal(captured.sessionId, "s1");
+  assert.equal(captured.currentTurnScopeId, "turn-current");
+  assert.equal(captured.persistenceContext.kind, "test-context");
+  assert.equal(Object.hasOwn(captured, "parentSessionId"), false);
   assert.equal(result, projection);
 });
 
 test("createSessionFacade should delegate appendExecutionLog to executionLogService", async () => {
   let captured = null;
-  const session = createSessionFacade({
-    sessionTreeService: {},
-    sessionCrudService: {},
-    sessionMessageService: {},
-    sessionContextService: {},
-    taskService: {},
+  const { runtime } = createFacadeRuntime({
     executionLogService: {
       async appendExecutionLog(payload = {}) {
         captured = payload;
@@ -55,6 +64,7 @@ test("createSessionFacade should delegate appendExecutionLog to executionLogServ
       },
     },
   });
+  const session = createSessionFacade(runtime);
 
   const result = await session.appendExecutionLog({
     userId: "u1",
@@ -63,24 +73,22 @@ test("createSessionFacade should delegate appendExecutionLog to executionLogServ
     category: "system",
     type: "trace",
     data: { text: "hello" },
-    parentSessionId: "p1",
   });
 
   assert.equal(captured.userId, "u1");
   assert.equal(captured.sessionId, "s1");
   assert.equal(captured.event, "thinking");
-  assert.equal(captured.parentSessionId, "p1");
+  assert.equal(captured.persistenceContext.kind, "test-context");
   assert.deepEqual(result, { ok: true });
+  await assert.rejects(
+    () => session.appendExecutionLog({ userId: "u1", sessionId: "s1", parentSessionId: "p1" }),
+    /without parentSessionId/,
+  );
 });
 
 test("createSessionFacade preserves scoped execution turn log fields", async () => {
   let captured = null;
-  const session = createSessionFacade({
-    sessionTreeService: {},
-    sessionCrudService: {},
-    sessionMessageService: {},
-    sessionContextService: {},
-    taskService: {},
+  const { runtime, contexts } = createFacadeRuntime({
     executionLogService: {
       async getTurnLogs(payload = {}) {
         captured = payload;
@@ -88,44 +96,56 @@ test("createSessionFacade preserves scoped execution turn log fields", async () 
       },
     },
   });
-  const persistenceContext = { locationResolver: { scopeId: "workflow-node" } };
+  const session = createSessionFacade(runtime);
+  const persistenceScope = {
+    scopeId: "agent:workflow-node",
+    parentSessionId: "parent-1",
+    relativeDir: "runtime/plugin-data/workflow/session/parent-1/child-1",
+    allowedRoot: "runtime/plugin-data/workflow/session",
+  };
 
   await session.getExecutionTurnLogs({
     userId: "u1",
     sessionId: "child-1",
     dialogProcessId: "dp-1",
-    parentSessionId: "parent-1",
-    persistenceContext,
+    persistenceScope,
   });
 
+  assert.deepEqual(contexts, [{ userId: "u1", sessionId: "child-1", persistenceScope }]);
   assert.deepEqual(captured, {
     userId: "u1",
     sessionId: "child-1",
     dialogProcessId: "dp-1",
-    parentSessionId: "parent-1",
-    persistenceContext,
+    persistenceContext: { kind: "test-context", sessionId: "child-1" },
   });
+  await assert.rejects(
+    () =>
+      session.getExecutionTurnLogs({
+        userId: "u1",
+        sessionId: "child-1",
+        persistenceContext: captured.persistenceContext,
+      }),
+    /derives persistence context from persistenceScope/,
+  );
 });
 
 test("createSessionFacade resolves authority outbox access from the protocol persistence scope", async () => {
   const calls = [];
-  const contexts = [];
   const persistenceScope = {
     scopeId: "agent:workflow-node-1",
     parentSessionId: "root-session",
     relativeDir: "runtime/plugin-data/workflow/session/root-session/workflow-node-1",
     allowedRoot: "runtime/plugin-data/workflow/session",
   };
-  const runtime = {
-    sessionTreeService: {},
-    sessionCrudService: {},
+  const methods = [
+    "getPendingAuthorityEvents",
+    "recordAuthorityEventAttempts",
+    "acknowledgeAuthorityEvents",
+    "compactAuthorityEvents",
+  ];
+  const { runtime, contexts } = createFacadeRuntime({
     sessionMessageService: Object.fromEntries(
-      [
-        "getPendingAuthorityEvents",
-        "recordAuthorityEventAttempts",
-        "acknowledgeAuthorityEvents",
-        "compactAuthorityEvents",
-      ].map((method) => [
+      methods.map((method) => [
         method,
         async (payload) => {
           calls.push({ method, payload });
@@ -133,21 +153,9 @@ test("createSessionFacade resolves authority outbox access from the protocol per
         },
       ]),
     ),
-    sessionContextService: {},
-    taskService: {},
-    executionLogService: {},
-    createScopedPersistenceContext(payload) {
-      contexts.push(payload);
-      return Object.freeze({ kind: "test-scope", locationResolver: {} });
-    },
-  };
+  });
   const session = createSessionFacade(runtime);
-  const identity = {
-    userId: "u1",
-    sessionId: "child-session",
-    parentSessionId: "root-session",
-    persistenceScope,
-  };
+  const identity = { userId: "u1", sessionId: "child-session", persistenceScope };
 
   await session.getPendingAuthorityEvents(identity);
   await session.recordAuthorityEventAttempts({ ...identity, eventIds: ["event-1"] });
@@ -157,66 +165,56 @@ test("createSessionFacade resolves authority outbox access from the protocol per
   });
   await session.compactAuthorityEvents({ ...identity, consumerId: "service.websocket" });
 
-  assert.equal(calls.length, 4);
-  assert.equal(contexts.length, 4);
-  for (const { payload } of calls) {
-    assert.equal(payload.persistenceScope, persistenceScope);
-    assert.equal(payload.parentSessionId, "root-session");
-    assert.equal(payload.persistenceContext.kind, "test-scope");
-  }
-  assert.deepEqual(contexts[0], {
-    userId: "u1",
-    sessionId: "child-session",
-    parentSessionId: "root-session",
-    scopeId: "agent:workflow-node-1",
-    relativeDir: "runtime/plugin-data/workflow/session/root-session/workflow-node-1",
-    allowedRoot: "runtime/plugin-data/workflow/session",
-  });
-  await expectAuthorityScopeConflict(session, persistenceScope);
-});
-
-async function expectAuthorityScopeConflict(session, persistenceScope) {
-  await assert.rejects(
-    () =>
-      session.getPendingAuthorityEvents({
-        userId: "u1",
-        sessionId: "child-session",
-        parentSessionId: "different-root",
-        persistenceScope,
-      }),
-    /parent does not match its authority protocol scope/,
+  assert.deepEqual(
+    calls.map(({ method }) => method),
+    methods,
   );
-}
+  assert.equal(contexts.length, 4);
+  for (const context of contexts) {
+    assert.deepEqual(context, { userId: "u1", sessionId: "child-session", persistenceScope });
+  }
+  for (const { payload } of calls) {
+    assert.equal(Object.hasOwn(payload, "persistenceScope"), false);
+    assert.equal(Object.hasOwn(payload, "parentSessionId"), false);
+    assert.equal(payload.persistenceContext.kind, "test-context");
+  }
+  await assert.rejects(
+    () => session.getPendingAuthorityEvents({ ...identity, parentSessionId: "root-session" }),
+    /without parentSessionId/,
+  );
+});
 
 test("createSessionFacade should delegate CRUD and connector methods to sessionCrudService", async () => {
   const captured = [];
-  const session = createSessionFacade({
-    sessionTreeService: {},
+  const record = (name, result) => async (payload) => {
+    captured.push([name, payload]);
+    return typeof result === "function" ? result(payload) : result;
+  };
+  const { runtime } = createFacadeRuntime({
     sessionCrudService: {
-      async createSession(payload = {}) {
-        captured.push(["createSession", payload]);
-        return { exists: true };
-      },
-      async getSessionBundle(payload = {}) {
-        captured.push(["getSessionBundle", payload]);
-        return { exists: true, session: { sessionId: "s1" }, task: { tasks: [] } };
-      },
-      async setRootSessionSelectedConnectorIds(payload = {}) {
-        captured.push(["setRootSessionSelectedConnectorIds", payload]);
-        return ["con_google"];
-      },
-      async renameSession(payload = {}) {
-        captured.push(["renameSession", payload]);
-        return { sessionId: payload.sessionId, customTitle: payload.title };
-      },
+      createSession: record("createSession", { exists: true }),
+      getSessionBundle: record("getSessionBundle", {
+        exists: true,
+        session: { sessionId: "s1" },
+        task: { tasks: [] },
+      }),
+      setRootSessionSelectedConnectorIds: record("setRootSessionSelectedConnectorIds", [
+        "con_google",
+      ]),
+      renameSession: record("renameSession", (payload) => ({
+        sessionId: payload.sessionId,
+        customTitle: payload.title,
+      })),
     },
-    sessionMessageService: {},
-    sessionContextService: {},
-    taskService: {},
-    executionLogService: {},
   });
+  const session = createSessionFacade(runtime);
 
-  const created = await session.createSession({ userId: "u1", sessionId: "s1" });
+  const created = await session.createSession({
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    caller: "user",
+  });
   const bundle = await session.getSessionBundle({ userId: "u1", sessionId: "s1" });
   const connectors = await session.setRootSessionSelectedConnectorIds({
     userId: "u1",
@@ -225,28 +223,35 @@ test("createSessionFacade should delegate CRUD and connector methods to sessionC
   });
   const renamed = await session.renameSession({ userId: "u1", sessionId: "s1", title: "new name" });
 
-  assert.equal(captured.length, 4);
-  assert.equal(captured[0][0], "createSession");
-  assert.equal(captured[1][0], "getSessionBundle");
-  assert.equal(captured[2][0], "setRootSessionSelectedConnectorIds");
-  assert.equal(captured[3][0], "renameSession");
+  assert.deepEqual(
+    captured.map(([name]) => name),
+    ["createSession", "getSessionBundle", "setRootSessionSelectedConnectorIds", "renameSession"],
+  );
+
+  assert.equal(captured[0][1].parentSessionId, "");
+  assert.equal(captured[0][1].persistenceContext.kind, "test-context");
+  assert.equal(captured[1][1].persistenceContext.kind, "test-context");
+  assert.equal(captured[3][1].persistenceContext.kind, "test-context");
   assert.deepEqual(created, { exists: true });
   assert.equal(bundle.exists, true);
   assert.deepEqual(connectors, ["con_google"]);
   assert.deepEqual(renamed, { sessionId: "s1", customTitle: "new name" });
+  await assert.rejects(
+    () => session.getSessionBundle({ userId: "u1", sessionId: "s1", parentSessionId: "" }),
+    /without parentSessionId/,
+  );
 });
 
 test("createSessionFacade should delegate message and tree methods", async () => {
   let appendCaptured = null;
   let deleteCaptured = null;
-  const session = createSessionFacade({
+  const { runtime } = createFacadeRuntime({
     sessionTreeService: {
       async deleteSessionBranch(payload = {}) {
         deleteCaptured = payload;
         return { ok: true, deletedSessionIds: ["s2"] };
       },
     },
-    sessionCrudService: {},
     sessionMessageService: {
       async appendTurns(payload = {}) {
         appendCaptured = payload;
@@ -256,10 +261,8 @@ test("createSessionFacade should delegate message and tree methods", async () =>
         return [{ role: "user", content: "hi" }];
       },
     },
-    sessionContextService: {},
-    taskService: {},
-    executionLogService: {},
   });
+  const session = createSessionFacade(runtime);
 
   await session.appendTurns({
     userId: "u1",
@@ -270,6 +273,7 @@ test("createSessionFacade should delegate message and tree methods", async () =>
   const deleted = await session.deleteSessionBranch({ userId: "u1", sessionId: "s2" });
 
   assert.equal(appendCaptured.sessionId, "s1");
+  assert.equal(appendCaptured.persistenceContext.kind, "test-context");
   assert.equal(turns.length, 1);
   assert.equal(deleteCaptured.sessionId, "s2");
   assert.equal(deleted.ok, true);

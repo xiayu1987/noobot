@@ -13,6 +13,10 @@ import {
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+} from "@noobot/agent-transport-protocol/events";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
 useProvisionedRuntimeEventsWorkspace(["primary-user", "owner-a", "owner-b", "canonical-owner"]);
@@ -322,7 +326,13 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
             }),
           ),
         );
-        resolve();
+      });
+
+      runWs.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw || "{}"));
+        if (parsed?.event === "turn_committed" && parsed?.data?.sessionId === "s-owner-stop") {
+          resolve();
+        }
       });
       runWs.on("error", reject);
     });
@@ -349,6 +359,14 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
       );
       stopWs.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
+        if (
+          parsed?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+          parsed?.data?.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED
+        ) {
+          clearTimeout(timer);
+          reject(new Error(`same owner stop rejected: ${parsed.data.error.message}`));
+          return;
+        }
         if (
           parsed?.event === "turn_lifecycle" &&
           parsed?.data?.payload?.eventType === TURN_EVENT.STOP_ACCEPTED

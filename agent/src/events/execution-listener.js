@@ -4,17 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
 import {
   omitExecutionRouteIdentity,
-  projectExecutionRouteIdentity,
   projectExecutionTransportPayload,
+  requireExecutionRouteIdentity,
 } from "./transport-payload.js";
 import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
-import { text, isFunction, isPlainObject } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function projectExecutionLogRecord(event = "", data = {}) {
   if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
@@ -42,12 +41,12 @@ function projectExecutionLogRecord(event = "", data = {}) {
 
 export function createExecutionEventListener({
   sessionManager,
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  turnScopeId = "",
-  dialogProcessId: inputDialogProcessId,
-  persistenceContext = null,
+  userId,
+  sessionId,
+  parentSessionId,
+  turnScopeId,
+  dialogProcessId,
+  persistenceScope,
   upstream = null,
 }) {
   if (!isFunction(sessionManager?.appendExecutionLog)) {
@@ -56,8 +55,17 @@ export function createExecutionEventListener({
   if (upstream !== null && !isFunction(upstream.onEvent)) {
     throw new TypeError("execution event upstream requires an onEvent port");
   }
-  const dialogProcessId = normalizeDialogProcessId(inputDialogProcessId);
-  const defaults = { userId, dialogProcessId, sessionId, parentSessionId, turnScopeId };
+
+  if (persistenceScope === undefined) {
+    throw new TypeError("execution event listener requires an explicit persistenceScope");
+  }
+  const route = requireExecutionRouteIdentity({
+    userId,
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    turnScopeId,
+  });
   let persistenceTail = Promise.resolve();
   let deliveryTail = Promise.resolve();
   const persistenceFailures = [];
@@ -80,16 +88,14 @@ export function createExecutionEventListener({
   };
 
   const appendExecutionLog = (record) => {
-    const route = projectExecutionRouteIdentity({}, defaults);
     const canonicalRecord = {
       ...record,
       userId: route.userId,
       sessionId: route.sessionId,
-      parentSessionId: route.parentSessionId,
       dialogProcessId: route.dialogProcessId,
       turnScopeId: route.turnScopeId,
       data: omitExecutionRouteIdentity(record?.data),
-      ...(persistenceContext ? { persistenceContext } : {}),
+      persistenceScope,
     };
     persistenceTail = persistenceTail.then(async () => {
       try {
@@ -105,15 +111,15 @@ export function createExecutionEventListener({
     return persistenceTail;
   };
 
-  const summarizeDelivery = (event, data, route) => ({
+  const summarizeDelivery = (event, data, deliveryRoute) => ({
     sourceEvent: event,
     eventId: text(data?.envelope?.identity?.eventId),
     eventType: text(data?.envelope?.identity?.eventType || event),
     route: {
-      sessionId: text(route.sessionId),
-      parentSessionId: text(route.parentSessionId),
-      dialogProcessId: text(route.dialogProcessId),
-      turnScopeId: text(route.turnScopeId),
+      sessionId: deliveryRoute.sessionId,
+      parentSessionId: deliveryRoute.parentSessionId,
+      dialogProcessId: deliveryRoute.dialogProcessId,
+      turnScopeId: deliveryRoute.turnScopeId,
     },
     messageId: text(data?.envelope?.identity?.messageId),
     presentationMessageId: text(data?.presentationMessageId),
@@ -125,9 +131,9 @@ export function createExecutionEventListener({
       : 0,
   });
 
-  const forwardUpstream = ({ event, data, ts, route }) => {
-    const transportData = projectExecutionTransportPayload({ event, data, route });
-    const diagnostic = summarizeDelivery(event, transportData, route);
+  const forwardUpstream = ({ event, data, ts, route: deliveryRoute }) => {
+    const transportData = projectExecutionTransportPayload({ event, data, route: deliveryRoute });
+    const diagnostic = summarizeDelivery(event, transportData, deliveryRoute);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.messageId);
     const enqueuedAt = deliveryTiming ? performance.now() : 0;
     const task = deliveryTail.then(async () => {
@@ -164,14 +170,11 @@ export function createExecutionEventListener({
   };
 
   const forwardEvent = (evt = {}) => {
-    if (!isPlainObject(evt?.route)) {
-      throw new TypeError("forwardEvent requires an explicit route identity");
-    }
     return forwardUpstream({
       event: evt?.event || "",
       data: evt?.data || {},
       ts: evt?.ts || new Date().toISOString(),
-      route: evt.route,
+      route: requireExecutionRouteIdentity(evt?.route),
     });
   };
 
@@ -188,9 +191,9 @@ export function createExecutionEventListener({
 
       if (deliveryTiming && deliveryTiming.queueWaitMs.length > 0) {
         const summary = {
-          sessionId,
-          turnScopeId,
-          dialogProcessId,
+          sessionId: route.sessionId,
+          turnScopeId: route.turnScopeId,
+          dialogProcessId: route.dialogProcessId,
           queueWaitMs: summarizeTiming(deliveryTiming.queueWaitMs),
           runMs: summarizeTiming(deliveryTiming.runMs),
         };
@@ -241,7 +244,7 @@ export function createExecutionEventListener({
       }
 
       if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
-      return forwardUpstream({ event, data, ts, route: defaults });
+      return forwardUpstream({ event, data, ts, route });
     },
   };
 }

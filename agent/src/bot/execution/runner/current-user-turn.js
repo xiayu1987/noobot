@@ -86,7 +86,6 @@ export async function prepareCurrentUserTurn({
   userInteractionBridge,
   abortSignal,
   parentAsyncResultContainer,
-  persistenceContext,
   persistenceScope,
   contextMode,
   userId,
@@ -109,14 +108,13 @@ export async function prepareCurrentUserTurn({
     parentSessionId,
     userConfig,
     userMessageAttachments: attachments,
-    systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
+    systemMessages,
     eventListener,
     dialogProcessId,
     userInteractionBridge,
     runConfig: resolvedRunConfig,
     abortSignal,
     parentAsyncResultContainer,
-    persistenceContext,
     persistenceScope,
   };
   emitPreparedTurnDebug({
@@ -153,11 +151,10 @@ export async function prepareCurrentUserTurn({
   reusedTurnResult = await assertReusedUserTurnIdentity({
     userId,
     sessionId,
-    parentSessionId,
     turnScopeId,
     dialogProcessId,
     ...(!precommittedUserTurn ? { attachments: canonicalAttachments } : {}),
-    ...(persistenceContext ? { persistenceContext } : {}),
+    persistenceScope,
   });
   currentUserMessage = reusedTurnResult?.userMessage;
   if (precommittedUserTurn) {
@@ -197,7 +194,7 @@ export async function prepareCurrentUserTurn({
       attachments: canonicalAttachments,
       expectedAggregateVersion: committedTurnResult?.aggregateVersion,
       commandId: deriveAttachmentBindCommandId(turnScopeId),
-      persistenceContext,
+      persistenceScope,
     });
     currentUserMessage = attachmentBinding?.userMessage;
     committedTurnResult = {

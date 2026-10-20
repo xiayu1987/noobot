@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createSessionCommand,
+  createSessionNotFoundError,
   createTurnReplacementCommit,
   SESSION_COMMAND,
 } from "@noobot/session-protocol";
@@ -221,7 +222,9 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
-        renameSession: async () => null,
+        renameSession: async ({ userId, sessionId }) => {
+          throw createSessionNotFoundError({ userId, sessionId });
+        },
       },
       getAttachmentById: async () => null,
     },

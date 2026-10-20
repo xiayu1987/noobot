@@ -12,13 +12,12 @@ import { buildContextMessageBlocks } from "../../src/context/assembly/message-bu
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
-function createContextSessionManager({ getContextProjection = null } = {}) {
+function createContextSessionManager() {
   return {
     async getRootSessionId({ sessionId }) {
       return sessionId;
     },
-    async getContextProjection(payload = {}) {
-      if (getContextProjection) return getContextProjection(payload);
+    async getContextProjection() {
       return { scope: {}, messages: [] };
     },
   };
@@ -34,18 +33,16 @@ function executionRunConfig(turnScopeId, extra = {}) {
 }
 
 function createBuilderForAttachmentRuntimeTest({
-  attachments = [],
-  userMessageAttachments = null,
-  promptSections = [],
-  runtimeAttachments = true,
-  eventListener = null,
-  botManager = null,
-  selectedConnectorIds = [],
-  userInteractionBridge = null,
-  persistenceContext = null,
-  persistenceScope = null,
-  parentSessionId = "",
-} = {}) {
+  userMessageAttachments,
+  promptSections,
+  runtimeAttachments,
+  eventListener,
+  botManager,
+  selectedConnectorIds,
+  userInteractionBridge,
+  persistenceScope,
+  parentSessionId,
+}) {
   return new ContextBuilder({
     config: {
       globalConfig: {
@@ -65,6 +62,7 @@ function createBuilderForAttachmentRuntimeTest({
       eventListener,
       botManager,
       userInteractionBridge,
+      errorLogger: null,
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
@@ -72,8 +70,7 @@ function createBuilderForAttachmentRuntimeTest({
       sessionId: "s1",
       caller: SESSION_CALLER.USER,
       parentSessionId,
-      ...(Array.isArray(userMessageAttachments) ? { userMessageAttachments } : {}),
-      attachments,
+      userMessageAttachments,
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           promptSections,
@@ -82,15 +79,14 @@ function createBuilderForAttachmentRuntimeTest({
         selectedConnectorIds,
       }),
       parentAsyncResultContainer: null,
-      persistenceContext,
       persistenceScope,
+      systemMessages: [],
     },
   });
 }
 
 test("ContextBuilder binds Session persistence authority before constructing tools", async () => {
   const requests = [];
-  const persistenceContext = { kind: "trusted-context" };
   const persistenceScope = {
     scopeId: " agent:turn-child ",
     parentSessionId: "root-session",
@@ -98,7 +94,6 @@ test("ContextBuilder binds Session persistence authority before constructing too
     allowedRoot: "runtime/agent/session",
   };
   const builder = createBuilderForAttachmentRuntimeTest({
-    persistenceContext,
     persistenceScope,
     parentSessionId: "root-session",
     userInteractionBridge: {
@@ -107,6 +102,12 @@ test("ContextBuilder binds Session persistence authority before constructing too
         return { confirmed: true, verificationCode: "ok" };
       },
     },
+    userMessageAttachments: [],
+    promptSections: [],
+    runtimeAttachments: true,
+    eventListener: null,
+    botManager: null,
+    selectedConnectorIds: [],
   });
 
   const executionScope = await builder.buildNewSessionContext({ dialogProcessId: "dp-child" });
@@ -124,10 +125,6 @@ test("ContextBuilder binds Session persistence authority before constructing too
     relativeDir: "runtime/agent/session/s1",
     allowedRoot: "runtime/agent/session",
   });
-  assert.equal(
-    executionScope.bindings.runtime.systemRuntime.persistenceContext,
-    persistenceContext,
-  );
 });
 
 test("buildNewSessionContext always projects explicitly selected connectors", async () => {
@@ -152,6 +149,12 @@ test("buildNewSessionContext always projects explicitly selected connectors", as
         },
       },
     },
+    userMessageAttachments: [],
+    runtimeAttachments: true,
+    eventListener: null,
+    userInteractionBridge: null,
+    persistenceScope: null,
+    parentSessionId: "",
   });
 
   const context = await builder.buildNewSessionContext({ dialogProcessId: "dp-connectors" });
@@ -169,6 +172,13 @@ test("buildNewSessionContext emits the default agent context debug structure", a
         events.push(event);
       },
     },
+    userMessageAttachments: [],
+    runtimeAttachments: true,
+    botManager: null,
+    selectedConnectorIds: [],
+    userInteractionBridge: null,
+    persistenceScope: null,
+    parentSessionId: "",
   });
 
   await builder.buildNewSessionContext({ dialogProcessId: "dp-debug" });
@@ -185,7 +195,7 @@ test("buildNewSessionContext emits the default agent context debug structure", a
   assert.equal(JSON.stringify(event.data).includes("abortSignal"), false);
 });
 
-test("buildNewSessionContext prefers userMessageAttachments over legacy attachments", async () => {
+test("buildNewSessionContext binds userMessageAttachments into runtime", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     userMessageAttachments: [
       {
@@ -198,18 +208,14 @@ test("buildNewSessionContext prefers userMessageAttachments over legacy attachme
         path: "/tmp/noobot-test-workspace/u1/runtime/attach/scoped/s1/user/input.png",
       },
     ],
-    attachments: [
-      {
-        attachmentId: "att_legacy",
-        sessionId: "s1",
-        attachmentSource: "user",
-        name: "legacy.png",
-        mimeType: "image/png",
-        size: 123,
-        path: "/tmp/noobot-test-workspace/u1/runtime/attach/scoped/s1/user/legacy.png",
-      },
-    ],
     promptSections: ["base_prompt", "system_runtime", "scenario"],
+    runtimeAttachments: true,
+    eventListener: null,
+    botManager: null,
+    selectedConnectorIds: [],
+    userInteractionBridge: null,
+    persistenceScope: null,
+    parentSessionId: "",
   });
 
   const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
@@ -239,6 +245,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
       eventListener: null,
       botManager: null,
       userInteractionBridge: null,
+      errorLogger: null,
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
@@ -246,13 +253,15 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
       sessionId: "s1",
       caller: SESSION_CALLER.USER,
       parentSessionId: "",
-      attachments: [],
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           promptSections: ["base_prompt", "system_runtime", "scenario"],
         },
       }),
       parentAsyncResultContainer: null,
+      persistenceScope: null,
+      userMessageAttachments: [],
+      systemMessages: [],
     },
   });
 
@@ -286,6 +295,7 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
       eventListener: null,
       botManager: null,
       userInteractionBridge: null,
+      errorLogger: null,
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
@@ -296,6 +306,8 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
       userMessageAttachments: [],
       runConfig: executionRunConfig("turn-runtime-only"),
       parentAsyncResultContainer: null,
+      persistenceScope: null,
+      systemMessages: [],
     },
   });
 
@@ -333,6 +345,7 @@ test("buildNewSessionContext keeps super user identity in system message when sy
       eventListener: null,
       botManager: null,
       userInteractionBridge: null,
+      errorLogger: null,
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
@@ -340,13 +353,15 @@ test("buildNewSessionContext keeps super user identity in system message when sy
       sessionId: "s1",
       caller: SESSION_CALLER.USER,
       parentSessionId: "",
-      attachments: [],
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           promptSections: ["base_prompt"],
         },
       }),
       parentAsyncResultContainer: null,
+      persistenceScope: null,
+      userMessageAttachments: [],
+      systemMessages: [],
     },
   });
 
@@ -427,6 +442,13 @@ test("buildNewSessionContext keeps user message attachments separate from runtim
       },
     ],
     promptSections: ["base_prompt", "system_runtime", "scenario"],
+    runtimeAttachments: true,
+    eventListener: null,
+    botManager: null,
+    selectedConnectorIds: [],
+    userInteractionBridge: null,
+    persistenceScope: null,
+    parentSessionId: "",
   });
 
   const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
@@ -481,6 +503,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
       eventListener: null,
       botManager: null,
       userInteractionBridge: null,
+      errorLogger: null,
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
@@ -488,11 +511,13 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
       sessionId: "s1",
       caller: SESSION_CALLER.USER,
       parentSessionId: "",
-      attachments: [],
       runConfig: executionRunConfig("client-turn:edited", {
         contextPolicy: { promptSections: ["base_prompt", "system_runtime"] },
       }),
       parentAsyncResultContainer: null,
+      persistenceScope: null,
+      userMessageAttachments: [],
+      systemMessages: [],
     },
   });
 
@@ -611,12 +636,14 @@ function createBuilderForLongMemoryTest(
       sessionId: "s1",
       caller: SESSION_CALLER.USER,
       parentSessionId: "",
-      attachments: [],
       runConfig: executionRunConfig("client-turn:long-memory", {
         contextPolicy: { promptSections: ["base_prompt", "long_memory"] },
       }),
       abortSignal,
       parentAsyncResultContainer: null,
+      persistenceScope: null,
+      userMessageAttachments: [],
+      systemMessages: [],
     },
   });
 }
@@ -701,13 +728,29 @@ test("a builder with memoryService requires an error logger", () => {
     () =>
       new ContextBuilder({
         config: { globalConfig: {}, userConfig: {} },
-        serviceContainer: { memoryService: { readLongMemory: async () => "" } },
+        serviceContainer: {
+          eventListener: null,
+          sessionManager: createContextSessionManager(),
+          memoryService: { readLongMemory: async () => "" },
+          attachmentService: null,
+          skillService: null,
+          botManager: null,
+          errorLogger: null,
+          userInteractionBridge: null,
+        },
         sessionContext: {
-          abortSignal: new AbortController().signal,
           userId: "u1",
+          sessionId: "s1",
+          caller: SESSION_CALLER.USER,
+          parentSessionId: "",
+          userMessageAttachments: [],
+          systemMessages: [],
           runConfig: executionRunConfig("client-turn:no-logger"),
+          abortSignal: new AbortController().signal,
+          parentAsyncResultContainer: null,
+          persistenceScope: null,
         },
       }),
-    TypeError,
+    /ContextBuilder with memoryService requires errorLogger\.log/,
   );
 });

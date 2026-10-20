@@ -106,7 +106,7 @@ test("user_interaction: should forward explicit timeoutMs to bridge", async () =
           return { response: "ok" };
         },
       },
-      systemRuntime: {},
+      systemRuntime: { persistenceScope: null },
     }),
   });
 
@@ -133,7 +133,7 @@ test("user_interaction: should tolerate unescaped quotes inside fields string de
           };
         },
       },
-      systemRuntime: {},
+      systemRuntime: { persistenceScope: null },
     }),
   });
 

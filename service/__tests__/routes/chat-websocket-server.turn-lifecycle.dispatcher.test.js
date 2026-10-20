@@ -50,6 +50,9 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
     async recordAuthorityEventAttempts() {
       return { recorded: true };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
       acknowledged += acknowledgements.length;
       const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
@@ -84,7 +87,11 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
   });
 
   try {
-    const result = await dispatch({ userId: "u1", sessionId: "s-artifact-live" });
+    const result = await dispatch({
+      userId: "u1",
+      sessionId: "s-artifact-live",
+      persistenceScope: null,
+    });
 
     assert.deepEqual(result, { dispatched: true, delivered: 1 });
     assert.deepEqual(packets, [{ event: PLUGIN_ARTIFACT_EVENT, data: envelope }]);
@@ -143,6 +150,9 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
       }
       return { recorded: true };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
       for (const receipt of acknowledgements) {
         const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
@@ -170,7 +180,11 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
       },
     });
 
-  const failed = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
+  const failed = await createDispatcher()({
+    userId: "u1",
+    sessionId: "s-send-retry",
+    persistenceScope: null,
+  });
   assert.deepEqual(failed, {
     dispatched: false,
     reason: "authority_event_send_failed",
@@ -184,7 +198,11 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   assert.equal(eventOutbox[0].deliveries[AUTHORITY_EVENT_CONSUMER.WEBSOCKET].attempts, 1);
 
   socketAvailable = true;
-  const retried = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
+  const retried = await createDispatcher()({
+    userId: "u1",
+    sessionId: "s-send-retry",
+    persistenceScope: null,
+  });
   assert.deepEqual(retried, { dispatched: true, delivered: 1 });
   assert.equal(sent.length, 1);
   assert.equal(sent[0].identity.eventId, "authority-event-send-retry");
@@ -198,6 +216,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   const afterAcknowledgement = await createDispatcher()({
     userId: "u1",
     sessionId: "s-send-retry",
+    persistenceScope: null,
   });
   assert.deepEqual(afterAcknowledgement, { dispatched: true, delivered: 0 });
   assert.equal(sent.length, 1);
@@ -250,9 +269,7 @@ test("authority dispatcher preserves the child persistence scope across every ou
   const result = await dispatch({
     userId: "u1",
     sessionId: "child-session",
-    parentSessionId: "root-session",
     persistenceScope,
-    limit: 25,
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
@@ -263,9 +280,7 @@ test("authority dispatcher preserves the child persistence scope across every ou
   for (const { input } of calls) {
     assert.equal(input.persistenceScope, persistenceScope);
     assert.equal(input.sessionId, "child-session");
-    assert.equal(input.parentSessionId, "root-session");
   }
-  assert.equal(calls[0].input.limit, 25);
   assert.equal(calls[0].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
   assert.equal(calls[1].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
   assert.deepEqual(calls[1].input.eventIds, [envelope.identity.eventId]);
@@ -321,6 +336,9 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
       const pendingIds = new Set(pending.map((item) => item.eventId));
       return { recorded: input.eventIds.every((eventId) => pendingIds.has(eventId)) };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents(input) {
       calls.push({ method: "acknowledge", input });
       const ackedIds = new Set(input.acknowledgements.map((receipt) => receipt.eventId));
@@ -342,7 +360,6 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
       dispatchAuthorityEvents({
         userId: envelope.payload.userId,
         sessionId: envelope.identity.sessionId,
-        parentSessionId: envelope.payload.parentSessionId,
         persistenceScope: context.persistenceScope,
       }),
   });
@@ -403,6 +420,9 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
       calls.attempt += 1;
       return { recorded: true };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents() {
       calls.acknowledge += 1;
       pending = false;
@@ -418,11 +438,15 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
       return true;
     },
   });
-  const persistenceScope = { scopeId: "agent:child-turn" };
+  const persistenceScope = Object.freeze({
+    scopeId: "agent:child-turn",
+    parentSessionId: "root-session",
+    relativeDir: "runtime/plugin-data/workflow/session/root-session/child-turn",
+    allowedRoot: "runtime/plugin-data/workflow/session",
+  });
   const payload = {
     userId: "u1",
     sessionId: "child-session",
-    parentSessionId: "root-session",
     persistenceScope,
   };
 
@@ -472,6 +496,9 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
       const pendingIds = new Set(pending.map((item) => item.eventId));
       return { recorded: eventIds.every((eventId) => pendingIds.has(eventId)) };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
       const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
       pending = pending.filter((item) => !ackedIds.has(item.eventId));
@@ -489,8 +516,12 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
   const payload = {
     userId: "u1",
     sessionId: "child-session",
-    parentSessionId: "root-session",
-    persistenceScope: { scopeId: "agent:child-turn" },
+    persistenceScope: Object.freeze({
+      scopeId: "agent:child-turn",
+      parentSessionId: "root-session",
+      relativeDir: "runtime/plugin-data/workflow/session/root-session/child-turn",
+      allowedRoot: "runtime/plugin-data/workflow/session",
+    }),
   };
 
   const runningDrain = dispatch(payload);
@@ -557,6 +588,9 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
       }
       return { recorded: true };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
       if (!acknowledgementAvailable) {
         return { acknowledged: false, reason: "session_save_failed" };
@@ -584,7 +618,11 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
     },
   });
 
-  const failedAcknowledgement = await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
+  const failedAcknowledgement = await dispatch({
+    userId: "u1",
+    sessionId: "s-ack-retry",
+    persistenceScope: null,
+  });
   assert.deepEqual(failedAcknowledgement, {
     dispatched: false,
     reason: "session_save_failed",
@@ -598,7 +636,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   assert.equal(eventOutbox[0].deliveries[AUTHORITY_EVENT_CONSUMER.WEBSOCKET].attempts, 1);
 
   acknowledgementAvailable = true;
-  const retry = await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
+  const retry = await dispatch({ userId: "u1", sessionId: "s-ack-retry", persistenceScope: null });
   assert.deepEqual(retry, { dispatched: true, delivered: 1 });
   assert.deepEqual(sentEventIds, ["authority-event-ack-retry", "authority-event-ack-retry"]);
   assert.equal(eventOutbox[0].deliveries[AUTHORITY_EVENT_CONSUMER.WEBSOCKET].attempts, 2);
@@ -608,7 +646,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
     0,
   );
 
-  await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
+  await dispatch({ userId: "u1", sessionId: "s-ack-retry", persistenceScope: null });
   assert.equal(sentEventIds.length, 2);
 });
 
@@ -662,7 +700,11 @@ test("CLI dispatcher acknowledges and compacts as the CLI consumer", async () =>
     sendEvent: () => true,
   });
 
-  const result = await dispatch({ userId: "u1", sessionId: "s-cli-consumer" });
+  const result = await dispatch({
+    userId: "u1",
+    sessionId: "s-cli-consumer",
+    persistenceScope: null,
+  });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
   const consumerIdsByMethod = Object.fromEntries(

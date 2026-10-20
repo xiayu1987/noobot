@@ -15,20 +15,22 @@ import {
 
 const INTERACTION_AUTHORITY_FIELDS = Object.freeze(["session", "turn", "persistenceScope"]);
 const TURN_IDENTITY_FIELDS = Object.freeze(["dialogProcessId", "turnScopeId"]);
-export function createInteractionAuthority(source = {}) {
-  const input = isPlainObject(source) ? source : {};
+
+export function createInteractionAuthority(source) {
+  if (!isPlainObject(source)) {
+    throw new TypeError("interaction authority must be an object");
+  }
   return Object.freeze({
-    session: createSessionScope(input.session),
-    turn: createTurnIdentity(input.turn),
-    persistenceScope: createSessionPersistenceScope(input.persistenceScope),
+    session: createSessionScope(source.session),
+    turn: createTurnIdentity(source.turn),
+    persistenceScope: createSessionPersistenceScope(source.persistenceScope),
   });
 }
 
-export function validateInteractionAuthority(source = {}) {
+export function validateInteractionAuthority(source) {
   if (!isPlainObject(source)) {
     return { valid: false, errors: ["invalid_interaction_authority"] };
   }
-  const authority = createInteractionAuthority(source);
   const errors = [
     ...validateSessionScope(source.session).errors,
     ...validateTurnIdentity(source.turn).errors,
@@ -42,16 +44,17 @@ export function validateInteractionAuthority(source = {}) {
   ) {
     errors.push("unknown_turn_identity_field");
   }
-  if (source.persistenceScope != null) {
-    const scopeValidation = validateSessionPersistenceScope(source.persistenceScope);
-    errors.push(...scopeValidation.errors);
-    if (authority.persistenceScope) {
-      if (authority.persistenceScope.parentSessionId !== authority.session.parentSessionId) {
-        errors.push("persistence_scope_parent_mismatch");
-      }
-    }
+  const scopeValidation = validateSessionPersistenceScope(source.persistenceScope);
+  errors.push(...scopeValidation.errors);
+
+  if (
+    scopeValidation.scope &&
+    scopeValidation.scope.parentSessionId !== createSessionScope(source.session).parentSessionId
+  ) {
+    errors.push("persistence_scope_parent_mismatch");
   }
-  return { valid: errors.length === 0, errors, authority };
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, errors, authority: createInteractionAuthority(source) };
 }
 
 export const INTERACTION_LIFECYCLE = Object.freeze({

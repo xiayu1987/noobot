@@ -8,7 +8,7 @@ import { fatalSystemError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
-import { createSessionDeletedError, normalizeParentSessionId } from "@noobot/session-protocol";
+import { createSessionDeletedError, createSessionNotFoundError } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function requireLifecycleSessionKey(sessionId = "") {
@@ -114,42 +114,44 @@ class SessionLifecycleMethods {
     return runAt(0);
   }
 
-  async withSessionMutation(
-    userId,
-    sessionId,
-    parentSessionId = "",
-    operation,
-    persistenceContext = null,
-  ) {
+  async withSessionMutation(userId, sessionId, operation, { persistenceContext } = {}) {
+    return this._withScopedSessionMutation(userId, sessionId, operation, async () => {
+      const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
+      if (!scope) throw createSessionNotFoundError({ userId, sessionId });
+      return scope;
+    });
+  }
+
+  async withSessionPlacementMutation(userId, placement, operation, { persistenceContext } = {}) {
+    return this._withScopedSessionMutation(userId, placement.sessionId, operation, async () => {
+      await this._assertParentSessionWritable(userId, placement.parentSessionId);
+      return this.placeSessionScope(userId, placement, persistenceContext);
+    });
+  }
+
+  async _withScopedSessionMutation(userId, sessionId, operation, resolveScope) {
     return this.withSessionLifecycleMutation(userId, sessionId, async () => {
       await this.assertSessionWritable(userId, sessionId);
-      const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
-      if (
-        normalizedParentSessionId &&
-        (await this.isSessionDeleted(userId, normalizedParentSessionId))
-      ) {
-        throw createSessionDeletedError({ userId, sessionId: normalizedParentSessionId });
-      }
-      const scope = await this.resolveSessionScope(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      const result = await operation();
-      if (typeof persistenceContext?.metadataContributor === "function") {
-        const metadata = await persistenceContext.metadataContributor({
-          userId,
-          sessionId,
-          parentSessionId: scope.resolvedParentSessionId,
-          scope,
-        });
-        if (isPlainObject(metadata)) {
-          await this.storageService.writeJsonAtomic(scope.metadataFile, metadata);
-        }
-      }
-      return result;
+      const scope = await resolveScope();
+      await this._assertParentSessionWritable(userId, scope.resolvedParentSessionId);
+      return operation(scope);
     });
+  }
+
+  async _assertParentSessionWritable(userId, parentSessionId) {
+    if (parentSessionId && (await this.isSessionDeleted(userId, parentSessionId))) {
+      throw createSessionDeletedError({ userId, sessionId: parentSessionId });
+    }
+  }
+
+  async writeSessionMetadata(userId, sessionId, metadata, { persistenceContext } = {}) {
+    if (!isPlainObject(metadata)) throw new TypeError("session metadata must be a plain object");
+    return this.withSessionMutation(
+      userId,
+      sessionId,
+      (scope) => this.storageService.writeJsonAtomic(scope.metadataFile, metadata),
+      { persistenceContext },
+    );
   }
 
   _withMutationLock(lockPath, operation) {

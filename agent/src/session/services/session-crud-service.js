@@ -4,13 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { readRepositoryParentSessionId } from "./session-scope-resolution.js";
 import {
   buildSessionDisplaySummary,
   SESSION_DETAIL_MESSAGE_PROJECTION,
 } from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
-import { createTurnTerminalResolution } from "@noobot/session-protocol";
+import {
+  SESSION_NOT_FOUND_REASON,
+  createSessionNotFoundError,
+  createTurnTerminalResolution,
+} from "@noobot/session-protocol";
 import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
 import { reconcileSessionSummaryIndex } from "@noobot/session-repair";
 import {
@@ -35,27 +38,11 @@ export class SessionCrudService {
     this.now = now;
   }
 
-  async _withSessionMutation(
-    userId,
-    sessionId,
-    parentSessionId,
-    operation,
-    persistenceContext = null,
-  ) {
-    return this.sessionRepo.withSessionMutation(
-      userId,
-      sessionId,
-      parentSessionId,
-      operation,
-      persistenceContext,
-    );
-  }
-
   async listSessionIds({ userId }) {
     return this.sessionRepo.listSessionIds(userId);
   }
 
-  async ensureSession(userId, sessionId, parentSessionId, caller, persistenceContext = null) {
+  async createSession({ userId, sessionId, parentSessionId, caller, persistenceContext }) {
     await this.sessionRepo.ensureSession({
       userId,
       sessionId,
@@ -63,51 +50,22 @@ export class SessionCrudService {
       caller,
       persistenceContext,
     });
+    return this.getSessionBundle({ userId, sessionId, persistenceContext });
   }
 
-  async createSession({ userId, sessionId, parentSessionId, caller, persistenceContext = null }) {
-    await this.ensureSession(userId, sessionId, parentSessionId, caller, persistenceContext);
-    return this.getSessionBundle({ userId, sessionId, parentSessionId, persistenceContext });
+  async repairSession({ userId, sessionId, persistenceContext }) {
+    return this.sessionRepo.repairSessionProtocol(userId, sessionId, { persistenceContext });
   }
 
-  async repairSession({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
-    return this.sessionRepo.repairSessionProtocol(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-  }
-
-  async getSessionBundle({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+  async getSessionBundle({ userId, sessionId, persistenceContext }) {
+    const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
     if (!session) return { exists: false, session: null, task: null };
-    const task = await this.taskRepo.getBundle(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    return { exists: true, session, task: task || null };
+    const task = await this.taskRepo.getBundle(userId, sessionId, { persistenceContext });
+    return { exists: true, session, task };
   }
 
-  async resolveSessionScope({
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-  } = {}) {
-    return this.sessionRepo.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+  async locateSessionScope({ userId, sessionId, persistenceContext }) {
+    return this.sessionRepo.locateSessionScope(userId, sessionId, persistenceContext);
   }
 
   async getSessionData({ userId, sessionId }) {
@@ -117,6 +75,7 @@ export class SessionCrudService {
       sessionBundle = await this.getSessionBundle({
         userId,
         sessionId: normalizedSessionId,
+        persistenceContext: this.sessionRepo.treePersistenceContext(userId, normalizedSessionId),
       });
     } catch (error) {
       if (error?.code !== "SESSION_PROTOCOL_INVALID") throw error;
@@ -153,7 +112,7 @@ export class SessionCrudService {
       const currentBundle = await this.getSessionBundle({
         userId,
         sessionId: currentSessionId,
-        parentSessionId: currentParentSessionId,
+        persistenceContext: this.sessionRepo.treePersistenceContext(userId, currentSessionId),
       });
       if (!currentBundle.exists) {
         if (await this.sessionRepo.isSessionDeleted(userId, currentSessionId)) continue;
@@ -195,12 +154,16 @@ export class SessionCrudService {
 
   async getSessionThinkingDetail({ userId, sessionId, turnScopeId = "", dialogProcessId = "" }) {
     const normalizedSessionId = text(sessionId);
+    const persistenceContext = this.sessionRepo.treePersistenceContext(userId, normalizedSessionId);
     const [turn, displaySummary] = await Promise.all([
       this.sessionRepo.readSessionTurn(userId, normalizedSessionId, {
         turnScopeId,
         dialogProcessId,
+        persistenceContext,
       }),
-      this.sessionRepo.readSessionDisplaySummary(userId, normalizedSessionId),
+      this.sessionRepo.readSessionDisplaySummary(userId, normalizedSessionId, {
+        persistenceContext,
+      }),
     ]);
     const summaryMessage = (
       Array.isArray(displaySummary?.messages) ? displaySummary.messages : []
@@ -226,9 +189,7 @@ export class SessionCrudService {
     sessionId,
     turnScopeId,
     commandId,
-    parentSessionId = "",
-    persistenceScope = null,
-    persistenceContext = null,
+    persistenceContext,
   }) {
     const normalizedSessionId = text(sessionId);
     const normalizedTurnScopeId = text(turnScopeId);
@@ -239,7 +200,6 @@ export class SessionCrudService {
     const bundle = await this.getSessionBundle({
       userId,
       sessionId: normalizedSessionId,
-      parentSessionId: text(parentSessionId || persistenceScope?.parentSessionId),
       persistenceContext,
     });
     if (!bundle.exists || !bundle.session) {
@@ -247,19 +207,7 @@ export class SessionCrudService {
         commandId: normalizedCommandId,
         sessionId: normalizedSessionId,
         turnScopeId: normalizedTurnScopeId,
-        reason: "session_not_found",
-      });
-    }
-    if (
-      text(bundle.session.sessionId) !== normalizedSessionId ||
-      (persistenceScope?.parentSessionId &&
-        text(bundle.session.parentSessionId) !== String(persistenceScope.parentSessionId).trim())
-    ) {
-      return createTurnTerminalResolution({
-        commandId: normalizedCommandId,
-        sessionId: normalizedSessionId,
-        turnScopeId: normalizedTurnScopeId,
-        reason: "persistence_scope_identity_mismatch",
+        reason: SESSION_NOT_FOUND_REASON,
       });
     }
     return resolveAuthoritativeTurnTerminal({
@@ -298,11 +246,9 @@ export class SessionCrudService {
       const depth = resolveSessionTreeDepth(sessionTree, currentSessionId);
       let summary = null;
       try {
-        summary = await this.sessionRepo.readSessionDisplaySummary(
-          userId,
-          currentSessionId,
-          currentParentSessionId,
-        );
+        summary = await this.sessionRepo.readSessionDisplaySummary(userId, currentSessionId, {
+          persistenceContext: this.sessionRepo.treePersistenceContext(userId, currentSessionId),
+        });
       } catch (error) {
         summary = await this.sessionRepo.buildUnavailableSessionSummary(userId, currentNode, error);
       }
@@ -332,20 +278,15 @@ export class SessionCrudService {
   }
 
   async maintainSessionDisplaySummaries({ userId }) {
-    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-
     const sessionIds = await this.listSessionIds({ userId });
     const rebuiltSessionIds = [];
     const migratedSessionIds = [];
     const failures = [];
     for (const sessionId of sessionIds) {
-      const { parentSessionId } = requireSessionTreeNode(sessionTree, sessionId);
       try {
-        const result = await this.sessionRepo.ensureSessionDisplaySummary(
-          userId,
-          sessionId,
-          parentSessionId,
-        );
+        const result = await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, {
+          persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
+        });
         if (result.migrated) migratedSessionIds.push(sessionId);
         if (result.rebuilt) rebuiltSessionIds.push(sessionId);
       } catch (error) {
@@ -361,7 +302,6 @@ export class SessionCrudService {
 
   async getAllSessionsData({ userId, failures = null }) {
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-
     const sessionIds = await this.listSessionIds({ userId });
 
     const sessionList = (
@@ -373,7 +313,7 @@ export class SessionCrudService {
             sessionBundle = await this.getSessionBundle({
               userId,
               sessionId,
-              parentSessionId,
+              persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
             });
           } catch (error) {
             if (Array.isArray(failures)) {
@@ -407,11 +347,18 @@ export class SessionCrudService {
     await this.sessionRepo.ensureSessionsSummarySchema(userId);
     const sessionIds = await this.listSessionIds({ userId });
     for (const sessionId of sessionIds) {
-      const { parentSessionId } = requireSessionTreeNode(sessionTree, sessionId);
+      const persistenceContext = this.sessionRepo.treePersistenceContext(userId, sessionId);
       try {
-        await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
+        await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, {
+          persistenceContext,
+        });
       } catch (error) {
-        await this.sessionRepo.markSessionSummaryUnavailable(userId, sessionId, { error });
+        const scope = await this.sessionRepo.requireSessionScope(
+          userId,
+          sessionId,
+          persistenceContext,
+        );
+        await this.sessionRepo.markSessionSummaryUnavailable(userId, sessionId, { error, scope });
       }
     }
     let payload = await this.sessionRepo.readSessionsSummary(userId);
@@ -429,73 +376,66 @@ export class SessionCrudService {
       );
   }
 
-  async setSessionModelAlias({ userId, sessionId, modelAlias }) {
-    return this._withSessionMutation(userId, sessionId, "", async () => {
-      const resolvedParentSessionId = await readRepositoryParentSessionId(
-        this.sessionRepo,
-        userId,
-        sessionId,
-        "",
-        null,
-      );
-      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
-      if (!session) return null;
+  async setSessionModelAlias({ userId, sessionId, modelAlias, persistenceContext }) {
+    return this._mutateSessionDocument(userId, sessionId, persistenceContext, (session) => {
       session.modelAlias = String(modelAlias || "");
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId);
       return session;
     });
   }
 
-  async renameSession({ userId, sessionId, title }) {
+  async renameSession({ userId, sessionId, title, persistenceContext }) {
     const normalizedTitle = text(title);
     if (!normalizedTitle) {
       const error = new Error("Session title is required");
       error.statusCode = 400;
       throw error;
     }
-    return this._withSessionMutation(userId, sessionId, "", async () => {
-      const resolvedParentSessionId = await readRepositoryParentSessionId(
-        this.sessionRepo,
-        userId,
-        sessionId,
-        "",
-        null,
-      );
-      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
-      if (!session) return null;
+    return this._mutateSessionDocument(userId, sessionId, persistenceContext, (session) => {
       session.customTitle = normalizedTitle;
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId);
       return session;
     });
   }
 
   async getRootSessionSelectedConnectorIds({ userId, sessionId }) {
     const rootSessionId = await this.sessionTreeService.getRootSessionId({ userId, sessionId });
-    return this.sessionRepo.readSelectedConnectorIds(userId, rootSessionId);
+    return this.sessionRepo.readSelectedConnectorIds(userId, rootSessionId, {
+      persistenceContext: this.sessionRepo.treePersistenceContext(userId, rootSessionId),
+    });
   }
 
   async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
     const rootSessionId = await this.sessionTreeService.getRootSessionId({ userId, sessionId });
-    return this._withSessionMutation(userId, rootSessionId, "", async () => {
-      const resolvedParentSessionId = await readRepositoryParentSessionId(
-        this.sessionRepo,
-        userId,
-        rootSessionId,
-        "",
-        null,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        rootSessionId,
-        resolvedParentSessionId,
-      );
-      if (!session) return normalizeSelectedConnectorIds([]);
-      session.selectedConnectorIds = normalizeSelectedConnectorIds(selectedConnectorIds);
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId);
-      return session.selectedConnectorIds;
+    const session = await this._mutateSessionDocument(
+      userId,
+      rootSessionId,
+      this.sessionRepo.treePersistenceContext(userId, rootSessionId),
+      (current) => {
+        current.selectedConnectorIds = normalizeSelectedConnectorIds(selectedConnectorIds);
+        return current;
+      },
+    );
+    return session.selectedConnectorIds;
+  }
+
+  async writeSessionMetadata({ userId, sessionId, metadata, persistenceContext }) {
+    await this.sessionRepo.writeSessionMetadata(userId, sessionId, metadata, {
+      persistenceContext,
     });
+  }
+
+  async _mutateSessionDocument(userId, sessionId, persistenceContext, mutate) {
+    return this.sessionRepo.withSessionMutation(
+      userId,
+      sessionId,
+      async () => {
+        const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
+        if (!session) throw createSessionNotFoundError({ userId, sessionId });
+        mutate(session);
+        session.updatedAt = this.now();
+        await this.sessionRepo.save(userId, session, { persistenceContext });
+        return session;
+      },
+      { persistenceContext },
+    );
   }
 }

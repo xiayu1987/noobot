@@ -28,7 +28,6 @@ import {
   hasDialogProcessIdInSession,
 } from "./session-message-service/message-queries.js";
 import { commitTurnSummaryCheckpoint } from "./session-message-service/turn-summary-checkpoint.js";
-import { readRepositoryParentSessionId } from "./session-scope-resolution.js";
 
 export class SessionMessageService {
   constructor({
@@ -41,53 +40,6 @@ export class SessionMessageService {
     this.sessionCrudService = sessionCrudService;
     this.now = now;
     this.allocateDialogProcessId = allocateDialogProcessId;
-  }
-
-  async _resolveParentSessionId(
-    userId,
-    sessionId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    return readRepositoryParentSessionId(
-      this.sessionRepo,
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-  }
-
-  async _findSession(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-    return { session, resolvedParentSessionId };
-  }
-
-  async _withSessionMutation(
-    userId,
-    sessionId,
-    operation,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    return this.sessionRepo.withSessionMutation(
-      userId,
-      sessionId,
-      parentSessionId,
-      operation,
-      persistenceContext,
-    );
   }
 
   async bindTurnAttachments(payload = {}) {
@@ -103,12 +55,9 @@ export class SessionMessageService {
     return commitAuthorityEvent.call(this, payload);
   }
   async getPluginArtifact(payload = {}) {
-    const session = await this.sessionRepo.findById(
-      payload.userId,
-      payload.sessionId,
-      payload.parentSessionId || "",
-      payload.persistenceContext || null,
-    );
+    const session = await this.sessionRepo.findById(payload.userId, payload.sessionId, {
+      persistenceContext: payload.persistenceContext,
+    });
     const key = pluginArtifactKey(payload);
     const current = projectPluginArtifacts(session?.sessionArtifactEvents || [])[key];
     if (!current) return { found: false, artifact: null, revision: 0 };

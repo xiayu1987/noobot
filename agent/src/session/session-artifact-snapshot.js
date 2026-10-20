@@ -8,7 +8,6 @@ import { buildSessionArtifactFileMap, readJsonArtifactFile } from "./session-art
 import { readExecutionLogs } from "./session-artifact-execution-logs.js";
 import { readSessionArtifactForRepair } from "./session-artifact-session.js";
 import { normalizeSessionDocumentForCurrentProtocol } from "./session-document-normalization.js";
-import { text } from "@noobot/shared/value";
 
 export async function readSessionArtifactSnapshot({
   outputDir = "",
@@ -22,9 +21,7 @@ export async function readSessionArtifactSnapshot({
     readJsonArtifactFile(files.meta, null),
   ]);
   const session = sessionRaw
-    ? normalizeSessionDocumentForCurrentProtocol(sessionRaw, {
-        sessionId: text(sessionRaw?.sessionId),
-      }).document
+    ? normalizeSessionDocumentForCurrentProtocol(sessionRaw).document
     : null;
   const sessionSummary = session ? buildSessionDisplaySummary(session) : null;
   return {

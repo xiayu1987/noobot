@@ -3,33 +3,37 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSessionPersistenceScope } from "@noobot/session-protocol";
 import { text as clean } from "@noobot/shared/value";
 
-export function createTurnLifecycleBridge({ resolveBot, dispatchAuthorityEvents } = {}) {
-  return async function commitTurnLifecycle(event = {}) {
-    const bot = resolveBot();
-    const result = await bot.applyTurnLifecycleEvent({
+export function createTurnLifecycleBridge({
+  resolveBot,
+  dispatchAuthorityEvents,
+  persistenceScope,
+}) {
+  const scope = createSessionPersistenceScope(persistenceScope);
+  return async function commitTurnLifecycle(event) {
+    if (Object.hasOwn(event, "persistenceScope")) {
+      throw new TypeError("turn lifecycle event must not carry persistenceScope");
+    }
+    const result = await resolveBot().applyTurnLifecycleEvent({
       ...event,
       userId: clean(event.userId),
       sessionId: clean(event.sessionId),
       turnScopeId: clean(event.turnScopeId),
       commandId: clean(event.commandId),
+      persistenceScope: scope,
     });
-    if (!result?.applied && !result?.deduplicated)
-      return result || { applied: false, reason: "lifecycle_unavailable" };
-    const turn = result.turn;
-    if (!turn) return { ...result, applied: false, reason: "lifecycle_turn_missing" };
-    if (!result.envelope)
+    if (!result.applied && !result.deduplicated) return result;
+    if (!result.turn) return { ...result, applied: false, reason: "lifecycle_turn_missing" };
+    if (!result.envelope) {
       return { ...result, applied: false, reason: "lifecycle_envelope_missing" };
-    const dispatch =
-      typeof dispatchAuthorityEvents === "function"
-        ? await dispatchAuthorityEvents({
-            userId: event.userId,
-            sessionId: event.sessionId,
-            parentSessionId: event.parentSessionId,
-            persistenceScope: event.persistenceScope,
-          })
-        : { dispatched: false, reason: "authority_dispatcher_unavailable" };
+    }
+    const dispatch = await dispatchAuthorityEvents({
+      userId: event.userId,
+      sessionId: event.sessionId,
+      persistenceScope: scope,
+    });
     return { ...result, dispatch };
   };
 }

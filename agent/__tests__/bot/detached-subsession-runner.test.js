@@ -29,6 +29,7 @@ import {
   createParentExecutionScope,
 } from "./detached-subsession-runner.test-helpers.js";
 import { SESSION_CALLER, requireSessionCaller } from "@noobot/shared/session-caller";
+import { createSessionPersistenceScope } from "@noobot/session-protocol";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
 test("detached sub-session delegates execution and persistence to the main runner", async () => {
@@ -96,22 +97,20 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.runtimeModel, "gpt_5_4");
   assert.equal(payload.runConfig.systemRuntimePatch, undefined);
   assert.equal(payload.parentAsyncResultContainer, null);
-  assert.ok(payload.persistenceContext);
-  assert.equal(calls.persistencePayloads[0].sessionId, "sub1");
-  assert.equal(calls.persistencePayloads[0].parentSessionId, "parent1");
-  assert.equal(calls.persistencePayloads[0].scopeId, "agent:turn-1");
-
-  assert.equal(calls.persistencePayloads.length, 1);
-  assert.deepEqual(calls.persistencePayloads[0], {
-    userId: "u1",
-    sessionId: "sub1",
-    parentSessionId: "parent1",
+  assert.equal(Object.hasOwn(payload, "persistenceContext"), false);
+  assert.deepEqual(payload.persistenceScope, {
     scopeId: "agent:turn-1",
+    parentSessionId: "parent1",
     relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
     allowedRoot: "runtime/plugin-data/workflow/session",
-    metadataContributor: calls.persistencePayloads[0].metadataContributor,
   });
-  const metadata = calls.persistencePayloads[0].metadataContributor();
+
+  assert.equal(calls.metadataWrites.length, 1);
+  const [metadataWrite] = calls.metadataWrites;
+  assert.equal(metadataWrite.userId, "u1");
+  assert.equal(metadataWrite.sessionId, "sub1");
+  assert.equal(metadataWrite.persistenceScope, payload.persistenceScope);
+  const { metadata } = metadataWrite;
   assert.equal(metadata.scope, "workflow_node");
   assert.equal(metadata.nodeId, "n1");
   assert.equal(metadata.sessionId, "sub1");
@@ -353,18 +352,19 @@ test("agent detached strategy resolves through the authoritative scoped persiste
       parentDialogProcessId: "parent-dialog",
     });
     const services = createTestSessionServices({ workspaceRoot });
-    const persistenceContext = services.createScopedPersistenceContext({
+    const persistenceContext = services.createSessionPersistenceContext({
       userId: strategy.userId,
       sessionId: strategy.sessionId,
-      parentSessionId: strategy.parentSessionId,
-      scopeId: strategy.executionId,
-      relativeDir: strategy.relativeDir,
-      allowedRoot: strategy.allowedRoot,
+      persistenceScope: createSessionPersistenceScope({
+        scopeId: strategy.executionId,
+        parentSessionId: strategy.parentSessionId,
+        relativeDir: strategy.relativeDir,
+        allowedRoot: strategy.allowedRoot,
+      }),
     });
-    const scope = await persistenceContext.locationResolver.resolveSessionScope(
+    const scope = await persistenceContext.locationResolver.locateSessionScope(
       strategy.userId,
       strategy.sessionId,
-      strategy.parentSessionId,
     );
 
     assert.equal(strategy.allowedRoot, AGENT_DETACHED_SESSION_ROOT);
@@ -385,11 +385,12 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   const fixedNow = () => "2026-07-30T12:53:35.738Z";
   const sessionDir = await mkdtemp(path.join(os.tmpdir(), "noobot-detached-outbox-"));
   const repo = {
-    async withSessionMutation(_userId, _sessionId, _context, operation) {
-      return operation();
+    scope: { resolvedParentSessionId: "parent1", sessionDir, indexed: false, registered: true },
+    async withSessionMutation(_userId, _sessionId, operation) {
+      return operation(this.scope);
     },
-    async resolveSessionScope() {
-      return { resolvedParentSessionId: "parent1", sessionDir };
+    async withSessionPlacementMutation(_userId, _placement, operation) {
+      return operation(this.scope);
     },
     createInitialSession({ sessionId, parentSessionId, caller }) {
       return normalizeSessionEntity(
@@ -412,7 +413,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
         ? normalizeSessionEntity(structuredClone(persisted), { now: fixedNow })
         : null;
     },
-    async save(_userId, next, _context, { expectedAggregateVersion, createOnly } = {}) {
+    async save(_userId, next, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
       else assert.equal(expectedAggregateVersion, Number(persisted?.aggregateVersion ?? 0));
       next.aggregateVersion = Number(persisted?.aggregateVersion ?? 0) + 1;
@@ -424,17 +425,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     session: {
       async appendExecutionLog() {},
       applyTurnLifecycleEvent: (payload) => messageService.applyTurnLifecycleEvent(payload),
-      createScopedPersistenceContext(payload = {}) {
-        return Object.freeze({
-          locationResolver: {
-            marker: payload.relativeDir,
-            async resolveSessionScope(userId, sessionId, parentSessionId) {
-              return { userId, sessionId, resolvedParentSessionId: parentSessionId };
-            },
-          },
-          metadataContributor: payload.metadataContributor,
-        });
-      },
+      async writeSessionMetadata() {},
     },
   });
 
@@ -502,7 +493,7 @@ test("detached sub-session rejects a runner result with a second dialog identity
       error?.lifecycle?.executionId === "agent:turn-identity-mismatch",
   );
   const childFacts = calls.executionLogs.filter(
-    (record) => record.persistenceContext === calls.persistenceContexts[0],
+    (record) => record.persistenceScope === calls.lifecyclePayloads[0].persistenceScope,
   );
   assert.equal(childFacts.length, calls.executionLogs.length);
   assert.equal(
@@ -673,7 +664,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
       (record) =>
         record.event === "detached_sub_session_stop_committed" &&
         record.sessionId === "sub1" &&
-        record.persistenceContext === calls.persistenceContexts[0] &&
+        record.persistenceScope === calls.lifecyclePayloads[0].persistenceScope &&
         record.data?.reason === "user_stop" &&
         record.data?.state === "stop_completed",
     ),

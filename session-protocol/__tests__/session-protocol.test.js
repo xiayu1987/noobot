@@ -27,6 +27,7 @@ import {
   validateCanonicalAssistantPresentation,
   validateTurnAcceptanceUserMessage,
   validateSessionCommand,
+  assertSessionScopeIdentity,
 } from "../src/index.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
@@ -53,6 +54,8 @@ test("Session artifact and Turn commit metadata have one canonical protocol shap
   );
   assert.deepEqual(
     validateSessionAggregateInvariants({
+      sessionId: "session-1",
+      parentSessionId: "",
       caller: SESSION_CALLER.USER,
       messages: [
         {
@@ -74,6 +77,8 @@ test("Session artifact and Turn commit metadata have one canonical protocol shap
 
 test("session aggregate requires canonical collection shapes", () => {
   assert.deepEqual(validateSessionAggregateInvariants({ messages: [] }).errors, [
+    "invalid_session_id",
+    "invalid_parent_session_id",
     "invalid_caller",
     "invalid_dialog_order",
     "invalid_turn_timings",
@@ -81,6 +86,8 @@ test("session aggregate requires canonical collection shapes", () => {
   ]);
   assert.deepEqual(
     validateSessionAggregateInvariants({
+      sessionId: "session-1",
+      parentSessionId: "",
       caller: SESSION_CALLER.BOT,
       messages: [],
       dialogOrder: [],
@@ -91,6 +98,8 @@ test("session aggregate requires canonical collection shapes", () => {
   );
   assert.deepEqual(
     validateSessionAggregateInvariants({
+      sessionId: "session-1",
+      parentSessionId: "",
       caller: "",
       messages: [],
       dialogOrder: [],
@@ -98,6 +107,18 @@ test("session aggregate requires canonical collection shapes", () => {
       turnLifecycle: createEmptyTurnLifecycle(),
     }).errors,
     ["invalid_caller"],
+  );
+  assert.deepEqual(
+    validateSessionAggregateInvariants({
+      sessionId: "",
+      parentSessionId: null,
+      caller: SESSION_CALLER.USER,
+      messages: [],
+      dialogOrder: [],
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+    }).errors,
+    ["invalid_session_id", "invalid_parent_session_id"],
   );
   assert.deepEqual(validateSessionAggregateInvariants(null).errors, ["invalid_session"]);
 });
@@ -113,6 +134,8 @@ test("canonical assistant presentation is unique and fully identified per Turn",
     true,
   );
   const result = validateSessionAggregateInvariants({
+    sessionId: "session-1",
+    parentSessionId: "",
     caller: SESSION_CALLER.USER,
     messages: [
       {
@@ -279,6 +302,27 @@ const scope = { userId: "user-1", sessionId: "session-1", parentSessionId: "" };
 
 test("session aggregate conflicts have one protocol error code", () => {
   assert.equal(SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT, "SESSION_AGGREGATE_VERSION_CONFLICT");
+});
+
+test("session scope identity has one protocol assertion over sessionId and parentSessionId", () => {
+  const session = { sessionId: "child", parentSessionId: "root" };
+  assert.doesNotThrow(() =>
+    assertSessionScopeIdentity({ session, sessionId: "child", parentSessionId: "root" }),
+  );
+  for (const scope of [
+    { sessionId: "other", parentSessionId: "root" },
+    { sessionId: "child", parentSessionId: "" },
+    { sessionId: "child", parentSessionId: "other" },
+  ]) {
+    assert.throws(() => assertSessionScopeIdentity({ session, ...scope }), {
+      code: SESSION_ERROR_CODE.SCOPE_IDENTITY_CONFLICT,
+      statusCode: 409,
+    });
+  }
+  assert.throws(
+    () => assertSessionScopeIdentity({ session: null, sessionId: "child", parentSessionId: "" }),
+    { code: "SESSION_SCOPE_IDENTITY_CONFLICT" },
+  );
 });
 
 test("session command has one strict identity and concurrency coordinate", () => {

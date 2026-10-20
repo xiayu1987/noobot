@@ -5,6 +5,7 @@
  */
 
 import { createExecutionEventListener, emitEvent } from "../../events/index.js";
+import { assertSessionScopeIdentity } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
 export class SessionExecutionInitializer {
@@ -17,13 +18,13 @@ export class SessionExecutionInitializer {
   async initializeRunSessionRuntime({
     userId,
     sessionId,
-    parentSessionId = "",
+    parentSessionId,
     caller,
     eventListener = null,
     dialogProcessId = "",
     turnScopeId = "",
     thinkingStartedAt = "",
-    persistenceContext = null,
+    persistenceScope,
   }) {
     const usedSessionId = sessionId;
     const upstreamListener = eventListener;
@@ -36,8 +37,7 @@ export class SessionExecutionInitializer {
     const sessionBundle = await this.session.getSessionBundle({
       userId,
       sessionId: usedSessionId,
-      parentSessionId,
-      persistenceContext,
+      persistenceScope,
     });
     const sessionLoadState = sessionBundle.exists ? "loaded" : "created";
     const userConfig = await this.configService.loadUserConfig(basePath);
@@ -48,34 +48,38 @@ export class SessionExecutionInitializer {
         sessionId: usedSessionId,
         parentSessionId,
         caller,
-        persistenceContext,
+        persistenceScope,
       });
     }
 
     await this.session.upsertTurnTiming({
       userId,
       sessionId: usedSessionId,
-      parentSessionId,
       turnScopeId,
       dialogProcessId: resolvedDialogProcessId,
       thinkingStartedAt,
-      persistenceContext,
+      persistenceScope,
     });
 
-    const sessionScope = await this.session.resolveSessionScope({
+    const sessionScope = await this.session.locateSessionScope({
       userId,
       sessionId: usedSessionId,
-      parentSessionId,
-      persistenceContext,
+      persistenceScope,
+    });
+
+    assertSessionScopeIdentity({
+      session: { sessionId: usedSessionId, parentSessionId },
+      sessionId: usedSessionId,
+      parentSessionId: sessionScope.resolvedParentSessionId,
     });
 
     const runtimeEventListener = createExecutionEventListener({
       sessionManager: this.session,
       userId,
       sessionId: usedSessionId,
-      parentSessionId,
+      parentSessionId: sessionScope.resolvedParentSessionId,
       turnScopeId,
-      persistenceContext,
+      persistenceScope,
       dialogProcessId: resolvedDialogProcessId,
       upstream: upstreamListener,
     });
@@ -93,6 +97,7 @@ export class SessionExecutionInitializer {
 
     return {
       usedSessionId,
+      parentSessionId: sessionScope.resolvedParentSessionId,
       dialogProcessId: resolvedDialogProcessId,
       sessionLoadState,
       userConfig,

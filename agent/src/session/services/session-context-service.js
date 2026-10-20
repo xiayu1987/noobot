@@ -19,20 +19,18 @@ export class SessionContextService {
   async getContextProjection({
     userId,
     sessionId,
-    parentSessionId,
+    persistenceContext,
     currentTurnScopeId,
     currentDialogProcessId,
   }) {
     const source = await this.sessionMessageService.getSessionContextSource({
       userId,
       sessionId,
-      parentSessionId,
+      persistenceContext,
     });
     return projectContextSource({
       source,
       scope: createContextScope({
-        sessionId,
-        parentSessionId,
         dialogProcessId: currentDialogProcessId,
         turnScopeId: currentTurnScopeId,
       }),

@@ -17,72 +17,122 @@ import { resolveLongMemory } from "./providers/memory-resolver.js";
 import { buildAgentExecutionContext } from "./application/build-agent-execution-context.js";
 import { buildSystemContext, buildSystemRuntime } from "./application/build-system-context.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import {
-  normalizeParentSessionId,
-  validateSessionPersistenceScope,
-} from "@noobot/session-protocol";
+import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/assembly/diagnostics";
 import { emitEvent } from "../events/index.js";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/constants.js";
 import { MEMORY_SUMMARY_STAGE } from "../memory/stage-runner.js";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
+import { requireSessionCaller } from "@noobot/shared/session-caller";
 
-function normalizeAdditionalSystemMessages(input = []) {
-  if (!Array.isArray(input)) return [];
+function normalizeAdditionalSystemMessages(input) {
   return input.map((item) => text(item)).filter(Boolean);
 }
 
-export class ContextBuilder {
-  constructor(input = {}) {
-    const hasContainerShape =
-      input &&
-      typeof input === "object" &&
-      input.config &&
-      input.serviceContainer &&
-      input.sessionContext;
-    if (!hasContainerShape) {
+const CONTEXT_BUILDER_INPUT_FIELDS = Object.freeze({
+  config: Object.freeze(["globalConfig", "userConfig"]),
+  serviceContainer: Object.freeze([
+    "eventListener",
+    "sessionManager",
+    "memoryService",
+    "attachmentService",
+    "skillService",
+    "botManager",
+    "errorLogger",
+    "userInteractionBridge",
+  ]),
+  sessionContext: Object.freeze([
+    "userId",
+    "sessionId",
+    "caller",
+    "parentSessionId",
+    "userMessageAttachments",
+    "systemMessages",
+    "runConfig",
+    "abortSignal",
+    "parentAsyncResultContainer",
+    "persistenceScope",
+  ]),
+});
+
+function assertContextBuilderInput(input) {
+  if (!isPlainObject(input)) {
+    throw new Error(tSystem("context.builderContainerInputRequired"));
+  }
+  const sections = Object.keys(CONTEXT_BUILDER_INPUT_FIELDS);
+  const unknownSections = Object.keys(input).filter((section) => !sections.includes(section));
+  if (unknownSections.length) {
+    throw new TypeError(`ContextBuilder input has unknown sections: ${unknownSections.join(",")}`);
+  }
+  for (const [section, fields] of Object.entries(CONTEXT_BUILDER_INPUT_FIELDS)) {
+    const value = input[section];
+    if (!isPlainObject(value)) {
       throw new Error(tSystem("context.builderContainerInputRequired"));
     }
-    const normalized = {
-      ...(input?.config || {}),
-      ...(input?.serviceContainer || {}),
-      ...(input?.sessionContext || {}),
-    };
+    const missing = fields.filter((field) => !Object.hasOwn(value, field));
+    if (missing.length) {
+      throw new TypeError(`ContextBuilder ${section} requires: ${missing.join(",")}`);
+    }
+    const unknown = Object.keys(value).filter((field) => !fields.includes(field));
+    if (unknown.length) {
+      throw new TypeError(`ContextBuilder ${section} has unknown fields: ${unknown.join(",")}`);
+    }
+  }
+  const { sessionContext } = input;
+  for (const field of ["userMessageAttachments", "systemMessages"]) {
+    if (!Array.isArray(sessionContext[field])) {
+      throw new TypeError(`ContextBuilder ${field} must be an array`);
+    }
+  }
+  if (!isPlainObject(sessionContext.runConfig)) {
+    throw new TypeError("ContextBuilder runConfig must be a plain object");
+  }
+  if (!isPlainObject(input.config.userConfig)) {
+    throw new TypeError("ContextBuilder userConfig must be a plain object");
+  }
+}
+
+export class ContextBuilder {
+  constructor(input) {
+    assertContextBuilderInput(input);
     const {
       globalConfig,
-      userConfig = {},
-      eventListener = null,
-      userId = "",
-      sessionId = "",
-      caller = "user",
-      parentSessionId = "",
-      userMessageAttachments = [],
+      userConfig,
+      eventListener,
+      userId,
+      sessionId,
+      caller,
+      parentSessionId,
+      userMessageAttachments,
       sessionManager,
       memoryService,
       attachmentService,
       skillService,
-      botManager = null,
-      errorLogger = null,
-      userInteractionBridge = null,
-      runConfig = {},
-      systemMessages = [],
+      botManager,
+      errorLogger,
+      userInteractionBridge,
+      runConfig,
+      systemMessages,
       abortSignal,
-      parentAsyncResultContainer = null,
-      persistenceContext = null,
-      persistenceScope = null,
-    } = normalized;
+      parentAsyncResultContainer,
+      persistenceScope,
+    } = { ...input.config, ...input.serviceContainer, ...input.sessionContext };
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
     this.eventListener = eventListener;
+    if (!text(userId) || !text(sessionId)) {
+      throw new TypeError("ContextBuilder requires userId and sessionId");
+    }
+    if (typeof parentSessionId !== "string") {
+      throw new TypeError("ContextBuilder parentSessionId must be a string");
+    }
     this.userId = userId;
     this.sessionId = sessionId;
-    this.caller = caller;
+    this.caller = requireSessionCaller(caller);
     this.parentSessionId = parentSessionId;
-    this.userMessageAttachments = Array.isArray(userMessageAttachments)
-      ? userMessageAttachments
-      : [];
+    this.userMessageAttachments = userMessageAttachments;
     this.sessionManager = sessionManager;
     this.memoryService = memoryService;
     this.attachmentService = attachmentService;
@@ -94,7 +144,7 @@ export class ContextBuilder {
     this.errorLogger = errorLogger;
     this.userInteractionBridge = userInteractionBridge;
     this.runConfig = runConfig;
-    this.contextPolicy = normalizeContextPolicy(runConfig?.contextPolicy);
+    this.contextPolicy = normalizeContextPolicy(runConfig.contextPolicy);
     this.additionalSystemMessages = normalizeAdditionalSystemMessages(systemMessages);
     this.abortSignal = abortSignal;
     this.parentAsyncResultContainer = parentAsyncResultContainer;
@@ -104,10 +154,6 @@ export class ContextBuilder {
         `invalid Session persistence scope: ${persistenceScopeValidation.errors.join(",")}`,
       );
     }
-    if (Boolean(persistenceContext) !== Boolean(persistenceScopeValidation.scope)) {
-      throw new TypeError("scoped Agent Context requires persistence context and scope");
-    }
-    this.persistenceContext = persistenceContext;
     this.persistenceScope = persistenceScopeValidation.scope;
     this._effectiveConfigCache = null;
     this._runtimeBasePathCache = "";
@@ -162,7 +208,7 @@ export class ContextBuilder {
     const workspaceDirectories =
       await this._resolveWorkspaceDirectoriesCached(resolvedRuntimeBasePath);
     const effectiveConfig = this._getEffectiveConfig();
-    const runtimeModel = text(this.runConfig?.runtimeModel);
+    const runtimeModel = text(this.runConfig.runtimeModel);
     const allEnabledProviders = resolveAllEnabledProviders(effectiveConfig);
     const systemRuntime = {
       ...buildSystemRuntime({
@@ -178,7 +224,6 @@ export class ContextBuilder {
         staticInfo: runtimeStaticInfo,
         now: this._now(),
       }),
-      persistenceContext: this.persistenceContext,
       persistenceScope: this.persistenceScope,
     };
     return buildAgentExecutionContext({
@@ -212,17 +257,17 @@ export class ContextBuilder {
     });
   }
 
-  async _resolveSessionRecords({ dialogProcessId = "" } = {}) {
+  async _resolveSessionRecords({ dialogProcessId }) {
     return this.sessionManager.getContextProjection({
       userId: this.userId,
       sessionId: this.sessionId,
-      parentSessionId: normalizeParentSessionId(this.parentSessionId),
+      persistenceScope: this.persistenceScope,
       currentDialogProcessId: dialogProcessId,
-      currentTurnScopeId: text(this.runConfig?.turnScopeId),
+      currentTurnScopeId: text(this.runConfig.turnScopeId),
     });
   }
 
-  async _buildSystemContext({ dialogProcessId = "", longMemory = null } = {}) {
+  async _buildSystemContext({ dialogProcessId, longMemory }) {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     return buildSystemContext({
       identity: {
@@ -273,7 +318,7 @@ export class ContextBuilder {
     }
   }
 
-  async _buildSessionContext({ dialogProcessId = "", mode = "" } = {}) {
+  async _buildSessionContext({ dialogProcessId, mode }) {
     const sessionProjection = await this._resolveSessionRecords({ dialogProcessId });
     const sessionRecords = sessionProjection.messages;
     emitModelContextTrace(this.eventListener, "context_records_resolved", {
@@ -296,11 +341,11 @@ export class ContextBuilder {
     );
   }
 
-  async buildNewSessionContext({ dialogProcessId = "" } = {}) {
+  async buildNewSessionContext({ dialogProcessId }) {
     return this._buildSessionContext({ dialogProcessId, mode: "new_session" });
   }
 
-  async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
+  async buildExistingSessionContext({ dialogProcessId }) {
     return this._buildSessionContext({ dialogProcessId, mode: "existing_session" });
   }
 }

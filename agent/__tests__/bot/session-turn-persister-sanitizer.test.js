@@ -7,6 +7,7 @@ import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { createSessionPersistenceScope } from "@noobot/session-protocol";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 import {
   FLOW_CONTROL_ROLE,
@@ -74,7 +75,12 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
 test("appendAgentMessages keeps scoped persistence identity for logs and messages", async () => {
   const executionPayloads = [];
   const batches = [];
-  const persistenceContext = { locationResolver: { scope: "workflow-node" } };
+  const persistenceScope = createSessionPersistenceScope({
+    scopeId: "agent:child-1",
+    parentSessionId: "root-1",
+    relativeDir: "runtime/plugin-data/workflow/session/run/node",
+    allowedRoot: "runtime/plugin-data/workflow/session",
+  });
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async (payload = {}) => executionPayloads.push(payload),
@@ -91,19 +97,18 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
     parentSessionId: "root-1",
     turnScopeId: "workflow-node:one",
     messages: [{ role: "assistant", content: "done" }],
-    persistenceContext,
+    persistenceScope,
   });
 
   assert.ok(executionPayloads.length >= 1);
   assert.equal(
-    executionPayloads.every((payload) => payload.persistenceContext === persistenceContext),
+    executionPayloads.every((payload) => payload.persistenceScope === persistenceScope),
     true,
   );
   assert.equal(batches.length, 1);
   assert.equal(batches[0].turns.length, 1);
-  assert.equal(batches[0].persistenceContext, persistenceContext);
-  assert.equal(batches[0].parentSessionId, "root-1");
-  assert.equal("persistenceContext" in batches[0].turns[0], false);
+  assert.equal(batches[0].persistenceScope, persistenceScope);
+  assert.equal("persistenceScope" in batches[0].turns[0], false);
 });
 
 test("appendAgentMessages forwards the authoritative realtime message identity", async () => {
@@ -164,7 +169,12 @@ test("appendAgentMessages forwards the canonical internal control message type",
 
 test("appendAgentMessages forwards presentation identity and checkpoint context", async () => {
   const batches = [];
-  const persistenceContext = { locationResolver: { scope: "running-turn" } };
+  const persistenceScope = createSessionPersistenceScope({
+    scopeId: "agent:running-turn",
+    parentSessionId: "root-1",
+    relativeDir: "runtime/plugin-data/workflow/session/run/turn",
+    allowedRoot: "runtime/plugin-data/workflow/session",
+  });
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
@@ -178,7 +188,7 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
   await persister.appendAgentMessages({
     userId: "u1",
     sessionId: "s1",
-    persistenceContext,
+    persistenceScope,
     messages: [
       {
         role: "assistant",
@@ -205,10 +215,10 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
   assert.equal(turn.presentationMessageId, "msg_chat_1");
   assert.equal(turn.chatPresentation, false);
   assert.equal(turn.activityTimeline[0].eventId, "guidance-analysis:1");
-  assert.equal(batches[0].persistenceContext, persistenceContext);
+  assert.equal(batches[0].persistenceScope, persistenceScope);
 });
 
-test("SessionTurnPersister normalizes parentSessionId once for every persistence outlet", async () => {
+test("SessionTurnPersister never forwards a caller parentSessionId to persistence outlets", async () => {
   const batches = [];
   const executionLogs = [];
   const session = {
@@ -219,30 +229,22 @@ test("SessionTurnPersister normalizes parentSessionId once for every persistence
     },
   };
   const persister = new SessionTurnPersister({ session });
-  const rawParentSessionId = `  ${"p".repeat(205)}  `;
 
   await persister.appendAgentMessages({
     userId: "u1",
     sessionId: "s1",
-    parentSessionId: rawParentSessionId,
+    parentSessionId: "caller-parent",
     messages: [{ role: "assistant", content: "done" }],
     dialogProcessId: "dp1",
   });
 
-  const expected = "p".repeat(200);
-  assert.equal(batches[0].parentSessionId, expected);
-  assert.equal(executionLogs[0].parentSessionId, expected);
-
-  batches.length = 0;
-  executionLogs.length = 0;
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    parentSessionId: "   ",
-    messages: [{ role: "assistant", content: "done" }],
-  });
-  assert.equal(batches[0].parentSessionId, "");
-  assert.equal(executionLogs[0].parentSessionId, "");
+  assert.equal(Object.hasOwn(batches[0], "parentSessionId"), false);
+  assert.equal(Object.hasOwn(batches[0].turns[0], "parentSessionId"), false);
+  assert.ok(executionLogs.length >= 1);
+  assert.equal(
+    executionLogs.some((log) => Object.hasOwn(log, "parentSessionId")),
+    false,
+  );
 });
 
 test("SessionTurnPersister persists tool transfer envelopes into session turns", async () => {

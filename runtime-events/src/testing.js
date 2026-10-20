@@ -7,11 +7,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
-import { requireSessionTombstoneSessions } from "@noobot/workspace-protocol/session-tombstone";
+import { readWorkspaceSessionTombstones, readWorkspaceSessionTree } from "./session-location.js";
 import {
   createEmptySessionTree,
   createSessionTreeNode,
-  normalizeSessionTree,
   resolveSessionDirSegments,
 } from "@noobot/workspace-protocol/session-tree";
 import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
@@ -63,15 +62,6 @@ export async function withRuntimeEventsEnv(declaration, operation) {
   }
 }
 
-async function readOptionalJson(file) {
-  try {
-    return JSON.parse(await fs.readFile(file, "utf8"));
-  } catch (error) {
-    if (error?.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
 async function writeJson(file, value) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify(value), "utf8");
@@ -89,13 +79,8 @@ export async function initializeSessionTree(workspaceRoot, userId) {
   await writeJson(sessionTreeFile(workspaceRoot, userId), createEmptySessionTree());
 }
 
-async function readSessionTreeFixture(workspaceRoot, userId) {
-  const treeFile = sessionTreeFile(workspaceRoot, userId);
-  return normalizeSessionTree(JSON.parse(await fs.readFile(treeFile, "utf8")));
-}
-
 export async function sessionDirPath(workspaceRoot, userId, sessionId) {
-  const tree = await readSessionTreeFixture(workspaceRoot, userId);
+  const tree = await readWorkspaceSessionTree(userRootOf(workspaceRoot, userId));
   return path.join(
     userRootOf(workspaceRoot, userId),
     ...resolveSessionDirSegments(tree, sessionId),
@@ -108,22 +93,19 @@ export async function persistSession(
   { sessionId, parentSessionId, caller },
 ) {
   const userRoot = userRootOf(workspaceRoot, userId);
-  const tree = await readSessionTreeFixture(workspaceRoot, userId);
+  const tree = await readWorkspaceSessionTree(userRoot);
   const node = createSessionTreeNode({ sessionId, parentSessionId, caller });
   tree.nodes[node.sessionId] = node;
-  await writeJson(path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE), tree);
+  await writeJson(sessionTreeFile(workspaceRoot, userId), tree);
   const sessionDir = path.join(userRoot, ...resolveSessionDirSegments(tree, node.sessionId));
   await writeJson(path.join(sessionDir, "session.json"), node);
   return sessionDir;
 }
 
 export async function markSessionDeleted(workspaceRoot, userId, sessionId) {
-  const markerFile = path.join(
-    userRootOf(workspaceRoot, userId),
-    WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE,
-  );
-  const marker = await readOptionalJson(markerFile);
-  const sessions = marker === null ? {} : requireSessionTombstoneSessions(marker, { markerFile });
+  const userRoot = userRootOf(workspaceRoot, userId);
+  const markerFile = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
+  const sessions = await readWorkspaceSessionTombstones(userRoot);
   await writeJson(markerFile, { sessions: { ...sessions, [sessionId]: Date.now() } });
   return { markerFile };
 }

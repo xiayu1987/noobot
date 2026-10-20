@@ -229,6 +229,8 @@ export function registerFileCrudRoutes(
               content,
               operation: "replace",
               mutationRoot: await resolveRequestMutationRoot(req, root),
+
+              sessionScope: null,
               writeText,
             })
           : (await writeText(absolutePath, content),

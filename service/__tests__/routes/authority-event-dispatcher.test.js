@@ -37,7 +37,11 @@ test("authority dispatcher reports ack failure without counting the sent events"
     sendEvent: (eventType) => sent.push(eventType) > 0,
   });
 
-  const result = await dispatch({ userId: "u1", sessionId: "s-ack-failed" });
+  const result = await dispatch({
+    userId: "u1",
+    sessionId: "s-ack-failed",
+    persistenceScope: null,
+  });
 
   assert.deepEqual(result, { dispatched: false, reason: "ack_rejected", delivered: 0 });
   assert.equal(sent.length, 1);
@@ -60,6 +64,9 @@ test("authority dispatcher drains again when dispatch is requested while a drain
     async recordAuthorityEventAttempts() {
       return { recorded: true };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
       const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
       pending = pending.filter((entry) => !ackedIds.has(entry.eventId));
@@ -72,15 +79,15 @@ test("authority dispatcher drains again when dispatch is requested while a drain
     sendEvent: () => true,
   });
 
-  const first = dispatch({ userId: "u1", sessionId: "s-dirty" });
-  const second = dispatch({ userId: "u1", sessionId: "s-dirty" });
+  const first = dispatch({ userId: "u1", sessionId: "s-dirty", persistenceScope: null });
+  const second = dispatch({ userId: "u1", sessionId: "s-dirty", persistenceScope: null });
   assert.equal(second, first);
   releaseFirstGet();
 
   assert.deepEqual(await first, { dispatched: true, delivered: 1 });
   assert.equal(getCalls, 3);
 
-  const next = dispatch({ userId: "u1", sessionId: "s-dirty" });
+  const next = dispatch({ userId: "u1", sessionId: "s-dirty", persistenceScope: null });
   assert.notEqual(next, first);
   assert.deepEqual(await next, { dispatched: true, delivered: 0 });
 });

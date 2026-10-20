@@ -11,6 +11,7 @@ import test from "node:test";
 import { writeRuntimeEvent } from "../src/index.js";
 
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { SESSION_STORE_ERROR } from "@noobot/workspace-protocol/session-store";
 import {
   markSessionDeleted,
   pathExists,
@@ -181,41 +182,12 @@ test("session events reject when the workspace session tree cannot be read", asy
     userId: "admin",
     sessionId: "tree-broken",
   };
-  await assert.rejects(writeRuntimeEvent(event), SyntaxError);
+  await assert.rejects(writeRuntimeEvent(event), { code: SESSION_STORE_ERROR.CORRUPTED });
   await fs.rm(path.join(workspaceRoot, "admin", WORKSPACE_LAYOUT.SESSION_TREE_FILE));
-  await assert.rejects(writeRuntimeEvent(event), { code: "ENOENT" });
+  await assert.rejects(writeRuntimeEvent(event), {
+    code: SESSION_STORE_ERROR.WORKSPACE_NOT_INITIALIZED,
+  });
   assert.equal(warn.mock.callCount(), 0);
-});
-
-test("an explicit parent that contradicts the tree is rejected", async () => {
-  const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", {
-    sessionId: "parent-session",
-    parentSessionId: "",
-    caller: SESSION_CALLER.USER,
-  });
-  await persistSession(workspaceRoot, "admin", {
-    sessionId: "other-session",
-    parentSessionId: "",
-    caller: SESSION_CALLER.USER,
-  });
-  await persistSession(workspaceRoot, "admin", {
-    sessionId: "child-session",
-    parentSessionId: "parent-session",
-    caller: SESSION_CALLER.USER,
-  });
-  await assert.rejects(
-    writeRuntimeEvent({
-      source: "agent",
-      scope: "session",
-      category: "system",
-      event: "child.event",
-      userId: "admin",
-      sessionId: "child-session",
-      parentSessionId: "other-session",
-    }),
-    /registered under "parent-session"/,
-  );
 });
 
 test("workspace runtime events ignore placeholder parent session ids", async () => {
@@ -318,7 +290,7 @@ test("runtime event writer does not recreate a deleted session directory", async
   assert.equal(await pathExists(sessionDir), false);
 });
 
-test("runtime event writer does not recreate a deleted parent session for child logs", async () => {
+test("runtime event writer skips an unregistered child of a deleted parent as missing", async () => {
   const workspaceRoot = await tempRoot();
   const userId = "admin";
   const parentSessionId = "deleted-parent-session";
@@ -340,7 +312,7 @@ test("runtime event writer does not recreate a deleted parent session for child 
   });
   assert.equal(result.ok, true);
   assert.equal(result.skipped, true);
-  assert.equal(result.deleted, true);
+  assert.equal(result.missingSession, true);
   assert.equal(await pathExists(sessionDir), false);
 });
 

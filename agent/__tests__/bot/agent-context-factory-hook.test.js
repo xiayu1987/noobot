@@ -12,6 +12,18 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
+function createFactory() {
+  return new AgentContextFactory({
+    globalConfig: {},
+    session: null,
+    memory: null,
+    attach: null,
+    skill: null,
+    botManager: null,
+    errorLogger: null,
+  });
+}
+
 test("buildAgentContextFromBuilder triggers before/after context build hooks", async () => {
   const hookManager = createHookManager();
   const beforePayloads = [];
@@ -53,7 +65,7 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
     },
   };
 
-  const factory = new AgentContextFactory({});
+  const factory = createFactory();
   const result = await factory.buildAgentContextFromBuilder({
     mode: "new_session",
     userId: "u_ctx_1",
@@ -114,7 +126,7 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
     },
   };
 
-  const factory = new AgentContextFactory({});
+  const factory = createFactory();
   await assert.rejects(
     () =>
       factory.buildAgentContextFromBuilder({
@@ -143,12 +155,18 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
 });
 
 test("buildAgentContextFromBuilder rejects unknown context modes", async () => {
-  const factory = new AgentContextFactory({});
+  const factory = createFactory();
   await assert.rejects(
     () =>
       factory.buildAgentContextFromBuilder({
         mode: "typo_mode",
+        userId: "u1",
         sessionId: "s1",
+        caller: SESSION_CALLER.USER,
+        parentSessionId: "",
+        eventListener: null,
+        dialogProcessId: "dp1",
+        runConfig: {},
         contextBuilder: {},
       }),
     (error) => error?.code === "INVALID_CONTEXT_MODE",

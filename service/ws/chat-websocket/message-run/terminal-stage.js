@@ -31,7 +31,6 @@ export async function finalizeRunResult(context, run, accepted, active) {
   const processed = await context.commitTurnLifecycle({
     userId: run.userId,
     sessionId: run.sessionId,
-    parentSessionId: run.parentSessionId,
     turnScopeId: run.turnScopeId,
     dialogProcessId: run.dialogProcessId,
     commandId: createTurnLifecycleCommandId({

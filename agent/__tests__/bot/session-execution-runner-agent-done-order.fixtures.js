@@ -28,6 +28,7 @@ import {
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 export function createRunner({
   callOrder,
@@ -110,8 +111,10 @@ export function createRunner({
     normalizeRunMessage: (message) => message,
     validateRunInput: () => {},
     ensureParentAsyncResultContainer: () => null,
-    initializeRunSessionRuntime: async () => ({
+
+    initializeRunSessionRuntime: async ({ parentSessionId }) => ({
       usedSessionId: "session-used",
+      parentSessionId,
       dialogProcessId: "dialog-1",
       sessionLoadState: "created",
       userConfig: {},
@@ -127,7 +130,6 @@ export function createRunner({
     prepareTurnInput: async ({ buildContextPayload }) => ({
       userMessageAttachments: buildContextPayload.userMessageAttachments,
     }),
-    assertPersistenceContextIdentity: () => {},
     bindSessionTurnAttachments: async () => {
       throw new Error("attachment binding is not part of this fixture");
     },
@@ -170,7 +172,7 @@ export function createRunner({
     },
     now: () => "2026-05-21T00:00:00.000Z",
   });
-  runner.runAcceptedSession = (request = {}) => {
+  runner.runAcceptedSession = (request) => {
     const turnScopeId = text(request.turnScopeId);
     const acceptedRunConfig = createAcceptedRunIdentity(turnScopeId, request.runConfig);
     const messageUid = `sm_test_${turnScopeId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -188,20 +190,22 @@ export function createRunner({
       userMetaMaterialized: true,
       attachments: [],
     });
-    return runner.runSession({
-      ...request,
-      turnScopeId,
-      runConfig: acceptedRunConfig,
-      turnAcceptance: createTurnAcceptanceReceipt({
-        ...createTestSessionRequiredFields(),
-        commandId: acceptedRunConfig.commandId,
-        sessionId: "session-used",
+    return runner.runSession(
+      createTestSessionRunPayload({
+        ...request,
         turnScopeId,
-        dialogProcessId: "dialog-1",
-        messageUid,
-        aggregateVersion: 1,
+        runConfig: acceptedRunConfig,
+        turnAcceptance: createTurnAcceptanceReceipt({
+          ...createTestSessionRequiredFields(),
+          commandId: acceptedRunConfig.commandId,
+          sessionId: "session-used",
+          turnScopeId,
+          dialogProcessId: "dialog-1",
+          messageUid,
+          aggregateVersion: 1,
+        }),
       }),
-    });
+    );
   };
   return runner;
 }

@@ -7,15 +7,9 @@ import { inspectTurnRecovery, recoverActiveTurn } from "@noobot/authoritative-st
 import { TURN_RECOVERY_ACTION } from "@noobot/session-protocol/turn-lifecycle";
 import { text as clean } from "@noobot/shared/value";
 
-function snapshotReader(bot) {
-  const reader = bot?.getTurnLifecycleSnapshot;
-  return typeof reader === "function" ? (request) => reader.call(bot, request) : null;
-}
-
-const identityOf = ({ userId, sessionId, parentSessionId = "" } = {}) => ({
+const identityOf = ({ userId, sessionId }) => ({
   userId: clean(userId),
   sessionId: clean(sessionId),
-  parentSessionId: clean(parentSessionId),
 });
 
 export async function readAnnotatedTurnSnapshot({
@@ -24,15 +18,20 @@ export async function readAnnotatedTurnSnapshot({
   commandId,
   knownSequence,
   terminalLimit,
+  persistenceScope,
   ...identityInput
-} = {}) {
-  const read = snapshotReader(bot);
-  if (!read) return { found: false, reason: "lifecycle_snapshot_unavailable" };
+}) {
   const identity = identityOf(identityInput);
-  const result = await read({ ...identity, commandId, knownSequence, terminalLimit });
-  if (!result?.found) return result || { found: false, reason: "snapshot_not_found" };
+  const result = await bot.getTurnLifecycleSnapshot({
+    ...identity,
+    persistenceScope,
+    commandId,
+    knownSequence,
+    terminalLimit,
+  });
+  if (!result.found) return result;
   const assessment = await inspectTurnRecovery({
-    turn: result.snapshot?.activeTurn || null,
+    turn: result.snapshot.activeTurn,
     identity,
     inspectExecution,
   });
@@ -54,18 +53,21 @@ export async function finalizeTurnSnapshot({
   commitTurnLifecycle,
   commandId,
   terminalLimit,
+  persistenceScope,
   ...identityInput
-} = {}) {
-  const read = snapshotReader(bot);
-  if (!read) return { recovered: false, reason: "lifecycle_snapshot_unavailable" };
+}) {
   const identity = identityOf(identityInput);
-  const initial = await read({ ...identity, commandId, knownSequence: 0, terminalLimit });
-  if (!initial?.found) {
-    return { recovered: false, reason: initial?.reason || "snapshot_not_found" };
-  }
+  const initial = await bot.getTurnLifecycleSnapshot({
+    ...identity,
+    persistenceScope,
+    commandId,
+    knownSequence: 0,
+    terminalLimit,
+  });
+  if (!initial.found) return { recovered: false, reason: initial.reason };
   const recovered = await recoverPersistedTurn({
     ...identity,
-    turn: initial.snapshot?.activeTurn || null,
+    turn: initial.snapshot.activeTurn,
     inspectExecution,
     commitTurnLifecycle,
   });
@@ -83,7 +85,8 @@ export async function finalizeTurnSnapshot({
     commandId,
     knownSequence: 0,
     terminalLimit,
+    persistenceScope,
   });
-  if (!result?.found) return { ...recovered, reason: result?.reason || "snapshot_not_found" };
+  if (!result.found) return { ...recovered, reason: result.reason };
   return { ...recovered, snapshot: result.snapshot };
 }

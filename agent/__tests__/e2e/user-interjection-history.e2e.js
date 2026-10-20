@@ -16,9 +16,9 @@ import { createModelContext } from "@noobot/context-protocol/assembly/hook-conte
 import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
-import { assertPersistenceContextIdentity } from "../../src/session/session-location-resolver.js";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 test("session execution preserves every user interjection into the next model history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-user-interjection-e2e-"));
@@ -43,7 +43,6 @@ test("session execution preserves every user interjection into the next model hi
   });
 
   const session = {
-    assertPersistenceContextIdentity,
     async getSessionBundle() {
       return { exists: false, session: { messages: [] } };
     },
@@ -51,8 +50,13 @@ test("session execution preserves every user interjection into the next model hi
     async getExecutionTurnLogs() {
       return [];
     },
-    async resolveSessionScope({ userId, sessionId: resolvedSessionId }) {
-      return { sessionDir: path.join(root, userId, "runtime", "session", resolvedSessionId) };
+    async locateSessionScope({ userId, sessionId: resolvedSessionId }) {
+      return {
+        sessionDir: path.join(root, userId, "runtime", "session", resolvedSessionId),
+        resolvedParentSessionId: "",
+        indexed: true,
+        registered: true,
+      };
     },
     async appendExecutionLog() {},
     async upsertTurnTiming() {},
@@ -189,27 +193,29 @@ test("session execution preserves every user interjection into the next model hi
   };
 
   try {
-    await engine.runSession({
-      abortSignal: new AbortController().signal,
-      userId: "admin",
-      sessionId,
-      message: "start task",
-      dialogProcessId,
-      turnScopeId,
-      turnAcceptance: createTurnAcceptanceReceipt({
-        ...createTestSessionRequiredFields(),
-        commandId: turnScopeId,
+    await engine.runSession(
+      createTestSessionRunPayload({
+        abortSignal: new AbortController().signal,
+        userId: "admin",
         sessionId,
-        turnScopeId,
+        message: "start task",
         dialogProcessId,
-        messageUid: `user:${turnScopeId}`,
-        aggregateVersion: 1,
+        turnScopeId,
+        turnAcceptance: createTurnAcceptanceReceipt({
+          ...createTestSessionRequiredFields(),
+          commandId: turnScopeId,
+          sessionId,
+          turnScopeId,
+          dialogProcessId,
+          messageUid: `user:${turnScopeId}`,
+          aggregateVersion: 1,
+        }),
+        runConfig: {
+          ...createAcceptedRunIdentity(turnScopeId, { commandId: turnScopeId }),
+          executionKind: "agent",
+        },
       }),
-      runConfig: {
-        ...createAcceptedRunIdentity(turnScopeId, { commandId: turnScopeId }),
-        executionKind: "agent",
-      },
-    });
+    );
 
     for (const expected of interjections) {
       const interjection = persistedTurns.find(

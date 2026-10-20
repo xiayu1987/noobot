@@ -28,6 +28,7 @@ export function createRuntime(basePath, patch = {}) {
       userId: "admin",
       sessionId: "session-1",
       rootSessionId: "session-1",
+      persistenceScope: null,
       config: { safeConfirm: false },
     },
     ...patch,

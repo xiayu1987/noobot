@@ -27,6 +27,7 @@ export function executeToolCall({
   bindAssistantMessageEventStream(runtime, {
     messageId: identity.messageId,
     presentationMessageId,
+    parentSessionId: identity.parentSessionId,
   });
   if (runtime.eventListener && !runtime.sessionManager) {
     runtime.sessionManager = createCanonicalMessageEventSessionManager();

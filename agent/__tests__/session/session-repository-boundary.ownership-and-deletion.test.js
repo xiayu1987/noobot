@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 
-import { createTestSessionServices } from "../helpers/session-services.js";
+import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { readExecutionLogs } from "../../src/session/session-artifact-store.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -44,27 +44,40 @@ test("session/task/execution repositories should keep file ownership boundaries"
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
 
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
-
-    const sessionScope = await runtime.repositories.sessionRepository.resolveSessionScope(
+    await provisionTestSession(runtime, {
       userId,
       sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+
+    const sessionScope = await runtime.repositories.sessionRepository.requireSessionScope(
+      userId,
+      sessionId,
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, sessionId),
     );
 
     assert.equal(await exists(sessionScope.sessionFile), true);
     assert.equal(await exists(sessionScope.taskFile), false);
 
-    await runtime.repositories.taskRepository.save(userId, sessionId, {
-      taskId: "t1",
-      taskName: "task-1",
-      taskStatus: "start",
-    });
+    const treeContext = runtime.repositories.sessionRepository.treePersistenceContext(
+      userId,
+      sessionId,
+    );
+    await runtime.repositories.taskRepository.save(
+      userId,
+      sessionId,
+      { taskId: "t1", taskName: "task-1", taskStatus: "start" },
+      { persistenceContext: treeContext },
+    );
     assert.equal(await exists(sessionScope.taskFile), true);
 
-    await runtime.repositories.executionRepository.appendLog(userId, sessionId, {
-      event: "start",
-      dialogProcessId: "dp-1",
-    });
+    await runtime.repositories.executionRepository.appendLog(
+      userId,
+      sessionId,
+      { event: "start", dialogProcessId: "dp-1" },
+      { persistenceContext: treeContext },
+    );
     assert.equal(
       await exists(path.join(sessionScope.sessionDir, "execution-events/index.json")),
       true,
@@ -84,12 +97,15 @@ test("session/task/execution repositories should keep file ownership boundaries"
       userId,
       sessionId,
       "dp-1",
+      { persistenceContext: treeContext },
     );
     assert.equal(turnLogs.length, 1);
     assert.equal(turnLogs[0].event, "start");
     assert.equal(turnLogs[0].dialogProcessId, "dp-1");
     assert.deepEqual(
-      await runtime.repositories.executionRepository.getTurnLogs(userId, sessionId, "dp-other"),
+      await runtime.repositories.executionRepository.getTurnLogs(userId, sessionId, "dp-other", {
+        persistenceContext: treeContext,
+      }),
       [],
     );
   });
@@ -105,26 +121,41 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
 
-    await runtime.sessionCrudService.ensureSession(userId, "A", "", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "A",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
 
-    await runtime.sessionCrudService.ensureSession(userId, "B", "A", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "B",
+      parentSessionId: "A",
+      caller: SESSION_CALLER.USER,
+    });
 
-    await runtime.sessionCrudService.ensureSession(userId, "C", "B", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "C",
+      parentSessionId: "B",
+      caller: SESSION_CALLER.USER,
+    });
 
-    const scopeA = await runtime.repositories.sessionRepository.resolveSessionScope(
+    const scopeA = await runtime.repositories.sessionRepository.requireSessionScope(
       userId,
       "A",
-      "",
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, "A"),
     );
-    const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(
+    const scopeB = await runtime.repositories.sessionRepository.requireSessionScope(
       userId,
       "B",
-      "A",
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, "B"),
     );
-    const scopeC = await runtime.repositories.sessionRepository.resolveSessionScope(
+    const scopeC = await runtime.repositories.sessionRepository.requireSessionScope(
       userId,
       "C",
-      "B",
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, "C"),
     );
 
     const result = await runtime.sessionTreeService.deleteSessionBranch({
@@ -160,8 +191,13 @@ test("ensureSession registers child Sessions in the Session Tree and deleteSessi
     await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession(userId, rootSessionId, "", SESSION_CALLER.USER);
-    await runtime.repositories.sessionRepository.ensureSession({
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: rootSessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    await provisionTestSession(runtime, {
       userId,
       sessionId: childSessionId,
       parentSessionId: rootSessionId,
@@ -174,9 +210,10 @@ test("ensureSession registers child Sessions in the Session Tree and deleteSessi
       parentSessionId: rootSessionId,
       caller: SESSION_CALLER.BOT,
     });
-    const rootScope = await runtime.repositories.sessionRepository.resolveSessionScope(
+    const rootScope = await runtime.repositories.sessionRepository.requireSessionScope(
       userId,
       rootSessionId,
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, rootSessionId),
     );
 
     const result = await runtime.sessionTreeService.deleteSessionBranch({
@@ -213,10 +250,16 @@ test("appendTurns should not recreate session after deletion marker is set", asy
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
 
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+    await provisionTestSession(runtime, {
       userId,
       sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const scope = await runtime.repositories.sessionRepository.requireSessionScope(
+      userId,
+      sessionId,
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, sessionId),
     );
     assert.equal(await exists(scope.sessionFile), true);
 
@@ -240,10 +283,16 @@ test("task and execution writes should not recreate a deleted session directory"
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
 
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+    await provisionTestSession(runtime, {
       userId,
       sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const scope = await runtime.repositories.sessionRepository.requireSessionScope(
+      userId,
+      sessionId,
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, sessionId),
     );
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
@@ -287,11 +336,21 @@ test("late execution initialization should not restore a deleted session tree no
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
 
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
     await assert.rejects(
-      runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER),
+      provisionTestSession(runtime, {
+        userId,
+        sessionId,
+        parentSessionId: "",
+        caller: SESSION_CALLER.USER,
+      }),
       {
         code: "SESSION_DELETED",
       },
@@ -314,10 +373,16 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
 
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+    await provisionTestSession(runtime, {
       userId,
       sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const scope = await runtime.repositories.sessionRepository.requireSessionScope(
+      userId,
+      sessionId,
+      runtime.repositories.sessionRepository.treePersistenceContext(userId, sessionId),
     );
     const persistenceContext = {
       locationResolver: runtime.repositories.sessionRepository.sessionPathResolver,
@@ -333,19 +398,15 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
       { code: "SESSION_DELETED" },
     );
     assert.equal(
-      await runtime.repositories.sessionRepository.findById(
-        userId,
-        sessionId,
-        "",
+      await runtime.repositories.sessionRepository.findById(userId, sessionId, {
         persistenceContext,
-      ),
+      }),
       null,
     );
     await assert.rejects(
       runtime.repositories.sessionRepository.save(
         userId,
         { sessionId, messages: [{ role: "user", content: "late" }] },
-        "",
         { persistenceContext },
       ),
       { code: "SESSION_DELETED" },
@@ -382,11 +443,28 @@ test("a session deleted before the lifecycle lock is rejected without creating a
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
     const repo = runtime.repositories.sessionRepository;
-    const scope = await repo.resolveSessionScope(userId, sessionId);
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
+    const scope = await repo.placeSessionScope(
+      userId,
+      { sessionId, parentSessionId: "" },
+      repo.treePersistenceContext(userId, sessionId),
+    );
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
-    await assert.rejects(repo.ensureSession({ userId, sessionId }), { code: "SESSION_DELETED" });
+    await assert.rejects(
+      provisionTestSession(runtime, {
+        userId,
+        sessionId,
+        parentSessionId: "",
+        caller: SESSION_CALLER.USER,
+      }),
+      { code: "SESSION_DELETED" },
+    );
     assert.equal(await exists(scope.sessionDir), false);
     assert.deepEqual(await repo.listSessionIds(userId), []);
   });
@@ -400,17 +478,26 @@ test("a child of a deleted parent is rejected before any artifact or tree node i
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
     const repo = runtime.repositories.sessionRepository;
-    await runtime.sessionCrudService.ensureSession(
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: parentSessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const parentScope = await repo.requireSessionScope(
       userId,
       parentSessionId,
-      "",
-      SESSION_CALLER.USER,
+      repo.treePersistenceContext(userId, parentSessionId),
     );
-    const parentScope = await repo.resolveSessionScope(userId, parentSessionId);
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId: parentSessionId });
 
     await assert.rejects(
-      repo.ensureSession({ userId, sessionId: childSessionId, parentSessionId }),
+      provisionTestSession(runtime, {
+        userId,
+        sessionId: childSessionId,
+        parentSessionId,
+        caller: SESSION_CALLER.BOT,
+      }),
       { code: "SESSION_DELETED" },
     );
     assert.equal(await exists(parentScope.sessionDir), false);

@@ -20,6 +20,7 @@ const writeText = (filePath, content) => writeFile(filePath, content, "utf8");
 test("file mutation requires an explicit write capability", async () => {
   await assert.rejects(
     applyFileMutation({
+      sessionScope: null,
       filePath: "unused.txt",
       logicalPath: "unused.txt",
       content: "unused",
@@ -35,6 +36,7 @@ test("file mutation persists before snapshot and diff, then reads the same recor
     const target = path.join(root, "file.txt");
     await writeFile(target, "before\n", "utf8");
     const result = await applyFileMutation({
+      sessionScope: null,
       filePath: target,
       logicalPath: "file.txt",
       content: "after\n",
@@ -65,6 +67,7 @@ test("file mutation rolls target back when record commit fails", async () => {
     await writeFile(path.join(root, "records"), "not-a-directory", "utf8");
     await assert.rejects(
       applyFileMutation({
+        sessionScope: null,
         filePath: target,
         logicalPath: "file.txt",
         content: "after\n",
@@ -85,6 +88,7 @@ test("delete mutation persists the before snapshot and a removal diff", async ()
     const target = path.join(root, "file.txt");
     await writeFile(target, "before\n", "utf8");
     const result = await applyFileMutation({
+      sessionScope: null,
       filePath: target,
       logicalPath: "file.txt",
       operation: "delete",
@@ -112,6 +116,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
     const mutationRoot = resolveFileMutationRoot(root);
     await writeFile(target, "base\n", "utf8");
     const first = await applyFileMutation({
+      sessionScope: null,
       filePath: target,
       logicalPath: "file.txt",
       content: "middle\n",
@@ -121,6 +126,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
       writeText,
     });
     const second = await applyFileMutation({
+      sessionScope: null,
       filePath: target,
       logicalPath: "file.txt",
       content: "final\n",
@@ -149,6 +155,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
     ]);
 
     const isolated = await applyFileMutation({
+      sessionScope: null,
       filePath: target,
       logicalPath: "file.txt",
       content: "other\n",
@@ -185,6 +192,7 @@ test("multi-file callers can roll back every committed mutation after a later wr
       await writeFile(filePath, content, "utf8");
     };
     const firstMutation = await applyFileMutation({
+      sessionScope: null,
       filePath: first,
       logicalPath: "first.txt",
       content: "first-after\n",
@@ -193,6 +201,7 @@ test("multi-file callers can roll back every committed mutation after a later wr
     });
     await assert.rejects(
       applyFileMutation({
+        sessionScope: null,
         filePath: second,
         logicalPath: "second.txt",
         content: "second-after\n",
@@ -216,6 +225,7 @@ test("rollback removes a file created by a mutation", async () => {
     const target = path.join(root, "created.txt");
     const mutationRoot = resolveFileMutationRoot(root);
     const result = await applyFileMutation({
+      sessionScope: null,
       filePath: target,
       logicalPath: "created.txt",
       content: "created\n",

@@ -12,12 +12,7 @@ import {
 import { text as clean, isFunction } from "@noobot/shared/value";
 
 export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents } = {}) {
-  return async function commitInteractionRequest({
-    userId,
-    parentSessionId = "",
-    payload = {},
-    persistenceScope = null,
-  } = {}) {
+  return async function commitInteractionRequest({ userId, payload, persistenceScope }) {
     const validation = validateInteractionRequestPayload(payload);
     if (!validation.valid) throw new TypeError(`invalid interaction request: ${validation.reason}`);
     const bot = resolveBot?.();
@@ -40,7 +35,6 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
     const committed = await bot.commitAuthorityEvent({
       userId: clean(userId),
       sessionId,
-      parentSessionId: clean(parentSessionId),
       family: EVENT_FAMILY.INTERACTION_REQUEST,
       identity: {
         eventType: INTERACTION_EVENT_TYPE.REQUEST,
@@ -57,10 +51,9 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
         `interaction authority event commit failed: ${committed?.reason || "unknown"}`,
       );
     }
-    const dispatch = await dispatchAuthorityEvents?.({
+    const dispatch = await dispatchAuthorityEvents({
       userId: clean(userId),
       sessionId,
-      parentSessionId: clean(parentSessionId),
       persistenceScope,
     });
     if (dispatch?.dispatched !== true) {

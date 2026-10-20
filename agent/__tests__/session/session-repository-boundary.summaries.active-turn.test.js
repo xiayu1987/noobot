@@ -9,7 +9,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createTestSessionServices } from "../helpers/session-services.js";
+import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import {
   withTempWorkspace,
@@ -141,9 +141,19 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     const sessionId = "active-full-detail";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
 
-    const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, "");
+    const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, {
+      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+        userId,
+        sessionId,
+      ),
+    });
     session.messages = canonicalMessages(
       [
         {
@@ -173,11 +183,12 @@ test("full and summary Session Detail expose the same canonical active Turn mess
         },
       },
     };
-    await runtime.repositories.sessionRepository.save(
-      userId,
-      applySessionMessageFacts(session),
-      "",
-    );
+    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
+      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+        userId,
+        session.sessionId,
+      ),
+    });
     await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
 
     const summaryDetail = await runtime.sessionCrudService.getSessionDisplayData({

@@ -50,6 +50,7 @@ function createRuntime(abortSignal = new AbortController().signal) {
   bindAssistantMessageEventStream(runtime, {
     messageId: "message-tool-batch",
     presentationMessageId: "presentation-tool-batch",
+    parentSessionId: "",
   });
   return bindTestDispatchLifecycle(runtime);
 }

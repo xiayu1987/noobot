@@ -11,6 +11,10 @@ import {
   SESSION_TREE_ERROR,
   resolveSessionTreeChain,
 } from "@noobot/workspace-protocol/session-tree";
+import {
+  SESSION_STORE_ERROR,
+  parseWorkspaceSessionTree,
+} from "@noobot/workspace-protocol/session-store";
 import { text } from "@noobot/shared/value";
 
 export class FileSystemSessionTreeRepository {
@@ -47,7 +51,28 @@ export class FileSystemSessionTreeRepository {
     }
   }
 
-  async assertWorkspaceInitialized(userId) {
+  workspaceNotInitializedError(basePath, details) {
+    return fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
+      code: ERROR_CODE.FATAL_WORKSPACE_NOT_INITIALIZED,
+      details: { basePath, ...details },
+    });
+  }
+
+  async _readTree(userId) {
+    const basePath = this._basePath(userId);
+    const file = this._treeFile(userId);
+    try {
+      const raw = await this.storageService.readTextOrNull(file);
+      return normalizeSessionTreeEntity(parseWorkspaceSessionTree({ raw, file }));
+    } catch (error) {
+      if (error?.code !== SESSION_STORE_ERROR.WORKSPACE_NOT_INITIALIZED) throw error;
+      throw this.workspaceNotInitializedError(basePath, {
+        missingFile: error.details.missingFile,
+      });
+    }
+  }
+
+  async _assertWorkspaceDirectories(userId) {
     const basePath = this._basePath(userId);
     const requiredDirectories = [
       this.pathResolver.sessionRoot(basePath),
@@ -56,24 +81,17 @@ export class FileSystemSessionTreeRepository {
     ];
     for (const directory of requiredDirectories) {
       if (await this.storageService.isDirectory(directory)) continue;
-      throw fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
-        code: ERROR_CODE.FATAL_WORKSPACE_NOT_INITIALIZED,
-        details: { basePath, missingDirectory: directory },
-      });
-    }
-    const treeFile = this._treeFile(userId);
-    if (!(await this.storageService.exists(treeFile))) {
-      throw fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
-        code: ERROR_CODE.FATAL_WORKSPACE_NOT_INITIALIZED,
-        details: { basePath, missingFile: treeFile },
-      });
+      throw this.workspaceNotInitializedError(basePath, { missingDirectory: directory });
     }
   }
 
+  async assertWorkspaceInitialized(userId) {
+    await this.getTree(userId);
+  }
+
   async getTree(userId) {
-    await this.assertWorkspaceInitialized(userId);
-    const tree = await this.storageService.readJson(this._treeFile(userId), null);
-    return normalizeSessionTreeEntity(tree);
+    await this._assertWorkspaceDirectories(userId);
+    return this._readTree(userId);
   }
 
   async saveTree(userId, tree) {

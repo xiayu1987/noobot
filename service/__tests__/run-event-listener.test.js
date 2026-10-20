@@ -13,6 +13,13 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { createRunEventListener } from "../ws/chat-websocket/run-event-listener.js";
 
+const CHILD_SCOPE = Object.freeze({
+  scopeId: "agent:child-turn",
+  parentSessionId: "root-session",
+  relativeDir: "runtime/plugin-data/workflow/session/root-session/child-turn",
+  allowedRoot: "runtime/plugin-data/workflow/session",
+});
+
 function createListener(overrides = {}) {
   const frames = [];
   const listener = createRunEventListener({
@@ -117,10 +124,10 @@ test("run-event-listener dispatches a canonical authority commit without rebuild
   const envelope = messageEnvelope();
   const result = listener.onEvent({
     event: "authority_event_committed",
-    data: { envelope, persistenceScope: { kind: "session" } },
+    data: { envelope, persistenceScope: CHILD_SCOPE },
   });
   assert.equal(result, true);
-  assert.deepEqual(dispatched, [{ envelope, options: { persistenceScope: { kind: "session" } } }]);
+  assert.deepEqual(dispatched, [{ envelope, options: { persistenceScope: CHILD_SCOPE } }]);
   assert.deepEqual(frames, []);
 });
 
@@ -192,7 +199,10 @@ test("run-event-listener audits authority commits from the committed envelope id
     dialogProcessId: "dialog-1",
     presentationMessageId: "presentation-1",
   });
-  listener.onEvent({ event: "authority_event_committed", data: { envelope } });
+  listener.onEvent({
+    event: "authority_event_committed",
+    data: { envelope, persistenceScope: null },
+  });
   assert.equal(audits.length, 1);
   assert.equal(audits[0].eventType, MESSAGE_EVENT_WIRE_EVENT);
   assert.equal(audits[0].payloadEventType, MESSAGE_EVENT_TYPE.TOOL_CALL_START);

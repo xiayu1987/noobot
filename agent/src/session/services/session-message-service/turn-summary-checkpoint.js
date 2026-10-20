@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import { SESSION_NOT_FOUND_REASON, normalizeDialogProcessId } from "@noobot/session-protocol";
 import {
   resolveContextMessageDialogProcessId,
   resolveContextToolCallDeclarationId,
@@ -92,8 +92,7 @@ function normalizeCheckpointRequest(payload) {
   const request = {
     userId: payload.userId,
     sessionId: payload.sessionId,
-    parentSessionId: payload.parentSessionId || "",
-    persistenceContext: payload.persistenceContext || null,
+    persistenceContext: payload.persistenceContext,
     dialogProcessId: normalizeDialogProcessId(payload.dialogProcessId || ""),
     turnScopeId: text(payload.turnScopeId),
     checkpointId: text(payload.checkpointId),
@@ -284,18 +283,13 @@ export async function commitTurnSummaryCheckpoint(payload = {}) {
   if (!hasCheckpointIdentity(request)) {
     return { committed: false, reason: "missing_checkpoint_identity", markedCount: 0 };
   }
-  const { userId, sessionId, parentSessionId, persistenceContext } = request;
-  const mutation = this._withSessionMutation(
+  const { userId, sessionId, persistenceContext } = request;
+  const mutation = this.sessionRepo.withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const { session, resolvedParentSessionId } = await this._findSession(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      if (!session) return { committed: false, reason: "session_not_found", markedCount: 0 };
+      const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
+      if (!session) return { committed: false, reason: SESSION_NOT_FOUND_REASON, markedCount: 0 };
       assertCheckpointTargetsTurn(session, request);
       const currentState =
         session.turnSummaryCheckpoints?.[request.turnScopeId] || EMPTY_CHECKPOINT_STATE;
@@ -306,11 +300,10 @@ export async function commitTurnSummaryCheckpoint(payload = {}) {
       assertCheckpointMessagesResolved(session.messages, request);
       assertSummarizedToolPairClosure(session.messages, request.summarizedMessageUids);
       const result = applyCheckpointCommit(session, currentState, request, this.now());
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+      await this.sessionRepo.save(userId, session, { persistenceContext });
       return result;
     },
-    parentSessionId,
-    persistenceContext,
+    { persistenceContext },
   );
   return resolveDeletedSessionAs(mutation, { committed: false, markedCount: 0 });
 }

@@ -119,6 +119,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",
+    parentSessionId: "",
     message: "build workflow",
     turnScopeId: "turn-workflow-semantic",
     runConfig: {

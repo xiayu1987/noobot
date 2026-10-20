@@ -7,8 +7,9 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
+import { isMissingPersistencePathError } from "../shared/storage/json-file-reader.js";
 import { text } from "@noobot/shared/value";
-import { requireSessionTombstoneSessions } from "@noobot/workspace-protocol/session-tombstone";
+import { parseWorkspaceSessionTombstones } from "@noobot/workspace-protocol/session-store";
 
 const V4_RECORD_FIELDS = Object.freeze(["schemaVersion", "sessionId", "repair", "updatedAt"]);
 
@@ -26,14 +27,8 @@ function upgradeError(message, details) {
   return error;
 }
 
-async function readJson(filePath, { optional }) {
-  let raw;
-  try {
-    raw = await readFile(filePath, "utf8");
-  } catch (error) {
-    if (optional && error?.code === "ENOENT") return null;
-    throw error;
-  }
+async function readJson(filePath) {
+  const raw = await readFile(filePath, "utf8");
   try {
     return JSON.parse(raw);
   } catch {
@@ -70,12 +65,6 @@ function resolveDeletedAtMs(record, relativePath) {
   return deletedAtMs;
 }
 
-async function readTombstoneSessions(tombstoneFile) {
-  const tombstone = await readJson(tombstoneFile, { optional: true });
-  if (tombstone === null) return {};
-  return { ...requireSessionTombstoneSessions(tombstone, { filePath: tombstoneFile }) };
-}
-
 async function backupRecord(backupBase, relativePath, record) {
   const backupPath = path.join(backupBase, relativePath);
   await mkdir(path.dirname(backupPath), { recursive: true });
@@ -83,18 +72,30 @@ async function backupRecord(backupBase, relativePath, record) {
   return backupPath;
 }
 
+async function readTextOrNull(filePath) {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if (isMissingPersistencePathError(error)) return null;
+    throw error;
+  }
+}
+
 export async function upgradeSessionLifecycle({ base, backupBase }) {
   const upgradedAt = new Date().toISOString();
   const recordsDir = path.join(base, WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR);
   const tombstoneFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
-  const tombstoneSessions = await readTombstoneSessions(tombstoneFile);
+  const tombstoneSessions = parseWorkspaceSessionTombstones({
+    raw: await readTextOrNull(tombstoneFile),
+    file: tombstoneFile,
+  });
   const rewritten = [];
   const retired = [];
   let tombstoneChanged = false;
 
   for (const name of await listRecordFiles(recordsDir)) {
     const relativePath = path.join(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR, name);
-    const record = await readJson(path.join(base, relativePath), { optional: false });
+    const record = await readJson(path.join(base, relativePath));
     if (isV4Record(record)) continue;
     const sessionId = text(record.sessionId);
     if (!sessionId) {

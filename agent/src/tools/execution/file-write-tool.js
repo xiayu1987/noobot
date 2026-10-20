@@ -80,7 +80,7 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
         content,
         operation: "replace",
         mutationRoot: resolveRuntimeFileMutationRoot(runtime),
-        sessionScope: runtime?.systemRuntime?.persistenceScope || null,
+        sessionScope: runtime.systemRuntime.persistenceScope,
         writeText: (target, value) => workspaceIo.writeText(target, value),
       });
       const resource = await registerResource({

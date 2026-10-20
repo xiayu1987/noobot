@@ -87,14 +87,14 @@ class SessionSummaryMethods {
     return payload;
   }
 
-  async upsertSessionSummary(userId, session, { listFacts, persistenceContext }) {
-    if (persistenceContext) return null;
+  async upsertSessionSummary(userId, session, { listFacts, scope }) {
+    if (!scope.indexed) return null;
     const summary = buildSessionSummary(session, { listFacts });
     return this._replaceSessionSummary(userId, summary);
   }
 
-  async markSessionSummaryUnavailable(userId, sessionId, { error, persistenceContext }) {
-    if (persistenceContext) return null;
+  async markSessionSummaryUnavailable(userId, sessionId, { error, scope }) {
+    if (!scope.indexed) return null;
     const sessionTree = await this.sessionTreeRepository.getTree(userId);
     const unavailable = await this.buildUnavailableSessionSummary(
       userId,
@@ -132,7 +132,9 @@ class SessionSummaryMethods {
     for (const sessionId of sessionIds) {
       const node = requireSessionTreeNode(sessionTree, sessionId);
       try {
-        const session = await this.findById(userId, sessionId, node.parentSessionId);
+        const session = await this.findById(userId, sessionId, {
+          persistenceContext: this.treePersistenceContext(userId, sessionId),
+        });
         if (!session) {
           const error = new Error("Canonical session artifact is missing");
           error.code = "SESSION_ARTIFACT_MISSING";
@@ -152,13 +154,17 @@ class SessionSummaryMethods {
       sessionId,
       parentSessionId,
       caller,
-      metadata: await this._readSessionSummaryMetadata(userId, sessionId, parentSessionId),
+      metadata: await this._readSessionSummaryMetadata(userId, sessionId),
       error: requireUnavailableError(error),
     });
   }
 
-  async _readSessionSummaryMetadata(userId, sessionId, parentSessionId) {
-    const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId);
+  async _readSessionSummaryMetadata(userId, sessionId) {
+    const scope = await this.requireSessionScope(
+      userId,
+      sessionId,
+      this.treePersistenceContext(userId, sessionId),
+    );
     try {
       return projectUnavailableMetadata(await readJsonArtifactFile(scope.sessionFile, null));
     } catch (error) {

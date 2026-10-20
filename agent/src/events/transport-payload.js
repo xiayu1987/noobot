@@ -7,8 +7,7 @@ import {
   ATTACHMENT_LIFECYCLE_WIRE_EVENT,
   createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
 
 const ROUTE_IDENTITY_FIELDS = Object.freeze([
   "userId",
@@ -18,6 +17,27 @@ const ROUTE_IDENTITY_FIELDS = Object.freeze([
   "turnScopeId",
 ]);
 
+const REQUIRED_NON_EMPTY_ROUTE_FIELDS = Object.freeze(["userId", "sessionId", "dialogProcessId"]);
+
+export function requireExecutionRouteIdentity(route) {
+  if (!isPlainObject(route)) {
+    throw new TypeError("execution route identity must be an object");
+  }
+  const unknown = Object.keys(route).filter((key) => !ROUTE_IDENTITY_FIELDS.includes(key));
+  if (unknown.length > 0) {
+    throw new TypeError(`execution route identity has unknown fields: ${unknown.join(",")}`);
+  }
+  for (const field of ROUTE_IDENTITY_FIELDS) {
+    if (typeof route[field] !== "string") {
+      throw new TypeError(`execution route identity ${field} must be a string`);
+    }
+  }
+  for (const field of REQUIRED_NON_EMPTY_ROUTE_FIELDS) {
+    if (!route[field]) throw new TypeError(`execution route identity ${field} is required`);
+  }
+  return Object.freeze({ ...route });
+}
+
 export function omitExecutionRouteIdentity(data = {}) {
   const eventData = isPlainObject(data) ? data : {};
   const payload = { ...eventData };
@@ -25,19 +45,8 @@ export function omitExecutionRouteIdentity(data = {}) {
   return payload;
 }
 
-export function projectExecutionRouteIdentity(data = {}, route = {}) {
-  return {
-    ...omitExecutionRouteIdentity(data),
-    userId: text(route.userId),
-    dialogProcessId: text(route.dialogProcessId),
-    sessionId: text(route.sessionId),
-    turnScopeId: text(route.turnScopeId),
-    parentSessionId: normalizeParentSessionId(route.parentSessionId),
-  };
-}
-
-export function projectExecutionTransportPayload({ event = "", data = {}, route = {} } = {}) {
+export function projectExecutionTransportPayload({ event, data, route }) {
   const eventData = isPlainObject(data) ? data : {};
   if (event === ATTACHMENT_LIFECYCLE_WIRE_EVENT) return createAttachmentLifecycleEvent(eventData);
-  return projectExecutionRouteIdentity(eventData, route);
+  return { ...omitExecutionRouteIdentity(eventData), ...route };
 }

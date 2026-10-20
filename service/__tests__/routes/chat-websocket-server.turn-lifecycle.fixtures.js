@@ -10,6 +10,7 @@ import {
 } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  compactAuthorityEventOutbox,
   createEventEnvelope,
   EVENT_FAMILY,
   listPendingAuthorityEvents,
@@ -192,6 +193,11 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         eventOutbox = result.outbox;
       }
       return { recorded: true };
+    },
+    async compactAuthorityEvents({ retainDeliveredAfter }) {
+      const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
+      eventOutbox = result.outbox;
+      return { compacted: result.compacted, removed: result.removed };
     },
     async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
       let deduplicated = 0;

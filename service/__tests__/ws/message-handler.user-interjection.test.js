@@ -57,6 +57,7 @@ function createFixture() {
   };
   const commitUserInterjection = createUserInterjectionAuthorityBridge({
     resolveBot: () => bot,
+    persistenceScope: null,
   });
   const handler = createMessageHandler({
     state: {},

@@ -61,7 +61,8 @@ function recordDispatchFailure(run, committedEnvelope, dispatchContext, reason, 
     data: {
       childSessionId: identity.sessionId || "",
       parentSessionId: payload.parentSessionId || "",
-      persistenceScopeId: dispatchContext.persistenceScope?.scopeId || "",
+      persistenceScopeId:
+        dispatchContext.persistenceScope === null ? "" : dispatchContext.persistenceScope.scopeId,
       lifecycleEventType: payload.eventType || "",
       reason,
       delivered: Number(delivered || 0),
@@ -69,14 +70,13 @@ function recordDispatchFailure(run, committedEnvelope, dispatchContext, reason, 
   });
 }
 
-async function dispatchCommittedTurn(context, run, envelope = {}, dispatchContext = {}) {
+async function dispatchCommittedTurn(context, run, envelope, dispatchContext) {
   const identity = envelope.identity || {};
   const payload = envelope.payload || {};
   try {
-    const dispatch = await context.dispatchAuthorityEvents?.({
+    const dispatch = await context.dispatchAuthorityEvents({
       userId: payload.userId,
       sessionId: identity.sessionId,
-      parentSessionId: payload.parentSessionId,
       persistenceScope: dispatchContext.persistenceScope,
     });
     if (dispatch?.dispatched !== true) {
@@ -96,16 +96,15 @@ async function dispatchCommittedTurn(context, run, envelope = {}, dispatchContex
   }
 }
 
-async function dispatchAuthorityEvent(context, run, active, envelope = {}, dispatchContext = {}) {
+async function dispatchAuthorityEvent(context, run, active, envelope, dispatchContext) {
   if (isTransientMessageEvent(envelope)) {
     const sent = await publishRunEvent(active.runHandle, envelope.identity.eventType, envelope);
     return { dispatched: true, delivered: sent === true ? 1 : 0 };
   }
-  const dispatch = await context.dispatchAuthorityEvents?.(
+  const dispatch = await context.dispatchAuthorityEvents(
     {
       userId: run.userId,
       sessionId: envelope.identity.sessionId,
-      parentSessionId: envelope.payload.parentSessionId,
       persistenceScope: dispatchContext.persistenceScope,
     },
     (...args) => publishRunEvent(active.runHandle, ...args),
@@ -122,7 +121,6 @@ function startProcessing(context, run, accepted, lifecycleData) {
     .commitTurnLifecycle({
       userId: run.userId,
       sessionId: run.sessionId,
-      parentSessionId: run.parentSessionId,
       turnScopeId: run.turnScopeId,
       dialogProcessId: run.dialogProcessId,
       commandId: createTurnLifecycleCommandId({

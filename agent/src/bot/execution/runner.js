@@ -23,7 +23,57 @@ import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
+
+const SESSION_RUN_PAYLOAD_FIELDS = Object.freeze([
+  "userId",
+  "sessionId",
+  "message",
+  "attachments",
+  "systemMessages",
+  "eventListener",
+  "caller",
+  "parentSessionId",
+  "parentDialogProcessId",
+  "dialogProcessId",
+  "abortSignal",
+  "userInteractionBridge",
+  "userInterjectionPort",
+  "runConfig",
+  "turnAcceptance",
+  "turnScopeId",
+  "parentAsyncResultContainer",
+  "persistenceScope",
+]);
+
+function assertSessionRunPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new TypeError("session run payload must be an object");
+  }
+  const missing = SESSION_RUN_PAYLOAD_FIELDS.filter((field) => !Object.hasOwn(payload, field));
+  if (missing.length) {
+    throw new TypeError(`session run payload requires: ${missing.join(",")}`);
+  }
+  const unknown = Object.keys(payload).filter(
+    (field) => !SESSION_RUN_PAYLOAD_FIELDS.includes(field),
+  );
+  if (unknown.length) {
+    throw new TypeError(`session run payload has unknown fields: ${unknown.join(",")}`);
+  }
+  for (const field of ["attachments", "systemMessages"]) {
+    if (!Array.isArray(payload[field])) {
+      throw new TypeError(`session run payload ${field} must be an array`);
+    }
+  }
+  if (!isPlainObject(payload.runConfig)) {
+    throw new TypeError("session run payload runConfig must be a plain object");
+  }
+  for (const field of ["parentDialogProcessId", "dialogProcessId", "turnScopeId"]) {
+    if (typeof payload[field] !== "string") {
+      throw new TypeError(`session run payload ${field} must be a string`);
+    }
+  }
+}
 
 export class SessionExecutionRunner {
   constructor({
@@ -40,7 +90,6 @@ export class SessionExecutionRunner {
     prepareAgentTurnExecution,
     commitSummaryCheckpoint,
     appendAgentMessages,
-    assertPersistenceContextIdentity,
     bindSessionTurnAttachments,
     assertReusedUserTurnIdentity,
     getSessionTurns,
@@ -55,7 +104,6 @@ export class SessionExecutionRunner {
       agentRunner,
       buildContextBuilder,
       prepareTurnInput,
-      assertPersistenceContextIdentity,
       assertReusedUserTurnIdentity,
       bindSessionTurnAttachments,
       saveExecutionReport,
@@ -76,7 +124,6 @@ export class SessionExecutionRunner {
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.commitSummaryCheckpoint = commitSummaryCheckpoint;
     this.appendAgentMessages = appendAgentMessages;
-    this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
     this.bindSessionTurnAttachments = bindSessionTurnAttachments;
     this.assertReusedUserTurnIdentity = assertReusedUserTurnIdentity;
     this.getSessionTurns = getSessionTurns;
@@ -88,42 +135,37 @@ export class SessionExecutionRunner {
     this.now = now;
   }
 
-  async runSession({
-    userId,
-    sessionId,
-    message,
-    attachments = [],
-    systemMessages = [],
-    eventListener = null,
-    caller,
-    parentSessionId = "",
-    parentDialogProcessId = "",
-    dialogProcessId: requestedDialogProcessId = "",
-    abortSignal,
-    userInteractionBridge = null,
-    userInterjectionPort = null,
-    runConfig = {},
-    turnAcceptance = null,
-    turnScopeId = "",
-    parentAsyncResultContainer = null,
-    persistenceContext = null,
-    persistenceScope = null,
-  }) {
+  async runSession(payload) {
+    assertSessionRunPayload(payload);
+    const {
+      userId,
+      sessionId,
+      message,
+      attachments,
+      systemMessages,
+      eventListener,
+      caller,
+      parentSessionId,
+      parentDialogProcessId,
+      dialogProcessId: requestedDialogProcessId,
+      abortSignal,
+      userInteractionBridge,
+      userInterjectionPort,
+      runConfig,
+      turnAcceptance,
+      turnScopeId,
+      parentAsyncResultContainer,
+      persistenceScope,
+    } = payload;
+    if (typeof parentSessionId !== "string") {
+      throw new TypeError("session run parentSessionId must be a string");
+    }
     const persistenceScopeValidation = validateSessionPersistenceScope(persistenceScope);
     if (!persistenceScopeValidation.valid) {
       throw new TypeError(
         `invalid Session persistence scope: ${persistenceScopeValidation.errors.join(",")}`,
       );
     }
-    if (Boolean(persistenceContext) !== Boolean(persistenceScopeValidation.scope)) {
-      throw new TypeError("scoped Session execution requires persistence context and scope");
-    }
-    this.assertPersistenceContextIdentity(persistenceContext, {
-      userId,
-      sessionId,
-      parentSessionId,
-      scopeId: text(runConfig?.executionId),
-    });
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     let resolvedRunConfig = runConfig;
     let resolvedUsedSessionId = sessionId;
@@ -171,12 +213,13 @@ export class SessionExecutionRunner {
         runConfig,
         requestedTurnScopeId: turnScopeId,
         parentAsyncResultContainer,
-        persistenceContext,
+        persistenceScope,
       });
       const {
         normalizedMessage,
         resolvedParentAsyncResultContainer: initializedParentAsyncResultContainer,
         usedSessionId,
+        parentSessionId: resolvedParentSessionId,
         dialogProcessId,
         sessionLoadState,
         userConfig,
@@ -216,12 +259,11 @@ export class SessionExecutionRunner {
           userInteractionBridge,
           abortSignal,
           parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-          persistenceContext,
           persistenceScope: persistenceScopeValidation.scope,
           contextMode,
           userId,
           sessionId: usedSessionId,
-          parentSessionId,
+          parentSessionId: resolvedParentSessionId,
           dialogProcessId,
           turnScopeId: resolvedTurnScopeId,
           caller,
@@ -249,12 +291,12 @@ export class SessionExecutionRunner {
         commitSummaryCheckpoint: this.commitSummaryCheckpoint,
         userId,
         sessionId: usedSessionId,
-        parentSessionId,
+        parentSessionId: resolvedParentSessionId,
         dialogProcessId,
         parentDialogProcessId,
         turnScopeId: resolvedTurnScopeId,
         eventListener: runtimeEventListener,
-        persistenceContext,
+        persistenceScope,
         sessionDir,
         normalizedMessage,
         requestedAttachments: attachments,
@@ -311,13 +353,13 @@ export class SessionExecutionRunner {
         getTurnSummaryCheckpointState: this.getTurnSummaryCheckpointState,
         finalizeRunSession: this.finalizeRunSession,
         userId,
-        parentSessionId,
+        parentSessionId: resolvedParentSessionId,
         parentDialogProcessId,
         caller,
         agentResult,
         userConfig,
         lifecycle,
-        persistenceContext,
+        persistenceScope,
       });
       await runBotRuntimeHook({
         runtime: botHookRuntime,
@@ -340,7 +382,7 @@ export class SessionExecutionRunner {
       this.upsertParentAsyncTask({
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
         sessionId: usedSessionId,
-        parentSessionId,
+        parentSessionId: resolvedParentSessionId,
         patch: {
           status: SESSION_ASYNC_STATUS.COMPLETED,
           endedAt: this.now(),
@@ -370,7 +412,7 @@ export class SessionExecutionRunner {
         upsertParentAsyncTask: this.upsertParentAsyncTask,
         saveExecutionReport: this.saveExecutionReport,
         getExecutionTurnLogs: this.getExecutionTurnLogs,
-        persistenceContext,
+        persistenceScope,
         turnScopeId: failureTurnScopeId,
         errorLogger: this.errorLogger,
         now: this.now,

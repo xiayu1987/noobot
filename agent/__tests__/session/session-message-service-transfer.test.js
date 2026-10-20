@@ -28,11 +28,11 @@ function emptyTurnLifecycle() {
 test("SessionMessageService.appendTurns persists transferEnvelopes", async () => {
   const saved = [];
   const sessionRepo = {
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
     async ensureSession() {},
     async findTurnView() {
@@ -112,11 +112,11 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
     turnTimings: [],
   };
   const sessionRepo = {
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
     async ensureSession() {},
     async findTurnView() {
@@ -175,11 +175,11 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
     turnTimings: [],
   };
   const sessionRepo = {
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
     async ensureSession() {},
     async findTurnView() {
@@ -267,11 +267,11 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
     turnLifecycle: emptyTurnLifecycle(),
   };
   const sessionRepo = {
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
     async findById() {
       return session;
@@ -328,11 +328,11 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
     turnLifecycle: emptyTurnLifecycle(),
   };
   const sessionRepo = {
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
     async findById() {
       return session;

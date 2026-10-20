@@ -47,8 +47,7 @@ async function saveFailureReport(context, failure) {
   const persistence = {
     userId: context.userId,
     sessionId,
-    parentSessionId: context.parentSessionId,
-    persistenceContext: context.persistenceContext,
+    persistenceScope: context.persistenceScope,
   };
   const { executionSummary, summaryError } = await readFailureSummary(
     context,

@@ -8,33 +8,13 @@ import { createEmptyTurnLifecycle, normalizeDialogProcessId } from "@noobot/sess
 import { repairOrphanedTerminalTurns } from "@noobot/authoritative-state/application";
 import { text } from "@noobot/shared/value";
 
-export async function getSessionTurns({
-  userId,
-  sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
-} = {}) {
-  const { session } = await this._findSession(
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
+export async function getSessionTurns({ userId, sessionId, persistenceContext } = {}) {
+  const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
   return session?.messages || [];
 }
 
-export async function getSessionContextSource({
-  userId,
-  sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
-} = {}) {
-  const { session } = await this._findSession(
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
+export async function getSessionContextSource({ userId, sessionId, persistenceContext } = {}) {
+  const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
   if (!session) return { messages: [], turnLifecycle: createEmptyTurnLifecycle() };
   const repair = repairOrphanedTerminalTurns({
     messages: session.messages,
@@ -46,20 +26,14 @@ export async function getSessionContextSource({
 export async function getTurnSummaryCheckpointState({
   userId,
   sessionId,
-  parentSessionId = "",
-  persistenceContext = null,
+  persistenceContext,
   dialogProcessId = "",
   turnScopeId = "",
 } = {}) {
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   const normalizedTurnScopeId = text(turnScopeId);
   if (!userId || !sessionId || !normalizedDialogProcessId || !normalizedTurnScopeId) return null;
-  const { session } = await this._findSession(
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
+  const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
   const state = session?.turnSummaryCheckpoints?.[normalizedTurnScopeId];
   if (!state || text(state?.dialogProcessId) !== normalizedDialogProcessId) return null;
   return structuredClone(state);
@@ -69,17 +43,11 @@ export async function hasDialogProcessIdInSession({
   userId,
   sessionId,
   dialogProcessId = "",
-  parentSessionId = "",
-  persistenceContext = null,
+  persistenceContext,
 }) {
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) return false;
-  const { session } = await this._findSession(
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-  );
+  const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
   if (!session) return false;
   return session.messages.some(
     (messageItem) =>

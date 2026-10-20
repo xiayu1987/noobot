@@ -13,90 +13,51 @@ import {
 } from "../session-artifact-store.js";
 
 export class FileSystemExecutionRepository {
-  constructor({ pathResolver, sessionPathResolver, storageService, sessionRepository } = {}) {
-    this.pathResolver = pathResolver;
-    this.sessionPathResolver = sessionPathResolver;
+  constructor({ storageService, sessionRepository } = {}) {
     this.storageService = storageService;
     this.sessionRepository = sessionRepository;
   }
 
-  async _resolveSessionDir(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
-    const { sessionDir } = await resolver.resolveSessionScope(userId, sessionId, parentSessionId);
-    return sessionDir;
+  async _requireSessionDir(userId, sessionId, persistenceContext) {
+    const scope = await this.sessionRepository.requireSessionScope(
+      userId,
+      sessionId,
+      persistenceContext,
+    );
+    return scope.sessionDir;
   }
 
-  async _mutateSessionDir(userId, sessionId, parentSessionId, persistenceContext, write) {
+  async _mutateSessionDir(userId, sessionId, persistenceContext, write) {
     return this.sessionRepository.withSessionMutation(
       userId,
       sessionId,
-      parentSessionId,
-      async () => {
-        const sessionDir = await this._resolveSessionDir(
-          userId,
-          sessionId,
-          parentSessionId,
-          persistenceContext,
-        );
-        await fsMkdir(sessionDir, { recursive: true });
-        return write(sessionDir);
+      async (scope) => {
+        await fsMkdir(scope.sessionDir, { recursive: true });
+        return write(scope.sessionDir);
       },
-      persistenceContext,
+      { persistenceContext },
     );
   }
 
-  async getTurnLogs(
-    userId,
-    sessionId,
-    dialogProcessId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    const sessionDir = await this._resolveSessionDir(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+  async getTurnLogs(userId, sessionId, dialogProcessId, { persistenceContext } = {}) {
+    const sessionDir = await this._requireSessionDir(userId, sessionId, persistenceContext);
     return readExecutionLogs(sessionDir, {
       dialogProcessId: requireDialogProcessKey(dialogProcessId),
     });
   }
 
-  async saveReport(
-    userId,
-    sessionId,
-    report = {},
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    await this._mutateSessionDir(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-      (sessionDir) =>
-        writeExecutionReportArtifact({
-          storageService: this.storageService,
-          sessionDir,
-          reportPayload: report,
-        }),
+  async saveReport(userId, sessionId, report, { persistenceContext } = {}) {
+    await this._mutateSessionDir(userId, sessionId, persistenceContext, (sessionDir) =>
+      writeExecutionReportArtifact({
+        storageService: this.storageService,
+        sessionDir,
+        reportPayload: report,
+      }),
     );
   }
 
-  async getReport(
-    userId,
-    sessionId,
-    dialogProcessId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    const sessionDir = await this._resolveSessionDir(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+  async getReport(userId, sessionId, dialogProcessId, { persistenceContext } = {}) {
+    const sessionDir = await this._requireSessionDir(userId, sessionId, persistenceContext);
     return readExecutionReportArtifact({
       storageService: this.storageService,
       sessionDir,
@@ -104,19 +65,9 @@ export class FileSystemExecutionRepository {
     });
   }
 
-  async appendLog(
-    userId,
-    sessionId,
-    executionLog = {},
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    await this._mutateSessionDir(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-      (sessionDir) => appendExecutionLogArtifact({ sessionDir, executionLog, alreadyLocked: true }),
+  async appendLog(userId, sessionId, executionLog, { persistenceContext } = {}) {
+    await this._mutateSessionDir(userId, sessionId, persistenceContext, (sessionDir) =>
+      appendExecutionLogArtifact({ sessionDir, executionLog, alreadyLocked: true }),
     );
   }
 }

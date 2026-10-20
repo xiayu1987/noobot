@@ -51,6 +51,7 @@ test("workflow service reads child execution events only from the workflow scope
     sessionDir: workflowDir,
     sessionPayload: {
       sessionId: "child-s",
+      parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
       aggregateVersion: 0,
       messages: [],
@@ -79,6 +80,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     sessionDir: workflowDir,
     sessionPayload: {
       sessionId: "node-s",
+      parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
       updatedAt: "2026-08-19T00:00:00.000Z",
@@ -162,6 +164,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     sessionDir: workflowDir,
     sessionPayload: {
       sessionId: "node-s",
+      parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
       turnTimings: [],

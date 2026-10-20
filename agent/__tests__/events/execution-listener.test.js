@@ -40,6 +40,7 @@ test("execution listener forwards the authoritative persistence scope and its de
         return delivered;
       },
     },
+    persistenceScope: null,
   });
 
   const result = await listener.onEvent({
@@ -87,6 +88,10 @@ test("execution listener persists events in source order and exposes a durabilit
     },
     userId: "user-a",
     sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
 
   listener.onEvent({
@@ -123,6 +128,10 @@ test("execution listener keeps completion behind the persistence durability barr
     },
     userId: "user-a",
     sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
 
   listener.onEvent({
@@ -150,6 +159,10 @@ test("execution listener exposes persistence failures at the durability barrier"
     },
     userId: "user-a",
     sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
 
   listener.onEvent({
@@ -175,12 +188,22 @@ test("execution listener forwarding port delivers without taking persistence own
     upstream: {
       onEvent: async (event) => forwarded.push(event),
     },
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
 
   await listener.forwardEvent({
     event: "model_context_trace",
     data: { sessionId: "spoofed-session", invocationId: "invoke-1" },
-    route: { userId: "user-a", sessionId: "child-session", dialogProcessId: "child-dialog" },
+    route: {
+      userId: "user-a",
+      sessionId: "child-session",
+      parentSessionId: "parent-session",
+      turnScopeId: "",
+      dialogProcessId: "child-dialog",
+    },
   });
   await listener.onEvent({ event: "turn_lifecycle_committed", data: { sessionId: "spoofed" } });
   await listener.flush();
@@ -200,10 +223,16 @@ test("execution listener forwarding port rejects events without a route identity
   const listener = createExecutionEventListener({
     sessionManager: { appendExecutionLog: async () => {} },
     upstream: { onEvent: async () => true },
+    userId: "user-a",
+    sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
   assert.throws(
     () => listener.forwardEvent({ event: "model_context_trace", data: {} }),
-    /explicit route identity/,
+    /execution route identity must be an object/,
   );
 });
 
@@ -220,6 +249,9 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
         return true;
       },
     },
+    userId: "user-a",
+    parentSessionId: "",
+    persistenceScope: null,
   });
   const identity = {
     attachmentId: "source-a",
@@ -275,6 +307,8 @@ test("execution listener persists the canonical message fact instead of the priv
     turnScopeId: "turn-a",
     dialogProcessId: "dialog-a",
     upstream: { onEvent: async () => true },
+    parentSessionId: "",
+    persistenceScope: null,
   });
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
@@ -323,6 +357,8 @@ test("execution listener forwards transient message events without persisting th
         return true;
       },
     },
+    parentSessionId: "",
+    persistenceScope: null,
   });
   const messageEnvelope = (eventId, sequence, payload) =>
     createEventEnvelope({
@@ -382,6 +418,8 @@ test("execution listener classifies context identity diagnostics under one proto
     turnScopeId: "turn-a",
     dialogProcessId: "dialog-a",
     upstream: { onEvent: async () => true },
+    parentSessionId: "",
+    persistenceScope: null,
   });
 
   await listener.onEvent({
@@ -418,6 +456,8 @@ test("execution listener classifies agent context diagnostics under the dedicate
     turnScopeId: "turn-a",
     dialogProcessId: "dialog-a",
     upstream: { onEvent: async () => true },
+    parentSessionId: "",
+    persistenceScope: null,
   });
 
   await listener.onEvent({
@@ -442,6 +482,10 @@ test("execution listener rejects committed authority events that violate the pro
     sessionId: "session-a",
     turnScopeId: "turn-a",
     upstream: { onEvent: async () => true },
+    userId: "user-a",
+    parentSessionId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
@@ -477,6 +521,10 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
     upstream: {
       onEvent: async () => false,
     },
+    userId: "user-a",
+    parentSessionId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
 
   const envelope = createEventEnvelope({
@@ -528,6 +576,12 @@ test("execution listener drains delivery failure diagnostics before rejecting fl
       },
     },
     upstream: { onEvent: async () => false },
+    userId: "user-a",
+    sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
   listener.forwardEvent({
     event: "authority_event_committed",
@@ -536,7 +590,13 @@ test("execution listener drains delivery failure diagnostics before rejecting fl
         identity: { eventId: "failed-delivery" },
       },
     },
-    route: {},
+    route: {
+      userId: "user-a",
+      sessionId: "session-a",
+      parentSessionId: "",
+      turnScopeId: "",
+      dialogProcessId: "dialog-a",
+    },
   });
   let settled = false;
   const completion = assert
@@ -562,6 +622,12 @@ test("execution listener reports delivery and persistence failures together", as
       },
     },
     upstream: { onEvent: async () => false },
+    userId: "user-a",
+    sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
   listener.onEvent({ event: "agent_lifecycle_state_changed", data: { state: "completed" } });
   await assert.rejects(listener.flush(), (error) => {
@@ -590,6 +656,12 @@ test("execution listener includes events enqueued during a flush", async () => {
       },
     },
     upstream: { onEvent: async ({ data }) => forwarded.push(data.sequence) },
+    userId: "user-a",
+    sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
   listener.onEvent({ event: "agent_lifecycle_state_changed", data: { sequence: 1 } });
   const completion = listener.flush();
@@ -614,6 +686,8 @@ test("execution listener reports delivery timing once at flush without writing e
       onEvent: async () => ({ delivered: 1 }),
       onDeliveryTiming: (summary) => timings.push(summary),
     },
+    parentSessionId: "",
+    persistenceScope: null,
   });
   listener.forwardEvent({
     event: "turn_lifecycle_committed",
@@ -621,6 +695,7 @@ test("execution listener reports delivery timing once at flush without writing e
     route: {
       userId: "user-a",
       sessionId: "session-a",
+      parentSessionId: "",
       turnScopeId: "turn-a",
       dialogProcessId: "dialog-a",
     },
@@ -631,6 +706,7 @@ test("execution listener reports delivery timing once at flush without writing e
     route: {
       userId: "user-a",
       sessionId: "session-a",
+      parentSessionId: "",
       turnScopeId: "turn-a",
       dialogProcessId: "dialog-a",
     },
@@ -653,6 +729,9 @@ test("execution listener does not collect delivery timing without onDeliveryTimi
     sessionId: "session-a",
     turnScopeId: "turn-a",
     upstream: { onEvent: async () => forwarded.push(1) },
+    parentSessionId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
   });
   const originalNow = performance.now;
   let nowCalls = 0;
@@ -667,6 +746,7 @@ test("execution listener does not collect delivery timing without onDeliveryTimi
       route: {
         userId: "user-a",
         sessionId: "session-a",
+        parentSessionId: "",
         turnScopeId: "turn-a",
         dialogProcessId: "dialog-a",
       },
@@ -679,22 +759,31 @@ test("execution listener does not collect delivery timing without onDeliveryTimi
   assert.equal(nowCalls, 0);
 });
 
-test("execution listener persists runtime events into the scoped persistence context", async () => {
+test("execution listener carries the explicit persistence scope on every record", async () => {
   const persisted = [];
-  const persistenceContext = { locationResolver: { resolve: () => "scoped" } };
+  const persistenceScope = {
+    scopeId: "agent:child-turn",
+    parentSessionId: "parent-session",
+    relativeDir: "runtime/plugin-data/workflow/session/parent-session/child-turn",
+    allowedRoot: "runtime/plugin-data/workflow/session",
+  };
   const scoped = createExecutionEventListener({
     sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
     userId: "user-a",
     sessionId: "child-session",
     parentSessionId: "parent-session",
-    persistenceContext,
+    turnScopeId: "",
+    persistenceScope,
     dialogProcessId: "child-dialog",
   });
   const unscoped = createExecutionEventListener({
     sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
     userId: "user-a",
     sessionId: "root-session",
+    parentSessionId: "",
+    turnScopeId: "",
     dialogProcessId: "root-dialog",
+    persistenceScope: null,
   });
 
   await scoped.onEvent({ event: "llm_call_start", data: {} });
@@ -703,8 +792,48 @@ test("execution listener persists runtime events into the scoped persistence con
   await unscoped.flush();
 
   assert.equal(persisted.length, 2);
-  assert.equal(persisted[0].persistenceContext, persistenceContext);
-  assert.equal("persistenceContext" in persisted[1], false);
+  assert.equal(persisted[0].persistenceScope, persistenceScope);
+  assert.equal(persisted[1].persistenceScope, null);
+  assert.equal("persistenceContext" in persisted[0], false);
+});
+
+test("execution listener rejects construction without an explicit persistence scope", () => {
+  assert.throws(
+    () =>
+      createExecutionEventListener({
+        sessionManager: { appendExecutionLog: async () => {} },
+        userId: "user-a",
+        sessionId: "session-a",
+        parentSessionId: "",
+        turnScopeId: "",
+        dialogProcessId: "dialog-a",
+      }),
+    /explicit persistenceScope/,
+  );
+});
+
+test("execution listener rejects non-string or missing route identity at construction", () => {
+  const base = {
+    sessionManager: { appendExecutionLog: async () => {} },
+    userId: "user-a",
+    sessionId: "session-a",
+    parentSessionId: "",
+    turnScopeId: "",
+    dialogProcessId: "dialog-a",
+    persistenceScope: null,
+  };
+  assert.throws(
+    () => createExecutionEventListener({ ...base, parentSessionId: undefined }),
+    /parentSessionId must be a string/,
+  );
+  assert.throws(
+    () => createExecutionEventListener({ ...base, sessionId: "" }),
+    /sessionId is required/,
+  );
+  assert.throws(
+    () => createExecutionEventListener({ ...base, userId: 1 }),
+    /userId must be a string/,
+  );
 });
 
 test("execution listener rejects an upstream without an onEvent port", () => {

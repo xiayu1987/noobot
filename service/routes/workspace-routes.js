@@ -241,10 +241,9 @@ export function registerWorkspaceRoutes(
       if (hasPersistenceScope && !scopeValues.every(Boolean)) {
         throw new Error("complete session persistence scope is required for file mutations");
       }
-      const scope = await workspaceService.resolveSessionScope({
+      const scope = await workspaceService.locateSessionScope({
         userId,
         sessionId,
-        parentSessionId,
         ...(hasPersistenceScope
           ? { persistenceScope: { scopeId, parentSessionId, relativeDir, allowedRoot } }
           : {}),

@@ -30,24 +30,24 @@ export function harness(initial = {}) {
   );
   let lockCalls = 0;
   const repo = {
-    async withSessionMutation(_u, _s, _p, operation) {
+    async withSessionMutation(_u, _s, operation) {
       lockCalls += 1;
-      return operation();
+      return operation(await this.locateSessionScope());
     },
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
     async ensureSession() {},
     async findById() {
       return structuredClone(session);
     },
-    async findTurnView(_u, _s, _p, { turnScopeIds = [] } = {}) {
+    async findTurnView(_u, _s, { turnScopeIds = [] } = {}) {
       return { session: structuredClone(session), turnScopeIds };
     },
     async saveTurnView(_u, next) {
       session = structuredClone(next);
     },
-    async save(_u, next, _p, { expectedAggregateVersion } = {}) {
+    async save(_u, next, { expectedAggregateVersion } = {}) {
       const actual = Number(session.aggregateVersion ?? 0);
       if (expectedAggregateVersion != null && Number(expectedAggregateVersion) !== actual) {
         const error = new Error("session version conflict");

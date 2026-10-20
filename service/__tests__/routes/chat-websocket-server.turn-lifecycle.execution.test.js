@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  compactAuthorityEventOutbox,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
@@ -277,6 +278,11 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
       }
       return { recorded: true };
     },
+    async compactAuthorityEvents({ retainDeliveredAfter }) {
+      const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
+      eventOutbox = result.outbox;
+      return { compacted: result.compacted, removed: result.removed };
+    },
     async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
       let result = { found: true };
       for (const receipt of acknowledgements) {
@@ -309,6 +315,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   const commit = createTurnLifecycleBridge({
     resolveBot: () => bot,
     dispatchAuthorityEvents,
+    persistenceScope: null,
   });
   const event = {
     userId: "u1",

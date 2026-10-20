@@ -49,11 +49,8 @@ function resolveRequestedStreamIdentity(runConfig, state, requested) {
       config.presentationMessageId,
       messageId,
     ),
-    parentSessionId: firstText(
-      requested.parentSessionId,
-      runConfig.parentSessionId,
-      state.parentSessionId,
-    ),
+
+    parentSessionId: requested.parentSessionId,
     workflowRunId: firstText(
       requested.workflowRunId,
       runConfig.workflowRunId,
@@ -70,6 +67,9 @@ function resolveRequestedStreamIdentity(runConfig, state, requested) {
 }
 
 function assertRequestedStreamIdentity(identity) {
+  if (typeof identity.parentSessionId !== "string") {
+    throw new TypeError("turn message event parentSessionId must be a string");
+  }
   if (!identity.messageId || !identity.presentationMessageId) {
     throw new Error("turn message event identity is incomplete");
   }
@@ -103,7 +103,7 @@ export function bindAssistantMessageEventStream(
   {
     messageId = "",
     presentationMessageId = "",
-    parentSessionId = "",
+    parentSessionId,
     workflowRunId = "",
     nodeExecutionId = "",
   } = {},
@@ -200,14 +200,13 @@ function messageEventCommitInput(runtime, state, payload) {
   return {
     userId: text(runtime?.systemRuntime?.userId),
     sessionId: text(state?.sessionId),
-    parentSessionId: text(payload.parentSessionId),
     turnScopeId: text(state?.turnScopeId),
     messageId: text(state?.messageEventStream?.activeMessageId),
     executionId: text(runtime?.runConfig?.executionId),
     commandId: text(runtime?.runConfig?.commandId),
     correlationId: text(runtime?.runConfig?.turnScopeId),
     payload,
-    persistenceContext: state?.persistenceContext || null,
+    persistenceScope: state.persistenceScope,
   };
 }
 
@@ -269,7 +268,7 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
   }
   await emitEvent(eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope,
-    persistenceScope: state?.persistenceScope || null,
+    persistenceScope: state.persistenceScope,
   });
   return envelope;
 }

@@ -73,7 +73,6 @@ test("interaction authority rejects alternate shapes and conflicting persistence
   assert.deepEqual(validateInteractionAuthority(source).errors, [
     "unknown_interaction_authority_field",
     "unknown_persistence_scope_field",
-    "persistence_scope_parent_mismatch",
   ]);
   assert.deepEqual(
     validateInteractionAuthority({
@@ -81,7 +80,23 @@ test("interaction authority rejects alternate shapes and conflicting persistence
       turn: source.turn,
       persistenceScope: { scopeId: "agent:child-execution" },
     }).errors,
-    ["incomplete_persistence_scope", "persistence_scope_parent_mismatch"],
+    ["incomplete_persistence_scope"],
+  );
+  const { legacyPath: _legacyPath, ...conflictingScope } = source.persistenceScope;
+  const conflicting = validateInteractionAuthority({
+    session: source.session,
+    turn: source.turn,
+    persistenceScope: conflictingScope,
+  });
+  assert.deepEqual(conflicting.errors, ["persistence_scope_parent_mismatch"]);
+  assert.equal(conflicting.authority, undefined);
+  assert.deepEqual(
+    validateInteractionAuthority({ session: source.session, turn: source.turn }).errors,
+    ["missing_persistence_scope"],
+  );
+  assert.throws(
+    () => createInteractionAuthority({ session: source.session, turn: source.turn }),
+    (error) => error.code === "SESSION_PERSISTENCE_SCOPE_INVALID",
   );
 });
 

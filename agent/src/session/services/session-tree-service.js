@@ -43,7 +43,9 @@ export class SessionTreeService {
     await this.sessionRepo.withSessionLifecycleMutations(userId, toDelete, async () => {
       await this.sessionRepo.markSessionsDeleted(userId, toDelete);
       for (const id of toDelete) {
-        await this.sessionRepo.delete(userId, id);
+        await this.sessionRepo.delete(userId, id, {
+          persistenceContext: this.sessionRepo.treePersistenceContext(userId, id),
+        });
         deletedSessionIds.push(id);
       }
       await this.treeRepo.withLock(userId, async () => {

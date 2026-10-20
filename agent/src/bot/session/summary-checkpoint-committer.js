@@ -200,15 +200,13 @@ async function commitCheckpointTransaction({
   summarizedMessageUids,
   retainedMessageUids,
 } = {}) {
-  const { userId, sessionId, dialogProcessId, turnScopeId, parentSessionId, persistenceContext } =
-    identity;
+  const { userId, sessionId, dialogProcessId, turnScopeId, persistenceScope } = identity;
   const checkpointResult = await session.commitTurnSummaryCheckpoint({
     userId,
     sessionId,
     dialogProcessId,
     turnScopeId,
-    parentSessionId,
-    persistenceContext,
+    persistenceScope,
     checkpointId: buildCheckpointId({
       dialogProcessId,
       turnScopeId,
@@ -287,12 +285,11 @@ export async function commitSummaryCheckpoint({
   runtime = null,
   userId = "",
   sessionId = "",
-  parentSessionId = "",
   dialogProcessId = "",
   parentDialogProcessId = "",
   turnScopeId = "",
   eventListener = null,
-  persistenceContext = null,
+  persistenceScope,
   summaryCompletion = null,
 } = {}) {
   if (!canCommitSummaryCheckpoint({ session, runtime, userId, sessionId })) {
@@ -301,12 +298,11 @@ export async function commitSummaryCheckpoint({
   const identity = {
     userId,
     sessionId,
-    parentSessionId,
     dialogProcessId,
     parentDialogProcessId,
     turnScopeId,
     eventListener,
-    persistenceContext,
+    persistenceScope,
   };
   const turnMessages = runtime.currentTurnMessages.toArray();
   const retainedCheckpointEvidenceIds = resolveRetainedCheckpointEvidenceIds(turnMessages);
@@ -368,10 +364,9 @@ export async function commitSummaryCheckpoint({
     turnPersister,
     userId,
     sessionId,
-    parentSessionId,
     dialogProcessId,
     turnScopeId,
-    persistenceContext,
+    persistenceScope,
     eventListener,
   });
   applyCheckpointMarks({ runtime, createSummaryMarker, summarizedMessageUids });

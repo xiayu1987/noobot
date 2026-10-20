@@ -11,119 +11,115 @@ import {
   EXECUTION_REPORT_PROTOCOL,
   EXECUTION_REPORT_VERSION,
 } from "@noobot/session-protocol/execution-report";
+import { createSessionPersistenceScope } from "@noobot/session-protocol";
 import { resolveSessionArtifactMutationLock } from "../../src/session/session-artifact-files.js";
-import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
 import { summarizeExecutionLogs } from "../../src/observability/execution-log/execution-log-summary.js";
-import { ExecutionLogService } from "../../src/observability/execution-log/execution-log-service.js";
 import { createSessionFacade } from "../../src/session/index.js";
-import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
-import {
-  ScopedSessionLocationResolver,
-  createPersistenceContext,
-} from "../../src/session/session-location-resolver.js";
 import {
   readExecutionLogs,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
+import { provisionTestSession } from "../helpers/session-services.js";
+import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createEmptySessionTree } from "@noobot/workspace-protocol/session-tree";
 
+const SCOPED_ROOT = "runtime/plugin-data/workflow/session";
+
+function scopedAccess(runtime, { sessionId, parentSessionId, node }) {
+  const persistenceScope = createSessionPersistenceScope({
+    scopeId: `agent:${sessionId}`,
+    parentSessionId,
+    allowedRoot: SCOPED_ROOT,
+    relativeDir: `${SCOPED_ROOT}/${node}`,
+  });
+  const persistenceContext = runtime.createSessionPersistenceContext({
+    userId: "alice",
+    sessionId,
+    persistenceScope,
+  });
+  return {
+    persistenceScope,
+    persistenceContext,
+    locate: () =>
+      runtime.repositories.sessionRepository.requireSessionScope(
+        "alice",
+        sessionId,
+        persistenceContext,
+      ),
+  };
+}
+
+function ensureScopedSession(runtime, { sessionId, parentSessionId, persistenceContext }) {
+  return runtime.repositories.sessionRepository.ensureSession({
+    userId: "alice",
+    sessionId,
+    parentSessionId,
+    caller: SESSION_CALLER.BOT,
+    persistenceContext,
+  });
+}
+
 test("scoped repositories keep all artifacts and metadata in their execution directory without default leakage", async () => {
   const harness = buildHarness();
-  const { root, pathResolver, sessionRepo, taskRepo, executionRepo } = await harness.setup();
+  const { root, runtime, sessionRepo, taskRepo, executionRepo } = await harness.setup();
   try {
-    const resolver = new ScopedSessionLocationResolver({
-      pathResolver,
-      userId: "alice",
+    const access = scopedAccess(runtime, {
       sessionId: "child-a",
       parentSessionId: "parent-a",
-      scopeId: "agent:child-a",
-      allowedRoot: "runtime/plugin-data/workflow/session",
-      relativeDir: "runtime/plugin-data/workflow/session/run-a/node-a",
+      node: "run-a/node-a",
     });
-    const context = createPersistenceContext({
-      locationResolver: resolver,
-      metadataContributor: ({ sessionId, parentSessionId, scope }) => ({
-        plugin: "workflow-test",
-        sessionId,
-        parentSessionId,
-        sessionDir: scope.sessionDir,
-      }),
+    const options = { persistenceContext: access.persistenceContext };
+    await ensureScopedSession(runtime, {
+      sessionId: "child-a",
+      parentSessionId: "parent-a",
+      persistenceContext: access.persistenceContext,
     });
-
-    await sessionRepo.withSessionMutation(
+    await sessionRepo.writeSessionMetadata(
       "alice",
       "child-a",
-      "parent-a",
-      async () => {
-        await sessionRepo.ensureSession({
-          userId: "alice",
-          sessionId: "child-a",
-          parentSessionId: "parent-a",
-          caller: SESSION_CALLER.BOT,
-          persistenceContext: context,
-        });
-        await taskRepo.save(
-          "alice",
-          "child-a",
-          {
-            taskId: "task-a",
-            skillName: "skill",
-            taskName: "task",
-            taskStatus: "start",
-          },
-          "parent-a",
-          context,
-        );
-        await executionRepo.appendLog(
-          "alice",
-          "child-a",
-          { type: "event", value: 1, dialogProcessId: "dp-a" },
-          "parent-a",
-          context,
-        );
-      },
-      context,
+      { plugin: "workflow-test", sessionId: "child-a" },
+      options,
+    );
+    await taskRepo.save(
+      "alice",
+      "child-a",
+      { taskId: "task-a", skillName: "skill", taskName: "task", taskStatus: "start" },
+      options,
+    );
+    await executionRepo.appendLog(
+      "alice",
+      "child-a",
+      { type: "event", value: 1, dialogProcessId: "dp-a" },
+      options,
     );
 
-    const scope = await resolver.resolveSessionScope("alice", "child-a", "parent-a");
-    assert.equal(
-      scope.sessionDir,
-      path.join(root, "alice/runtime/plugin-data/workflow/session/run-a/node-a"),
-    );
+    const scope = await access.locate();
+    assert.equal(scope.sessionDir, path.join(root, `alice/${SCOPED_ROOT}/run-a/node-a`));
+    assert.equal(scope.resolvedParentSessionId, "parent-a");
     assert.deepEqual(await readJson(scope.metadataFile), {
       plugin: "workflow-test",
       sessionId: "child-a",
-      parentSessionId: "parent-a",
-      sessionDir: scope.sessionDir,
     });
     assert.equal((await readJson(scope.sessionFile)).parentSessionId, "parent-a");
-    await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", "parent-a", context);
+    await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
     assert.equal((await readJson(scope.sessionSummaryFile)).sessionId, "child-a");
     assert.equal((await readJson(scope.taskFile)).tasks[0].taskId, "task-a");
     assert.equal((await readExecutionLogs(scope.sessionDir))[0].value, 1);
 
     const defaultRoot = path.join(root, "alice/runtime/session");
-    assert.equal(
-      await sessionRepo.storageService.exists(path.join(defaultRoot, "child-a/session.json")),
-      false,
-    );
-    assert.equal(
-      await sessionRepo.storageService.exists(path.join(defaultRoot, "sessions.json")),
-      false,
-    );
-    assert.equal(
-      await sessionRepo.storageService.exists(path.join(defaultRoot, ".deleted-sessions.json")),
-      false,
-    );
+    const { storageService } = sessionRepo;
+    for (const file of ["child-a/session.json", "sessions.json", ".deleted-sessions.json"]) {
+      assert.equal(await storageService.exists(path.join(defaultRoot, file)), false, file);
+    }
     assert.deepEqual(
       await readJson(path.join(defaultRoot, "session-tree.json")),
       createEmptySessionTree(),
     );
     assert.equal(
-      await sessionRepo.storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
+      await storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
       false,
     );
   } finally {
@@ -133,57 +129,29 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
 
 test("session facade execution reads do not create a default shadow session for scoped workflows", async () => {
   const harness = buildHarness();
-  const { root, pathResolver, sessionRepo, executionRepo } = await harness.setup();
+  const { root, runtime, sessionRepo } = await harness.setup();
   try {
-    const resolver = new ScopedSessionLocationResolver({
-      pathResolver,
-      userId: "alice",
+    const access = scopedAccess(runtime, {
       sessionId: "child-facade",
       parentSessionId: "parent-facade",
-      scopeId: "workflow:child-facade",
-      allowedRoot: "runtime/plugin-data/workflow/session",
-      relativeDir: "runtime/plugin-data/workflow/session/run-facade/node-facade",
+      node: "run-facade/node-facade",
     });
-    const persistenceContext = createPersistenceContext({ locationResolver: resolver });
-    const executionLogService = new ExecutionLogService({
-      executionRepo: new ExecutionLogRepository({ executionRepository: executionRepo }),
-      sessionRepo,
-    });
-    const session = createSessionFacade({
-      sessionTreeService: {},
-      sessionCrudService: {},
-      sessionMessageService: {},
-      executionReadService: {},
-      sessionContextService: {},
-      taskService: {},
-      executionLogService,
-    });
-
-    await sessionRepo.ensureSession({
-      userId: "alice",
-      sessionId: "child-facade",
-      parentSessionId: "parent-facade",
-      caller: SESSION_CALLER.BOT,
-      persistenceContext,
-    });
-    await session.getExecutionTurnLogs({
+    const session = createSessionFacade(runtime);
+    const payload = {
       userId: "alice",
       sessionId: "child-facade",
       dialogProcessId: "dp-facade",
-      parentSessionId: "parent-facade",
-      persistenceContext,
-    });
-    await session.appendExecutionLog({
-      userId: "alice",
+      persistenceScope: access.persistenceScope,
+    };
+    await ensureScopedSession(runtime, {
       sessionId: "child-facade",
       parentSessionId: "parent-facade",
-      dialogProcessId: "dp-facade",
-      persistenceContext,
-      event: "workflow_started",
+      persistenceContext: access.persistenceContext,
     });
+    assert.deepEqual(await session.getExecutionTurnLogs(payload), []);
+    await session.appendExecutionLog({ ...payload, event: "workflow_started" });
 
-    const scope = await resolver.resolveSessionScope("alice", "child-facade", "parent-facade");
-    assert.equal(await sessionRepo.storageService.exists(scope.sessionFile), true);
+    const scope = await access.locate();
     assert.equal((await readExecutionLogs(scope.sessionDir))[0].event, "workflow_started");
     assert.equal(
       await sessionRepo.storageService.exists(
@@ -196,67 +164,44 @@ test("session facade execution reads do not create a default shadow session for 
   }
 });
 
-test("scoped Agent persistence keeps assistant and tool turns beside the child user turn", async () => {
+test("scoped Agent persistence keeps assistant and tool turns beside the child user turn", async (t) => {
+  useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
   const harness = buildHarness();
-  const { root, pathResolver, sessionRepo, executionRepo } = await harness.setup();
+  const { root, runtime, sessionRepo } = await harness.setup();
   try {
-    const resolver = new ScopedSessionLocationResolver({
-      pathResolver,
-      userId: "alice",
+    const access = scopedAccess(runtime, {
       sessionId: "child-agent",
       parentSessionId: "root-agent",
-      scopeId: "agent:child-agent",
-      allowedRoot: "runtime/plugin-data/workflow/session",
-      relativeDir: "runtime/plugin-data/workflow/session/root-agent/node-agent",
+      node: "root-agent/node-agent",
     });
-    const context = createPersistenceContext({ locationResolver: resolver });
-    await sessionRepo.ensureSession({
-      userId: "alice",
+    await ensureScopedSession(runtime, {
       sessionId: "child-agent",
       parentSessionId: "root-agent",
-      caller: SESSION_CALLER.BOT,
-      persistenceContext: context,
+      persistenceContext: access.persistenceContext,
     });
-    const messageService = new SessionMessageService({ sessionRepo });
-    const persister = new SessionTurnPersister({
-      session: {
-        appendTurns: (payload = {}) => messageService.appendTurns(payload),
-        appendExecutionLog: (payload = {}) =>
-          executionRepo.appendLog(
-            payload.userId,
-            payload.sessionId,
-            {
-              event: payload.event,
-              type: payload.type,
-              data: payload.data,
-              dialogProcessId: payload.dialogProcessId,
-            },
-            payload.parentSessionId,
-            payload.persistenceContext,
-          ),
-      },
-    });
-    await messageService.appendTurns({
+    const session = createSessionFacade(runtime);
+    const turnIdentity = {
       userId: "alice",
       sessionId: "child-agent",
-      parentSessionId: "root-agent",
-      persistenceContext: context,
+      dialogProcessId: "dialog-workflow-node-agent",
+      turnScopeId: "workflow-node:agent",
+      persistenceScope: access.persistenceScope,
+    };
+    await session.appendTurns({
+      userId: "alice",
+      sessionId: "child-agent",
+      persistenceScope: access.persistenceScope,
       turns: [
         {
           role: "user",
           content: "node task",
-          dialogProcessId: "dialog-workflow-node-agent",
-          turnScopeId: "workflow-node:agent",
+          dialogProcessId: turnIdentity.dialogProcessId,
+          turnScopeId: turnIdentity.turnScopeId,
         },
       ],
     });
-    await persister.appendAgentMessages({
-      userId: "alice",
-      sessionId: "child-agent",
-      parentSessionId: "root-agent",
-      dialogProcessId: "dialog-workflow-node-agent",
-      turnScopeId: "workflow-node:agent",
-      persistenceContext: context,
+    await new SessionTurnPersister({ session }).appendAgentMessages({
+      ...turnIdentity,
       messages: [
         {
           role: "assistant",
@@ -269,7 +214,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       ],
     });
 
-    const scope = await resolver.resolveSessionScope("alice", "child-agent", "root-agent");
+    const scope = await access.locate();
     const scopedSession = await readSessionArtifact({ sessionDir: scope.sessionDir });
     assert.deepEqual(
       scopedSession.messages.map((message) => message.role),
@@ -295,114 +240,86 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
 
 test("scoped repositories isolate concurrent contexts and mutation locks", async () => {
   const harness = buildHarness();
-  const { pathResolver, sessionRepo, taskRepo, executionRepo } = await harness.setup();
+  const { runtime, sessionRepo, taskRepo, executionRepo } = await harness.setup();
   try {
-    const makeContext = (name, index) => {
-      const resolver = new ScopedSessionLocationResolver({
-        pathResolver,
-        userId: "alice",
+    const nodes = ["node-1", "node-2"].map((node, index) => ({
+      node,
+      sessionId: `child-${index}`,
+      access: scopedAccess(runtime, {
         sessionId: `child-${index}`,
         parentSessionId: "parent",
-        scopeId: `agent:${name}`,
-        allowedRoot: "runtime/plugin-data/workflow/session",
-        relativeDir: `runtime/plugin-data/workflow/session/run/${name}`,
-      });
-      return {
-        resolver,
-        context: createPersistenceContext({
-          locationResolver: resolver,
-          metadataContributor: () => ({ node: name }),
-        }),
-      };
-    };
-    const first = makeContext("node-1", 0);
-    const second = makeContext("node-2", 1);
+        node: `run/${node}`,
+      }),
+    }));
 
     await Promise.all(
-      [first, second].map(({ context }, index) =>
-        sessionRepo.withSessionMutation(
-          "alice",
-          `child-${index}`,
-          "parent",
-          async () => {
-            await sessionRepo.ensureSession({
-              userId: "alice",
-              caller: SESSION_CALLER.USER,
-              sessionId: `child-${index}`,
-              parentSessionId: "parent",
-              persistenceContext: context,
-            });
-            await taskRepo.save(
-              "alice",
-              `child-${index}`,
-              { taskId: `task-${index}`, taskStatus: "start" },
-              "parent",
-              context,
-            );
-            await executionRepo.appendLog(
-              "alice",
-              `child-${index}`,
-              { index, dialogProcessId: `dp-${index}` },
-              "parent",
-              context,
-            );
-          },
-          context,
-        ),
-      ),
+      nodes.map(async ({ node, sessionId, access }, index) => {
+        const options = { persistenceContext: access.persistenceContext };
+        await ensureScopedSession(runtime, {
+          sessionId,
+          parentSessionId: "parent",
+          persistenceContext: access.persistenceContext,
+        });
+        await Promise.all([
+          sessionRepo.writeSessionMetadata("alice", sessionId, { node }, options),
+          taskRepo.save(
+            "alice",
+            sessionId,
+            { taskId: `task-${index}`, taskStatus: "start" },
+            options,
+          ),
+          executionRepo.appendLog(
+            "alice",
+            sessionId,
+            { index, dialogProcessId: `dp-${index}` },
+            options,
+          ),
+        ]);
+      }),
     );
 
-    const firstScope = await first.resolver.resolveSessionScope("alice", "child-0", "parent");
-    const secondScope = await second.resolver.resolveSessionScope("alice", "child-1", "parent");
+    const [firstScope, secondScope] = await Promise.all(nodes.map(({ access }) => access.locate()));
     assert.notEqual(firstScope.sessionDir, secondScope.sessionDir);
     assert.equal((await readJson(firstScope.metadataFile)).node, "node-1");
     assert.equal((await readJson(secondScope.metadataFile)).node, "node-2");
     assert.equal((await readJson(firstScope.taskFile)).tasks[0].taskId, "task-0");
     assert.equal((await readJson(secondScope.taskFile)).tasks[0].taskId, "task-1");
+    for (const scope of [firstScope, secondScope]) {
+      assert.equal(
+        await sessionRepo.storageService.exists(
+          resolveSessionArtifactMutationLock(scope.sessionDir),
+        ),
+        false,
+      );
+    }
   } finally {
     await harness.cleanup();
   }
 });
 
-test("scoped metadata contributor failures abort the locked mutation", async () => {
+test("scoped metadata writes reject non-object metadata without leaving files or locks", async () => {
   const harness = buildHarness();
-  const { pathResolver, sessionRepo } = await harness.setup();
+  const { runtime, sessionRepo } = await harness.setup();
   try {
-    const resolver = new ScopedSessionLocationResolver({
-      pathResolver,
-      userId: "alice",
+    const access = scopedAccess(runtime, {
       sessionId: "child",
       parentSessionId: "parent",
-      scopeId: "agent:child",
-      allowedRoot: "runtime/plugin-data/workflow/session",
-      relativeDir: "runtime/plugin-data/workflow/session/run-fail/node",
+      node: "run-fail/node",
     });
-    const context = createPersistenceContext({
-      locationResolver: resolver,
-      metadataContributor: () => {
-        throw new Error("metadata boom");
-      },
+    await ensureScopedSession(runtime, {
+      sessionId: "child",
+      parentSessionId: "parent",
+      persistenceContext: access.persistenceContext,
     });
-    await assert.rejects(
-      () =>
-        sessionRepo.withSessionMutation(
-          "alice",
-          "child",
-          "parent",
-          async () => {
-            await sessionRepo.ensureSession({
-              userId: "alice",
-              caller: SESSION_CALLER.USER,
-              sessionId: "child",
-              parentSessionId: "parent",
-              persistenceContext: context,
-            });
-          },
-          context,
-        ),
-      /metadata boom/,
-    );
-    const scope = await resolver.resolveSessionScope("alice", "child", "parent");
+    for (const metadata of [null, [], "boom"]) {
+      await assert.rejects(
+        sessionRepo.writeSessionMetadata("alice", "child", metadata, {
+          persistenceContext: access.persistenceContext,
+        }),
+        { name: "TypeError", message: /plain object/ },
+      );
+    }
+    const scope = await access.locate();
     assert.equal(await sessionRepo.storageService.exists(scope.metadataFile), false);
     assert.equal(
       await sessionRepo.storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
@@ -415,35 +332,23 @@ test("scoped metadata contributor failures abort the locked mutation", async () 
 
 test("session facade writes per-turn execution reports into the scoped session directory", async () => {
   const harness = buildHarness();
-  const { root, pathResolver, sessionRepo, executionRepo } = await harness.setup();
+  const { root, runtime, sessionRepo } = await harness.setup();
   try {
-    const resolver = new ScopedSessionLocationResolver({
-      pathResolver,
-      userId: "alice",
+    const access = scopedAccess(runtime, {
       sessionId: "child-report",
       parentSessionId: "parent-report",
-      scopeId: "workflow:child-report",
-      allowedRoot: "runtime/plugin-data/workflow/session",
-      relativeDir: "runtime/plugin-data/workflow/session/run-report/node-report",
+      node: "run-report/node-report",
     });
-    const persistenceContext = createPersistenceContext({ locationResolver: resolver });
-    const session = createSessionFacade({
-      sessionTreeService: {},
-      sessionCrudService: {},
-      sessionMessageService: {},
-      executionReadService: {},
-      sessionContextService: {},
-      taskService: {},
-      executionLogService: new ExecutionLogService({
-        executionRepo: new ExecutionLogRepository({ executionRepository: executionRepo }),
-        sessionRepo,
-      }),
+    await ensureScopedSession(runtime, {
+      sessionId: "child-report",
+      parentSessionId: "parent-report",
+      persistenceContext: access.persistenceContext,
     });
+    const session = createSessionFacade(runtime);
     const scopePayload = {
       userId: "alice",
       sessionId: "child-report",
-      parentSessionId: "parent-report",
-      persistenceContext,
+      persistenceScope: access.persistenceScope,
     };
 
     for (const [dialogProcessId, status, error] of [
@@ -463,7 +368,7 @@ test("session facade writes per-turn execution reports into the scoped session d
       });
     }
 
-    const scope = await resolver.resolveSessionScope("alice", "child-report", "parent-report");
+    const scope = await access.locate();
     assert.equal(
       (await readJson(path.join(scope.sessionDir, "execution-reports/dp-1.json"))).status,
       "completed",
@@ -489,7 +394,7 @@ test("session facade writes per-turn execution reports into the scoped session d
 
 test("execution report writes reject deleted sessions and invalid turn keys", async () => {
   const harness = buildHarness();
-  const { root, sessionRepo, executionRepo } = await harness.setup();
+  const { runtime, sessionRepo, executionRepo } = await harness.setup();
   const reportFor = (sessionId, dialogProcessId) => ({
     protocol: EXECUTION_REPORT_PROTOCOL,
     version: EXECUTION_REPORT_VERSION,
@@ -506,28 +411,46 @@ test("execution report writes reject deleted sessions and invalid turn keys", as
     summaryError: { name: "Error", message: "missing" },
     error: { name: "Error", message: "boom" },
   });
+  const treeOptions = (sessionId) => ({
+    persistenceContext: sessionRepo.treePersistenceContext("alice", sessionId),
+  });
   try {
-    await sessionRepo.markSessionsDeleted("alice", ["gone"]);
-    await assert.rejects(executionRepo.saveReport("alice", "gone", reportFor("gone", "dp-1")), {
-      code: "SESSION_DELETED",
-    });
-    for (const dialogProcessId of ["", "../escape", "a/b"]) {
-      await assert.rejects(
-        executionRepo.saveReport("alice", "live", reportFor("live", dialogProcessId)),
-        { code: "DIALOG_PROCESS_ID_INVALID" },
-      );
-      await assert.rejects(executionRepo.getReport("alice", "live", dialogProcessId), {
-        code: "DIALOG_PROCESS_ID_INVALID",
+    for (const sessionId of ["gone", "live"]) {
+      await provisionTestSession(runtime, {
+        userId: "alice",
+        sessionId,
+        caller: SESSION_CALLER.USER,
       });
     }
-    for (const sessionId of ["gone", "live"]) {
-      assert.equal(
-        await sessionRepo.storageService.exists(
-          path.join(root, `alice/runtime/session/${sessionId}/execution-reports`),
+    await sessionRepo.markSessionsDeleted("alice", ["gone"]);
+    await assert.rejects(
+      executionRepo.saveReport("alice", "gone", reportFor("gone", "dp-1"), treeOptions("gone")),
+      { code: "SESSION_DELETED" },
+    );
+    for (const dialogProcessId of ["", "../escape", "a/b"]) {
+      await assert.rejects(
+        executionRepo.saveReport(
+          "alice",
+          "live",
+          reportFor("live", dialogProcessId),
+          treeOptions("live"),
         ),
-        false,
+        { code: "DIALOG_PROCESS_ID_INVALID" },
+      );
+      await assert.rejects(
+        executionRepo.getReport("alice", "live", dialogProcessId, treeOptions("live")),
+        { code: "DIALOG_PROCESS_ID_INVALID" },
       );
     }
+    const liveScope = await sessionRepo.requireSessionScope(
+      "alice",
+      "live",
+      treeOptions("live").persistenceContext,
+    );
+    assert.equal(
+      await sessionRepo.storageService.exists(path.join(liveScope.sessionDir, "execution-reports")),
+      false,
+    );
   } finally {
     await harness.cleanup();
   }

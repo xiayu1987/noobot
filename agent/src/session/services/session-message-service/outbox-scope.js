@@ -4,42 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
-
-export async function resolveOutboxSessionDir(
-  service,
-  userId,
-  sessionId,
-  resolvedParentSessionId = "",
-  persistenceContext = null,
-) {
-  const scope = await service.sessionRepo.resolveSessionScope(
-    userId,
-    sessionId,
-    resolvedParentSessionId,
-    persistenceContext,
-  );
-  return text(scope?.sessionDir);
-}
-
-export async function requireOutboxSessionDir(
-  service,
-  userId,
-  sessionId,
-  resolvedParentSessionId = "",
-  persistenceContext = null,
-) {
-  const sessionDir = await resolveOutboxSessionDir(
-    service,
-    userId,
-    sessionId,
-    resolvedParentSessionId,
-    persistenceContext,
-  );
-  if (!sessionDir) {
-    const error = new Error("authority outbox session directory is unresolved");
-    error.code = "OUTBOX_SESSION_DIR_UNRESOLVED";
-    throw error;
-  }
-  return sessionDir;
+export async function locateOutboxSessionDir(service, userId, sessionId, persistenceContext) {
+  const scope = await service.sessionRepo.locateSessionScope(userId, sessionId, persistenceContext);
+  return scope ? scope.sessionDir : "";
 }

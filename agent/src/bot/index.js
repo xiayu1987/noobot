@@ -166,7 +166,7 @@ export class BotManager {
     return this.errorLogger.log(payload);
   }
 
-  async runSession(payload = {}) {
+  async runSession(payload) {
     return this.sessionRunner.runSession(payload);
   }
 

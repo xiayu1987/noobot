@@ -10,10 +10,12 @@ import { text, isFunction } from "@noobot/shared/value";
 const SESSION_PERSISTENCE_SCOPE_KIND = "noobot.session_persistence_scope";
 const SESSION_PERSISTENCE_SCOPE_VERSION = 1;
 
-function buildScope(sessionDir, resolvedParentSessionId = "") {
+function buildScope(sessionDir, resolvedParentSessionId, { indexed, registered }) {
   const files = buildSessionArtifactFileMap(sessionDir);
   return Object.freeze({
     resolvedParentSessionId: text(resolvedParentSessionId),
+    indexed,
+    registered,
     sessionDir,
     sessionFile: files.session,
     sessionSummaryFile: files.sessionSummary,
@@ -25,16 +27,66 @@ function buildScope(sessionDir, resolvedParentSessionId = "") {
   });
 }
 
+function assertBoundIdentity(resolver, userId, sessionId) {
+  if (text(userId) !== resolver.userId) {
+    throw new Error("session location user does not match its bound scope");
+  }
+  const normalizedSessionId = text(sessionId);
+  if (!normalizedSessionId) {
+    throw new Error("session location requires a sessionId");
+  }
+  if (normalizedSessionId !== resolver.sessionId) {
+    throw new Error("session id does not match its bound location scope");
+  }
+}
+
+export class SessionTreeLocationContext {
+  constructor({ sessionPathResolver, userId, sessionId }) {
+    this.sessionPathResolver = sessionPathResolver;
+    this.userId = text(userId);
+    this.sessionId = text(sessionId);
+    this.scopeId = "";
+    if (!this.sessionPathResolver || !this.userId || !this.sessionId) {
+      throw new TypeError(
+        "session tree location requires sessionPathResolver, userId and sessionId",
+      );
+    }
+    Object.freeze(this);
+  }
+
+  async locateSessionScope(userId, sessionId) {
+    assertBoundIdentity(this, userId, sessionId);
+    return this.sessionPathResolver.locateSessionScope(this.userId, this.sessionId);
+  }
+
+  async placeSessionScope(userId, { sessionId, parentSessionId }) {
+    assertBoundIdentity(this, userId, sessionId);
+    return this.sessionPathResolver.placeSessionScope(this.userId, {
+      sessionId: this.sessionId,
+      parentSessionId,
+    });
+  }
+
+  async commitSessionPlacement(userId, { sessionId, parentSessionId, caller }) {
+    assertBoundIdentity(this, userId, sessionId);
+    return this.sessionPathResolver.commitSessionPlacement(this.userId, {
+      sessionId: this.sessionId,
+      parentSessionId,
+      caller,
+    });
+  }
+}
+
 export class ScopedSessionLocationResolver {
   constructor({
     pathResolver,
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    scopeId = "",
-    relativeDir = "",
-    allowedRoot = "",
-  } = {}) {
+    userId,
+    sessionId,
+    parentSessionId,
+    scopeId,
+    relativeDir,
+    allowedRoot,
+  }) {
     this.pathResolver = pathResolver;
     this.userId = text(userId);
     this.sessionId = text(sessionId);
@@ -46,12 +98,13 @@ export class ScopedSessionLocationResolver {
       !this.pathResolver ||
       !this.userId ||
       !this.sessionId ||
+      !this.parentSessionId ||
       !this.scopeId ||
       !this.relativeDir ||
       !this.allowedRoot
     ) {
       throw new TypeError(
-        "scoped session location requires pathResolver, userId, sessionId, scopeId, relativeDir and allowedRoot",
+        "scoped session location requires pathResolver, userId, sessionId, parentSessionId, scopeId, relativeDir and allowedRoot",
       );
     }
     if (path.isAbsolute(this.relativeDir) || path.isAbsolute(this.allowedRoot)) {
@@ -74,78 +127,51 @@ export class ScopedSessionLocationResolver {
     Object.freeze(this);
   }
 
-  async resolveSessionScope(userId, sessionId, parentSessionId = "") {
-    this._assertIdentity(userId, sessionId);
-    const resolvedParentSessionId = text(parentSessionId);
-    if (this.parentSessionId && resolvedParentSessionId !== this.parentSessionId) {
-      throw new Error("scoped session parent does not match its execution scope");
-    }
-    return buildScope(this.sessionDir, resolvedParentSessionId);
+  async locateSessionScope(userId, sessionId) {
+    assertBoundIdentity(this, userId, sessionId);
+    return buildScope(this.sessionDir, this.parentSessionId, { indexed: false, registered: true });
   }
 
-  _assertIdentity(userId, sessionId) {
-    if (text(userId) !== this.userId) {
-      throw new Error("scoped session location user does not match its execution scope");
+  async placeSessionScope(userId, { sessionId, parentSessionId }) {
+    assertBoundIdentity(this, userId, sessionId);
+    if (parentSessionId !== this.parentSessionId) {
+      throw new Error("scoped session parent does not match its execution scope");
     }
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) {
-      throw new Error("scoped session location requires a sessionId");
-    }
-    if (this.sessionId && normalizedSessionId !== this.sessionId) {
-      throw new Error("scoped session id does not match its execution scope");
-    }
+    return buildScope(this.sessionDir, this.parentSessionId, { indexed: false, registered: true });
+  }
+
+  async commitSessionPlacement(userId, { sessionId, parentSessionId }) {
+    await this.placeSessionScope(userId, { sessionId, parentSessionId });
   }
 }
 
-export function createPersistenceContext({ locationResolver, metadataContributor = null } = {}) {
-  if (!locationResolver || !isFunction(locationResolver.resolveSessionScope)) {
+export function createPersistenceContext({ locationResolver }) {
+  if (
+    !isFunction(locationResolver?.locateSessionScope) ||
+    !isFunction(locationResolver?.placeSessionScope) ||
+    !isFunction(locationResolver?.commitSessionPlacement)
+  ) {
     throw new TypeError("persistence context requires a locationResolver");
   }
-  if (
-    !text(locationResolver?.userId) ||
-    !text(locationResolver?.sessionId) ||
-    !text(locationResolver?.scopeId)
-  ) {
-    throw new TypeError("persistence context requires a bound userId, sessionId and scopeId");
-  }
-  if (metadataContributor !== null && !isFunction(metadataContributor)) {
-    throw new TypeError("metadataContributor must be a function");
+  const scoped = locationResolver instanceof ScopedSessionLocationResolver;
+  if (!scoped && !(locationResolver instanceof SessionTreeLocationContext)) {
+    throw new TypeError("persistence context requires a session location implementation");
   }
   return Object.freeze({
     kind: SESSION_PERSISTENCE_SCOPE_KIND,
     version: SESSION_PERSISTENCE_SCOPE_VERSION,
-    scopeId: text(locationResolver?.scopeId),
-    userId: text(locationResolver?.userId),
-    sessionId: text(locationResolver?.sessionId),
-    parentSessionId: text(locationResolver?.parentSessionId),
+    scoped,
+    scopeId: locationResolver.scopeId,
+    userId: locationResolver.userId,
+    sessionId: locationResolver.sessionId,
     locationResolver,
-    metadataContributor,
   });
 }
 
-export function assertPersistenceContextIdentity(
-  context = null,
-  { userId = "", sessionId = "", parentSessionId = "", scopeId = "" } = {},
-) {
-  if (!context?.locationResolver) return null;
-  if (
-    context.kind !== SESSION_PERSISTENCE_SCOPE_KIND ||
-    Number(context.version) !== SESSION_PERSISTENCE_SCOPE_VERSION
-  ) {
-    throw new TypeError("invalid scoped session persistence context");
-  }
-  const expected = {
-    userId: text(userId),
-    sessionId: text(sessionId),
-    parentSessionId: text(parentSessionId),
-    scopeId: text(scopeId),
-  };
-  for (const key of Object.keys(expected)) {
-    if (expected[key] && text(context[key]) !== expected[key]) {
-      throw new Error(`scoped session persistence ${key} does not match its execution scope`);
-    }
-  }
-  return context;
+export function createSessionTreePersistenceContext({ sessionPathResolver, userId, sessionId }) {
+  return createPersistenceContext({
+    locationResolver: new SessionTreeLocationContext({ sessionPathResolver, userId, sessionId }),
+  });
 }
 
 export { buildScope as buildSessionLocationScope };

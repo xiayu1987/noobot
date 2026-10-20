@@ -52,6 +52,9 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
       identities.push(identity);
       return { recorded: identity.eventIds.includes(envelope.identity.eventId) };
     },
+    async compactAuthorityEvents() {
+      return { compacted: false, removed: 0 };
+    },
     async acknowledgeAuthorityEvents(identity) {
       identities.push(identity);
       delivered = identity.acknowledgements.some(
@@ -73,16 +76,12 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   const result = await dispatchAuthorityEvents({
     userId: "u1",
     sessionId: "child-session",
-    parentSessionId: "parent-session",
+    persistenceScope: null,
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
   assert.equal(
     identities.every((identity) => identity.sessionId === "child-session"),
-    true,
-  );
-  assert.equal(
-    identities.every((identity) => identity.parentSessionId === "parent-session"),
     true,
   );
   assert.equal(events.length, 1);
@@ -125,7 +124,11 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
     },
   });
 
-  const result = await dispatchAuthorityEvents({ userId: "user-1", sessionId: "session-invalid" });
+  const result = await dispatchAuthorityEvents({
+    userId: "user-1",
+    sessionId: "session-invalid",
+    persistenceScope: null,
+  });
 
   assert.equal(result.dispatched, false);
   assert.equal(result.reason, "invalid_authority_event_envelope");

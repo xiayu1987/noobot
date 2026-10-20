@@ -22,7 +22,6 @@ async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, message
   const sessionSource = await engine.session.getSessionContextSource({
     userId: identity.userId,
     sessionId: identity.sessionId,
-    parentSessionId: identity.parentSessionId,
   });
   return restoreSnapshotUserAttachmentFactsFromSessionAuthority(
     messageBlocks,

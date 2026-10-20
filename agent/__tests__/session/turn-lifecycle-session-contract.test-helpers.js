@@ -46,16 +46,16 @@ function harness(initial = {}) {
   });
   let saveFailure = null;
   const repo = {
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
     },
     async findById() {
       return normalizeSessionEntity(structuredClone(persisted), { now });
     },
-    async save(_u, next, _p, { expectedAggregateVersion } = {}) {
+    async save(_u, next, { expectedAggregateVersion } = {}) {
       assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
       if (saveFailure) {
         const error = saveFailure;
@@ -94,10 +94,13 @@ function newSessionHarness() {
   const sessionDir = createSessionDir();
   let persisted = null;
   const repo = {
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
-    async resolveSessionScope() {
+    async withSessionPlacementMutation(_u, _placement, operation) {
+      return operation(await this.locateSessionScope());
+    },
+    async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
     },
     async isSessionDeleted() {
@@ -119,7 +122,7 @@ function newSessionHarness() {
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted), { now }) : null;
     },
-    async save(_u, next, _p, { expectedAggregateVersion, createOnly } = {}) {
+    async save(_u, next, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
       else assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
       persisted = structuredClone(normalizeSessionEntity(next, { now }));

@@ -64,13 +64,12 @@ function prepareAttachmentBinding({
 export async function bindTurnAttachments({
   userId,
   sessionId,
-  parentSessionId = "",
   turnScopeId = "",
   messageUid = "",
   attachments = [],
   expectedAggregateVersion = null,
   commandId = "",
-  persistenceContext = null,
+  persistenceContext,
 } = {}) {
   const { identity, canonicalAttachments, normalizedExpectedVersion, requestHash } =
     prepareAttachmentBinding({
@@ -82,16 +81,14 @@ export async function bindTurnAttachments({
       attachments,
       expectedAggregateVersion,
     });
-  return this._withSessionMutation(
+  return this.sessionRepo.withSessionMutation(
     identity.userId,
     identity.sessionId,
-    async () => {
-      const { session, resolvedParentSessionId } = await this._findSession(
-        identity.userId,
-        identity.sessionId,
-        parentSessionId,
+    async (scope) => {
+      const session = await this.sessionRepo.findById(identity.userId, identity.sessionId, {
         persistenceContext,
-      );
+      });
+      const resolvedParentSessionId = scope.resolvedParentSessionId;
       if (!session) throw Object.assign(new Error("session not found"), { statusCode: 404 });
       const idempotency = decideCommandIdempotency({
         commandId: identity.commandId,
@@ -172,7 +169,7 @@ export async function bindTurnAttachments({
         },
       );
       session.updatedAt = this.now();
-      await this.sessionRepo.save(identity.userId, session, resolvedParentSessionId, {
+      await this.sessionRepo.save(identity.userId, session, {
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
@@ -195,7 +192,6 @@ export async function bindTurnAttachments({
         deduplicated: false,
       };
     },
-    parentSessionId,
-    persistenceContext,
+    { persistenceContext },
   );
 }

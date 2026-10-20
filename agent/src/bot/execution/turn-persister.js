@@ -5,7 +5,7 @@
  */
 
 import { isPlainObject, text } from "@noobot/shared/value";
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import {
   readContextMessageField,
   resolveContextMessageDialogProcessId,
@@ -124,7 +124,6 @@ function normalizeSessionTurnInput(input = {}) {
     toolTimeline: valueOrDefault(input.toolTimeline, []),
     dialogProcessId,
     parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
-    parentSessionId: normalizeParentSessionId(valueOrDefault(input.parentSessionId, "")),
     turnScopeId: text(valueOrDefault(input.turnScopeId, "")),
     injectedMessage: input.injectedMessage === true,
     noobotInternalMessageType: valueOrDefault(input.noobotInternalMessageType, ""),
@@ -146,7 +145,7 @@ function normalizeSessionTurnInput(input = {}) {
     turnTimingThinkingFinishedAt: normalizeIsoTime(
       valueOrDefault(input.turnTimingThinkingFinishedAt, thinkingFinishedAt),
     ),
-    persistenceContext: valueOrDefault(input.persistenceContext, null),
+    persistenceScope: input.persistenceScope,
   };
 }
 
@@ -161,7 +160,6 @@ function buildFullTurnPayload(input) {
     type: stringValue(input.type),
     userName: stringValue(input.userName).trim(),
     sessionId: stringValue(input.sessionId).trim(),
-    parentSessionId: input.parentSessionId,
     taskId: valueOrDefault(input.taskId, ""),
     taskStatus: valueOrDefault(input.taskStatus, ""),
     dialogProcessId: input.dialogProcessId,
@@ -218,27 +216,25 @@ async function appendSessionTurnDiagnostics(session, input, fullTurnPayload) {
   await session.appendExecutionLog({
     userId: input.userId,
     sessionId: input.sessionId,
-    parentSessionId: input.parentSessionId,
     dialogProcessId: input.dialogProcessId,
     turnScopeId: input.turnScopeId,
     event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
     category: MESSAGE_ROLE.SYSTEM,
     type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
     data: summarizeSessionTurnPayload(fullTurnPayload),
-    persistenceContext: input.persistenceContext,
+    persistenceScope: input.persistenceScope,
   });
   if (!hasTurnTiming(input)) return;
   await session.appendExecutionLog({
     userId: input.userId,
     sessionId: input.sessionId,
-    parentSessionId: input.parentSessionId,
     dialogProcessId: input.dialogProcessId,
     turnScopeId: input.turnScopeId,
     event: "debug_turn_timing_append",
     category: MESSAGE_ROLE.SYSTEM,
     type: "system",
     data: buildTurnTimingDiagnostic(input),
-    persistenceContext: input.persistenceContext,
+    persistenceScope: input.persistenceScope,
   });
 }
 
@@ -303,7 +299,6 @@ function normalizeAgentMessagesInput(input = {}) {
   return {
     userId: input.userId,
     sessionId: input.sessionId,
-    parentSessionId: valueOrDefault(input.parentSessionId, ""),
     messages: valueOrDefault(input.messages, []),
     dialogProcessId: valueOrDefault(input.dialogProcessId, ""),
     parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
@@ -311,7 +306,7 @@ function normalizeAgentMessagesInput(input = {}) {
     eventListener: input.eventListener,
     thinkingStartedAt: normalizeIsoTime(valueOrDefault(input.thinkingStartedAt, "")),
     thinkingFinishedAt: normalizeIsoTime(valueOrDefault(input.thinkingFinishedAt, "")),
-    persistenceContext: valueOrDefault(input.persistenceContext, null),
+    persistenceScope: input.persistenceScope,
   };
 }
 
@@ -329,7 +324,6 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
       : {}),
     content: stringValue(messageItem.content),
     type: stringValue(messageItem.type),
-    parentSessionId: input.parentSessionId,
     dialogProcessId: firstTruthyValue([
       resolveContextMessageDialogProcessId(messageItem),
       normalizeDialogProcessId(input.dialogProcessId),
@@ -371,7 +365,7 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     turnTimingThinkingStartedAt: includeTurnTiming ? input.thinkingStartedAt : "",
     turnTimingThinkingFinishedAt: includeTurnTiming ? input.thinkingFinishedAt : "",
     eventListener: input.eventListener,
-    persistenceContext: input.persistenceContext,
+    persistenceScope: input.persistenceScope,
   };
 }
 
@@ -408,9 +402,8 @@ export class SessionTurnPersister {
     const appendResult = await this.session.appendTurns({
       userId: input.userId,
       sessionId: input.sessionId,
-      parentSessionId: normalizeParentSessionId(input.parentSessionId),
       turns: turnPayloads,
-      persistenceContext: input.persistenceContext,
+      persistenceScope: input.persistenceScope,
     });
     if (!appendResult.appended) return appendResult.turns;
     for (const turnPayload of turnPayloads) {

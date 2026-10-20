@@ -336,6 +336,7 @@ function bindPresentation(runtime) {
   bindAssistantMessageEventStream(runtime, {
     messageId: "message-test",
     presentationMessageId: "presentation-test",
+    parentSessionId: "",
   });
 }
 

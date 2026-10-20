@@ -8,7 +8,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/index.js";
-import { createTestSessionServices } from "../helpers/session-services.js";
+import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import {
   canonicalMessages,
   withTempWorkspace,
@@ -60,9 +60,16 @@ test("session detail derives transfer envelopes from the canonical Session", asy
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
 
-    const session = await repository.findById(userId, sessionId, "");
+    const session = await repository.findById(userId, sessionId, {
+      persistenceContext: repository.treePersistenceContext(userId, sessionId),
+    });
     session.messages = canonicalMessages(
       [
         {
@@ -73,10 +80,18 @@ test("session detail derives transfer envelopes from the canonical Session", asy
       ],
       "canonical_display",
     );
-    await repository.save(userId, applySessionMessageFacts(session), "");
-    await repository.ensureSessionDisplaySummary(userId, sessionId, "");
+    await repository.save(userId, applySessionMessageFacts(session), {
+      persistenceContext: repository.treePersistenceContext(userId, session.sessionId),
+    });
+    await repository.ensureSessionDisplaySummary(userId, sessionId, {
+      persistenceContext: repository.treePersistenceContext(userId, sessionId),
+    });
 
-    const scope = await repository.resolveSessionScope(userId, sessionId, "");
+    const scope = await repository.requireSessionScope(
+      userId,
+      sessionId,
+      repository.treePersistenceContext(userId, sessionId),
+    );
     const summaryFile = path.join(scope.sessionDir, "session-summary.json");
     const staleSummary = JSON.parse(await readFile(summaryFile, "utf8"));
     staleSummary.schemaVersion = SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION - 1;
@@ -122,11 +137,24 @@ test("failed Session repair projects an unavailable list item", async () => {
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
-    await runtime.sessionCrudService.ensureSession(userId, sessionId, "", SESSION_CALLER.USER);
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
 
-    const scope = await repository.resolveSessionScope(userId, sessionId, "");
+    const scope = await repository.requireSessionScope(
+      userId,
+      sessionId,
+      repository.treePersistenceContext(userId, sessionId),
+    );
     await writeFile(scope.sessionFile, "{invalid-json", "utf8");
-    await assert.rejects(repository.readSessionDisplaySummary(userId, sessionId, ""));
+    await assert.rejects(
+      repository.readSessionDisplaySummary(userId, sessionId, {
+        persistenceContext: repository.treePersistenceContext(userId, sessionId),
+      }),
+    );
 
     const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
     const unavailable = summaries.find((item) => item.sessionId === sessionId);

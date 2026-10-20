@@ -11,7 +11,8 @@ import { createRunner, createTestAgentExecutionScope } from "./runner-bot-hook.f
 test("SessionExecutionRunner does not let currentSessionModelAlias override selectedModel", async () => {
   let capturedRunConfig = null;
   const runner = createRunner({
-    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+    initializeRunSessionRuntime: async ({ eventListener = null, parentSessionId } = {}) => ({
+      parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp1",
       sessionLoadState: "created",
@@ -46,7 +47,8 @@ test("SessionExecutionRunner does not let currentSessionModelAlias override sele
 test("SessionExecutionRunner restores currentSessionModelAlias when selectedModel is absent", async () => {
   let capturedRunConfig = null;
   const runner = createRunner({
-    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+    initializeRunSessionRuntime: async ({ eventListener = null, parentSessionId } = {}) => ({
+      parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp1",
       sessionLoadState: "loaded",

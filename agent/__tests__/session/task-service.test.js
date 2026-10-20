@@ -10,12 +10,12 @@ import { TaskService } from "../../src/session/services/task-service.js";
 function createRepos({ session = null, bundle = { tasks: [], currentTaskId: "" } } = {}) {
   const calls = { saved: [], savedBatch: [], savedSessions: [], mutations: 0 };
   const sessionRepo = {
-    async resolveSessionScope(_userId, _sessionId, parentSessionId) {
-      return { resolvedParentSessionId: parentSessionId || "resolved-parent" };
+    async locateSessionScope() {
+      return { resolvedParentSessionId: "", indexed: true, registered: true };
     },
-    async withSessionMutation(_userId, _sessionId, _parentSessionId, operation) {
+    async withSessionMutation(_userId, _sessionId, operation) {
       calls.mutations += 1;
-      return operation();
+      return operation(await this.locateSessionScope());
     },
     async findById() {
       return session;
@@ -31,7 +31,7 @@ function createRepos({ session = null, bundle = { tasks: [], currentTaskId: "" }
     async save(_userId, _sessionId, task) {
       calls.saved.push(task);
     },
-    async saveBatch(_userId, _sessionId, tasks, _parentSessionId, currentTaskId) {
+    async saveBatch(_userId, _sessionId, tasks, { currentTaskId } = {}) {
       calls.savedBatch.push({ tasks, currentTaskId });
     },
   };

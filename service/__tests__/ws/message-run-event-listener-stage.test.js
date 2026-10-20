@@ -35,7 +35,10 @@ function createListener(dispatchResult, runHandle = {}) {
 function commitAuthorityEvent(eventListener) {
   return eventListener.onEvent({
     event: AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED,
-    data: { envelope: createTestLifecycleEnvelope({ eventId: "evt-stage-1" }) },
+    data: {
+      envelope: createTestLifecycleEnvelope({ eventId: "evt-stage-1" }),
+      persistenceScope: null,
+    },
   });
 }
 
@@ -104,7 +107,7 @@ test("transient message events bypass the authority dispatcher", async () => {
   });
   const result = await eventListener.onEvent({
     event: AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED,
-    data: { envelope },
+    data: { envelope, persistenceScope: null },
   });
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
   assert.deepEqual(sent, [MESSAGE_EVENT_WIRE_EVENT]);

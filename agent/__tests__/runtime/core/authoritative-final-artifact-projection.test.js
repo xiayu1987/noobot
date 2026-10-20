@@ -49,6 +49,7 @@ test("authoritative final event owns generated attachment envelopes before persi
   bindAssistantMessageEventStream(runtime, {
     messageId: "message-event-1",
     presentationMessageId: "presentation-1",
+    parentSessionId: "",
   });
   beginAssistantMessageEventStream(runtime);
 
@@ -186,6 +187,7 @@ test("authoritative final completion retains classified checkpoint call-result p
   bindAssistantMessageEventStream(runtime, {
     messageId: "final-message",
     presentationMessageId: "final-presentation",
+    parentSessionId: "",
   });
   beginAssistantMessageEventStream(runtime);
   runtime.currentTurnMessages = createCurrentTurnMessagesStore([

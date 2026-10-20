@@ -30,6 +30,7 @@ function createContext(
   return buildAgentContext(basePath, "u-risk", {
     runtime: {
       systemRuntime: {
+        persistenceScope: null,
         userId: "u-risk",
         sessionId: "s-risk",
         rootSessionId: "s-risk",
@@ -105,7 +106,7 @@ test("host file risk uses the canonical resource path behind directory symlinks"
             executionIsolation: { mode: "host" },
           },
         },
-        systemRuntime: { isSuperUser: true },
+        systemRuntime: { persistenceScope: null, isSuperUser: true },
       },
     });
     const resolution = await resolveAuthorizedUserWorkspaceFilePath({

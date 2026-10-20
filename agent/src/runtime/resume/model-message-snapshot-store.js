@@ -34,7 +34,6 @@ async function resolveSnapshotLocation(identity = {}, globalConfig = {}) {
     workspaceRoot,
     userId: identity.userId,
     sessionId: identity.sessionId,
-    parentSessionId: identity.parentSessionId,
   });
   if (!location.sessionDir) return location;
   const fileName = `${snapshotFileSegment(identity.dialogProcessId)}__${snapshotFileSegment(identity.turnScopeId)}.json`;

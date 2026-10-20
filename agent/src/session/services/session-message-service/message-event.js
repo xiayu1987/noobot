@@ -14,7 +14,6 @@ import { text } from "@noobot/shared/value";
 export async function commitMessageEvent({
   userId,
   sessionId,
-  parentSessionId = "",
   turnScopeId,
   messageId,
   executionId = "",
@@ -23,7 +22,7 @@ export async function commitMessageEvent({
   correlationId = "",
   producer = { type: "agent", id: "message-runtime" },
   payload = {},
-  persistenceContext = null,
+  persistenceContext,
 } = {}) {
   const identity = {
     userId: text(userId),
@@ -39,7 +38,6 @@ export async function commitMessageEvent({
   return this.commitAuthorityEvent({
     userId: identity.userId,
     sessionId: identity.sessionId,
-    parentSessionId,
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
     identity: {
       eventType: MESSAGE_EVENT_WIRE_EVENT,

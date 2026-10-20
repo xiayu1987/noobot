@@ -23,6 +23,10 @@ import {
   readJournalLines,
 } from "./scoped-session-repositories.fixtures.js";
 
+const treeContext = (sessionRepo, sessionId) => ({
+  persistenceContext: sessionRepo.treePersistenceContext("alice", sessionId),
+});
+
 test("protocol repair moves v10 journal snapshot indexes into the manifest", async () => {
   const harness = buildHarness();
   const { sessionRepo } = await harness.setup();
@@ -48,6 +52,7 @@ test("protocol repair moves v10 journal snapshot indexes into the manifest", asy
       "alice",
       applySessionMessageFacts({
         ...createTestSessionRequiredFields(),
+        parentSessionId: "",
         sessionId,
         aggregateVersion: 0,
         messages: [
@@ -58,8 +63,13 @@ test("protocol repair moves v10 journal snapshot indexes into the manifest", asy
           active: { dialogProcessId: "dialog-active", turnScopeId: "active", receipts: [receipt] },
         },
       }),
+      { createOnly: true, ...treeContext(sessionRepo, sessionId) },
     );
-    const scope = await sessionRepo.resolveSessionScope("alice", sessionId, "");
+    const scope = await sessionRepo.requireSessionScope(
+      "alice",
+      sessionId,
+      treeContext(sessionRepo, sessionId).persistenceContext,
+    );
     const files = buildSessionArtifactFileMap(scope.sessionDir);
     const current = await readJson(files.session);
     const [turn] = current.turnOrder;
@@ -102,7 +112,11 @@ test("protocol repair moves v10 journal snapshot indexes into the manifest", asy
       "utf8",
     );
 
-    await sessionRepo.repairSessionProtocol("alice", sessionId);
+    await sessionRepo.repairSessionProtocol(
+      "alice",
+      sessionId,
+      treeContext(sessionRepo, sessionId),
+    );
 
     const migrated = await readJson(files.session);
     assert.equal(migrated.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
@@ -149,10 +163,12 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
       "alice",
       applySessionMessageFacts({
         ...createTestSessionRequiredFields(),
+        parentSessionId: "",
         sessionId,
         aggregateVersion: 0,
         messages: [keep, replaced],
       }),
+      { createOnly: true, ...treeContext(sessionRepo, sessionId) },
     );
 
     const replacement = (suffix) => ({
@@ -167,23 +183,31 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
         "alice",
         applySessionMessageFacts({
           ...createTestSessionRequiredFields(),
+          parentSessionId: "",
           sessionId,
           aggregateVersion: 0,
           messages: [keep, replacement("a")],
         }),
+        treeContext(sessionRepo, sessionId),
       ),
       sessionRepo.save(
         "alice",
         applySessionMessageFacts({
           ...createTestSessionRequiredFields(),
+          parentSessionId: "",
           sessionId,
           aggregateVersion: 0,
           messages: [keep, replacement("b")],
         }),
+        treeContext(sessionRepo, sessionId),
       ),
     ]);
 
-    const scope = await sessionRepo.resolveSessionScope("alice", sessionId, "");
+    const scope = await sessionRepo.requireSessionScope(
+      "alice",
+      sessionId,
+      treeContext(sessionRepo, sessionId).persistenceContext,
+    );
     const files = buildSessionArtifactFileMap(scope.sessionDir);
     const manifest = await readJson(files.session);
     assert.deepEqual(
@@ -216,52 +240,67 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
   }
 });
 
-test("session save rejects entity parentSessionId that conflicts with the explicit scope", async () => {
+test("session save rejects entity parentSessionId that conflicts with the located scope", async () => {
   const harness = buildHarness();
-  const { root, sessionRepo } = await harness.setup();
-  const sessionFile = (sessionId) =>
-    path.join(root, `alice/runtime/session/${sessionId}/session.json`);
+  const { sessionRepo } = await harness.setup();
+  const childEntity = (parentSessionId) => ({
+    ...createTestSessionRequiredFields(),
+    sessionId: "child",
+    parentSessionId,
+    aggregateVersion: 0,
+  });
   try {
-    for (const explicitParent of ["p2", ""]) {
-      await assert.rejects(
-        sessionRepo.save(
-          "alice",
-          {
-            ...createTestSessionRequiredFields(),
-            sessionId: "child",
-            parentSessionId: "p1",
-            aggregateVersion: 0,
-          },
-          explicitParent,
-        ),
-        { code: "SESSION_PARENT_SESSION_SCOPE_CONFLICT", statusCode: 409 },
-      );
-    }
-    assert.equal(await sessionRepo.storageService.exists(sessionFile("child")), false);
     await sessionRepo.save(
       "alice",
       {
         ...createTestSessionRequiredFields(),
-        sessionId: "child",
-        parentSessionId: "p1",
+        sessionId: "p1",
+        parentSessionId: "",
         aggregateVersion: 0,
       },
-      "p1",
+      { createOnly: true, ...treeContext(sessionRepo, "p1") },
     );
-    assert.equal((await readJson(sessionFile("child"))).parentSessionId, "p1");
+    await sessionRepo.save("alice", childEntity("p1"), {
+      createOnly: true,
+      ...treeContext(sessionRepo, "child"),
+    });
+    for (const conflictingParent of ["p2", ""]) {
+      await assert.rejects(
+        sessionRepo.save(
+          "alice",
+          childEntity(conflictingParent),
+          treeContext(sessionRepo, "child"),
+        ),
+        { code: "SESSION_SCOPE_IDENTITY_CONFLICT", statusCode: 409 },
+      );
+    }
+    const childScope = await sessionRepo.requireSessionScope(
+      "alice",
+      "child",
+      treeContext(sessionRepo, "child").persistenceContext,
+    );
+    assert.equal(childScope.resolvedParentSessionId, "p1");
+    assert.equal((await readJson(childScope.sessionFile)).parentSessionId, "p1");
   } finally {
     await harness.cleanup();
   }
 });
 
-test("protocol repair of a missing Session reports not found without recording a repair failure", async () => {
+test("protocol repair of an unregistered Session reports not found without recording a repair failure", async () => {
   const harness = buildHarness();
   const { sessionRepo } = await harness.setup();
   try {
-    await assert.rejects(sessionRepo.repairSessionProtocol("alice", "missing-session"), {
-      code: "SESSION_ARTIFACT_NOT_FOUND",
-      statusCode: 404,
-    });
+    await assert.rejects(
+      sessionRepo.repairSessionProtocol(
+        "alice",
+        "missing-session",
+        treeContext(sessionRepo, "missing-session"),
+      ),
+      {
+        code: "SESSION_NOT_FOUND",
+        statusCode: 404,
+      },
+    );
     const lifecycle = await sessionRepo._readSessionLifecycleRecord("alice", "missing-session");
     assert.notEqual(lifecycle?.repair?.status, "failed");
   } finally {

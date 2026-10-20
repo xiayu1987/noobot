@@ -5,15 +5,8 @@
  */
 import { text } from "@noobot/shared/value";
 
-export function createContextScope({
-  sessionId = "",
-  parentSessionId = "",
-  dialogProcessId = "",
-  turnScopeId = "",
-} = {}) {
+export function createContextScope({ dialogProcessId, turnScopeId }) {
   return Object.freeze({
-    sessionId: text(sessionId),
-    parentSessionId: text(parentSessionId),
     dialogProcessId: text(dialogProcessId),
     turnScopeId: text(turnScopeId),
   });

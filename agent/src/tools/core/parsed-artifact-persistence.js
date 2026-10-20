@@ -17,7 +17,6 @@ import {
   formatAttachmentIdentityRef,
 } from "@noobot/attachment-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   getTransferAttachments,
   materializeTextForToolResult,
@@ -86,11 +85,10 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
   if (!isFunction(runtime.sessionManager?.commitAuthorityEvent)) {
     throw new Error("attachment authority event commit port is unavailable");
   }
-  const persistenceScope = system.persistenceScope || null;
+  const persistenceScope = system.persistenceScope;
   const committed = await runtime.sessionManager.commitAuthorityEvent({
     userId: text(system.userId),
     sessionId: text(system.sessionId),
-    parentSessionId: normalizeParentSessionId(system.parentSessionId),
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
     identity: {
       eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,

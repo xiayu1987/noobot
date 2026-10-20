@@ -36,6 +36,7 @@ function bindTestTurn(runtime = {}, suffix = "1") {
   bindAssistantMessageEventStream(runtime, {
     messageId: `turn-message-${suffix}`,
     presentationMessageId: `presentation-${suffix}`,
+    parentSessionId: "",
   });
   return runtime;
 }

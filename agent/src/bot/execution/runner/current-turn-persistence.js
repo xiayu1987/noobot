@@ -92,12 +92,11 @@ export function bindCurrentTurnPersistence({
   commitSummaryCheckpoint,
   userId,
   sessionId,
-  parentSessionId,
   dialogProcessId,
   parentDialogProcessId,
   turnScopeId,
   eventListener,
-  persistenceContext,
+  persistenceScope,
 }) {
   let persistenceTail = Promise.resolve();
   let batchDepth = 0;
@@ -124,13 +123,12 @@ export function bindCurrentTurnPersistence({
       const persistedMessages = await appendAgentMessages({
         userId,
         sessionId,
-        parentSessionId,
         messages: messagesToPersist,
         dialogProcessId,
         parentDialogProcessId,
         turnScopeId,
         eventListener,
-        persistenceContext,
+        persistenceScope,
       });
       const activityMessages = messagesToPersist.filter(
         (item = {}) =>
@@ -214,12 +212,11 @@ export function bindCurrentTurnPersistence({
       runtime: dispatchRuntime,
       userId,
       sessionId,
-      parentSessionId,
       dialogProcessId,
       parentDialogProcessId,
       turnScopeId,
       eventListener,
-      persistenceContext,
+      persistenceScope,
       ...payload,
     });
 }

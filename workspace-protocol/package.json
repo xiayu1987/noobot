@@ -13,6 +13,7 @@
     "./layout-migration": "./src/layout-migration.js",
     "./session-tree": "./src/session-tree.js",
     "./session-tombstone": "./src/session-tombstone.js",
+    "./session-store": "./src/session-store.js",
     "./package.json": "./package.json"
   },
   "scripts": {

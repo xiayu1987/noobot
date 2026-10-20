@@ -58,7 +58,7 @@ export async function initializeSessionRun({
   runConfig,
   requestedTurnScopeId,
   parentAsyncResultContainer,
-  persistenceContext,
+  persistenceScope,
 }) {
   const normalizedMessage = normalizeRunMessage(message);
   validateRunInput({ userId, sessionId, caller, parentSessionId });
@@ -82,18 +82,11 @@ export async function initializeSessionRun({
     await assertReusedUserTurnIdentity({
       userId,
       sessionId,
-      parentSessionId,
       turnScopeId: normalizedRequestTurnScopeId,
       dialogProcessId: text(requestedDialogProcessId),
-      ...(persistenceContext ? { persistenceContext } : {}),
+      persistenceScope,
     });
   }
-  const resolvedParentAsyncResultContainer = ensureParentAsyncResultContainer({
-    parentAsyncResultContainer,
-    caller,
-    parentSessionId,
-    parentDialogProcessId,
-  });
   const initialized = await initializeRunSessionRuntime({
     userId,
     sessionId,
@@ -103,10 +96,11 @@ export async function initializeSessionRun({
     dialogProcessId: requestedDialogProcessId,
     turnScopeId: normalizedRequestTurnScopeId,
     thinkingStartedAt: text(runConfig?.thinkingStartedAt),
-    persistenceContext,
+    persistenceScope,
   });
   const {
     usedSessionId,
+    parentSessionId: resolvedParentSessionId,
     dialogProcessId,
     sessionLoadState,
     userConfig,
@@ -114,6 +108,12 @@ export async function initializeSessionRun({
     sessionDir,
     runtimeEventListener,
   } = initialized;
+  const resolvedParentAsyncResultContainer = ensureParentAsyncResultContainer({
+    parentAsyncResultContainer,
+    caller,
+    parentSessionId: resolvedParentSessionId,
+    parentDialogProcessId,
+  });
   const requestRunConfig = {
     ...(isPlainObject(runConfig) ? runConfig : {}),
     turnScopeId: normalizedRequestTurnScopeId,
@@ -161,7 +161,13 @@ export async function initializeSessionRun({
         : null,
   };
   const botHookBase = withBotHookRuntimeMeta(
-    { userId, sessionId: usedSessionId, parentSessionId, dialogProcessId, caller },
+    {
+      userId,
+      sessionId: usedSessionId,
+      parentSessionId: resolvedParentSessionId,
+      dialogProcessId,
+      caller,
+    },
     { runConfig: resolvedRunConfig },
   );
   for (const record of resolvedRunConfig.pluginLifecycleEvents || []) {
@@ -194,6 +200,7 @@ export async function initializeSessionRun({
     normalizedMessage,
     resolvedParentAsyncResultContainer,
     usedSessionId,
+    parentSessionId: resolvedParentSessionId,
     dialogProcessId,
     sessionLoadState,
     userConfig,

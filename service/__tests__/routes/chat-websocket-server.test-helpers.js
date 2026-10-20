@@ -12,6 +12,7 @@ import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  compactAuthorityEventOutbox,
   createEventEnvelope,
   listPendingAuthorityEvents,
   normalizeAuthorityEventOutbox,
@@ -296,6 +297,13 @@ export async function startServerWithWs({
           delivered += 1;
         }
         return { acknowledged: true, delivered };
+      }),
+    compactAuthorityEvents:
+      suppliedBot.compactAuthorityEvents ||
+      (async ({ retainDeliveredAfter }) => {
+        const result = compactAuthorityEventOutbox(authorityEventOutbox, { retainDeliveredAfter });
+        authorityEventOutbox = result.outbox;
+        return { compacted: result.compacted, removed: result.removed };
       }),
     commitTestAuthorityEvent: async ({
       family,

@@ -12,6 +12,7 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { DETACHED_REQUEST_METADATA } from "./detached-subsession-runner.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 test("SessionExecutionEngine forwards the authoritative dialog identity to runtime initialization", async () => {
   const engine = new SessionExecutionEngine({});
@@ -33,9 +34,8 @@ test("SessionExecutionEngine forwards the authoritative dialog identity to runti
   assert.equal(captured.dialogProcessId, "authoritative-dialog");
 });
 
-test("SessionExecutionEngine preserves persistence context and cross-layer scope", async () => {
+test("SessionExecutionEngine forwards only the cross-layer persistence scope", async () => {
   const engine = new SessionExecutionEngine({});
-  const persistenceContext = { kind: "trusted-context" };
   const persistenceScope = { scopeId: "agent:child" };
   const userInterjectionPort = {
     consume: async () => [],
@@ -59,17 +59,21 @@ test("SessionExecutionEngine preserves persistence context and cross-layer scope
     },
   };
 
-  await engine.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    message: "hello",
-    persistenceContext,
-    persistenceScope,
-    turnAcceptance,
-    userInterjectionPort,
-  });
+  await engine.runSession(
+    createTestSessionRunPayload({
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "",
+      message: "hello",
+      turnScopeId: "turn-1",
+      persistenceScope,
+      turnAcceptance,
+      userInterjectionPort,
+    }),
+  );
 
-  assert.equal(captured.persistenceContext, persistenceContext);
+  assert.equal(Object.hasOwn(captured, "persistenceContext"), false);
+  assert.equal(captured.parentSessionId, "");
   assert.equal(captured.persistenceScope, persistenceScope);
   assert.equal(captured.turnAcceptance, turnAcceptance);
   assert.equal(captured.userInterjectionPort, userInterjectionPort);
@@ -135,9 +139,7 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
     },
     session: {
       async appendExecutionLog() {},
-      createScopedPersistenceContext() {
-        return Object.freeze({ marker: "scoped" });
-      },
+      async writeSessionMetadata() {},
       async applyTurnLifecycleEvent(payload = {}) {
         lifecycleSequence += 1;
         const envelope = { ...payload, revision: lifecycleSequence, sequence: lifecycleSequence };

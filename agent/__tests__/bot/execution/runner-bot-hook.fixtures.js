@@ -20,6 +20,15 @@ import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../../helpers/session-message-facts.js";
+import {
+  TEST_ACCEPTED_DIALOG_PROCESS_ID,
+  createTestSessionRunPayload,
+} from "../../helpers/session-run-payload.js";
+
+const DEFAULT_ACCEPTED_RECEIPT = Object.freeze({
+  dialogProcessId: TEST_ACCEPTED_DIALOG_PROCESS_ID,
+  committedEventPublished: false,
+});
 
 export const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
 
@@ -62,7 +71,6 @@ export function createCanonicalHandledResult(context = {}, output = "") {
 export function persistedUserMessage({
   userId,
   sessionId,
-  parentSessionId = "",
   turnScopeId,
   dialogProcessId,
   attachments = [],
@@ -76,7 +84,7 @@ export function persistedUserMessage({
     content: "persisted",
     userName: userId,
     sessionId,
-    parentSessionId,
+    parentSessionId: "",
     dialogProcessId,
     turnScopeId,
     messageOrigin: "natural",
@@ -97,9 +105,11 @@ export function createRunner({
     agentContext: createTestAgentExecutionScope(createTestRuntimeContext()),
     userMessageAttachments: [],
   }),
-  initializeRunSessionRuntime = async ({ eventListener = null } = {}) => ({
+
+  initializeRunSessionRuntime = async ({ eventListener = null, parentSessionId } = {}) => ({
     usedSessionId: "s1",
-    dialogProcessId: "dp1",
+    parentSessionId,
+    dialogProcessId: TEST_ACCEPTED_DIALOG_PROCESS_ID,
     sessionLoadState: "created",
     userConfig: {},
     currentSessionModelAlias: "",
@@ -117,7 +127,6 @@ export function createRunner({
   getSessionTurns = async () => [],
   bindSessionTurnAttachments = async () => ({}),
   assertReusedUserTurnIdentity = async () => ({}),
-  assertPersistenceContextIdentity = () => {},
   finalizeRunSession = async () => ({ answer: "ok" }),
   saveExecutionReport = async () => {},
   getExecutionTurnLogs = async () => [],
@@ -125,11 +134,11 @@ export function createRunner({
 } = {}) {
   let authorityEventSequence = 0;
   const acceptedUserMessages = new Map();
-  const acceptRequest = (request = {}, identity = {}) => {
+  const acceptRequest = (request, receipt = DEFAULT_ACCEPTED_RECEIPT) => {
     const turnScopeId = text(request.turnScopeId);
     const runConfig = createAcceptedRunIdentity(turnScopeId, request.runConfig);
-    const sessionId = text(identity.sessionId) || "s1";
-    const dialogProcessId = text(identity.dialogProcessId) || "dp1";
+    const { sessionId } = request;
+    const { dialogProcessId } = receipt;
     const turnIdentity = turnScopeId.replace(/[^a-zA-Z0-9_-]/g, "_");
     const userMessage = {
       messageUid: `sm_test_${turnIdentity}`,
@@ -139,7 +148,7 @@ export function createRunner({
       content: request.message,
       userName: request.userId,
       sessionId,
-      parentSessionId: request.parentSessionId || "",
+      parentSessionId: request.parentSessionId,
       dialogProcessId,
       turnScopeId,
       messageOrigin: "natural",
@@ -147,7 +156,7 @@ export function createRunner({
       attachments: [],
     };
     acceptedUserMessages.set(turnScopeId, userMessage);
-    return {
+    return createTestSessionRunPayload({
       ...request,
       turnScopeId,
       runConfig,
@@ -159,9 +168,9 @@ export function createRunner({
         dialogProcessId,
         messageUid: userMessage.messageUid,
         aggregateVersion: 1,
-        committedEventPublished: identity.committedEventPublished === true,
+        committedEventPublished: receipt.committedEventPublished === true,
       }),
-    };
+    });
   };
   const sessionManager = {
     async commitMessageEvent({
@@ -304,7 +313,6 @@ export function createRunner({
     appendAgentMessages,
     getSessionTurns,
     getTurnSummaryCheckpointState: async () => null,
-    assertPersistenceContextIdentity,
     bindSessionTurnAttachments: bindCanonicalUserMessageAttachments,
     assertReusedUserTurnIdentity: assertCanonicalReusedUserMessage,
     finalizeRunSession,
@@ -313,8 +321,8 @@ export function createRunner({
     upsertParentAsyncTask,
     now: () => new Date().toISOString(),
   });
-  runner.runAcceptedSession = (request = {}, identity = {}) =>
-    runner.runSession(acceptRequest(request, identity));
+  runner.runAcceptedSession = (request, receipt) =>
+    runner.runSession(acceptRequest(request, receipt));
   return runner;
 }
 

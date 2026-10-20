@@ -25,14 +25,14 @@ function createService({ initialSession }) {
     ...initialSession,
   });
   const sessionRepo = {
-    async resolveSessionScope() {
+    async locateSessionScope() {
       return {
         resolvedParentSessionId: currentSession?.parentSessionId || "",
         sessionDir: TEST_SESSION_DIR,
       };
     },
-    async withSessionMutation(_u, _s, _p, operation) {
-      return operation();
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
     },
     async findById() {
       return currentSession;

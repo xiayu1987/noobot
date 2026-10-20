@@ -54,10 +54,9 @@ export async function applyPendingUserMetaBackwrites(
     turnPersister,
     userId = "",
     sessionId = "",
-    parentSessionId = "",
     dialogProcessId = "",
     turnScopeId = "",
-    persistenceContext = null,
+    persistenceScope,
     eventListener = null,
   } = {},
 ) {
@@ -79,11 +78,10 @@ export async function applyPendingUserMetaBackwrites(
     await turnPersister.appendAgentMessages({
       userId,
       sessionId,
-      parentSessionId,
       dialogProcessId,
       turnScopeId,
       eventListener,
-      persistenceContext,
+      persistenceScope,
       messages: [
         {
           ...message,

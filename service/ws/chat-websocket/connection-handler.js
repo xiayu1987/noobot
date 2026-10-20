@@ -25,6 +25,8 @@ import {
 import { EXECUTION_ABORT_TYPE, createExecutionAbortReason } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
+const CHAT_CONNECTION_PERSISTENCE_SCOPE = null;
+
 export const CONNECTION_CLOSE_POLICY = Object.freeze({
   DETACH_RUN: "detach_run",
   ABORT_RUN: "abort_run",
@@ -84,22 +86,24 @@ function createTurnStatusRejection({ webSocket }) {
   };
 }
 
-function createTurnRecovery({ resolveBot, commitTurnLifecycle, authInfo }) {
+function createTurnRecovery({ resolveBot, commitTurnLifecycle, authInfo, persistenceScope }) {
   const inspectorFor = (request) =>
     createExecutionLivenessInspector({
       userId: text(authInfo?.userId),
       sessionId: request.sessionId,
     });
   return {
-    readSnapshot: (request = {}) =>
+    readSnapshot: (request) =>
       readAnnotatedTurnSnapshot({
         ...request,
+        persistenceScope,
         bot: resolveBot(),
         inspectExecution: inspectorFor(request),
       }),
-    finalize: (request = {}) =>
+    finalize: (request) =>
       finalizeTurnSnapshot({
         ...request,
+        persistenceScope,
         bot: resolveBot(),
         commitTurnLifecycle,
         inspectExecution: inspectorFor(request),
@@ -191,9 +195,11 @@ function createConnectionMessageRuntime(context) {
   const commitTurnLifecycle = createTurnLifecycleBridge({
     resolveBot: context.resolveBot,
     dispatchAuthorityEvents,
+    persistenceScope: CHAT_CONNECTION_PERSISTENCE_SCOPE,
   });
   const commitUserInterjection = createUserInterjectionAuthorityBridge({
     resolveBot: context.resolveBot,
+    persistenceScope: CHAT_CONNECTION_PERSISTENCE_SCOPE,
   });
   const finalizers = createTurnFinalizer({
     sendEvent: context.sendEvent,
@@ -220,6 +226,7 @@ function createConnectionMessageRuntime(context) {
       resolveBot: context.resolveBot,
       commitTurnLifecycle,
       authInfo: context.authInfo,
+      persistenceScope: CHAT_CONNECTION_PERSISTENCE_SCOPE,
     }),
   };
 }
@@ -246,6 +253,7 @@ function createConnectionMessageHandler(context, runtime) {
     commitUserInterjection: runtime.commitUserInterjection,
     dispatchAuthorityEvents: runtime.dispatchAuthorityEvents,
     turnRecovery: runtime.turnRecovery,
+    persistenceScope: CHAT_CONNECTION_PERSISTENCE_SCOPE,
   });
 }
 

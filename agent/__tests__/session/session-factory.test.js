@@ -30,38 +30,24 @@ test("createSessionServices wires repositories/services with expected dependency
       { now: () => "2026-05-14T00:00:00.000Z" },
     );
 
-    assert.ok(runtime.services.sessionTreeService);
-    assert.ok(runtime.services.sessionCrudService);
-    assert.ok(runtime.services.sessionMessageService);
-    assert.ok(runtime.services.sessionContextService);
-    assert.ok(runtime.services.taskService);
-    assert.ok(runtime.services.executionLogService);
-
-    assert.equal(runtime.sessionTreeService, runtime.services.sessionTreeService);
-    assert.equal(runtime.sessionCrudService, runtime.services.sessionCrudService);
-    assert.equal(runtime.sessionMessageService, runtime.services.sessionMessageService);
-    assert.equal(runtime.sessionContextService, runtime.services.sessionContextService);
+    assert.ok(runtime.sessionTreeService);
+    assert.ok(runtime.sessionCrudService);
+    assert.ok(runtime.sessionMessageService);
+    assert.ok(runtime.sessionContextService);
+    assert.ok(runtime.taskService);
+    assert.ok(runtime.executionLogService);
 
     assert.equal(
-      runtime.services.sessionContextService.sessionMessageService,
-      runtime.services.sessionMessageService,
+      runtime.sessionContextService.sessionMessageService,
+      runtime.sessionMessageService,
     );
+    assert.equal(runtime.sessionMessageService.sessionCrudService, runtime.sessionCrudService);
     assert.equal(
-      runtime.services.sessionMessageService.sessionCrudService,
-      runtime.services.sessionCrudService,
-    );
-    assert.equal(
-      runtime.services.executionLogService.executionRepo,
+      runtime.executionLogService.executionRepo,
       runtime.repositories.executionRepository,
     );
-    assert.equal(
-      runtime.services.executionLogService.sessionRepo,
-      runtime.repositories.sessionRepository,
-    );
-    assert.equal(runtime.services.taskService.taskRepo, runtime.repositories.taskRepository);
-    assert.equal(
-      runtime.services.sessionTreeService.treeRepo,
-      runtime.repositories.sessionTreeRepository,
-    );
+    assert.equal(runtime.executionLogService.sessionRepo, runtime.repositories.sessionRepository);
+    assert.equal(runtime.taskService.taskRepo, runtime.repositories.taskRepository);
+    assert.equal(runtime.sessionTreeService.treeRepo, runtime.repositories.sessionTreeRepository);
   });
 });

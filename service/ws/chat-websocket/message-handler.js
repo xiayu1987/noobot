@@ -52,6 +52,7 @@ export function createMessageHandler({
   commitUserInterjection,
   dispatchAuthorityEvents,
   turnRecovery,
+  persistenceScope,
 }) {
   const canonicalRunOwnerId = text(authInfo?.userId);
 
@@ -88,6 +89,7 @@ export function createMessageHandler({
     finalizeCompleted,
     commitTurnLifecycle,
     dispatchAuthorityEvents,
+    persistenceScope,
   });
 
   const context = {
@@ -103,6 +105,7 @@ export function createMessageHandler({
     finalizeGenericError,
     commitUserInterjection,
     dispatchAuthorityEvents,
+    persistenceScope,
     commitCurrentFailure,
     routes: {
       handleExecutionQuery,
@@ -230,13 +233,16 @@ async function enqueueInterjection({ sendEvent, commitUserInterjection }, comman
   }
 }
 
-async function dispatchInterjectionAuthority({ dispatchAuthorityEvents }, activeRun) {
+async function dispatchInterjectionAuthority(
+  { dispatchAuthorityEvents, persistenceScope },
+  activeRun,
+) {
   try {
-    return await dispatchAuthorityEvents?.(
+    return await dispatchAuthorityEvents(
       {
         userId: activeRun.userId,
         sessionId: activeRun.sessionId,
-        parentSessionId: activeRun.parentSessionId,
+        persistenceScope,
       },
       (...args) => publishRunEvent(activeRun, ...args),
     );

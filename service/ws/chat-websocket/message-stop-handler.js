@@ -59,7 +59,6 @@ export function createMessageStopHandler({
     commitTurnLifecycle({
       userId: target.userId,
       sessionId: target.sessionId,
-      parentSessionId: command.identity.parentSessionId,
       turnScopeId: target.turnScopeId,
       commandId: stopLifecycleCommandId(target.stopCommandId, TURN_EVENT.STOP_ACCEPTED),
       causationId: target.stopCommandId,
@@ -110,7 +109,6 @@ export function createMessageStopHandler({
     const lifecycleContext = {
       userId: target.userId,
       sessionId: stopPayload.sessionId,
-      parentSessionId: command.identity.parentSessionId,
       turnScopeId: stopPayload.turnScopeId,
       dialogProcessId: stopPayload.dialogProcessId,
       phase: TURN_PHASE.STOP,
