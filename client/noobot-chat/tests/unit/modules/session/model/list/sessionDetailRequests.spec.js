@@ -53,7 +53,7 @@ describe("sessionDetailRequests thinking detail", () => {
         turnScopeId: "client-turn:eventual-detail",
         thinkingContentTimeline: [
           {
-            contentId: "message:user-interjection:command-1",
+            contentId: "message:interjection-uid-command-1",
             contentKind: "user_interjection",
             text: "continue with the accepted correction",
             sequence: 1,

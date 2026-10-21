@@ -219,9 +219,9 @@ describe("reconnect authoritative message event replay", () => {
       commandId,
       causationId: commandId,
       contentFact: {
-        contentId: `message:user-interjection:${commandId}`,
+        contentId: "message:interjection-uid-1",
         contentKind: "user_interjection",
-        sourceMessageUid: `user-interjection:${commandId}`,
+        sourceMessageUid: "interjection-uid-1",
         text: "replay this accepted interjection",
         timestamp: "2026-07-22T05:00:01.000Z",
         sequence: 1,

@@ -46,8 +46,8 @@ describe("useChatEngine.send-stream", () => {
     );
     expect(userMessage).toEqual(
       expect.objectContaining({
-        id: expect.stringMatching(/^msg_/),
-        messageId: expect.stringMatching(/^msg_/),
+        id: expect.stringMatching(/^um_/),
+        messageId: expect.stringMatching(/^um_/),
         sessionId: "s-user-message-identity",
         turnScopeId: capturedPayload.identity.turnScopeId,
       }),

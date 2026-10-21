@@ -19,6 +19,8 @@ import {
 } from "../../ws/chat-websocket/run-registry.js";
 import { createUserInterjectionAuthorityBridge } from "../../ws/chat-websocket/user-interjection-authority-bridge.js";
 import { createEventEnvelope } from "@noobot/event-protocol";
+import { MESSAGE_IDENTITY_FIELD } from "@noobot/session-protocol/message-identity";
+import { MESSAGE_FIELD_SCHEMA } from "@noobot/session-protocol/message-identity-schema";
 
 function createFixture() {
   const sent = [];
@@ -101,6 +103,13 @@ test("message handler enqueues user interjections and acknowledges the command",
       fixture.handle.userInterjectionQueue.map((item) => item.message),
       ["first", "second"],
     );
+    const sessionMessagePrefix = MESSAGE_FIELD_SCHEMA[MESSAGE_IDENTITY_FIELD.SESSION].prefix;
+    const queue = fixture.handle.userInterjectionQueue;
+    const queuedUids = queue.map((item) => item[MESSAGE_IDENTITY_FIELD.SESSION]);
+    queuedUids.forEach((uid, index) => {
+      assert.ok(uid.startsWith(sessionMessagePrefix));
+      assert.equal(uid.includes(queue[index].commandId), false);
+    });
     assert.deepEqual(
       fixture.sent.map(({ event, data }) => ({
         event,
@@ -112,11 +121,11 @@ test("message handler enqueues user interjections and acknowledges the command",
           event: "message_event",
           outcome: undefined,
           contentFact: {
-            contentId: "message:user-interjection:interjection-1",
+            contentId: `message:${queuedUids[0]}`,
             contentKind: "user_interjection",
-            sourceMessageUid: "user-interjection:interjection-1",
+            sourceMessageUid: queuedUids[0],
             text: "first",
-            timestamp: fixture.handle.userInterjectionQueue[0].receivedAt,
+            timestamp: queue[0].receivedAt,
             sequence: 1,
             sessionId: "interjection-session",
             dialogProcessId: "interjection-dialog",
@@ -133,11 +142,11 @@ test("message handler enqueues user interjections and acknowledges the command",
           event: "message_event",
           outcome: undefined,
           contentFact: {
-            contentId: "message:user-interjection:interjection-2",
+            contentId: `message:${queuedUids[1]}`,
             contentKind: "user_interjection",
-            sourceMessageUid: "user-interjection:interjection-2",
+            sourceMessageUid: queuedUids[1],
             text: "second",
-            timestamp: fixture.handle.userInterjectionQueue[1].receivedAt,
+            timestamp: queue[1].receivedAt,
             sequence: 2,
             sessionId: "interjection-session",
             dialogProcessId: "interjection-dialog",

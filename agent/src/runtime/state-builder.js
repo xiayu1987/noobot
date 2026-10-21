@@ -28,6 +28,11 @@ import {
   emitContextIdentityDebug,
 } from "../observability/context-identity-debug.js";
 import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
+import {
+  CONTEXT_MESSAGE_PROJECTION_TYPE,
+  deriveContextMessageProjectionId,
+  resolveContextMessageId,
+} from "@noobot/context-protocol/message/codec";
 import { initializeAgentModelHost } from "./model-port-host.js";
 import { text } from "@noobot/shared/value";
 
@@ -180,7 +185,10 @@ function emitAgentStateDiagnostics({
   modelContext,
 }) {
   const sourceMessageUid = text(currentUserMessage.messageUid);
-  const userMetaId = `${sourceMessageUid}::user_meta`;
+  const userMetaId = deriveContextMessageProjectionId(
+    sourceMessageUid,
+    CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
+  );
   const modelMessageIds = modelContext.messages.map(resolveContextMessageId).filter(Boolean);
   emitContextIdentityDebug(eventListener, "modelContextCreated", {
     sourceMessageUid,
@@ -274,4 +282,3 @@ export function createStateBuilder({
 }
 
 export const buildAgentState = createStateBuilder();
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";

@@ -15,7 +15,9 @@
     "./turn-commit": "./src/turn-commit.js",
     "./turn-attachment-bind": "./src/turn-attachment-bind.js",
     "./turn-scope-identity": "./src/turn-scope-identity.js",
-    "./turn-command-id": "./src/lifecycle/turn-command-id.js"
+    "./turn-command-id": "./src/lifecycle/turn-command-id.js",
+    "./message-identity": "./src/identity/message-identity.js",
+    "./message-identity-schema": "./src/identity/message-identity-schema.js"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

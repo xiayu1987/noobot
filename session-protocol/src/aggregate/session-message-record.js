@@ -4,8 +4,49 @@
  * SPDX-License-Identifier: MIT
  */
 import { text } from "@noobot/shared/value";
+import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
 
 export const SESSION_AUTO_TITLE_MAX_LENGTH = 20;
+
+const ROLE_IDENTITY_FIELD = Object.freeze({
+  assistant: MESSAGE_IDENTITY_FIELD.MODEL,
+  user: MESSAGE_IDENTITY_FIELD.USER,
+});
+const ROLE_IDENTITY_FIELDS = Object.freeze(Object.values(ROLE_IDENTITY_FIELD));
+
+export function resolveSessionMessageRecordModelMessageId(record = {}) {
+  return text(record?.role) === "assistant" ? text(record?.[MESSAGE_IDENTITY_FIELD.MODEL]) : "";
+}
+
+export function resolveSessionMessageRecordUserMessageId(record = {}) {
+  return text(record?.role) === "user" ? text(record?.[MESSAGE_IDENTITY_FIELD.USER]) : "";
+}
+
+export function validateSessionMessageRecordIdentity(record = {}) {
+  const errors = [];
+  if (!text(record?.[MESSAGE_IDENTITY_FIELD.SESSION])) errors.push("session_message_uid_missing");
+  if (Object.hasOwn(record ?? {}, "messageId")) errors.push("session_message_id_noncanonical");
+  const role = text(record?.role);
+  const ownField = ROLE_IDENTITY_FIELD[role] || "";
+  for (const field of ROLE_IDENTITY_FIELDS) {
+    if (field !== ownField && Object.hasOwn(record ?? {}, field)) {
+      errors.push(`session_message_${field}_forbidden_for_${role || "unknown"}`);
+    }
+  }
+  if (role === "assistant" && !resolveSessionMessageRecordModelMessageId(record)) {
+    errors.push("session_message_model_message_id_missing");
+  }
+  return errors;
+}
+
+export function assertSessionMessageRecordIdentity(record = {}) {
+  const errors = validateSessionMessageRecordIdentity(record);
+  if (!errors.length) return record;
+  const error = new TypeError(`invalid session message identity: ${errors.join(",")}`);
+  error.code = "SESSION_MESSAGE_IDENTITY_INVALID";
+  error.validationErrors = errors;
+  throw error;
+}
 
 export function isSummarizedSessionMessageRecord(record = {}) {
   return record?.summarized === true;

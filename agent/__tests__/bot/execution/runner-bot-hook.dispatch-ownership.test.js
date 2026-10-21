@@ -234,7 +234,7 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
     botHookManager,
     agentRunner: async () => {
       rootAgentCalls += 1;
-      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+      return createCanonicalHandledResult("wrong");
     },
   });
 
@@ -271,7 +271,7 @@ test("a handled workflow failure terminates the root Turn without Agent fallback
     botHookManager,
     agentRunner: async () => {
       rootAgentCalls += 1;
-      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+      return createCanonicalHandledResult("wrong");
     },
   });
 
@@ -300,7 +300,7 @@ test("a claimed dispatch hook failure cannot fall back to the root Agent", async
     botHookManager,
     agentRunner: async () => {
       rootAgentCalls += 1;
-      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+      return createCanonicalHandledResult("wrong");
     },
   });
 
@@ -329,7 +329,7 @@ test("a claimed dispatch cannot pass the same task back to the root Agent", asyn
     botHookManager,
     agentRunner: async () => {
       rootAgentCalls += 1;
-      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+      return createCanonicalHandledResult("wrong");
     },
   });
 
@@ -357,7 +357,7 @@ test("a structured dispatch takeover must claim ownership before returning handl
     botHookManager,
     agentRunner: async () => {
       rootAgentCalls += 1;
-      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+      return createCanonicalHandledResult("wrong");
     },
   });
 

@@ -217,7 +217,7 @@ function acceptAgentResultMessages({
   emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
     disposition: dispatchOutcome.disposition,
     owner: dispatchOutcome.owner,
-    assistantMessageId: text(agentResult?.assistantMessageId),
+    modelMessageId: text(agentResult?.modelMessageId),
     outputChars: String(agentResult?.output || "").length,
     resultAttachmentCount: Array.isArray(agentResult?.attachments)
       ? agentResult.attachments.length

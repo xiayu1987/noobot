@@ -19,7 +19,6 @@
     "./assembly/scope": "./src/assembly/scope.js",
     "./assembly/source": "./src/assembly/source.js",
     "./message/codec": "./src/message/codec.js",
-    "./message/message-identity": "./src/message/message-identity.js",
     "./message/injected-types": "./src/message/injected-types.js",
     "./message/internal-types": "./src/message/internal-types.js",
     "./message/session-projection": "./src/message/session-projection.js",

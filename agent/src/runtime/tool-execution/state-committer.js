@@ -13,11 +13,8 @@ import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { appendToolResultModelMessage } from "../message-context/message-store.js";
-import {
-  applyAuthoritativeMessageId,
-  currentAssistantPresentationMessageId,
-} from "../../events/message-event-stream.js";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { currentAssistantPresentationMessageId } from "../../events/message-event-stream.js";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   assertCanonicalAssistantPresentation,
@@ -79,8 +76,9 @@ export function createStateCommitter({
       if (!canonicalMessageUid) {
         throw new TypeError("assistant message commit requires messageUid");
       }
-      let assistantMessage = {
+      const assistantMessage = {
         messageUid: canonicalMessageUid,
+        messageId: text(messageId),
         role: "assistant",
         content: String(content || ""),
         type,
@@ -108,7 +106,6 @@ export function createStateCommitter({
         modelAdditionalKwargs: isPlainObject(modelAdditionalKwargs) ? modelAdditionalKwargs : null,
         modelResponseMetadata: isPlainObject(modelResponseMetadata) ? modelResponseMetadata : null,
       };
-      assistantMessage = applyAuthoritativeMessageId(assistantMessage, messageId);
       await runAgentRuntimeHook({
         runtime,
         point: HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,

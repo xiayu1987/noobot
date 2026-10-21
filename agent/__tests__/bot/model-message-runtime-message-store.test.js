@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
 

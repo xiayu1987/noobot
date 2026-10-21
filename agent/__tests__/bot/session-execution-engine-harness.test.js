@@ -18,7 +18,7 @@ import { createStateCommitter } from "../../src/runtime/tool-execution/state-com
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext, getMessageId } from "@noobot/context-protocol";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 
@@ -441,7 +441,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       });
       return {
         output: "ok from fake agent",
-        assistantMessageId: "harness-assistant-message",
+        modelMessageId: "harness-assistant-message",
         traces: [{ type: "fake" }],
         turnMessages: [
           {

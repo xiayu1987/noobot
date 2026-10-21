@@ -14,7 +14,7 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 test("canonical tool-call projections retain declared context policy", () => {
   const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);

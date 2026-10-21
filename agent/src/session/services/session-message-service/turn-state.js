@@ -22,7 +22,7 @@ import {
   isInjectedOrPluginSessionMessageRecord,
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";

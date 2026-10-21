@@ -32,7 +32,7 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
   const result = await dispatchAgentTurn({
     agentRunner: async () => ({
       output: "done",
-      assistantMessageId: "sm_final",
+      modelMessageId: "sm_final",
       traces: [],
       turnMessages: [
         {

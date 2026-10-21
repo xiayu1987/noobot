@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
+import { THINKING_DETAIL_CONTENT_SOURCE_FIELD } from "@noobot/event-protocol/thinking-detail-content";
 import {
   sendMessage,
   selectPlugins,
@@ -200,25 +201,20 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
     ),
   );
   expect(
-    authorityInterjections.map((event) => [
-      event.causality.commandId,
-      event.payload.contentFact.contentId,
-      event.payload.contentFact.sequence,
-      event.payload.contentFact.text,
-    ]),
+    authorityInterjections.map((event) => {
+      const { contentFact } = event.payload;
+      const sourceId = contentFact[THINKING_DETAIL_CONTENT_SOURCE_FIELD[contentFact.contentKind]];
+      return [
+        event.causality.commandId,
+        contentFact.contentId === `message:${sourceId}`,
+        sourceId.includes(event.causality.commandId),
+        contentFact.sequence,
+        contentFact.text,
+      ];
+    }),
   ).toEqual([
-    [
-      firstInterjection.commandId,
-      `message:user-interjection:${firstInterjection.commandId}`,
-      1,
-      firstText,
-    ],
-    [
-      secondInterjection.commandId,
-      `message:user-interjection:${secondInterjection.commandId}`,
-      2,
-      secondText,
-    ],
+    [firstInterjection.commandId, true, false, 1, firstText],
+    [secondInterjection.commandId, true, false, 2, secondText],
   ]);
 
   await waitForNaturalCompletion({

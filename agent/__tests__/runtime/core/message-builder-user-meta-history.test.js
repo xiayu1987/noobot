@@ -13,7 +13,7 @@ import { projectSessionRecordsToContextMessages as toConversationMessages } from
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { projectTerminalHistoryMessages } from "@noobot/context-protocol/policy/terminal-history";
 import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 function sessionHistory(records) {
   return toConversationMessages(

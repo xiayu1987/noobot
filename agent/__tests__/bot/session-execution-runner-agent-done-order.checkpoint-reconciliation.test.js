@@ -24,7 +24,7 @@ test("runSession restores only the checkpoint-persisted agent prefix at finaliza
     runtime,
     agentRunner: async () => ({
       output: "tail",
-      assistantMessageId: "message-tail",
+      modelMessageId: "message-tail",
       traces: [],
       turnMessages: [
         {
@@ -90,7 +90,7 @@ test("runSession compares the complete durable turn without treating it as a che
     runtime: createTestRuntimeContext(),
     agentRunner: async () => ({
       output: "done",
-      assistantMessageId: "message-assistant",
+      modelMessageId: "message-assistant",
       traces: [],
       turnMessages: durableMessages.map((message) => ({ ...message, summarized: true })),
       turnTasks: [],
@@ -158,7 +158,7 @@ test("runSession upserts summarized messages created after a checkpoint", async 
     }),
     agentRunner: async () => ({
       output: "done",
-      assistantMessageId: "message-final",
+      modelMessageId: "message-final",
       traces: [],
       turnMessages: durableMessages.map((message) => ({ ...message, summarized: true })),
       turnTasks: [],
@@ -207,7 +207,7 @@ test("runSession restores checkpoint messages by exact persistent UID when avail
     runtime,
     agentRunner: async () => ({
       output: "tail",
-      assistantMessageId: "message-tail",
+      modelMessageId: "message-tail",
       traces: [],
       turnMessages: [
         {
@@ -271,7 +271,7 @@ test("runSession recovers checkpoint UIDs and active prefix from the durable rec
     runtime,
     agentRunner: async () => ({
       output: "tail",
-      assistantMessageId: "message-tail",
+      modelMessageId: "message-tail",
       traces: [],
       turnMessages: [
         {

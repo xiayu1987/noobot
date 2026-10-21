@@ -48,9 +48,9 @@ describe("reduceMessageEvent", () => {
     });
     const commandId = "command-live-1";
     const contentFact = {
-      contentId: `message:user-interjection:${commandId}`,
+      contentId: "message:interjection-uid-1",
       contentKind: "user_interjection",
-      sourceMessageUid: `user-interjection:${commandId}`,
+      sourceMessageUid: "interjection-uid-1",
       text: "display this authority event",
       timestamp: "2026-09-18T01:00:00.000Z",
       sequence: 1,

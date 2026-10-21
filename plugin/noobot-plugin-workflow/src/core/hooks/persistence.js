@@ -16,7 +16,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
-import { createModelMessageId } from "@noobot/context-protocol/message/message-identity";
+import { createModelMessageId } from "@noobot/session-protocol/message-identity";
 
 function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -403,7 +403,6 @@ async function upsertWorkflowMessage({
   if (!messageId) throw new Error("Existing workflow message requires a journal messageId");
   const workflowMessage = {
     role: "assistant",
-    id: messageId,
     messageId,
     type: "workflow",
     chatPresentation: true,
@@ -427,7 +426,7 @@ async function upsertWorkflowMessage({
   };
   if (content) {
     agentResult.output = content;
-    agentResult.assistantMessageId = messageId;
+    agentResult.modelMessageId = messageId;
   }
   if (existing) {
     Object.assign(existing, workflowMessage);

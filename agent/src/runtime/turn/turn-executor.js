@@ -52,11 +52,10 @@ import {
   summarizeDiagnosticMessages,
 } from "@noobot/context-protocol/assembly/diagnostics";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
 import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
-  applyAuthoritativeMessageId,
   beginAssistantMessageEventStream,
   currentAssistantPresentationMessageId,
 } from "../../events/message-event-stream.js";
@@ -167,7 +166,7 @@ export async function invokeNoToolsTurn({
   });
 
   let modelResponse = null;
-  const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
+  const modelMessageId = beginAssistantMessageEventStream(runtime, { turn });
   const presentationMessageId = currentAssistantPresentationMessageId(runtime);
   try {
     const protocolResponse = await modelState.modelPort.invoke({
@@ -246,7 +245,7 @@ export async function invokeNoToolsTurn({
       contentText: responseContentText,
       toolCalls: [],
       messageUid: assistantMessageUid,
-      modelMessageId: assistantMessageId,
+      modelMessageId,
     }),
     { block: "incremental" },
   );
@@ -257,13 +256,13 @@ export async function invokeNoToolsTurn({
     modelResponse,
     responseContentText,
     turn,
-    messageId: assistantMessageId,
+    messageId: modelMessageId,
     messageUid: assistantMessageUid,
     presentationMessageId,
   });
   return {
     output: responseContentText,
-    assistantMessageId,
+    modelMessageId,
     turnTaskStore,
     turnMessageStore,
     modelMessages: messages,
@@ -357,7 +356,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   emitEvent(eventListener, "llm_call_start", { turn, modelLoopRound, mode: "with_tools" });
 
   let ai = null;
-  const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
+  const modelMessageId = beginAssistantMessageEventStream(runtime, { turn });
   const presentationMessageId = currentAssistantPresentationMessageId(runtime);
   try {
     ai = await invokeBoundLlmWithToolChoice();
@@ -428,7 +427,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const calls = normalizedCalls.map((call) =>
     projectToolContextPolicy(call, toolMap.get(call.name)),
   );
-  ai = applyAuthoritativeMessageId(ai, assistantMessageId);
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.AFTER_LLM_CALL,
@@ -458,7 +456,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       contentText: finalAiContentText,
       toolCalls: calls,
       messageUid: assistantMessageUid,
-      modelMessageId: assistantMessageId,
+      modelMessageId,
     }),
     { block: "incremental" },
   );
@@ -489,7 +487,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     toolCalls: calls.length ? formatToolCallsForStorage(calls) : [],
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
-    messageId: assistantMessageId,
+    messageId: modelMessageId,
     messageUid: assistantMessageUid,
     presentationMessageId,
     chatPresentation: calls.length === 0,
@@ -498,7 +496,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       runtime,
       eventListener,
       dialogProcessId,
-      messageId: assistantMessageId,
+      messageId: modelMessageId,
       turnMessageStore,
     }),
   });
@@ -520,7 +518,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   return {
     ai,
-    assistantMessageId,
+    modelMessageId,
     aiContentText: finalAiContentText,
     calls,
     toolMap,

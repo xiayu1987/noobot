@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  createMessageUid,
-  createModelMessageId,
-} from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid, createModelMessageId } from "@noobot/session-protocol/message-identity";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
@@ -51,13 +48,8 @@ export function createTestBotHookManager() {
   });
 }
 
-function canonicalMessageIdForTest(message = {}, activeAssistantMessageId = "") {
-  if (message?.role === "assistant" && activeAssistantMessageId) return activeAssistantMessageId;
-  const existing = String(message?.messageId || message?.id || "").trim();
-  if (existing) return existing;
-  const stableLocalId = String(message?.messageUid || message?.tool_call_id || "").trim();
-  if (!stableLocalId) throw new Error("test Turn message requires a stable identity");
-  return `msg_test_${stableLocalId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+function withModelMessageIdForTest(message = {}, modelMessageId = "") {
+  return message?.role === "assistant" ? { ...message, messageId: modelMessageId } : message;
 }
 
 export function createCanonicalHandledResult(output = "") {
@@ -65,7 +57,7 @@ export function createCanonicalHandledResult(output = "") {
   return {
     output,
     traces: [],
-    assistantMessageId: messageId,
+    modelMessageId: messageId,
     turnMessages: [
       {
         role: "assistant",
@@ -106,12 +98,7 @@ export function persistedUserMessage({
 
 export function createRunner({
   botHookManager = createTestBotHookManager(),
-  agentRunner = async () => ({
-    output: "ok",
-    traces: [],
-    turnMessages: [],
-    turnTasks: [],
-  }),
+  agentRunner = async () => createCanonicalHandledResult("ok"),
   prepareAgentTurnExecution = async () => ({
     agentContext: createTestAgentExecutionScope(createTestRuntimeContext()),
     userMessageAttachments: [],
@@ -244,22 +231,17 @@ export function createRunner({
     if (!isObjectLike(result) || !String(result.output || "")) return result;
     const runtime = payload?.agentContext?.bindings?.runtime;
 
-    const reportedMessageId = text(result.assistantMessageId);
-    const messageId = reportedMessageId || createModelMessageId();
+    const messageId = text(result.modelMessageId);
+    if (!messageId) throw new Error("agent result with output requires modelMessageId");
     const store = runtime.currentTurnMessages;
-    for (const [index, message] of store.toArray().entries()) {
-      const canonicalMessageId = canonicalMessageIdForTest(message, messageId);
-      store.updateWhere(
-        { messageId: canonicalMessageId },
-        (_current, currentIndex) => currentIndex === index,
-      );
-    }
+    store.updateWhere({ messageId }, (current) => current?.role === "assistant");
     for (const message of Array.isArray(result.turnMessages) ? result.turnMessages : []) {
-      const canonicalMessageId = canonicalMessageIdForTest(message, messageId);
-      const canonicalMessage = { ...message, messageId: canonicalMessageId };
+      const messageUid = text(message?.messageUid);
+      if (!messageUid) throw new Error("test Turn message requires messageUid");
+      const canonicalMessage = withModelMessageIdForTest(message, messageId);
       const updatedCount = store.updateWhere(
         canonicalMessage,
-        (current) => text(current?.messageId) === canonicalMessageId,
+        (current) => text(current?.messageUid) === messageUid,
       );
       if (updatedCount === 0) store.push(canonicalMessage);
     }
@@ -281,7 +263,7 @@ export function createRunner({
     }
     return {
       ...result,
-      assistantMessageId: messageId,
+      modelMessageId: messageId,
       turnMessages: store.toArray(),
     };
   };

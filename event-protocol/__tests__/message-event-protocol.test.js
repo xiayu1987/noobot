@@ -102,9 +102,9 @@ test("message payload validation is total for non-object input", () => {
 test("user interjection events carry one canonical thinking content fact", () => {
   const commandId = "command-1";
   const contentFact = {
-    contentId: `message:user-interjection:${commandId}`,
+    contentId: "message:interjection-uid-1",
     contentKind: "user_interjection",
-    sourceMessageUid: `user-interjection:${commandId}`,
+    sourceMessageUid: "interjection-uid-1",
     text: "apply the accepted constraint",
     timestamp: "2026-09-18T01:00:00.000Z",
     sequence: 1,
@@ -130,10 +130,10 @@ test("user interjection events carry one canonical thinking content fact", () =>
       ...interjection,
       payload: {
         ...interjection.payload,
-        contentFact: { ...contentFact, sourceMessageUid: "user-interjection:other" },
+        contentFact: { ...contentFact, sourceMessageUid: "interjection-uid-other" },
       },
     }).errors,
-    ["interjection_source_identity_mismatch", "interjection_content_identity_mismatch"],
+    ["interjection_content_identity_mismatch"],
   );
   assert.deepEqual(
     validateProtocolEvent({

@@ -8,9 +8,49 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   SESSION_AUTO_TITLE_MAX_LENGTH,
+  assertSessionMessageRecordIdentity,
   deriveSessionAutoTitle,
+  resolveSessionMessageRecordModelMessageId,
+  resolveSessionMessageRecordUserMessageId,
   resolveSessionAutoTitle,
+  validateSessionMessageRecordIdentity,
 } from "../src/aggregate/session-message-record.js";
+
+test("session message identity reads each role from its own field", () => {
+  const assistant = { role: "assistant", messageUid: "sm_a", modelMessageId: "msg_m" };
+  const user = { role: "user", messageUid: "sm_u", userMessageId: "msg_u" };
+  assert.equal(resolveSessionMessageRecordModelMessageId(assistant), "msg_m");
+  assert.equal(resolveSessionMessageRecordUserMessageId(user), "msg_u");
+  assert.equal(resolveSessionMessageRecordModelMessageId(user), "");
+  assert.equal(resolveSessionMessageRecordUserMessageId(assistant), "");
+  assert.deepEqual(validateSessionMessageRecordIdentity(assistant), []);
+  assert.deepEqual(validateSessionMessageRecordIdentity(user), []);
+  assert.deepEqual(validateSessionMessageRecordIdentity({ role: "user", messageUid: "sm_i" }), []);
+  assert.deepEqual(validateSessionMessageRecordIdentity({ role: "tool", messageUid: "sm_t" }), []);
+});
+
+test("session message identity rejects legacy, misplaced and missing identities", () => {
+  assert.deepEqual(
+    validateSessionMessageRecordIdentity({ role: "tool", messageUid: "sm_t", messageId: "sm_t" }),
+    ["session_message_id_noncanonical"],
+  );
+  assert.deepEqual(
+    validateSessionMessageRecordIdentity({ role: "user", messageUid: "sm_u", modelMessageId: "m" }),
+    ["session_message_modelMessageId_forbidden_for_user"],
+  );
+  assert.deepEqual(validateSessionMessageRecordIdentity({ role: "system", userMessageId: "u" }), [
+    "session_message_uid_missing",
+    "session_message_userMessageId_forbidden_for_system",
+  ]);
+  assert.deepEqual(validateSessionMessageRecordIdentity({ role: "assistant", messageUid: "sm" }), [
+    "session_message_model_message_id_missing",
+  ]);
+  assert.throws(
+    () =>
+      assertSessionMessageRecordIdentity({ role: "assistant", messageUid: "sm", messageId: "x" }),
+    (error) => error.code === "SESSION_MESSAGE_IDENTITY_INVALID",
+  );
+});
 
 test("session auto title comes from the first non-injected user message with content", () => {
   assert.equal(

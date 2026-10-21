@@ -190,8 +190,8 @@ describe("useChatEngine.resend replace turn", () => {
       "",
       [],
       expect.objectContaining({
-        id: expect.stringMatching(/^msg_/),
-        messageId: expect.stringMatching(/^msg_/),
+        id: expect.stringMatching(/^pm_/),
+        messageId: expect.stringMatching(/^pm_/),
         sessionId: "local-resend-replace-success",
         turnScopeId: expect.stringMatching(/^client-turn:/),
       }),
@@ -210,7 +210,7 @@ describe("useChatEngine.resend replace turn", () => {
       (message) => message.role === RoleEnum.USER && message.content === "edited question",
     );
     const canonicalAssistantIndex = activeSession.value.messages.findIndex(
-      (message) => message.role === RoleEnum.ASSISTANT && /^msg_/.test(message.messageId || ""),
+      (message) => message.role === RoleEnum.ASSISTANT && /^pm_/.test(message.messageId || ""),
     );
     expect(canonicalAssistantIndex).toBeGreaterThan(replacementUserIndex);
     expect(activeSession.value.messages[canonicalAssistantIndex]).not.toHaveProperty(

@@ -30,7 +30,7 @@ function canonicalTurnMessages(runtime = {}) {
 }
 
 function authoritativeFinalMessages(result = {}, runtime = {}) {
-  const messageId = text(result?.assistantMessageId);
+  const messageId = text(result?.modelMessageId);
   if (!messageId) return [];
   return canonicalTurnMessages(runtime).filter(
     (message) => message && typeof message === "object" && messageIdentity(message) === messageId,
@@ -39,13 +39,13 @@ function authoritativeFinalMessages(result = {}, runtime = {}) {
 
 function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
   const messages = canonicalTurnMessages(runtime);
-  const assistantMessageId = text(result?.assistantMessageId);
+  const modelMessageId = text(result?.modelMessageId);
   const matches = messages.filter(
     (message) =>
-      message && typeof message === "object" && messageIdentity(message) === assistantMessageId,
+      message && typeof message === "object" && messageIdentity(message) === modelMessageId,
   );
   return {
-    assistantMessageId,
+    modelMessageId,
     outputChars: String(result?.output || "").length,
     storeMessageCount: messages.length,
     storeMessageIds: messages.map((message) => messageIdentity(message)),
@@ -64,7 +64,7 @@ function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
 
 export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {}) {
   const finalOutput = String(result?.output || "");
-  const messageId = text(result?.assistantMessageId);
+  const messageId = text(result?.modelMessageId);
   if (!finalOutput || !messageId) return false;
   const store = runtime?.currentTurnMessages;
   const matches = authoritativeFinalMessages(result, runtime);
@@ -90,7 +90,7 @@ export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {
 export async function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
   const eventListener = runtime?.eventListener || null;
   const finalOutput = String(result?.output || "");
-  const messageId = text(result?.assistantMessageId);
+  const messageId = text(result?.modelMessageId);
   if (!hasEventListener(eventListener) || !finalOutput || !messageId) return false;
   const messages = authoritativeFinalMessages(result, runtime);
   if (messages.length === 0) return false;
@@ -159,7 +159,6 @@ export async function commitAuthoritativeFinalResult({ result = {}, runtime = {}
   emitEvent(runtime?.eventListener || null, "authoritative_final_commit_completed", {
     ...authoritativeFinalDiagnostics(result, runtime),
     eventId: text(event?.identity?.eventId),
-    messageId: text(event?.identity?.messageId),
     presentationMessageId: text(event?.payload?.presentationMessageId),
   });
   return true;

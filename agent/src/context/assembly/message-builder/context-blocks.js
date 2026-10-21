@@ -12,8 +12,12 @@ import {
   getRuntimeFromAgentContext,
 } from "../../agent-context-accessor.js";
 import { buildHistoryMessages } from "./history.js";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import {
+  CONTEXT_MESSAGE_PROJECTION_TYPE,
+  deriveContextMessageProjectionId,
+  resolveContextMessageId,
+} from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
 import { text } from "@noobot/shared/value";
 
@@ -90,11 +94,14 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     runtime,
   });
   const projectedIds = incremental.map(resolveContextMessageId).filter(Boolean);
+  const userMetaId = deriveContextMessageProjectionId(
+    currentCanonicalId,
+    CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
+  );
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {
     sourceMessageUid: currentCanonicalId,
     contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",
-    userMetaProjectionId:
-      projectedIds.find((id) => id === `${currentCanonicalId}::user_meta`) || "",
+    userMetaProjectionId: projectedIds.find((id) => id === userMetaId) || "",
     incrementalCount: incremental.length,
     flatMessageCount: system.length + history.length + incremental.length,
   });

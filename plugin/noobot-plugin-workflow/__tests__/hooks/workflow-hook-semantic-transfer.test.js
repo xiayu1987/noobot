@@ -183,9 +183,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(workflowTurnMessage?.type, "workflow");
   assert.equal(workflowTurnMessage?.chatPresentation, true);
   assert.equal(workflowTurnMessage?.presentationMessageId, "assistant-presentation-1");
-  assert.match(workflowTurnMessage?.messageId, /^msg_[0-9a-f-]{36}$/);
-  assert.equal(workflowTurnMessage?.id, workflowTurnMessage.messageId);
-  assert.equal(agentResult?.assistantMessageId, workflowTurnMessage.messageId);
+  assert.match(workflowTurnMessage?.messageId, /^mm_[0-9a-f-]{36}$/);
+  assert.equal(agentResult?.modelMessageId, workflowTurnMessage.messageId);
   assert.equal(workflowTurnMessage?.attachments, undefined);
   assert.equal(
     workflowTurnMessage?.transferEnvelopes?.some(

@@ -85,7 +85,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     beforeDispatchContext?.runConfig?.presentationMessageId,
   );
   assert.equal(beforeDispatchContext?.runConfig?.messageId, undefined);
-  assert.match(beforeDispatchContext?.runConfig?.presentationMessageId, /^msg_/);
+  assert.match(beforeDispatchContext?.runConfig?.presentationMessageId, /^pm_/);
   assert.equal(beforeDispatchContext?.runtimeAgentContext, undefined);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");
   assert.equal(beforeDispatchContext?.messages, undefined);

@@ -6,6 +6,7 @@
 import test from "node:test";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
+import { createModelMessageId } from "@noobot/session-protocol/message-identity";
 import {
   createRunner,
   createTestAgentExecutionScope,
@@ -53,7 +54,13 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     }),
     agentRunner: async ({ agentContext }) => {
       await agentContext.bindings.runtime.persistCurrentTurnMessages();
-      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+      return {
+        output: "ok",
+        modelMessageId: createModelMessageId(),
+        traces: [],
+        turnMessages: [],
+        turnTasks: [],
+      };
     },
   });
 
@@ -151,7 +158,13 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
         (message) => message.messageUid === "sm_assistant",
       );
       await currentRuntime.persistCurrentTurnMessages();
-      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+      return {
+        output: "ok",
+        modelMessageId: createModelMessageId(),
+        traces: [],
+        turnMessages: [],
+        turnTasks: [],
+      };
     },
   });
 
@@ -214,7 +227,13 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
         });
         await currentRuntime.persistCurrentTurnMessages();
       });
-      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+      return {
+        output: "ok",
+        modelMessageId: createModelMessageId(),
+        traces: [],
+        turnMessages: [],
+        turnTasks: [],
+      };
     },
   });
 
@@ -253,7 +272,13 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
       const currentRuntime = agentContext.bindings.runtime;
       await assert.rejects(currentRuntime.persistCurrentTurnMessages(), /checkpoint unavailable/);
       await currentRuntime.persistCurrentTurnMessages();
-      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+      return {
+        output: "ok",
+        modelMessageId: createModelMessageId(),
+        traces: [],
+        turnMessages: [],
+        turnTasks: [],
+      };
     },
   });
 

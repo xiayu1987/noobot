@@ -10,7 +10,7 @@ import {
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";

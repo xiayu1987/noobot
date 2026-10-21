@@ -30,14 +30,36 @@ export const THINKING_DETAIL_CONTENT_KIND = Object.freeze({
   PLUGIN_ACTIVITY: "plugin_activity",
 });
 
+export const THINKING_DETAIL_CONTENT_SOURCE_FIELD = Object.freeze({
+  [THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE]: "sourceMessageUid",
+  [THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION]: "sourceMessageUid",
+  [THINKING_DETAIL_CONTENT_KIND.MODEL_ANALYSIS]: "sourceEventId",
+  [THINKING_DETAIL_CONTENT_KIND.THINKING]: "sourceEventId",
+  [THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY]: "sourceEventId",
+});
+
+const THINKING_DETAIL_CONTENT_SOURCE_FIELDS = Object.freeze(
+  new Set(Object.values(THINKING_DETAIL_CONTENT_SOURCE_FIELD)),
+);
+
+function hasExclusiveContentSource(value = {}, contentKind = "") {
+  const sourceField = THINKING_DETAIL_CONTENT_SOURCE_FIELD[contentKind];
+  return Boolean(
+    sourceField &&
+    text(value[sourceField]) &&
+    [...THINKING_DETAIL_CONTENT_SOURCE_FIELDS].every(
+      (field) => field === sourceField || !Object.hasOwn(value, field),
+    ),
+  );
+}
+
 export function isThinkingDetailContentFact(value = {}) {
   const contentKind = text(value?.contentKind);
   return Boolean(
     isPlainObject(value) &&
     text(value.contentId) &&
-    Object.values(THINKING_DETAIL_CONTENT_KIND).includes(contentKind) &&
     (contentKind !== THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY || text(value.activityKind)) &&
-    (text(value.sourceMessageUid) || text(value.sourceEventId)) &&
+    hasExclusiveContentSource(value, contentKind) &&
     typeof value.text === "string" &&
     text(value.text) &&
     Number.isInteger(Number(value.sequence)) &&

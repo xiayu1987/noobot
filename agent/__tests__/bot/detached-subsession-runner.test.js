@@ -558,7 +558,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(runConfig.reuseExistingUserTurn, undefined);
   assert.equal(Number.isFinite(Date.parse(runConfig.thinkingStartedAt)), true);
   assert.notEqual(runConfig.thinkingStartedAt, "2026-07-26T12:00:00.000Z");
-  assert.match(runConfig.presentationMessageId, /^msg_/);
+  assert.match(runConfig.presentationMessageId, /^pm_/);
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message");
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message-from-patch");
   assert.equal(runConfig.messageId, undefined);

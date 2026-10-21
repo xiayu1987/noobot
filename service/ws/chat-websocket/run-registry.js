@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { text, isFunction } from "@noobot/shared/value";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 const activeRunRegistry = new Map();
 let nextRunHandleId = 0;
@@ -98,7 +99,7 @@ export function enqueueUserInterjection(handle = {}, interjection = {}, commitAu
       const interjectionSequence = handle.userInterjectionSequence + 1;
       const item = Object.freeze({
         commandId,
-        messageUid: `user-interjection:${commandId}`,
+        messageUid: createMessageUid(),
         message,
         receivedAt,
         interjectionSequence,

@@ -13,7 +13,7 @@ const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryR
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 function sessionContextHistory(records) {
   return records.map((record) =>

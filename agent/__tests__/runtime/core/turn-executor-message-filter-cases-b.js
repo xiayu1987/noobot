@@ -12,7 +12,7 @@ import {
   resolveContextMessageId,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 
 import { invokeWithToolsTurn as invokeWithToolsTurnProduction } from "../../../src/runtime/turn/turn-executor.js";

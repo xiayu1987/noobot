@@ -8,7 +8,10 @@ import {
   createUserMetaBackwrite,
   normalizeUserMetaBackwrites,
 } from "@noobot/context-protocol/policy/user-meta-backwrite";
-import { deriveContextMessageProjectionId } from "@noobot/context-protocol/message/codec";
+import {
+  CONTEXT_MESSAGE_PROJECTION_TYPE,
+  deriveContextMessageProjectionId,
+} from "@noobot/context-protocol/message/codec";
 import { resolveMessagesByIds } from "@noobot/context-protocol/message/store";
 import { projectContextMessageToSessionRecord } from "@noobot/context-protocol/message/session-projection";
 import { updateContextMessageById } from "@noobot/context-protocol/mutation/context";
@@ -36,7 +39,10 @@ export function queueUserMetaBackwrite(
   if (!sourceMessageUid || sourceOrigin !== "natural") {
     throw new Error("user_meta backwrite requires the current natural user message");
   }
-  const userMetaMessageUid = deriveContextMessageProjectionId(sourceMessageUid, "user_meta");
+  const userMetaMessageUid = deriveContextMessageProjectionId(
+    sourceMessageUid,
+    CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
+  );
   const backwrite = createUserMetaBackwrite({
     userMetaMessageUid,
     attachmentRef,

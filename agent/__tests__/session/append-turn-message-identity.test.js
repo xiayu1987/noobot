@@ -213,7 +213,7 @@ test("appendTurns preserves canonical user interjection time and sequence", asyn
     sessionId: "s1",
     turns: [
       {
-        messageUid: "user-interjection:command-1",
+        messageUid: "interjection-uid-command-1",
         role: "user",
         type: "message",
         content: "accepted constraint",

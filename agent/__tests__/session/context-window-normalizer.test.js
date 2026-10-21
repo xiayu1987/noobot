@@ -19,7 +19,7 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 function sessionRecord(record) {
   return { messageUid: createMessageUid(), ...record };

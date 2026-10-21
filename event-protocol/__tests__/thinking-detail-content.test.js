@@ -14,12 +14,13 @@ import {
   reduceThinkingDetailContentTimelines,
   selectThinkingDetailContentTimeline,
 } from "../src/thinking-detail-content.js";
+import { THINKING_DETAIL_CONTENT_SOURCE_FIELD } from "../src/thinking-detail-content-fact.js";
 
 test("reduces canonical content facts by their protocol content identity", () => {
   const original = {
-    contentId: "message:user-interjection:command-1",
+    contentId: "message:interjection-uid-command-1",
     contentKind: THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
-    sourceMessageUid: "user-interjection:command-1",
+    sourceMessageUid: "interjection-uid-command-1",
     text: "use the accepted constraint",
     timestamp: "2026-09-05T03:39:01.000Z",
     sequence: 1,
@@ -339,4 +340,34 @@ test("plugin_activity facts require an activityKind", () => {
   };
   assert.equal(isThinkingDetailContentFact(fact), false);
   assert.equal(isThinkingDetailContentFact({ ...fact, activityKind: "guidance_analysis" }), true);
+});
+
+test("content facts require exactly the source field declared for their kind", () => {
+  const sourceFields = new Set(Object.values(THINKING_DETAIL_CONTENT_SOURCE_FIELD));
+  for (const [contentKind, sourceField] of Object.entries(THINKING_DETAIL_CONTENT_SOURCE_FIELD)) {
+    const [otherField] = [...sourceFields].filter((field) => field !== sourceField);
+    const fact = {
+      contentId: `fact:${contentKind}`,
+      contentKind,
+      ...(contentKind === THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY
+        ? { activityKind: "guidance_analysis" }
+        : {}),
+      [sourceField]: `source-${contentKind}`,
+      text: "content",
+      sequence: 1,
+    };
+    assert.equal(isThinkingDetailContentFact(fact), true, contentKind);
+    const { [sourceField]: source, ...withoutSource } = fact;
+    assert.equal(isThinkingDetailContentFact({ ...withoutSource, [otherField]: source }), false);
+    assert.equal(isThinkingDetailContentFact({ ...fact, [otherField]: "other" }), false);
+  }
+  assert.equal(
+    isThinkingDetailContentFact({
+      contentId: "fact:unknown",
+      contentKind: "unknown",
+      text: "content",
+      sequence: 1,
+    }),
+    false,
+  );
 });

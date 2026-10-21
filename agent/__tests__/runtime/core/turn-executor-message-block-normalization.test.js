@@ -14,7 +14,7 @@ import {
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 const MODEL = normalizeRuntimeModelSpec({
   model: "gpt-4o",

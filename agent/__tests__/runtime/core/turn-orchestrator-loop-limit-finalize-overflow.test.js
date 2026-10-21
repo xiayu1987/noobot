@@ -13,7 +13,7 @@ import {
   resolveContextMessageId,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import {
   createTestTurnMessagesStore,
   createTestModelPort,

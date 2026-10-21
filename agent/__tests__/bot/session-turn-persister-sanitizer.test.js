@@ -526,7 +526,7 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
     sessionId: "s1",
     messages: [
       {
-        messageUid: "user-interjection:command-1",
+        messageUid: "interjection-uid-command-1",
         role: "user",
         type: "message",
         content: "accepted constraint",

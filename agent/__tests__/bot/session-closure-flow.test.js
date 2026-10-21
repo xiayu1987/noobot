@@ -21,7 +21,7 @@ import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
@@ -195,7 +195,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       );
       return {
         output: "已切换模型并生成附件",
-        assistantMessageId: "closure-assistant-message",
+        modelMessageId: "closure-assistant-message",
         traces: [{ event: "tool_chain_done" }],
         turnTasks: [{ taskId: "task-1", taskStatus: "completed" }],
         turnMessages: [
@@ -541,7 +541,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     botManager: {},
     agentRunner: async () => ({
       output: "continue answer",
-      assistantMessageId: "continue-assistant-message",
+      modelMessageId: "continue-assistant-message",
       traces: [],
       turnTasks: [],
       turnMessages: [

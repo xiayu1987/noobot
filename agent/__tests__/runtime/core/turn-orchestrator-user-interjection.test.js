@@ -18,8 +18,8 @@ test("an interjection accepted during the final model call is consumed before co
     activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
   });
   const pendingInterjections = [
-    { commandId: "command-1", messageUid: "user-interjection:command-1", message: "first" },
-    { commandId: "command-2", messageUid: "user-interjection:command-2", message: "second" },
+    { commandId: "command-1", messageUid: "interjection-uid-command-1", message: "first" },
+    { commandId: "command-2", messageUid: "interjection-uid-command-2", message: "second" },
   ];
   const observedModelInputs = [];
   let invocation = 0;
@@ -67,7 +67,7 @@ test("an interjection accepted during the final model call is consumed before co
       return {
         aiContentText:
           invocation === 1 ? "answer before interjection" : "answer after interjection",
-        assistantMessageId: `assistant-${invocation}`,
+        modelMessageId: `assistant-${invocation}`,
         calls: [],
         turnMessageStore: currentTurnMessages,
         turnTaskStore: { toArray: () => [] },

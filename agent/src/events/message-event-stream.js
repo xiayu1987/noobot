@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createModelMessageId } from "@noobot/context-protocol/message/message-identity";
+import { createModelMessageId } from "@noobot/session-protocol/message-identity";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import {
   EVENT_FAMILY,
@@ -128,16 +128,6 @@ export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}
 
 export function currentAssistantPresentationMessageId(runtime = {}) {
   return text(runtimeState(runtime)?.messageEventStream?.activePresentationMessageId);
-}
-
-export function applyAuthoritativeMessageId(message = {}, messageId = "") {
-  const id = text(messageId);
-  if (!isObjectLike(message) || !id) return message;
-
-  const target = { ...message };
-  target.id = id;
-  target.messageId = id;
-  return target;
 }
 
 function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {

@@ -82,7 +82,7 @@ export function createRunner({
         callOrder.push("agentRunner");
         return {
           output: "ok",
-          assistantMessageId: "message-test-assistant",
+          modelMessageId: "message-test-assistant",
           traces: [{ id: "trace-1" }],
           turnMessages: [
             {

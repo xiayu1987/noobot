@@ -14,7 +14,7 @@ import {
   createPresentationMessageId,
   createUserMessageId,
   isMessageIdentity,
-} from "../src/message/message-identity.js";
+} from "../src/identity/message-identity.js";
 
 test("each identity kind has one field name", () => {
   assert.deepEqual(MESSAGE_IDENTITY_FIELD, {
@@ -29,9 +29,9 @@ test("each identity kind has one field name", () => {
 test("generators produce unique prefixed identities", () => {
   const cases = [
     [createMessageUid, /^sm_[0-9a-f-]{36}$/],
-    [createModelMessageId, /^msg_[0-9a-f-]{36}$/],
-    [createPresentationMessageId, /^msg_[0-9a-f-]{36}$/],
-    [createUserMessageId, /^msg_[0-9a-f-]{36}$/],
+    [createModelMessageId, /^mm_[0-9a-f-]{36}$/],
+    [createPresentationMessageId, /^pm_[0-9a-f-]{36}$/],
+    [createUserMessageId, /^um_[0-9a-f-]{36}$/],
   ];
   for (const [create, pattern] of cases) {
     const first = create();

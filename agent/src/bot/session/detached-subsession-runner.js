@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createPresentationMessageId } from "@noobot/context-protocol/message/message-identity";
+import { createPresentationMessageId } from "@noobot/session-protocol/message-identity";
 import { AGENT_RUN_EVENT, createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {

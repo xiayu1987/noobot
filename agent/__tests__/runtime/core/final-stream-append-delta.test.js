@@ -63,7 +63,7 @@ test("authoritative final content is the sole terminal content event", async () 
   };
   bindTestTurn(runtime);
   const messageId = beginAssistantMessageEventStream(runtime);
-  result.assistantMessageId = messageId;
+  result.modelMessageId = messageId;
   runtime.currentTurnMessages = createTurnMessageStore([
     { role: "assistant", messageId, content: result.output },
   ]);
@@ -96,7 +96,7 @@ test("final content commit follows hook-appended streaming delta", async () => {
   ]);
   const result = buildLoopResult({
     output: "draft",
-    assistantMessageId: messageId,
+    modelMessageId: messageId,
     traces: [],
     loopState: {
       turnMessages: [
@@ -158,7 +158,7 @@ test("final content uses the result message identity after active stream changes
   ]);
   const result = buildLoopResult({
     output: "authoritative final answer",
-    assistantMessageId: finalMessageId,
+    modelMessageId: finalMessageId,
     traces: [],
     loopState: {
       turnMessages: [
@@ -210,7 +210,7 @@ test("rewritten final content is committed only through the authoritative final 
   runtime.currentTurnMessages = createTurnMessageStore([
     { role: "assistant", messageId, content: "旧回答" },
   ]);
-  result.assistantMessageId = messageId;
+  result.modelMessageId = messageId;
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
   assert.equal(
     (await emitAuthoritativeFinalMessageContent({ result, runtime }))?.payload?.eventType,

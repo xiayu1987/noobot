@@ -7,7 +7,7 @@ import { normalizeTrimmedString } from "./utils.js";
 import {
   createPresentationMessageId,
   createUserMessageId,
-} from "@noobot/context-protocol/message/message-identity";
+} from "@noobot/session-protocol/message-identity";
 import { createTurnScopeId, hasActiveTurnInFlight } from "./sendFlowSupport.js";
 
 function normalizeSendContent(options, { input }) {

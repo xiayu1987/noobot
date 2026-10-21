@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import {
   createPresentationMessageId,
   createUserMessageId,
-} from "@noobot/context-protocol/message/message-identity";
+} from "@noobot/session-protocol/message-identity";
 import {
   AGENT_COMMAND,
   createInteractionResponseCommand,

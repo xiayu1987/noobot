@@ -440,9 +440,9 @@ describe("ThinkingPanel canonical details", () => {
       pending: true,
       thinkingContentTimeline: [
         {
-          contentId: "message:user-interjection:command-live",
+          contentId: "message:interjection-uid-command-live",
           contentKind: "user_interjection",
-          sourceMessageUid: "user-interjection:command-live",
+          sourceMessageUid: "interjection-uid-command-live",
           text: "display this accepted interjection immediately",
           timestamp: "2026-09-18T01:00:00.000Z",
           sequence: 1,

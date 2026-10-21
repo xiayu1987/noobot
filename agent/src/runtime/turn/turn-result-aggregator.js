@@ -23,7 +23,7 @@ export function finalizeTurnMessagesBeforeReturn({ turnMessageStore = null } = {
 
 export function buildLoopResult({
   output,
-  assistantMessageId = "",
+  modelMessageId = "",
   traces,
   loopState,
   turnTaskStore = null,
@@ -37,7 +37,7 @@ export function buildLoopResult({
   const modelLoopRound = Number(loopState?.systemRuntime?.modelLoopRound || 0);
   return {
     output,
-    assistantMessageId: text(assistantMessageId),
+    modelMessageId: text(modelMessageId),
     traces,
     turnMessages: finalTurnMessages,
     modelMessages: Array.isArray(modelMessages) ? modelMessages : [],

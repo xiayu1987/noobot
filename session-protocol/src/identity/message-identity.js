@@ -5,32 +5,40 @@
  */
 
 import { createSecureId } from "@noobot/shared/secure-identity";
+import { MESSAGE_FIELD_SCHEMA } from "./message-identity-schema.js";
+
+function generatedField(name) {
+  if (!MESSAGE_FIELD_SCHEMA[name]?.prefix) {
+    throw new TypeError(`${name} is not a generated message identity field`);
+  }
+  return name;
+}
 
 export const MESSAGE_IDENTITY_FIELD = Object.freeze({
-  PRESENTATION: "presentationMessageId",
-  MODEL: "modelMessageId",
-  SESSION: "messageUid",
-  USER: "userMessageId",
+  PRESENTATION: generatedField("presentationMessageId"),
+  MODEL: generatedField("modelMessageId"),
+  SESSION: generatedField("messageUid"),
+  USER: generatedField("userMessageId"),
 });
 
-function randomId(prefix) {
-  return createSecureId(prefix, "");
+function randomId(field) {
+  return createSecureId(MESSAGE_FIELD_SCHEMA[field].prefix, "");
 }
 
 export function createMessageUid() {
-  return randomId("sm_");
+  return randomId(MESSAGE_IDENTITY_FIELD.SESSION);
 }
 
 export function createModelMessageId() {
-  return randomId("msg_");
+  return randomId(MESSAGE_IDENTITY_FIELD.MODEL);
 }
 
 export function createPresentationMessageId() {
-  return randomId("msg_");
+  return randomId(MESSAGE_IDENTITY_FIELD.PRESENTATION);
 }
 
 export function createUserMessageId() {
-  return randomId("msg_");
+  return randomId(MESSAGE_IDENTITY_FIELD.USER);
 }
 
 export function isMessageIdentity(value) {

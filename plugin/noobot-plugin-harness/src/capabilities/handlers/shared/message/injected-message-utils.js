@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HARNESS_INJECTED_MESSAGE_BY_VALUE, HARNESS_INJECTION_MESSAGE_ROLE } from "../constants.js";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { resolveContextInjectedMessageType } from "@noobot/context-protocol/message/codec";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { isPlainObject, text } from "@noobot/shared/value";

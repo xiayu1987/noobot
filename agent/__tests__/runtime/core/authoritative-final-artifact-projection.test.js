@@ -12,27 +12,12 @@ import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/curren
 import {
   beginAssistantMessageEventStream,
   bindAssistantMessageEventStream,
-  applyAuthoritativeMessageId,
 } from "../../../src/events/message-event-stream.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
-
-test("authoritative message id can be applied to immutable model output", () => {
-  const output = Object.freeze({
-    text: "answer",
-    additional_kwargs: Object.freeze({ provider: "openai" }),
-  });
-  const projected = applyAuthoritativeMessageId(output, "assistant-1");
-
-  assert.equal(projected.id, "assistant-1");
-  assert.equal(projected.messageId, "assistant-1");
-  assert.equal(projected.additional_kwargs.provider, "openai");
-  assert.equal(Object.hasOwn(projected.additional_kwargs, "noobotMessageId"), false);
-  assert.equal(output.id, undefined);
-});
 
 test("authoritative final event owns generated attachment envelopes before persistence", async () => {
   const events = [];
@@ -114,7 +99,7 @@ test("authoritative final event owns generated attachment envelopes before persi
   ]);
   const result = {
     output: "final answer",
-    assistantMessageId: "assistant-message-1",
+    modelMessageId: "assistant-message-1",
     turnMessages: runtime.currentTurnMessages.toArray(),
   };
   runtime.currentTurnMessages.push({
@@ -213,7 +198,7 @@ test("authoritative final completion retains classified checkpoint call-result p
   ]);
   const result = {
     output: "final answer",
-    assistantMessageId: "final-message",
+    modelMessageId: "final-message",
     modelMessages: [],
   };
 

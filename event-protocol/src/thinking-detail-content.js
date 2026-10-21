@@ -19,6 +19,7 @@ import {
 export {
   THINKING_DETAIL_CONTENT_FIELDS,
   THINKING_DETAIL_CONTENT_KIND,
+  THINKING_DETAIL_CONTENT_SOURCE_FIELD,
   createUserInterjectionContentFact,
   isThinkingDetailContentFact,
 } from "./thinking-detail-content-fact.js";

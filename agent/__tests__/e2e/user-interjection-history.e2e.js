@@ -28,12 +28,12 @@ test("session execution preserves every user interjection into the next model hi
   const turnScopeId = "turn-user-interjection-e2e";
   const interjections = [
     {
-      messageUid: "user-interjection:e2e:first",
+      messageUid: "interjection-uid-e2e:first",
       message: "retain the first user instruction",
       interjectionSequence: 1,
     },
     {
-      messageUid: "user-interjection:e2e:second",
+      messageUid: "interjection-uid-e2e:second",
       message: "retain the second user instruction",
       interjectionSequence: 2,
     },
@@ -165,7 +165,7 @@ test("session execution preserves every user interjection into the next model hi
       });
       return {
         output: "completed",
-        assistantMessageId: "assistant:e2e:final",
+        modelMessageId: "assistant:e2e:final",
         traces: [],
         turnTasks: [],
         turnMessages: runtime.currentTurnMessages.toArray(),

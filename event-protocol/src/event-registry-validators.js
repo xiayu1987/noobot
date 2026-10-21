@@ -91,10 +91,7 @@ const collectInterjectionIdentityErrors = (envelope, errors) => {
   if (text(causality?.causationId) !== commandId) {
     errors.push("interjection_causation_identity_mismatch");
   }
-  if (sourceMessageUid !== `user-interjection:${commandId}`) {
-    errors.push("interjection_source_identity_mismatch");
-  }
-  if (text(fact.contentId) !== `message:${sourceMessageUid}`) {
+  if (!sourceMessageUid || text(fact.contentId) !== `message:${sourceMessageUid}`) {
     errors.push("interjection_content_identity_mismatch");
   }
   for (const [factField, envelopeValue] of [

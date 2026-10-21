@@ -11,7 +11,7 @@ import { createStateCommitter } from "../../../src/runtime/tool-execution/state-
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext } from "@noobot/context-protocol";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import {
   readContextMessageValue,
   resolveContextMessageId,

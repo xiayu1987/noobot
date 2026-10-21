@@ -230,7 +230,7 @@ describe("useChatEngine.resend scoped pruning", () => {
       "u-old",
       "a-old",
       "u-new",
-      expect.stringMatching(/^msg_/),
+      expect.stringMatching(/^pm_/),
     ]);
     expect(observedMessagesAtStream[2]).toEqual(
       expect.objectContaining({

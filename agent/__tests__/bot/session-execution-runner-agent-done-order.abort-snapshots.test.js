@@ -11,7 +11,7 @@ import {
   resolveContextMessageId,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import {
   assert,
   fs,
@@ -424,13 +424,13 @@ test("runSession drains accepted user interjections before sealing the stopped s
   const queued = [
     {
       commandId: "interjection-command-1",
-      messageUid: "user-interjection:interjection-command-1",
+      messageUid: "interjection-uid-interjection-command-1",
       message: "first interjection",
       receivedAt: "2026-05-21T00:00:01.000Z",
     },
     {
       commandId: "interjection-command-2",
-      messageUid: "user-interjection:interjection-command-2",
+      messageUid: "interjection-uid-interjection-command-2",
       message: "second interjection",
       receivedAt: "2026-05-21T00:00:02.000Z",
     },
@@ -480,8 +480,8 @@ test("runSession drains accepted user interjections before sealing the stopped s
       message.type,
     ]),
     [
-      ["first interjection", "user-interjection:interjection-command-1", "human"],
-      ["second interjection", "user-interjection:interjection-command-2", "human"],
+      ["first interjection", "interjection-uid-interjection-command-1", "human"],
+      ["second interjection", "interjection-uid-interjection-command-2", "human"],
     ],
   );
   const acceptedTurnCheck = callOrder.indexOf("assertReusedUserTurnIdentity");

@@ -7,7 +7,7 @@ import {
   CONTEXT_MESSAGE_NATIVE_FIELDS,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 const NATIVE_FIELDS = new Set(CONTEXT_MESSAGE_NATIVE_FIELDS);
 

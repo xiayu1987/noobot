@@ -12,7 +12,7 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 
 function sessionContextHistory(records) {

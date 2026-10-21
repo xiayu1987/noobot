@@ -9,7 +9,7 @@ import { buildContextMessageBlocks } from "../../../src/context/assembly/message
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { withContextMessageMetadata } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 const human = (value = {}) => ({
   role: "user",

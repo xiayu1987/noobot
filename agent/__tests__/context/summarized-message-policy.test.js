@@ -19,7 +19,7 @@ import {
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { filterForModelContext as protocolFilterForModelContext } from "@noobot/context-protocol/policy/message";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 
 function sessionRecord(record) {
@@ -306,7 +306,7 @@ test("user interjections remain fully retained through completion and history", 
     summarized: false,
   });
   const userInterjection = sessionRecord({
-    messageUid: "user-interjection:command:test",
+    messageUid: "interjection-uid-command:test",
     role: "user",
     type: "message",
     content: "不要动呼吸效果",
@@ -319,7 +319,7 @@ test("user interjections remain fully retained through completion and history", 
   });
   const earlierUserInterjection = {
     ...userInterjection,
-    messageUid: "user-interjection:command:earlier",
+    messageUid: "interjection-uid-command:earlier",
     content: "先记住这条",
   };
   const oldGuidance = sessionRecord({

@@ -154,7 +154,7 @@ export function createTurnOrchestrator({
         if (continuedResult) return continuedResult;
         return buildLoopResultFn({
           output: noToolsResult.output,
-          assistantMessageId: noToolsResult.assistantMessageId,
+          modelMessageId: noToolsResult.modelMessageId,
           traces,
           loopState,
           turnTaskStore: noToolsResult.turnTaskStore,
@@ -185,7 +185,7 @@ export function createTurnOrchestrator({
         });
         return buildLoopResultFn({
           output: finalResult.output,
-          assistantMessageId: finalResult.assistantMessageId,
+          modelMessageId: finalResult.modelMessageId,
           traces,
           loopState,
           turnTaskStore: finalResult.turnTaskStore,
@@ -228,7 +228,7 @@ export function createTurnOrchestrator({
         if (continuedResult) return continuedResult;
         return buildLoopResultFn({
           output: noToolsResult.output,
-          assistantMessageId: noToolsResult.assistantMessageId,
+          modelMessageId: noToolsResult.modelMessageId,
           traces,
           loopState,
           turnTaskStore: noToolsResult.turnTaskStore,
@@ -259,7 +259,7 @@ export function createTurnOrchestrator({
         if (isOverMaxTurns) {
           return buildLoopResultFn({
             output: aiContentText,
-            assistantMessageId: withToolsResult.assistantMessageId,
+            modelMessageId: withToolsResult.modelMessageId,
             traces,
             loopState,
             turnTaskStore,
@@ -269,7 +269,7 @@ export function createTurnOrchestrator({
         }
         return buildLoopResultFn({
           output: aiContentText,
-          assistantMessageId: withToolsResult.assistantMessageId,
+          modelMessageId: withToolsResult.modelMessageId,
           traces,
           loopState,
           turnTaskStore,
@@ -328,7 +328,7 @@ export function createTurnOrchestrator({
         if (continuedResult) return continuedResult;
         return buildLoopResultFn({
           output: finalResult.output,
-          assistantMessageId: finalResult.assistantMessageId,
+          modelMessageId: finalResult.modelMessageId,
           traces,
           loopState,
           turnTaskStore: finalResult.turnTaskStore,

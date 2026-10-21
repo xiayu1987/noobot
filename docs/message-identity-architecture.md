@@ -2,7 +2,8 @@
 
 本文档定义 Noobot 各类消息身份的归属，并作为 messageId 相关全部任务（任务 A：流 ID 删除与身份拆分；任务 B：用户消息 `messageId` 收敛；任务 C：附件事件双重身份）的唯一任务清单。字段契约、前缀和校验以协议包实现为唯一规范：
 
-- `context-protocol/src/message/message-identity.js`：消息相关身份
+- `session-protocol/src/identity/message-identity-schema.js`：消息身份字段唯一定义（`MESSAGE_FIELD_SCHEMA`：类别、前缀、角色约束、`renamedFrom` 迁移来源）
+- `session-protocol/src/identity/message-identity.js`：生成函数与校验（前缀读自 schema）
 - `attachment-protocol/src/identity.js`：附件事件身份
 
 本文档不定义第二套 schema。
@@ -29,9 +30,9 @@
 - 流 ID：`msg_event_` + `presentationMessageId`。它是展示消息 ID 的派生副本，生成函数 `createAssistantMessageEventId` 已删除，信封、Turn 实体、`requestHashFor` 和身份冲突校验统一使用 `presentationMessageId`。
 - `assistantMessageId`：这个名字混用了两类身份，按含义拆分。
   - 前端、CLI、`command.presentation` 一侧指展示消息 ID，改为 `presentationMessageId`。
-  - agent 运行时、workflow 一侧指模型消息 ID（`beginAssistantMessageEventStream` 返回的 `createModelMessageId()`），**尚未改名**，见第 8 节 M1。
+  - agent 运行时、workflow 一侧指模型消息 ID（`beginAssistantMessageEventStream` 返回的 `createModelMessageId()`），已改名 `modelMessageId`（M1）。
 - `messageId`（作为模型消息 ID 的字段名）：计划改为 `modelMessageId`，**尚未执行**，journal 仍写 `messageId`，见第 8 节 M2。
-- `applyAuthoritativeMessageId` 写入三份同值身份：`additional_kwargs.noobotMessageId` 已删除，仍写 `id`、`messageId` 两份，见第 8 节 M3。
+- `applyAuthoritativeMessageId`：曾同时写 `additional_kwargs.noobotMessageId`、`id`、`messageId` 三份同值身份。函数已删除；`turn-executor` 对模型响应的调用无读取方，直接删除；`state-committer` 在助手消息字面量里只写一份 `messageId`（字段名随 M2 改为 `modelMessageId`）。见第 8 节 M3。
 - `agent/src/context/session/message-uid.js`：只是透传，删除。
 
 ## 3. 已确认决策
@@ -183,19 +184,22 @@ D12. 作用域会话根与插件数据（已确认，方案 A，已执行）
    - [x] 删除 `message-uid.js` 及 `entities/normalizers.js`、`entities.js` 两层转导出，6 个调用方直接引用 `createMessageUid`。
    - [x] 展示侧 `assistantMessageId` 改为 `presentationMessageId`：agent-transport-protocol（`PRESENTATION_KEYS`、`createTurnRunCommand`，校验码改为 `missing_presentation_message_id`）、前端发送链路、CLI `run-turn.js`、`chat-run-service.js`。命令不落库，不需要迁移。
    - [x] `agent-transport-consumption` 只读 `activePresentationMessageId`，诊断字段改为 `requested/boundPresentationMessageId`、`presentationMessageIdConsumed`；`detached-subsession-runner` 删除 3 处对 `runConfig.assistantMessageId` 的死 `delete`。
-   - [ ] 运行时侧 `assistantMessageId` 改为 `modelMessageId`：`turn-executor`、`orchestrator`、`turn-result-aggregator`、`engine`、`agent-dispatch`、workflow `persistence.js`（第 8 节 M1，待拍板）。
-   - [ ] 诊断事件 `canonical_turn_messages_accepted`、`authoritative_final_commit_*` 的 `data.assistantMessageId` 新写入改为 `modelMessageId`（随 M1）；`authoritative_final_commit_completed.messageId` 读已删除字段（M6）。存量没有回读方，不迁移。
+   - [x] 运行时侧 `assistantMessageId` 改为 `modelMessageId`（源码 6 个文件、测试 12 个文件，无旧名残留）：`turn-executor`、`orchestrator`、`turn-result-aggregator`、`engine`、`agent-dispatch`、workflow `persistence.js`（第 8 节 M1）。
+   - [x] 诊断事件 `canonical_turn_messages_accepted`、`authoritative_final_commit_*` 的 `data.assistantMessageId` 新写入改为 `modelMessageId`（随 M1）；存量没有回读方，不迁移。
+   - [x] `authoritative_final_commit_completed.messageId` 读已删除的 `event.identity.messageId`，恒为空，已删除（M6）。
    - [ ] `accepted[].messageId` 混用 `msg_`（模型消息）和 `sm_`（`messageUid`），按 D1 拆开。
    - [ ] `messageUid` 的生成收敛为"新建时生成，已有时必须一致"：`state-committer.js:76`（no-tools 路径的唯一生成入口）、`turn-upsert.js:179/207`、`turn-state.js:44`（同时删除从 `turn.presentationMessageId` 回填展示 ID 的推导）。
-   - [ ] 模型消息 ID 字段改为 `modelMessageId`（M2，待拍板），`applyAuthoritativeMessageId` 只写一份（M3）。
+   - [x] 删除 `applyAuthoritativeMessageId`，助手消息模型 ID 只写一份（M3）。
+   - [ ] 模型消息 ID 字段改为 `modelMessageId`（M2）。
    - [x] 按 D1 收敛 `noobotMessageId`（范围见 D2）：agent、context-protocol、harness、门禁正则已收敛；`shared/message-diagnostics.js` 与前端 `subSessionSnapshotMerge.js` 各 2 处残留归 D10。
 3. 测试收敛
    - [x] agent-proxy 154/154（夹具 `presentation.assistantMessageId` 改为 `presentationMessageId`）。
-   - [x] agent 1546/1546；删除 agent 侧重复的 `message-store.test.js`（context-protocol 同名用例已覆盖）。
+   - [x] agent 1545/1545（M3 删除 1 条 `applyAuthoritativeMessageId` 用例）；删除 agent 侧重复的 `message-store.test.js`（context-protocol 同名用例已覆盖）。
    - [x] service 286/286。
    - [x] 前端 vitest 207 个文件 1398/1398；源码读取方 7 处已收敛。
    - [x] 其余包：context-protocol 124、session-protocol 110、session-repair 39、semantic-transfer 41、event-protocol 75、memory-protocol 29、workspace-protocol 30、plugin-runtime 19、harness 386、workflow 106，全部通过。
-   - [ ] 测试侧 `runner-bot-hook.fixtures.js` 的 `reportedMessageId || createModelMessageId()` 回退链改为必填。
+   - [x] 测试侧 `runner-bot-hook.fixtures.js` 的 `reportedMessageId || createModelMessageId()` 回退链改为必填；默认 `agentRunner` 与显式桩自带 `modelMessageId`；删除 `canonicalMessageIdForTest` 的 `messageId || id` 回退与 `msg_test_` 推导，非助手消息不再改写身份，按 `messageUid` 合并。
+   - [ ] 风险（测试侧）：`runCanonicalAgent` 把 store 内所有助手消息写成同一 `messageId`，多助手场景会掩盖真实冲突。
    - [ ] 两处静默丢弃改为报错：`normalizeCommandReceipt`、`normalizeAuthorityEventOutbox`。
    - [ ] activity timeline、thinking-detail 事实带未声明字段时被白名单静默跳过，改为报错。
 4. v6 布局迁移
@@ -205,7 +209,7 @@ D12. 作用域会话根与插件数据（已确认，方案 A，已执行）
    - [x] 测试夹具信封全部改为 v3（测试目录内无 v2 信封）。
    - [x] 迁移测试 `agent/__tests__/workspace-session-transfer-envelope-upgrade.test.js`：改写结果、备份逐字节等于原文件、重跑无写入、过期 summary 保持过期、校验失败零落盘、`recordCount` 不变。
    - [ ] 跨文件写入不是原子的，中途失败只能靠备份恢复；恢复方式需写进运维说明。
-   - [ ] 模型消息 `messageId` 改为 `modelMessageId`（M2，待拍板，涉及 journal 存量）。
+   - [ ] 模型消息 `messageId` 改为 `modelMessageId`（M2，涉及 journal 存量）。
    - [ ] 上下文快照 v3→v4 迁移（D4/D6/D9）未实现，依赖 D9 确认。
    - [ ] 只在夹具验证；真实工作区试跑须停服并用数据副本。
 5. 读取方
@@ -215,7 +219,7 @@ D12. 作用域会话根与插件数据（已确认，方案 A，已执行）
    - [x] 信封、transport、reconnect 读取方收敛到 `presentationMessageId`。
    - [ ] 剩余 `messageId` 混用与占位 ID 见第 8 节 M7。
 7. 全量验证与收尾
-   - [x] 全部包 `npm test`、`check:quality` 通过；基线收紧：complexity 245、fallbackChain 581、inlineTrim 96、rawTypeof 642，模型上下文豁免 11→10。
+   - [x] 全部包 `npm test`、`check:quality` 通过；基线收紧：complexity 245、fallbackChain 581、inlineTrim 94（M3/M1 后 96→94）、rawTypeof 642，模型上下文豁免 11→10。
    - [x] 临时文件、`/tmp/mi-base` worktree、ops_workdir 一次性脚本已清理。
    - [ ] 用真实数据副本跑一次 v6 全量对比。
 
@@ -260,24 +264,110 @@ D12. 作用域会话根与插件数据（已确认，方案 A，已执行）
 
 仍混用，按处理方式分两类。
 
-直接修（规则明确，不改协议）：
+直接修（规则明确，不改协议）。M3、M6 已修（agent 1545/1545，`check:quality` 通过）：
 
-| 编号 | 位置                                                                        | 问题                                                                                           | 修法                                              |
-| ---- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| M3   | `agent/src/events/message-event-stream.js` `applyAuthoritativeMessageId`    | 模型消息 ID 同时写 `id`、`messageId` 两份                                                      | 只写一份；随 M2 定字段名                          |
-| M5   | `agent/src/session/entities/message-entity.js:59` `resolveRuntimeMessageId` | `messageId \|\| messageUid` 回退，把会话 UID 写成 `messageId`（任务 B 的 2122 条来源之一）     | 删除回退，`messageId` 只取自身；与任务 B 一起执行 |
-| M5   | `session-repair/src/document-migration.js:641`                              | `item.messageId \|\| item.messageUid` 匹配 `replacementUserMessageId`                          | 随任务 B 改为只匹配 `userMessageId`               |
-| M6   | `agent/src/runtime/engine.js:162`                                           | `authoritative_final_commit_completed.messageId` 读已删除的 `event.identity.messageId`，恒为空 | 删除该诊断字段                                    |
+| 编号 | 位置                                                                                                                     | 问题                                                                                           | 修法                                              |
+| ---- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| M3   | `agent/src/events/message-event-stream.js` `applyAuthoritativeMessageId`；workflow `persistence.js` `workflowMessage.id` | 模型消息 ID 同时写 `id`、`messageId` 两份                                                      | 已修：函数删除，只写一份 `messageId`              |
+| M5   | `agent/src/session/entities/message-entity.js:59` `resolveRuntimeMessageId`                                              | `messageId \|\| messageUid` 回退，把会话 UID 写成 `messageId`（任务 B 的 2122 条来源之一）     | 删除回退，`messageId` 只取自身；与任务 B 一起执行 |
+| M5   | `session-repair/src/document-migration.js:641`                                                                           | `item.messageId \|\| item.messageUid` 匹配 `replacementUserMessageId`                          | 随任务 B 改为只匹配 `userMessageId`               |
+| M9   | `agent/src/runtime/tool-execution/state-committer.js` `pushToolResult`                                                   | 工具结果写 `messageId: messageUid`，同值双写                                                   | 删除 `messageId`；与任务 B、M5 一起执行           |
+| M6   | `agent/src/runtime/engine.js:162`                                                                                        | `authoritative_final_commit_completed.messageId` 读已删除的 `event.identity.messageId`，恒为空 | 已修：诊断字段删除                                |
 
-待拍板（涉及协议字段名或存量迁移）：
+已确认（2026-10-21，涉及协议字段名或存量迁移）：
 
-| 编号 | 位置                                                                                                                            | 现状                                                                                                                     | 建议                                                                                                  |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| M1   | `turn-executor`、`orchestrator`、`turn-result-aggregator`、`engine`、`agent-dispatch`、workflow `persistence.js:430`（35 处）   | `assistantMessageId` 承载 `createModelMessageId()`，名不副实                                                             | 改名 `modelMessageId`；运行时字段不落库，无迁移                                                       |
-| M2   | journal 助手消息、`turn-upsert`、`turn-persister`、`no-tools-commit-stage`、`state-committer`、workflow `persistence.js:402`    | 模型消息 ID 存在 `messageId`；用户消息的 `messageId` 是客户端 ID（任务 B）                                               | 助手消息改为 `modelMessageId`，布局 v7 迁移 journal/checkpoint；与任务 B 合并为一次迁移               |
-| M4   | `agent/src/session/session-summary-builders/message-summary-projection.js:185`                                                  | 展示摘要 `messageId = presentationMessageId \|\| messageId`，展示 ID 与模型 ID 共用一个字段；`sourceMessageId` 存模型 ID | 摘要分别输出 `presentationMessageId`、`modelMessageId`，删除合并字段；前端和 `session-routes.js` 同步 |
-| M7   | 前端 `messageView.js`、`turnPresentation.js`、`subSessionSnapshotMerge.js`、`messageModel.js`、`conversationFoldingIdentity.js` | 视图 `messageId` 混装展示 ID、模型 ID 和占位值（`turn-status-placeholder:<turnScopeId>`）                                | 视图身份只用 `presentationMessageId`，占位改 `placeholderId`；依赖 M4                                 |
-| M8   | `summarizedMessageIds`、`summaryCheckpointMessageIds`、`markedMessageIds`、`sourceMessageId`（投影源）                          | 值是 `messageUid`，字段名不含 Uid                                                                                        | 改名 `*MessageUids` / `sourceMessageUid`；`summarizedMessageIds` 落库在 checkpoint，需迁移            |
-| D10  | `shared/message-diagnostics.js:15-25,135,172`、前端 `subSessionSnapshotMerge.js:25,118`                                         | 四级回退读取 `noobotMessageId`                                                                                           | diagnostics 按消息形状只读 `additional_kwargs.messageUid`；前端删除 `noobotMessageId` 读取            |
+| 编号 | 位置                                                                                                                            | 现状                                                                                                                     | 建议                                                                                                                                                                          |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1   | `turn-executor`、`orchestrator`、`turn-result-aggregator`、`engine`、`agent-dispatch`、workflow `persistence.js:430`（35 处）   | `assistantMessageId` 承载 `createModelMessageId()`，名不副实                                                             | 已完成：改名 `modelMessageId`，运行时字段不落库，无迁移；agent 1545/1545、workflow 106/106                                                                                    |
+| M2   | journal 助手消息、`turn-upsert`、`turn-persister`、`no-tools-commit-stage`、`state-committer`、workflow `persistence.js:402`    | 模型消息 ID 存在 `messageId`；用户消息的 `messageId` 是客户端 ID（任务 B）                                               | 助手消息改为 `modelMessageId`，布局 v7 迁移 journal/checkpoint；与任务 B 合并为一次迁移                                                                                       |
+| M4   | `agent/src/session/session-summary-builders/message-summary-projection.js:185`                                                  | 展示摘要 `messageId = presentationMessageId \|\| messageId`，展示 ID 与模型 ID 共用一个字段；`sourceMessageId` 存模型 ID | 摘要分别输出 `presentationMessageId`、`modelMessageId`，删除合并字段；前端和 `session-routes.js` 同步                                                                         |
+| M7   | 前端 `messageView.js`、`turnPresentation.js`、`subSessionSnapshotMerge.js`、`messageModel.js`、`conversationFoldingIdentity.js` | 视图 `messageId` 混装展示 ID、模型 ID 和占位值（`turn-status-placeholder:<turnScopeId>`）                                | 视图身份只用 `presentationMessageId`，占位改 `placeholderId`；依赖 M4。同类：`runtime-binding.js:38,125` presentation 投影写 `id` 与 `messageId`/`presentationMessageId` 同值 |
+| M8   | `summarizedMessageIds`、`summaryCheckpointMessageIds`、`markedMessageIds`、`sourceMessageId`（投影源）                          | 值是 `messageUid`，字段名不含 Uid                                                                                        | 改名 `*MessageUids` / `sourceMessageUid`；`summarizedMessageIds` 落库在 checkpoint，需迁移                                                                                    |
+| D10  | `shared/message-diagnostics.js:15-25,135,172`、前端 `subSessionSnapshotMerge.js:25,118`                                         | 四级回退读取 `noobotMessageId`                                                                                           | diagnostics 按消息形状只读 `additional_kwargs.messageUid`；前端删除 `noobotMessageId` 读取                                                                                    |
 
-建议顺序：M6、M3 → M1 → M4、M7 → M2 与任务 B 合并为布局 v7（含 M5）→ M8。
+执行顺序：M6、M3、M1（已完成）→ M2 与任务 B 合并为布局 v7（含 M5、M9）→ M4、M7 → M8。
+
+顺序调整（2026-10-21）：原计划 M4 先于 M2。存量核实（admin 工作区 journal 23554 条）显示 journal `messageId` 按角色承载三类事实：
+
+| 角色      | 条数  | `messageId` 实际值                       | 类别                    |
+| --------- | ----- | ---------------------------------------- | ----------------------- |
+| assistant | 13100 | `msg_`，均不等于 `presentationMessageId` | 模型消息 ID             |
+| user      | 220   | `msg_`，自然用户消息                     | 用户消息客户端 ID       |
+| user      | 2899  | 等于 `messageUid`                        | 会话 UID 重复存储       |
+| tool      | 7043  | 等于 `messageUid`                        | 会话 UID 重复存储（M9） |
+| system    | 292   | 等于 `messageUid`                        | 会话 UID 重复存储       |
+
+同值记录来自 `message-entity.js:223` 调用 `resolveRuntimeMessageId` 的 `messageId || messageUid` 回退（M5），门禁 `agent-contracts.mjs:20` 把该回退固化为合规写法。M4 若先做，摘要只能按角色把 `messageId` 推断为 `modelMessageId`，违反不推导事实原则。因此先做布局 v7，让 journal 按事实分别落 `modelMessageId`、`userMessageId`，删除回退并改写门禁；M4、M7 再直接读固定字段。
+
+## 9. 命名方案：`messageId` 与 `messageUid` 区分（2026-10-21，已确认，主键名改定为 `messageUid`）
+
+问题：两个字段只差 `Id`/`Uid`，存量里 `messageId` 699180 处、`messageUid` 463243 处，裸 `messageId` 按角色承载模型 ID、用户客户端 ID、会话 UID 副本三类事实（见第 8 节）。三类 `msg_` ID 共用前缀，无法从值区分。
+
+方案（2026-10-21 用户改定：`messageUid` 保持为会话主键名，不改名）：
+
+1. 删除裸 `messageId`。assistant 的模型 ID 落 `modelMessageId`，user 的客户端 ID 落 `userMessageId`，其余角色的 `messageId` 是 `messageUid` 副本，直接删除；由 v7 迁移和门禁保证。删掉后，与 `messageUid` 相近的裸名不再存在。
+2. 后缀表达归属：`*MessageUid(s)` 只指向会话主键；`*MessageId(s)` 只用于三类关联键，必须以 `modelMessageId`、`presentationMessageId`、`userMessageId` 结尾。不再出现装会话主键的 `*MessageId(s)`。
+3. 前缀按类别分开（只用于排查可读性，代码不按前缀判断类别）：`sm_`（会话）、`mm_`（模型）、`pm_`（展示）、`um_`（用户客户端）。存量 `msg_` 值保持原样，不改写身份值。
+4. 唯一定义处：`session-protocol/src/identity/message-identity-schema.js` 的 `MESSAGE_FIELD_SCHEMA`；`MESSAGE_IDENTITY_FIELD` 与生成函数从它派生，未在 schema 中登记前缀的字段名在模块加载时报错。需要改名的引用字段：
+
+| 新名                                                           | 现名                                                                  | 处理                                        |
+| -------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------- |
+| `replacementUserMessageUid`                                    | `replacementUserMessageId`（值是 `sm_`，session.json 60、summary 33） | 已登记 schema，v7 改名                      |
+| `summarizedMessageUids` 及限定变体                             | `summarizedMessageIds`、`summaryCheckpointMessageIds` 等              | 源码改名；落库部分随 v7                     |
+| `sourceMessageUid`                                             | 投影源 `sourceMessageId`（值为主键时）                                | 源码改名；值为模型 ID 的改 `modelMessageId` |
+| `requestedPresentationMessageId`、`boundPresentationMessageId` | 已完成                                                                | -                                           |
+
+门禁 `check:message-identity-fields` 拒绝裸 `messageId`、`noobotMessageId`，以及不以已登记字段结尾的 `*MessageId(s)`/`*MessageUid(s)`。
+
+5. 落地顺序：源码引用改名 → 裸 `messageId` 按角色拆分（M2/M4/M5/M7/M9/任务 B/M14）→ v7 迁移（journal、checkpoint、session.json、session-summary、outbox、作用域会话），源码与迁移同批，不保留旧名读取。
+
+存量中不迁移的历史记录：
+
+| 位置                                               | 字段                                                                         | 处理                                                                             |
+| -------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `events`、`execution-events` 诊断日志              | `assistantMessageId`、`requested/boundAssistantMessageId`、`storeMessageIds` | 只追加的审计记录，源码与测试外 grep 无读取方；v7 不改写，原样保留                |
+| `model-message-snapshots`（stopped 快照，7022 处） | `additional_kwargs.noobotMessageId`                                          | 走 `hydrateModelContextSnapshot` 的快照 schema 版本，由 D9 的快照 v3→v4 迁移处理 |
+
+命令回执：采用方案 1，回执新增 `requestHashVersion`；v7 将存量回执标为 1，新写入为 2；版本不一致时同一 `commandId` 重放返回 `command_receipt_superseded`。
+
+### 架构：一个主键、若干关联键、带类别的引用
+
+`MESSAGE_FIELD_SCHEMA` 按四类登记字段，校验、生成函数前缀、门禁和 v7 改名表都从它读取：
+
+| 类别        | 字段                                                                                                                | 说明                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| key         | `messageUid`（`sm_`）                                                                                               | 会话内唯一主键，内部引用只指向它                                                        |
+| correlation | `modelMessageId`（`mm_`，仅 assistant 且必填）、`presentationMessageId`（`pm_`）、`userMessageId`（`um_`，仅 user） | 与模型、前端、客户端对账；不得被内部引用当主键                                          |
+| derived     | `contextMessageId`                                                                                                  | 模型上下文消息身份：journal 投影时等于主键，派生投影为 `<主键>::<type>`，不是独立事实源 |
+| reference   | `replacementUserMessageUid` 及所有 `*MessageUid(s)` 限定变体                                                        | 全部指向主键                                                                            |
+
+- 限定词变体（如 `activePresentationMessageId`、`summarizedMessageUids`）以已登记字段结尾即合法；裸 `messageId`、`noobotMessageId` 一律不合法。
+- 前缀只为排查可读性，代码不按前缀判断类别。生成函数已切换为新前缀；存量 `msg_` 值不改写。
+- `duplicateOf`：user 记录的 `messageId` 存量混有客户端 ID（220 条）和 M5 回退写入的主键副本（2899 条），单靠 role 分不开。主键副本是已知写入方产生的重复存储，不是另一类事实，所以 v7 在值等于 `messageUid` 时丢弃，不迁成 `userMessageId`。
+- session-summary 是 journal 的投影，v7 重建而非改名（`MESSAGE_IDENTITY_STORE_POLICY.rebuilt`）。存量里助手摘要 `sourceMessageId` 是模型 ID、`sourceMessageUid` 是自身主键，重建后分别落 `modelMessageId`、`messageUid`。
+
+门禁 `check:message-identity-fields`（已接入 `check:quality`）：扫描源码和测试的字段位置，`legacyKeyField` 统计裸 `messageId`/`noobotMessageId`，`unregisteredField` 统计未登记字段。主键名改定后基线 751 / 131（原 1771 / 373，其中 1020 处 `messageUid` 与 241 处 `*MessageUid(s)` 不再计入），只许下降，v7 落地后收紧到 0。豁免只有 schema 文件本身。
+
+### 本次新发现的旁路
+
+| 编号          | 位置                                                                                                  | 问题                                                                                                                    | 处理                                                                                                                                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M10           | `session.json` `turnSummaryCheckpoints.receipts[]` 与 `turn-snapshots/*/checkpoint-*.json`            | 快照由 `buildSummarySnapshotPayload` 从 receipt 拷贝 `persisted/summarizedMessageUids`，两份落库（各 39059 / 37918 条） | 定事实源后删副本；快照参与哈希链，需单独设计，随 v7 前确认                                                                                                                                                           |
+| M11（已完成） | `service/ws/chat-websocket/run-registry.js:101`、`event-protocol/src/event-registry-validators.js:94` | 插话主键用 `user-interjection:${commandId}` 拼出，校验器把拼法固化为规则；存量 405 处、checkpoint 引用 164 处           | 改用 `createMessageUid`；删除 `interjection_source_identity_mismatch`，改为来源非空且 `contentId === message:${sourceMessageUid}`；命令归属只认 `causality.commandId`；存量值原样保留                                |
+| M12（已完成） | `event-protocol/src/thinking-detail-content-fact.js:40`                                               | `sourceMessageUid \|\| sourceEventId` 回退                                                                              | 协议常量 `THINKING_DETAIL_CONTENT_SOURCE_FIELD` 按 `contentKind` 规定唯一来源字段，另一来源字段必须不存在，未知 kind 拒绝；经公开入口 `@noobot/event-protocol/thinking-detail-content` 导出，测试与 e2e 经该常量读取 |
+| M13（已完成） | `agent/src/runtime/state-builder.js:183`、`context-blocks.js:97`、`user-meta-backwrite.js:39`         | 内联拼接 `${sourceMessageUid}::user_meta`                                                                               | 三处改用 `deriveContextMessageProjectionId(..., CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META)`                                                                                                                          |
+| M14           | `agent/__tests__/bot/execution/runner-bot-hook.fixtures.js:84`                                        | 夹具内联拼 `msg_user_test_` 并写裸 `messageId`                                                                          | 随任务 B 改为 `userMessageId`                                                                                                                                                                                        |
+
+已修：测试 helper `accepted-run-identity.js` 手写 `msg_assistant_`/`msg_user_`，改为读 schema 前缀。
+
+M11～M13 验证：event-protocol 76/76、service 286/286、agent 1545/1545、前端 1398/1398，`check:quality` 通过，字段门禁 1771/373 未抬高。e2e `050-user-interjection` 断言已改，需真实服务环境，尚未运行。
+
+登记（不合并）：`CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META`（内部消息类型）与 `CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META`（投影 ID 后缀）取值相同、概念不同。
+
+### 进度（截至 2026-10-21）
+
+- 已完成：
+  - 四类身份字段与生成函数统一到 session-protocol；流 ID、`noobotMessageId`（agent、context-protocol、harness、门禁）、`applyAuthoritativeMessageId` 双写删除；M1、M3、M6；consumption 诊断字段改 presentation 语义。
+  - `message-identity-schema.js` 落地并接入 exports；生成函数前缀改为 `sm_`/`mm_`/`pm_`/`um_`；门禁 `check:message-identity-fields` 按实测基线接入。
+  - M11、M12、M13。
+- 未完成（按顺序）：引用字段改名为 `*MessageUid(s)`（`unregisteredField` 131）→ 裸 `messageId` 按角色拆分（M2/M4/M5/M7/M8/M9/任务 B、M14，`legacyKeyField` 751）→ v7 迁移（读 `messageFieldRenamesFor`，含回执 `requestHashVersion`、session-summary 重建）→ 门禁收紧到 0；M10 事实源确认；D10；D9 快照迁移。

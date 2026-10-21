@@ -6,7 +6,7 @@
 
 import { HumanMessage } from "@langchain/core/messages";
 import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
-import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import {
   CONTEXT_CONTROL_MESSAGE_TYPES,
