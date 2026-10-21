@@ -35,15 +35,13 @@ import {
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text, isPlainObject } from "@noobot/shared/value";
 
-function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
+function assignTerminalAssistantSessionIdentity(session, turnScopeId, assistantMessage) {
   if (!isPlainObject(assistantMessage)) return assistantMessage;
-  const clean = (value) => text(value);
-  const turn = session?.turnLifecycle?.turns?.[clean(turnScopeId)] || {};
+  const turn = session?.turnLifecycle?.turns?.[text(turnScopeId)] || {};
   return normalizeMessageEntity({
     ...assistantMessage,
-    messageUid: clean(assistantMessage.messageUid) || createMessageUid(),
-    presentationMessageId:
-      clean(assistantMessage.presentationMessageId) || clean(turn.presentationMessageId),
+    messageUid: createMessageUid(),
+    presentationMessageId: text(turn.presentationMessageId),
   });
 }
 
@@ -287,7 +285,7 @@ export async function applyTurnLifecycleEvent({
         expectedAggregateVersion,
       );
       if (conflict) return conflict;
-      const terminalAssistantMessage = bindTerminalAssistantIdentity(
+      const terminalAssistantMessage = assignTerminalAssistantSessionIdentity(
         session,
         lifecycleEvent.turnScopeId,
         lifecycleEvent.terminalStatus?.assistantMessage,

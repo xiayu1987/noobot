@@ -17,7 +17,7 @@ import {
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
-const SNAPSHOT_VERSION = 4;
+export const SNAPSHOT_VERSION = 4;
 const IDENTITY_FIELDS = [
   "userId",
   "sessionId",

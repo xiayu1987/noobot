@@ -17,6 +17,7 @@ export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   executionEventsDir: "execution-events",
   turnsDir: "turns",
   turnSnapshotsDir: "turn-snapshots",
+  modelMessageSnapshotsDir: "model-message-snapshots",
   meta: "meta.json",
 });
 
@@ -31,6 +32,7 @@ export function buildSessionArtifactFileMap(sessionDir = "") {
     executionEventsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.executionEventsDir),
     turnsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.turnsDir),
     turnSnapshotsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir),
+    modelMessageSnapshotsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.modelMessageSnapshotsDir),
     meta: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.meta),
   };
 }

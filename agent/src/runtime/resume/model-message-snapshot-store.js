@@ -18,8 +18,7 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { emitEvent } from "../../events/emitter.js";
-
-const SNAPSHOT_DIR_NAME = "model-message-snapshots";
+import { SESSION_ARTIFACT_FILE_NAMES } from "../../session/session-artifact-files.js";
 
 function snapshotFileSegment(value = "") {
   return String(value).replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -37,7 +36,13 @@ async function resolveSnapshotLocation(identity = {}, globalConfig = {}) {
   });
   if (!location.sessionDir) return location;
   const fileName = `${snapshotFileSegment(identity.dialogProcessId)}__${snapshotFileSegment(identity.turnScopeId)}.json`;
-  return { file: path.join(location.sessionDir, SNAPSHOT_DIR_NAME, fileName) };
+  return {
+    file: path.join(
+      location.sessionDir,
+      SESSION_ARTIFACT_FILE_NAMES.modelMessageSnapshotsDir,
+      fileName,
+    ),
+  };
 }
 
 function snapshotSkipReason(location = {}) {

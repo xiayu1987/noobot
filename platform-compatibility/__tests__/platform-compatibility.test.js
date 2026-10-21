@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   PLATFORM,
@@ -21,6 +24,7 @@ import {
   supportsHeadedBrowser,
   terminateProcessTree,
   usesDetachedProcessGroup,
+  writeFileAtomic,
 } from "../src/index.js";
 
 test("platform aliases normalize to one canonical identity", () => {
@@ -167,4 +171,22 @@ test("process tree termination uses the platform primitive", async () => {
     execFileImpl: (...args) => calls.push(args),
   });
   assert.deepEqual(calls, [[-43, "SIGTERM"]]);
+});
+
+test("atomic write keeps a fixed-length temporary name for long target names", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "atomic-write-"));
+  const fileName = `${"a".repeat(240)}.json`;
+  try {
+    await writeFileAtomic({
+      filePath: path.join(directory, fileName),
+      content: "{}",
+      writeFile,
+      rename,
+      remove: rm,
+    });
+    assert.equal(await readFile(path.join(directory, fileName), "utf8"), "{}");
+    assert.deepEqual(await readdir(directory), [fileName]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

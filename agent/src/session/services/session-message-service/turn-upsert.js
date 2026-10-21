@@ -10,7 +10,6 @@ import {
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
@@ -120,46 +119,29 @@ function applyAttachments(turn, input) {
   if (attachments.length) turn.attachments = attachments;
 }
 
-function findCompositeIdentityIndex(messages, turn, dialogProcessId, turnScopeId) {
-  if (!turn.messageId) return -1;
-  return messages.findIndex(
-    (message = {}) =>
-      normalizedString(message?.messageId) === turn.messageId &&
-      resolveSessionMessageRecordDialogProcessId(message) === dialogProcessId &&
-      normalizedString(message?.turnScopeId) === turnScopeId,
-  );
-}
-
-function findPersistedTurn(messages, turn) {
-  const dialogProcessId = normalizeDialogProcessId(turn?.dialogProcessId);
-  const turnScopeId = normalizedString(turn?.turnScopeId);
-  const messageUid = normalizedString(turn.messageUid);
-  const compositeIdentityIndex = findCompositeIdentityIndex(
-    messages,
-    turn,
-    dialogProcessId,
-    turnScopeId,
-  );
-  const existingIndex = messageUid
-    ? messages.findIndex((message = {}) => normalizedString(message?.messageUid) === messageUid)
-    : compositeIdentityIndex;
-  return { compositeIdentityIndex, dialogProcessId, existingIndex, messageUid, turnScopeId };
-}
-
 function createIdentityError(message, code) {
   const error = new Error(message);
   error.code = code;
   return error;
 }
 
-function assertMessageIdentityMatch(identity, existing = null) {
-  if (identity.messageUid && identity.existingIndex < 0 && identity.compositeIdentityIndex >= 0) {
-    throw createIdentityError(
-      "messageUid does not match the persisted runtime message identity",
-      "SESSION_MESSAGE_UID_MISMATCH",
-    );
+function findPersistedTurnByMessageUid(messages, turn) {
+  const messageUid = normalizedString(turn.messageUid);
+  if (!messageUid) {
+    throw createIdentityError("session turn requires messageUid", "SESSION_MESSAGE_UID_REQUIRED");
   }
-  if (!existing || !identity.messageUid) return;
+  return {
+    dialogProcessId: normalizeDialogProcessId(turn?.dialogProcessId),
+    turnScopeId: normalizedString(turn?.turnScopeId),
+    messageUid,
+    existingIndex: messages.findIndex(
+      (message = {}) => normalizedString(message?.messageUid) === messageUid,
+    ),
+  };
+}
+
+function assertMessageIdentityMatch(identity, existing = null) {
+  if (!existing) return;
   if (
     resolveSessionMessageRecordDialogProcessId(existing) !== identity.dialogProcessId ||
     normalizedString(existing?.turnScopeId) !== identity.turnScopeId
@@ -171,12 +153,12 @@ function assertMessageIdentityMatch(identity, existing = null) {
   }
 }
 
-function mergeExistingTurn(service, existing, turn, messageUid) {
+function mergeExistingTurn(service, existing, turn) {
   return normalizeMessageEntity(
     {
       ...existing,
       ...turn,
-      messageUid: existing.messageUid || messageUid || createMessageUid(),
+      messageUid: existing.messageUid,
       messageId: turn.messageId,
       ts: existing.ts || turn.ts,
     },
@@ -185,7 +167,7 @@ function mergeExistingTurn(service, existing, turn, messageUid) {
 }
 
 function persistTurn(service, messages, turn) {
-  const identity = findPersistedTurn(messages, turn);
+  const identity = findPersistedTurnByMessageUid(messages, turn);
   const existing = identity.existingIndex >= 0 ? messages[identity.existingIndex] || {} : null;
   assertMessageIdentityMatch(identity, existing);
   const incomingPresentation = canonicalAssistantPresentationIdentity(turn);
@@ -199,12 +181,12 @@ function persistTurn(service, messages, turn) {
     }
   }
   if (existing) {
-    const persisted = mergeExistingTurn(service, existing, turn, identity.messageUid);
+    const persisted = mergeExistingTurn(service, existing, turn);
     messages[identity.existingIndex] = persisted;
     return persisted;
   }
   const persisted = normalizeMessageEntity(
-    { ...turn, messageUid: identity.messageUid || createMessageUid() },
+    { ...turn, messageUid: identity.messageUid },
     service.now,
   );
   messages.push(persisted);

@@ -317,9 +317,17 @@ test("internal append and summary checkpoint use mutation lock without changing 
   await h.service.appendTurns({
     userId: "u1",
     sessionId: "s1",
-    turns: [{ role: "assistant", content: "a", turnScopeId: "t", dialogProcessId: "dp" }],
+    turns: [
+      {
+        messageUid: "sm_a",
+        role: "assistant",
+        content: "a",
+        turnScopeId: "t",
+        dialogProcessId: "dp",
+      },
+    ],
   });
-  const targetUid = h.get().messages.find((message) => message.content === "a").messageUid;
+  const targetUid = "sm_a";
   await h.service.commitTurnSummaryCheckpoint({
     userId: "u1",
     sessionId: "s1",

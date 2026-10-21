@@ -13,6 +13,7 @@
     "./debug-projection": "./debug-projection.js",
     "./length-thresholds": "./length-thresholds.js",
     "./message-diagnostics": "./message-diagnostics.js",
+    "./migration": "./migration.js",
     "./quantity-thresholds": "./quantity-thresholds.js",
     "./runtime-events-config": "./runtime-events-config.js",
     "./time-thresholds": "./time-thresholds.js",

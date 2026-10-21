@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import {
   ensureUserWorkspace,
+  repairUserWorkspace,
   resetUserWorkspace,
   syncUserWorkspace,
 } from "../../workspace-lifecycle/index.js";
@@ -42,6 +43,10 @@ export class WorkspaceService {
 
   async ensureUserWorkspace(userId) {
     return ensureUserWorkspace(this.lifecycleOptions(userId));
+  }
+
+  async repairUserWorkspace(userId) {
+    return repairUserWorkspace(this.lifecycleOptions(userId));
   }
 
   async resetUserWorkspace(userId, options = {}) {

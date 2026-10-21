@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const WORKSPACE_LAYOUT_VERSION = 6;
+export const WORKSPACE_LAYOUT_VERSION = 7;
 
 export const WORKSPACE_ROOT_LAYOUT = Object.freeze({
   USERS_FILE: "user.json",
@@ -37,6 +37,7 @@ export const WORKSPACE_LAYOUT = Object.freeze({
   PLUGIN_DATA_DIR: "runtime/plugin-data",
   MEMORY_REPAIR_BACKUPS_DIR: "runtime/memory-repair-backups",
   WORKSPACE_BACKUPS_DIR: "runtime/workspace-backups",
+  MIGRATION_QUARANTINE_DIR: "runtime/migration-quarantine",
   ASSET_STATE_FILE: "runtime/workspace-asset-state.json",
   LAYOUT_STATE_FILE: "runtime/workspace-layout-state.json",
 });

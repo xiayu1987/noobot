@@ -9,6 +9,7 @@ import { isTransientAtomicRenameError } from "./file-system.js";
 import { isFunction } from "@noobot/shared/value";
 
 export const ATOMIC_RENAME_RETRY_DELAYS_MS = Object.freeze([25, 75, 150, 300, 600]);
+const TEMPORARY_FILE_PREFIX = ".noobot-atomic-";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,10 +29,7 @@ export async function writeFileAtomic({
     throw new TypeError("atomic file write requires writeFile, rename, and remove operations");
   }
   const delays = Array.isArray(retryDelaysMs) ? retryDelaysMs : ATOMIC_RENAME_RETRY_DELAYS_MS;
-  const temporary = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.noobot-${process.pid}-${Date.now()}-${randomUUID()}`,
-  );
+  const temporary = path.join(path.dirname(filePath), `${TEMPORARY_FILE_PREFIX}${randomUUID()}`);
   try {
     await writeFile(temporary, content, encoding);
     for (let attempt = 0; ; attempt += 1) {

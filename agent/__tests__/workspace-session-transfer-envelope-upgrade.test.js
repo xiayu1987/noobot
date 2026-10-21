@@ -293,7 +293,7 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
     );
 
     const rerun = await upgradeSessionTransferEnvelopes(fixture);
-    assert.deepEqual(rerun, { sessions: [] });
+    assert.deepEqual(rerun, { sessions: [], quarantined: [] });
   } finally {
     await fixture.restore();
   }
@@ -312,7 +312,7 @@ test("v6 keeps a stale summary revision stale", async () => {
   }
 });
 
-test("v6 rejects a journal hash mismatch without writing any file", async () => {
+test("v6 quarantines a journal hash mismatch without writing any file", async () => {
   const fixture = await createFixture();
   try {
     const seeded = await seedSession(fixture);
@@ -320,12 +320,13 @@ test("v6 rejects a journal hash mismatch without writing any file", async () => 
     const committed = jsonl([tampered, upsert(seeded.plain)]);
     await fixture.write("turns/turn-1.jsonl", committed);
     const before = await fixture.readText("events/events.jsonl");
-    await assert.rejects(upgradeSessionTransferEnvelopes(fixture), (error) => {
-      assert.equal(error.code, "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID");
-      assert.equal(error.details.reason, "journal_hash_mismatch");
-      assert.equal(error.details.messageUid, "sm_a");
-      return true;
-    });
+    const result = await upgradeSessionTransferEnvelopes(fixture);
+    assert.deepEqual(result.sessions, []);
+    const [quarantined] = result.quarantined;
+    assert.equal(quarantined.path, SESSION);
+    assert.equal(quarantined.error.code, "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID");
+    assert.equal(quarantined.error.details.reason, "journal_hash_mismatch");
+    assert.equal(quarantined.error.details.messageUid, "sm_a");
     assert.equal(await fixture.readText("turns/turn-1.jsonl"), committed);
     assert.equal(await fixture.readText("events/events.jsonl"), before);
     assert.equal(await fixture.backupExists("turns/turn-1.jsonl"), false);
@@ -334,16 +335,18 @@ test("v6 rejects a journal hash mismatch without writing any file", async () => 
   }
 });
 
-test("v6 rejects a manifest hash that does not match the committed record", async () => {
+test("v6 quarantines a manifest hash that does not match the committed record", async () => {
   const fixture = await createFixture();
   try {
     const seeded = await seedSession(fixture);
     const manifest = structuredClone(seeded.manifest);
     manifest.turnOrder[0].messageHashes.sm_a = "sha256:other";
     await fixture.write("session.json", manifest);
-    await assert.rejects(upgradeSessionTransferEnvelopes(fixture), {
-      code: "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID",
-      details: { reason: "manifest_message_hash_mismatch", turnId: "turn-1", messageUid: "sm_a" },
+    const result = await upgradeSessionTransferEnvelopes(fixture);
+    assert.deepEqual(result.quarantined[0].error.details, {
+      reason: "manifest_message_hash_mismatch",
+      turnId: "turn-1",
+      messageUid: "sm_a",
     });
     assert.deepEqual(await fixture.readJson("session.json"), manifest);
     assert.equal(await fixture.backupExists("session.json"), false);

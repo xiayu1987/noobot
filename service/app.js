@@ -11,6 +11,7 @@ import { createHeadlessRuntime } from "./bootstrap/create-headless-runtime.js";
 import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewares.js";
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
+import { prepareUserWorkspaces } from "./bootstrap/prepare-user-workspaces.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -87,12 +88,10 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 try {
-  const results = [];
-  for (const userId of await readSessionUserIds()) {
-    await getBot().ensureUserWorkspace(userId);
-    results.push(await getBot().session.maintainSessionDisplaySummaries({ userId }));
-  }
-  const failures = results.flatMap((result) => result.failures || []);
+  const preparation = await prepareUserWorkspaces({
+    userIds: await readSessionUserIds(),
+    bot: getBot(),
+  });
   if (!shuttingDown) {
     httpServer = await startHttpServer({
       app,
@@ -113,22 +112,11 @@ try {
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.STARTUP,
       category: RUNTIME_EVENT_CATEGORIES.STATE,
-      level: failures.length ? "error" : "info",
-      event: failures.length
-        ? "service.startup.sessionDisplaySummaryMaintenance.failed"
-        : "service.startup.sessionDisplaySummaryMaintenance.completed",
-      data: {
-        userCount: results.length,
-        migratedSessionCount: results.reduce(
-          (count, result) => count + (result.migratedSessionIds?.length || 0),
-          0,
-        ),
-        rebuiltSessionCount: results.reduce(
-          (count, result) => count + (result.rebuiltSessionIds?.length || 0),
-          0,
-        ),
-        failures,
-      },
+      level: preparation.failures.length ? "error" : "info",
+      event: preparation.failures.length
+        ? "service.startup.workspacePreparation.failed"
+        : "service.startup.workspacePreparation.completed",
+      data: preparation,
     });
   }
 } catch (error) {
@@ -138,7 +126,7 @@ try {
     channel: RUNTIME_EVENT_CHANNELS.STARTUP,
     category: RUNTIME_EVENT_CATEGORIES.STATE,
     level: "error",
-    event: "service.startup.sessionDisplaySummaryMaintenance.failed",
+    event: "service.startup.failed",
     data: {
       code: String(error?.code || ""),
       message: String(error?.message || error || ""),

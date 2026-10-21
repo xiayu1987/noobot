@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import { RUNTIME_EVENTS_DIR } from "@noobot/runtime-events";
 import {
   TRANSFER_DOCUMENT_FORMAT,
@@ -32,13 +32,15 @@ import {
   messageHash,
 } from "../session/session-artifact-session/turn-journal-store.js";
 import { createSessionDisplaySourceRevision } from "../session/session-display-source-revision.js";
+import { quarantineMigrationUnit } from "./migration-quarantine.js";
+import { walkSessionManifestDirectories } from "./session-directory-walk.js";
 
-const SESSION_ARTIFACT_DIRECTORIES = new Set(Object.values(SESSION_ARTIFACT_FILE_NAMES));
-const MUTATION_LOCK_SUFFIX = ".mutation-lock";
+const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID";
+const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE;
 
 function upgradeError(code, details) {
   const error = new Error(`workspace session transfer envelope upgrade failed: ${code}`);
-  error.code = "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID";
+  error.code = UPGRADE_INVALID_CODE;
   error.details = { reason: code, ...details };
   return error;
 }
@@ -92,12 +94,17 @@ function createWritePlan() {
 
 async function commitWritePlan({ base, backupBase, writes }) {
   const files = [];
-  for (const [filePath, content] of writes) {
-    const target = path.join(backupBase, path.relative(base, filePath));
-    await mkdir(path.dirname(target), { recursive: true });
-    await copyFile(filePath, target);
-    await writeText(filePath, content);
-    files.push({ path: path.relative(base, filePath), backupPath: target });
+  try {
+    for (const [filePath, content] of writes) {
+      const target = path.join(backupBase, path.relative(base, filePath));
+      await mkdir(path.dirname(target), { recursive: true });
+      await copyFile(filePath, target);
+      files.push({ path: path.relative(base, filePath), backupPath: target });
+      await writeText(filePath, content);
+    }
+  } catch (error) {
+    for (const file of files) await copyFile(file.backupPath, path.join(base, file.path));
+    throw error;
   }
   return files;
 }
@@ -419,32 +426,32 @@ async function upgradeSessionDirectory({ base, backupBase, sessionDir }) {
   };
 }
 
-async function* walkSessionDirectories(directory) {
-  for (const entry of await listEntries(directory)) {
-    if (!entry.isDirectory()) continue;
-    if (SESSION_ARTIFACT_DIRECTORIES.has(entry.name)) continue;
-    if (entry.name.endsWith(MUTATION_LOCK_SUFFIX)) continue;
-    const child = path.join(directory, entry.name);
-    if ((await readTextOrNull(path.join(child, SESSION_ARTIFACT_FILE_NAMES.session))) !== null) {
-      yield child;
-    }
-    yield* walkSessionDirectories(child);
-  }
-}
-
 export async function upgradeSessionTransferEnvelopes({ base, backupBase, scopedSessionRoots }) {
   if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
     throw new TypeError("session transfer envelope upgrade requires scopedSessionRoots");
   }
   const sessions = [];
+  const quarantined = [];
   for (const root of [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots]) {
-    for await (const sessionDir of walkSessionDirectories(path.join(base, root))) {
-      const result = await sessionMutationCoordinator.run(
-        resolveSessionArtifactMutationLock(sessionDir),
-        () => upgradeSessionDirectory({ base, backupBase, sessionDir }),
-      );
-      if (result) sessions.push(result);
+    for await (const sessionDir of walkSessionManifestDirectories(path.join(base, root))) {
+      try {
+        const result = await sessionMutationCoordinator.run(
+          resolveSessionArtifactMutationLock(sessionDir),
+          () => upgradeSessionDirectory({ base, backupBase, sessionDir }),
+        );
+        if (result) sessions.push(result);
+      } catch (error) {
+        if (error?.code !== UPGRADE_INVALID_CODE) throw error;
+        quarantined.push(
+          await quarantineMigrationUnit({
+            base,
+            kind: QUARANTINE_KIND,
+            relativePath: path.relative(base, sessionDir),
+            error,
+          }),
+        );
+      }
     }
   }
-  return { sessions };
+  return { sessions, quarantined };
 }

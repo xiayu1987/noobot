@@ -87,7 +87,7 @@ function normalizeSessionTurnInput(input = {}) {
   return {
     ...input,
     userName: valueOrDefault(input.userName, input.userId),
-    messageUid: text(valueOrDefault(input.messageUid, "")),
+    messageUid: text(input.messageUid),
     messageId: text(valueOrDefault(input.messageId, "")),
     presentationMessageId: text(valueOrDefault(input.presentationMessageId, "")),
     chatPresentation: input.chatPresentation === true,

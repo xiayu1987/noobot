@@ -166,7 +166,11 @@ async function withWorkspace(options, operation, sections) {
 }
 
 export async function ensureUserWorkspace(options) {
-  return (await withWorkspace(options, WORKSPACE_OPERATION.REPAIR, normalizeSections())).base;
+  return (await repairUserWorkspace(options)).base;
+}
+
+export function repairUserWorkspace(options) {
+  return withWorkspace(options, WORKSPACE_OPERATION.REPAIR, normalizeSections());
 }
 
 export async function syncUserWorkspace(options) {

@@ -118,5 +118,5 @@ test("writeJsonAtomic cleans up temp file when rename cannot recover", async () 
 
   assert.equal(writes.size, 0);
   assert.equal(removed.length, 1);
-  assert.match(removed[0], /\.session-tree\.json\.noobot-/);
+  assert.match(removed[0], /[\\/]\.noobot-atomic-[0-9a-f-]{36}$/);
 });

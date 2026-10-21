@@ -82,6 +82,10 @@ export class BotManager {
     return this.workspaceService.ensureUserWorkspace(userId);
   }
 
+  async repairUserWorkspace(userId) {
+    return this.workspaceService.repairUserWorkspace(userId);
+  }
+
   async resetUserWorkspace(userId, options = {}) {
     return this.workspaceService.resetUserWorkspace(userId, options);
   }

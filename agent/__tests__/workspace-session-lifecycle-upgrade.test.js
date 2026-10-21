@@ -10,6 +10,7 @@ import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { upgradeSessionLifecycle } from "../src/workspace-lifecycle/session-lifecycle-upgrade.js";
+import { releaseQuarantinedUnits } from "../src/workspace-lifecycle/migration-quarantine.js";
 
 const RECORDS = WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR;
 const TOMBSTONE = WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE;
@@ -111,19 +112,56 @@ test("v4 keeps an existing tombstone entry and is a no-op on re-run", async () =
       updatedAt: "t0",
     });
     const rerun = await upgradeSessionLifecycle(fixture);
-    assert.deepEqual(rerun, { rewritten: [], retired: [], tombstoneSessionsAdded: false });
+    assert.deepEqual(rerun, {
+      rewritten: [],
+      retired: [],
+      quarantined: [],
+      tombstoneSessionsAdded: false,
+    });
   } finally {
     await fixture.restore();
   }
 });
 
-test("v4 rejects a deleted record without a valid deletedAt", async () => {
+test("v4 quarantines a deleted record without a valid deletedAt and upgrades the rest", async () => {
   const fixture = await createFixture();
   try {
     await fixture.write(`${RECORDS}/s-deleted.json`, { ...deletedRecord, deletedAt: "" });
-    await assert.rejects(upgradeSessionLifecycle(fixture), {
-      code: "WORKSPACE_SESSION_LIFECYCLE_UPGRADE_INVALID",
+    await fixture.write(`${RECORDS}/s-other.json`, { ...deletedRecord, sessionId: "s-other" });
+    const result = await upgradeSessionLifecycle(fixture);
+    const quarantined = `${WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR}/session-lifecycle/${RECORDS}/s-deleted.json`;
+    assert.deepEqual(
+      result.quarantined.map((item) => [item.path, item.quarantinePath, item.error.code]),
+      [[`${RECORDS}/s-deleted.json`, quarantined, "WORKSPACE_SESSION_LIFECYCLE_UPGRADE_INVALID"]],
+    );
+    assert.equal(await fixture.exists(`${RECORDS}/s-deleted.json`), false);
+    assert.equal((await fixture.readJson(quarantined)).deletedAt, "");
+    assert.equal((await fixture.readJson(`${quarantined}.reason.json`)).kind, "session-lifecycle");
+    assert.deepEqual(Object.keys((await fixture.readJson(TOMBSTONE)).sessions), ["s-other"]);
+    assert.equal(await fixture.exists(`${RECORDS}/s-other.json`), false);
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("v4 retries a released quarantined record once its data can be mapped", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write(`${RECORDS}/s-deleted.json`, { ...deletedRecord, deletedAt: "" });
+    const first = await upgradeSessionLifecycle(fixture);
+    const quarantined = first.quarantined[0].quarantinePath;
+    await fixture.write(quarantined, deletedRecord);
+    const released = await releaseQuarantinedUnits({
+      base: fixture.base,
+      kind: "session-lifecycle",
     });
+    assert.deepEqual(released, [`${RECORDS}/s-deleted.json`]);
+    assert.equal(await fixture.exists(`${quarantined}.reason.json`), false);
+    const retried = await upgradeSessionLifecycle(fixture);
+    assert.deepEqual(retried.quarantined, []);
+    assert.equal(retried.tombstoneSessionsAdded, true);
+    assert.equal(await fixture.exists(`${RECORDS}/s-deleted.json`), false);
+    assert.deepEqual(Object.keys((await fixture.readJson(TOMBSTONE)).sessions), ["s-deleted"]);
   } finally {
     await fixture.restore();
   }

@@ -358,7 +358,7 @@ test("v4 workspace fills session tree callers from nested session documents", as
   }
 });
 
-test("layout upgrade rejects a corrupted session manifest and leaves it untouched", async () => {
+test("layout upgrade quarantines a corrupted session manifest without blocking the workspace", async () => {
   const fixture = await createFixture();
   try {
     await fixture.write(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE, { version: 5 });
@@ -370,18 +370,21 @@ test("layout upgrade rejects a corrupted session manifest and leaves it untouche
     });
     await fixture.write("runtime/session/root/session.json", { caller: SESSION_CALLER.USER });
     await fixture.write("runtime/session/root/broken/session.json", "{not json");
-    await assert.rejects(ensureUserWorkspace(fixture.options), {
-      code: "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID",
-      details: {
-        reason: "invalid_json",
-        filePath: fixture.at("runtime/session/root/broken/session.json"),
-      },
-    });
+    await ensureUserWorkspace(fixture.options);
     assert.equal(
       await readFile(fixture.at("runtime/session/root/broken/session.json"), "utf8"),
       "{not json",
     );
-    assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), { version: 5 });
+    const reason = await fixture.readJson(
+      `${WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR}/session-transfer-envelope/runtime/session/root/broken.reason.json`,
+    );
+    assert.deepEqual(reason.error.details, {
+      reason: "invalid_json",
+      filePath: fixture.at("runtime/session/root/broken/session.json"),
+    });
+    assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), {
+      version: WORKSPACE_LAYOUT_VERSION,
+    });
   } finally {
     await fixture.restore();
   }

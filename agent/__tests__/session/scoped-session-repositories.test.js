@@ -193,6 +193,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       persistenceScope: access.persistenceScope,
       turns: [
         {
+          messageUid: "sm_node_task",
           role: "user",
           content: "node task",
           dialogProcessId: turnIdentity.dialogProcessId,
@@ -204,13 +205,20 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       ...turnIdentity,
       messages: [
         {
+          messageUid: "sm_tool_call",
           role: "assistant",
           type: "tool_call",
           content: "",
           tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
         },
-        { role: "tool", type: "tool_result", content: "body", tool_call_id: "call-1" },
-        { role: "assistant", type: "message", content: "done" },
+        {
+          messageUid: "sm_tool_result",
+          role: "tool",
+          type: "tool_result",
+          content: "body",
+          tool_call_id: "call-1",
+        },
+        { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
       ],
     });
 

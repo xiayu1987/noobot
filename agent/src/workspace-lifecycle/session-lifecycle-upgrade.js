@@ -5,13 +5,15 @@
  */
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { isMissingPersistencePathError } from "../shared/storage/json-file-reader.js";
 import { text } from "@noobot/shared/value";
 import { parseWorkspaceSessionTombstones } from "@noobot/workspace-protocol/session-store";
+import { quarantineMigrationUnit } from "./migration-quarantine.js";
 
 const V4_RECORD_FIELDS = Object.freeze(["schemaVersion", "sessionId", "repair", "updatedAt"]);
+const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE;
 
 function isV4Record(record) {
   return (
@@ -81,53 +83,87 @@ async function readTextOrNull(filePath) {
   }
 }
 
+async function planRecord({ base, relativePath, tombstoneSessions }) {
+  const record = await readJson(path.join(base, relativePath));
+  if (isV4Record(record)) return null;
+  const sessionId = text(record.sessionId);
+  if (!sessionId) {
+    throw upgradeError(`lifecycle record has no sessionId: ${relativePath}`, {
+      path: relativePath,
+    });
+  }
+  const deletedAtMs =
+    record.state === "deleted" && !Object.hasOwn(tombstoneSessions, sessionId)
+      ? resolveDeletedAtMs(record, relativePath)
+      : null;
+  return { relativePath, record, sessionId, deletedAtMs };
+}
+
+async function applyRecord({ base, backupBase, plan, upgradedAt }) {
+  const { relativePath, record, sessionId } = plan;
+  const backupPath = await backupRecord(backupBase, relativePath, record);
+  if (record.repair?.status === "failed") {
+    await writeJson(path.join(base, relativePath), {
+      schemaVersion: 1,
+      sessionId,
+      repair: record.repair,
+      updatedAt: upgradedAt,
+    });
+    return { rewritten: true, item: { path: relativePath, backupPath } };
+  }
+  await rm(path.join(base, relativePath));
+  return { rewritten: false, item: { path: relativePath, backupPath } };
+}
+
+async function planRecords({ base, tombstoneSessions }) {
+  const recordsDir = path.join(base, WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR);
+  const plans = [];
+  const quarantined = [];
+  for (const name of await listRecordFiles(recordsDir)) {
+    const relativePath = path.join(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR, name);
+    try {
+      const plan = await planRecord({ base, relativePath, tombstoneSessions });
+      if (plan) plans.push(plan);
+    } catch (error) {
+      if (error?.code !== "WORKSPACE_SESSION_LIFECYCLE_UPGRADE_INVALID") throw error;
+      quarantined.push(
+        await quarantineMigrationUnit({
+          base,
+          kind: QUARANTINE_KIND,
+          relativePath,
+          error,
+          move: true,
+        }),
+      );
+    }
+  }
+  return { plans, quarantined };
+}
+
 export async function upgradeSessionLifecycle({ base, backupBase }) {
   const upgradedAt = new Date().toISOString();
-  const recordsDir = path.join(base, WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR);
   const tombstoneFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
   const tombstoneSessions = parseWorkspaceSessionTombstones({
     raw: await readTextOrNull(tombstoneFile),
     file: tombstoneFile,
   });
+  const { plans, quarantined } = await planRecords({ base, tombstoneSessions });
+  const deleted = plans.filter((plan) => plan.deletedAtMs !== null);
+  for (const plan of deleted) tombstoneSessions[plan.sessionId] = plan.deletedAtMs;
+  if (deleted.length) {
+    await mkdir(path.dirname(tombstoneFile), { recursive: true });
+    await writeJson(tombstoneFile, { sessions: tombstoneSessions, updatedAt: upgradedAt });
+  }
   const rewritten = [];
   const retired = [];
-  let tombstoneChanged = false;
-
-  for (const name of await listRecordFiles(recordsDir)) {
-    const relativePath = path.join(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR, name);
-    const record = await readJson(path.join(base, relativePath));
-    if (isV4Record(record)) continue;
-    const sessionId = text(record.sessionId);
-    if (!sessionId) {
-      throw upgradeError(`lifecycle record has no sessionId: ${relativePath}`, {
-        path: relativePath,
-      });
-    }
-    if (record.state === "deleted" && !Object.hasOwn(tombstoneSessions, sessionId)) {
-      tombstoneSessions[sessionId] = resolveDeletedAtMs(record, relativePath);
-      tombstoneChanged = true;
-    }
-    const backupPath = await backupRecord(backupBase, relativePath, record);
-    if (record.repair?.status === "failed") {
-      await writeJson(path.join(base, relativePath), {
-        schemaVersion: 1,
-        sessionId,
-        repair: record.repair,
-        updatedAt: upgradedAt,
-      });
-      rewritten.push({ path: relativePath, backupPath });
-    } else {
-      await rm(path.join(base, relativePath));
-      retired.push({ path: relativePath, backupPath });
-    }
+  for (const plan of plans) {
+    const result = await applyRecord({ base, backupBase, plan, upgradedAt });
+    (result.rewritten ? rewritten : retired).push(result.item);
   }
-
-  if (tombstoneChanged) {
-    await mkdir(path.dirname(tombstoneFile), { recursive: true });
-    await writeJson(tombstoneFile, {
-      sessions: tombstoneSessions,
-      updatedAt: upgradedAt,
-    });
-  }
-  return { rewritten, retired, tombstoneSessionsAdded: tombstoneChanged };
+  return {
+    rewritten,
+    retired,
+    quarantined,
+    tombstoneSessionsAdded: deleted.length > 0,
+  };
 }

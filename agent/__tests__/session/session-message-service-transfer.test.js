@@ -88,7 +88,9 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
   await service.appendTurns({
     userId: "u1",
     sessionId: "s1",
-    turns: [{ role: "assistant", content: "done", transferEnvelopes: [envelope] }],
+    turns: [
+      { messageUid: "sm_done", role: "assistant", content: "done", transferEnvelopes: [envelope] },
+    ],
   });
 
   assert.equal(saved.length, 1);
@@ -137,6 +139,7 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
     sessionId: "s1",
     turns: [
       {
+        messageUid: "sm_done",
         role: "assistant",
         content: "done",
         turnScopeId: "turn-1",
@@ -200,6 +203,7 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
     sessionId: "s1",
     turns: [
       {
+        messageUid: "sm_guidance",
         role: "user",
         content: "injected guidance",
         turnScopeId: "turn-1",
@@ -217,6 +221,7 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
     sessionId: "s1",
     turns: [
       {
+        messageUid: "sm_done",
         role: "assistant",
         content: "done",
         turnScopeId: "turn-1",

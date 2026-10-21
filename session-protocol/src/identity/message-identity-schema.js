@@ -94,10 +94,15 @@ export const MESSAGE_FIELD_SCHEMA = Object.freeze({
   }),
 });
 
+export const MESSAGE_REMOVED_FIELD_NAME = Object.freeze({
+  MESSAGE_ID: "messageId",
+  NOOBOT_MESSAGE_ID: "noobotMessageId",
+});
+
 export const MESSAGE_REMOVED_FIELD = Object.freeze({
-  messageId:
+  [MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID]:
     "split by role into modelMessageId and userMessageId; other roles duplicated messageUid",
-  noobotMessageId: "duplicate of contextMessageId",
+  [MESSAGE_REMOVED_FIELD_NAME.NOOBOT_MESSAGE_ID]: "duplicate of contextMessageId",
 });
 
 export function isRegisteredMessageIdentityField(name) {
