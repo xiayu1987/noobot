@@ -42,11 +42,7 @@ function resolveSourceWorkflowRunId(pluginMeta) {
   return String(pluginMeta?.payload?.workflowRunId || "");
 }
 
-function buildPlanningSourceMessage(
-  workflowMessage,
-  payload,
-  { presentationMessageId, messageId },
-) {
+function buildPlanningSourceMessage(workflowMessage, payload, { presentationMessageId }) {
   const pluginMeta = workflowMessage?.pluginMeta;
   return {
     role: String(workflowMessage?.role || ""),
@@ -54,7 +50,6 @@ function buildPlanningSourceMessage(
     pluginMessage: workflowMessage?.pluginMessage === true,
     ...pickPluginMetaText(pluginMeta),
     presentationMessageId,
-    messageId,
     workflowRunId: resolveSourceWorkflowRunId(pluginMeta),
     contentLength: String(workflowMessage?.content || "").length,
     semanticNodeCount: countArray(payload?.semantic?.nodes),
@@ -99,12 +94,11 @@ export async function prepareWorkflowPlanningMessage({
     attachments: [],
   });
   const identity = resolveWorkflowRunIdentity(ctx);
-  const { turnScopeId, messageId, presentationMessageId, executionId, commandId } = identity;
+  const { turnScopeId, presentationMessageId, executionId, commandId } = identity;
   const runtimeData = {
     sessionId: text(ctx?.sessionId),
     dialogProcessId: text(ctx?.dialogProcessId),
     turnScopeId,
-    messageId,
     presentationMessageId,
     workflowRunId,
     semanticText,
@@ -120,7 +114,6 @@ export async function prepareWorkflowPlanningMessage({
     orderingDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
     orderingScopeId: workflowRunId,
     revision: 1,
-    messageId,
     executionId,
   });
 }

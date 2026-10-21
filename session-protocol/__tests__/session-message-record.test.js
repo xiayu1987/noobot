@@ -10,7 +10,7 @@ import {
   SESSION_AUTO_TITLE_MAX_LENGTH,
   deriveSessionAutoTitle,
   resolveSessionAutoTitle,
-} from "../src/policy/message.js";
+} from "../src/aggregate/session-message-record.js";
 
 test("session auto title comes from the first non-injected user message with content", () => {
   assert.equal(

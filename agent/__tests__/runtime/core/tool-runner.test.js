@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -270,9 +271,8 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
       dialogProcessId: "child-dialog",
       turnScopeId: "workflow-node:turn-1",
       runId: "agent:workflow-node:turn-1",
-      messageId: "message-1",
+      presentationMessageId: "child-assistant-1",
     },
-    presentationMessageId: "child-assistant-1",
   });
 
   const completed = findCommittedMessagePayload(events, "tool_call_end");
@@ -546,7 +546,7 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
       dialogProcessId: "dp_1",
       turnScopeId: "turn-call_meta",
       runId: "run-call_meta",
-      messageId: "message-call_meta",
+      presentationMessageId: "message-call_meta",
     },
   });
 
@@ -585,7 +585,7 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
       dialogProcessId: "dialog-call_overflow",
       turnScopeId: "turn-call_overflow",
       runId: "run-call_overflow",
-      messageId: "message-call_overflow",
+      presentationMessageId: "message-call_overflow",
     },
     tool,
     turn: 1,
@@ -615,7 +615,7 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
     "tool_result_overflow",
   );
   const overflowAttachment = getPrimaryTransferAttachment(overflowEnvelope);
-  assert.equal(overflowEnvelope.version, 2);
+  assert.equal(overflowEnvelope.version, TRANSFER_VERSION);
   assert.equal(overflowEnvelope.payload.mode, "attachment");
   assert.equal(overflowAttachment.identity.sessionId, "session-overflow-1");
   assert.equal(overflowAttachment.identity.attachmentSource, "model");
@@ -715,7 +715,7 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
     result.transferEnvelopes,
     "tool_result_overflow",
   );
-  assert.equal(overflowEnvelope.version, 2);
+  assert.equal(overflowEnvelope.version, TRANSFER_VERSION);
   assert.equal(overflowEnvelope.payload.mode, "attachment");
   assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
 });
@@ -777,7 +777,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
       dialogProcessId: "dialog-call_task_summary_transfer",
       turnScopeId: "turn-call_task_summary_transfer",
       runId: "run-call_task_summary_transfer",
-      messageId: "message-call_task_summary_transfer",
+      presentationMessageId: "message-call_task_summary_transfer",
     },
     turn: 1,
   });
@@ -853,7 +853,7 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
   );
   assert.equal(Array.isArray(payload.attachmentRefs), true);
   assert.equal(payload.transferEnvelopes, undefined);
-  assert.equal(overflowEnvelope.version, 2);
+  assert.equal(overflowEnvelope.version, TRANSFER_VERSION);
   assert.equal(overflowEnvelope.payload.mode, "attachment");
   assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
   assert.equal(JSON.stringify(overflowEnvelope).includes("sandboxPath"), false);

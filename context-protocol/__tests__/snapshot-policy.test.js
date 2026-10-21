@@ -13,6 +13,18 @@ import {
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
   serializeContextMessage,
 } from "../src/policy/snapshot.js";
+import {
+  readContextMessageField,
+  readContextMessageValue,
+  resolveContextMessageSummarized,
+} from "../src/message/codec.js";
+
+function roundOf(message) {
+  return {
+    dialogProcessId: readContextMessageField(message, "dialogProcessId"),
+    turnScopeId: readContextMessageField(message, "turnScopeId"),
+  };
+}
 
 const identity = {
   userId: "admin",
@@ -27,26 +39,59 @@ test("snapshot policy preserves block boundaries and message protocol fields", (
     identity,
     now: "2026-08-03T00:00:00.000Z",
     messageBlocks: {
-      system: [{ role: "system", content: "system" }],
+      system: [{ role: "system", content: "system", additional_kwargs: { messageUid: "sm_sys" } }],
       history: [
         {
           role: "assistant",
           content: "",
           tool_calls: [{ id: "call", name: "tool" }],
-          custom: { value: 1 },
+          additional_kwargs: { custom: { value: 1 } },
         },
       ],
-      incremental: [{ role: "tool", content: "result", tool_call_id: "call", summarized: true }],
+      incremental: [
+        {
+          role: "tool",
+          content: "result",
+          tool_call_id: "call",
+          additional_kwargs: { summarized: true },
+        },
+      ],
     },
   });
   const hydrated = hydrateModelContextSnapshot(snapshot, identity);
 
-  assert.equal(snapshot.version, 3);
+  assert.equal(snapshot.version, 4);
   assert.deepEqual(hydrated.messageBlocks.history[0].tool_calls, [{ id: "call", name: "tool" }]);
-  assert.deepEqual(hydrated.messageBlocks.history[0].custom, { value: 1 });
+  assert.deepEqual(readContextMessageValue(hydrated.messageBlocks.history[0], "custom"), {
+    value: 1,
+  });
   assert.equal(hydrated.messageBlocks.incremental[0].tool_call_id, "call");
-  assert.equal(hydrated.messageBlocks.incremental[0].summarized, true);
+  assert.equal(resolveContextMessageSummarized(hydrated.messageBlocks.incremental[0]), true);
   assert.equal(hydrated.messages.length, 3);
+});
+
+test("snapshot serialization rejects noobot facts outside additional_kwargs", () => {
+  assert.throws(
+    () => serializeContextMessage({ role: "assistant", content: "", custom: { value: 1 } }),
+    /top-level field is not part of the protocol: custom/,
+  );
+  assert.throws(
+    () => serializeContextMessage({ role: "user", content: "x", dialogProcessId: "dialog" }),
+    /top-level field is not part of the protocol: dialogProcessId/,
+  );
+});
+
+test("snapshot serialization accepts LangChain native ToolMessage metadata key without persisting it", () => {
+  const serialized = serializeContextMessage({
+    type: "tool",
+    content: "tool output",
+    tool_call_id: "call-1",
+    metadata: { native: true },
+    additional_kwargs: { messageUid: "sm_tool" },
+  });
+  assert.equal("metadata" in serialized, false);
+  assert.equal(serialized.tool_call_id, "call-1");
+  assert.equal(readContextMessageValue(serialized, "messageUid"), "sm_tool");
 });
 
 test("continued snapshot recovery preserves stored facts and rebinds only incremental execution", () => {
@@ -60,10 +105,10 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
   };
   const userMetaContent = `[用户元信息]\n${JSON.stringify(firstTurn)}\n[/用户元信息]`;
   const storedBlocks = {
-    system: [{ role: "system", content: "system" }],
+    system: [{ role: "system", content: "system", additional_kwargs: { messageUid: "sm_sys" } }],
     history: [],
     incremental: [
-      { role: "user", content: "start", ...firstTurn },
+      { role: "user", content: "start", additional_kwargs: { ...firstTurn } },
       {
         role: "user",
         content: userMetaContent,
@@ -71,19 +116,18 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
           noobotInternalMessageType: "user_meta",
           ...firstTurn,
         },
-        ...firstTurn,
       },
       {
         role: "assistant",
         content: "",
         tool_calls: [{ id: "call-first", name: "read_file", args: {} }],
-        ...firstTurn,
+        additional_kwargs: { ...firstTurn },
       },
       {
         role: "tool",
         content: "first result",
         tool_call_id: "call-first",
-        ...firstTurn,
+        additional_kwargs: { ...firstTurn },
       },
     ],
   };
@@ -103,13 +147,7 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
     firstSnapshot.messageBlocks,
   );
   assert.equal(restored.messageBlocks.incremental[1].content, userMetaContent);
-  assert.deepEqual(
-    restored.messageBlocks.incremental.map((message) => ({
-      dialogProcessId: message.dialogProcessId,
-      turnScopeId: message.turnScopeId,
-    })),
-    Array(4).fill(firstTurn),
-  );
+  assert.deepEqual(restored.messageBlocks.incremental.map(roundOf), Array(4).fill(firstTurn));
 
   const continuedSnapshotMessages = projectSnapshotIncrementalToContinuation(
     restored.messageBlocks.incremental,
@@ -123,15 +161,9 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
   );
   const continuedIncremental = [
     ...continuedSnapshotMessages,
-    { role: "user", content: "continue", ...secondTurn },
+    { role: "user", content: "continue", additional_kwargs: { ...secondTurn } },
   ];
-  assert.deepEqual(
-    continuedIncremental.map((message) => ({
-      dialogProcessId: message.dialogProcessId,
-      turnScopeId: message.turnScopeId,
-    })),
-    [...Array(4).fill(firstTurn), secondTurn],
-  );
+  assert.deepEqual(continuedIncremental.map(roundOf), [...Array(4).fill(firstTurn), secondTurn]);
   assert.equal(restored.messageBlocks.incremental[1].content, userMetaContent);
   assert.equal(continuedSnapshotMessages[1].content, userMetaContent);
 });
@@ -141,7 +173,7 @@ test("snapshot attachment facts come only from matching Session authority", () =
     type: "human",
     content: "[User Metadata]",
     additional_kwargs: {
-      noobotMessageId: "source-user::user_meta",
+      messageUid: "source-user::user_meta",
       messageOrigin: "natural",
       userMetaMaterialized: true,
       noobotInternalMessageType: "user_meta",
@@ -155,7 +187,7 @@ test("snapshot attachment facts come only from matching Session authority", () =
           type: "human",
           content: "source",
           additional_kwargs: {
-            noobotMessageId: "source-user",
+            messageUid: "source-user",
             messageOrigin: "natural",
             userMetaMaterialized: true,
           },
@@ -172,7 +204,10 @@ test("snapshot attachment facts come only from matching Session authority", () =
     ],
   );
 
-  assert.deepEqual(restored.history[0].attachments, [{ attachmentId: "attachment-authority" }]);
+  assert.deepEqual(readContextMessageValue(restored.history[0], "attachments"), [
+    { attachmentId: "attachment-authority" },
+  ]);
+  assert.equal(restored.history[0].attachments, undefined);
   assert.equal(restored.incremental[0], derivedMeta);
 });
 
@@ -185,8 +220,7 @@ test("persisted snapshot user sources require canonical identity", () => {
             {
               type: "human",
               content: "source",
-              messageOrigin: "natural",
-              userMetaMaterialized: true,
+              additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
             },
           ],
         },
@@ -212,9 +246,11 @@ test("persisted snapshot user sources must exist in Session authority", () => {
             {
               type: "human",
               content: "source",
-              messageUid: "missing-user",
-              messageOrigin: "natural",
-              userMetaMaterialized: true,
+              additional_kwargs: {
+                messageUid: "missing-user",
+                messageOrigin: "natural",
+                userMetaMaterialized: true,
+              },
             },
           ],
         },
@@ -266,9 +302,11 @@ test("snapshot user source identity cannot resolve to another Session role", () 
             {
               type: "human",
               content: "source",
-              messageUid: "source-user",
-              messageOrigin: "natural",
-              userMetaMaterialized: true,
+              additional_kwargs: {
+                messageUid: "source-user",
+                messageOrigin: "natural",
+                userMetaMaterialized: true,
+              },
             },
           ],
         },

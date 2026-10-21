@@ -42,7 +42,7 @@ function createCommand(overrides = {}) {
       summaryPolicy: { phaseSummaryLoopTurns: 1 },
       selectedPlugins: ["planning"],
     },
-    presentation: { userMessageId: "user-1", assistantMessageId: "assistant-1" },
+    presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
     concurrency: {
       expectedTurnRevision: 0,
       expectedAggregateVersion: 3,

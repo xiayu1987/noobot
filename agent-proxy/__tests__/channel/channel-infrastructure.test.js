@@ -28,7 +28,6 @@ function canonicalTurnLifecycle(domainEnvelope) {
       eventType: "turn_lifecycle",
       sessionId: domainEnvelope.sessionId,
       turnScopeId: domainEnvelope.turnScopeId,
-      messageId: domainEnvelope.messageId,
     },
     causality: { commandId: domainEnvelope.commandId },
     ordering: {
@@ -218,7 +217,6 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
     commandId: "command-1",
     sessionId: "session-1",
     turnScopeId: "turn-1",
-    messageId: "message-1",
     presentationMessageId: "assistant-1",
     dialogProcessId: "dialog-1",
     revision: 2,
@@ -272,7 +270,6 @@ test("newer lifecycle state supersedes the in-flight state and is delivered imme
       commandId: "command-ordered",
       sessionId: "session-ordered",
       turnScopeId: "turn-ordered",
-      messageId: "message-ordered",
       presentationMessageId: "assistant-ordered",
       dialogProcessId: "dialog-ordered",
       revision: sequence,
@@ -352,7 +349,6 @@ test("older lifecycle state is superseded by the in-flight newer state and not s
     commandId: "command-stale",
     sessionId: "session-stale",
     turnScopeId: "turn-stale",
-    messageId: "message-stale",
     presentationMessageId: "assistant-stale",
     dialogProcessId: "dialog-stale",
   };
@@ -437,7 +433,6 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
     commandId: "command-timeout",
     sessionId: "session-timeout",
     turnScopeId: "turn-timeout",
-    messageId: "message-timeout",
     presentationMessageId: "assistant-timeout",
     dialogProcessId: "dialog-timeout",
     revision: 4,
@@ -482,7 +477,6 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
     commandId: "command-drop",
     sessionId: "session-drop",
     turnScopeId: "turn-drop",
-    messageId: "message-drop",
     presentationMessageId: "assistant-drop",
     dialogProcessId: "dialog-drop",
   };

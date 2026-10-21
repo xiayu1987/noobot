@@ -22,14 +22,13 @@ import { getAgentContextEnvelope } from "../../../context/agent-context-accessor
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
-  const messageId = text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
-  return messageId;
+  return text(message?.messageUid);
 }
 
 function summarizedMessageIds(messages = []) {
   return (Array.isArray(messages) ? messages : [])
     .filter((message = {}) => message?.summarized === true)
-    .map((message = {}) => resolveContextMessageId(message))
+    .map(messageIdentity)
     .filter(Boolean);
 }
 
@@ -48,17 +47,17 @@ function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
     if (!isObjectLike(message)) continue;
     const identity = messageIdentity(message);
     if (!identity) {
-      throw new Error("dispatched turn message requires a canonical messageId");
+      throw new Error("dispatched turn message requires messageUid");
     }
     const updatedCount = store.updateWhere(
       message,
       (current) => messageIdentity(current) === identity,
     );
     if (updatedCount > 1) {
-      throw new Error(`canonical turn store contains duplicate messageId: ${identity}`);
+      throw new Error(`canonical turn store contains duplicate messageUid: ${identity}`);
     }
     if (updatedCount === 0) store.push(message);
-    accepted.push({ messageId: identity, action: updatedCount === 0 ? "inserted" : "updated" });
+    accepted.push({ messageUid: identity, action: updatedCount === 0 ? "inserted" : "updated" });
   }
   return { messages: store.toArray(), accepted };
 }
@@ -298,4 +297,3 @@ export async function dispatchAgentTurn({
   });
   return agentResult;
 }
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";

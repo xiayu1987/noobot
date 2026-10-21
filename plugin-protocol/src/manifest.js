@@ -120,6 +120,8 @@ const surfaceContributionSchema = z
       .strict()
       .optional(),
     executionIntent: pluginExecutionIntentSchema.optional(),
+
+    scopedSessionRoots: z.array(strictString).optional(),
     tools: z.array(pluginToolContributionSchema).optional(),
     routes: z.array(pluginRouteContributionSchema).optional(),
     extensions: z.array(pluginFrontendContributionSchema).optional(),
@@ -220,6 +222,7 @@ function validateSurfaceHookOwnership(surface, contributes, context) {
 const SURFACE_CONTRIBUTION_OWNERS = Object.freeze([
   ["routes", PLUGIN_SURFACE.SERVICE, "routes are service contributions"],
   ["tools", PLUGIN_SURFACE.AGENT, "tools are agent contributions"],
+  ["scopedSessionRoots", PLUGIN_SURFACE.AGENT, "scoped session roots are agent contributions"],
   ["extensions", PLUGIN_SURFACE.FRONTEND, "extensions are frontend contributions"],
 ]);
 
@@ -238,6 +241,13 @@ function hasDuplicates(values) {
 function validateSurfaceHookUniqueness(surface, contributes, context) {
   const registers = contributes?.hooks?.registers || [];
   const emits = contributes?.hooks?.emits || [];
+  if (hasDuplicates(contributes?.scopedSessionRoots || [])) {
+    addManifestIssue(
+      context,
+      ["contributes", surface, "scopedSessionRoots"],
+      "scoped session roots must be unique",
+    );
+  }
   if (hasDuplicates(registers.map((item) => item.id))) {
     addManifestIssue(
       context,

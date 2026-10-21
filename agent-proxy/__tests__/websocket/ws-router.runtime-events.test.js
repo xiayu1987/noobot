@@ -37,7 +37,7 @@ function runCommand({
     preferences: {},
     presentation: {
       userMessageId: `user:${turnScopeId}`,
-      assistantMessageId: `assistant:${turnScopeId}`,
+      presentationMessageId: `assistant:${turnScopeId}`,
     },
     concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 0 },
     continuation: { dialogProcessId: "dialog-stopped", turnScopeId: "turn-stopped" },

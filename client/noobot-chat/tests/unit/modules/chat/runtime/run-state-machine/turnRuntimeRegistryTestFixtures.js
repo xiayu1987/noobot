@@ -62,7 +62,6 @@ export function lifecycle(
       userId: "u1",
       sessionId,
       turnScopeId,
-      messageId: `msg-event-${turnScopeId}`,
       presentationMessageId: `msg-${turnScopeId}`,
       dialogProcessId,
       revision,
@@ -138,7 +137,6 @@ export function snapshot(overrides = {}) {
   const withMessageIdentity = (turn) =>
     turn
       ? {
-          messageId: `msg-event-${turn.turnScopeId}`,
           presentationMessageId: `msg-${turn.turnScopeId}`,
           startedAt: "2026-01-01T00:00:00.000Z",
           ...turn,

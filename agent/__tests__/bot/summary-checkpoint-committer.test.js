@@ -8,6 +8,10 @@ import assert from "node:assert/strict";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import {
+  resolveContextMessageSummarized,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 import {
   FLOW_CONTROL_ROLE,
@@ -16,6 +20,27 @@ import {
 
 const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+
+function toContextMessage(record = {}, metadata = {}) {
+  const { role, content, tool_calls, tool_call_id } = record;
+  const native = { role, content };
+  if (tool_calls) native.tool_calls = tool_calls;
+  if (tool_call_id) native.tool_call_id = tool_call_id;
+  return writeContextMessageMetadata(native, { messageUid: record.messageUid, ...metadata });
+}
+
+const PHASE_PROMPT_RECORD = Object.freeze({
+  messageUid: "phase_prompt_1",
+  role: "user",
+  content: "summarize now",
+  noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+});
+
+function phasePromptContextMessage() {
+  return toContextMessage(PHASE_PROMPT_RECORD, {
+    noobotInternalMessageType: PHASE_PROMPT_RECORD.noobotInternalMessageType,
+  });
+}
 
 test("summary checkpoint persists unmodified messages before atomically marking exact UIDs", async () => {
   const messages = [
@@ -105,7 +130,11 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
     currentTurnMessages: createCurrentTurnMessagesStore(messages),
     activeMessageContext: createModelContext({
       checkpointRevision: 2,
-      messageBlocks: { system: [], history: [], incremental: messages },
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: messages.map((message) => toContextMessage(message)),
+      },
     }),
   };
   await assert.rejects(
@@ -139,32 +168,17 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
 
 test("summary checkpoint atomically marks persisted scope and context control prompts", async () => {
   const persistedMessage = { messageUid: "sm_1", role: "assistant", content: "M1" };
-  const phasePrompt = {
-    role: "user",
-    content: "summarize now",
-    additional_kwargs: {
-      noobotMessageId: "phase_prompt_1",
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
-    },
-  };
+  const phasePrompt = phasePromptContextMessage();
   const runtime = {
     currentTurnMessages: createCurrentTurnMessagesStore([
       persistedMessage,
-      {
-        messageUid: "phase_prompt_1",
-        role: "user",
-        content: "summarize now",
-        additional_kwargs: phasePrompt.additional_kwargs,
-      },
+      { ...PHASE_PROMPT_RECORD },
     ]),
     activeMessageContext: createModelContext({
       messageBlocks: {
         system: [],
         history: [],
-        incremental: [
-          { ...persistedMessage, additional_kwargs: { noobotMessageId: "sm_1" } },
-          phasePrompt,
-        ],
+        incremental: [toContextMessage(persistedMessage), phasePrompt],
       },
     }),
   };
@@ -172,7 +186,7 @@ test("summary checkpoint atomically marks persisted scope and context control pr
   await commitSummaryCheckpoint({
     session: {
       async commitTurnSummaryCheckpoint() {
-        assert.equal(phasePrompt.summarized, undefined);
+        assert.equal(resolveContextMessageSummarized(phasePrompt), false);
         return { committed: true, markedCount: 2, checkpointRevision: 1 };
       },
     },
@@ -189,27 +203,15 @@ test("summary checkpoint atomically marks persisted scope and context control pr
 
   assert.deepEqual(runtime.currentTurnMessages.toArray(), []);
   assert.deepEqual(runtime.activeMessageContext.messageBlocks.incremental, []);
-  assert.equal(phasePrompt.summarized, true);
+  assert.equal(resolveContextMessageSummarized(phasePrompt), true);
 });
 
 test("failed summary checkpoint preserves context control prompts", async () => {
-  const phasePrompt = {
-    role: "user",
-    content: "summarize now",
-    additional_kwargs: {
-      noobotMessageId: "phase_prompt_1",
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
-    },
-  };
+  const phasePrompt = phasePromptContextMessage();
   const runtime = {
     currentTurnMessages: createCurrentTurnMessagesStore([
       { messageUid: "sm_1", role: "assistant", content: "M1" },
-      {
-        messageUid: "phase_prompt_1",
-        role: "user",
-        content: "summarize now",
-        additional_kwargs: phasePrompt.additional_kwargs,
-      },
+      { ...PHASE_PROMPT_RECORD },
     ]),
     activeMessageContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: [phasePrompt] },
@@ -236,7 +238,7 @@ test("failed summary checkpoint preserves context control prompts", async () => 
     /checkpoint failed/,
   );
 
-  assert.equal(phasePrompt.summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(phasePrompt), false);
   assert.deepEqual(runtime.activeMessageContext.messageBlocks.incremental, [phasePrompt]);
 });
 
@@ -278,7 +280,13 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
     currentTurnMessages: createCurrentTurnMessagesStore(messages),
     activeMessageContext: createModelContext({
       checkpointRevision: 0,
-      messageBlocks: { system: [], history: [], incremental: messages },
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: messages.map((message) =>
+          toContextMessage(message, { summarized: message.summarized }),
+        ),
+      },
     }),
   };
   let checkpointPayload = null;
@@ -508,11 +516,7 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
       messageBlocks: {
         system: [],
         history: [],
-        incremental: turnMessages.map((message) => ({
-          ...message,
-          summarized: true,
-          additional_kwargs: { noobotMessageId: message.messageUid },
-        })),
+        incremental: turnMessages.map((message) => toContextMessage(message, { summarized: true })),
       },
     }),
   };

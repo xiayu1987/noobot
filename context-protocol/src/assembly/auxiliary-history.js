@@ -6,16 +6,11 @@
 
 import {
   resolveContextMessageRole,
-  resolveContextMessageOrigin,
   resolveContextToolCallDeclarationId,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
 import { text, isObjectLike } from "@noobot/shared/value";
-
-function resolveRole(message = {}) {
-  return resolveContextMessageRole(message);
-}
 
 function extractContextTextContent(content = "") {
   if (content === undefined || content === null) return "";
@@ -38,19 +33,17 @@ function extractContextTextContent(content = "") {
 }
 
 function normalizeMessage(message = {}) {
-  const role = resolveRole(message);
+  const role = resolveContextMessageRole(message);
   if (!role) throw new TypeError("auxiliary history message role is required");
-  const content = extractContextTextContent(message?.content ?? message?.lc_kwargs?.content ?? "");
+  const content = extractContextTextContent(message?.content);
   if (role === "assistant") {
     const toolCalls = resolveContextToolCalls(message);
     if (!content && !toolCalls.length) return null;
-    const normalized = {
+    return {
       role,
       content,
       ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
     };
-    if (resolveContextMessageOrigin(message) === "natural") normalized.messageOrigin = "natural";
-    return normalized;
   }
   if (role === "tool") {
     const toolCallId = resolveContextToolResultCallId(message);
@@ -58,9 +51,7 @@ function normalizeMessage(message = {}) {
     return { role, content, tool_call_id: toolCallId };
   }
   if (!content) return null;
-  const normalized = { role, content };
-  if (resolveContextMessageOrigin(message) === "natural") normalized.messageOrigin = "natural";
-  return normalized;
+  return { role, content };
 }
 
 function assertToolEvidenceAlignment(messages = []) {
@@ -121,13 +112,7 @@ export function projectAuxiliaryHistoryMessages(
   const projected = projectObserverPerspective
     ? normalizedMessages.map((message) => {
         if (message.role === "tool") {
-          return {
-            role: "assistant",
-            content: formatToolResultForObserver(message),
-            ...(resolveContextMessageOrigin(message) === "natural"
-              ? { messageOrigin: "natural" }
-              : {}),
-          };
+          return { role: "assistant", content: formatToolResultForObserver(message) };
         }
         if (
           message.role === "assistant" &&

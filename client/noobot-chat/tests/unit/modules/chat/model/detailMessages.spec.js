@@ -12,7 +12,7 @@ import {
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 describe("detailMessages", () => {
   it("builds one normalized detail message list for replace and preserve inputs", () => {
@@ -27,9 +27,9 @@ describe("detailMessages", () => {
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            version: 2,
+            version: TRANSFER_VERSION,
             transferId: "root",
-            messageId: "message-root",
+            presentationMessageId: "message-root",
             identity: {
               sessionId: "root-session",
               turnScopeId: "turn-root",
@@ -76,9 +76,9 @@ describe("detailMessages", () => {
             transferEnvelopes: [
               {
                 protocol: "noobot.semantic-transfer",
-                version: 2,
+                version: TRANSFER_VERSION,
                 transferId: "child",
-                messageId: "message-child",
+                presentationMessageId: "message-child",
                 identity: {
                   sessionId: "child-session",
                   turnScopeId: "turn-child",
@@ -182,9 +182,9 @@ describe("detailMessages", () => {
               transferEnvelopes: [
                 {
                   protocol: "noobot.semantic-transfer",
-                  version: 2,
+                  version: TRANSFER_VERSION,
                   transferId: "child-transfer-b",
-                  messageId: "message-child-transfer-b",
+                  presentationMessageId: "message-child-transfer-b",
                   identity: {
                     sessionId: "child-session",
                     turnScopeId: "turn-child-transfer-b",
@@ -259,9 +259,9 @@ describe("detailMessages", () => {
               transferEnvelopes: [
                 {
                   protocol: "noobot.semantic-transfer",
-                  version: 2,
+                  version: TRANSFER_VERSION,
                   transferId: "child-transfer",
-                  messageId: "message-child-transfer",
+                  presentationMessageId: "message-child-transfer",
                   identity: {
                     sessionId: "child-session",
                     turnScopeId: "turn-child-transfer",
@@ -322,9 +322,9 @@ describe("detailMessages", () => {
               transferEnvelopes: [
                 {
                   protocol: "noobot.semantic-transfer",
-                  version: 2,
+                  version: TRANSFER_VERSION,
                   transferId: "plugin",
-                  messageId: "message-plugin",
+                  presentationMessageId: "message-plugin",
                   identity: {
                     sessionId: "root-session",
                     turnScopeId: "turn-plugin",
@@ -359,9 +359,9 @@ describe("detailMessages", () => {
               nodeResultTransferEnvelopes: [
                 {
                   protocol: "noobot.semantic-transfer",
-                  version: 2,
+                  version: TRANSFER_VERSION,
                   transferId: "node-result",
-                  messageId: "message-node-result",
+                  presentationMessageId: "message-node-result",
                   identity: {
                     sessionId: "root-session",
                     turnScopeId: "turn-node-result",
@@ -398,9 +398,9 @@ describe("detailMessages", () => {
                   transferEnvelopes: [
                     {
                       protocol: "noobot.semantic-transfer",
-                      version: 2,
+                      version: TRANSFER_VERSION,
                       transferId: "node-session",
-                      messageId: "message-node-session",
+                      presentationMessageId: "message-node-session",
                       identity: {
                         sessionId: "root-session",
                         turnScopeId: "turn-node-session",

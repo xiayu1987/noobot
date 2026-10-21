@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  deriveSessionAutoTitle,
-  isDialogAnchorMessage,
-} from "@noobot/context-protocol/policy/message";
 import { pruneTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
-import { SESSION_ARTIFACT_WRITE_TIME_DIALOG_FACTS_SCHEMA_VERSION } from "@noobot/session-protocol";
+import {
+  SESSION_ARTIFACT_WRITE_TIME_DIALOG_FACTS_SCHEMA_VERSION,
+  deriveSessionAutoTitle,
+  isDialogAnchorMessageRecord,
+  resolveSessionMessageRecordDialogProcessId,
+} from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function compareDialogAnchors(left, right) {
@@ -27,7 +27,7 @@ function compareDialogAnchors(left, right) {
 function collectDialogAnchors(messages) {
   const anchors = new Map();
   const addAnchor = (message, sourceIndex, anchored) => {
-    const dialogProcessId = resolveContextMessageDialogProcessId(message);
+    const dialogProcessId = resolveSessionMessageRecordDialogProcessId(message);
     if (!dialogProcessId || anchors.has(dialogProcessId)) return;
     anchors.set(dialogProcessId, {
       dialogProcessId,
@@ -38,7 +38,7 @@ function collectDialogAnchors(messages) {
     });
   };
   messages.forEach((message, index) => {
-    if (isDialogAnchorMessage(message)) addAnchor(message, index, true);
+    if (isDialogAnchorMessageRecord(message)) addAnchor(message, index, true);
   });
   messages.forEach((message, index) => addAnchor(message, index, false));
   return [...anchors.values()].sort(compareDialogAnchors);

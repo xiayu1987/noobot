@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { randomUUID } from "node:crypto";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
@@ -21,8 +19,10 @@ import {
   validateSessionProvisionIntent,
   requireSessionAggregateVersion,
   SESSION_NOT_FOUND_REASON,
+  isInjectedOrPluginSessionMessageRecord,
+  resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
-import { createSessionMessageUid } from "../../../context/session/message-uid.js";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";
@@ -41,7 +41,7 @@ function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
   const turn = session?.turnLifecycle?.turns?.[clean(turnScopeId)] || {};
   return normalizeMessageEntity({
     ...assistantMessage,
-    messageUid: clean(assistantMessage.messageUid) || createSessionMessageUid(),
+    messageUid: clean(assistantMessage.messageUid) || createMessageUid(),
     presentationMessageId:
       clean(assistantMessage.presentationMessageId) || clean(turn.presentationMessageId),
   });
@@ -150,7 +150,7 @@ function materializeAcceptedUserMessage({
   if (existing) return existing;
   const userMessage = normalizeMessageEntity(
     {
-      messageUid: createSessionMessageUid(),
+      messageUid: createMessageUid(),
       messageId: input.messageId,
       role: "user",
       type: "message",
@@ -485,7 +485,7 @@ export async function assertReusedUserTurnIdentity({
       const messageItem = messages[index];
       if (text(messageItem?.role) !== "user") continue;
       if (text(messageItem?.turnScopeId) !== normalizedTurnScopeId) continue;
-      if (isInjectedOrPluginMessage(messageItem)) continue;
+      if (isInjectedOrPluginSessionMessageRecord(messageItem)) continue;
       return index;
     }
     return -1;
@@ -493,7 +493,7 @@ export async function assertReusedUserTurnIdentity({
   if (targetIndex < 0) throw new TypeError("reused Turn user message was not found");
 
   const targetMessage = messages[targetIndex];
-  if (resolveContextMessageDialogProcessId(targetMessage) !== normalizedDialogProcessId) {
+  if (resolveSessionMessageRecordDialogProcessId(targetMessage) !== normalizedDialogProcessId) {
     throw new TypeError("reused Turn dialogProcessId does not match Session authority");
   }
   if (Array.isArray(attachments)) {

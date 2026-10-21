@@ -215,7 +215,7 @@ export async function transferToolInput({
   if (decision.mode === TRANSFER_MODE.DIRECT) {
     const envelope = directTransfer({
       transferId: identity.transferId,
-      messageId: identity.messageId,
+      presentationMessageId: identity.presentationMessageId,
       identity,
       direction: TRANSFER_DIRECTION.INPUT,
       content: normalizedText,

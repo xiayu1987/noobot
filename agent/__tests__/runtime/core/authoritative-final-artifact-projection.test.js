@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -29,7 +30,7 @@ test("authoritative message id can be applied to immutable model output", () => 
   assert.equal(projected.id, "assistant-1");
   assert.equal(projected.messageId, "assistant-1");
   assert.equal(projected.additional_kwargs.provider, "openai");
-  assert.equal(projected.additional_kwargs.noobotMessageId, "assistant-1");
+  assert.equal(Object.hasOwn(projected.additional_kwargs, "noobotMessageId"), false);
   assert.equal(output.id, undefined);
 });
 
@@ -47,7 +48,6 @@ test("authoritative final event owns generated attachment envelopes before persi
     },
   };
   bindAssistantMessageEventStream(runtime, {
-    messageId: "message-event-1",
     presentationMessageId: "presentation-1",
     parentSessionId: "",
   });
@@ -55,9 +55,9 @@ test("authoritative final event owns generated attachment envelopes before persi
 
   const transferEnvelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer:message-event-1:tool:search-call:output:tool_result_text",
-    messageId: "message-event-1",
+    presentationMessageId: "presentation-1",
     identity: {
       sessionId: "session-1",
       turnScopeId: "turn-1",
@@ -99,12 +99,14 @@ test("authoritative final event owns generated attachment envelopes before persi
     {
       role: "tool",
       type: "tool_result",
+      messageUid: "sm_tool_message_1",
       messageId: "tool-message-1",
       transferEnvelopes: [transferEnvelope],
     },
     {
       role: "assistant",
       type: "message",
+      messageUid: "sm_assistant_message_1",
       messageId: "assistant-message-1",
       presentationMessageId: "presentation-1",
       content: "draft",
@@ -118,6 +120,7 @@ test("authoritative final event owns generated attachment envelopes before persi
   runtime.currentTurnMessages.push({
     role: "system",
     type: "message",
+    messageUid: "sm_final_hook_control_1",
     messageId: "final-hook-control-1",
     content: "final response policy",
     summarized: false,
@@ -185,7 +188,6 @@ test("authoritative final completion retains classified checkpoint call-result p
     },
   };
   bindAssistantMessageEventStream(runtime, {
-    messageId: "final-message",
     presentationMessageId: "final-presentation",
     parentSessionId: "",
   });

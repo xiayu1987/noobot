@@ -34,7 +34,6 @@ function bindTestTurn(runtime = {}, suffix = "1") {
     producerId: `final-stream-${suffix}`,
   });
   bindAssistantMessageEventStream(runtime, {
-    messageId: `turn-message-${suffix}`,
     presentationMessageId: `presentation-${suffix}`,
     parentSessionId: "",
   });
@@ -136,7 +135,8 @@ test("final content commit follows hook-appended streaming delta", async () => {
     [1],
   );
   assert.equal(messageEvents[0].payload.text, "draft plus hook");
-  assert.equal(messageEvents[0].identity.messageId, "turn-message-1");
+  assert.equal(messageEvents[0].payload.presentationMessageId, "presentation-1");
+  assert.equal(messageEvents[0].ordering.scopeId, "presentation-1");
   assert.equal(result.turnMessages[0].messageId, messageId);
   assert.equal(result.turnMessages[0].content, "draft plus hook");
 });
@@ -187,7 +187,7 @@ test("final content uses the result message identity after active stream changes
     "authoritative_final_content",
   );
   const committed = committedMessageEvents(events).at(-1);
-  assert.equal(committed?.identity?.messageId, "turn-message-1");
+  assert.equal(committed?.payload?.presentationMessageId, "presentation-1");
   assert.equal(committed?.payload?.text, "authoritative final answer");
   assert.equal(result.turnMessages[0].content, "authoritative final answer");
 });

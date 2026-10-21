@@ -145,7 +145,7 @@ function buildStateWithRunConfig(runConfig) {
           rootSessionId: "s1",
           parentSessionId: "",
           runId: "r-1",
-          messageId: "m-1",
+          presentationMessageId: "m-1",
         },
       },
     ),

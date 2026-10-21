@@ -12,6 +12,14 @@ import { createModelContext } from "@noobot/context-protocol/assembly/hook-conte
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { projectTerminalHistoryMessages } from "@noobot/context-protocol/policy/terminal-history";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+
+function sessionHistory(records) {
+  return toConversationMessages(
+    records.map((record) => ({ messageUid: createMessageUid(), ...record })),
+  );
+}
 
 function buildAgentContext({
   userId = "u1",
@@ -51,8 +59,8 @@ function buildAgentContext({
 }
 
 test("terminal history reaches the model as canonical user/meta/injection/explanation messages", () => {
-  const projected = projectTerminalHistoryMessages({
-    messages: [
+  const history = projectTerminalHistoryMessages({
+    messages: toConversationMessages([
       {
         messageUid: "stopped-user",
         role: "user",
@@ -93,7 +101,7 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
         dialogProcessId: "dlg-stopped",
         turnScopeId: "turn-stopped",
       },
-    ],
+    ]),
     terminalStatuses: [
       {
         status: "user_stopped",
@@ -104,7 +112,6 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
       },
     ],
   });
-  const history = toConversationMessages(projected);
   const blocks = buildContextMessageBlocks(
     buildAgentContext({
       sessionId: "s-current",
@@ -117,10 +124,12 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
     ["停止轮问题", blocks.history[1].content, "最新 guidance", "用户停止了本轮生成"],
   );
   assert.equal(blocks.history[1].content.startsWith("[用户元信息]"), true);
-  assert.deepEqual(
-    blocks.history.map((item) => item.additional_kwargs?.noobotMessageId),
-    ["stopped-user", "stopped-user::user_meta", "guidance-new", "turn-stopped::terminal_status"],
-  );
+  assert.deepEqual(blocks.history.map(resolveContextMessageId), [
+    "stopped-user",
+    "stopped-user::user_meta",
+    "guidance-new",
+    "turn-stopped::terminal_status",
+  ]);
   assert.equal(blocks.history[3].type, "human");
 });
 
@@ -130,7 +139,7 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
       turnScopeId: "client-turn:current",
       messages: {
         system: [],
-        history: [
+        history: sessionHistory([
           {
             role: "user",
             content: "历史附件问题",
@@ -161,7 +170,7 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
             dialogProcessId: "dlg-history",
             turnScopeId: "client-turn:history",
           },
-        ],
+        ]),
       },
     }),
   );
@@ -188,7 +197,7 @@ test("historical user content and metadata remain distinct canonical projections
     buildAgentContext({
       messages: {
         system: [],
-        history: [
+        history: sessionHistory([
           {
             role: "user",
             content: "历史问题",
@@ -198,7 +207,7 @@ test("historical user content and metadata remain distinct canonical projections
             dialogProcessId: "dlg-history",
             turnScopeId: "turn-history",
           },
-        ],
+        ]),
       },
     }),
   );
@@ -217,10 +226,10 @@ test("historical user content and metadata remain distinct canonical projections
     ["历史问题", historicalUsers[1].content],
   );
   assert.equal(historicalUsers[1].content.startsWith("[用户元信息]"), true);
-  assert.deepEqual(
-    historicalUsers.map((message) => message.additional_kwargs?.noobotMessageId),
-    ["sm_history_user", "sm_history_user::user_meta"],
-  );
+  assert.deepEqual(historicalUsers.map(resolveContextMessageId), [
+    "sm_history_user",
+    "sm_history_user::user_meta",
+  ]);
   assert.notEqual(historicalUsers[0], historicalUsers[1]);
 });
 
@@ -250,10 +259,7 @@ test("persisted history keeps messageUid as its canonical model context identity
     },
   });
 
-  assert.equal(
-    context.messageBlocks.history[0]?.additional_kwargs?.noobotMessageId,
-    "sm_persisted_history",
-  );
+  assert.equal(resolveContextMessageId(context.messageBlocks.history[0]), "sm_persisted_history");
 });
 
 test("buildContextMessageBlocks does not infer frontend user metadata from round identity", () => {
@@ -261,10 +267,10 @@ test("buildContextMessageBlocks does not infer frontend user metadata from round
     buildAgentContext({
       messages: {
         system: [],
-        history: [
+        history: sessionHistory([
           { role: "user", content: "无附件历史", dialogProcessId: "dlg-plain" },
           { role: "assistant", content: "普通回答", dialogProcessId: "dlg-plain" },
-        ],
+        ]),
       },
     }),
   );
@@ -281,7 +287,7 @@ test("buildContextMessageBlocks keeps previous history rounds with same user tex
       turnScopeId: "client-turn:current",
       messages: {
         system: [],
-        history: [
+        history: sessionHistory([
           {
             role: "user",
             content: "全仓回归测试",
@@ -306,7 +312,7 @@ test("buildContextMessageBlocks keeps previous history rounds with same user tex
             dialogProcessId: "dlg-old-other",
             turnScopeId: "client-turn:old-other",
           },
-        ],
+        ]),
       },
     }),
     { currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试") },
@@ -322,15 +328,15 @@ test("buildContextMessageBlocks keeps previous history rounds with same user tex
 });
 
 test("buildContextMessageBlocks keeps latest repeated next-step dialog rounds", () => {
-  const history = [];
+  const records = [];
   for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_5"]) {
-    history.push({
+    records.push({
       role: "user",
       content: "下一步",
       dialogProcessId: id,
       turnScopeId: `turn:${id}`,
     });
-    history.push({
+    records.push({
       role: "assistant",
       content: `${id} answer`,
       dialogProcessId: id,
@@ -344,7 +350,7 @@ test("buildContextMessageBlocks keeps latest repeated next-step dialog rounds", 
       turnScopeId: "turn:current",
       messages: {
         system: [],
-        history,
+        history: sessionHistory(records),
       },
     }),
     { currentUserMessage: createPersistedCurrentUserMessage("下一步") },

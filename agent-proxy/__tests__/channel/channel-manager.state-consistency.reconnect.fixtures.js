@@ -59,7 +59,6 @@ export function authoritativeLifecycle(fields = {}) {
     sessionId: fields.sessionId,
     parentSessionId: fields.parentSessionId,
     turnScopeId: fields.turnScopeId,
-    messageId: fields.messageId || `message-${fields.eventId}`,
     presentationMessageId: fields.presentationMessageId || `presentation-${fields.eventId}`,
     dialogProcessId: fields.dialogProcessId || `dialog-${fields.eventId}`,
     revision: fields.revision,
@@ -78,7 +77,6 @@ export function authoritativeLifecycle(fields = {}) {
       eventType: "turn_lifecycle",
       sessionId: payload.sessionId,
       turnScopeId: payload.turnScopeId,
-      messageId: payload.messageId,
     },
     causality: { commandId: payload.commandId },
     ordering: {

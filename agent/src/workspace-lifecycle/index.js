@@ -107,6 +107,7 @@ async function runWorkspaceOperation({
   baseValues,
   sections,
   created,
+  scopedSessionRoots,
 }) {
   const backupBase = resolveWorkspaceBackupBase(base);
   const backup = createSectionBackup(backupBase, base);
@@ -116,7 +117,12 @@ async function runWorkspaceOperation({
     for (const section of sections) await clearSection({ base, section, backup });
   }
   const report = { operation, layoutMigrations: await migrateWorkspaceLayout({ base, backup }) };
-  report.layoutUpgrades = await upgradeWorkspaceLayout({ base, backupBase, created });
+  report.layoutUpgrades = await upgradeWorkspaceLayout({
+    base,
+    backupBase,
+    created,
+    scopedSessionRoots,
+  });
   await ensureRuntimeDirectories(base);
   report.memory = await repairMemorySection(base);
   if (operation !== WORKSPACE_OPERATION.RESET || selected.has(WORKSPACE_SECTION.CONFIG)) {
@@ -138,6 +144,9 @@ async function runWorkspaceOperation({
 }
 
 async function withWorkspace(options, operation, sections) {
+  if (!Array.isArray(options?.scopedSessionRoots) || !options.scopedSessionRoots.length) {
+    throw new TypeError("workspace lifecycle requires scopedSessionRoots");
+  }
   const { base, assetPackageBase, mutationLockDir } = await resolveWorkspacePaths(options);
   return workspaceMutationCoordinator.run(mutationLockDir, async () => {
     const existed = await requireWorkspaceDirectory(base);
@@ -150,6 +159,7 @@ async function withWorkspace(options, operation, sections) {
       baseValues: options.baseValues ?? {},
       sections,
       created: !existed,
+      scopedSessionRoots: options.scopedSessionRoots,
     });
     return { base, report };
   });

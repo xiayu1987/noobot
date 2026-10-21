@@ -14,7 +14,6 @@ const finalEvent = (overrides = {}) =>
     eventId: "event-final-1",
     eventType: "authoritative_final_content",
     sessionId: "session-1",
-    messageId: "stream-message-1",
     presentationMessageId: "assistant-message-1",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",

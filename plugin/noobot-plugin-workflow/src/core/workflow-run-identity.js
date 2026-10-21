@@ -19,7 +19,6 @@ const WORKFLOW_RUN_IDENTITY_FIELDS = Object.freeze([
   "commandId",
   "executionId",
   "rootExecutionId",
-  "messageId",
   "presentationMessageId",
 ]);
 

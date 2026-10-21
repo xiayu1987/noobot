@@ -27,6 +27,8 @@ import {
   renderWorkspaceLayoutState,
   renderWorkspaceAssetState,
   resolvePluginDataRelativePath,
+  resolveScopedSessionRoots,
+  AGENT_SCOPED_SESSION_ROOTS,
 } from "../src/index.js";
 
 const h = (char) => char.repeat(64);
@@ -179,13 +181,45 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-tree-parent-only-v3",
       "session-deletion-tombstone-only-v4",
       "session-tree-caller-v5",
+      "session-transfer-envelope-v6",
     ],
   );
   assert.deepEqual(
     planWorkspaceLayoutUpgrades({ installedVersion: 3 }).map((item) => item.id),
-    ["session-deletion-tombstone-only-v4", "session-tree-caller-v5"],
+    [
+      "session-deletion-tombstone-only-v4",
+      "session-tree-caller-v5",
+      "session-transfer-envelope-v6",
+    ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);
   assert.equal(WORKSPACE_LAYOUT_UPGRADES.at(-1).toVersion, WORKSPACE_LAYOUT_VERSION);
   assert.throws(() => planWorkspaceLayoutUpgrades({}), TypeError);
+});
+
+test("scoped session roots are the agent roots plus plugin-declared plugin-data roots", () => {
+  assert.deepEqual(AGENT_SCOPED_SESSION_ROOTS, [WORKSPACE_LAYOUT.AGENT_SESSION_DIR]);
+  assert.deepEqual(resolveScopedSessionRoots([]), [WORKSPACE_LAYOUT.AGENT_SESSION_DIR]);
+  assert.deepEqual(
+    resolveScopedSessionRoots([{ pluginId: "workflow", scopedSessionRoots: ["session", "a/b"] }]),
+    [
+      WORKSPACE_LAYOUT.AGENT_SESSION_DIR,
+      "runtime/plugin-data/workflow/session",
+      "runtime/plugin-data/workflow/a/b",
+    ],
+  );
+  assert.throws(() => resolveScopedSessionRoots(null), TypeError);
+  assert.throws(() => resolveScopedSessionRoots([{ pluginId: "w" }]), TypeError);
+  assert.throws(
+    () => resolveScopedSessionRoots([{ pluginId: "w", scopedSessionRoots: ["../x"] }]),
+    TypeError,
+  );
+  assert.throws(
+    () => resolveScopedSessionRoots([{ pluginId: "w", scopedSessionRoots: ["/abs"] }]),
+    TypeError,
+  );
+  assert.throws(
+    () => resolveScopedSessionRoots([{ pluginId: "w", scopedSessionRoots: ["s", "s"] }]),
+    TypeError,
+  );
 });

@@ -3,17 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
+import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
 
 test("toConversationMessages keeps transferEnvelopes", () => {
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer-1",
-    messageId: "message-1",
+    presentationMessageId: "message-1",
     identity: {
       sessionId: "s1",
       turnScopeId: "t1",
@@ -50,9 +52,9 @@ test("toConversationMessages keeps transferEnvelopes", () => {
   ]);
 
   assert.equal(messages.length, 1);
-  assert.equal("transferEnvelopes" in messages[0], true);
-  assert.deepEqual(messages[0].transferEnvelopes, [envelope]);
-  assert.equal("attachments" in messages[0], false);
+  assert.equal("transferEnvelopes" in messages[0], false);
+  assert.deepEqual(readContextMessageValue(messages[0], "transferEnvelopes"), [envelope]);
+  assert.equal(readContextMessageValue(messages[0], "attachments"), undefined);
 });
 
 test("toConversationMessages omits empty legacy attachment/transfer mirrors", () => {
@@ -66,6 +68,6 @@ test("toConversationMessages omits empty legacy attachment/transfer mirrors", ()
     },
   ]);
 
-  assert.equal("attachments" in message, false);
-  assert.equal("transferEnvelopes" in message, false);
+  assert.equal(readContextMessageValue(message, "attachments"), undefined);
+  assert.equal(readContextMessageValue(message, "transferEnvelopes"), undefined);
 });

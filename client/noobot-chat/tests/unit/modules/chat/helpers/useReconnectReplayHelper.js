@@ -84,7 +84,6 @@ export function createCanonicalAssistant({
 export function createAuthoritativeMessageEnvelope(
   eventType,
   {
-    messageId,
     presentationMessageId,
     sessionId = "s-1",
     dialogProcessId,
@@ -94,9 +93,12 @@ export function createAuthoritativeMessageEnvelope(
     ...eventData
   } = {},
 ) {
+  if (Object.hasOwn(eventData, "messageId")) {
+    throw new TypeError("messageId is not a message event field");
+  }
   const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
-  const normalizedMessageId = normalizeIdentityPart(
-    messageId,
+  const normalizedPresentationMessageId = normalizeIdentityPart(
+    presentationMessageId,
     `message-${normalizedDialogProcessId}`,
   );
   const normalizedTurnScopeId = normalizeIdentityPart(
@@ -111,23 +113,25 @@ export function createAuthoritativeMessageEnvelope(
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
     identity: {
-      eventId: normalizeIdentityPart(eventId, `${normalizedMessageId}-${eventType}-${sequence}`),
+      eventId: normalizeIdentityPart(
+        eventId,
+        `${normalizedPresentationMessageId}-${eventType}-${sequence}`,
+      ),
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId,
       turnScopeId: normalizedTurnScopeId,
-      messageId: normalizedMessageId,
     },
     causality: {},
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      scopeId: normalizedMessageId,
+      scopeId: normalizedPresentationMessageId,
       sequence: orderingSequence,
     },
     producer: { type: "test", id: "client-reconnect-fixture" },
     occurredAt: `2026-01-01T00:00:${String(sequence % 60).padStart(2, "0")}.000Z`,
     payload: {
       eventType,
-      presentationMessageId: normalizeIdentityPart(presentationMessageId, normalizedMessageId),
+      presentationMessageId: normalizedPresentationMessageId,
       dialogProcessId: normalizedDialogProcessId,
       ...eventData,
     },
@@ -162,13 +166,7 @@ export function createInteractionEnvelope(
 export function createWorkflowEnvelope(
   eventType,
   payload = {},
-  {
-    sessionId = "s-1",
-    turnScopeId = "turn-workflow",
-    messageId = "workflow-message-1",
-    sequence = 1,
-    eventId,
-  } = {},
+  { sessionId = "s-1", turnScopeId = "turn-workflow", sequence = 1, eventId } = {},
 ) {
   const workflowRunId = normalizeIdentityPart(payload.workflowRunId, "workflow-1");
   return createEventEnvelope({
@@ -178,7 +176,6 @@ export function createWorkflowEnvelope(
       eventType,
       sessionId,
       turnScopeId,
-      messageId,
     },
     causality: {},
     ordering: {

@@ -95,20 +95,16 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     return envelope;
   };
 
-  runtime.materializePendingCurrentTurnMessageEvents = ({
-    messageId = "",
-    activityTimeline = [],
-    toolTimeline = [],
-  } = {}) => {
-    const ownerId = text(messageId);
-    if (!ownerId) throw new Error("pending message event materialization requires messageId");
-
+  const drainPendingMessageEvents = (
+    acceptsOwner,
+    { activityTimeline = [], toolTimeline = [] },
+  ) => {
     const facts = [];
     for (let index = pendingMessageEvents.length - 1; index >= 0; index -= 1) {
       const pendingOwnerId = resolveMessageEventModelMessageId(
         pendingMessageEvents[index]?.payload,
       );
-      if (!pendingOwnerId || pendingOwnerId === ownerId) {
+      if (!pendingOwnerId || acceptsOwner(pendingOwnerId)) {
         facts.unshift(...pendingMessageEvents.splice(index, 1));
       }
     }
@@ -130,6 +126,20 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
       },
     );
   };
+
+  runtime.materializePendingCurrentTurnMessageEvents = ({
+    modelMessageId = "",
+    ...timelines
+  } = {}) => {
+    const ownerId = text(modelMessageId);
+    if (!ownerId) {
+      throw new Error("pending message event materialization requires modelMessageId");
+    }
+    return drainPendingMessageEvents((pendingOwnerId) => pendingOwnerId === ownerId, timelines);
+  };
+
+  runtime.materializeUnownedCurrentTurnMessageEvents = (timelines = {}) =>
+    drainPendingMessageEvents(() => false, timelines);
 
   return runtime;
 }

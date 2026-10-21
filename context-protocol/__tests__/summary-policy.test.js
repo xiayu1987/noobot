@@ -7,45 +7,72 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  collectCurrentTurnSummarizedMessageIndexes,
   collectDialogScopedMessagesToSummarize,
   collectLatestCheckpointEvidenceMessageIndexes,
   collectScopedMessagesToSummarize,
   resolveSummaryScope,
-  markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
 } from "../src/policy/summary.js";
 import { isContextControlMessage } from "../src/policy/injected-message.js";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/message/injected-types.js";
+import { readContextMessageField, resolveContextMessageSummarized } from "../src/message/codec.js";
 import { FLOW_CONTROL_ROLE, createFlowControlContextPolicy } from "../src/tool/context-policy.js";
+import { contextMessage } from "./helpers/context-message.js";
 
 const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+
+function msg(messageUid, fields = {}) {
+  return contextMessage({ ...fields, messageUid });
+}
 
 function flowCall(id, name, contextPolicy) {
   return { id, name, contextPolicy };
 }
 
-function flowResult(id, toolName, content, contextPolicy) {
-  return { role: "tool", tool_call_id: id, toolName, content, contextPolicy };
+function flowResult(messageUid, id, toolName, content, contextPolicy) {
+  return msg(messageUid, { role: "tool", tool_call_id: id, toolName, content, contextPolicy });
+}
+
+function assistantCalls(messageUid, toolCalls = []) {
+  return msg(messageUid, { role: "assistant", tool_calls: toolCalls });
+}
+
+function toolResult(messageUid, id, toolName, content) {
+  return msg(messageUid, { role: "tool", tool_call_id: id, toolName, content });
+}
+
+function injectedMessage(messageUid, injectedMessageType, content, extra = {}) {
+  return msg(messageUid, {
+    role: "user",
+    content,
+    injectedMessage: true,
+    injectedBy: "plugin",
+    injectedMessageType,
+    ...extra,
+  });
+}
+
+function currentTurnSummarizedFlags(messages = []) {
+  const indexes = collectCurrentTurnSummarizedMessageIndexes(messages);
+  return messages.map((_, index) => indexes.has(index));
 }
 
 test("checkpoint evidence selection retains the latest closed batch per canonical tool identity", () => {
   const messages = [
-    { role: "assistant", tool_calls: [flowCall("old", "plan_control", evidencePolicy)] },
-    flowResult("old", "plan_control", "old", evidencePolicy),
-    { role: "assistant", tool_calls: [flowCall("accept", "accept_control", evidencePolicy)] },
-    flowResult("accept", "accept_control", "accepted", evidencePolicy),
-    { role: "assistant", tool_calls: [{ id: "business", name: "execute_script" }] },
-    { role: "tool", tool_call_id: "business", toolName: "execute_script", content: "ok" },
-    {
-      role: "assistant",
-      tool_calls: [
-        flowCall("latest", "plan_control", evidencePolicy),
-        { id: "parallel", name: "read_file" },
-      ],
-    },
-    flowResult("latest", "plan_control", "latest", evidencePolicy),
-    { role: "tool", tool_call_id: "parallel", toolName: "read_file", content: "file" },
+    assistantCalls("m0", [flowCall("old", "plan_control", evidencePolicy)]),
+    flowResult("m1", "old", "plan_control", "old", evidencePolicy),
+    assistantCalls("m2", [flowCall("accept", "accept_control", evidencePolicy)]),
+    flowResult("m3", "accept", "accept_control", "accepted", evidencePolicy),
+    assistantCalls("m4", [{ id: "business", name: "execute_script" }]),
+    toolResult("m5", "business", "execute_script", "ok"),
+    assistantCalls("m6", [
+      flowCall("latest", "plan_control", evidencePolicy),
+      { id: "parallel", name: "read_file" },
+    ]),
+    flowResult("m7", "latest", "plan_control", "latest", evidencePolicy),
+    toolResult("m8", "parallel", "read_file", "file"),
   ];
 
   assert.deepEqual(
@@ -58,34 +85,29 @@ test("checkpoint evidence selection retains the latest closed batch per canonica
 
 test("checkpoint evidence pairs a persisted tool result by tool_call_id, not its message id", () => {
   const messages = [
-    {
-      messageUid: "evidence-call-message",
+    msg("evidence-call-message", {
       id: "assistant-provider-message",
       role: "assistant",
       type: "tool_call",
       tool_calls: [flowCall("evidence-call", "flow_evidence", evidencePolicy)],
-    },
-    {
-      messageUid: "evidence-result-message",
+    }),
+    msg("evidence-result-message", {
       id: "tool-result-message",
       role: "tool",
       type: "tool_result",
       tool_call_id: "evidence-call",
       content: "recorded",
-    },
+    }),
   ];
 
   assert.deepEqual([...collectLatestCheckpointEvidenceMessageIndexes(messages)], [0, 1]);
-  assert.deepEqual(
-    markCurrentTurnArraySummarized(messages).map((message) => message.summarized === true),
-    [false, false],
-  );
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [false, false]);
 });
 
 test("an unclassified tool name is never inferred to be checkpoint evidence", () => {
   const messages = [
-    { role: "assistant", tool_calls: [{ id: "fake", name: "task_check" }] },
-    { role: "tool", tool_call_id: "fake", toolName: "task_check", content: "not classified" },
+    assistantCalls("m0", [{ id: "fake", name: "task_check" }]),
+    toolResult("m1", "fake", "task_check", "not classified"),
   ];
 
   assert.deepEqual([...collectLatestCheckpointEvidenceMessageIndexes(messages)], []);
@@ -93,16 +115,11 @@ test("an unclassified tool name is never inferred to be checkpoint evidence", ()
 });
 
 test("summary retention keeps the latest injection independently in every dialog", () => {
-  const injected = (id, dialogProcessId, content) => ({
-    role: "user",
-    content,
-    dialogProcessId,
-    turnScopeId: `turn-${dialogProcessId}`,
-    injectedMessage: true,
-    injectedBy: "plugin",
-    injectedMessageType: "guidance",
-    additional_kwargs: { noobotMessageId: id },
-  });
+  const injected = (messageUid, dialogProcessId, content) =>
+    injectedMessage(messageUid, "guidance", content, {
+      dialogProcessId,
+      turnScopeId: `turn-${dialogProcessId}`,
+    });
   const messages = [
     injected("d1-old", "d1", "old d1"),
     injected("d1-latest", "d1", "latest d1"),
@@ -115,135 +132,95 @@ test("summary retention keeps the latest injection independently in every dialog
   });
 
   assert.deepEqual(
-    selected.map((message) => message.additional_kwargs.noobotMessageId),
+    selected.map((message) => readContextMessageField(message, "messageUid")),
     ["d1-old", "d2-old"],
   );
 });
 
 test("summary policy preserves latest task summary pair and latest injection", () => {
-  const result = markCurrentTurnArraySummarized([
-    { role: "assistant", tool_calls: [flowCall("old", "summary_control", boundaryPolicy)] },
-    flowResult("old", "summary_control", "old", boundaryPolicy),
-    {
-      role: "user",
-      injectedMessage: true,
-      injectedBy: "plugin",
-      injectedMessageType: "guidance",
-      content: "old guidance",
-    },
-    { role: "assistant", tool_calls: [flowCall("latest", "summary_control", boundaryPolicy)] },
-    flowResult("latest", "summary_control", "latest", boundaryPolicy),
-    {
-      role: "user",
-      injectedMessage: true,
-      injectedBy: "plugin",
-      injectedMessageType: "guidance",
-      content: "latest guidance",
-    },
-  ]);
+  const messages = [
+    assistantCalls("m0", [flowCall("old", "summary_control", boundaryPolicy)]),
+    flowResult("m1", "old", "summary_control", "old", boundaryPolicy),
+    injectedMessage("m2", "guidance", "old guidance"),
+    assistantCalls("m3", [flowCall("latest", "summary_control", boundaryPolicy)]),
+    flowResult("m4", "latest", "summary_control", "latest", boundaryPolicy),
+    injectedMessage("m5", "guidance", "latest guidance"),
+  ];
 
-  assert.deepEqual(
-    result.map((message) => message.summarized === true),
-    [true, true, true, false, false, false],
-  );
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [true, true, true, false, false, false]);
 });
 
 test("checkpoint control prompts are summarized while normal injections retain their latest type", () => {
   const messages = [
-    {
-      role: "user",
-      injectedMessage: true,
-      injectedBy: "plugin",
-      injectedMessageType: "guidance",
-      content: "old",
-    },
-    {
-      role: "user",
-      injectedMessage: true,
-      injectedBy: "plugin",
-      injectedMessageType: "guidance",
-      content: "latest",
-    },
-    {
+    injectedMessage("m0", "guidance", "old"),
+    injectedMessage("m1", "guidance", "latest"),
+    msg("m2", {
       role: "user",
       content: "summary prompt",
-      additional_kwargs: {
-        noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
-      },
-    },
-    {
+      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+    }),
+    msg("m3", {
       role: "user",
       content: "check prompt",
-      additional_kwargs: {
-        noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
-      },
-    },
+      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
+    }),
   ];
 
-  const result = markCurrentTurnArraySummarized(messages);
-  const selected = collectScopedMessagesToSummarize(messages).messages;
-
-  assert.deepEqual(
-    result.map((message) => message.summarized === true),
-    [true, false, true, true],
-  );
-  assert.deepEqual(selected, [messages[0], messages[2], messages[3]]);
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [true, false, true, true]);
+  assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, [
+    messages[0],
+    messages[2],
+    messages[3],
+  ]);
 });
 
 test("summary checkpoint preserves only the latest task_check call and result pair", () => {
-  const result = markCurrentTurnArraySummarized([
-    { role: "assistant", tool_calls: [flowCall("check-old", "check_control", evidencePolicy)] },
-    flowResult("check-old", "check_control", "old", evidencePolicy),
-    { role: "assistant", tool_calls: [{ id: "business", name: "execute_script" }] },
-    { role: "tool", tool_call_id: "business", toolName: "execute_script", content: "ok" },
-    { role: "assistant", tool_calls: [flowCall("check-latest", "check_control", evidencePolicy)] },
-    flowResult("check-latest", "check_control", "latest", evidencePolicy),
-    { role: "assistant", tool_calls: [flowCall("summary", "summary_control", boundaryPolicy)] },
-    flowResult("summary", "summary_control", "summary", boundaryPolicy),
-  ]);
+  const messages = [
+    assistantCalls("m0", [flowCall("check-old", "check_control", evidencePolicy)]),
+    flowResult("m1", "check-old", "check_control", "old", evidencePolicy),
+    assistantCalls("m2", [{ id: "business", name: "execute_script" }]),
+    toolResult("m3", "business", "execute_script", "ok"),
+    assistantCalls("m4", [flowCall("check-latest", "check_control", evidencePolicy)]),
+    flowResult("m5", "check-latest", "check_control", "latest", evidencePolicy),
+    assistantCalls("m6", [flowCall("summary", "summary_control", boundaryPolicy)]),
+    flowResult("m7", "summary", "summary_control", "summary", boundaryPolicy),
+  ];
 
-  assert.deepEqual(
-    result.map((message) => message.summarized === true),
-    [true, true, true, true, false, false, false, false],
-  );
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+  ]);
 });
 
 test("summary selection keeps a parallel tool-call batch atomic when task_check is preserved", () => {
-  const assistant = {
-    role: "assistant",
-    tool_calls: [
+  const messages = [
+    assistantCalls("m0", [
       { id: "read-a", name: "read_file" },
       { id: "read-b", name: "read_file" },
       flowCall("check", "check_control", evidencePolicy),
-    ],
-  };
-  const messages = [
-    assistant,
-    { role: "tool", tool_call_id: "read-a", toolName: "read_file", content: "a" },
-    { role: "tool", tool_call_id: "read-b", toolName: "read_file", content: "b" },
-    flowResult("check", "check_control", "check", evidencePolicy),
+    ]),
+    toolResult("m1", "read-a", "read_file", "a"),
+    toolResult("m2", "read-b", "read_file", "b"),
+    flowResult("m3", "check", "check_control", "check", evidencePolicy),
   ];
 
-  const selected = collectScopedMessagesToSummarize(messages).messages;
-  const marked = markCurrentTurnArraySummarized(messages);
-
-  assert.deepEqual(selected, []);
-  assert.deepEqual(
-    marked.map((message) => message.summarized === true),
-    [false, false, false, false],
-  );
+  assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, []);
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [false, false, false, false]);
 });
 
 test("summary selection does not select an incomplete parallel tool-call batch", () => {
   const messages = [
-    {
-      role: "assistant",
-      tool_calls: [
-        { id: "read-a", name: "read_file" },
-        { id: "read-b", name: "read_file" },
-      ],
-    },
-    { role: "tool", tool_call_id: "read-a", toolName: "read_file", content: "a" },
+    assistantCalls("m0", [
+      { id: "read-a", name: "read_file" },
+      { id: "read-b", name: "read_file" },
+    ]),
+    toolResult("m1", "read-a", "read_file", "a"),
   ];
 
   assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, []);
@@ -251,23 +228,21 @@ test("summary selection does not select an incomplete parallel tool-call batch",
 
 test("summary scope is the protocol-owned history plus incremental closed boundary", () => {
   const history = [
-    { role: "user", content: "prior", dialogProcessId: "d1", turnScopeId: "t0", id: "h1" },
+    msg("h1", { role: "user", content: "prior", dialogProcessId: "d1", turnScopeId: "t0" }),
   ];
-  const call = {
+  const call = msg("c1", {
     role: "assistant",
     dialogProcessId: "d1",
     turnScopeId: "t1",
-    id: "c1",
     tool_calls: [{ id: "tool-1", name: "read_file" }],
-  };
-  const result = {
+  });
+  const result = msg("r1", {
     role: "tool",
     dialogProcessId: "d1",
     turnScopeId: "t1",
-    id: "r1",
     tool_call_id: "tool-1",
     content: "ok",
-  };
+  });
   const scope = resolveSummaryScope({ history, incremental: [call, result] });
   assert.deepEqual(scope.sourceMessages, [history[0], call, result]);
   assert.deepEqual(scope.checkpointMessages, [history[0], call, result]);
@@ -275,34 +250,10 @@ test("summary scope is the protocol-owned history plus incremental closed bounda
 });
 
 test("checkpoint targets use the completed authoritative scope to select one injection per type", () => {
-  const oldGuidance = {
-    role: "user",
-    injectedMessage: true,
-    injectedBy: "plugin",
-    injectedMessageType: "guidance",
-    additional_kwargs: { noobotMessageId: "old-guidance" },
-  };
-  const latestGuidance = {
-    role: "user",
-    injectedMessage: true,
-    injectedBy: "plugin",
-    injectedMessageType: "guidance",
-    additional_kwargs: { noobotMessageId: "latest-guidance" },
-  };
-  const oldSummary = {
-    role: "user",
-    injectedMessage: true,
-    injectedBy: "plugin",
-    injectedMessageType: "summary",
-    additional_kwargs: { noobotMessageId: "old-summary" },
-  };
-  const completedSummary = {
-    role: "user",
-    injectedMessage: true,
-    injectedBy: "plugin",
-    injectedMessageType: "summary",
-    additional_kwargs: { noobotMessageId: "completed-summary" },
-  };
+  const oldGuidance = injectedMessage("old-guidance", "guidance", "old guidance");
+  const latestGuidance = injectedMessage("latest-guidance", "guidance", "latest guidance");
+  const oldSummary = injectedMessage("old-summary", "summary", "old summary");
+  const completedSummary = injectedMessage("completed-summary", "summary", "completed summary");
   const checkpointTargets = [oldGuidance, latestGuidance, oldSummary];
 
   const result = markScopedMessagesSummarized(checkpointTargets, {
@@ -310,61 +261,35 @@ test("checkpoint targets use the completed authoritative scope to select one inj
   });
 
   assert.equal(result.changedCount, 2);
-  assert.deepEqual(
-    checkpointTargets.map((message) => message.summarized === true),
-    [true, false, true],
-  );
-  assert.equal(completedSummary.summarized, undefined);
+  assert.deepEqual(checkpointTargets.map(resolveContextMessageSummarized), [true, false, true]);
+  assert.equal(resolveContextMessageSummarized(completedSummary), false);
 });
 
 test("summary policy marks restored guidance when a newer guidance exists", () => {
-  const restoredGuidance = {
-    role: "user",
-    content: "restored guidance",
-    additional_kwargs: {
-      noobotMessageId: "restored-guidance",
-      injectedMessage: true,
+  const messages = [
+    injectedMessage("restored-guidance", "separate_model_relay:guidance", "restored guidance", {
       injectedBy: "harness-plugin",
-      injectedMessageType: "separate_model_relay:guidance",
-    },
-  };
-  const latestGuidance = {
-    role: "user",
-    content: "latest guidance",
-    injectedMessage: true,
-    injectedBy: "harness-plugin",
-    injectedMessageType: "separate_model_relay:guidance",
-    additional_kwargs: { noobotMessageId: "latest-guidance" },
-  };
+    }),
+    injectedMessage("latest-guidance", "separate_model_relay:guidance", "latest guidance", {
+      injectedBy: "harness-plugin",
+    }),
+  ];
 
-  const result = markCurrentTurnArraySummarized([restoredGuidance, latestGuidance]);
-
-  assert.equal(result[0].summarized, true);
-  assert.equal(result[1].summarized, undefined);
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [true, false]);
 });
 
 test("user interjection is a retained injection category, not a checkpoint control", () => {
-  const messages = [
-    {
+  const interjection = (messageUid, content) =>
+    msg(messageUid, {
       role: "user",
-      content: "先记住这条",
+      content,
       injectedMessage: true,
       injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
       noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
-    },
-    {
-      role: "user",
-      content: "再记住这条",
-      injectedMessage: true,
-      injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
-    },
-  ];
+    });
+  const messages = [interjection("m0", "先记住这条"), interjection("m1", "再记住这条")];
 
   assert.equal(isContextControlMessage(messages[0]), false);
-  assert.deepEqual(
-    markCurrentTurnArraySummarized(messages).map((message) => message.summarized),
-    [undefined, undefined],
-  );
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [false, false]);
   assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, []);
 });

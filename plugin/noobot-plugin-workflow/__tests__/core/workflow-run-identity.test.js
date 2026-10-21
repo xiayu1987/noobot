@@ -19,7 +19,6 @@ test("workflow run and node identities are stable and attempt-scoped", () => {
     commandId: "command-1",
     executionId: "run-explicit",
     rootExecutionId: "root-1",
-    messageId: "msg-1",
     presentationMessageId: "pres-1",
   };
   const ctx = { sessionId: "s1", dialogProcessId: "d1", runConfig };

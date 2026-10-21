@@ -9,7 +9,6 @@ import {
   markCurrentTurnStoreSummarized,
   mirrorSummarizedMessagesById,
 } from "./summary.js";
-import { resolveContextMessageId } from "../message/codec.js";
 import { isFunction } from "@noobot/shared/value";
 
 export function applyTurnCompletionPolicy({
@@ -17,27 +16,23 @@ export function applyTurnCompletionPolicy({
   turnMessageStore = null,
   policyOptions = {},
 } = {}) {
-  if (!turnMessageStore || !isFunction(turnMessageStore.updateWhere)) {
+  if (
+    !turnMessageStore ||
+    !isFunction(turnMessageStore.updateWhere) ||
+    !isFunction(turnMessageStore.toArray)
+  ) {
     throw new Error("turn completion policy requires the canonical turn message store");
   }
-
-  const markedMessageIds = new Set();
-  const markedCount = markCurrentTurnStoreSummarized(turnMessageStore, {
+  const { markedCount, markedMessageIds } = markCurrentTurnStoreSummarized(turnMessageStore, {
     policyOptions,
-    onMarked: (message) => {
-      const id = resolveContextMessageId(message);
-      if (id) markedMessageIds.add(id);
-    },
   });
   mirrorSummarizedMessagesById(modelMessages, markedMessageIds);
   return {
     markedCount,
-    messages: typeof turnMessageStore.toArray === "function" ? turnMessageStore.toArray() : [],
+    messages: turnMessageStore.toArray(),
   };
 }
 
-export function projectTurnCompletionMessages(messages = [], { policyOptions = {} } = {}) {
-  return markCurrentTurnArraySummarized(messages, {
-    policyOptions,
-  });
+export function projectTurnCompletionMessages(records = [], { policyOptions = {} } = {}) {
+  return markCurrentTurnArraySummarized(records, { policyOptions });
 }

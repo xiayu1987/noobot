@@ -22,6 +22,7 @@ import {
   projectMessageEventToolFacets,
   projectTurnPresentation,
   resolveMessageEventPresentationId,
+  resolveTurnPresentationMessageId,
   validateMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "../src/event-registry.js";
@@ -45,13 +46,12 @@ function envelope(payloadOverrides = {}, envelopeOverrides = {}) {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "child-1",
       turnScopeId: "turn-1",
-      messageId: "message-1",
       ...(envelopeOverrides.identity || {}),
     },
     causality: { ...(envelopeOverrides.causality || {}) },
     ordering: {
       domain: "message-event",
-      scopeId: "message-1",
+      scopeId: "presentation-1",
       sequence: 1,
       ...(envelopeOverrides.ordering || {}),
     },
@@ -66,9 +66,10 @@ test("message family validates canonical v3 identity, ordering, and domain paylo
   assert.deepEqual(validateProtocolEvent(envelope({}, { ordering: { sequence: 0 } })).errors, [
     "durable_event_unsequenced",
   ]);
-  assert.deepEqual(validateProtocolEvent(envelope({}, { identity: { messageId: "" } })).errors, [
-    "missing_message_id",
-  ]);
+  assert.throws(
+    () => envelope({}, { identity: { messageId: "message-1" } }),
+    /unknown_envelope_field: identity\.messageId/,
+  );
   assert.deepEqual(
     validateProtocolEvent(envelope({}, { ordering: { scopeId: "message-2" } })).errors,
     ["sequence_scope_mismatch"],
@@ -110,7 +111,6 @@ test("user interjection events carry one canonical thinking content fact", () =>
     sessionId: "child-1",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
-    messageId: "message-1",
     presentationMessageId: "presentation-1",
   };
   const interjection = envelope(
@@ -197,7 +197,6 @@ test("turn presentation atomically declares canonical user and assistant entitie
     },
     assistantMessage: {
       id: "presentation-1",
-      messageId: "presentation-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
       sessionId: "child-1",
@@ -236,7 +235,7 @@ test("turn presentation atomically declares canonical user and assistant entitie
         assistantMessage: { ...presentation.assistantMessage, messageId: "split-id" },
       },
     }).errors,
-    ["assistant_message_id_mismatch"],
+    ["noncanonical_assistant_message_id"],
   );
 });
 
@@ -342,4 +341,20 @@ test("isHostActivity accepts empty and host kinds and rejects plugin kinds", () 
     assert.equal(isHostActivity({ activityKind }), true);
   }
   assert.equal(isHostActivity({ activityKind: "guidance_analysis" }), false);
+});
+
+test("turn presentation messages resolve identity by role without fallback", () => {
+  assert.equal(
+    resolveTurnPresentationMessageId({
+      role: "assistant",
+      presentationMessageId: "presentation-1",
+    }),
+    "presentation-1",
+  );
+  assert.equal(resolveTurnPresentationMessageId({ role: "assistant", messageId: "stream-1" }), "");
+  assert.equal(resolveTurnPresentationMessageId({ role: "user", messageId: "user-1" }), "user-1");
+  assert.equal(
+    resolveTurnPresentationMessageId({ role: "user", presentationMessageId: "presentation-1" }),
+    "",
+  );
 });

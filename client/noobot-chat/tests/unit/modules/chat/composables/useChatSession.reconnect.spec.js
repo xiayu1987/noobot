@@ -163,7 +163,6 @@ describe("useChatSession reconnect replay", () => {
       createAuthoritativeMessageEnvelope(eventType, {
         eventId: `evt-${sequence}`,
         sessionId: "s-live",
-        messageId: "msg-live",
         presentationMessageId: "msg-live",
         dialogProcessId: "dp-live",
         turnScopeId: "turn-live",
@@ -227,7 +226,6 @@ describe("useChatSession reconnect replay", () => {
       createAuthoritativeMessageEnvelope("llm_delta", {
         eventId: "evt-after-reconnect-delta",
         sessionId: "s-after-reconnect",
-        messageId: "msg-after-reconnect",
         presentationMessageId: "msg-after-reconnect",
         dialogProcessId: "dp-after-reconnect",
         turnScopeId: "turn-after-reconnect",
@@ -293,7 +291,6 @@ describe("useChatSession reconnect replay", () => {
         createAuthoritativeMessageEnvelope("thinking", {
           eventId: "evt-continued-thinking",
           sessionId: "s-continue",
-          messageId: "msg-continued",
           presentationMessageId: "msg-continued",
           dialogProcessId: "dp-continued",
           turnScopeId: "turn-continued",
@@ -367,7 +364,6 @@ describe("useChatSession reconnect replay", () => {
         createAuthoritativeMessageEnvelope("authoritative_final_content", {
           eventId: "evt-new-final",
           sessionId: "s-1",
-          messageId: "msg-new",
           presentationMessageId: "msg-new",
           dialogProcessId: "dp-new",
           turnScopeId: "turn-new",

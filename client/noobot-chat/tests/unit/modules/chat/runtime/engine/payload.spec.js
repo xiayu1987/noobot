@@ -11,7 +11,7 @@ function buildRequiredPayload(options) {
   return buildChatPayload({
     activeSession: { value: { sessionId: "session-1", isLocal: false } },
     userMessageId: `user-message:${options.turnScopeId}`,
-    assistantMessageId: `assistant-message:${options.turnScopeId}`,
+    presentationMessageId: `assistant-message:${options.turnScopeId}`,
     expectedAggregateVersion: 0,
     ...options,
   });
@@ -171,12 +171,12 @@ describe("buildChatPayload model preferences", () => {
     const payload = buildRequiredPayload({
       message: "hello",
       turnScopeId: "turn-1",
-      assistantMessageId: "  msg_assistant-1  ",
+      presentationMessageId: "  msg_assistant-1  ",
     });
 
-    expect(payload.presentation.assistantMessageId).toBe("msg_assistant-1");
+    expect(payload.presentation.presentationMessageId).toBe("msg_assistant-1");
     expect(payload).not.toHaveProperty("presentationMessageId");
-    expect(payload).not.toHaveProperty("assistantMessageId");
+    expect(payload).not.toHaveProperty("presentationMessageId");
   });
 
   it("carries the preallocated user message identity once in presentation", () => {

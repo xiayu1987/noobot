@@ -35,9 +35,16 @@ export class BotManager {
     this.startupContext = startupContext;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
     this.connectorAccessPort = connectorAccessPort;
+    const scopedSessionRoots = pluginRuntimeBundle?.scopedSessionRoots;
+    if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
+      throw new TypeError("BotManager requires pluginRuntimeBundle.scopedSessionRoots");
+    }
 
     this.attach = new AttachmentService(globalConfig);
-    this.sessionRuntime = createSessionServices(globalConfig, { attachmentService: this.attach });
+    this.sessionRuntime = createSessionServices(globalConfig, {
+      attachmentService: this.attach,
+      scopedSessionRoots,
+    });
     this.session = createSessionFacade(this.sessionRuntime);
     this.memory = new MemoryManager(globalConfig);
     this.skill = new SkillService(globalConfig);
@@ -45,6 +52,7 @@ export class BotManager {
     this.workspaceService = new WorkspaceService({
       globalConfig,
       globalConfigRaw: this.globalConfigRaw,
+      scopedSessionRoots,
     });
     this.configService = new ConfigService();
     this.errorLogger = new SystemErrorLogger({

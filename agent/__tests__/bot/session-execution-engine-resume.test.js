@@ -19,6 +19,7 @@ import { initializeSessionTree, persistSession } from "../helpers/runtime-events
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
 
 test("prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
@@ -131,19 +132,23 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
         {
           type: "human",
           content: "history",
-          dialogProcessId: "dialog-history",
-          turnScopeId: "turn-history",
+          additional_kwargs: {
+            dialogProcessId: "dialog-history",
+            turnScopeId: "turn-history",
+          },
         },
       ],
       incremental: [
         {
           type: "human",
           content: "incremental",
-          messageUid: "source-user",
-          messageOrigin: "natural",
-          userMetaMaterialized: true,
-          dialogProcessId: "dialog-stopped",
-          turnScopeId: "turn-stopped",
+          additional_kwargs: {
+            messageUid: "source-user",
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
+            dialogProcessId: "dialog-stopped",
+            turnScopeId: "turn-stopped",
+          },
         },
       ],
     },
@@ -224,11 +229,13 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     );
     assert.deepEqual(sourceCalls, [{ userId: "u1", sessionId: "s1", persistenceScope: null }]);
     assert.equal(captured[0].options.dialogProcessId, "dialog-current");
-    assert.equal(captured[0].history[0].dialogProcessId, "dialog-history");
-    assert.equal(captured[0].history[0].turnScopeId, "turn-history");
-    assert.equal(captured[0].options.incrementalMessages[0].dialogProcessId, "dialog-stopped");
-    assert.equal(captured[0].options.incrementalMessages[0].turnScopeId, "turn-stopped");
-    assert.deepEqual(captured[0].options.incrementalMessages[0].attachments, [
+    const [restoredHistory] = captured[0].history;
+    const [restoredIncremental] = captured[0].options.incrementalMessages;
+    assert.equal(readContextMessageValue(restoredHistory, "dialogProcessId"), "dialog-history");
+    assert.equal(readContextMessageValue(restoredHistory, "turnScopeId"), "turn-history");
+    assert.equal(readContextMessageValue(restoredIncremental, "dialogProcessId"), "dialog-stopped");
+    assert.equal(readContextMessageValue(restoredIncremental, "turnScopeId"), "turn-stopped");
+    assert.deepEqual(readContextMessageValue(restoredIncremental, "attachments"), [
       {
         attachmentId: "attachment-source",
         sessionId: "s1",

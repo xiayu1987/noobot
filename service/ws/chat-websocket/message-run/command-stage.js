@@ -14,7 +14,6 @@ import {
   TURN_ACTION,
   TURN_EVENT,
   TURN_PHASE,
-  createAssistantMessageEventId,
   createTurnAcceptanceReceipt,
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
@@ -121,7 +120,6 @@ function createActionEvent(command, run, executionIntent, startedAt) {
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: RUN_COMMAND_TURN_ACTION[command.commandType],
-    messageId: run.normalizedRunConfig.messageId,
     presentationMessageId: run.normalizedRunConfig.presentationMessageId,
     startedAt,
     createSessionIfAbsent: run.createSessionIfAbsent,
@@ -180,9 +178,6 @@ async function commitAction(context, actionEvent, run) {
 export async function acceptRunCommand(context, command, run) {
   const startedAt = new Date().toISOString();
   run.normalizedRunConfig.thinkingStartedAt = startedAt;
-  run.normalizedRunConfig.messageId = createAssistantMessageEventId(
-    run.normalizedRunConfig.presentationMessageId,
-  );
   const activeBot = context.resolveBot();
   const agentApplication = createAgentApplication({ runtime: activeBot });
   const executionIntent = await agentApplication.resolveExecutionIntent({

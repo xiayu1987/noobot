@@ -7,12 +7,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createModelContext } from "@noobot/context-protocol";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { ModelProtocolError, MODEL_ERROR_CODE } from "@noobot/model-protocol";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { NO_FINAL_RESPONSE_RETRY_POLICY } from "@noobot/context-protocol/policy/no-final-response-retry";
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+
+function sessionContextMessage(record) {
+  return projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record });
+}
 
 const RETRY_TYPE = CONTEXT_INJECTED_MESSAGE_TYPE.NO_FINAL_RESPONSE_RETRY_PROMPT;
 
@@ -36,7 +42,7 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
     messageBlocks: {
       system: [],
       history: [],
-      incremental: [{ role: "user", content: "question" }],
+      incremental: [sessionContextMessage({ role: "user", content: "question" })],
     },
     activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
   });

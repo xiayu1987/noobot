@@ -22,7 +22,8 @@
         "originType": "workflow",
         "originIdKey": "workflowRunId",
         "stage": "planning"
-      }
+      },
+      "scopedSessionRoots": ["session"]
     },
     "service": {
       "hooks": {

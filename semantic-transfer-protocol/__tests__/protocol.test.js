@@ -30,10 +30,10 @@ const identity = createTransferIdentity({
   producer: { type: "tool", id: "call1" },
 });
 
-test("creates strict direct V2 envelope", () => {
+test("creates strict direct V3 envelope", () => {
   const envelope = directTransfer({
     transferId: "tr1",
-    messageId: "m1",
+    presentationMessageId: "m1",
     identity,
     direction: "output",
     intent: {
@@ -44,14 +44,14 @@ test("creates strict direct V2 envelope", () => {
     },
     content: "ok",
   });
-  assert.equal(envelope.version, 2);
+  assert.equal(envelope.version, 3);
   assert.equal(validateTransferEnvelope(envelope).ok, true);
 });
 
 test("creates attachment envelope from canonical identity and rejects paths", () => {
   const envelope = attachmentTransfer({
     transferId: "tr2",
-    messageId: "m2",
+    presentationMessageId: "m2",
     identity,
     direction: "output",
     intent: {
@@ -75,7 +75,7 @@ test("creates attachment envelope from canonical identity and rejects paths", ()
   assert.throws(() =>
     attachmentTransfer({
       transferId: "tr3",
-      messageId: "m3",
+      presentationMessageId: "m3",
       identity,
       direction: "output",
       intent: {},
@@ -97,7 +97,7 @@ test("creates attachment envelope from canonical identity and rejects paths", ()
 test("creates a source reference envelope without persisting an attachment", () => {
   const envelope = sourceReferenceTransfer({
     transferId: "tr-source",
-    messageId: "m-source",
+    presentationMessageId: "m-source",
     identity,
     direction: "output",
     reference: {
@@ -126,7 +126,7 @@ test("creates a source reference envelope for a canonical attachment identity", 
   };
   const envelope = sourceReferenceTransfer({
     transferId: "tr-attachment-source",
-    messageId: "m-attachment-source",
+    presentationMessageId: "m-attachment-source",
     identity,
     direction: "output",
     reference: { address, name: "result.txt", startLine: 1, endLine: 400 },
@@ -145,7 +145,7 @@ test("rejects inferred or incomplete attachment source addresses", () => {
   assert.throws(() =>
     sourceReferenceTransfer({
       transferId: "tr-invalid-source",
-      messageId: "m-invalid-source",
+      presentationMessageId: "m-invalid-source",
       identity,
       direction: "output",
       reference: { address: { attachmentId: "attachment-source-1" }, name: "result.txt" },
@@ -190,7 +190,7 @@ test("rejects unregistered scenarios and strategies", () => {
     () =>
       directTransfer({
         transferId: "tr-unregistered",
-        messageId: "m-unregistered",
+        presentationMessageId: "m-unregistered",
         identity,
         direction: "output",
         intent: {
@@ -238,7 +238,7 @@ test("tool input and output policies come from the protocol registry", () => {
 test("strict validation rejects unregistered incoming semantics", () => {
   const envelope = directTransfer({
     transferId: "strict-registration",
-    messageId: "m-strict-registration",
+    presentationMessageId: "m-strict-registration",
     identity,
     direction: "output",
     intent: {
@@ -255,15 +255,15 @@ test("strict validation rejects unregistered incoming semantics", () => {
 
 test("transfer identity key is unambiguous", () => {
   assert.notEqual(
-    transferIdentityKey({ transferId: "a:b", messageId: "c" }),
-    transferIdentityKey({ transferId: "a", messageId: "b:c" }),
+    transferIdentityKey({ transferId: "a:b", presentationMessageId: "c" }),
+    transferIdentityKey({ transferId: "a", presentationMessageId: "b:c" }),
   );
 });
 
 test("mergeTransferEnvelopes is ordered, idempotent, and rejects identity conflicts", () => {
   const envelope = directTransfer({
     transferId: "merge-1",
-    messageId: "merge-message",
+    presentationMessageId: "merge-message",
     identity,
     direction: "output",
     intent: {
@@ -288,7 +288,7 @@ test("mergeTransferEnvelopes is ordered, idempotent, and rejects identity confli
 test("attachment references have one canonical conflict-aware projection", () => {
   const envelope = attachmentTransfer({
     transferId: "refs-1",
-    messageId: "refs-message",
+    presentationMessageId: "refs-message",
     identity,
     direction: "output",
     intent: {

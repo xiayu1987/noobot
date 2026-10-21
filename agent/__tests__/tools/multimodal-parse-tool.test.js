@@ -18,7 +18,7 @@ import { createTestModelHost } from "../helpers/test-model-host.js";
 
 const TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:multimodal-parse:output",
-  messageId: "message:test-multimodal-parse",
+  presentationMessageId: "message:test-multimodal-parse",
   sessionId: "session-1",
   turnScopeId: "turn:test-multimodal-parse",
   runId: "run:test-multimodal-parse",
@@ -205,7 +205,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
             family,
             identity: {
               ...identity,
-              eventId: `attachment-authority:${identity.messageId}`,
+              eventId: `attachment-authority:${authorityRequests.length}`,
               sessionId: "session-1",
             },
             causality,

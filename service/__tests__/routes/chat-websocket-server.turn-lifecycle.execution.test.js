@@ -113,7 +113,7 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
         item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.COMPLETED,
     );
     assert.equal(completedEnvelope.data.payload.startedAt, authoritativeStartedAt);
-    assert.equal(completedEnvelope.data.identity.messageId, turn.messageId);
+    assert.equal(Object.hasOwn(completedEnvelope.data.identity, "messageId"), false);
     assert.equal(completedEnvelope.data.payload.presentationMessageId, turn.presentationMessageId);
     assert.equal(Boolean(completedEnvelope.data.payload.finishedAt), true);
     assert.equal(

@@ -16,6 +16,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { createModelMessageId } from "@noobot/context-protocol/message/message-identity";
 
 function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -388,21 +389,25 @@ async function upsertWorkflowMessage({
     semanticText,
     attachmentPathBlock: attachmentReferenceBlock,
   });
-  const { presentationMessageId, messageId, workflowRunId } = resolveWorkflowRunIdentity(ctx);
+  const { presentationMessageId, workflowRunId } = resolveWorkflowRunIdentity(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  if (!isFunction(runtime?.materializePendingCurrentTurnMessageEvents)) {
+  if (!isFunction(runtime?.materializeUnownedCurrentTurnMessageEvents)) {
     throw new Error("Turn message event materializer is required");
   }
-  const messageEventProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
+  const messageEventProjection = runtime.materializeUnownedCurrentTurnMessageEvents();
   applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
   const sessionWorkflowPayload = buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId);
+  const existing = findExistingWorkflowMessage(turnMessages, dialogProcessId);
+
+  const messageId = existing ? text(existing.messageId) : createModelMessageId();
+  if (!messageId) throw new Error("Existing workflow message requires a journal messageId");
   const workflowMessage = {
     role: "assistant",
     id: messageId,
     messageId,
     type: "workflow",
     chatPresentation: true,
-    ...(presentationMessageId ? { presentationMessageId } : {}),
+    presentationMessageId,
     ...pickNonEmptyTimelines(messageEventProjection),
     content,
     dialogProcessId,
@@ -420,11 +425,10 @@ async function upsertWorkflowMessage({
       sessionWorkflowPayload,
     }),
   };
-  if (content && messageId) {
+  if (content) {
     agentResult.output = content;
     agentResult.assistantMessageId = messageId;
   }
-  const existing = findExistingWorkflowMessage(turnMessages, dialogProcessId);
   if (existing) {
     Object.assign(existing, workflowMessage);
     return existing;

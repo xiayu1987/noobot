@@ -61,7 +61,6 @@ test("session save refreshes the display projection with live activity timeline"
               sequenceScopeId: "model-live",
               sessionId: "live",
               turnScopeId: "turn-live",
-              messageId: "model-live",
               presentationMessageId: "presentation-live",
             }),
           ],

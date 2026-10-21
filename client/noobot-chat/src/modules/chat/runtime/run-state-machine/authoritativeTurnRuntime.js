@@ -49,7 +49,6 @@ function commitEnvelopeProjection(registry, envelope, result, fingerprint) {
   if (result.turn) {
     Object.assign(result.turn, {
       parentSessionId: text(envelope.parentSessionId),
-      messageId: text(envelope.messageId),
       presentationMessageId: text(envelope.presentationMessageId),
       authoritativeEventId: text(envelope.eventId),
       authoritativeEventFingerprint: fingerprint,

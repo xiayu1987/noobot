@@ -8,26 +8,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildCanonicalMessageBlocks } from "../src/policy/block.js";
 
+function ctx(role, content, metadata = {}) {
+  return { role, content, additional_kwargs: { ...metadata } };
+}
+
+function record(role, content, facts = {}) {
+  return { role, content, ...facts };
+}
+
+const HISTORY_ROUND = { dialogProcessId: "history-dialog", turnScopeId: "history-turn" };
+const SNAPSHOT_ROUND = { dialogProcessId: "snapshot-dialog", turnScopeId: "snapshot-turn" };
+
 test("canonical blocks preserve main system history incremental composition", () => {
   const result = buildCanonicalMessageBlocks({
-    systemMessages: [{ role: "system", content: "system" }],
+    systemMessages: [ctx("system", "system", { messageUid: "sm_system" })],
     historyMessages: [
-      {
-        role: "user",
-        content: "history",
-        dialogProcessId: "history-dialog",
-        turnScopeId: "history-turn",
-      },
-      { role: "assistant", content: "history-answer" },
+      ctx("user", "history", { messageUid: "sm_history", ...HISTORY_ROUND }),
+      ctx("assistant", "history-answer", { messageUid: "sm_answer", ...HISTORY_ROUND }),
     ],
     incrementalMessages: [],
-    currentUserMessage: {
+    currentUserMessage: record("user", "current", {
       messageUid: "sm_current",
-      role: "user",
-      content: "current",
       dialogProcessId: "current-dialog",
       turnScopeId: "current-turn",
-    },
+    }),
     historyExclusionIdentity: { dialogProcessId: "current-dialog", turnScopeId: "current-turn" },
   });
 
@@ -46,19 +50,12 @@ test("canonical blocks preserve main system history incremental composition", ()
   assert.deepEqual(result.messages, [...result.system, ...result.history, ...result.incremental]);
 });
 
-test("snapshot history inherits round identity for grouping without mutating messages", () => {
-  const assistant = { role: "assistant", content: "tool call" };
-  const tool = { role: "tool", content: "tool result" };
+test("history rounds group by each message's own dialog identity", () => {
   const result = buildCanonicalMessageBlocks({
     historyMessages: [
-      {
-        role: "user",
-        content: "task",
-        dialogProcessId: "snapshot-dialog",
-        turnScopeId: "snapshot-turn",
-      },
-      assistant,
-      tool,
+      ctx("user", "task", { messageUid: "sm_task", ...SNAPSHOT_ROUND }),
+      ctx("assistant", "tool call", { messageUid: "sm_call", ...SNAPSHOT_ROUND }),
+      ctx("tool", "tool result", { messageUid: "sm_result", ...SNAPSHOT_ROUND }),
     ],
   });
 
@@ -66,28 +63,19 @@ test("snapshot history inherits round identity for grouping without mutating mes
     result.history.map((message) => message.content),
     ["task", "tool call", "tool result"],
   );
-  assert.equal(assistant.dialogProcessId, undefined);
-  assert.equal(tool.dialogProcessId, undefined);
 });
 
 test("current history exclusion uses explicit runtime identity instead of fallback identity", () => {
   const result = buildCanonicalMessageBlocks({
     historyMessages: [
-      {
-        role: "user",
-        content: "snapshot",
-        dialogProcessId: "snapshot-dialog",
-        turnScopeId: "snapshot-turn",
-      },
-      { role: "assistant", content: "answer" },
+      ctx("user", "snapshot", { messageUid: "sm_snapshot", ...SNAPSHOT_ROUND }),
+      ctx("assistant", "answer", { messageUid: "sm_snapshot_answer", ...SNAPSHOT_ROUND }),
     ],
-    currentUserMessage: {
+    currentUserMessage: record("user", "continue", {
       messageUid: "sm_continue",
-      role: "user",
-      content: "continue",
       dialogProcessId: "snapshot-dialog",
       turnScopeId: "current-turn",
-    },
+    }),
     historyExclusionIdentity: { dialogProcessId: "current-dialog", turnScopeId: "current-turn" },
   });
 
@@ -107,18 +95,23 @@ test("current message protocol rejects text without persisted identity", () => {
     /canonical persisted message entity/,
   );
   assert.throws(
-    () => buildCanonicalMessageBlocks({ currentUserMessage: { role: "user", content: "current" } }),
-    /persisted content and messageUid/,
+    () => buildCanonicalMessageBlocks({ currentUserMessage: record("user", "current") }),
+    /requires messageUid/,
   );
   assert.throws(
     () =>
       buildCanonicalMessageBlocks({
-        currentUserMessage: {
+        currentUserMessage: record("user", "", { messageUid: "sm_current" }),
+      }),
+    /requires persisted content/,
+  );
+  assert.throws(
+    () =>
+      buildCanonicalMessageBlocks({
+        currentUserMessage: record("user", "current", {
           messageUid: "sm_current",
-          role: "user",
-          content: "current",
           dialogProcessId: "dialog-current",
-        },
+        }),
       }),
     /canonical user round identity/,
   );

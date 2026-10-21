@@ -6,8 +6,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
+
+function sessionContextMessage(record) {
+  return projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record });
+}
 
 const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
 
@@ -22,23 +28,23 @@ test("plugin resolveModelMessages uses authoritative modelContext blocks", () =>
           system: [],
           history: [],
           incremental: [
-            {
+            sessionContextMessage({
               role: "user",
               content: "[agent-plugin-relay/planning]\\nold",
               injectedMessage: true,
               injectedBy: "agent-plugin",
               injectedMessageType: "planning_relay",
               dialogProcessId: "dlg_old",
-            },
-            {
+            }),
+            sessionContextMessage({
               role: "user",
               content: "[agent-plugin-relay/planning]\\nnew",
               injectedMessage: true,
               injectedBy: "agent-plugin",
               injectedMessageType: "planning_relay",
               dialogProcessId: "dlg_new",
-            },
-            { role: "assistant", content: "normal" },
+            }),
+            sessionContextMessage({ role: "assistant", content: "normal" }),
           ],
         },
       }),
@@ -61,23 +67,27 @@ test("plugin resolveModelMessages keeps unsummarized injected blocks append-only
           system: [],
           history: [],
           incremental: [
-            {
+            sessionContextMessage({
               role: "user",
               content: "[agent-plugin-relay/planning]\\nold",
               injectedMessage: true,
               injectedBy: "agent-plugin",
               injectedMessageType: "planning_relay",
               dialogProcessId: "dlg_old",
-            },
-            {
+            }),
+            sessionContextMessage({
               role: "user",
               content: "[agent-plugin-relay/planning]\\nnew",
               injectedMessage: true,
               injectedBy: "agent-plugin",
               injectedMessageType: "planning_relay",
               dialogProcessId: "dlg_new",
-            },
-            { role: "assistant", content: "normal", dialogProcessId: "dlg_new" },
+            }),
+            sessionContextMessage({
+              role: "assistant",
+              content: "normal",
+              dialogProcessId: "dlg_new",
+            }),
           ],
         },
       }),
@@ -100,7 +110,13 @@ test("plugin resolveModelMessages accepts a versioned modelContext", () => {
         messageBlocks: {
           system: [],
           history: [],
-          incremental: [{ role: "user", content: "protocol-compatible", dialogProcessId: "dlg" }],
+          incremental: [
+            sessionContextMessage({
+              role: "user",
+              content: "protocol-compatible",
+              dialogProcessId: "dlg",
+            }),
+          ],
         },
       }),
     },
@@ -123,10 +139,10 @@ test("plugin resolveModelMessages no longer clips agent context to plugin contex
           system: [],
           history: [],
           incremental: [
-            { role: "user", content: "u1", dialogProcessId: "dlg_new" },
-            { role: "assistant", content: "a1", dialogProcessId: "dlg_new" },
-            { role: "user", content: "u2", dialogProcessId: "dlg_new" },
-            { role: "assistant", content: "a2", dialogProcessId: "dlg_new" },
+            sessionContextMessage({ role: "user", content: "u1", dialogProcessId: "dlg_new" }),
+            sessionContextMessage({ role: "assistant", content: "a1", dialogProcessId: "dlg_new" }),
+            sessionContextMessage({ role: "user", content: "u2", dialogProcessId: "dlg_new" }),
+            sessionContextMessage({ role: "assistant", content: "a2", dialogProcessId: "dlg_new" }),
           ],
         },
       }),
@@ -146,17 +162,21 @@ test("plugin resolveModelMessages uses main-flow blocks when available", () => {
       agentContext,
       modelContext: createModelContext({
         messageBlocks: {
-          system: [{ role: "system", content: "sys" }],
+          system: [sessionContextMessage({ role: "system", content: "sys" })],
           history: [
-            { role: "user", content: "u1-first", dialogProcessId: "d1" },
-            { role: "user", content: "u1-second", dialogProcessId: "d1" },
-            { role: "assistant", content: "a1-old", dialogProcessId: "d1" },
-            { role: "assistant", content: "a1-latest", dialogProcessId: "d1" },
+            sessionContextMessage({ role: "user", content: "u1-first", dialogProcessId: "d1" }),
+            sessionContextMessage({ role: "user", content: "u1-second", dialogProcessId: "d1" }),
+            sessionContextMessage({ role: "assistant", content: "a1-old", dialogProcessId: "d1" }),
+            sessionContextMessage({
+              role: "assistant",
+              content: "a1-latest",
+              dialogProcessId: "d1",
+            }),
           ],
           incremental: [
-            { role: "user", content: "inc1" },
-            { role: "assistant", content: "drop", summarized: true },
-            { role: "assistant", content: "inc2" },
+            sessionContextMessage({ role: "user", content: "inc1" }),
+            sessionContextMessage({ role: "assistant", content: "drop", summarized: true }),
+            sessionContextMessage({ role: "assistant", content: "inc2" }),
           ],
         },
       }),
@@ -176,16 +196,16 @@ test("plugin resolveModelMessages does not mutate source messages or messageBloc
     agentContext,
     modelContext: createModelContext({
       messageBlocks: {
-        system: [{ role: "system", content: "sys" }],
+        system: [sessionContextMessage({ role: "system", content: "sys" })],
         history: [
-          { role: "user", content: "u1", dialogProcessId: "d1" },
-          { role: "assistant", content: "a1", dialogProcessId: "d1" },
-          { role: "user", content: "u2", dialogProcessId: "d2" },
-          { role: "assistant", content: "a2", dialogProcessId: "d2" },
+          sessionContextMessage({ role: "user", content: "u1", dialogProcessId: "d1" }),
+          sessionContextMessage({ role: "assistant", content: "a1", dialogProcessId: "d1" }),
+          sessionContextMessage({ role: "user", content: "u2", dialogProcessId: "d2" }),
+          sessionContextMessage({ role: "assistant", content: "a2", dialogProcessId: "d2" }),
         ],
         incremental: [
-          { role: "user", content: "current", dialogProcessId: "d3" },
-          { role: "assistant", content: "current-a", dialogProcessId: "d3" },
+          sessionContextMessage({ role: "user", content: "current", dialogProcessId: "d3" }),
+          sessionContextMessage({ role: "assistant", content: "current-a", dialogProcessId: "d3" }),
         ],
       },
     }),

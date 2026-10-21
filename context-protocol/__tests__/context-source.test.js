@@ -11,9 +11,22 @@ test("context source projection excludes only the active canonical scope", () =>
   const projection = projectContextSource({
     source: {
       messages: [
-        { role: "user", content: "old", dialogProcessId: "d-old", turnScopeId: "t-old" },
-        { role: "user", content: "active", dialogProcessId: "d-active", turnScopeId: "t-active" },
         {
+          messageUid: "m1",
+          role: "user",
+          content: "old",
+          dialogProcessId: "d-old",
+          turnScopeId: "t-old",
+        },
+        {
+          messageUid: "m2",
+          role: "user",
+          content: "active",
+          dialogProcessId: "d-active",
+          turnScopeId: "t-active",
+        },
+        {
+          messageUid: "m3",
           role: "assistant",
           content: "current dialog",
           dialogProcessId: "d-active",

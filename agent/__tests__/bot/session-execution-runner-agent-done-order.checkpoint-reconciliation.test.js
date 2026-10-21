@@ -27,8 +27,13 @@ test("runSession restores only the checkpoint-persisted agent prefix at finaliza
       assistantMessageId: "message-tail",
       traces: [],
       turnMessages: [
-        { messageId: "message-retained-persisted", role: "tool", content: "retained-persisted" },
-        { messageId: "message-tail", role: "assistant", content: "tail" },
+        {
+          messageUid: "sm_retained-persisted",
+          messageId: "message-retained-persisted",
+          role: "tool",
+          content: "retained-persisted",
+        },
+        { messageUid: "sm_tail", messageId: "message-tail", role: "assistant", content: "tail" },
       ],
       turnTasks: [],
     }),

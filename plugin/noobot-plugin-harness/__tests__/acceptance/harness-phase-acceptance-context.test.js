@@ -11,6 +11,10 @@ import {
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import {
+  readContextMessageField,
+  resolveContextMessageFlags,
+} from "@noobot/context-protocol/message/codec";
 
 test("phase acceptance injects context, revised plan checklist, then phase request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -67,8 +71,14 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
     /计划清单上下文|Plan checklist context/,
   );
   assert.match(String(ctx.modelContext.messages[planContextIndex].content), /核心实现/);
-  assert.equal(ctx.modelContext.messages[planContextIndex].injectedMessage, true);
-  assert.equal(ctx.modelContext.messages[planContextIndex].injectedBy, "harness-plugin");
+  assert.equal(
+    resolveContextMessageFlags(ctx.modelContext.messages[planContextIndex]).injected,
+    true,
+  );
+  assert.equal(
+    readContextMessageField(ctx.modelContext.messages[planContextIndex], "injectedBy"),
+    "harness-plugin",
+  );
   assert.equal(ctx.modelContext.messages[requestIndex].role, "user");
   assert.doesNotMatch(
     String(ctx.modelContext.messages[requestIndex].content),
@@ -79,8 +89,11 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
     /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/,
   );
   assert.match(String(ctx.modelContext.messages[protocolIndex].content), /evidence=\[简短证据\]/);
-  assert.equal(ctx.modelContext.messages[requestIndex].injectedMessage, true);
-  assert.equal(ctx.modelContext.messages[requestIndex].injectedBy, "harness-plugin");
+  assert.equal(resolveContextMessageFlags(ctx.modelContext.messages[requestIndex]).injected, true);
+  assert.equal(
+    readContextMessageField(ctx.modelContext.messages[requestIndex], "injectedBy"),
+    "harness-plugin",
+  );
   assert.equal(
     planContextIndex > -1 && requestIndex > planContextIndex && responsibilityIndex > requestIndex,
     true,

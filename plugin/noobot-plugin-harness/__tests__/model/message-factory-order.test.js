@@ -7,13 +7,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildCapabilityProtocolModelMessages } from "../../src/capabilities/handlers/shared/model/message-factory.js";
+import { contextMessage } from "../helpers/context-message.js";
 
 test("capability protocol model messages keep system block before agent conversation", () => {
   const messages = buildCapabilityProtocolModelMessages({
     agentMessages: [
-      { role: "user", content: "current user", messageUid: "m1" },
-      { role: "system", content: "agent system", messageUid: "m2" },
-      { role: "assistant", content: "history assistant", messageUid: "m3" },
+      contextMessage({ role: "user", content: "current user", messageUid: "m1" }),
+      contextMessage({ role: "system", content: "agent system", messageUid: "m2" }),
+      contextMessage({ role: "assistant", content: "history assistant", messageUid: "m3" }),
     ],
     contextMessages: ["planning context"],
     protocolPrompt: "planning protocol",

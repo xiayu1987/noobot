@@ -12,7 +12,7 @@ import {
 
 export const IDENTITY = Object.freeze({
   transferId: "transfer:native-script:output",
-  messageId: "message:native-script",
+  presentationMessageId: "message:native-script",
   sessionId: "session-1",
   turnScopeId: "turn:native-script",
   runId: "run:native-script",

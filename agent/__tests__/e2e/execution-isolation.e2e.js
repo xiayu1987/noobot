@@ -20,7 +20,7 @@ const execFileAsync = promisify(execFile);
 const TEST_IMAGE = "nikolaik/python-nodejs:python3.12-nodejs26-bookworm";
 const TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:e2e:execution-isolation",
-  messageId: "message:e2e:execution-isolation",
+  presentationMessageId: "message:e2e:execution-isolation",
   sessionId: "session:e2e:execution-isolation",
   turnScopeId: "turn:e2e:execution-isolation",
   runId: "run:e2e:execution-isolation",
@@ -76,7 +76,7 @@ function buildAgentContext({
         dialogProcessId: "d-1",
         turnScopeId: "t-1",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
     },
   );

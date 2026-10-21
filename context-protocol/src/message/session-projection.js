@@ -6,6 +6,11 @@
 
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { isPlainObject } from "@noobot/shared/value";
+import {
+  readContextMessageValue,
+  resolveContextMessageRole,
+  writeContextMessageMetadata,
+} from "./codec.js";
 
 const SESSION_CONTEXT_ROLES = new Set(["system", "user", "assistant", "tool"]);
 
@@ -38,14 +43,6 @@ function optionalPlainObject(value, field) {
   return value;
 }
 
-function pickTextFields(source, fields) {
-  return Object.fromEntries(fields.map((field) => [field, source[field] || ""]));
-}
-
-function pickFlagFields(source, fields) {
-  return Object.fromEntries(fields.map((field) => [field, source[field] === true]));
-}
-
 function normalizeRawModelContent(value) {
   return typeof value === "string" || Array.isArray(value) ? value : null;
 }
@@ -57,6 +54,35 @@ export function normalizeContextTransferEnvelopes(envelopes = []) {
   return normalizeTransferEnvelopes(envelopes);
 }
 
+const PROJECTED_TEXT_FIELDS = Object.freeze([
+  "userName",
+  "sessionId",
+  "parentSessionId",
+  "dialogProcessId",
+  "parentDialogProcessId",
+  "turnScopeId",
+  "injectedBy",
+  "injectedMessageType",
+  "messageOrigin",
+  "noobotInternalMessageType",
+  "relayCorrelationId",
+  "terminalStatus",
+  "terminalReason",
+]);
+
+const PROJECTED_FLAG_FIELDS = Object.freeze([
+  "summarized",
+  "injectedMessage",
+  "userMetaMaterialized",
+  "pluginMessage",
+  "terminalHistoryProjection",
+  "terminalHistoryExplanation",
+]);
+
+function presentText(value) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 export function projectSessionRecordToContextMessage(record = {}) {
   const source = requireRecord(record);
   const messageUid = requireText(source.messageUid, "messageUid");
@@ -64,46 +90,34 @@ export function projectSessionRecordToContextMessage(record = {}) {
   if (!SESSION_CONTEXT_ROLES.has(role)) {
     throw new TypeError(`Session Context projection rejects role: ${role}`);
   }
+  const toolCalls = optionalArray(source.tool_calls, "tool_calls");
+  const toolCallId = presentText(source.tool_call_id);
   const attachments = optionalArray(source.attachments, "attachments");
   const transferEnvelopes = normalizeContextTransferEnvelopes(
     optionalArray(source.transferEnvelopes, "transferEnvelopes"),
   );
-  return {
-    messageUid,
-    role,
-    content: source.content ?? "",
-    rawModelContent: normalizeRawModelContent(source.rawModelContent),
-    ...pickTextFields(source, [
-      "type",
-      "userName",
-      "sessionId",
-      "parentSessionId",
-      "dialogProcessId",
-      "parentDialogProcessId",
-      "turnScopeId",
-    ]),
-    ...pickFlagFields(source, ["summarized", "injectedMessage"]),
-    ...pickTextFields(source, ["injectedBy", "injectedMessageType", "messageOrigin"]),
-    ...pickFlagFields(source, [
-      "userMetaMaterialized",
-      "pluginMessage",
-      "terminalHistoryProjection",
-      "terminalHistoryExplanation",
-    ]),
-    ...pickTextFields(source, ["terminalStatus", "terminalReason"]),
-    tool_calls: optionalArray(source.tool_calls, "tool_calls"),
-    ...pickTextFields(source, ["tool_call_id"]),
-    modelAdditionalKwargs: optionalPlainObject(
-      source.modelAdditionalKwargs,
-      "modelAdditionalKwargs",
-    ),
-    modelResponseMetadata: optionalPlainObject(
-      source.modelResponseMetadata,
-      "modelResponseMetadata",
-    ),
-    ...(attachments.length ? { attachments } : {}),
-    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
-  };
+  const metadata = { messageUid };
+  for (const field of PROJECTED_TEXT_FIELDS) metadata[field] = presentText(source[field]);
+  for (const field of PROJECTED_FLAG_FIELDS) {
+    metadata[field] = source[field] === true ? true : undefined;
+  }
+  metadata.rawModelContent = normalizeRawModelContent(source.rawModelContent) ?? undefined;
+  metadata.contextPolicy = optionalPlainObject(source.contextPolicy, "contextPolicy") ?? undefined;
+  metadata.modelAdditionalKwargs =
+    optionalPlainObject(source.modelAdditionalKwargs, "modelAdditionalKwargs") ?? undefined;
+  metadata.modelResponseMetadata =
+    optionalPlainObject(source.modelResponseMetadata, "modelResponseMetadata") ?? undefined;
+  metadata.attachments = attachments.length ? attachments : undefined;
+  metadata.transferEnvelopes = transferEnvelopes.length ? transferEnvelopes : undefined;
+  return writeContextMessageMetadata(
+    {
+      role,
+      content: source.content ?? "",
+      ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+      ...(toolCallId ? { tool_call_id: toolCallId } : {}),
+    },
+    metadata,
+  );
 }
 
 export function projectSessionRecordsToContextMessages(records = []) {
@@ -111,4 +125,42 @@ export function projectSessionRecordsToContextMessages(records = []) {
     throw new TypeError("Session Context projection requires a record array");
   }
   return records.map(projectSessionRecordToContextMessage);
+}
+
+const PROJECTED_STRUCTURED_FIELDS = Object.freeze([
+  "rawModelContent",
+  "contextPolicy",
+  "modelAdditionalKwargs",
+  "modelResponseMetadata",
+  "attachments",
+  "transferEnvelopes",
+]);
+
+export function projectContextMessageToSessionRecord(message = {}) {
+  if (message === null || typeof message !== "object" || Array.isArray(message)) {
+    throw new TypeError("Context Session projection requires a message object");
+  }
+  const messageUid = requireText(readContextMessageValue(message, "messageUid"), "messageUid");
+  const role = resolveContextMessageRole(message);
+  if (!SESSION_CONTEXT_ROLES.has(role)) {
+    throw new TypeError(`Context Session projection rejects role: ${role || "<empty>"}`);
+  }
+  const record = { messageUid, role, content: message.content ?? "" };
+  if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
+    record.tool_calls = message.tool_calls;
+  }
+  const toolCallId = presentText(message.tool_call_id);
+  if (toolCallId) record.tool_call_id = toolCallId;
+  for (const field of PROJECTED_TEXT_FIELDS) {
+    const value = presentText(readContextMessageValue(message, field));
+    if (value !== undefined) record[field] = value;
+  }
+  for (const field of PROJECTED_FLAG_FIELDS) {
+    if (readContextMessageValue(message, field) === true) record[field] = true;
+  }
+  for (const field of PROJECTED_STRUCTURED_FIELDS) {
+    const value = readContextMessageValue(message, field);
+    if (value !== undefined && value !== null) record[field] = value;
+  }
+  return record;
 }

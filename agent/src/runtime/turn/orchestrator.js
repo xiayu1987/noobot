@@ -371,11 +371,7 @@ export function createTurnOrchestrator({
         }).messages;
         requestMainFlowSummaryCheckpoint(runtime, {
           source: "task_summary",
-          summarizedMessageIds: summaryTargets
-            .map((message) =>
-              text(message?.messageUid || message?.additional_kwargs?.noobotMessageId),
-            )
-            .filter(Boolean),
+          summarizedMessageIds: summaryTargets.map(getMessageId).filter(Boolean),
         });
         await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
       }

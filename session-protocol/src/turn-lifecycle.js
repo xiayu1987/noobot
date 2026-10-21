@@ -264,7 +264,6 @@ export function createTurnLifecycleEnvelope({
   sessionId,
   parentSessionId = "",
   turnScopeId,
-  messageId = "",
   presentationMessageId = "",
   dialogProcessId = "",
   revision,
@@ -314,7 +313,6 @@ export function createTurnLifecycleEnvelope({
     sessionId: clean(sessionId),
     parentSessionId: clean(parentSessionId),
     turnScopeId: canonicalizeTurnScopeId(turnScopeId),
-    messageId: clean(messageId),
     presentationMessageId: clean(presentationMessageId),
     dialogProcessId: clean(dialogProcessId),
     revision: Number(revision || 0),
@@ -347,7 +345,6 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (!clean(envelope.eventId)) errors.push("missing_event_id");
   if (!clean(envelope.sessionId)) errors.push("missing_session_id");
   errors.push(...collectTurnScopeIdErrors(envelope.turnScopeId));
-  errors.push(...collectRequiredFieldErrors(envelope.messageId, "missing_message_id"));
   errors.push(
     ...collectRequiredFieldErrors(
       envelope.presentationMessageId,

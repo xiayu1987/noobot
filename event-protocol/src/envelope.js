@@ -7,6 +7,24 @@
 import { isPlainObject, text } from "@noobot/shared/value";
 import { selectFields } from "./normalize.js";
 
+const ENVELOPE_SECTION_FIELDS = Object.freeze({
+  identity: Object.freeze(["eventId", "eventType", "sessionId", "turnScopeId", "executionId"]),
+  causality: Object.freeze(["commandId", "causationId", "correlationId"]),
+  ordering: Object.freeze(["domain", "scopeId", "sequence", "revision", "aggregateVersion"]),
+  producer: Object.freeze(["type", "id"]),
+});
+
+function selectSectionFields(section, source) {
+  const allowed = ENVELOPE_SECTION_FIELDS[section];
+  const unknown = Object.keys(source).filter((key) => !allowed.includes(key));
+  if (unknown.length) {
+    throw new TypeError(
+      `unknown_envelope_field: ${unknown.map((k) => `${section}.${k}`).join(",")}`,
+    );
+  }
+  return selectFields(source, allowed);
+}
+
 export const EVENT_PROTOCOL_NAME = "@noobot/event-protocol";
 export const EVENT_PROTOCOL_VERSION = 3;
 
@@ -101,23 +119,10 @@ export function createEventEnvelope({
         family: text(family),
         schemaVersion: Number(schemaVersion),
       }),
-      identity: selectFields(identity, [
-        "eventId",
-        "eventType",
-        "sessionId",
-        "turnScopeId",
-        "messageId",
-        "executionId",
-      ]),
-      causality: selectFields(causality, ["commandId", "causationId", "correlationId"]),
-      ordering: selectFields(ordering, [
-        "domain",
-        "scopeId",
-        "sequence",
-        "revision",
-        "aggregateVersion",
-      ]),
-      producer: selectFields(producer, ["type", "id"]),
+      identity: selectSectionFields("identity", identity),
+      causality: selectSectionFields("causality", causality),
+      ordering: selectSectionFields("ordering", ordering),
+      producer: selectSectionFields("producer", producer),
       occurredAt: text(occurredAt),
       payload,
     }),

@@ -6,11 +6,11 @@
 import { text } from "@noobot/shared/value";
 import { MESSAGE_EVENT_TYPE, isHostActivity } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import {
-  CONTEXT_INJECTED_MESSAGE_TYPE,
-  resolveContextInternalMessageType,
-} from "@noobot/context-protocol/policy/injected-message";
-import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
+  isInjectedSessionMessageRecord,
+  resolveSessionMessageRecordInternalMessageType,
+} from "@noobot/session-protocol";
 import {
   THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
@@ -33,17 +33,18 @@ function messageContent(message = {}) {
 
 export function isThinkingDetailUserInterjection(message = {}) {
   return (
-    resolveContextInternalMessageType(message) === CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION
+    resolveSessionMessageRecordInternalMessageType(message) ===
+    CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION
   );
 }
 
 function isThinkingDetailControlMessage(message = {}) {
   if (isThinkingDetailUserInterjection(message)) return false;
-  return Boolean(resolveContextInternalMessageType(message));
+  return Boolean(resolveSessionMessageRecordInternalMessageType(message));
 }
 
 export function isThinkingDetailInjectedMessage(message = {}) {
-  return isInjectedMessage(message) && !isThinkingDetailControlMessage(message);
+  return isInjectedSessionMessageRecord(message) && !isThinkingDetailControlMessage(message);
 }
 
 function compareContentFacts(left = {}, right = {}) {
@@ -88,7 +89,6 @@ function messageContentFact(message = {}, contentKind, index) {
     sessionId: text(message?.sessionId),
     dialogProcessId: text(message?.dialogProcessId),
     turnScopeId: text(message?.turnScopeId),
-    messageId: text(message?.messageId),
     presentationMessageId: text(message?.presentationMessageId),
   };
 }
@@ -118,7 +118,6 @@ function activityContentFact(activity = {}, index) {
     sessionId: text(activity?.sessionId),
     dialogProcessId: text(activity?.dialogProcessId),
     turnScopeId: text(activity?.turnScopeId),
-    messageId: text(activity?.messageId),
     presentationMessageId: text(activity?.presentationMessageId),
   };
 }

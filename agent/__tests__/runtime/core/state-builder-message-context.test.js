@@ -8,6 +8,8 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+
 import { createStateBuilder } from "../../../src/runtime/state-builder.js";
 
 function createRuntime({ eventListener }) {
@@ -29,17 +31,38 @@ function createRuntime({ eventListener }) {
 
 test("state-builder canonicalizes model messages and block views through one store", () => {
   const identityEvents = [];
-  const system = { role: "system", content: "system context" };
-  const history = { role: "assistant", content: "history answer" };
+
+  const system = {
+    role: "system",
+    content: "system context",
+    additional_kwargs: { messageUid: "sm_system_context" },
+  };
+  const history = {
+    role: "assistant",
+    content: "history answer",
+    additional_kwargs: {
+      messageUid: "sm_history_answer",
+      dialogProcessId: "dlg-history",
+      turnScopeId: "turn-history",
+    },
+  };
   const currentUserForMessages = {
     role: "user",
     content: "current task",
-    additional_kwargs: { noobotMessageId: "sm_current_task" },
+    additional_kwargs: {
+      messageUid: "sm_current_task",
+      dialogProcessId: "dlg-1",
+      turnScopeId: "turn-1",
+    },
   };
   const currentUserForBlocks = {
     role: "user",
     content: "current task",
-    additional_kwargs: { noobotMessageId: "sm_current_task" },
+    additional_kwargs: {
+      messageUid: "sm_current_task",
+      dialogProcessId: "dlg-1",
+      turnScopeId: "turn-1",
+    },
   };
   const buildAgentState = createStateBuilder({
     buildContextMessageBlocksFn: () => ({
@@ -65,7 +88,7 @@ test("state-builder canonicalizes model messages and block views through one sto
       turnScopeId: "turn-1",
       rootSessionId: "parent-s1",
       runId: "r-1",
-      messageId: "m-1",
+      presentationMessageId: "m-1",
     },
   });
 
@@ -88,10 +111,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     loopState.modelContext.messages[2],
     loopState.modelContext.messageBlocks.incremental[0],
   );
-  assert.equal(
-    loopState.modelContext.messages[2].additional_kwargs?.noobotMessageId,
-    "sm_current_task",
-  );
+  assert.equal(resolveContextMessageId(loopState.modelContext.messages[2]), "sm_current_task");
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
   assert.deepEqual(loopState.modelContext.activeTurnIdentity, {
     dialogProcessId: "dlg-1",

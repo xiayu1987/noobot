@@ -87,18 +87,7 @@ export function filterForModelContext(
   messages = [],
   { recoverUnpairedToolResult = recoverContextTaskSummaryToolResult } = {},
 ) {
-  const kept = (Array.isArray(messages) ? messages : []).filter((message) => {
-    const placeholder =
-      message?.turnStatusPlaceholder === true ||
-      Boolean(
-        message?.synthetic === true &&
-        message?.placeholder === true &&
-        message?.turnStatus &&
-        typeof message.turnStatus === "object",
-      );
-    return !placeholder && shouldKeepForModelContext(message);
-  });
-  const source = kept;
+  const source = (Array.isArray(messages) ? messages : []).filter(shouldKeepForModelContext);
   const assistantIds = new Set();
   const resultIds = new Set();
   for (const message of source) {

@@ -10,6 +10,10 @@ import { ensureHarnessBucket } from "./bucket-utils.js";
 import { resolveCurrentTurnMessagesStore } from "./message/injected-message-utils.js";
 import { resolveModelMessages } from "../../../core/message-store.js";
 import {
+  readContextMessageValue,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
+import {
   mergeTransferEnvelopes,
   normalizeTransferEnvelopes,
   TRANSFER_REASON,
@@ -38,11 +42,30 @@ export function applyTransferPayloadToMessage(message = {}, payload = {}) {
   return message;
 }
 
-import { isHarnessInjectedMessage as isHarnessInjectedMessageBase } from "./message/utils.js";
+import {
+  isHarnessInjectedMessage as isHarnessInjectedContextMessageBase,
+  isHarnessInjectedSessionRecord as isHarnessInjectedSessionRecordBase,
+} from "./message/utils.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
-function isHarnessInjectedMessage(message = {}) {
-  return isHarnessInjectedMessageBase(message, { role: "user" });
+function isHarnessInjectedContextMessage(message = {}) {
+  return isHarnessInjectedContextMessageBase(message, { role: "user" });
+}
+
+function isHarnessInjectedSessionRecord(record = {}) {
+  return isHarnessInjectedSessionRecordBase(record, { role: "user" });
+}
+
+export function applyTransferPayloadToContextMessage(message = {}, payload = {}) {
+  const transferPayload = normalizeTransferPayload(payload);
+  if (!transferPayload.transferEnvelopes.length) return message;
+  const current = readContextMessageValue(message, "transferEnvelopes");
+  return writeContextMessageMetadata(message, {
+    transferEnvelopes: mergeTransferEnvelopes(
+      Array.isArray(current) ? current : [],
+      transferPayload.transferEnvelopes,
+    ),
+  });
 }
 
 export function attachTransferPayloadToLatestInjectedMessage(ctx = {}, transferPayload = {}) {
@@ -51,13 +74,13 @@ export function attachTransferPayloadToLatestInjectedMessage(ctx = {}, transferP
   const messages = resolveModelMessages(ctx);
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const item = messages[index] || {};
-    if (!isHarnessInjectedMessage(item)) continue;
-    Object.assign(item, applyTransferPayloadToMessage({ ...item }, normalizedTransferPayload));
+    if (!isHarnessInjectedContextMessage(item)) continue;
+    applyTransferPayloadToContextMessage(item, normalizedTransferPayload);
     const turnStore = resolveCurrentTurnMessagesStore(ctx);
     if (turnStore && typeof turnStore.updateLast === "function") {
       turnStore.updateLast(
         applyTransferPayloadToMessage({}, normalizedTransferPayload),
-        (messageItem = {}) => isHarnessInjectedMessage(messageItem),
+        (record = {}) => isHarnessInjectedSessionRecord(record),
       );
     }
     return true;

@@ -14,7 +14,7 @@ test("summary command is acknowledged once only after the unified checkpoint com
     role: "assistant",
     content: "old tool call",
     summarized: true,
-    additional_kwargs: { noobotMessageId: "m1" },
+    messageUid: "m1",
   };
   const calls = [];
   const runtime = {

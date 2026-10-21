@@ -192,7 +192,7 @@ test("acceptance checklist attachments are bound to final assistant turn output"
                   transferEnvelopes: [
                     attachmentTransfer({
                       transferId: `transfer-${record.attachmentId}`,
-                      messageId: `message-${record.attachmentId}`,
+                      presentationMessageId: `message-${record.attachmentId}`,
                       identity: {
                         sessionId: "s-attach",
                         turnScopeId: "turn-attach",

@@ -92,10 +92,9 @@ test("transient message events bypass the authority dispatcher", async () => {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "root-session",
       turnScopeId: "scope-1",
-      messageId: "message-1",
     },
     causality: {},
-    ordering: { domain: "message-event", scopeId: "message-1", sequence: 0 },
+    ordering: { domain: "message-event", scopeId: "p-1", sequence: 0 },
     producer: { type: "agent", id: "agent-1" },
     occurredAt: "2026-10-05T00:00:00.000Z",
     payload: {

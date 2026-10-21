@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import {
   MESSAGE_EVENT_REDUCE_RESULT,
@@ -56,7 +57,6 @@ describe("reduceMessageEvent", () => {
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      messageId: "message-1",
       presentationMessageId: "message-1",
     };
     const interjectionEvent = event({
@@ -235,9 +235,9 @@ describe("reduceMessageEvent", () => {
     const target = message({ sessionId: "session-1", attachments: [] });
     const transferEnvelope = {
       protocol: "noobot.semantic-transfer",
-      version: 2,
+      version: TRANSFER_VERSION,
       transferId: "transfer-search-overflow",
-      messageId: "message-1",
+      presentationMessageId: "message-1",
       identity: {
         sessionId: "session-1",
         turnScopeId: "turn-1",
@@ -438,9 +438,9 @@ describe("reduceMessageEvent", () => {
     const transferEnvelopes = [
       {
         protocol: "noobot.semantic-transfer",
-        version: 2,
+        version: TRANSFER_VERSION,
         transferId: "transfer-final",
-        messageId: "message-final",
+        presentationMessageId: "message-final",
         identity: {
           sessionId: "session-1",
           turnScopeId: "turn-1",
@@ -663,25 +663,6 @@ describe("reduceMessageEvent", () => {
     );
   });
 
-  it("validates the explicit presentation identity independently from the source message", () => {
-    const target = message({ id: "presentation-1", messageId: "presentation-1" });
-    const projected = event({
-      messageId: "model-message-1",
-      presentationMessageId: "presentation-1",
-    });
-    expect(reduce(target, projected).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
-    expect(
-      reduce(
-        message(),
-        event({
-          eventId: "evt-conflict",
-          messageId: "model-message-1",
-          presentationMessageId: "presentation-1",
-        }),
-      ).result,
-    ).toBe(MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT);
-  });
-
   it("keeps guidance and model analysis on the same presentation activity timeline", () => {
     const target = message({ id: "presentation-1", messageId: "presentation-1" });
     expect(
@@ -694,9 +675,7 @@ describe("reduceMessageEvent", () => {
           purpose: "guidance",
           pluginFlow: "analysis",
           chain: "auxiliary",
-          messageId: "model-message-1",
           presentationMessageId: "presentation-1",
-          sequenceScopeId: "model-message-1",
           tool: "",
           toolCallId: "",
           args: undefined,
@@ -708,7 +687,6 @@ describe("reduceMessageEvent", () => {
       eventId: "evt-model-analysis",
       sequence: 2,
       eventType: "model_analysis_delta",
-      messageId: "model-message-1",
       presentationMessageId: "presentation-1",
       tool: "",
       toolCallId: "",
@@ -729,7 +707,6 @@ describe("reduceMessageEvent", () => {
         expect.objectContaining({
           eventType: "model_analysis_delta",
           text: "intermediate model analysis",
-          messageId: "model-message-1",
           presentationMessageId: "presentation-1",
         }),
       ]),

@@ -26,7 +26,6 @@ test("reduces canonical content facts by their protocol content identity", () =>
     sessionId: "session-1",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
-    messageId: "assistant-1",
     presentationMessageId: "assistant-1",
   };
   const updated = {
@@ -177,13 +176,12 @@ function relayActivity(overrides = {}) {
     eventType: "thinking",
     text: "继续检查缓存事实。",
     sequence: 1,
-    sequenceScopeId: "message-1",
+    sequenceScopeId: "presentation-1",
     sequenceDomain: "message-event",
     authority: "authoritative",
     timestamp: "2026-09-05T03:39:01.897Z",
     sessionId: "session-1",
     turnScopeId: "turn-1",
-    messageId: "message-1",
     presentationMessageId: "presentation-1",
     ...overrides,
   };

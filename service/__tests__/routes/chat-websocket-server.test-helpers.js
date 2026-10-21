@@ -142,7 +142,7 @@ export function createProtocolTestCommand(payload = {}) {
     },
     presentation: {
       userMessageId: payload?.userMessageId ?? `user-message:${turnScopeId}`,
-      assistantMessageId: payload?.presentationMessageId ?? `assistant-message:${turnScopeId}`,
+      presentationMessageId: payload?.presentationMessageId ?? `assistant-message:${turnScopeId}`,
     },
     concurrency: {
       expectedTurnRevision: payload?.expectedTurnRevision ?? 0,

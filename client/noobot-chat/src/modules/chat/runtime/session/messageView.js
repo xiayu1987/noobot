@@ -22,7 +22,10 @@ import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessage,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import { projectTurnPresentation } from "@noobot/event-protocol/message-event";
+import {
+  projectTurnPresentation,
+  resolveTurnPresentationMessageId,
+} from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
 
 const PRESENTATION_RUNTIME_FIELDS = Object.freeze([
@@ -128,7 +131,7 @@ export function createSessionMessageView({
         sessionId,
         ts: source.ts || source.createdAt || envelope.occurredAt,
       };
-      const messageId = text(sourceMessage.messageId);
+      const messageId = resolveTurnPresentationMessageId(sourceMessage);
       const existing = messages.find((message) => text(message?.messageId) === messageId);
       const canonical = makeViewMessage(sourceMessage);
       if (existing) {

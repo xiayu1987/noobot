@@ -19,7 +19,7 @@ function createEnvelope(overrides = {}) {
       dialogProcessId: "d1",
       turnScopeId: "t1",
       runId: "r1",
-      messageId: "m1",
+      presentationMessageId: "m1",
     },
     environment: {
       os: { platform: "linux", arch: "x64", timezone: "UTC", nodeVersion: "v22.0.0" },
@@ -79,7 +79,7 @@ test("agent context envelope requires every identity field explicitly", () => {
   assert.throws(
     () => createEnvelope({ identity: { sessionId: "s1", dialogProcessId: "d1" } }),
     (error) =>
-      ["userId", "rootSessionId", "turnScopeId", "runId", "messageId"].every((field) =>
+      ["userId", "rootSessionId", "turnScopeId", "runId", "presentationMessageId"].every((field) =>
         error.message.includes(`identity.${field} must be a non-empty string`),
       ) && error.message.includes("identity.parentSessionId must be string"),
   );

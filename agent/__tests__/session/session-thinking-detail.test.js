@@ -61,7 +61,6 @@ test("thinking detail message carries its session identity without duplicating s
       sessionId: "",
       dialogProcessId: "",
       turnScopeId: "turn-detail",
-      messageId: "",
       presentationMessageId: "",
     },
   ]);
@@ -92,7 +91,6 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
                   sessionId: "content-session",
                   dialogProcessId: "content-dialog",
                   turnScopeId: "content-turn",
-                  messageId: "presentation-content",
                   presentationMessageId: "presentation-content",
                 }),
               ],
@@ -167,7 +165,6 @@ test("thinking detail projects the complete turn timeline onto the final assista
                   sessionId: "child-session",
                   dialogProcessId: "dialog-workflow-node",
                   turnScopeId: "workflow-node:turn-1",
-                  messageId: "final-assistant",
                   presentationMessageId: "final-assistant",
                 }),
               ],

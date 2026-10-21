@@ -18,7 +18,6 @@ const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
     "sessionId",
     "dialogProcessId",
     "turnScopeId",
-    "messageId",
     "presentationMessageId",
   ]),
 );
@@ -55,7 +54,6 @@ export function createUserInterjectionContentFact({
   sessionId = "",
   dialogProcessId = "",
   turnScopeId = "",
-  messageId = "",
   presentationMessageId = "",
 } = {}) {
   const sourceMessageUid = text(messageUid);
@@ -69,7 +67,6 @@ export function createUserInterjectionContentFact({
     sessionId: text(sessionId),
     dialogProcessId: text(dialogProcessId),
     turnScopeId: text(turnScopeId),
-    messageId: text(messageId),
     presentationMessageId: text(presentationMessageId),
   });
   if (!isThinkingDetailContentFact(fact)) {

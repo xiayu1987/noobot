@@ -13,7 +13,7 @@ const IDENTITY_KEYS = Object.freeze([
   "dialogProcessId",
   "turnScopeId",
   "runId",
-  "messageId",
+  "presentationMessageId",
 ]);
 
 const SYSTEM_RUNTIME_IDENTITY_KEYS = Object.freeze([
@@ -25,7 +25,11 @@ const SYSTEM_RUNTIME_IDENTITY_KEYS = Object.freeze([
   "turnScopeId",
 ]);
 
-const RUN_CONFIG_IDENTITY_KEYS = Object.freeze(["turnScopeId", "executionId", "messageId"]);
+const RUN_CONFIG_IDENTITY_KEYS = Object.freeze([
+  "turnScopeId",
+  "executionId",
+  "presentationMessageId",
+]);
 
 export function createTestTurnIdentity(label) {
   return Object.freeze({
@@ -36,7 +40,7 @@ export function createTestTurnIdentity(label) {
     dialogProcessId: `dialog-${label}`,
     turnScopeId: `turn-${label}`,
     runId: `run-${label}`,
-    messageId: `message-${label}`,
+    presentationMessageId: `presentation-${label}`,
   });
 }
 
@@ -76,7 +80,7 @@ export function applyTestIdentityToRuntime(runtime, identity) {
     ...runtime.runConfig,
     turnScopeId: identity.turnScopeId,
     executionId: identity.runId,
-    messageId: identity.messageId,
+    presentationMessageId: identity.presentationMessageId,
   };
   return identity;
 }

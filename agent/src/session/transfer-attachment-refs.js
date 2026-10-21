@@ -75,7 +75,7 @@ function compactTransferEnvelope(envelope = {}) {
     protocol: validated.protocol,
     version: validated.version,
     transferId: validated.transferId,
-    messageId: validated.messageId,
+    presentationMessageId: validated.presentationMessageId,
     identity: validated.identity,
     direction: validated.direction,
     payload: validated.payload,

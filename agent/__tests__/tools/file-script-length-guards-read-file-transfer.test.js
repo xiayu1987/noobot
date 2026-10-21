@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import {
   test,
   assert,
@@ -93,7 +94,7 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
     sessionId: "s-1",
     identity: {
       transferId: "transfer:m-1:tool:tool-call-read-file-overflow:output:tool_result_text",
-      messageId: "m-1",
+      presentationMessageId: "m-1",
       sessionId: "s-1",
       turnScopeId: "t-1",
       runId: "r-1",
@@ -110,7 +111,7 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   const envelope = result.transferEnvelopes?.[0] || {};
   assert.equal(result.overflowed, true);
   assert.equal(envelope.protocol, "noobot.semantic-transfer");
-  assert.equal(envelope.version, 2);
+  assert.equal(envelope.version, TRANSFER_VERSION);
   assert.equal(envelope.payload?.mode, "source_reference");
   assert.equal(envelope.payload?.reference?.address, "runtime/ops_workdir/large_test_file.txt");
   assert.equal(envelope.payload?.reference?.startLine, 1);
@@ -147,7 +148,7 @@ test("read_file: 附件大结果保留权威附件引用作为唯一源引用", 
     identity: {
       transferId:
         "transfer:m-attachment:tool:tool-call-read-attachment-overflow:output:tool_result_text",
-      messageId: "m-attachment",
+      presentationMessageId: "m-attachment",
       sessionId: "s-1",
       turnScopeId: "t-1",
       runId: "r-1",

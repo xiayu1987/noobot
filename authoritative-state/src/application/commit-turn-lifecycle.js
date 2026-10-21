@@ -25,7 +25,6 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
     sessionId: event.sessionId,
     parentSessionId: event.parentSessionId,
     turnScopeId: turn.turnScopeId,
-    messageId: turn.messageId,
     presentationMessageId: turn.presentationMessageId,
     dialogProcessId: turn.dialogProcessId,
     revision: turn.revision,
@@ -59,7 +58,6 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
       eventType: TURN_LIFECYCLE_WIRE_EVENT,
       sessionId: payload.sessionId,
       turnScopeId: payload.turnScopeId,
-      messageId: payload.messageId,
       executionId: payload.executionId,
     },
     causality: {

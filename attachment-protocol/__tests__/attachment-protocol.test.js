@@ -10,6 +10,7 @@ import {
   ATTACHMENT_LIFECYCLE,
   attachmentIdentityKey,
   formatAttachmentIdentityRef,
+  createAttachmentEventId,
   createAttachmentLifecycleEvent,
   parseAttachmentAccessRef,
   parseAttachmentDescriptor,
@@ -142,7 +143,7 @@ test("persistence, runtime, access and UI models stay separate", () => {
   );
 });
 
-test("lifecycle events require stable identity and versioned message identity", () => {
+test("lifecycle events require stable identity and versioned attachment event identity", () => {
   const relation = {
     relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
     sourceIdentity: identity,
@@ -152,7 +153,7 @@ test("lifecycle events require stable identity and versioned message identity", 
   const event = createAttachmentLifecycleEvent({
     eventType: ATTACHMENT_EVENT_TYPE.PARSED,
     eventVersion: 1,
-    messageId: "attachment-event-1",
+    attachmentEventId: "attachment-event-1",
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: "2026-08-07T00:00:00.000Z",
@@ -218,7 +219,7 @@ test("lifecycle reducer is the unique deterministic transition authority", () =>
         ...base,
         eventType: ATTACHMENT_EVENT_TYPE.PARSED,
         status: ATTACHMENT_LIFECYCLE.DELETED,
-        messageId: "bad",
+        attachmentEventId: "bad",
       }),
     /attachment_event_status_mismatch/,
   );
@@ -226,13 +227,13 @@ test("lifecycle reducer is the unique deterministic transition authority", () =>
     ...base,
     eventType: ATTACHMENT_EVENT_TYPE.RECEIVED,
     status: ATTACHMENT_LIFECYCLE.RECEIVED,
-    messageId: "1",
+    attachmentEventId: "1",
   });
   const persisted = createAttachmentLifecycleEvent({
     ...base,
     eventType: ATTACHMENT_EVENT_TYPE.PERSISTED,
     status: ATTACHMENT_LIFECYCLE.PERSISTED,
-    messageId: "2",
+    attachmentEventId: "2",
   });
   const state = reduceAttachmentLifecycle(
     reduceAttachmentLifecycle(undefined, received),
@@ -241,7 +242,7 @@ test("lifecycle reducer is the unique deterministic transition authority", () =>
   assert.equal(state.status, ATTACHMENT_LIFECYCLE.PERSISTED);
   assert.equal(reduceAttachmentLifecycle(state, persisted), state);
   assert.throws(
-    () => reduceAttachmentLifecycle(state, { ...received, messageId: "3" }),
+    () => reduceAttachmentLifecycle(state, { ...received, attachmentEventId: "3" }),
     /invalid_attachment_lifecycle_transition/,
   );
 });
@@ -270,4 +271,10 @@ test("mime type is resolved from the file name extension table", () => {
   assert.equal(resolveMimeTypeFromFileName(".png"), DEFAULT_MIME_TYPE);
   assert.equal(resolveMimeTypeFromFileName("archive.unknown"), DEFAULT_MIME_TYPE);
   assert.equal(resolveMimeTypeFromFileName(""), DEFAULT_MIME_TYPE);
+});
+
+test("attachment event identity has its own generator", () => {
+  const first = createAttachmentEventId();
+  assert.match(first, /^attachment-event:[0-9a-f-]{36}$/);
+  assert.notEqual(first, createAttachmentEventId());
 });

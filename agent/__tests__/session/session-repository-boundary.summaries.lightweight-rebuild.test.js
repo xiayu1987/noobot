@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -53,9 +53,9 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const longWorkflowContent = `workflow final ${"workflow-long-content-".repeat(400)}${workflowContentTail}`;
     const workflowTransferEnvelope = {
       protocol: "noobot.semantic-transfer",
-      version: 2,
+      version: TRANSFER_VERSION,
       transferId: "transfer:sm-workflow-final:plugin:workflow-node:output:workflow:result",
-      messageId: "sm-workflow-final",
+      presentationMessageId: "sm-workflow-final",
       identity: {
         sessionId: "B",
         turnScopeId: "turn-workflow",
@@ -130,7 +130,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
               sessionId: "A",
               dialogProcessId: "dp-u1",
               turnScopeId: "turn-scope-u1",
-              messageId: "a1",
               presentationMessageId: "a1",
             }),
           ],
@@ -201,7 +200,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
               sequenceScopeId: "w1",
               sessionId: "A",
               turnScopeId: "turn-scope-workflow",
-              messageId: "w1",
               presentationMessageId: "w1",
             }),
           ],

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { HumanMessage } from "@langchain/core/messages";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
@@ -11,9 +10,14 @@ import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { projectAttachmentMetaForModel } from "../../../artifacts/index.js";
 import {
-  projectContextMessageIdentityMetadata,
-  deriveContextMessageProjectionId as deriveMessageProjectionId,
+  CONTEXT_MESSAGE_PROJECTION_TYPE,
+  deriveContextMessageProjectionId,
+  projectContextMessageModelMetadata,
   readContextMessageField,
+  readContextMessageValue,
+  resolveContextMessageFlags,
+  resolveContextMessageId,
+  resolveContextMessageTurnScopeId,
   resolveContextMessageDialogProcessId,
   resolveContextMessageOrigin,
   resolveContextMessageRole,
@@ -22,20 +26,17 @@ import {
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import { text, isPlainObject } from "@noobot/shared/value";
 
+function readContextMessageArray(msg = {}, field = "") {
+  const value = readContextMessageValue(msg, field);
+  return Array.isArray(value) ? value : [];
+}
+
 export function resolveAttachments(msg = {}) {
   const transferAttachments = getTransferAttachments(
-    [
-      ...(Array.isArray(msg?.transferEnvelopes) ? msg.transferEnvelopes : []),
-      ...(Array.isArray(msg?.lc_kwargs?.transferEnvelopes) ? msg.lc_kwargs.transferEnvelopes : []),
-    ].filter(Boolean),
+    readContextMessageArray(msg, "transferEnvelopes").filter(Boolean),
   );
   if (transferAttachments.length) return transferAttachments;
-  if (Array.isArray(msg?.attachments)) return msg.attachments;
-  if (Array.isArray(msg?.additional_kwargs?.attachments)) return msg.additional_kwargs.attachments;
-  if (Array.isArray(msg?.lc_kwargs?.additional_kwargs?.attachments)) {
-    return msg.lc_kwargs.additional_kwargs.attachments;
-  }
-  return [];
+  return readContextMessageArray(msg, "attachments");
 }
 
 export function buildHumanMessageContent(msg = {}) {
@@ -48,12 +49,12 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
 
 function buildUserMetaInfoContent(runtime = {}, msg = {}) {
   const payload = {
-    userName: text(msg?.userName),
-    sessionId: text(msg?.sessionId),
-    parentSessionId: normalizeParentSessionId(msg?.parentSessionId),
+    userName: readContextMessageField(msg, "userName"),
+    sessionId: readContextMessageField(msg, "sessionId"),
+    parentSessionId: normalizeParentSessionId(readContextMessageField(msg, "parentSessionId")),
     dialogProcessId: resolveContextMessageDialogProcessId(msg),
-    parentDialogProcessId: text(msg?.parentDialogProcessId),
-    turnScopeId: resolveMessageTurnScopeId(msg),
+    parentDialogProcessId: readContextMessageField(msg, "parentDialogProcessId"),
+    turnScopeId: resolveContextMessageTurnScopeId(msg),
     attachments: resolveAttachments(msg).map((attachmentItem) =>
       buildUserMetaAttachmentInfo(attachmentItem),
     ),
@@ -63,18 +64,21 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}) {
 }
 
 export function buildHumanMessagesForUser(runtime = {}, msg = {}) {
-  const contentText = buildHumanMessageContent(msg);
-  const identityKwargs = projectContextMessageIdentityMetadata(msg);
-  const userMetaMessageId = deriveMessageProjectionId(identityKwargs.noobotMessageId, "user_meta");
+  const messageUid = resolveContextMessageId(msg);
+  if (!messageUid) throw new Error("user context message requires additional_kwargs.messageUid");
+  const metadata = projectContextMessageModelMetadata(msg);
   const contentMessage = new HumanMessage({
-    content: contentText,
-    additional_kwargs: identityKwargs,
+    content: buildHumanMessageContent(msg),
+    additional_kwargs: metadata,
   });
   const metaMessage = new HumanMessage({
     content: buildUserMetaInfoContent(runtime, msg),
     additional_kwargs: {
-      ...identityKwargs,
-      ...(userMetaMessageId ? { noobotMessageId: userMetaMessageId } : {}),
+      ...metadata,
+      messageUid: deriveContextMessageProjectionId(
+        messageUid,
+        CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
+      ),
       noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META,
     },
   });
@@ -84,27 +88,17 @@ export function buildHumanMessagesForUser(runtime = {}, msg = {}) {
 export function shouldBuildUserMetaForHistoryMessage(msg = {}) {
   if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
   const messageOrigin = resolveContextMessageOrigin(msg);
-  const injectedMessageType = readContextMessageField(msg, "injectedMessageType");
-  if (messageOrigin === "internal") return false;
-  if (msg?.phaseSummaryMemory === true) return false;
-  if (isInjectedOrPluginMessage(msg)) return false;
-  if (injectedMessageType) return false;
-  return messageOrigin === "natural" && resolveContextUserMetaMaterialized(msg);
+  if (messageOrigin !== "natural") return false;
+  if (readContextMessageField(msg, "noobotInternalMessageType")) return false;
+  const flags = resolveContextMessageFlags(msg);
+  if (flags.injected || flags.plugin) return false;
+  return resolveContextUserMetaMaterialized(msg);
 }
 
 export function isDerivedUserMetaMessage(msg = {}) {
   return (
     readContextMessageField(msg, "noobotInternalMessageType") ===
     CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META
-  );
-}
-
-function resolveMessageTurnScopeId(msg = {}) {
-  return text(
-    msg?.turnScopeId ||
-      msg?.additional_kwargs?.turnScopeId ||
-      msg?.lc_kwargs?.turnScopeId ||
-      msg?.lc_kwargs?.additional_kwargs?.turnScopeId,
   );
 }
 

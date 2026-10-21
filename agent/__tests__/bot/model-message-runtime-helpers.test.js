@@ -6,8 +6,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import {
+  readContextMessageValue,
+  resolveContextMessageId,
+} from "@noobot/context-protocol/message/codec";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
+
+function sessionContextMessage(record) {
+  return projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record });
+}
 
 const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
 
@@ -20,17 +30,22 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", ()
       agentContext,
       modelContext: createModelContext({
         messageBlocks: {
-          system: [{ role: "system", content: "sys" }],
+          system: [sessionContextMessage({ role: "system", content: "sys" })],
           history: [
-            { role: "user", content: "old-u", dialogProcessId: "d1" },
-            { role: "assistant", content: "old-a", dialogProcessId: "d1" },
-            { role: "user", content: "new-u", dialogProcessId: "d2" },
-            { role: "assistant", content: "new-a", dialogProcessId: "d2" },
+            sessionContextMessage({ role: "user", content: "old-u", dialogProcessId: "d1" }),
+            sessionContextMessage({ role: "assistant", content: "old-a", dialogProcessId: "d1" }),
+            sessionContextMessage({ role: "user", content: "new-u", dialogProcessId: "d2" }),
+            sessionContextMessage({ role: "assistant", content: "new-a", dialogProcessId: "d2" }),
           ],
           incremental: [
-            { role: "user", content: "inc-u", dialogProcessId: "d3" },
-            { role: "assistant", content: "drop", summarized: true, dialogProcessId: "d3" },
-            { role: "assistant", content: "inc-a", dialogProcessId: "d3" },
+            sessionContextMessage({ role: "user", content: "inc-u", dialogProcessId: "d3" }),
+            sessionContextMessage({
+              role: "assistant",
+              content: "drop",
+              summarized: true,
+              dialogProcessId: "d3",
+            }),
+            sessionContextMessage({ role: "assistant", content: "inc-a", dialogProcessId: "d3" }),
           ],
         },
       }),
@@ -49,24 +64,33 @@ test("ModelMessageRuntimeHelpers preserves canonical identity across normalized 
   const modelContext = createModelContext({
     messageBlocks: {
       system: [],
-      history: [{ role: "user", content: "history", dialogProcessId: "d1", turnScopeId: "t1" }],
-      incremental: [{ role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2" }],
+      history: [
+        sessionContextMessage({
+          role: "user",
+          content: "history",
+          dialogProcessId: "d1",
+          turnScopeId: "t1",
+        }),
+      ],
+      incremental: [
+        sessionContextMessage({
+          role: "user",
+          content: "current",
+          dialogProcessId: "d2",
+          turnScopeId: "t2",
+        }),
+      ],
     },
   });
-  const sourceIds = modelContext.messages.map(
-    (message) => message.additional_kwargs.noobotMessageId,
-  );
+  const sourceIds = modelContext.messages.map(resolveContextMessageId);
 
   const resolved = resolver({ ctx: { agentContext, modelContext } });
 
   assert.equal(resolved[0], modelContext.messageBlocks.history[0]);
   assert.equal(resolved[1], modelContext.messageBlocks.incremental[0]);
+  assert.deepEqual(resolved.map(resolveContextMessageId), sourceIds);
   assert.deepEqual(
-    resolved.map((message) => message.additional_kwargs.noobotMessageId),
-    sourceIds,
-  );
-  assert.deepEqual(
-    resolved.map((message) => message.turnScopeId),
+    resolved.map((message) => readContextMessageValue(message, "turnScopeId")),
     ["t1", "t2"],
   );
 });
@@ -81,12 +105,14 @@ test("ModelMessageRuntimeHelpers resolves non-main history from authoritative mo
       agentContext,
       modelContext: createModelContext({
         messageBlocks: {
-          system: [{ role: "system", content: "sys" }],
+          system: [sessionContextMessage({ role: "system", content: "sys" })],
           history: [
-            { role: "user", content: "hist-u", dialogProcessId: "d1" },
-            { role: "assistant", content: "hist-a", dialogProcessId: "d1" },
+            sessionContextMessage({ role: "user", content: "hist-u", dialogProcessId: "d1" }),
+            sessionContextMessage({ role: "assistant", content: "hist-a", dialogProcessId: "d1" }),
           ],
-          incremental: [{ role: "user", content: "inc-u", dialogProcessId: "d2" }],
+          incremental: [
+            sessionContextMessage({ role: "user", content: "inc-u", dialogProcessId: "d2" }),
+          ],
         },
       }),
     },
@@ -102,16 +128,20 @@ test("ModelMessageRuntimeHelpers does not clip authoritative non-main blocks", (
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
 
-  const history = Array.from({ length: 22 }, (_, index) => ({
-    role: index % 2 === 0 ? "user" : "assistant",
-    content: `history-${index + 1}`,
-    dialogProcessId: "dlg-history",
-  }));
-  const incremental = Array.from({ length: 4 }, (_, index) => ({
-    role: index % 2 === 0 ? "user" : "assistant",
-    content: `incremental-${index + 1}`,
-    dialogProcessId: "dlg-current",
-  }));
+  const history = Array.from({ length: 22 }, (_, index) =>
+    sessionContextMessage({
+      role: index % 2 === 0 ? "user" : "assistant",
+      content: `history-${index + 1}`,
+      dialogProcessId: "dlg-history",
+    }),
+  );
+  const incremental = Array.from({ length: 4 }, (_, index) =>
+    sessionContextMessage({
+      role: index % 2 === 0 ? "user" : "assistant",
+      content: `incremental-${index + 1}`,
+      dialogProcessId: "dlg-current",
+    }),
+  );
 
   const resolved = resolver({
     purpose: "planning",
@@ -119,7 +149,7 @@ test("ModelMessageRuntimeHelpers does not clip authoritative non-main blocks", (
       agentContext,
       modelContext: createModelContext({
         messageBlocks: {
-          system: [{ role: "system", content: "sys" }],
+          system: [sessionContextMessage({ role: "system", content: "sys" })],
           history,
           incremental,
         },
@@ -144,11 +174,13 @@ test("ModelMessageRuntimeHelpers does not clip non-main model context by default
         messageBlocks: {
           system: [],
           history: [],
-          incremental: Array.from({ length: 22 }, (_, index) => ({
-            role: "user",
-            content: `m${index + 1}`,
-            dialogProcessId: "dlg-1",
-          })),
+          incremental: Array.from({ length: 22 }, (_, index) =>
+            sessionContextMessage({
+              role: "user",
+              content: `m${index + 1}`,
+              dialogProcessId: "dlg-1",
+            }),
+          ),
         },
       }),
     },
@@ -171,11 +203,13 @@ test("ModelMessageRuntimeHelpers never clips non-main model context in injected 
         messageBlocks: {
           system: [],
           history: [],
-          incremental: Array.from({ length: 22 }, (_, index) => ({
-            role: "user",
-            content: `m${index + 1}`,
-            dialogProcessId: "dlg-1",
-          })),
+          incremental: Array.from({ length: 22 }, (_, index) =>
+            sessionContextMessage({
+              role: "user",
+              content: `m${index + 1}`,
+              dialogProcessId: "dlg-1",
+            }),
+          ),
         },
       }),
     },
@@ -199,21 +233,23 @@ test("ModelMessageRuntimeHelpers keeps unsummarized incremental injections appen
           system: [],
           history: [],
           incremental: [
-            {
+            sessionContextMessage({
               role: "user",
               content: "old-injected",
               injectedMessage: true,
               injectedBy: "agentPlugin",
+              injectedMessageType: "agent_plugin",
               dialogProcessId: "old",
-            },
-            {
+            }),
+            sessionContextMessage({
               role: "user",
               content: "new-injected",
               injectedMessage: true,
               injectedBy: "agentPlugin",
+              injectedMessageType: "agent_plugin",
               dialogProcessId: "new",
-            },
-            { role: "assistant", content: "normal", dialogProcessId: "new" },
+            }),
+            sessionContextMessage({ role: "assistant", content: "normal", dialogProcessId: "new" }),
           ],
         },
       }),

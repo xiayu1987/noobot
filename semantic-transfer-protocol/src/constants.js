@@ -5,7 +5,7 @@
  */
 
 export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
-export const TRANSFER_VERSION = 2;
+export const TRANSFER_VERSION = 3;
 export const TRANSFER_DIRECTION = Object.freeze({
   INPUT: "input",
   OUTPUT: "output",

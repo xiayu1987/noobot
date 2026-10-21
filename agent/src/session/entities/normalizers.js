@@ -5,7 +5,6 @@
  */
 
 export { normalizeMessageEntity, normalizeMessagesEntity } from "./message-entity.js";
-export { createSessionMessageUid } from "../../context/session/message-uid.js";
 export { normalizeSessionEntity, normalizeSessionTreeEntity } from "./session-entity.js";
 export { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 export { normalizeTaskEntity } from "./task-entity.js";

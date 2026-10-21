@@ -16,7 +16,6 @@ import {
 const now = "2026-07-30T00:00:00.000Z";
 const turn = (overrides = {}) => ({
   turnScopeId: "turn-1",
-  messageId: "message-1",
   presentationMessageId: "message-1",
   executionId: "agent:turn-1",
   executionKind: "agent",

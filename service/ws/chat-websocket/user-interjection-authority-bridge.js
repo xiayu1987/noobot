@@ -22,7 +22,6 @@ export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceS
     const sessionId = text(activeRun.sessionId);
     const dialogProcessId = text(activeRun.dialogProcessId);
     const turnScopeId = text(activeRun.turnScopeId);
-    const messageId = text(activeRun.messageId);
     const presentationMessageId = text(activeRun.presentationMessageId);
     const commandId = text(interjection.commandId);
     if (
@@ -30,7 +29,6 @@ export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceS
       !sessionId ||
       !dialogProcessId ||
       !turnScopeId ||
-      !messageId ||
       !presentationMessageId ||
       !commandId
     ) {
@@ -44,7 +42,6 @@ export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceS
       sessionId,
       dialogProcessId,
       turnScopeId,
-      messageId,
       presentationMessageId,
     });
     const payload = Object.freeze({
@@ -62,10 +59,9 @@ export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceS
       identity: {
         eventType: MESSAGE_EVENT_WIRE_EVENT,
         turnScopeId,
-        messageId,
       },
       causality: { commandId, causationId: commandId },
-      ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: messageId },
+      ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: presentationMessageId },
       producer: { type: "service", id: "websocket.user-interjection" },
       payload,
     });

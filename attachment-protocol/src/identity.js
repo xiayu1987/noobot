@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSecureId } from "@noobot/shared/secure-identity";
 import { AttachmentProtocolError } from "./errors.js";
 import {
   assertKnownFields,
@@ -11,6 +12,10 @@ import {
   requirePlainObject,
 } from "./protocol-utils.js";
 const FIELDS = new Set(["attachmentId", "sessionId", "attachmentSource"]);
+
+export function createAttachmentEventId() {
+  return createSecureId("attachment-event");
+}
 export const ATTACHMENT_IDENTITY_REF_PREFIX = "attachment:v1:";
 export const ATTACHMENT_SOURCE = Object.freeze({
   USER: "user",

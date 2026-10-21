@@ -24,13 +24,13 @@ function createFixture() {
   const sent = [];
   const closed = [];
   const outbox = [];
+  const committed = [];
   let authoritySequence = 0;
   const handle = registerActiveRun({
     userId: "interjection-owner",
     sessionId: "interjection-session",
     dialogProcessId: "interjection-dialog",
     turnScopeId: "interjection-turn",
-    messageId: "interjection-message-stream",
     presentationMessageId: "interjection-assistant",
   });
   const sendEvent = (event, data) => {
@@ -53,6 +53,7 @@ function createFixture() {
           occurredAt: `2026-09-18T01:00:0${authoritySequence}.000Z`,
         });
         outbox.push(envelope);
+        committed.push(envelope);
         return { committed: true, envelope };
       },
     },
@@ -87,7 +88,7 @@ function createFixture() {
       },
       interaction: { message },
     });
-  return { sent, closed, handle, handler, command };
+  return { sent, closed, committed, handle, handler, command };
 }
 
 test("message handler enqueues user interjections and acknowledges the command", async () => {
@@ -120,7 +121,6 @@ test("message handler enqueues user interjections and acknowledges the command",
             sessionId: "interjection-session",
             dialogProcessId: "interjection-dialog",
             turnScopeId: "interjection-turn",
-            messageId: "interjection-message-stream",
             presentationMessageId: "interjection-assistant",
           },
         },
@@ -142,7 +142,6 @@ test("message handler enqueues user interjections and acknowledges the command",
             sessionId: "interjection-session",
             dialogProcessId: "interjection-dialog",
             turnScopeId: "interjection-turn",
-            messageId: "interjection-message-stream",
             presentationMessageId: "interjection-assistant",
           },
         },
@@ -151,6 +150,17 @@ test("message handler enqueues user interjections and acknowledges the command",
           outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
           contentFact: undefined,
         },
+      ],
+    );
+
+    assert.deepEqual(
+      fixture.committed.map((envelope) => ({
+        hasMessageId: Object.hasOwn(envelope.identity, "messageId"),
+        scopeId: envelope.ordering.scopeId,
+      })),
+      [
+        { hasMessageId: false, scopeId: "interjection-assistant" },
+        { hasMessageId: false, scopeId: "interjection-assistant" },
       ],
     );
     assert.deepEqual(fixture.closed, []);

@@ -22,7 +22,7 @@ test("containsExecutableScriptText recognizes executable script signals only", (
 test("transfer payload binds and deduplicates complete V2 envelopes by stable transfer identity", () => {
   const envelope = attachmentTransfer({
     transferId: "transfer-1",
-    messageId: "message-1",
+    presentationMessageId: "message-1",
     identity: {
       sessionId: "session-1",
       turnScopeId: "turn-1",
@@ -107,4 +107,80 @@ test("each capability artifact operation owns a distinct semantic transfer ident
   assert.equal(transferKeys.length, 2);
   assert.ok(transferKeys.every(Boolean));
   assert.notEqual(transferKeys[0], transferKeys[1]);
+});
+
+test("latest harness injected message receives envelopes in context metadata and session record", async () => {
+  const { attachTransferPayloadToLatestInjectedMessage } =
+    await import("../../src/capabilities/handlers/shared/attachment-log-utils.js");
+  const { buildHarnessInjectedRecord } =
+    await import("../../src/capabilities/handlers/shared/message/injected-message-utils.js");
+  const { projectSessionRecordToContextMessage } =
+    await import("@noobot/context-protocol/message/session-projection");
+  const { readContextMessageValue } = await import("@noobot/context-protocol/message/codec");
+  const { replaceMessages } = await import("../../src/core/message-store.js");
+  const { createTestHookContext } = await import("../helpers/public-runtime-fixtures.js");
+
+  const record = buildHarnessInjectedRecord("relay", {
+    role: "user",
+    dialogProcessId: "dp-1",
+    injectedMessageType: "harness_relay",
+  });
+  const ctx = createTestHookContext({ agentContext: { bindings: { runtime: {} } } });
+  ctx.modelContext.activeTurnIdentity = { dialogProcessId: "dp-1", turnScopeId: "turn-1" };
+  replaceMessages(ctx, [projectSessionRecordToContextMessage(record)]);
+  const sessionRecords = [{ ...record }];
+  ctx.agentContext.bindings.runtime.currentTurnMessages = {
+    push(value) {
+      sessionRecords.push(value);
+    },
+    updateLast(patch, matcher) {
+      for (let index = sessionRecords.length - 1; index >= 0; index -= 1) {
+        if (!matcher(sessionRecords[index])) continue;
+        sessionRecords[index] = { ...sessionRecords[index], ...patch };
+        return sessionRecords[index];
+      }
+      return null;
+    },
+  };
+  const envelope = attachmentTransfer({
+    transferId: "transfer-sync",
+    presentationMessageId: "msg_sync",
+    identity: {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      runId: "run-1",
+      producer: { type: "plugin", id: "harness" },
+    },
+    direction: "output",
+    attachments: [
+      {
+        identity: {
+          attachmentId: "attachment-sync",
+          sessionId: "session-1",
+          attachmentSource: "model",
+        },
+        role: "primary",
+        name: "report.txt",
+        mimeType: "text/plain",
+        size: 12,
+      },
+    ],
+    intent: {
+      source: "plugin",
+      reason: TRANSFER_REASON.HARNESS_SUMMARY,
+      scenario: "harness",
+      strategy: "harness_summary",
+    },
+  });
+
+  assert.equal(
+    attachTransferPayloadToLatestInjectedMessage(ctx, { transferEnvelopes: [envelope] }),
+    true,
+  );
+  const contextMessage = ctx.modelContext.messages.at(-1);
+
+  assert.equal(Object.hasOwn(contextMessage, "transferEnvelopes"), false);
+  assert.equal(readContextMessageValue(contextMessage, "transferEnvelopes").length, 1);
+
+  assert.equal(sessionRecords.at(-1).transferEnvelopes.length, 1);
 });

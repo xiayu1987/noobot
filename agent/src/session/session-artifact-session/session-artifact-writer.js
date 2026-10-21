@@ -29,6 +29,7 @@ import {
   replaceJournal,
   replaceJournalRecords,
   resolveTurnSummaryReceipts,
+  SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   summarySnapshotIndex,
   turnArtifactRequiresRewrite,
   turnIdOrdinal,
@@ -107,7 +108,7 @@ function buildSummarySnapshotPayload({
   records,
 }) {
   return {
-    schemaVersion: 2,
+    schemaVersion: SUMMARY_SNAPSHOT_SCHEMA_VERSION,
     checkpointId: checkpoint.checkpointId,
     checkpointRevision: checkpoint.checkpointRevision,
     sessionId: text(sessionPayload.sessionId),

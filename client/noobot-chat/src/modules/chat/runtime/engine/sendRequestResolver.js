@@ -5,11 +5,10 @@
  */
 import { normalizeTrimmedString } from "./utils.js";
 import {
-  createAssistantMessageId,
+  createPresentationMessageId,
   createUserMessageId,
-  createTurnScopeId,
-  hasActiveTurnInFlight,
-} from "./sendFlowSupport.js";
+} from "@noobot/context-protocol/message/message-identity";
+import { createTurnScopeId, hasActiveTurnInFlight } from "./sendFlowSupport.js";
 
 function normalizeSendContent(options, { input }) {
   const explicitMessageText =
@@ -45,7 +44,7 @@ function normalizeSendControls(options) {
     dialogProcessId: normalizeTrimmedString(options?.dialogProcessId),
     requestedTurnScopeId: normalizeTrimmedString(options?.turnScopeId),
     requestedUserMessageId: normalizeTrimmedString(options?.userMessageId),
-    requestedAssistantMessageId: normalizeTrimmedString(options?.assistantMessageId),
+    requestedPresentationMessageId: normalizeTrimmedString(options?.presentationMessageId),
   };
 }
 
@@ -93,7 +92,8 @@ export function resolveSendRequest(options, deps) {
     ...normalized,
     turnScopeId,
     userMessageId: normalized.requestedUserMessageId || createUserMessageId(),
-    assistantMessageId: normalized.requestedAssistantMessageId || createAssistantMessageId(),
+    presentationMessageId:
+      normalized.requestedPresentationMessageId || createPresentationMessageId(),
     sessionId: String(deps.activeSession.value?.sessionId || deps.activeSessionId?.value || ""),
   };
 }

@@ -616,7 +616,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const relayInjected = relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
-    ...flowTags,
     relayCorrelationId,
     content: relayText,
     transferPayload: normalizeTransferPayload(relayAttachments),

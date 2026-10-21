@@ -18,7 +18,7 @@ import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-
 import { text, isFunction } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
-  return text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
+  return text(message?.messageId);
 }
 
 function canonicalTurnMessages(runtime = {}) {

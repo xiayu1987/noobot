@@ -38,7 +38,7 @@ test("createStreamingCallbacks should emit llm_delta event", async () => {
         sessionId: "session-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
-        messageEventStream: { sequence: 0, activeMessageId: "message-1" },
+        messageEventStream: { sequence: 0, activePresentationMessageId: "presentation-1" },
       },
     },
   );
@@ -60,7 +60,6 @@ test("stream visibility filtering happens before the transient delta is emitted"
       turnScopeId: "turn-1",
       messageEventStream: {
         sequence: 0,
-        activeMessageId: "message-1",
         activePresentationMessageId: "presentation-1",
       },
     },

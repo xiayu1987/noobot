@@ -20,14 +20,13 @@ function activity(eventId, sequence, text) {
     pluginFlow: "",
     chain: "",
     sequence,
-    sequenceScopeId: "message-logs",
+    sequenceScopeId: "presentation-logs",
     sequenceDomain: "message-event",
     authority: "authoritative",
     timestamp: `2026-09-05T03:39:${String(sequence).padStart(2, "0")}.000Z`,
     sessionId: "session-logs",
     dialogProcessId: "dp-logs",
     turnScopeId: "client-turn:logs",
-    messageId: "message-logs",
     presentationMessageId: "presentation-logs",
   };
 }

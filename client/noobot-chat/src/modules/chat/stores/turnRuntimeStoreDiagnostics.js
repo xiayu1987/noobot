@@ -54,7 +54,6 @@ export function buildMessageProjectionDiagnostics({
 }) {
   return {
     ...turnIdentity(turn),
-    messageId: text(turn?.messageId),
     presentationMessageId: text(turn?.presentationMessageId),
     state: text(turn?.state),
     terminal: text(turn?.terminal),

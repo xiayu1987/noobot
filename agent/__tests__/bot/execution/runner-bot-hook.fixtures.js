@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  createMessageUid,
+  createModelMessageId,
+} from "@noobot/context-protocol/message/message-identity";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
@@ -53,17 +57,24 @@ function canonicalMessageIdForTest(message = {}, activeAssistantMessageId = "") 
   if (existing) return existing;
   const stableLocalId = String(message?.messageUid || message?.tool_call_id || "").trim();
   if (!stableLocalId) throw new Error("test Turn message requires a stable identity");
-  return `msg_event_test_${stableLocalId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  return `msg_test_${stableLocalId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
-export function createCanonicalHandledResult(context = {}, output = "") {
-  const messageId = text(context?.runConfig?.messageId);
-  if (!messageId) throw new Error("handled test result requires the bound canonical messageId");
+export function createCanonicalHandledResult(output = "") {
+  const messageId = createModelMessageId();
   return {
     output,
     traces: [],
     assistantMessageId: messageId,
-    turnMessages: [{ role: "assistant", type: "message", messageId, content: output }],
+    turnMessages: [
+      {
+        role: "assistant",
+        type: "message",
+        messageUid: createMessageUid(),
+        messageId,
+        content: output,
+      },
+    ],
     turnTasks: [],
   };
 }
@@ -172,14 +183,7 @@ export function createRunner({
     });
   };
   const sessionManager = {
-    async commitMessageEvent({
-      sessionId,
-      turnScopeId,
-      messageId,
-      commandId,
-      correlationId,
-      payload,
-    }) {
+    async commitMessageEvent({ sessionId, turnScopeId, commandId, correlationId, payload }) {
       authorityEventSequence += 1;
       return {
         committed: true,
@@ -190,12 +194,11 @@ export function createRunner({
             eventType: MESSAGE_EVENT_WIRE_EVENT,
             sessionId,
             turnScopeId,
-            messageId,
           },
           causality: { commandId, correlationId },
           ordering: {
             domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-            scopeId: messageId,
+            scopeId: payload.presentationMessageId,
             sequence: authorityEventSequence,
           },
           producer: { type: "test", id: "runner-bot-hook-fixture" },
@@ -240,8 +243,9 @@ export function createRunner({
     const result = await agentRunner(payload);
     if (!isObjectLike(result) || !String(result.output || "")) return result;
     const runtime = payload?.agentContext?.bindings?.runtime;
-    const messageId = text(runtime?.systemRuntime?.messageEventStream?.activeMessageId);
-    if (!messageId) throw new Error("test Agent result requires the bound canonical messageId");
+
+    const reportedMessageId = text(result.assistantMessageId);
+    const messageId = reportedMessageId || createModelMessageId();
     const store = runtime.currentTurnMessages;
     for (const [index, message] of store.toArray().entries()) {
       const canonicalMessageId = canonicalMessageIdForTest(message, messageId);
@@ -265,13 +269,19 @@ export function createRunner({
       .reverse()
       .find(({ message }) => message?.role === "assistant")?.index;
     if (assistantIndex === undefined) {
-      store.push({ role: "assistant", type: "message", messageId, content: String(result.output) });
+      store.push({
+        role: "assistant",
+        type: "message",
+        messageUid: createMessageUid(),
+        messageId,
+        content: String(result.output),
+      });
     } else {
       store.updateWhere({ messageId }, (_message, index) => index === assistantIndex);
     }
     return {
       ...result,
-      assistantMessageId: String(result.assistantMessageId || messageId).trim(),
+      assistantMessageId: messageId,
       turnMessages: store.toArray(),
     };
   };

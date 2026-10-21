@@ -97,8 +97,6 @@ function validatePresentationMessage(message, expectedRole, value) {
   if (!isPlainObject(message)) {
     return [`invalid_${expectedRole}_presentation`];
   }
-  const messageId = text(message.messageId);
-  if (!messageId) errors.push(`missing_${expectedRole}_message_id`);
   if (text(message.role) !== expectedRole) errors.push(`invalid_${expectedRole}_role`);
   if (!text(message.sessionId)) errors.push(`missing_${expectedRole}_session_id`);
   if (!text(message.turnScopeId)) errors.push(`missing_${expectedRole}_turn_scope_id`);
@@ -110,9 +108,9 @@ function validatePresentationMessage(message, expectedRole, value) {
     if (text(message.presentationMessageId) !== text(value.presentationMessageId)) {
       errors.push("assistant_presentation_id_mismatch");
     }
-    if (messageId !== text(value.presentationMessageId)) {
-      errors.push("assistant_message_id_mismatch");
-    }
+    if (Object.hasOwn(message, "messageId")) errors.push("noncanonical_assistant_message_id");
+  } else if (!text(message.messageId)) {
+    errors.push("missing_user_message_id");
   }
   return errors;
 }
@@ -150,6 +148,12 @@ export function resolveMessageEventPresentationId(value = {}) {
   return text(value?.presentationMessageId);
 }
 
+export function resolveTurnPresentationMessageId(message = {}) {
+  return text(message?.role) === "assistant"
+    ? text(message?.presentationMessageId)
+    : text(message?.messageId);
+}
+
 const NONCANONICAL_PAYLOAD_FIELDS = Object.freeze([
   "event",
   "type",
@@ -168,7 +172,6 @@ const USER_INTERJECTION_FACT_REQUIREMENTS = Object.freeze([
   ["sessionId", "missing_user_interjection_fact_session_id"],
   ["dialogProcessId", "missing_user_interjection_fact_dialog_process_id"],
   ["turnScopeId", "missing_user_interjection_fact_turn_scope_id"],
-  ["messageId", "missing_user_interjection_fact_message_id"],
   ["presentationMessageId", "missing_user_interjection_fact_presentation_message_id"],
 ]);
 

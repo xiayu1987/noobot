@@ -26,7 +26,7 @@ test("recoverable tool errors retain the complete execution identity", async () 
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       runId: "agent:turn-1",
-      messageId: "message-call_identity",
+      presentationMessageId: "message-call_identity",
     },
     errorLogger: {
       async log(entry) {

@@ -58,7 +58,7 @@ const IDENTITY = Object.freeze({
   dialogProcessId: "dialog-1",
   turnScopeId: "client-turn:1",
   runId: "run-1",
-  messageId: "msg-1",
+  presentationMessageId: "presentation-1",
 });
 
 const FIXTURE_TOOL_NAMES = Object.freeze(["help", "read_file", "search"]);

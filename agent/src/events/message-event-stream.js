@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomUUID } from "node:crypto";
+import { createModelMessageId } from "@noobot/context-protocol/message/message-identity";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import {
   EVENT_FAMILY,
@@ -33,21 +33,18 @@ function runtimeState(runtime) {
     );
   }
   if (!isObjectLike(systemRuntime.messageEventStream)) {
-    systemRuntime.messageEventStream = { activeMessageId: "" };
+    systemRuntime.messageEventStream = { activePresentationMessageId: "" };
   }
   return systemRuntime;
 }
 
 function resolveRequestedStreamIdentity(runConfig, state, requested) {
   const config = state.config || {};
-  const messageId = firstText(requested.messageId, runConfig.messageId, config.messageId);
   return {
-    messageId,
     presentationMessageId: firstText(
       requested.presentationMessageId,
       runConfig.presentationMessageId,
       config.presentationMessageId,
-      messageId,
     ),
 
     parentSessionId: requested.parentSessionId,
@@ -70,7 +67,7 @@ function assertRequestedStreamIdentity(identity) {
   if (typeof identity.parentSessionId !== "string") {
     throw new TypeError("turn message event parentSessionId must be a string");
   }
-  if (!identity.messageId || !identity.presentationMessageId) {
+  if (!identity.presentationMessageId) {
     throw new Error("turn message event identity is incomplete");
   }
   if (Boolean(identity.workflowRunId) !== Boolean(identity.nodeExecutionId)) {
@@ -82,7 +79,6 @@ function assertRequestedStreamIdentity(identity) {
 }
 
 const STREAM_IDENTITY_BINDINGS = Object.freeze([
-  ["activeMessageId", "messageId"],
   ["activePresentationMessageId", "presentationMessageId"],
   ["parentSessionId", "parentSessionId"],
   ["workflowRunId", "workflowRunId"],
@@ -100,17 +96,10 @@ function assertStreamIdentityCompatible(stream, identity) {
 
 export function bindAssistantMessageEventStream(
   runtime = {},
-  {
-    messageId = "",
-    presentationMessageId = "",
-    parentSessionId,
-    workflowRunId = "",
-    nodeExecutionId = "",
-  } = {},
+  { presentationMessageId = "", parentSessionId, workflowRunId = "", nodeExecutionId = "" } = {},
 ) {
   const state = runtimeState(runtime);
   const identity = resolveRequestedStreamIdentity(runtime?.runConfig || {}, state, {
-    messageId,
     presentationMessageId,
     parentSessionId,
     workflowRunId,
@@ -128,10 +117,10 @@ export function bindAssistantMessageEventStream(
 export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}) {
   const state = runtimeState(runtime);
   const stream = state.messageEventStream;
-  if (!text(stream.activeMessageId)) {
+  if (!text(stream.activePresentationMessageId)) {
     throw new Error("Turn message event domain must be bound before model invocation");
   }
-  const modelMessageId = `msg_${randomUUID()}`;
+  const modelMessageId = createModelMessageId();
   stream.activeModelMessageId = modelMessageId;
   state.messageEventStream.activeTurn = Number(turn || 0);
   return modelMessageId;
@@ -148,32 +137,16 @@ export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   const target = { ...message };
   target.id = id;
   target.messageId = id;
-  const additionalKwargs =
-    target.additional_kwargs && typeof target.additional_kwargs === "object"
-      ? { ...target.additional_kwargs }
-      : {};
-  additionalKwargs.noobotMessageId = id;
-  target.additional_kwargs = additionalKwargs;
   return target;
 }
 
 function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
   const state = runtimeState(runtime);
   const stream = state.messageEventStream || (state.messageEventStream = {});
-  const messageId = text(data?.messageId || stream.activeMessageId);
-  if (!messageId) throw new Error(`authoritative message event requires messageId: ${eventType}`);
-  if (
-    text(data?.messageId) &&
-    text(stream.activeMessageId) &&
-    messageId !== text(stream.activeMessageId)
-  ) {
-    throw new Error(
-      `authoritative message event messageId conflicts with Turn domain: ${eventType}`,
-    );
+  const presentationMessageId = text(stream.activePresentationMessageId);
+  if (data?.messageId !== undefined || data?.presentationMessageId !== undefined) {
+    throw new Error(`message event payload must not carry stream identity: ${eventType}`);
   }
-  const presentationMessageId = text(
-    data?.presentationMessageId || stream.activePresentationMessageId || messageId,
-  );
   if (!presentationMessageId) {
     throw new Error(`authoritative message event requires presentationMessageId: ${eventType}`);
   }
@@ -201,7 +174,6 @@ function messageEventCommitInput(runtime, state, payload) {
     userId: text(runtime?.systemRuntime?.userId),
     sessionId: text(state?.sessionId),
     turnScopeId: text(state?.turnScopeId),
-    messageId: text(state?.messageEventStream?.activeMessageId),
     executionId: text(runtime?.runConfig?.executionId),
     commandId: text(runtime?.runConfig?.commandId),
     correlationId: text(runtime?.runConfig?.turnScopeId),
@@ -211,7 +183,7 @@ function messageEventCommitInput(runtime, state, payload) {
 }
 
 function createTransientMessageEventEnvelope(input) {
-  if (!input.sessionId || !input.turnScopeId || !input.messageId) {
+  if (!input.sessionId || !input.turnScopeId || !input.payload?.presentationMessageId) {
     throw new TypeError("message event requires session, Turn and message identity");
   }
   const envelope = createEventEnvelope({
@@ -221,7 +193,6 @@ function createTransientMessageEventEnvelope(input) {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: input.sessionId,
       turnScopeId: input.turnScopeId,
-      messageId: input.messageId,
       executionId: input.executionId,
     },
     causality: {
@@ -231,7 +202,7 @@ function createTransientMessageEventEnvelope(input) {
     },
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      scopeId: input.messageId,
+      scopeId: input.payload.presentationMessageId,
       sequence: TRANSIENT_MESSAGE_EVENT_SEQUENCE,
     },
     producer: { type: "agent", id: "message-runtime" },

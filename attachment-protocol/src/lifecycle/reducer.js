@@ -13,14 +13,14 @@ export function reduceAttachmentLifecycle(current, eventValue) {
     return Object.freeze({
       identity: event.identity,
       status: event.status,
-      messageIds: Object.freeze([event.messageId]),
+      attachmentEventIds: Object.freeze([event.attachmentEventId]),
       relations: Object.freeze(event.relation ? [event.relation] : []),
       lastEvent: event,
     });
   if (!sameAttachmentIdentity(current.identity, event.identity))
     throw new AttachmentProtocolError("attachment_lifecycle_identity_mismatch");
-  const ids = Array.isArray(current.messageIds) ? current.messageIds : [];
-  if (ids.includes(event.messageId)) return current;
+  const ids = Array.isArray(current.attachmentEventIds) ? current.attachmentEventIds : [];
+  if (ids.includes(event.attachmentEventId)) return current;
   if (!canTransitionAttachmentLifecycle(current.status, event.status))
     throw new AttachmentProtocolError("invalid_attachment_lifecycle_transition");
   const relations = event.relation
@@ -34,7 +34,7 @@ export function reduceAttachmentLifecycle(current, eventValue) {
   return Object.freeze({
     identity: event.identity,
     status: event.status,
-    messageIds: Object.freeze([...ids, event.messageId]),
+    attachmentEventIds: Object.freeze([...ids, event.attachmentEventId]),
     relations: Object.freeze(relations),
     lastEvent: event,
   });

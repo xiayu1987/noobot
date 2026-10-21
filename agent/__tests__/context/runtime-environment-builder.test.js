@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
 
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
@@ -211,7 +212,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
       },
     },
     runConfig: {
-      messageId: "message-runtime-context-basepath",
+      presentationMessageId: "message-runtime-context-basepath",
       turnScopeId: "turn-runtime-context-basepath",
       executionId: "run-runtime-context-basepath",
     },
@@ -244,7 +245,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
   const attachmentRef = envelope?.payload?.attachments?.[0] || {};
 
   assert.equal(envelope.protocol, "noobot.semantic-transfer");
-  assert.equal(envelope.version, 2);
+  assert.equal(envelope.version, TRANSFER_VERSION);
   assert.equal(envelope.payload?.mode, "attachment");
   assert.deepEqual(attachmentRef.identity, {
     attachmentId: "att-runtime-context-basepath",

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { canonicalizeTestContextMessage } from "./context-message.js";
 import { createModelContext, resolveModelFinalMessages } from "@noobot/context-protocol";
 import { createHookManager, HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import {
@@ -98,7 +99,7 @@ function initializeTestSemanticTransfer(agentContext = {}) {
           : { type: "plugin", id: "harness-test" };
       const common = {
         transferId: `test-transfer-${testTransferSequence}`,
-        messageId: `test-transfer-message-${testTransferSequence}`,
+        presentationMessageId: `test-transfer-message-${testTransferSequence}`,
         identity: {
           sessionId,
           turnScopeId: text(identitySource.turnScopeId),
@@ -229,11 +230,14 @@ export function ensureTestHookContext(ctx = {}) {
       const role = String(message?.role || message?.type || "")
         .trim()
         .toLowerCase();
+      canonicalizeTestContextMessage(message);
       if (role === "system" || role === "developer") continue;
-      if (!text(message.dialogProcessId)) message.dialogProcessId = dialogProcessId;
-      if (!text(message.turnScopeId)) message.turnScopeId = turnScopeId;
+      const metadata = message.additional_kwargs;
+      if (!text(metadata.dialogProcessId)) metadata.dialogProcessId = dialogProcessId;
+      if (!text(metadata.turnScopeId)) metadata.turnScopeId = turnScopeId;
     }
   };
+  stampRoundIdentity(ctx.messageBlocks?.system);
   stampRoundIdentity(ctx.messageBlocks?.history);
   stampRoundIdentity(ctx.messageBlocks?.incremental);
   if (ctx.modelContext?.protocolVersion !== 3) {

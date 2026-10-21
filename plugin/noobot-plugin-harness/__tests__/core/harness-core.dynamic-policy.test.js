@@ -20,7 +20,7 @@ import {
   applyDynamicPolicyPromptFromText,
   buildDynamicPolicyPromptProtocolInstruction,
 } from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
+import { isHarnessPromptMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
 
 test("dynamic policy prompt protocol instruction is localized", () => {
   const zh = buildDynamicPolicyPromptProtocolInstruction("zh-CN");
@@ -242,14 +242,14 @@ test("harness policy prompt survives agent-side system message compaction", asyn
   await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(
-    ctx.modelContext.messages.filter(
-      (item = {}) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ctx.modelContext.messages.filter((item = {}) =>
+      isHarnessPromptMessage(item, "noobot-harness-policy"),
     ).length,
     1,
   );
   assert.equal(
-    ctx.modelContext.messageBlocks.system.filter(
-      (item = {}) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ctx.modelContext.messageBlocks.system.filter((item = {}) =>
+      isHarnessPromptMessage(item, "noobot-harness-policy"),
     ).length,
     1,
   );

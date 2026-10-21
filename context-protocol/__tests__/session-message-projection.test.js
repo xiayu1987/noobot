@@ -4,20 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
   normalizeContextTransferEnvelopes,
+  projectContextMessageToSessionRecord,
   projectSessionRecordToContextMessage,
   projectSessionRecordsToContextMessages,
 } from "../src/message/session-projection.js";
+import { readContextMessageValue, resolveContextMessageId } from "../src/message/codec.js";
 
 function transferEnvelope({ transferId = "transfer-1", content = "payload" } = {}) {
   return {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId,
-    messageId: "message-1",
+    presentationMessageId: "message-1",
     identity: {
       sessionId: "session-1",
       turnScopeId: "turn-1",
@@ -45,9 +48,10 @@ test("Session Record projection preserves explicit canonical facts", () => {
     transferEnvelopes: [envelope],
   });
 
-  assert.equal(projected.messageUid, "message-1");
+  assert.equal(resolveContextMessageId(projected), "message-1");
   assert.equal(projected.role, "assistant");
-  assert.deepEqual(projected.transferEnvelopes, [envelope]);
+  assert.deepEqual(readContextMessageValue(projected, "transferEnvelopes"), [envelope]);
+  assert.equal(projected.messageUid, undefined);
 });
 
 test("Session Record projection never infers identity or role", () => {
@@ -94,4 +98,34 @@ test("Session Record projection rejects malformed collections and transfer facts
       ]),
     /transfer_identity_conflict/,
   );
+});
+
+test("context message projects back to the same session record", () => {
+  const record = {
+    messageUid: "sm_round_trip",
+    role: "assistant",
+    content: "done",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn-1",
+    injectedMessage: true,
+    injectedMessageType: "agent_plugin",
+    summarized: true,
+    tool_calls: [{ id: "call-1", name: "read_file", args: {} }],
+    contextPolicy: { checkpoint: true },
+    attachments: [{ attachmentRef: "attach://a1" }],
+  };
+  const projected = projectContextMessageToSessionRecord(
+    projectSessionRecordToContextMessage(record),
+  );
+  assert.deepEqual(projected, record);
+  assert.equal("additional_kwargs" in projected, false);
+});
+
+test("context to session projection rejects missing identity and non-object input", () => {
+  assert.throws(
+    () =>
+      projectContextMessageToSessionRecord({ role: "user", content: "x", additional_kwargs: {} }),
+    /requires messageUid/,
+  );
+  assert.throws(() => projectContextMessageToSessionRecord(null), /requires a message object/);
 });

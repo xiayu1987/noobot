@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSessionMessageUid } from "../../../context/session/message-uid.js";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import {
@@ -169,7 +169,7 @@ function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
   return normalizeMessageEntity(
     {
       ...replacementBaseMessage,
-      messageUid: createSessionMessageUid(),
+      messageUid: createMessageUid(),
       role: "user",
       type: "message",
       content: fields.content,

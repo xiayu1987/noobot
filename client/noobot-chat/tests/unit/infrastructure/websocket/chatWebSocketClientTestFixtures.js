@@ -79,7 +79,7 @@ export function streamCommand(identity) {
     input: { message: "test", attachments: [] },
     presentation: {
       userMessageId: `user-message:${identity.turnScopeId}`,
-      assistantMessageId: `assistant-message:${identity.turnScopeId}`,
+      presentationMessageId: `assistant-message:${identity.turnScopeId}`,
     },
     concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 0 },
   });
@@ -110,7 +110,6 @@ export function turnLifecycleProtocolEvent(payload) {
       eventType: TURN_LIFECYCLE_WIRE_EVENT,
       sessionId: payload.sessionId,
       turnScopeId: payload.turnScopeId,
-      messageId: payload.messageId,
       executionId: payload.executionId,
     },
     causality: {

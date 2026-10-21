@@ -20,11 +20,10 @@ const event = (eventType, eventId, sequence, extra = {}) =>
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "session-1",
       turnScopeId: "turn-1",
-      messageId: "model-message-1",
     },
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      scopeId: "model-message-1",
+      scopeId: "presentation-1",
       sequence,
     },
     producer: { type: "test", id: "canonical-message-timeline" },
@@ -53,7 +52,8 @@ test("canonical tool reducer merges call and result by stable toolCallId", () =>
   assert.equal(timeline[0].call.eventId, "event-1");
   assert.equal(timeline[0].resultEvent.eventId, "event-2");
   assert.equal(timeline[0].call.sequenceDomain, "message-event");
-  assert.equal(timeline[0].resultEvent.sequenceScopeId, "model-message-1");
+
+  assert.equal(timeline[0].resultEvent.sequenceScopeId, "presentation-1");
   assert.equal("log" in timeline[0].call, false);
   assert.equal("log" in timeline[0].resultEvent, false);
 });

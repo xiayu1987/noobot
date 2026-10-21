@@ -34,7 +34,7 @@ export const AGENT_CONTEXT_IDENTITY_SHAPE = Object.freeze({
   dialogProcessId: "nonEmptyString",
   turnScopeId: "nonEmptyString",
   runId: "nonEmptyString",
-  messageId: "nonEmptyString",
+  presentationMessageId: "nonEmptyString",
 });
 
 export const AGENT_CONTEXT_ENVIRONMENT_SHAPE = Object.freeze({

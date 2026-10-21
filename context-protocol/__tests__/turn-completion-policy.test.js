@@ -38,7 +38,7 @@ test("turn completion marks eligible model messages and canonical store", () => 
     },
   };
 
-  const result = applyTurnCompletionPolicy({ modelMessages: messages, turnMessageStore: store });
+  const result = applyTurnCompletionPolicy({ modelMessages: [], turnMessageStore: store });
 
   assert.equal(result.markedCount, 2);
   assert.deepEqual(
@@ -71,23 +71,19 @@ test("turn completion mirrors the canonical UID decisions to a separate model sn
       summarized: false,
     },
   ];
+
   const modelMessages = [
     {
-      messageUid: "call-1",
       role: "assistant",
       tool_calls: [{ id: "tool-1", name: "read_file" }],
       content: "provider snapshot",
-      summarized: false,
-      lc_kwargs: {},
+      additional_kwargs: { messageUid: "call-1", summarized: false },
     },
     {
-      messageUid: "result-1",
       role: "tool",
       tool_call_id: "tool-1",
-      toolName: "read_file",
       content: "provider snapshot",
-      summarized: false,
-      lc_kwargs: {},
+      additional_kwargs: { messageUid: "result-1", toolName: "read_file", summarized: false },
     },
   ];
   const store = {
@@ -107,11 +103,11 @@ test("turn completion mirrors the canonical UID decisions to a separate model sn
 
   assert.equal(result.markedCount, 2);
   assert.deepEqual(
-    modelMessages.map((message) => message.summarized),
+    modelMessages.map((message) => message.additional_kwargs.summarized),
     [true, true],
   );
   assert.deepEqual(
-    modelMessages.map((message) => message.lc_kwargs.summarized),
+    storeMessages.map((message) => message.summarized),
     [true, true],
   );
 });

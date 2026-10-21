@@ -7,15 +7,12 @@ import { isMessageInjected } from "./shared.js";
 import {
   isContextSystemMessage,
   readContextMessageField,
+  resolveContextMessageFlags,
 } from "@noobot/context-protocol/message/codec";
 import {
-  HARNESS_INJECTED_MESSAGE_BY_FIELD,
-  HARNESS_INJECTED_MESSAGE_BY_VALUE,
-  HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
-  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
-  HARNESS_INJECTION_MESSAGE_ROLE,
-  HARNESS_PROMPT_INJECTION_ID_FIELD,
-} from "../handlers/shared/constants.js";
+  buildHarnessInjectedMessage,
+  harnessPromptInjectedMessageType,
+} from "../handlers/shared/message/injected-message-utils.js";
 import {
   resolveModelMessageBlocks,
   resolveModelMessages,
@@ -23,12 +20,14 @@ import {
 } from "../../core/message-store.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
+const HARNESS_TAKEOVER_INJECTED_MESSAGE_TYPE = "harness_takeover";
+
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
   while (
     index < messages.length &&
     isContextSystemMessage(messages[index]) &&
-    messages[index]?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] !== HARNESS_INJECTED_MESSAGE_FLAG_VALUE
+    !resolveContextMessageFlags(messages[index]).injected
   ) {
     index += 1;
   }
@@ -58,13 +57,11 @@ function buildTakeoverMessage(directive = {}) {
   return {
     id,
     messageContent,
-    message: {
-      role: HARNESS_INJECTION_MESSAGE_ROLE,
-      content: messageContent,
-      [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
-      [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
-      ...(id ? { [HARNESS_PROMPT_INJECTION_ID_FIELD]: id } : {}),
-    },
+    message: buildHarnessInjectedMessage(messageContent, {
+      injectedMessageType: id
+        ? harnessPromptInjectedMessageType(id)
+        : HARNESS_TAKEOVER_INJECTED_MESSAGE_TYPE,
+    }),
   };
 }
 

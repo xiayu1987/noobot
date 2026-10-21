@@ -13,9 +13,13 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { text } from "@noobot/shared/value";
 
 export class WorkspaceService {
-  constructor({ globalConfig = {}, globalConfigRaw = null } = {}) {
+  constructor({ globalConfig = {}, globalConfigRaw = null, scopedSessionRoots } = {}) {
+    if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
+      throw new TypeError("WorkspaceService requires scopedSessionRoots");
+    }
     this.globalConfig = globalConfig;
     this.globalConfigRaw = globalConfigRaw;
+    this.scopedSessionRoots = scopedSessionRoots;
   }
 
   getWorkspacePath(userId) {
@@ -32,6 +36,7 @@ export class WorkspaceService {
       assetPackagePath: this.globalConfig.workspaceTemplatePath,
       userId,
       baseValues: this.globalConfigRaw ?? {},
+      scopedSessionRoots: this.scopedSessionRoots,
     };
   }
 

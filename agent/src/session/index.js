@@ -48,7 +48,12 @@ function createSessionLifecycleAccess(sessionRepository) {
   };
 }
 
-function createSessionPersistenceContextFactory({ pathResolver, sessionPathResolver }) {
+function createSessionPersistenceContextFactory({
+  pathResolver,
+  sessionPathResolver,
+  scopedSessionRoots,
+}) {
+  const allowedRoots = new Set(scopedSessionRoots);
   return function createSessionPersistenceContext({ userId, sessionId, persistenceScope }) {
     const validation = validateSessionPersistenceScope(persistenceScope);
     if (!validation.valid) {
@@ -58,7 +63,11 @@ function createSessionPersistenceContextFactory({ pathResolver, sessionPathResol
     if (!scope) {
       return createSessionTreePersistenceContext({ sessionPathResolver, userId, sessionId });
     }
-    if (!isWorkspaceRuntimeRelativePath(scope.allowedRoot) || !scope.scopeId.startsWith("agent:")) {
+    if (
+      !isWorkspaceRuntimeRelativePath(scope.allowedRoot) ||
+      !allowedRoots.has(scope.allowedRoot) ||
+      !scope.scopeId.startsWith("agent:")
+    ) {
       throw new Error("scoped session access requires an Agent-owned runtime persistence scope");
     }
     return createPersistenceContext({
@@ -77,11 +86,14 @@ function createSessionPersistenceContextFactory({ pathResolver, sessionPathResol
 
 export function createSessionServices(
   globalConfig,
-  { now = () => new Date().toISOString(), attachmentService } = {},
+  { now = () => new Date().toISOString(), attachmentService, scopedSessionRoots } = {},
 ) {
   if (!isFunction(now)) throw new TypeError("createSessionServices requires now function");
   if (!isFunction(attachmentService?.ingest)) {
     throw new TypeError("createSessionServices requires attachmentService");
+  }
+  if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
+    throw new TypeError("createSessionServices requires scopedSessionRoots");
   }
   const pathResolver = new PathResolver(globalConfig);
   const storageService = new StorageService({ pathResolver });
@@ -170,6 +182,7 @@ export function createSessionServices(
     createSessionPersistenceContext: createSessionPersistenceContextFactory({
       pathResolver,
       sessionPathResolver,
+      scopedSessionRoots,
     }),
     sessionTreeService,
     sessionCrudService,

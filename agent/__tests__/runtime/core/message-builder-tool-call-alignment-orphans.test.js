@@ -20,13 +20,21 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+
+function sessionContextHistory(records) {
+  return records.map((record) =>
+    projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record }),
+  );
+}
 
 test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(createTestRuntimeContext(), {
       messageBlocks: {
         system: [],
-        history: [
+        history: sessionContextHistory([
           {
             role: "user",
             content: "q-1",
@@ -63,7 +71,7 @@ test("buildContextMessages drops orphan tool results without matching assistant 
             content: "final",
             dialogProcessId: "dlg-tool",
           },
-        ],
+        ]),
         incremental: [],
       },
     }),
@@ -93,7 +101,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
     createTestAgentExecutionScope(createTestRuntimeContext(), {
       messageBlocks: {
         system: [],
-        history: [
+        history: sessionContextHistory([
           {
             role: "user",
             content: "q-summary",
@@ -117,7 +125,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
             content: "done",
             dialogProcessId: "dlg-summary",
           },
-        ],
+        ]),
         incremental: [],
       },
     }),

@@ -13,6 +13,10 @@ import {
 
 import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared/index.js";
 import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/constants.js";
+import {
+  markContextMessageSummarized,
+  resolveContextMessageSummarized,
+} from "@noobot/context-protocol/message/codec";
 
 test("ensureHarnessBucket fast-path keeps initialized references stable", async () => {
   const ctx = {
@@ -95,7 +99,7 @@ test("hook context uses explicit modelContext instead of agent payload messages"
     ctx.modelContext.messageBlocks.incremental.map(({ role, content }) => ({ role, content })),
     [{ role: "assistant", content: "incremental ctx" }],
   );
-  assert.ok(ctx.modelContext.messageBlocks.system[0].additional_kwargs?.noobotMessageId);
+  assert.ok(ctx.modelContext.messageBlocks.system[0].additional_kwargs?.messageUid);
   assert.deepEqual(
     ctx.modelContext.messages.map((item = {}) => item.content),
     ["system ctx", "history ctx", "incremental ctx"],
@@ -120,12 +124,15 @@ test("hook context projection shares canonical entities with messageBlocks", () 
   );
 
   assert.equal(ctx.modelContext.messages[1], ctx.modelContext.messageBlocks.incremental[1]);
-  assert.ok(ctx.modelContext.messages[1].additional_kwargs?.noobotMessageId);
+  assert.ok(ctx.modelContext.messages[1].additional_kwargs?.messageUid);
   assert.equal(
-    ctx.modelContext.messages[1].additional_kwargs.noobotMessageId,
-    ctx.modelContext.messageBlocks.incremental[1].additional_kwargs.noobotMessageId,
+    ctx.modelContext.messages[1].additional_kwargs.messageUid,
+    ctx.modelContext.messageBlocks.incremental[1].additional_kwargs.messageUid,
   );
   assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
-  ctx.modelContext.messages[1].summarized = true;
-  assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, true);
+  markContextMessageSummarized(ctx.modelContext.messages[1]);
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[1]),
+    true,
+  );
 });

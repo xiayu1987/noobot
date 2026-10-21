@@ -3,9 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_NOT_FOUND_REASON, normalizeDialogProcessId } from "@noobot/session-protocol";
 import {
-  resolveContextMessageDialogProcessId,
+  SESSION_NOT_FOUND_REASON,
+  normalizeDialogProcessId,
+  resolveSessionMessageRecordDialogProcessId,
+} from "@noobot/session-protocol";
+import {
   resolveContextToolCallDeclarationId,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
@@ -52,7 +55,7 @@ function checkpointConflict(message = "", code = "TURN_SUMMARY_CHECKPOINT_CONFLI
 
 function toolPairKey(message = {}, callId = "") {
   return [
-    resolveContextMessageDialogProcessId(message),
+    resolveSessionMessageRecordDialogProcessId(message),
     text(message?.turnScopeId),
     text(callId),
   ].join("\u0000");
@@ -119,7 +122,7 @@ function assertCheckpointTargetsTurn(session, request) {
   const lifecycle = session.turnLifecycle;
   const lifecycleTurn = lifecycle.turns?.[request.turnScopeId];
   if (lifecycleTurn) {
-    if (resolveContextMessageDialogProcessId(lifecycleTurn) !== request.dialogProcessId) {
+    if (normalizeDialogProcessId(lifecycleTurn?.dialogProcessId) !== request.dialogProcessId) {
       throw checkpointConflict(
         "checkpoint does not own the lifecycle turn",
         "TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT",
@@ -221,7 +224,7 @@ function assertCheckpointMessagesResolved(messages, request) {
   for (const messageUid of request.persistedMessageUids) {
     const message = messagesByUid.get(messageUid);
     if (
-      resolveContextMessageDialogProcessId(message) !== request.dialogProcessId ||
+      resolveSessionMessageRecordDialogProcessId(message) !== request.dialogProcessId ||
       text(message?.turnScopeId) !== request.turnScopeId
     ) {
       throw checkpointConflict(

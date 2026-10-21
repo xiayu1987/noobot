@@ -7,7 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
+import { attachmentTransfer, TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
 
 test("inject-mode summary defaults to injecting full summary to main agent without attachment", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -131,7 +132,7 @@ test("inject-mode summary persists and injects the same complete Harness summary
                   transferEnvelopes: [
                     attachmentTransfer({
                       transferId: "transfer-summary-detail-1",
-                      messageId: "message-summary-detail-1",
+                      presentationMessageId: "message-summary-detail-1",
                       identity: {
                         sessionId: "s1",
                         turnScopeId: "turn-summary-1",
@@ -197,7 +198,7 @@ test("inject-mode summary persists and injects the same complete Harness summary
       (item = {}) =>
         String(item?.role || "").trim() === "user" &&
         String(item?.content || "").includes("[SUMMARY_OVERVIEW]") &&
-        Array.isArray(item?.transferEnvelopes),
+        Array.isArray(readContextMessageValue(item, "transferEnvelopes")),
     );
   assert.ok(injectedSummaryMessage);
   assert.match(String(injectedSummaryMessage?.content || ""), /\[SUMMARY_OVERVIEW\]/);
@@ -206,11 +207,17 @@ test("inject-mode summary persists and injects the same complete Harness summary
   assert.match(String(injectedSummaryMessage?.content || ""), /\[NEXT_EXECUTION_SUGGESTION\]/);
   assert.match(String(injectedSummaryMessage?.content || ""), /target = step5/);
   assert.equal(persistedSummaryPayload?.detail, ctx.modelResponse.text);
-  assert.equal(Array.isArray(injectedSummaryMessage?.transferEnvelopes), true);
-  assert.equal(injectedSummaryMessage?.transferEnvelopes?.[0]?.version, 2);
   assert.equal(
-    injectedSummaryMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity
-      ?.attachmentId,
+    Array.isArray(readContextMessageValue(injectedSummaryMessage, "transferEnvelopes")),
+    true,
+  );
+  assert.equal(
+    readContextMessageValue(injectedSummaryMessage, "transferEnvelopes")?.[0]?.version,
+    TRANSFER_VERSION,
+  );
+  assert.equal(
+    readContextMessageValue(injectedSummaryMessage, "transferEnvelopes")?.[0]?.payload
+      ?.attachments?.[0]?.identity?.attachmentId,
     "att-summary-detail-1",
   );
   assert.equal(injectedSummaryMessage?.attachments, undefined);

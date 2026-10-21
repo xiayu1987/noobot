@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
+import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
 const SHORT_MEMORY_RECORD_ROLES = new Set(["user", "assistant"]);
@@ -11,7 +11,7 @@ const SHORT_MEMORY_RECORD_ROLES = new Set(["user", "assistant"]);
 export function toShortMemoryRecords(messages = []) {
   const out = [];
   for (const messageItem of Array.isArray(messages) ? messages : []) {
-    if (isInjectedMessage(messageItem)) continue;
+    if (isInjectedSessionMessageRecord(messageItem)) continue;
     const role = text(messageItem?.role);
     if (!SHORT_MEMORY_RECORD_ROLES.has(role)) continue;
     if (role === "assistant" && text(messageItem?.type) === "tool_call") continue;

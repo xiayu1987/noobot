@@ -12,6 +12,14 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+
+function sessionContextHistory(records) {
+  return records.map((record) =>
+    projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record }),
+  );
+}
 
 function createMessageBuilderScope({ runtime = {}, history = [] } = {}) {
   return createTestAgentExecutionScope(createTestRuntimeContext(runtime), {
@@ -28,18 +36,20 @@ function buildRoundContents(fromRound, toRound) {
 
 function buildDefaultHistoryRounds() {
   const totalRounds = MAIN_MODEL_HISTORY_ROUND_LIMIT + 2;
-  return Array.from({ length: totalRounds }, (_, index) => [
-    {
-      role: "user",
-      content: `u-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-    {
-      role: "assistant",
-      content: `a-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-  ]).flat();
+  return sessionContextHistory(
+    Array.from({ length: totalRounds }, (_, index) => [
+      {
+        role: "user",
+        content: `u-${index + 1}`,
+        dialogProcessId: `dlg-${index + 1}`,
+      },
+      {
+        role: "assistant",
+        content: `a-${index + 1}`,
+        dialogProcessId: `dlg-${index + 1}`,
+      },
+    ]).flat(),
+  );
 }
 
 function expectedDefaultHistoryContents() {
@@ -51,7 +61,7 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
   const messages = buildContextMessages(
     createMessageBuilderScope({
       runtime: { systemRuntime: { dialogProcessId: "dlg_current" } },
-      history: [
+      history: sessionContextHistory([
         {
           role: "user",
           content: "当前问题",
@@ -62,6 +72,7 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
           content: "当前对话注入",
           injectedMessage: true,
           injectedBy: "agent-plugin",
+          injectedMessageType: "agent_plugin",
           dialogProcessId: "dlg_newer",
         },
         {
@@ -69,9 +80,10 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
           content: "旧对话注入",
           injectedMessage: true,
           injectedBy: "agent-plugin",
+          injectedMessageType: "agent_plugin",
           dialogProcessId: "dlg_old",
         },
-      ],
+      ]),
     }),
     { currentUserMessage: null },
   );

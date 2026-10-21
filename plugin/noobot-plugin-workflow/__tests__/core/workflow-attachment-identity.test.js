@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import {
   mergeAttachments,
@@ -84,9 +84,9 @@ test("workflow attachment operations reject incomplete identity", () => {
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            version: 2,
+            version: TRANSFER_VERSION,
             transferId: "transfer-invalid",
-            messageId: "message-invalid",
+            presentationMessageId: "presentation-invalid",
             identity: { sessionId: "session-a", producer: { type: "tool", id: "tool-1" } },
             direction: "output",
             payload: {

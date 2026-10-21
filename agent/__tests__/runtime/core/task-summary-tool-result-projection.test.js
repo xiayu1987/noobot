@@ -54,7 +54,7 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
       dialogProcessId: "dialog-call_task_summary_invalid",
       turnScopeId: "turn-call_task_summary_invalid",
       runId: "run-call_task_summary_invalid",
-      messageId: "message-call_task_summary_invalid",
+      presentationMessageId: "message-call_task_summary_invalid",
     },
     turn: 1,
   });

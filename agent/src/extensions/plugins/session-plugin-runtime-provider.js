@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { PLUGIN_LIFECYCLE_EVENT, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
-import { getNoobotPluginRuntime } from "@noobot/plugin-runtime";
+import {
+  collectNoobotPluginScopedSessionRootDeclarations,
+  getNoobotPluginRuntime,
+} from "@noobot/plugin-runtime";
+import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -38,9 +42,10 @@ function runtimeDescriptor(loadedPlugins) {
 }
 
 export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = {}) {
+  const rootOptions = text(pluginRootDir) ? { pluginRootDir: String(pluginRootDir).trim() } : {};
   const loadedPlugins = await getNoobotPluginRuntime({
     surface: PLUGIN_SURFACE.AGENT,
-    ...(text(pluginRootDir) ? { pluginRootDir: String(pluginRootDir).trim() } : {}),
+    ...rootOptions,
   });
   if (loadedPlugins.errors.length) {
     throw new Error(
@@ -48,5 +53,9 @@ export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = 
     );
   }
   reportRuntimeLifecycle(loadedPlugins);
-  return { loadedPlugins, pluginRuntime: runtimeDescriptor(loadedPlugins) };
+
+  const scopedSessionRoots = resolveScopedSessionRoots(
+    await collectNoobotPluginScopedSessionRootDeclarations(rootOptions),
+  );
+  return { loadedPlugins, pluginRuntime: runtimeDescriptor(loadedPlugins), scopedSessionRoots };
 }

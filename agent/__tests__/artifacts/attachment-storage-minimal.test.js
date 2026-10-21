@@ -386,7 +386,7 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
         dialogProcessId: "d-1",
         turnScopeId: "t-1",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
       environment: createTestAgentEnvironment({ basePath: workspaceRoot }),
     });

@@ -112,9 +112,9 @@ function aggregateConflictContinuationSession({ withCommittedMessage = false } =
 function historicalMultimodalParseEnvelope(overrides = {}) {
   return {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: 3,
     transferId: "transfer:multimodal-parse-1",
-    messageId: "message-1",
+    presentationMessageId: "msg_presentation-1",
     identity: {
       sessionId: "session-1",
       turnScopeId: "turn-1",

@@ -11,6 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 
 import { createSessionFacade, createSessionServices } from "noobot-agent/session";
 import { AttachmentService } from "noobot-agent/attach";
+import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
 import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -26,7 +27,12 @@ async function withRealFacadeServer(operation) {
     await initializeUserRuntimeDirectories(workspaceRoot, USER_ID);
     const runtime = createSessionServices(
       { workspaceRoot },
-      { attachmentService: new AttachmentService({ workspaceRoot }) },
+      {
+        attachmentService: new AttachmentService({ workspaceRoot }),
+        scopedSessionRoots: resolveScopedSessionRoots([
+          { pluginId: "workflow", scopedSessionRoots: ["session"] },
+        ]),
+      },
     );
     const session = createSessionFacade(runtime);
     await session.createSession({

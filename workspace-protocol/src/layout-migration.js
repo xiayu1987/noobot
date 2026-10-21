@@ -15,6 +15,7 @@ export const WORKSPACE_LAYOUT_UNMARKED_VERSION = 1;
 export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_STORAGE: "session-storage",
   SESSION_LIFECYCLE: "session-lifecycle",
+  SESSION_TRANSFER_ENVELOPE: "session-transfer-envelope",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -37,6 +38,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-tree-caller-v5",
     toVersion: 5,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-transfer-envelope-v6",
+    toVersion: 6,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE,
   }),
 ]);
 

@@ -12,7 +12,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
 import { isPlainObject, text } from "@noobot/shared/value";
 
-const AUTHORITY_OUTBOX_DIR = "authority-outbox";
+export const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";
 const AUTHORITY_OUTBOX_CHECKPOINT_FILE = "outbox-checkpoint.json";
 const AUTHORITY_OUTBOX_CHECKPOINT_SCHEMA_VERSION = 1;

@@ -10,6 +10,11 @@ import assert from "node:assert/strict";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { createHookManager } from "@noobot/hook-protocol";
 import {
+  resolveContextMessageId,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import {
   createTestTurnMessagesStore,
   createTestModelPort,
   createLoopTurnIdentity,
@@ -186,7 +191,7 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
     (message) => message === finalizePromptMessage,
   );
   assert.equal(promptInBlocks, finalizePromptMessage);
-  assert.ok(finalizePromptMessage.additional_kwargs.noobotMessageId);
+  assert.ok(resolveContextMessageId(finalizePromptMessage));
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
 });
 
@@ -285,7 +290,10 @@ test("post-summary char overflow enters final no-tools before the next with-tool
       return '{"ok":true}';
     },
   };
-  const longUserMessage = { role: "user", content: "x".repeat(32), summarized: false };
+  const longUserMessage = writeContextMessageMetadata(
+    { role: "user", content: "x".repeat(32) },
+    { messageUid: createMessageUid(), summarized: false },
+  );
   const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
     {
       content: "final after post-summary overflow",

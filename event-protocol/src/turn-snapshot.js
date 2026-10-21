@@ -26,7 +26,6 @@ export function createTurnSnapshotEnvelope(
       eventType: TURN_SNAPSHOT_WIRE_EVENT,
       sessionId: snapshot.sessionId,
       turnScopeId: snapshot.activeTurnScopeId || undefined,
-      messageId: snapshot.activeTurn?.messageId || undefined,
     },
     causality: { commandId: snapshot.commandId },
     ordering: {

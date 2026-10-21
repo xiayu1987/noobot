@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  deriveSessionAutoTitle,
-  resolveSessionAutoTitle,
-} from "@noobot/context-protocol/policy/message";
+import { deriveSessionAutoTitle, resolveSessionAutoTitle } from "@noobot/session-protocol";
 import { pruneDialogOrder, registerDialogOrderMessage } from "./dialog-order-entity.js";
 
 export function registerSessionMessageFacts(session, message) {

@@ -8,4 +8,5 @@ export const CONTEXT_INTERNAL_MESSAGE_TYPE = Object.freeze({
   SYSTEM_CONTEXT: "system_context",
   USER_META: "user_meta",
   PHASE_SUMMARY_MEMORY: "phase_summary_memory",
+  TERMINAL_HISTORY_EXPLANATION: "terminal_history_explanation",
 });

@@ -6,23 +6,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  markCurrentTurnArraySummarized,
-  markCurrentTurnStoreSummarized,
-  shouldMarkCurrentTurnSummarizedMessage,
-} from "@noobot/context-protocol/policy/summary";
+  applyTurnCompletionPolicy,
+  projectTurnCompletionMessages,
+} from "@noobot/context-protocol/policy/turn-completion";
+import { shouldMarkCurrentTurnSummarizedMessage as protocolShouldMarkCurrentTurnSummarizedMessage } from "@noobot/context-protocol/policy/summary";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
-import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
+import { resolveModelHistoryMessages as protocolResolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
-import { filterForModelContext } from "@noobot/context-protocol/policy/message";
+import { filterForModelContext as protocolFilterForModelContext } from "@noobot/context-protocol/policy/message";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+
+function sessionRecord(record) {
+  return { messageUid: createMessageUid(), ...record };
+}
+function toContext(messages = []) {
+  return messages.map((message) => projectSessionRecordToContextMessage(message));
+}
+const WINDOW_MESSAGE_KEYS = [
+  "sourceMessages",
+  "systemMessages",
+  "historyMessages",
+  "incrementalMessages",
+];
+function projectWindowOptions(options = {}) {
+  const projected = { ...options };
+  for (const key of WINDOW_MESSAGE_KEYS) {
+    if (Array.isArray(options[key])) projected[key] = toContext(options[key]);
+  }
+  return projected;
+}
+const resolveModelHistoryMessages = (options = {}) =>
+  protocolResolveModelHistoryMessages(projectWindowOptions(options));
+const filterForModelContext = (messages = []) => protocolFilterForModelContext(toContext(messages));
+const shouldMarkCurrentTurnSummarizedMessage = (record = {}) =>
+  protocolShouldMarkCurrentTurnSummarizedMessage(projectSessionRecordToContextMessage(record));
 
 const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 
-test("markCurrentTurnArraySummarized preserves only latest task_summary call and result", () => {
-  const oldAssistantMessage = {
+test("projectTurnCompletionMessages preserves only latest task_summary call and result", () => {
+  const oldAssistantMessage = sessionRecord({
     role: "assistant",
     content: "",
     tool_calls: [
@@ -36,15 +64,15 @@ test("markCurrentTurnArraySummarized preserves only latest task_summary call and
         contextPolicy: boundaryPolicy,
       },
     ],
-  };
-  const oldToolMessage = {
+  });
+  const oldToolMessage = sessionRecord({
     role: "tool",
     content: JSON.stringify({ toolName: "task_summary", ok: true }),
     tool_call_id: "call_task_summary_old",
     toolName: "task_summary",
     contextPolicy: boundaryPolicy,
-  };
-  const latestAssistantMessage = {
+  });
+  const latestAssistantMessage = sessionRecord({
     role: "assistant",
     content: "",
     tool_calls: [
@@ -58,22 +86,22 @@ test("markCurrentTurnArraySummarized preserves only latest task_summary call and
         contextPolicy: boundaryPolicy,
       },
     ],
-  };
-  const latestToolMessage = {
+  });
+  const latestToolMessage = sessionRecord({
     role: "tool",
     content: JSON.stringify({ toolName: "task_summary", ok: true }),
     tool_call_id: "call_task_summary_latest",
     toolName: "task_summary",
     contextPolicy: boundaryPolicy,
-  };
+  });
 
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(oldAssistantMessage), false);
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(oldToolMessage), false);
 
-  const result = markCurrentTurnArraySummarized([
+  const result = projectTurnCompletionMessages([
     oldAssistantMessage,
     oldToolMessage,
-    { role: "user", content: "next task" },
+    sessionRecord({ role: "user", content: "next task" }),
     latestAssistantMessage,
     latestToolMessage,
   ]);
@@ -86,7 +114,7 @@ test("markCurrentTurnArraySummarized preserves only latest task_summary call and
 });
 
 test("non-summary empty assistant tool_call can be summarized with its tool result", () => {
-  const assistantMessage = {
+  const assistantMessage = sessionRecord({
     role: "assistant",
     content: "",
     tool_calls: [
@@ -99,13 +127,13 @@ test("non-summary empty assistant tool_call can be summarized with its tool resu
         },
       },
     ],
-  };
-  const toolMessage = {
+  });
+  const toolMessage = sessionRecord({
     role: "tool",
     content: JSON.stringify({ toolName: "execute_script", ok: true }),
     tool_call_id: "call_execute",
     toolName: "execute_script",
-  };
+  });
 
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(assistantMessage), true);
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(toolMessage), true);
@@ -113,35 +141,31 @@ test("non-summary empty assistant tool_call can be summarized with its tool resu
 
 test("summarization includes every restored incremental tool call and result without duplication", () => {
   const restoredIncremental = [
-    {
-      type: "ai",
+    sessionRecord({
+      role: "assistant",
       content: "",
       tool_calls: [{ id: "call_search", name: "search", args: {}, type: "tool_call" }],
-      lc_kwargs: {},
-    },
-    {
-      type: "tool",
+    }),
+    sessionRecord({
+      role: "tool",
       content: "search-result",
       tool_call_id: "call_search",
       toolName: "search",
-      lc_kwargs: {},
-    },
-    {
-      type: "ai",
+    }),
+    sessionRecord({
+      role: "assistant",
       content: "",
       tool_calls: [{ id: "call_read", name: "read_file", args: {}, type: "tool_call" }],
-      lc_kwargs: {},
-    },
-    {
-      type: "tool",
+    }),
+    sessionRecord({
+      role: "tool",
       content: "read-result",
       tool_call_id: "call_read",
       toolName: "read_file",
-      lc_kwargs: {},
-    },
+    }),
   ];
-  const latestSummaryCall = {
-    type: "ai",
+  const latestSummaryCall = sessionRecord({
+    role: "assistant",
     content: "",
     tool_calls: [
       {
@@ -152,15 +176,14 @@ test("summarization includes every restored incremental tool call and result wit
         contextPolicy: boundaryPolicy,
       },
     ],
-    lc_kwargs: {},
-  };
+  });
   const messages = [
-    { type: "human", content: "restored task", lc_kwargs: {} },
+    sessionRecord({ role: "user", content: "restored task" }),
     ...restoredIncremental,
     latestSummaryCall,
   ];
 
-  const marked = markCurrentTurnArraySummarized(messages);
+  const marked = projectTurnCompletionMessages(messages);
 
   assert.equal(marked.length, 6);
   assert.deepEqual(
@@ -171,78 +194,17 @@ test("summarization includes every restored incremental tool call and result wit
   assert.equal(marked[5].summarized, undefined);
 });
 
-test("LangChain AIMessage-like task_summary tool_call is not marked summarized", () => {
-  const aiMessage = {
-    type: "ai",
-    content: "",
-    tool_calls: [
-      {
-        id: "call_task_summary",
-        name: "task_summary",
-        args: {},
-        type: "tool_call",
-        contextPolicy: boundaryPolicy,
-      },
-    ],
-  };
-
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage(aiMessage), false);
-});
-
-test("markCurrentTurnArraySummarized preserves only latest LangChain task_summary message", () => {
-  const messages = [
-    {
-      type: "ai",
-      content: "",
-      tool_calls: [
-        {
-          id: "call_task_summary_old",
-          name: "task_summary",
-          args: {},
-          type: "tool_call",
-          contextPolicy: boundaryPolicy,
-        },
-      ],
-      lc_kwargs: {},
-    },
-    {
-      type: "tool",
-      content: JSON.stringify({ toolName: "task_summary", ok: true }),
-      tool_call_id: "call_task_summary_old",
-      toolName: "task_summary",
-      contextPolicy: boundaryPolicy,
-      lc_kwargs: {},
-    },
-    {
-      type: "ai",
-      content: "",
-      tool_calls: [
-        {
-          id: "call_task_summary_latest",
-          name: "task_summary",
-          args: {},
-          type: "tool_call",
-          contextPolicy: boundaryPolicy,
-        },
-      ],
-      lc_kwargs: {},
-    },
-  ];
-
-  const marked = markCurrentTurnArraySummarized(messages);
-
-  assert.equal(marked[0].summarized, true);
-  assert.equal(marked[1].summarized, true);
-  assert.equal(marked[2].summarized, undefined);
-});
-
 test("filterForModelContext excludes only summarized in one policy", () => {
   const input = [
-    { role: "user", content: "keep me" },
-    { role: "assistant", content: "old", summarized: true },
-    { role: "assistant", content: "call", tool_calls: [{ id: "c1", function: { name: "x" } }] },
-    { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
-    { role: "assistant", content: "keep too" },
+    sessionRecord({ role: "user", content: "keep me" }),
+    sessionRecord({ role: "assistant", content: "old", summarized: true }),
+    sessionRecord({
+      role: "assistant",
+      content: "call",
+      tool_calls: [{ id: "c1", function: { name: "x" } }],
+    }),
+    sessionRecord({ role: "tool", content: '{"ok":true}', tool_call_id: "c1" }),
+    sessionRecord({ role: "assistant", content: "keep too" }),
   ];
   const result = filterForModelContext(input);
   assert.deepEqual(
@@ -253,16 +215,14 @@ test("filterForModelContext excludes only summarized in one policy", () => {
 
 test("filterForModelContext keeps summarized current system context marker", () => {
   const input = [
-    { role: "system", content: "old system", summarized: true },
-    {
+    sessionRecord({ role: "system", content: "old system", summarized: true }),
+    sessionRecord({
       role: "system",
       content: "current system context",
       summarized: true,
-      additional_kwargs: {
-        noobotInternalMessageType: "system_context",
-      },
-    },
-    { role: "user", content: "task" },
+      noobotInternalMessageType: "system_context",
+    }),
+    sessionRecord({ role: "user", content: "task" }),
   ];
   const result = filterForModelContext(input);
   assert.deepEqual(
@@ -272,49 +232,57 @@ test("filterForModelContext keeps summarized current system context marker", () 
 });
 
 test("system is summarized while user and assistant-without-tool-calls are not", () => {
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage({ role: "system", content: "note" }), true);
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage({ role: "user", content: "ask" }), false);
   assert.equal(
-    shouldMarkCurrentTurnSummarizedMessage({ role: "assistant", content: "plain text" }),
+    shouldMarkCurrentTurnSummarizedMessage(sessionRecord({ role: "system", content: "note" })),
+    true,
+  );
+  assert.equal(
+    shouldMarkCurrentTurnSummarizedMessage(sessionRecord({ role: "user", content: "ask" })),
+    false,
+  );
+  assert.equal(
+    shouldMarkCurrentTurnSummarizedMessage(
+      sessionRecord({ role: "assistant", content: "plain text" }),
+    ),
     false,
   );
 });
 
-test("markCurrentTurnArraySummarized preserves every user interjection and latest ordinary injection", () => {
-  const result = markCurrentTurnArraySummarized([
-    {
+test("projectTurnCompletionMessages preserves every user interjection and latest ordinary injection", () => {
+  const result = projectTurnCompletionMessages([
+    sessionRecord({
       role: "user",
       content: "old summary prompt",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "guidance_summary_prompt",
-    },
-    {
+    }),
+    sessionRecord({
       role: "user",
       content: "old planning prompt",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "planning_task",
-    },
-    {
+    }),
+    sessionRecord({
       role: "user",
       content: "new summary prompt",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "guidance_summary_prompt",
-    },
-    {
+    }),
+    sessionRecord({
       role: "user",
       content: "old user interjection",
       injectedMessage: true,
       injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
-    },
-    {
+    }),
+    sessionRecord({
       role: "user",
       content: "new user interjection",
       injectedMessage: true,
       injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
-    },
+    }),
   ]);
 
   assert.equal(result[0].summarized, true);
@@ -325,7 +293,7 @@ test("markCurrentTurnArraySummarized preserves every user interjection and lates
 });
 
 test("user interjections remain fully retained through completion and history", () => {
-  const latestGuidance = {
+  const latestGuidance = sessionRecord({
     messageUid: "guidance-latest",
     role: "user",
     type: "message",
@@ -336,8 +304,8 @@ test("user interjections remain fully retained through completion and history", 
     injectedBy: "harness-plugin",
     injectedMessageType: "separate_model_relay:guidance",
     summarized: false,
-  };
-  const userInterjection = {
+  });
+  const userInterjection = sessionRecord({
     messageUid: "user-interjection:command:test",
     role: "user",
     type: "message",
@@ -348,13 +316,13 @@ test("user interjections remain fully retained through completion and history", 
     injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
     noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
     summarized: false,
-  };
+  });
   const earlierUserInterjection = {
     ...userInterjection,
     messageUid: "user-interjection:command:earlier",
     content: "先记住这条",
   };
-  const oldGuidance = {
+  const oldGuidance = sessionRecord({
     messageUid: "guidance-old",
     role: "user",
     type: "message",
@@ -365,7 +333,7 @@ test("user interjections remain fully retained through completion and history", 
     injectedBy: "harness-plugin",
     injectedMessageType: "separate_model_relay:guidance",
     summarized: false,
-  };
+  });
   const store = createCurrentTurnMessagesStore([
     oldGuidance,
     latestGuidance,
@@ -373,7 +341,7 @@ test("user interjections remain fully retained through completion and history", 
     userInterjection,
   ]);
 
-  markCurrentTurnStoreSummarized(store);
+  applyTurnCompletionPolicy({ turnMessageStore: store });
 
   const retained = store.toArray();
   assert.equal(retained.find((message) => message.messageUid === "guidance-old").summarized, true);
@@ -391,39 +359,26 @@ test("user interjections remain fully retained through completion and history", 
     false,
   );
   assert.deepEqual(
-    resolveModelHistoryMessages({ sourceMessages: retained }).map((message) => message.messageUid),
+    resolveModelHistoryMessages({ sourceMessages: retained }).map(resolveContextMessageId),
     [latestGuidance.messageUid, earlierUserInterjection.messageUid, userInterjection.messageUid],
   );
 });
 
-test("markCurrentTurnArraySummarized includes restored old injections and preserves latest per type", () => {
+test("projectTurnCompletionMessages includes restored old injections and preserves latest per type", () => {
+  const injected = (content, injectedMessageType) =>
+    sessionRecord({
+      role: "user",
+      content,
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType,
+    });
   const messages = [
-    {
-      type: "human",
-      content: "old guidance",
-      injectedMessage: true,
-      injectedBy: "agent-plugin",
-      injectedMessageType: "guidance",
-      lc_kwargs: {},
-    },
-    {
-      type: "human",
-      content: "planning",
-      injectedMessage: true,
-      injectedBy: "agent-plugin",
-      injectedMessageType: "planning",
-      lc_kwargs: {},
-    },
-    {
-      type: "human",
-      content: "new guidance",
-      injectedMessage: true,
-      injectedBy: "agent-plugin",
-      injectedMessageType: "guidance",
-      lc_kwargs: {},
-    },
-    {
-      type: "ai",
+    injected("old guidance", "guidance"),
+    injected("planning", "planning"),
+    injected("new guidance", "guidance"),
+    sessionRecord({
+      role: "assistant",
       content: "",
       tool_calls: [
         {
@@ -434,11 +389,10 @@ test("markCurrentTurnArraySummarized includes restored old injections and preser
           contextPolicy: boundaryPolicy,
         },
       ],
-      lc_kwargs: {},
-    },
+    }),
   ];
 
-  const marked = markCurrentTurnArraySummarized(messages);
+  const marked = projectTurnCompletionMessages(messages);
 
   assert.equal(marked[0].summarized, true);
   assert.equal(marked[1].summarized, undefined);
@@ -448,36 +402,36 @@ test("markCurrentTurnArraySummarized includes restored old injections and preser
 
 test("model and store projections apply one summarization scope policy", () => {
   const source = [
-    {
+    sessionRecord({
       role: "user",
       content: "old guidance",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "guidance",
       lc_kwargs: {},
-    },
-    {
+    }),
+    sessionRecord({
       role: "assistant",
       content: "",
       tool_calls: [{ id: "call_search", function: { name: "search", arguments: "{}" } }],
       lc_kwargs: {},
-    },
-    {
+    }),
+    sessionRecord({
       role: "tool",
       content: "search-result",
       tool_call_id: "call_search",
       toolName: "search",
       lc_kwargs: {},
-    },
-    {
+    }),
+    sessionRecord({
       role: "user",
       content: "new guidance",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "guidance",
       lc_kwargs: {},
-    },
-    {
+    }),
+    sessionRecord({
       role: "assistant",
       content: "",
       tool_calls: [
@@ -488,20 +442,20 @@ test("model and store projections apply one summarization scope policy", () => {
         },
       ],
       lc_kwargs: {},
-    },
-    {
+    }),
+    sessionRecord({
       role: "tool",
       content: JSON.stringify({ toolName: "task_summary", ok: true }),
       tool_call_id: "call_summary",
       toolName: "task_summary",
       contextPolicy: boundaryPolicy,
       lc_kwargs: {},
-    },
+    }),
   ];
-  const modelMessages = markCurrentTurnArraySummarized(structuredClone(source));
+  const modelMessages = projectTurnCompletionMessages(structuredClone(source));
   const store = createCurrentTurnMessagesStore(structuredClone(source));
 
-  markCurrentTurnStoreSummarized(store);
+  applyTurnCompletionPolicy({ turnMessageStore: store });
 
   assert.deepEqual(
     modelMessages.map((message) => message.summarized === true),
@@ -515,28 +469,28 @@ test("model and store projections apply one summarization scope policy", () => {
 
 test("filterForModelContext preserves every unsummarized injected message", () => {
   const result = filterForModelContext([
-    {
+    sessionRecord({
       role: "user",
       content: "old relay",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "separate_model_relay:planning",
-    },
-    {
+    }),
+    sessionRecord({
       role: "user",
       content: "planning prompt",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "planning_task",
-    },
-    {
+    }),
+    sessionRecord({
       role: "user",
       content: "new relay",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "separate_model_relay:planning",
-    },
-    { role: "assistant", content: "normal" },
+    }),
+    sessionRecord({ role: "assistant", content: "normal" }),
   ]);
 
   assert.deepEqual(

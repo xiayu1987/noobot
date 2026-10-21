@@ -19,7 +19,7 @@ import {
 test("V2 envelopes use one payload model and reject path-shaped fields", () => {
   const direct = directTransfer({
     transferId: identity().transferId,
-    messageId: identity().messageId,
+    presentationMessageId: identity().presentationMessageId,
     identity: identity(),
     direction: "input",
     content: "hello",
@@ -34,10 +34,13 @@ test("V2 envelopes use one payload model and reject path-shaped fields", () => {
   assert.equal(direct.payload.content, "hello");
   assert.equal(assertTransferEnvelope(direct), direct);
 
-  const attachmentIdentity = identity({ transferId: "t-attachment", messageId: "m-attachment" });
+  const attachmentIdentity = identity({
+    transferId: "t-attachment",
+    presentationMessageId: "m-attachment",
+  });
   const attachment = attachmentTransfer({
     transferId: attachmentIdentity.transferId,
-    messageId: attachmentIdentity.messageId,
+    presentationMessageId: attachmentIdentity.presentationMessageId,
     identity: attachmentIdentity,
     direction: "output",
     attachments: [

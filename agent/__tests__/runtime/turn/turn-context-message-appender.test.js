@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
+import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
 
 import { appendTurnContextControlMessage } from "../../../src/runtime/turn/turn-context-message-appender.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
@@ -37,7 +38,7 @@ for (const internalType of [
       content: "control prompt",
       internalType,
     });
-    assert.equal(isInjectedMessage(persisted), true);
+    assert.equal(isInjectedSessionMessageRecord(persisted), true);
     assert.equal(persisted.injectedMessageType, internalType);
     const modelMessage = loopState.modelContext.messageBlocks.incremental.at(-1);
     assert.equal(isInjectedMessage(modelMessage), true);

@@ -20,6 +20,8 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
@@ -198,6 +200,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         turnTasks: [{ taskId: "task-1", taskStatus: "completed" }],
         turnMessages: [
           {
+            messageUid: "sm_closure-tool-call",
             messageId: "closure-tool-call",
             role: "assistant",
             type: "tool_call",
@@ -210,6 +213,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             ],
           },
           {
+            messageUid: "sm_closure-tool-result",
             messageId: "closure-tool-result",
             role: "tool",
             type: "tool_result",
@@ -217,6 +221,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             content: '{"ok":true,"modelAlias":"anthropic"}',
           },
           {
+            messageUid: "sm_closure-assistant-message",
             messageId: "closure-assistant-message",
             role: "assistant",
             type: "message",
@@ -297,11 +302,16 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
               userId: "u1",
               rootSessionId: acceptedTurn.sessionId,
               runId: "r-1",
-              messageId: "m-1",
+              presentationMessageId: "m-1",
             },
             messageBlocks: {
               system: ["[PROMPT_PATCHED] 你现在处于审计模式"],
-              history: [{ role: "user", content: "历史记录" }],
+              history: [
+                writeContextMessageMetadata(
+                  { role: "user", content: "历史记录" },
+                  { messageUid: createMessageUid() },
+                ),
+              ],
               incremental: [],
             },
             tools: [
@@ -536,6 +546,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       turnTasks: [],
       turnMessages: [
         {
+          messageUid: "sm_continue-assistant-message",
           messageId: "continue-assistant-message",
           role: "assistant",
           type: "message",
@@ -565,7 +576,7 @@ test("continue mode closed-loop: should build continue context and persist paren
             dialogProcessId,
             turnScopeId: runConfig.turnScopeId,
             runId: "r-1",
-            messageId: "m-1",
+            presentationMessageId: "m-1",
           },
           messageBlocks: { system: ["initial"], history: [], incremental: [] },
         },
@@ -588,11 +599,16 @@ test("continue mode closed-loop: should build continue context and persist paren
             dialogProcessId,
             turnScopeId: runConfig.turnScopeId,
             runId: "r-1",
-            messageId: "m-1",
+            presentationMessageId: "m-1",
           },
           messageBlocks: {
             system: ["continue prompt"],
-            history: [{ role: "user", content: "history" }],
+            history: [
+              writeContextMessageMetadata(
+                { role: "user", content: "history" },
+                { messageUid: createMessageUid() },
+              ),
+            ],
             incremental: [],
           },
           tools: [{ name: "task_summary" }],

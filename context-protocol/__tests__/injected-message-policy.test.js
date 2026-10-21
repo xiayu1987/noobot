@@ -24,12 +24,12 @@ test("internal message type uses the context protocol field codec", () => {
   );
 });
 
-test("internal message type reads the canonical Session entity field", () => {
+test("internal message type is read only from additional_kwargs", () => {
   assert.equal(
     resolveContextInternalMessageType({
       noobotInternalMessageType: "noobot.phase_summary_prompt",
     }),
-    "noobot.phase_summary_prompt",
+    "",
   );
 });
 
@@ -51,12 +51,16 @@ test("only checkpoint control messages participate in summary checkpoint policy"
 
 test("injected and plugin message flags resolve through the context protocol", async () => {
   const { isInjectedMessage, isInjectedOrPluginMessage } = await import("../src/policy/message.js");
-  assert.equal(isInjectedMessage({ injectedMessage: true }), true);
-  assert.equal(isInjectedMessage({ injectedBy: "harness-plugin" }), true);
-  assert.equal(isInjectedMessage({ additional_kwargs: { injectedMessage: true } }), true);
-  assert.equal(isInjectedOrPluginMessage({ pluginMessage: true }), true);
-  assert.equal(isInjectedOrPluginMessage({ additional_kwargs: { pluginMessage: true } }), true);
-  assert.equal(isInjectedOrPluginMessage({ injectedMessage: true }), true);
+  const ctx = (metadata) => ({ role: "user", content: "x", additional_kwargs: metadata });
+  assert.equal(isInjectedMessage(ctx({ injectedMessage: true, injectedMessageType: "t" })), true);
+
+  assert.equal(isInjectedMessage(ctx({ injectedBy: "harness-plugin" })), false);
+  assert.equal(isInjectedMessage({ role: "user", content: "x", injectedMessage: true }), false);
+  assert.equal(isInjectedOrPluginMessage(ctx({ pluginMessage: true })), true);
+  assert.equal(
+    isInjectedOrPluginMessage(ctx({ injectedMessage: true, injectedMessageType: "t" })),
+    true,
+  );
   assert.equal(isInjectedOrPluginMessage({ role: "user", content: "hi" }), false);
-  assert.equal(isInjectedOrPluginMessage({ pluginMessage: false }), false);
+  assert.equal(isInjectedOrPluginMessage(ctx({ pluginMessage: false })), false);
 });

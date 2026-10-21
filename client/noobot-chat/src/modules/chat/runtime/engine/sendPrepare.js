@@ -74,7 +74,7 @@ export function prepareChatSend({
   messageText = "",
   turnScopeId = "",
   userMessageId = "",
-  assistantMessageId = "",
+  presentationMessageId = "",
   reuseExistingUserTurn = false,
   attachmentFiles = null,
   userAttachments = null,
@@ -116,7 +116,7 @@ export function prepareChatSend({
   });
   applySessionTitleFromText({ activeSession, translate, text: normalizedText });
 
-  const botMessage = upsertCanonicalAssistantMessage(assistantMessageId, {
+  const botMessage = upsertCanonicalAssistantMessage(presentationMessageId, {
     sessionId,
     turnScopeId: normalizedTurnScopeId,
   });

@@ -16,7 +16,6 @@ export function snapshotTurn(turn = {}) {
   return {
     ...executionIdentity,
     turnScopeId: canonicalizeTurnScopeId(turn.turnScopeId),
-    messageId: clean(turn.messageId),
     presentationMessageId: clean(turn.presentationMessageId),
     dialogProcessId: clean(turn.dialogProcessId),
     commandId: clean(turn.commandId),

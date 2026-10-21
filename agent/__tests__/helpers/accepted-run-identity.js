@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  createAssistantMessageEventId,
-  deriveAgentExecutionId,
-  EXECUTION_KIND,
-} from "@noobot/session-protocol";
+import { deriveAgentExecutionId, EXECUTION_KIND } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 
 export function createAcceptedRunIdentity(turnScopeId, overrides = {}) {
@@ -17,7 +13,6 @@ export function createAcceptedRunIdentity(turnScopeId, overrides = {}) {
   const presentationMessageId = overrides.presentationMessageId ?? `msg_assistant_${scopeId}`;
   return {
     presentationMessageId,
-    messageId: createAssistantMessageEventId(presentationMessageId),
     userMessageId: `msg_user_${scopeId}`,
     commandId: `cmd_${scopeId}`,
     executionId,

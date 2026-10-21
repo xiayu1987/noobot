@@ -13,35 +13,34 @@ export function createCanonicalMessageEventSessionManager({
   producerId = "agent-test-fixture",
   occurredAt = "2026-05-21T00:00:00.000Z",
 } = {}) {
-  const sequencesByMessageId = new Map();
+  const sequencesByScopeId = new Map();
 
   return {
     async commitMessageEvent({
       sessionId,
       turnScopeId,
-      messageId,
       commandId,
       causationId,
       correlationId,
       payload,
     }) {
-      const sequence = (sequencesByMessageId.get(messageId) || 0) + 1;
-      sequencesByMessageId.set(messageId, sequence);
+      const scopeId = payload?.presentationMessageId;
+      const sequence = (sequencesByScopeId.get(scopeId) || 0) + 1;
+      sequencesByScopeId.set(scopeId, sequence);
       return {
         committed: true,
         envelope: createEventEnvelope({
           family: EVENT_FAMILY.MESSAGE_TIMELINE,
           identity: {
-            eventId: `${producerId}:${messageId}:${sequence}`,
+            eventId: `${producerId}:${scopeId}:${sequence}`,
             eventType: MESSAGE_EVENT_WIRE_EVENT,
             sessionId,
             turnScopeId,
-            messageId,
           },
           causality: { commandId, causationId, correlationId },
           ordering: {
             domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-            scopeId: messageId,
+            scopeId,
             sequence,
           },
           producer: { type: "test", id: producerId },

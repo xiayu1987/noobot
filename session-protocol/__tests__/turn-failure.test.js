@@ -45,7 +45,6 @@ test("FAILED envelope phase is read only from the top-level field", () => {
     eventId: "e1",
     sessionId: "s1",
     turnScopeId: "turn:t1",
-    messageId: "m1",
     presentationMessageId: "p1",
     revision: 1,
     sequence: 1,

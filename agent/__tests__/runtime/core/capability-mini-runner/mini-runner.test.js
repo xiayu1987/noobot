@@ -104,7 +104,7 @@ function createContext({
     sessionManager,
     runConfig: {
       streaming,
-      messageId: "message-test",
+      presentationMessageId: "presentation-test",
       turnScopeId: "turn-test",
       executionId: "agent:turn-test",
     },
@@ -127,7 +127,7 @@ function createContext({
           dialogProcessId: "dialog-test",
           turnScopeId: "turn-test",
           runId: "agent:turn-test",
-          messageId: "message-test",
+          presentationMessageId: "presentation-test",
           rootSessionId: "session-test",
           parentSessionId: "",
         },
@@ -334,7 +334,6 @@ test("mini-runner enforces the configured tool-turn limit and finalizes through 
 
 function bindPresentation(runtime) {
   bindAssistantMessageEventStream(runtime, {
-    messageId: "message-test",
     presentationMessageId: "presentation-test",
     parentSessionId: "",
   });

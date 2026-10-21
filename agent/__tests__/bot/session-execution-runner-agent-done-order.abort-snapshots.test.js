@@ -7,6 +7,12 @@ import test from "node:test";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createModelContext } from "@noobot/context-protocol";
 import {
+  readContextMessageValue,
+  resolveContextMessageId,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import {
   assert,
   fs,
   os,
@@ -122,13 +128,19 @@ test("runSession persists stopped model message snapshot from runtime candidate 
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       messages: [
-        { type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+        writeContextMessageMetadata(
+          { type: "human", content: "hello" },
+          { dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+        ),
       ],
       messageBlocks: {
         system: [{ type: "system", content: "system" }],
         history: [],
         incremental: [
-          { type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+          writeContextMessageMetadata(
+            { type: "human", content: "hello" },
+            { dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+          ),
         ],
       },
     },
@@ -314,13 +326,12 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
     agentRunner: async () => {
       abortController.abort({ type: "user_stop", reason: "user stop action" });
       await new Promise((resolve) => setImmediate(resolve));
-      runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.push({
-        type: "human",
-        role: "user",
-        content: "terminal hook injection after stop signal",
-        injectedMessage: true,
-        injectedMessageType: "separate_model_relay:guidance",
-      });
+      runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.push(
+        writeContextMessageMetadata(
+          { type: "human", role: "user", content: "terminal hook injection after stop signal" },
+          { injectedMessage: true, injectedMessageType: "separate_model_relay:guidance" },
+        ),
+      );
       throw abortError;
     },
     finalizeRunSession: async () => ({ ok: true }),
@@ -349,8 +360,11 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   });
   assert.equal(loaded.messages[0].content, "system");
   assert.equal(loaded.messages.at(-1).content, "terminal hook injection after stop signal");
-  assert.equal(loaded.messages.at(-1).injectedMessage, true);
-  assert.equal(loaded.messages.at(-1).injectedMessageType, "separate_model_relay:guidance");
+  assert.equal(readContextMessageValue(loaded.messages.at(-1), "injectedMessage"), true);
+  assert.equal(
+    readContextMessageValue(loaded.messages.at(-1), "injectedMessageType"),
+    "separate_model_relay:guidance",
+  );
   const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
   assert.equal(savedEvent?.data?.source, "runner_user_stop_catch");
   const stoppedEvent = findStoppedLifecycleEvent(events);
@@ -376,9 +390,19 @@ test("runSession drains accepted user interjections before sealing the stopped s
       turnScopeId: "turn-stop-interjection",
     },
     messageBlocks: {
-      system: [{ type: "system", content: "system" }],
+      system: [
+        writeContextMessageMetadata(
+          { type: "system", content: "system" },
+          { messageUid: createMessageUid() },
+        ),
+      ],
       history: [],
-      incremental: [{ type: "human", content: "hello" }],
+      incremental: [
+        writeContextMessageMetadata(
+          { type: "human", content: "hello" },
+          { messageUid: createMessageUid() },
+        ),
+      ],
     },
   });
   const runtime = Object.assign(createTestRuntimeContext(), {
@@ -446,10 +470,15 @@ test("runSession drains accepted user interjections before sealing the stopped s
     identity,
   });
   const restoredInterjections = loaded.messageBlocks.incremental.filter(
-    (message) => message.injectedMessageType === "noobot.user_interjection",
+    (message) =>
+      readContextMessageValue(message, "injectedMessageType") === "noobot.user_interjection",
   );
   assert.deepEqual(
-    restoredInterjections.map((message) => [message.content, message.messageUid, message.type]),
+    restoredInterjections.map((message) => [
+      message.content,
+      resolveContextMessageId(message),
+      message.type,
+    ]),
     [
       ["first interjection", "user-interjection:interjection-command-1", "human"],
       ["second interjection", "user-interjection:interjection-command-2", "human"],

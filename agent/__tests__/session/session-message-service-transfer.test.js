@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -55,9 +56,9 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
   });
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer:message-att-1:tool:call-att-1:output:tool_result_text:structured",
-    messageId: "message-att-1",
+    presentationMessageId: "message-att-1",
     identity: {
       sessionId: "s1",
       turnScopeId: "turn-att-1",

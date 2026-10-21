@@ -339,13 +339,6 @@ test("accepted Turn message identities are immutable", async () => {
     }),
   );
   assert.equal(accepted.applied, true);
-  const messageConflict = await h.service.applyTurnLifecycleEvent(
-    event(TURN_EVENT.PROCESSING_STARTED, "identity-message-conflict", 1, {
-      phase: TURN_PHASE.PROCESSING,
-      messageId: "other-message",
-    }),
-  );
-  assert.equal(messageConflict.reason, "turn_message_identity_conflict");
   const presentationConflict = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_STARTED, "identity-presentation-conflict", 1, {
       phase: TURN_PHASE.PROCESSING,

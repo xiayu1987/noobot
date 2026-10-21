@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -130,7 +130,8 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
       {
         role: "assistant",
         content: "done",
-        additional_kwargs: { noobotMessageId: "message-1" },
+
+        messageId: "message-1",
       },
     ],
   });
@@ -271,9 +272,9 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            version: 2,
+            version: TRANSFER_VERSION,
             transferId: "transfer-tool-1",
-            messageId: "message-tool-1",
+            presentationMessageId: "message-tool-1",
             identity: {
               sessionId: "s1",
               turnScopeId: "t1",
@@ -313,9 +314,9 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
   const persister = new SessionTurnPersister({ session });
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer-final",
-    messageId: "message-final",
+    presentationMessageId: "message-final",
     identity: {
       sessionId: "s1",
       turnScopeId: "t1",

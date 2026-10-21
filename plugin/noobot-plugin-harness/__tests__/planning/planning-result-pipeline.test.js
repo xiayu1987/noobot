@@ -5,12 +5,17 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
 
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
 import { LOCALE } from "../../src/capabilities/handlers/shared/index.js";
 import { processPlanningResult } from "../../src/capabilities/handlers/planning/result-pipeline.js";
 import { replaceMessages } from "../../src/core/message-store.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import {
+  readContextMessageField,
+  resolveContextInjectedMessageType,
+} from "@noobot/context-protocol/message/codec";
 
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 
@@ -185,7 +190,7 @@ test("planning result pipeline extracts current task goal from planning text pro
     dialogProcessId: "planning-dp",
     turnScopeId: "test-turn:planning-dp",
   };
-  replaceMessages(ctx, [{ role: "user", content: "开始任务" }]);
+  replaceMessages(ctx, [canonicalizeTestContextMessage({ role: "user", content: "开始任务" })]);
   const persisted = [];
   ctx.agentContext.bindings.runtime.currentTurnMessages = {
     push(message) {
@@ -214,20 +219,20 @@ test("planning result pipeline extracts current task goal from planning text pro
     "由计划模型确认的当前任务目标",
   );
   const injectedGoalMessage = ctx.modelContext.messages.find(
-    (item = {}) => String(item?.injectedMessageType || "") === "planning_current_task_goal",
+    (item = {}) => resolveContextInjectedMessageType(item) === "planning_current_task_goal",
   );
   assert.equal(injectedGoalMessage?.role, "system");
-  assert.equal(injectedGoalMessage?.injectedMessage, true);
-  assert.equal(injectedGoalMessage?.injectedBy, "harness-plugin");
-  assert.equal(injectedGoalMessage?.dialogProcessId, "planning-dp");
-  assert.ok(injectedGoalMessage?.additional_kwargs?.noobotMessageId);
+  assert.equal(injectedGoalMessage?.additional_kwargs?.injectedMessage, true);
+  assert.equal(readContextMessageField(injectedGoalMessage, "injectedBy"), "harness-plugin");
+  assert.equal(readContextMessageField(injectedGoalMessage, "dialogProcessId"), "planning-dp");
+  assert.ok(injectedGoalMessage?.additional_kwargs?.messageUid);
   assert.equal(ctx.modelContext.messageBlocks.system.includes(injectedGoalMessage), true);
   assert.equal(ctx.modelContext.messageBlocks.incremental.includes(injectedGoalMessage), false);
   assert.match(String(injectedGoalMessage?.content || ""), /\[CURRENT_TASK_GOAL\]/);
   assert.match(String(injectedGoalMessage?.content || ""), /由计划模型确认的当前任务目标/);
   assert.equal(
     persisted.some(
-      (item = {}) => String(item?.injectedMessageType || "") === "planning_current_task_goal",
+      (item = {}) => resolveContextInjectedMessageType(item) === "planning_current_task_goal",
     ),
     false,
   );
@@ -239,6 +244,33 @@ test("planning result pipeline extracts current task goal from planning text pro
     String(ctx.agentContext.bindings.extensions.harness.planText || ""),
     /CURRENT_TASK_GOAL/,
   );
+});
+
+test("planning result pipeline replaces the previous current task goal injection", async () => {
+  const ctx = createCtx();
+  ctx.dialogProcessId = "planning-dp";
+  ctx.modelContext.activeTurnIdentity = {
+    dialogProcessId: "planning-dp",
+    turnScopeId: "test-turn:planning-dp",
+  };
+  replaceMessages(ctx, [canonicalizeTestContextMessage({ role: "user", content: "开始任务" })]);
+  for (const goal of ["第一次确认的目标", "第二次确认的目标"]) {
+    await processPlanningResult(
+      ctx,
+      {},
+      {
+        source: "separate_model",
+        rawText: ["[CURRENT_TASK_GOAL]", goal, "[PLAN]", "ADD [1] 执行核心任务"].join("\n"),
+        locale: LOCALE.ZH_CN,
+      },
+    );
+  }
+  const goalMessages = ctx.modelContext.messages.filter(
+    (item = {}) => resolveContextInjectedMessageType(item) === "planning_current_task_goal",
+  );
+
+  assert.equal(goalMessages.length, 1);
+  assert.match(String(goalMessages[0].content || ""), /第二次确认的目标/);
 });
 
 test("planning result pipeline schedules retry when payload has no main plan", async () => {

@@ -14,6 +14,7 @@ import {
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
 import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { readContextMessageField } from "@noobot/context-protocol/message/codec";
 
 function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
@@ -214,8 +215,8 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
-        item.injectedMessage === true &&
-        String(item.injectedBy || "") === "harness-plugin" &&
+        item.additional_kwargs?.injectedMessage === true &&
+        readContextMessageField(item, "injectedBy") === "harness-plugin" &&
         String(item.role || "") === "user" &&
         String(item.content || "").includes("acceptance_semantic_validation"),
     ),

@@ -16,7 +16,7 @@ import {
 
 function context(message, id) {
   return declareAuxiliarySequenceIdentity(
-    { ...message, messageUid: id },
+    { ...message },
     {
       kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
       key: id,
@@ -143,20 +143,21 @@ test("auxiliary sequence rebuilds only from the authoritative context after chec
   );
 });
 
-test("auxiliary sequence rejects Context messages without canonical identity", () => {
-  const unidentified = declareAuxiliarySequenceIdentity(
-    { role: "user", content: "fact" },
-    {
-      kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
-      key: "claimed",
-    },
+test("auxiliary sequence rejects Context messages without a declared identity key", () => {
+  assert.throws(
+    () =>
+      declareAuxiliarySequenceIdentity(
+        { role: "user", content: "fact" },
+        { kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT },
+      ),
+    /auxiliary context message identity key is required/,
   );
   assert.throws(
     () =>
       advanceAuxiliaryModelContext({
-        currentContext: current(0, { history: [unidentified] }),
+        currentContext: current(0, { history: [{ role: "user", content: "fact" }] }),
       }),
-    /canonical messageUid\/noobotMessageId/,
+    /context or stable protocol identity/,
   );
 });
 

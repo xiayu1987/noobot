@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { HOOK_POINT, HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { buildHookContext } from "../../../src/runtime/hooks/hook-context-builder.js";
 
@@ -14,8 +16,18 @@ test("before_final_output retains the supplied authoritative modelContext entity
   const modelContext = createModelContext({
     messageBlocks: {
       system: [],
-      history: [{ role: "user", content: "history" }],
-      incremental: [{ role: "assistant", content: "final" }],
+      history: [
+        writeContextMessageMetadata(
+          { role: "user", content: "history" },
+          { messageUid: createMessageUid() },
+        ),
+      ],
+      incremental: [
+        writeContextMessageMetadata(
+          { role: "assistant", content: "final" },
+          { messageUid: createMessageUid() },
+        ),
+      ],
     },
   });
   const context = buildHookContext(
@@ -44,7 +56,12 @@ test("non-model hook context uses the canonical runtime turn identity and diagno
     messageBlocks: {
       system: [],
       history: [],
-      incremental: [{ role: "user", content: "active turn" }],
+      incremental: [
+        writeContextMessageMetadata(
+          { role: "user", content: "active turn" },
+          { messageUid: createMessageUid() },
+        ),
+      ],
     },
   });
   const runtime = {

@@ -64,10 +64,6 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
         /export\s+function\s+buildCanonicalMessageBlocks\b/,
       ],
       [
-        "owns snapshot history grouping identity",
-        /export\s+function\s+createHistoryRoundIdentityResolver\b/,
-      ],
-      [
         "owns current-turn history exclusion",
         /export\s+function\s+filterCurrentTurnMessagesFromHistory\b/,
       ],
@@ -102,11 +98,7 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
     required: [
       [
         "persisted message uid owns canonical entity identity",
-        /export\s+function\s+resolveContextMessageId[\s\S]*?const\s+persistedMessageUid\s*=\s*text\(message\?\.messageUid\)[\s\S]*?return\s+canonicalMessageId\s*\|\|\s*persistedMessageUid/,
-      ],
-      [
-        "persisted and context identities cannot diverge",
-        /canonicalMessageId\s*&&\s*persistedMessageUid\s*&&\s*canonicalMessageId\s*!==\s*persistedMessageUid[\s\S]*?persisted messageUid conflicts with canonical noobotMessageId/,
+        /export\s+function\s+resolveContextMessageId\(message = \{\}\) \{\s*return readContextMessageField\(message, "messageUid"\);\s*\}/,
       ],
       [
         "owns tool-call declaration identity",
@@ -139,7 +131,7 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
       ],
       [
         "terminal projection derives a stable explanation identity",
-        /`\$\{status\.turnScopeId\}::terminal_status`/,
+        /deriveContextMessageProjectionId\(\s*status\.turnScopeId,\s*CONTEXT_MESSAGE_PROJECTION_TYPE\.TERMINAL_STATUS,?\s*\)/,
       ],
     ],
   },
@@ -163,10 +155,6 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
   {
     file: "context-protocol/src/message/store.js",
     required: [
-      [
-        "message-store bumps next id for hydrated ids",
-        /function\s+bumpNextMessageId[\s\S]*?match\(\s*\/\^am_\(\[0-9a-z\]\+\)\$\/i\s*\)[\s\S]*?store\.nextId\s*=\s*numeric\s*\+\s*1/,
-      ],
       [
         "replaceMessages only replaces flat view",
         /export\s+function\s+replaceMessages[\s\S]*?holder\.messages\.splice\(0,\s*holder\.messages\.length,\s*\.\.\.canonicalMessages\)[\s\S]*?return\s+holder\.messages/,

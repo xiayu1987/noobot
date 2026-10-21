@@ -37,7 +37,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
         dialogProcessId: "dp1",
         turnScopeId: "t1",
         runId: "r1",
-        messageId: "m1",
+        presentationMessageId: "m1",
       },
       environment: {
         os: { platform: "linux", arch: "x64", timezone: "UTC", nodeVersion: "v0" },

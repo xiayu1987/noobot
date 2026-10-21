@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveContextMessageId } from "../message/codec.js";
 import { text, isPlainObject } from "@noobot/shared/value";
 
 export const AUXILIARY_SEQUENCE_IDENTITY_FIELD = "noobotAuxiliarySequenceIdentity";
@@ -29,14 +28,6 @@ function cloneMessage(message = {}) {
     cloned.tool_calls = message.tool_calls.map((item) =>
       item && typeof item === "object" ? { ...item } : item,
     );
-  }
-  const canonicalId = resolveContextMessageId(message);
-  if (canonicalId && !resolveContextMessageId(cloned)) {
-    Object.defineProperty(cloned, "noobotMessageId", {
-      value: canonicalId,
-      enumerable: false,
-      configurable: true,
-    });
   }
   const identity = resolveAuxiliarySequenceIdentity(message);
   if (identity) declareAuxiliarySequenceIdentity(cloned, identity);
@@ -86,14 +77,8 @@ function requireContextIdentity(message = {}) {
   if (declared?.kind !== AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT) {
     throw new TypeError("auxiliary Context message requires declared context identity");
   }
-  const canonicalId = resolveContextMessageId(message);
-  if (!canonicalId) {
-    throw new TypeError("auxiliary Context message requires canonical messageUid/noobotMessageId");
-  }
-  if (declared.key !== canonicalId) {
-    throw new TypeError("auxiliary Context message identity conflicts with canonical message id");
-  }
-  return canonicalId;
+
+  return declared.key;
 }
 
 function validateCurrentContext(current = {}) {
@@ -185,8 +170,6 @@ export function projectAuxiliaryMessagesForProvider(messages = []) {
   return (Array.isArray(messages) ? messages : []).map((message) => {
     const cloned = cloneMessage(message);
     delete cloned[AUXILIARY_SEQUENCE_IDENTITY_FIELD];
-    delete cloned.messageUid;
-    delete cloned.noobotMessageId;
     return cloned;
   });
 }

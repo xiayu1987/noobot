@@ -5,6 +5,10 @@
  */
 import { randomUUID } from "node:crypto";
 import {
+  createPresentationMessageId,
+  createUserMessageId,
+} from "@noobot/context-protocol/message/message-identity";
+import {
   AGENT_COMMAND,
   createInteractionResponseCommand,
   createTurnRunCommand,
@@ -34,8 +38,8 @@ export function createCliTurnIdentity({ sessionId = "" } = {}) {
   return {
     sessionId: sessionId || randomUUID(),
     turnScopeId: `cli-turn:${randomUUID()}`,
-    userMessageId: `msg_${randomUUID()}`,
-    assistantMessageId: `msg_${randomUUID()}`,
+    userMessageId: createUserMessageId(),
+    presentationMessageId: createPresentationMessageId(),
   };
 }
 
@@ -54,7 +58,7 @@ export function buildRunCommand({
     preferences: invocation.preferences,
     presentation: {
       userMessageId: identity.userMessageId,
-      assistantMessageId: identity.assistantMessageId,
+      presentationMessageId: identity.presentationMessageId,
     },
     concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: aggregateVersion },
     session: {

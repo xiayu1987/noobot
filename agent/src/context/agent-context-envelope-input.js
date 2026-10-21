@@ -27,7 +27,7 @@ export function createAgentContextEnvelopeInput({
       dialogProcessId: identity.dialogProcessId,
       turnScopeId: runConfig.turnScopeId,
       runId: runConfig.executionId,
-      messageId: runConfig.messageId,
+      presentationMessageId: runConfig.presentationMessageId,
     },
     environment: {
       os: {

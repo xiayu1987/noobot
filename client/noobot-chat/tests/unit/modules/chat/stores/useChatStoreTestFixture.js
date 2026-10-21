@@ -33,7 +33,6 @@ export function applySessionSnapshot(store, sessionDoc) {
 export function createSubSessionEvent(overrides = {}) {
   const { sequence = 1, ...eventOverrides } = overrides;
   const eventType = overrides.eventType || "llm_delta";
-  const messageId = overrides.messageId || "msg-assistant-1";
   return canonicalMessageEvent({
     sessionId: "sub-session-1",
     parentSessionId: "main-session-1",
@@ -44,8 +43,7 @@ export function createSubSessionEvent(overrides = {}) {
     sequence: sequence + 1,
     revision: 1,
     eventId: "event-1",
-    messageId,
-    presentationMessageId: overrides.presentationMessageId || messageId,
+    presentationMessageId: "msg-assistant-1",
     eventType,
     occurredAt: "2026-01-01T00:00:00.000Z",
     ...(eventType === "llm_delta"
@@ -58,7 +56,7 @@ export function createSubSessionEvent(overrides = {}) {
 export function commitPresentation(store, identity = {}) {
   const sessionId = identity.sessionId || "sub-session-1";
   const turnScopeId = identity.turnScopeId || "turn-1";
-  const assistantMessageId = identity.messageId || "msg-assistant-1";
+  const presentationMessageId = identity.presentationMessageId || "msg-assistant-1";
   return applyMessageEvent(
     store,
     canonicalMessageEvent({
@@ -70,9 +68,8 @@ export function commitPresentation(store, identity = {}) {
       nodeExecutionId: identity.nodeExecutionId || "node-1",
       sequence: 1,
       revision: 1,
-      eventId: `${turnScopeId}:${assistantMessageId}:presentation`,
-      messageId: assistantMessageId,
-      presentationMessageId: assistantMessageId,
+      eventId: `${turnScopeId}:${presentationMessageId}:presentation`,
+      presentationMessageId,
       eventType: "turn_presentation_committed",
       presentation: {
         userMessage: {
@@ -85,9 +82,8 @@ export function commitPresentation(store, identity = {}) {
           attachments: [],
         },
         assistantMessage: {
-          id: assistantMessageId,
-          messageId: assistantMessageId,
-          presentationMessageId: assistantMessageId,
+          id: presentationMessageId,
+          presentationMessageId,
           role: "assistant",
           sessionId,
           turnScopeId,

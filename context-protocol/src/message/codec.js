@@ -12,16 +12,85 @@ export const CONTEXT_MESSAGE_ROLE = Object.freeze({
   TOOL: "tool",
 });
 
-export function readContextMessageField(message = {}, field = "") {
+export const CONTEXT_MESSAGE_METADATA_KEY = "additional_kwargs";
+
+export const CONTEXT_MESSAGE_NATIVE_FIELDS = Object.freeze([
+  "type",
+  "role",
+  "content",
+  CONTEXT_MESSAGE_METADATA_KEY,
+  "id",
+  "name",
+  "tool_calls",
+  "invalid_tool_calls",
+  "tool_call_id",
+  "status",
+  "artifact",
+  "response_metadata",
+  "usage_metadata",
+
+  "metadata",
+]);
+
+function readContextMessageMetadata(message = {}) {
+  const metadata = isObjectLike(message) ? message[CONTEXT_MESSAGE_METADATA_KEY] : null;
+  return isObjectLike(metadata) ? metadata : {};
+}
+
+export function readContextMessageValue(message = {}, field = "") {
   const key = text(field);
-  if (!key || !isObjectLike(message)) return "";
-  return text(
-    message?.[key] ??
-      message?.additional_kwargs?.[key] ??
-      message?.lc_kwargs?.[key] ??
-      message?.lc_kwargs?.additional_kwargs?.[key] ??
-      "",
-  );
+  if (!key) return undefined;
+  return readContextMessageMetadata(message)[key];
+}
+
+export function readContextMessageField(message = {}, field = "") {
+  return text(readContextMessageValue(message, field) ?? "");
+}
+
+function readContextMessageFlag(message = {}, field = "") {
+  return readContextMessageMetadata(message)[field] === true;
+}
+
+export function writeContextMessageMetadata(message = {}, patch = {}) {
+  if (!isObjectLike(message)) {
+    throw new TypeError("context message must be an object");
+  }
+  if (!isObjectLike(patch)) {
+    throw new TypeError("context message metadata patch must be an object");
+  }
+  if (!isObjectLike(message[CONTEXT_MESSAGE_METADATA_KEY])) {
+    message[CONTEXT_MESSAGE_METADATA_KEY] = {};
+  }
+  const metadata = message[CONTEXT_MESSAGE_METADATA_KEY];
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete metadata[key];
+    else metadata[key] = value;
+  }
+  assertContextMessageInjectionMetadata(message);
+  return message;
+}
+
+export function withContextMessageMetadata(message = {}, patch = {}) {
+  if (!isObjectLike(message)) {
+    throw new TypeError("context message must be an object");
+  }
+  const copy = {
+    ...message,
+    [CONTEXT_MESSAGE_METADATA_KEY]: { ...readContextMessageMetadata(message) },
+  };
+  return writeContextMessageMetadata(copy, patch);
+}
+
+export function assertContextMessageInjectionMetadata(message = {}) {
+  const metadata = readContextMessageMetadata(message);
+  const declaresInjection =
+    text(metadata.injectedMessageType) !== "" || text(metadata.injectedBy) !== "";
+  if (declaresInjection && metadata.injectedMessage !== true) {
+    throw new Error("injected context message requires additional_kwargs.injectedMessage");
+  }
+  if (metadata.injectedMessage === true && !text(metadata.injectedMessageType)) {
+    throw new Error("injected context message requires additional_kwargs.injectedMessageType");
+  }
 }
 
 const CONTEXT_MESSAGE_ROLE_ALIASES = Object.freeze({
@@ -36,11 +105,7 @@ const CONTEXT_MESSAGE_ROLE_ALIASES = Object.freeze({
 });
 
 export function readDeclaredContextMessageRole(message = {}) {
-  return text(message?.role || message?.lc_kwargs?.role).toLowerCase();
-}
-
-function readDeclaredContextMessageType(message = {}) {
-  return text(message?.type || message?.lc_kwargs?.type || "").toLowerCase();
+  return text(message?.role || message?.type).toLowerCase();
 }
 
 export function normalizeContextMessageRole(role = "") {
@@ -48,10 +113,7 @@ export function normalizeContextMessageRole(role = "") {
 }
 
 export function resolveContextMessageRole(message = {}) {
-  return (
-    normalizeContextMessageRole(readDeclaredContextMessageRole(message)) ||
-    normalizeContextMessageRole(readDeclaredContextMessageType(message))
-  );
+  return normalizeContextMessageRole(readDeclaredContextMessageRole(message));
 }
 
 export function isContextSystemMessage(message = {}) {
@@ -59,13 +121,14 @@ export function isContextSystemMessage(message = {}) {
 }
 
 export function resolveContextMessageId(message = {}) {
-  const canonicalMessageId = readContextMessageField(message, "noobotMessageId");
-  const persistedMessageUid = text(message?.messageUid);
-  if (canonicalMessageId && persistedMessageUid && canonicalMessageId !== persistedMessageUid) {
-    throw new Error("persisted messageUid conflicts with canonical noobotMessageId");
-  }
-  return canonicalMessageId || persistedMessageUid;
+  return readContextMessageField(message, "messageUid");
 }
+
+export const CONTEXT_MESSAGE_PROJECTION_TYPE = Object.freeze({
+  USER_META: "user_meta",
+  PHASE_SUMMARY: "phase_summary",
+  TERMINAL_STATUS: "terminal_status",
+});
 
 export function deriveContextMessageProjectionId(sourceMessageId = "", projectionType = "") {
   const sourceId = text(sourceMessageId);
@@ -82,12 +145,7 @@ export function resolveContextMessageOrigin(message = {}) {
 }
 
 export function resolveContextUserMetaMaterialized(message = {}) {
-  return (
-    message?.userMetaMaterialized === true ||
-    message?.additional_kwargs?.userMetaMaterialized === true ||
-    message?.lc_kwargs?.userMetaMaterialized === true ||
-    message?.lc_kwargs?.additional_kwargs?.userMetaMaterialized === true
-  );
+  return readContextMessageFlag(message, "userMetaMaterialized");
 }
 
 export function resolveContextMessageTurnScopeId(message = {}) {
@@ -95,7 +153,7 @@ export function resolveContextMessageTurnScopeId(message = {}) {
 }
 
 export function resolveContextMessageContent(message = {}) {
-  const content = message?.content ?? message?.lc_kwargs?.content ?? "";
+  const content = message?.content ?? "";
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
@@ -110,11 +168,7 @@ export function resolveContextMessageContent(message = {}) {
 }
 
 export function resolveContextToolCalls(message = {}) {
-  if (Array.isArray(message?.tool_calls)) return message.tool_calls;
-  if (Array.isArray(message?.lc_kwargs?.tool_calls)) return message.lc_kwargs.tool_calls;
-  if (Array.isArray(message?.additional_kwargs?.tool_calls))
-    return message.additional_kwargs.tool_calls;
-  return [];
+  return Array.isArray(message?.tool_calls) ? message.tool_calls : [];
 }
 
 export function resolveContextToolCallDeclarationId(call = {}) {
@@ -126,53 +180,49 @@ export function resolveContextToolResultCallId(message = {}) {
 }
 
 export function resolveContextMessageSummarized(message = {}) {
-  return (
-    message?.summarized === true ||
-    message?.lc_kwargs?.summarized === true ||
-    message?.additional_kwargs?.summarized === true ||
-    message?.lc_kwargs?.additional_kwargs?.summarized === true
-  );
+  return readContextMessageFlag(message, "summarized");
 }
 
 export function markContextMessageSummarized(message = {}) {
-  if (!isObjectLike(message)) return message;
-  message.summarized = true;
-  if (isObjectLike(message.lc_kwargs)) {
-    message.lc_kwargs.summarized = true;
-  }
-  return message;
+  return writeContextMessageMetadata(message, { summarized: true });
 }
 
 export function resolveContextMessageFlags(message = {}) {
   return {
     summarized: resolveContextMessageSummarized(message),
     naturalUser: resolveContextMessageOrigin(message) === "natural",
-    injected:
-      readContextMessageField(message, "injectedMessage").toLowerCase() === "true" ||
-      Boolean(readContextMessageField(message, "injectedBy")),
-    plugin: readContextMessageField(message, "pluginMessage").toLowerCase() === "true",
+    injected: readContextMessageFlag(message, "injectedMessage"),
+    plugin: readContextMessageFlag(message, "pluginMessage"),
   };
 }
 
-export function projectContextMessageIdentityMetadata(message = {}) {
-  const noobotMessageId = resolveContextMessageId(message);
-  const dialogProcessId = resolveContextMessageDialogProcessId(message);
-  const turnScopeId = resolveContextMessageTurnScopeId(message);
-  const parentDialogProcessId = readContextMessageField(message, "parentDialogProcessId");
-  const injectedBy = readContextMessageField(message, "injectedBy");
-  const injectedMessageType = readContextMessageField(message, "injectedMessageType");
-  const messageOrigin = readContextMessageField(message, "messageOrigin");
-  const userMetaMaterialized = resolveContextUserMetaMaterialized(message);
-  return {
-    ...(noobotMessageId ? { noobotMessageId } : {}),
-    ...(dialogProcessId ? { dialogProcessId } : {}),
-    ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
-    ...(turnScopeId ? { turnScopeId } : {}),
-    ...(messageOrigin ? { messageOrigin } : {}),
-    ...(userMetaMaterialized ? { userMetaMaterialized: true } : {}),
-    ...(message?.injectedMessage === true ? { injectedMessage: true } : {}),
-    ...(injectedBy ? { injectedBy } : {}),
-    ...(injectedMessageType ? { injectedMessageType } : {}),
-    ...(message?.pluginMessage === true ? { pluginMessage: true } : {}),
-  };
+export function resolveContextInjectedMessageType(message = {}) {
+  return readContextMessageFlag(message, "injectedMessage")
+    ? readContextMessageField(message, "injectedMessageType")
+    : "";
+}
+
+export const CONTEXT_MESSAGE_MODEL_METADATA_FIELDS = Object.freeze([
+  "messageUid",
+  "dialogProcessId",
+  "parentDialogProcessId",
+  "turnScopeId",
+  "messageOrigin",
+  "userMetaMaterialized",
+  "injectedMessage",
+  "injectedBy",
+  "injectedMessageType",
+  "pluginMessage",
+  "noobotInternalMessageType",
+]);
+
+export function projectContextMessageModelMetadata(message = {}) {
+  const metadata = readContextMessageMetadata(message);
+  const projected = {};
+  for (const key of CONTEXT_MESSAGE_MODEL_METADATA_FIELDS) {
+    const value = metadata[key];
+    if (value === undefined || value === null || value === "" || value === false) continue;
+    projected[key] = value;
+  }
+  return projected;
 }

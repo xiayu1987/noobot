@@ -5,6 +5,7 @@
  */
 
 import { isPlainObject, text } from "@noobot/shared/value";
+import { readContextMessageValue } from "../message/codec.js";
 
 const TOOL_SEMANTIC_CLASS = Object.freeze({
   FLOW_CONTROL: "flow_control",
@@ -40,16 +41,22 @@ function normalizeToolContextPolicy(value = null) {
 
 export function resolveToolContextPolicy(value = null) {
   if (!isPlainObject(value)) return null;
-  return normalizeToolContextPolicy(
-    value.contextPolicy || value.metadata?.contextPolicy || value.lc_kwargs?.contextPolicy,
-  );
+  return normalizeToolContextPolicy(value.contextPolicy);
 }
 
-export function hasFlowControlRole(value = null, role = "") {
-  return resolveToolContextPolicy(value)?.flowControlRole === text(role);
+export function resolveContextMessageContextPolicy(message = {}) {
+  return normalizeToolContextPolicy(readContextMessageValue(message, "contextPolicy"));
+}
+
+export function hasToolCallFlowControlRole(call = null, role = "") {
+  return resolveToolContextPolicy(call)?.flowControlRole === text(role);
+}
+
+export function hasContextMessageFlowControlRole(message = {}, role = "") {
+  return resolveContextMessageContextPolicy(message)?.flowControlRole === text(role);
 }
 
 export function projectToolContextPolicy(target = {}, source = null) {
-  const contextPolicy = resolveToolContextPolicy(source) || resolveToolContextPolicy(target);
+  const contextPolicy = resolveToolContextPolicy(source);
   return contextPolicy ? { ...target, contextPolicy } : target;
 }

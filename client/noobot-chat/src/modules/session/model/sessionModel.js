@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSecureUuid } from "../../../shared/identity/secureIdentity.js";
+import { createSecureUuid } from "@noobot/shared/secure-identity";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { messages } from "noobot-i18n/client/messages";
 import { nowIso } from "../../chat/model/timeFields.js";

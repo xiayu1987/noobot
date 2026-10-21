@@ -18,7 +18,6 @@ test("turn lifecycle commit rejects events without causationId", () => {
       userId: "user-1",
       sessionId: "session-1",
       turnScopeId: "turn-1",
-      messageId: "message-1",
       presentationMessageId: "presentation-1",
       action: "send",
       phase: TURN_PHASE.ACTION,

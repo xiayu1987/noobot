@@ -93,7 +93,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
         dialogProcessId: buildContextPayload.dialogProcessId,
         turnScopeId,
         runId: `agent:${turnScopeId}`,
-        messageId: buildContextPayload.runConfig.messageId,
+        presentationMessageId: buildContextPayload.runConfig.presentationMessageId,
       };
       const modelPort = {
         async invoke(request) {
@@ -123,7 +123,6 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
     message: "build workflow",
     turnScopeId: "turn-workflow-semantic",
     runConfig: {
-      messageId: "message-workflow-semantic",
       presentationMessageId: "presentation-workflow-semantic",
     },
     eventListener: { onEvent: (event) => events.push(event) },
@@ -136,7 +135,6 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
       item?.data?.envelope?.payload?.activityKind === "workflow_semantic",
   );
   const envelope = committedEvent?.data?.envelope;
-  assert.equal(envelope?.identity?.messageId, "message-workflow-semantic");
   assert.equal(envelope?.payload?.presentationMessageId, "presentation-workflow-semantic");
   assert.equal(envelope?.ordering?.sequence, 2);
   assert.equal(envelope?.protocol?.version, 3);
@@ -156,7 +154,7 @@ test("before-dispatch takeover can claim root processing before the hook complet
     await hookGate;
     return createBotDispatchHandled({
       owner: "test_takeover",
-      result: createCanonicalHandledResult(ctx, "hook result"),
+      result: createCanonicalHandledResult("hook result"),
     });
   });
   const runner = createRunner({ botHookManager });
@@ -193,7 +191,7 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
     );
     return createBotDispatchHandled({
       owner: "workflow",
-      result: createCanonicalHandledResult(ctx, "hook result"),
+      result: createCanonicalHandledResult("hook result"),
     });
   });
   const runner = createRunner({ botHookManager });
@@ -229,7 +227,7 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
     ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router" });
     return createBotDispatchHandled({
       owner: "workflow",
-      result: createCanonicalHandledResult(ctx, "workflow result"),
+      result: createCanonicalHandledResult("workflow result"),
     });
   });
   const runner = createRunner({

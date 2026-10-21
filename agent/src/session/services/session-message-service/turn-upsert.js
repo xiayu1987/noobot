@@ -7,10 +7,10 @@ import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
   normalizeDialogProcessId,
+  resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { createSessionMessageUid } from "../../../context/session/message-uid.js";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
@@ -125,13 +125,13 @@ function findCompositeIdentityIndex(messages, turn, dialogProcessId, turnScopeId
   return messages.findIndex(
     (message = {}) =>
       normalizedString(message?.messageId) === turn.messageId &&
-      resolveContextMessageDialogProcessId(message) === dialogProcessId &&
+      resolveSessionMessageRecordDialogProcessId(message) === dialogProcessId &&
       normalizedString(message?.turnScopeId) === turnScopeId,
   );
 }
 
 function findPersistedTurn(messages, turn) {
-  const dialogProcessId = resolveContextMessageDialogProcessId(turn);
+  const dialogProcessId = normalizeDialogProcessId(turn?.dialogProcessId);
   const turnScopeId = normalizedString(turn?.turnScopeId);
   const messageUid = normalizedString(turn.messageUid);
   const compositeIdentityIndex = findCompositeIdentityIndex(
@@ -161,7 +161,7 @@ function assertMessageIdentityMatch(identity, existing = null) {
   }
   if (!existing || !identity.messageUid) return;
   if (
-    resolveContextMessageDialogProcessId(existing) !== identity.dialogProcessId ||
+    resolveSessionMessageRecordDialogProcessId(existing) !== identity.dialogProcessId ||
     normalizedString(existing?.turnScopeId) !== identity.turnScopeId
   ) {
     throw createIdentityError(
@@ -176,7 +176,7 @@ function mergeExistingTurn(service, existing, turn, messageUid) {
     {
       ...existing,
       ...turn,
-      messageUid: existing.messageUid || messageUid || createSessionMessageUid(),
+      messageUid: existing.messageUid || messageUid || createMessageUid(),
       messageId: turn.messageId,
       ts: existing.ts || turn.ts,
     },
@@ -204,7 +204,7 @@ function persistTurn(service, messages, turn) {
     return persisted;
   }
   const persisted = normalizeMessageEntity(
-    { ...turn, messageUid: identity.messageUid || createSessionMessageUid() },
+    { ...turn, messageUid: identity.messageUid || createMessageUid() },
     service.now,
   );
   messages.push(persisted);
@@ -218,7 +218,7 @@ function resolveTimingField(input, field, fallbackField) {
 function updateSessionMetadata(service, session, turn, input) {
   upsertSessionTurnTiming(session, {
     turnScopeId: turn.turnScopeId,
-    dialogProcessId: resolveContextMessageDialogProcessId(turn),
+    dialogProcessId: normalizeDialogProcessId(turn?.dialogProcessId),
     thinkingStartedAt: resolveTimingField(
       input,
       "turnTimingThinkingStartedAt",

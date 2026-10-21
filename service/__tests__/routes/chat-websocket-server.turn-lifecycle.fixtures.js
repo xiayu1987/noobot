@@ -87,7 +87,6 @@ export function createTestLifecycleEnvelope({
       eventType: "turn_lifecycle",
       sessionId: payload.sessionId,
       turnScopeId: payload.turnScopeId,
-      messageId: payload.messageId,
       executionId: payload.executionId,
     },
     causality: {

@@ -14,6 +14,7 @@ import {
   createTestHookContext,
   getTestContextMessages,
 } from "../helpers/public-runtime-fixtures.js";
+import { resolveContextInjectedMessageType } from "@noobot/context-protocol/message/codec";
 
 function createRefinementInjectContext(planText) {
   const agentContext = createAgentContext({
@@ -28,7 +29,7 @@ function createRefinementInjectContext(planText) {
 }
 
 function injectedTypes(ctx) {
-  return getTestContextMessages(ctx).map((item = {}) => item.injectedMessageType);
+  return getTestContextMessages(ctx).map((item = {}) => resolveContextInjectedMessageType(item));
 }
 
 test("refinement inject converges when scheduled targets became stale and every main step is refined", () => {

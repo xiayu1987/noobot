@@ -35,29 +35,28 @@ export function canonicalMessageEvent({
   sessionId = "session-1",
   turnScopeId = "turn-1",
   dialogProcessId = "dialog-1",
-  messageId = `message-${sequence}`,
+  presentationMessageId = `message-${sequence}`,
   eventType = MESSAGE_EVENT_TYPE.THINKING,
   text = "content",
 } = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
     identity: {
-      eventId: `message-event:${messageId}:${sequence}`,
+      eventId: `message-event:${presentationMessageId}:${sequence}`,
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId,
       turnScopeId,
-      messageId,
     },
     causality: {},
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      scopeId: messageId,
+      scopeId: presentationMessageId,
       sequence,
       aggregateVersion: sequence,
     },
     producer: { type: "test", id: "agent-proxy-test" },
     occurredAt: "2026-08-17T00:00:00.000Z",
-    payload: { eventType, presentationMessageId: messageId, dialogProcessId, text },
+    payload: { eventType, presentationMessageId, dialogProcessId, text },
   });
 }
 

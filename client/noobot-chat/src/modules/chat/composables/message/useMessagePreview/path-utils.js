@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isAbsolutePathForPlatform } from "@noobot/path-resolver/syntax";
-import { createSecureId } from "../../../../../shared/identity/secureIdentity.js";
+import { createSecureId } from "@noobot/shared/secure-identity";
 import { text } from "@noobot/shared/value";
 
 export function parseContentDisposition(contentDisposition = "") {

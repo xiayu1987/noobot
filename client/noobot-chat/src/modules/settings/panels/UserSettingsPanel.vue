@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { createSecureUuid } from "../../../shared/identity/secureIdentity.js";
+import { createSecureUuid } from "@noobot/shared/secure-identity";
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { Plus, Refresh } from "@element-plus/icons-vue";

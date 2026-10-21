@@ -7,11 +7,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildCapabilityModelMessages } from "../../src/capabilities/handlers/shared/model/message-factory.js";
+import { contextMessage } from "../helpers/context-message.js";
 
 let sourceSequence = 0;
 function source(message = {}) {
   sourceSequence += 1;
-  return { ...message, messageUid: `factory-source-${sourceSequence}` };
+  return contextMessage({ ...message, messageUid: `factory-source-${sourceSequence}` });
 }
 
 test("buildCapabilityModelMessages projects assistant tool calls for the observer", () => {
@@ -100,7 +101,7 @@ test("buildCapabilityModelMessages keeps regular messages unchanged", () => {
   ]);
 });
 
-test("buildCapabilityModelMessages keeps natural-user metadata for unchanged messages", () => {
+test("buildCapabilityModelMessages projects only provider fields for Context messages", () => {
   const output = buildCapabilityModelMessages({
     agentMessages: [
       source({
@@ -108,7 +109,6 @@ test("buildCapabilityModelMessages keeps natural-user metadata for unchanged mes
         content: "u1",
         messageOrigin: "natural",
         userMetaMaterialized: true,
-        additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
       }),
       source({
         role: "assistant",
@@ -118,7 +118,7 @@ test("buildCapabilityModelMessages keeps natural-user metadata for unchanged mes
   });
 
   assert.deepEqual(output, [
-    { role: "user", content: "u1", messageOrigin: "natural" },
+    { role: "user", content: "u1" },
     { role: "assistant", content: "a1" },
   ]);
 });

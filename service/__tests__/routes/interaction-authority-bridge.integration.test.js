@@ -11,6 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 
 import { createSessionFacade, createSessionServices } from "noobot-agent/session";
 import { AttachmentService } from "noobot-agent/attach";
+import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { AUTHORITY_EVENT_CONSUMER } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createInteractionAuthorityBridge } from "../../ws/chat-websocket/interaction-authority-bridge.js";
 import { initializeUserRuntimeDirectories } from "../runtime-events-root.test-helpers.js";
@@ -30,7 +31,12 @@ test("child interaction authority commits through the protocol persistence scope
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createSessionServices(
       { workspaceRoot },
-      { attachmentService: new AttachmentService({ workspaceRoot }) },
+      {
+        attachmentService: new AttachmentService({ workspaceRoot }),
+        scopedSessionRoots: resolveScopedSessionRoots([
+          { pluginId: "workflow", scopedSessionRoots: ["session"] },
+        ]),
+      },
     );
     const session = createSessionFacade(runtime);
     const persistenceScope = Object.freeze({

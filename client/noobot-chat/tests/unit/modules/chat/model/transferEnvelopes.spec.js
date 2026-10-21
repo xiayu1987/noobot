@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import {
   getMessageTransferAttachments,
@@ -18,9 +19,9 @@ const attachmentIdentity = {
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
-  version: 2,
+  version: TRANSFER_VERSION,
   transferId: "transfer-1",
-  messageId: "message-1",
+  presentationMessageId: "message-1",
   identity: {
     sessionId: "session-1",
     turnScopeId: "turn-1",
@@ -69,7 +70,7 @@ describe("transferEnvelopes", () => {
         attachmentSource: "model",
         name: "report.md",
         transferId: "transfer-1",
-        messageId: "message-1",
+        presentationMessageId: "message-1",
         transferRole: "primary",
       }),
     ]);

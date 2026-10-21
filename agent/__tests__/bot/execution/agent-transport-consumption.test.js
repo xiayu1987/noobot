@@ -8,8 +8,10 @@ import assert from "node:assert/strict";
 
 import { buildAgentTransportConsumption } from "../../../src/bot/execution/runner/agent-transport-consumption.js";
 
-test("Agent transport consumption proves normalized fields reached their runtime consumers", () => {
-  const result = buildAgentTransportConsumption({
+function consumptionInput({
+  messageEventStream = { activePresentationMessageId: "assistant-message-1" },
+} = {}) {
+  return {
     transportCommand: { protocolVersion: 2, commandType: "turn.send", commandId: "turn-1" },
     identity: {
       sessionId: "session-1",
@@ -45,11 +47,13 @@ test("Agent transport consumption proves normalized fields reached their runtime
     },
     committedTurnResult: { aggregateVersion: 4 },
     dispatchRuntime: {
-      systemRuntime: {
-        messageEventStream: { activePresentationMessageId: "assistant-message-1" },
-      },
+      systemRuntime: { messageEventStream },
     },
-  });
+  };
+}
+
+test("Agent transport consumption proves normalized fields reached their runtime consumers", () => {
+  const result = buildAgentTransportConsumption(consumptionInput());
 
   assert.equal(result.protocolVersion, 2);
   assert.equal(result.commandType, "turn.send");
@@ -74,10 +78,22 @@ test("Agent transport consumption proves normalized fields reached their runtime
     selectedConnectorIds: ["con_terminal"],
   });
   assert.equal(result.presentation.userMessageIdConsumed, true);
-  assert.equal(result.presentation.assistantMessageIdConsumed, true);
+  assert.equal(result.presentation.requestedPresentationMessageId, "assistant-message-1");
+  assert.equal(result.presentation.boundPresentationMessageId, "assistant-message-1");
+  assert.equal(result.presentation.presentationMessageIdConsumed, true);
   assert.equal(result.concurrency.commandId, "turn-1");
   assert.equal("commandIdConsumed" in result.concurrency, false);
   assert.equal(result.concurrency.expectedAggregateVersion, 3);
   assert.equal(result.concurrency.committedAggregateVersion, 4);
   assert.equal(JSON.stringify(result).includes("hello"), false);
+});
+
+test("Agent transport consumption reports unbound presentation identity as not consumed", () => {
+  const result = buildAgentTransportConsumption(
+    consumptionInput({ messageEventStream: { activePresentationMessageId: "" } }),
+  );
+
+  assert.equal(result.presentation.requestedPresentationMessageId, "assistant-message-1");
+  assert.equal(result.presentation.boundPresentationMessageId, "");
+  assert.equal(result.presentation.presentationMessageIdConsumed, false);
 });

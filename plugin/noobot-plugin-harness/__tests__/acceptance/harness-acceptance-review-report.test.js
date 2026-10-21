@@ -13,6 +13,7 @@ import {
 import { registerHarnessCore } from "../../src/index.js";
 
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
+import { resolveContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 
 test("harness summary selection does not mutate canonical messages before commit", async () => {
   const ctx = createTestHookContext(
@@ -66,10 +67,10 @@ test("harness summary selection does not mutate canonical messages before commit
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
   assert.ok(markedCount >= 2);
-  assert.equal(ctx.modelContext.messages[1]?.summarized, undefined);
-  assert.equal(ctx.modelContext.messages[2]?.summarized, undefined);
-  assert.equal(ctx.modelContext.messages[3]?.summarized, undefined);
-  assert.equal(ctx.modelContext.messages[4]?.summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(ctx.modelContext.messages[1]), false);
+  assert.equal(resolveContextMessageSummarized(ctx.modelContext.messages[2]), false);
+  assert.equal(resolveContextMessageSummarized(ctx.modelContext.messages[3]), false);
+  assert.equal(resolveContextMessageSummarized(ctx.modelContext.messages[4]), false);
 });
 
 test("harness review reports failed or inconsistent semantic acceptance", async () => {

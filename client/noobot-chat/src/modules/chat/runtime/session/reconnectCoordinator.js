@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
+import { createSecureId } from "@noobot/shared/secure-identity";
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";

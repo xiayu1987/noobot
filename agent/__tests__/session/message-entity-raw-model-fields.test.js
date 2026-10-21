@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -14,7 +15,9 @@ test("normalizeMessageEntity preserves the canonical internal control message ty
     type: "context_control",
     chatPresentation: false,
     content: "checkpoint",
-    additional_kwargs: { noobotInternalMessageType: "noobot.phase_summary_prompt" },
+    noobotInternalMessageType: "noobot.phase_summary_prompt",
+
+    additional_kwargs: { noobotInternalMessageType: "noobot.legacy_prompt" },
   });
 
   assert.equal(normalized.noobotInternalMessageType, "noobot.phase_summary_prompt");
@@ -70,9 +73,9 @@ test("normalizeMessageEntity persists assistant protocol blocks but not diagnost
 test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer:message-att-1:tool:call-att-1:output:tool_result_text:structured",
-    messageId: "message-att-1",
+    presentationMessageId: "message-att-1",
     identity: {
       sessionId: "test-session",
       turnScopeId: "turn-att-1",

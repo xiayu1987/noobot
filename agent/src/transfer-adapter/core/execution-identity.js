@@ -18,11 +18,18 @@ export function resolveRuntimeTransferIdentity({
   const producerType = safeStr(producer.type);
   const producerId = safeStr(producer.id);
   const { runConfig, systemRuntime } = runtime;
-  const messageId = safeStr(runConfig.messageId);
+  const presentationMessageId = safeStr(runConfig.presentationMessageId);
   const resolvedSessionId = safeStr(systemRuntime.sessionId);
   const turnScopeId = safeStr(runConfig.turnScopeId);
   const runId = safeStr(runConfig.executionId);
-  if (!messageId || !resolvedSessionId || !turnScopeId || !runId || !producerType || !producerId) {
+  if (
+    !presentationMessageId ||
+    !resolvedSessionId ||
+    !turnScopeId ||
+    !runId ||
+    !producerType ||
+    !producerId
+  ) {
     throw new Error("semantic_transfer_execution_identity_incomplete");
   }
   const normalizedDirection = safeStr(direction);
@@ -37,7 +44,7 @@ export function resolveRuntimeTransferIdentity({
   return Object.freeze({
     transferId: [
       "transfer",
-      messageId,
+      presentationMessageId,
       producerType,
       producerId,
       normalizedDirection,
@@ -46,7 +53,7 @@ export function resolveRuntimeTransferIdentity({
     ]
       .filter(Boolean)
       .join(":"),
-    messageId,
+    presentationMessageId,
     sessionId: identity.sessionId,
     turnScopeId: identity.turnScopeId,
     runId: identity.runId,

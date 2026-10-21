@@ -4,16 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  readContextMessageField,
-  resolveContextMessageDialogProcessId,
-  resolveContextMessageOrigin,
-  resolveContextUserMetaMaterialized,
-} from "@noobot/context-protocol/message/codec";
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { normalizeTurnCommitMetadata } from "@noobot/session-protocol";
+import {
+  normalizeTurnCommitMetadata,
+  resolveSessionMessageRecordDialogProcessId,
+} from "@noobot/session-protocol";
 import { copyPresentFields } from "./entity-primitives.js";
 import {
   dedupeAttachmentsByIdentity,
@@ -59,11 +56,7 @@ function normalizeAttachmentOwner(owner = null) {
 }
 
 function resolveRuntimeMessageId(message = {}, messageUid = "") {
-  return firstText(
-    message?.messageId,
-    readContextMessageField(message, "noobotMessageId"),
-    messageUid,
-  );
+  return firstText(message?.messageId, messageUid);
 }
 
 function createBaseMessageEntity(message, now) {
@@ -74,7 +67,7 @@ function createBaseMessageEntity(message, now) {
     userName: text(message?.userName),
     sessionId: text(message?.sessionId),
     parentSessionId: text(message?.parentSessionId),
-    dialogProcessId: resolveContextMessageDialogProcessId(message),
+    dialogProcessId: resolveSessionMessageRecordDialogProcessId(message),
     parentDialogProcessId: text(message?.parentDialogProcessId),
     turnScopeId: text(message?.turnScopeId),
     taskId: text(message?.taskId),
@@ -94,7 +87,7 @@ function applyMessageArtifacts(target, message, attachments) {
 
 function applyMessageInjection(target, message) {
   if (message?.injectedMessage === true) target.injectedMessage = true;
-  const internalType = readContextMessageField(message, "noobotInternalMessageType");
+  const internalType = text(message?.noobotInternalMessageType);
   if (internalType) target.noobotInternalMessageType = internalType;
   const injectedBy = text(message?.injectedBy);
   const injectedMessageType = text(message?.injectedMessageType);
@@ -109,13 +102,12 @@ function applyMessageInjection(target, message) {
 }
 
 function applyMessageOrigin(target, message) {
-  const origin = resolveContextMessageOrigin(message);
+  const origin = text(message?.messageOrigin).toLowerCase();
   if (origin === "natural" || origin === "internal") target.messageOrigin = origin;
 }
 
 function applyUserMetaMaterialized(target, message) {
-  if (target.role === "user")
-    target.userMetaMaterialized = resolveContextUserMetaMaterialized(message);
+  if (target.role === "user") target.userMetaMaterialized = message?.userMetaMaterialized === true;
 }
 
 function applyPresentationIdentity(target, message) {

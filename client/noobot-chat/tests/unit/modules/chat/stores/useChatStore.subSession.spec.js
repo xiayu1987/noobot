@@ -22,32 +22,29 @@ function applyMessageEvent(store, data) {
 }
 
 function messageEvent(eventType, data = {}) {
-  const messageId = data.messageId || "message-1";
   return canonicalMessageEvent({
+    presentationMessageId: "message-1",
     occurredAt: "2026-01-01T00:00:00.000Z",
     sequence: 1,
     eventType,
     parentSessionId: "root-session",
     workflowRunId: "workflow-run-1",
     nodeExecutionId: "node-execution-1",
-    messageId,
     ...data,
-    presentationMessageId: data.presentationMessageId || messageId,
   });
 }
 
 function commitPresentation(store, identity = {}) {
   const sessionId = identity.sessionId || "child-session";
   const turnScopeId = identity.turnScopeId || "workflow-node:execution-1";
-  const assistantMessageId = identity.presentationMessageId || identity.messageId || "message-1";
+  const presentationMessageId = identity.presentationMessageId || "message-1";
   return applyMessageEvent(
     store,
     messageEvent("turn_presentation_committed", {
       ...identity,
       sessionId,
       turnScopeId,
-      messageId: identity.sourceMessageId || assistantMessageId,
-      presentationMessageId: assistantMessageId,
+      presentationMessageId,
       eventId: `${turnScopeId}:presentation`,
       sequence: 1,
       presentation: {
@@ -61,9 +58,8 @@ function commitPresentation(store, identity = {}) {
           attachments: [],
         },
         assistantMessage: {
-          id: assistantMessageId,
-          messageId: assistantMessageId,
-          presentationMessageId: assistantMessageId,
+          id: presentationMessageId,
+          presentationMessageId,
           role: "assistant",
           sessionId,
           turnScopeId,
@@ -101,7 +97,7 @@ describe("sub-session realtime message projection", () => {
       turnScopeId: "workflow-node:execution-1",
       workflowRunId: "workflow-1",
       nodeExecutionId: "execution-1",
-      messageId: "msg-assistant-1",
+      presentationMessageId: "msg-assistant-1",
     };
     commitPresentation(store, identity);
 
@@ -147,7 +143,7 @@ describe("sub-session realtime message projection", () => {
     commitPresentation(store, {
       sessionId: "child-session",
       turnScopeId: "turn-1",
-      messageId: "msg-assistant-1",
+      presentationMessageId: "msg-assistant-1",
     });
     applyMessageEvent(
       store,
@@ -157,14 +153,14 @@ describe("sub-session realtime message projection", () => {
         eventId: "thinking-1",
         role: "assistant",
         text: "planning",
-        messageId: "msg-assistant-1",
+        presentationMessageId: "msg-assistant-1",
         sequence: 2,
       }),
     );
     commitPresentation(store, {
       sessionId: "child-session",
       turnScopeId: "turn-2",
-      messageId: "msg-assistant-2",
+      presentationMessageId: "msg-assistant-2",
     });
     applyMessageEvent(
       store,
@@ -177,7 +173,7 @@ describe("sub-session realtime message projection", () => {
         content: "result",
         result: "result",
         success: true,
-        messageId: "msg-assistant-2",
+        presentationMessageId: "msg-assistant-2",
         sequence: 2,
       }),
     );
@@ -193,7 +189,7 @@ describe("sub-session realtime message projection", () => {
       sessionId: "child-session",
       turnScopeId: "turn-completed",
       dialogProcessId: "dialog-child",
-      messageId: "assistant-completed",
+      presentationMessageId: "assistant-completed",
     };
     commitPresentation(store, identity);
     applyMessageEvent(
@@ -239,7 +235,6 @@ describe("sub-session realtime message projection", () => {
       parentSessionId: "parent-session",
       turnScopeId: "turn-authoritative",
       dialogProcessId: "dialog-child",
-      messageId: "assistant-authoritative",
       presentationMessageId: "assistant-authoritative",
     };
     commitPresentation(store, identity);
@@ -333,7 +328,6 @@ describe("sub-session realtime message projection", () => {
       sessionId: "root-session",
       turnScopeId: "root-turn",
       dialogProcessId: "root-dialog",
-      messageId: "root-assistant",
       presentationMessageId: "root-assistant",
     };
     store.sessions.push({
@@ -341,7 +335,7 @@ describe("sub-session realtime message projection", () => {
       messages: [
         {
           ...identity,
-          id: identity.messageId,
+          id: identity.presentationMessageId,
           role: "assistant",
           content: "answer",
           pending: true,
@@ -398,7 +392,7 @@ describe("sub-session realtime message projection", () => {
       dialogProcessId: "dialog-child",
       workflowRunId: "workflow-1",
       nodeExecutionId: "node-timing",
-      messageId: "assistant-timing",
+      presentationMessageId: "assistant-timing",
     };
     applyMessageEvent(
       store,
@@ -481,7 +475,6 @@ describe("sub-session realtime message projection", () => {
           recentTerminalTurns: [
             {
               turnScopeId: "workflow-node:node-1",
-              messageId: "message-1",
               presentationMessageId: "message-1",
               dialogProcessId: "dialog-1",
               action: "send",
@@ -603,7 +596,7 @@ describe("sub-session realtime message projection", () => {
       parentSessionId: "parent-a",
       workflowRunId: "workflow-a",
       nodeExecutionId: "node-a",
-      messageId: "msg-assistant-1",
+      presentationMessageId: "msg-assistant-1",
     };
     commitPresentation(store, identity);
     applyMessageEvent(

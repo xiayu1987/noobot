@@ -21,9 +21,15 @@ import {
   resolveContextMessageSummarized,
 } from "../message/codec.js";
 import { SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES } from "../message/injected-types.js";
+import { projectSessionRecordToContextMessage } from "../message/session-projection.js";
 import { isContextControlMessage } from "./injected-message.js";
-import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
+import {
+  FLOW_CONTROL_ROLE,
+  hasContextMessageFlowControlRole,
+  hasToolCallFlowControlRole,
+} from "../tool/context-policy.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { resolveSessionMessageRecordDialogProcessId } from "@noobot/session-protocol";
 
 const summaryAlwaysRetainedInjectedTypes = new Set(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES);
 
@@ -50,11 +56,13 @@ function resolveToolCallName(call = {}) {
 }
 
 function hasToolCallWithFlowControlRole(message = {}, role = "") {
-  return resolveContextToolCalls(message).some((call) => hasFlowControlRole(call, role));
+  return resolveContextToolCalls(message).some((call) => hasToolCallFlowControlRole(call, role));
 }
 
 function isToolResultWithFlowControlRole(message = {}, role = "") {
-  return resolveContextMessageRole(message) === "tool" && hasFlowControlRole(message, role);
+  return (
+    resolveContextMessageRole(message) === "tool" && hasContextMessageFlowControlRole(message, role)
+  );
 }
 
 export function hasCheckpointBoundaryToolCall(message = {}) {
@@ -115,7 +123,7 @@ function collectLatestFlowControlMessageIndexesByToolIdentity(
   const latestBatchByTool = new Map();
   for (const batch of toolBatchIndex.assistantBatches) {
     for (const call of batch.calls) {
-      if (!hasFlowControlRole(call, role)) continue;
+      if (!hasToolCallFlowControlRole(call, role)) continue;
       const toolName = resolveToolCallName(call);
       if (toolName) latestBatchByTool.set(toolName, batch);
     }
@@ -343,23 +351,50 @@ export function resolveSummaryScope(
   });
 }
 
-export function markCurrentTurnStoreSummarized(
-  store = null,
-  { policyOptions = {}, onMarked = null } = {},
+export function collectCurrentTurnSummarizedMessageIndexes(
+  messages = [],
+  { policyOptions = {} } = {},
 ) {
-  if (!store || typeof store.updateWhere !== "function") return 0;
-  const scoped = typeof store.toArray === "function" ? store.toArray() : [];
-  const dimensions = summaryScope(scoped, { policyOptions });
-  return store.updateWhere({ summarized: true }, (message, index) => {
-    const marked = shouldMarkCurrentTurnSummarizedMessageInScope(message, {
-      ...dimensions,
-      messages: scoped,
-      index,
-      policyOptions,
-    });
-    if (marked && typeof onMarked === "function") onMarked(message);
-    return marked;
+  const dimensions = summaryScope(messages, { policyOptions });
+  const indexes = new Set();
+  dimensions.source.forEach((message, index) => {
+    if (
+      shouldMarkCurrentTurnSummarizedMessageInScope(message, {
+        ...dimensions,
+        messages: dimensions.source,
+        index,
+        policyOptions,
+      })
+    ) {
+      indexes.add(index);
+    }
   });
+  return indexes;
+}
+
+function collectRecordSummarizedIndexes(records = [], policyOptions = {}) {
+  return collectCurrentTurnSummarizedMessageIndexes(
+    records.map(projectSessionRecordToContextMessage),
+    { policyOptions },
+  );
+}
+
+export function markCurrentTurnStoreSummarized(turnMessageStore, { policyOptions = {} } = {}) {
+  const indexes = collectRecordSummarizedIndexes(turnMessageStore.toArray(), policyOptions);
+  const markedMessageIds = new Set();
+  const markedCount = turnMessageStore.updateWhere({ summarized: true }, (record, index) => {
+    if (!indexes.has(index)) return false;
+    markedMessageIds.add(text(record.messageUid));
+    return true;
+  });
+  return { markedCount, markedMessageIds };
+}
+
+export function markCurrentTurnArraySummarized(records = [], { policyOptions = {} } = {}) {
+  const indexes = collectRecordSummarizedIndexes(records, policyOptions);
+  return records.map((record, index) =>
+    indexes.has(index) ? { ...record, summarized: true } : record,
+  );
 }
 
 export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set()) {
@@ -368,20 +403,6 @@ export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set
     if (!ids.has(resolveContextMessageId(message))) continue;
     markContextMessageSummarized(message);
   }
-}
-
-export function markCurrentTurnArraySummarized(messages = [], { policyOptions = {} } = {}) {
-  const dimensions = summaryScope(messages, { policyOptions });
-  return dimensions.source.map((message, index) =>
-    shouldMarkCurrentTurnSummarizedMessageInScope(message, {
-      ...dimensions,
-      messages: dimensions.source,
-      index,
-      policyOptions,
-    })
-      ? { ...(message || {}), summarized: true }
-      : message,
-  );
 }
 
 export function collectScopedMessagesToSummarize(
@@ -506,7 +527,7 @@ function collectTurnMessageOwnership(messages = []) {
   for (const message of Array.isArray(messages) ? messages : []) {
     const messageUid = text(message?.messageUid);
     allMessageUids.add(messageUid);
-    const key = `${resolveContextMessageDialogProcessId(message)}\u0000${text(message?.turnScopeId)}`;
+    const key = `${resolveSessionMessageRecordDialogProcessId(message)}\u0000${text(message?.turnScopeId)}`;
     const owned = ownedByTurn.get(key) || new Set();
     owned.add(messageUid);
     ownedByTurn.set(key, owned);

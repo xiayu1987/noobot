@@ -16,7 +16,7 @@ export const TEST_AGENT_IDENTITY = Object.freeze({
   dialogProcessId: "d-1",
   turnScopeId: "t-1",
   runId: "r-1",
-  messageId: "m-1",
+  presentationMessageId: "p-1",
 });
 
 export const EMPTY_TEST_MESSAGE_BLOCKS = Object.freeze({

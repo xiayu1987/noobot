@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -11,6 +11,11 @@ import { createStateCommitter } from "../../../src/runtime/tool-execution/state-
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext } from "@noobot/context-protocol";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import {
+  readContextMessageValue,
+  resolveContextMessageId,
+} from "@noobot/context-protocol/message/codec";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -113,6 +118,7 @@ test("state-committer emits before/after hooks for assistant message commit", as
 
   await committer.pushAssistantMessage({
     content: "hello",
+    messageUid: createMessageUid(),
     modelAlias: "alias_x",
     modelName: "model_x",
   });
@@ -139,12 +145,14 @@ test("state-committer keeps one canonical assistant presentation per Turn", asyn
 
   await committer.pushAssistantMessage({
     content: "first",
+    messageUid: createMessageUid(),
     messageId: "message-first",
     presentationMessageId: "presentation-canonical",
     chatPresentation: true,
   });
   await committer.pushAssistantMessage({
     content: "second",
+    messageUid: createMessageUid(),
     messageId: "message-second",
     presentationMessageId: "presentation-canonical",
     chatPresentation: true,
@@ -209,7 +217,7 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(traces[0].result, "tool_result_overridden_by_hook");
   assert.equal(messages.length, 1);
   assert.equal(messages[0]?.content, "tool_result_overridden_by_hook");
-  assert.deepEqual(messages[0]?.lc_kwargs?.contextPolicy, contextPolicy);
+  assert.deepEqual(readContextMessageValue(messages[0], "contextPolicy"), contextPolicy);
 });
 
 test("state-committer completes tool result hooks and commit after the parent Turn is stopped", async () => {
@@ -280,6 +288,7 @@ test("state-committer checkpoints assistant and tool records with presentation i
 
   await committer.pushAssistantMessage({
     content: "analysis",
+    messageUid: createMessageUid(),
     messageId: "msg_model_checkpoint",
     presentationMessageId: "msg_chat_checkpoint",
     type: "tool_call",
@@ -323,12 +332,15 @@ test("state-committer writes tool result through message store when holder is pr
   assert.equal(modelContext.messages[0]?.content, "store_tool_result");
   assert.equal(modelContext.messageBlocks.incremental[0], modelContext.messages[0]);
   assert.equal(
-    modelContext.messages[0].additional_kwargs.noobotMessageId,
+    resolveContextMessageId(modelContext.messages[0]),
     turnMessageStore.items[0].messageUid,
   );
   assert.equal(modelContext.messageBlocks.incrementalIds, undefined);
-  assert.equal(modelContext.messages[0]?.dialogProcessId, "dp_store_tool");
-  assert.equal(modelContext.messages[0]?.turnScopeId, "turn-store-tool");
+  assert.equal(
+    readContextMessageValue(modelContext.messages[0], "dialogProcessId"),
+    "dp_store_tool",
+  );
+  assert.equal(readContextMessageValue(modelContext.messages[0], "turnScopeId"), "turn-store-tool");
   assert.equal(turnMessageStore.items[0]?.content, "store_tool_result");
 });
 
@@ -338,9 +350,9 @@ test("state-committer stores compact LLM-facing tool result content", async () =
   const messages = modelContext.messages;
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer_compact",
-    messageId: "message_compact",
+    presentationMessageId: "message_compact",
     identity: {
       sessionId: "session_compact",
       turnScopeId: "turn_compact",
@@ -399,9 +411,9 @@ test("state-committer persists transferEnvelopes only", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer_legacy_removed",
-    messageId: "message_legacy_removed",
+    presentationMessageId: "message_legacy_removed",
     identity: {
       sessionId: "session_legacy_removed",
       turnScopeId: "turn_legacy_removed",

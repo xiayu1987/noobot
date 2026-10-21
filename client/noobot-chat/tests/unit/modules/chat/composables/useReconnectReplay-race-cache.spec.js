@@ -22,7 +22,7 @@ describe("useReconnectReplay", () => {
     const record = createAuthoritativeMessageEnvelope("llm_delta", {
       sessionId: "s-2",
       turnScopeId: "turn-missing",
-      messageId: "message-missing-turn",
+      presentationMessageId: "message-missing-turn",
       seq: 1,
       text: "no-turn",
     });
@@ -61,7 +61,7 @@ describe("useReconnectReplay", () => {
       sessionId: "s-2",
       dialogProcessId: "dp-s2",
       turnScopeId: "turn-s2",
-      messageId: "message-s2",
+      presentationMessageId: "message-s2",
       seq: 1,
       text: "A",
     });
@@ -73,7 +73,7 @@ describe("useReconnectReplay", () => {
       sessionId: "s-2",
       dialogProcessId: "dp-s2",
       turnScopeId: "turn-s2",
-      messageId: "message-s2",
+      presentationMessageId: "message-s2",
       seq: 2,
       text: "B",
     });
@@ -85,7 +85,7 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-s1",
       turnScopeId: "turn-s1",
-      messageId: "message-s1",
+      presentationMessageId: "message-s1",
       seq: 1,
       text: "C",
     });

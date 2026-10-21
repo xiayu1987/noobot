@@ -47,20 +47,18 @@ export function resolveModelSystemMessages(options = {}) {
 export function resolveModelHistoryMessages({
   sourceMessages = [],
   historyLimit = Number.POSITIVE_INFINITY,
-  resolveHistoryDialogProcessId = resolveContextMessageDialogProcessId,
 } = {}) {
-  const resolveDialog =
-    typeof resolveHistoryDialogProcessId === "function"
-      ? resolveHistoryDialogProcessId
-      : resolveContextMessageDialogProcessId;
   const source = (Array.isArray(sourceMessages) ? sourceMessages : []).filter((message) => {
-    if (!resolveDialog(message)) return false;
     if (isContextSystemMessage(message)) return false;
+
+    if (!resolveContextMessageDialogProcessId(message)) {
+      throw new Error("history context message requires additional_kwargs.dialogProcessId");
+    }
     return !resolveContextMessageSummarized(message);
   });
   const groups = new Map();
   source.forEach((message, index) => {
-    const key = resolveDialog(message);
+    const key = resolveContextMessageDialogProcessId(message);
     const group = groups.get(key) || { key, startIndex: index, messages: [] };
     group.messages.push(message);
     groups.set(key, group);
@@ -78,7 +76,6 @@ export function resolveModelFinalMessages({
   incrementalMessages = [],
   historyLimit = Number.POSITIVE_INFINITY,
   policyOptions = {},
-  resolveHistoryDialogProcessId = resolveContextMessageDialogProcessId,
 } = {}) {
   const system = resolveModelSystemMessages({ sourceMessages: systemMessages, policyOptions });
   const systemIdentities = identities(system);
@@ -90,7 +87,6 @@ export function resolveModelFinalMessages({
     resolveModelHistoryMessages({
       sourceMessages: historyMessages,
       historyLimit,
-      resolveHistoryDialogProcessId,
     }),
     new Set([...systemIdentities, ...identities(incremental)]),
   );

@@ -5,7 +5,10 @@
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { isMessageInjected } from "./shared.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../handlers/shared/constants.js";
+import {
+  buildHarnessInjectedMessage,
+  harnessPromptInjectedMessageType,
+} from "../handlers/shared/message/injected-message-utils.js";
 import {
   appendMessage,
   resolveModelMessageBlocks,
@@ -101,7 +104,10 @@ function applyMemoryTakeoverForModelContext(ctx = {}, takeover = {}) {
     if (!isMessageInjected(resolveModelMessageBlocks(ctx).system, marker, content)) {
       appendMessage(
         ctx,
-        { role: "system", content, [HARNESS_PROMPT_INJECTION_ID_FIELD]: marker },
+        buildHarnessInjectedMessage(content, {
+          role: "system",
+          injectedMessageType: harnessPromptInjectedMessageType(marker),
+        }),
         { block: "system" },
       );
       changed = true;

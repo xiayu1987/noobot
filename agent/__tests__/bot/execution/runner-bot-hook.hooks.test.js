@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/message/session-projection";
 import test from "node:test";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { TEST_ACCEPTED_DIALOG_PROCESS_ID } from "../../helpers/session-run-payload.js";
@@ -34,10 +35,22 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
       capturedBuildContextPayload = buildContextPayload;
       const runtimeAgentContext = createTestAgentExecutionScope(createTestRuntimeContext(), {
         messageBlocks: {
-          history: [
-            { role: "user", content: "history user" },
-            { role: "assistant", content: "history assistant" },
-          ],
+          history: projectSessionRecordsToContextMessages([
+            {
+              messageUid: "sm_history_user",
+              role: "user",
+              content: "history user",
+              dialogProcessId: "dp-history",
+              turnScopeId: "turn-history",
+            },
+            {
+              messageUid: "sm_history_assistant",
+              role: "assistant",
+              content: "history assistant",
+              dialogProcessId: "dp-history",
+              turnScopeId: "turn-history",
+            },
+          ]),
           system: [],
           incremental: [],
         },
@@ -68,15 +81,10 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
   assert.equal(
     beforeDispatchContext?.agentContext?.bindings?.runtime?.systemRuntime?.messageEventStream
-      ?.activeMessageId,
-    beforeDispatchContext?.runConfig?.messageId,
-  );
-  assert.equal(
-    beforeDispatchContext?.agentContext?.bindings?.runtime?.systemRuntime?.messageEventStream
       ?.activePresentationMessageId,
     beforeDispatchContext?.runConfig?.presentationMessageId,
   );
-  assert.match(beforeDispatchContext?.runConfig?.messageId, /^msg_event_msg_/);
+  assert.equal(beforeDispatchContext?.runConfig?.messageId, undefined);
   assert.match(beforeDispatchContext?.runConfig?.presentationMessageId, /^msg_/);
   assert.equal(beforeDispatchContext?.runtimeAgentContext, undefined);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");

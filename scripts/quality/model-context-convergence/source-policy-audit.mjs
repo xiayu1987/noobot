@@ -143,7 +143,6 @@ export const SOURCE_POLICY_EXEMPTIONS = Object.freeze([
       "context-protocol/src/message/codec.js",
       "context-protocol/src/message/store.js",
       "context-protocol/src/mutation/context.js",
-      "context-protocol/src/policy/snapshot.js",
       "context-protocol/src/policy/turn-completion.js",
       "agent/src/bot/session/summary-checkpoint-committer.js",
     ],

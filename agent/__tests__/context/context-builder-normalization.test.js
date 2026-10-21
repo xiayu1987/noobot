@@ -28,7 +28,7 @@ function executionRunConfig(turnScopeId, extra = {}) {
   return {
     turnScopeId,
     executionId: `run:${turnScopeId}`,
-    messageId: `message:${turnScopeId}`,
+    presentationMessageId: `message:${turnScopeId}`,
     ...extra,
   };
 }

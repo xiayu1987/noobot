@@ -42,7 +42,6 @@ function normalizeTurn(value, key) {
   if (!turnScopeId) return null;
   return {
     turnScopeId,
-    messageId: clean(value.messageId),
     presentationMessageId: clean(value.presentationMessageId),
     executionId: clean(value.executionId),
     executionKind: clean(value.executionKind).toLowerCase(),

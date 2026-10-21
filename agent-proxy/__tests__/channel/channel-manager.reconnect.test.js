@@ -197,7 +197,7 @@ test("reconnect excludes the data-plane journal even when it reached retention c
       MESSAGE_EVENT_WIRE_EVENT,
       canonicalMessageEvent({
         sequence: seq,
-        messageId: "message-retention",
+        presentationMessageId: "message-retention",
         text: "x".repeat(1024),
       }),
     );

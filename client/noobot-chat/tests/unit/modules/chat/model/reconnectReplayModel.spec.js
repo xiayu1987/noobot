@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import { createReplayBatch as createProtocolReplayBatch } from "@noobot/event-protocol";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
@@ -208,9 +209,9 @@ describe("reconnectReplayModel", () => {
   it("patchMessageObjectPreservingUiState keeps non-degrading content and transfer fields", () => {
     const envelope = {
       protocol: "noobot.semantic-transfer",
-      version: 2,
+      version: TRANSFER_VERSION,
       transferId: "transfer-existing",
-      messageId: "message-existing",
+      presentationMessageId: "message-existing",
       identity: {
         sessionId: "session-transfer",
         turnScopeId: "turn-existing",
@@ -260,9 +261,9 @@ describe("reconnectReplayModel", () => {
   it("patchMessageObjectPreservingUiState merges distinct V2 transfer envelopes", () => {
     const makeEnvelope = (id) => ({
       protocol: "noobot.semantic-transfer",
-      version: 2,
+      version: TRANSFER_VERSION,
       transferId: `transfer-${id}`,
-      messageId: "message-1",
+      presentationMessageId: "message-1",
       identity: {
         sessionId: "session-transfer",
         turnScopeId: "turn-1",

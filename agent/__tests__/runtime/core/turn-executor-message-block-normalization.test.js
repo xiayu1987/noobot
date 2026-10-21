@@ -13,6 +13,8 @@ import {
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 const MODEL = normalizeRuntimeModelSpec({
   model: "gpt-4o",
@@ -32,9 +34,26 @@ test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () =
       },
     }),
   };
-  const system = { role: "system", content: "sys" };
-  const history = { role: "assistant", content: "history", dialogProcessId: "d1" };
-  const current = { role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2" };
+  const system = writeContextMessageMetadata(
+    { role: "system", content: "sys" },
+    { messageUid: createMessageUid() },
+  );
+  const history = writeContextMessageMetadata(
+    { role: "assistant", content: "history" },
+    {
+      messageUid: createMessageUid(),
+      dialogProcessId: "d1",
+    },
+  );
+
+  const current = writeContextMessageMetadata(
+    { role: "user", content: "current" },
+    {
+      messageUid: createMessageUid(),
+      dialogProcessId: "d2",
+      turnScopeId: "t2",
+    },
+  );
   const modelState = {
     modelPort: createTestModelPort(llm),
     runtime: createTestRuntimeContext(),
@@ -43,7 +62,14 @@ test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () =
   const loopState = {
     messageBlocks: {
       system: [system],
-      history: [current, { role: "system", content: "misplaced" }, history],
+      history: [
+        current,
+        writeContextMessageMetadata(
+          { role: "system", content: "misplaced" },
+          { messageUid: createMessageUid() },
+        ),
+        history,
+      ],
       incremental: [current],
     },
     tools: [{ name: "execute_script" }],

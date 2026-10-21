@@ -40,7 +40,7 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
         dialogProcessId: "d-1",
         turnScopeId: "t-1",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
     },
   );

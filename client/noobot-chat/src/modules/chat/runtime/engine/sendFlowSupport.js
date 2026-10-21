@@ -13,18 +13,10 @@ import {
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { isStageStatusStepState } from "../run-state-machine/statusStep.js";
 import { normalizeTrimmedString } from "./utils.js";
-import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
+import { createSecureId } from "@noobot/shared/secure-identity";
 
 export function createTurnScopeId() {
   return createSecureId("client-turn");
-}
-
-export function createAssistantMessageId() {
-  return createSecureId("msg", "_");
-}
-
-export function createUserMessageId() {
-  return createAssistantMessageId();
 }
 
 export function isEventForCurrentTurn(data = {}, botMessage = {}) {

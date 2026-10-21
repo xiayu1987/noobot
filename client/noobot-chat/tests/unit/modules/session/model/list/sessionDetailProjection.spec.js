@@ -97,7 +97,6 @@ describe("buildSessionDetailProjection", () => {
                 text: "inspect first",
                 sessionId: "session-resend",
                 turnScopeId: "client-turn:resend",
-                messageId: "model-tool-call-1",
                 presentationMessageId: "assistant-resend",
               }),
             ],

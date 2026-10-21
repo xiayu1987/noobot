@@ -81,7 +81,6 @@ function auditEnvelopeIdentity(canonicalEnvelope, eventData) {
     sessionId: trimmedText(identity?.sessionId),
     dialogProcessId: trimmedText(payload?.dialogProcessId),
     turnScopeId: trimmedText(identity?.turnScopeId),
-    messageId: trimmedText(identity?.messageId),
     presentationMessageId: trimmedText(payload?.presentationMessageId),
     eventId: trimmedText(identity?.eventId),
   };

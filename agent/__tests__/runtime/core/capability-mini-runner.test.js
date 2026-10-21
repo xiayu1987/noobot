@@ -100,7 +100,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
           userId: "u-test",
           rootSessionId: "session-1",
           parentSessionId: "",
-          messageId: "m-1",
+          presentationMessageId: "m-1",
         },
       }),
     },

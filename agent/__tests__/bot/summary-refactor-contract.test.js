@@ -16,17 +16,18 @@ import {
   pruneContextSummarizedIncremental as pruneSummarizedIncrementalMessages,
 } from "@noobot/context-protocol/mutation/context";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import {
+  resolveContextMessageSummarized,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
 import * as mainFlowControl from "../../src/runtime/main-flow-control.js";
 
 function message(id, value = {}) {
-  return {
-    ...value,
-    messageUid: id,
-    additional_kwargs: {
-      ...(value.additional_kwargs || {}),
-      noobotMessageId: id,
-    },
-  };
+  return { ...value, messageUid: id };
+}
+
+function contextMessage(id, native = {}, metadata = {}) {
+  return writeContextMessageMetadata({ ...native }, { messageUid: id, ...metadata });
 }
 
 test("plugin runtime exposes no direct summarized-message mutation port", () => {
@@ -35,17 +36,26 @@ test("plugin runtime exposes no direct summarized-message mutation port", () => 
 
 test("model input after memory release equals the pre-refactor full-memory model input", async () => {
   const fullMemory = [
-    message("m1", {
-      role: "assistant",
-      content: "",
-      summarized: true,
-      tool_calls: [{ id: "c1", function: { name: "read_file" } }],
-    }),
-    message("m2", { role: "tool", content: "old", summarized: true, tool_call_id: "c1" }),
-    message("m3", { role: "user", content: "keep" }),
-    message("m4", { role: "assistant", content: "answer" }),
+    contextMessage(
+      "m1",
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "c1", function: { name: "read_file" } }],
+      },
+      { summarized: true },
+    ),
+    contextMessage(
+      "m2",
+      { role: "tool", content: "old", tool_call_id: "c1" },
+      { summarized: true },
+    ),
+    contextMessage("m3", { role: "user", content: "keep" }),
+    contextMessage("m4", { role: "assistant", content: "answer" }),
   ];
-  const reducedMemory = fullMemory.filter((item) => item.summarized !== true);
+  const reducedMemory = fullMemory.filter((item) => !resolveContextMessageSummarized(item));
+
+  assert.equal(reducedMemory.length, 2);
 
   assert.deepEqual(filterForModelContext(reducedMemory), filterForModelContext(fullMemory));
 });
@@ -54,32 +64,41 @@ test("model input remains deeply equal to pre-refactor block filtering across tw
   const holder = createModelContext({
     messageBlocks: {
       system: [
-        {
-          role: "system",
-          content: "current-system",
-          summarized: true,
-          additional_kwargs: { noobotInternalMessageType: "system_context" },
-        },
+        contextMessage(
+          "s1",
+          { role: "system", content: "current-system" },
+          { summarized: true, noobotInternalMessageType: "system_context" },
+        ),
       ],
       history: [
-        { role: "user", content: "history-keep", dialogProcessId: "old-dialog" },
-        {
-          role: "assistant",
-          content: "history-drop",
-          summarized: true,
-          dialogProcessId: "old-dialog",
-        },
+        contextMessage(
+          "h1",
+          { role: "user", content: "history-keep" },
+          { dialogProcessId: "old-dialog", turnScopeId: "old-turn" },
+        ),
+        contextMessage(
+          "h2",
+          { role: "assistant", content: "history-drop" },
+          { summarized: true, dialogProcessId: "old-dialog", turnScopeId: "old-turn" },
+        ),
       ],
       incremental: [
-        { role: "user", content: "current-user", dialogProcessId: "current-dialog" },
-        {
-          role: "assistant",
-          content: "",
-          summarized: true,
-          tool_calls: [{ id: "call-1", function: { name: "read_file" } }],
-        },
-        { role: "tool", content: "old-result", tool_call_id: "call-1", summarized: true },
-        { role: "assistant", content: "first-tail" },
+        contextMessage("i1", { role: "user", content: "current-user" }),
+        contextMessage(
+          "i2",
+          {
+            role: "assistant",
+            content: "",
+            tool_calls: [{ id: "call-1", function: { name: "read_file" } }],
+          },
+          { summarized: true },
+        ),
+        contextMessage(
+          "i3",
+          { role: "tool", content: "old-result", tool_call_id: "call-1" },
+          { summarized: true },
+        ),
+        contextMessage("i4", { role: "assistant", content: "first-tail" }),
       ],
     },
   });
@@ -96,33 +115,33 @@ test("model input remains deeply equal to pre-refactor block filtering across tw
 
   appendMessage(
     holder,
-    {
-      role: "assistant",
-      content: "",
-      summarized: true,
-      tool_calls: [{ id: "call-2", function: { name: "search" } }],
-    },
+    contextMessage(
+      "i5",
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "call-2", function: { name: "search" } }],
+      },
+      { summarized: true },
+    ),
     { block: "incremental" },
   );
   appendMessage(
     holder,
-    {
-      role: "tool",
-      content: "second-old-result",
-      tool_call_id: "call-2",
-      summarized: true,
-    },
+    contextMessage(
+      "i6",
+      { role: "tool", content: "second-old-result", tool_call_id: "call-2" },
+      { summarized: true },
+    ),
     { block: "incremental" },
   );
   appendMessage(
     holder,
-    {
-      role: "user",
-      content: "latest-summary-relay",
-      injectedMessage: true,
-      injectedBy: "harness-plugin",
-      injectedMessageType: "summary",
-    },
+    contextMessage(
+      "i7",
+      { role: "user", content: "latest-summary-relay" },
+      { injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "summary" },
+    ),
     { block: "incremental" },
   );
 

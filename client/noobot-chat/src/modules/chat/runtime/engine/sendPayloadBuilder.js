@@ -18,7 +18,7 @@ export function createTurnPayloadBuilder({ preferences, request, turn }) {
       dialogProcessId: request.dialogProcessId,
       turnScopeId: request.turnScopeId,
       userMessageId: request.userMessageId,
-      assistantMessageId: request.assistantMessageId,
+      presentationMessageId: request.presentationMessageId,
       continueFromStopped: continueFromUserStopped,
       resumeDialogProcessId: continueFromUserStopped ? request.resumeDialogProcessId : "",
       resumeTurnScopeId: continueFromUserStopped ? request.resumeTurnScopeId : "",

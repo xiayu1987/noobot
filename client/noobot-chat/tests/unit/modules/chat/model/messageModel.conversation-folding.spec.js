@@ -77,7 +77,6 @@ describe("messageModel conversation folding", () => {
             canonicalActivityFact({
               eventId: "new-log-1",
               text: "new tool log",
-              sequenceScopeId: "message-new",
               turnScopeId: "client-turn:new-stream",
             }),
           ],
@@ -94,7 +93,6 @@ describe("messageModel conversation folding", () => {
               eventId: "new-log-2",
               text: "new tool log 2",
               sequence: 2,
-              sequenceScopeId: "message-new",
               turnScopeId: "client-turn:new-stream",
             }),
           ],

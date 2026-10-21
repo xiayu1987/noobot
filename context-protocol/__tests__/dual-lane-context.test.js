@@ -8,13 +8,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createModelContext } from "../src/assembly/hook-context.js";
 import { buildDualLaneModelContext, MODEL_CONTEXT_LANE } from "../src/assembly/dual-lane.js";
+import { contextMessage } from "./helpers/context-message.js";
 
 test("primary lane materializes the authoritative model context blocks", () => {
   const modelContext = createModelContext({
     messageBlocks: {
-      system: [{ role: "system", content: "base system" }],
+      system: [contextMessage({ role: "system", content: "base system", messageUid: "s1" })],
       history: [],
-      incremental: [{ role: "user", content: "current task" }],
+      incremental: [contextMessage({ role: "user", content: "current task", messageUid: "u1" })],
     },
   });
   const result = buildDualLaneModelContext({ lane: MODEL_CONTEXT_LANE.PRIMARY, modelContext });
@@ -27,12 +28,27 @@ test("primary lane materializes the authoritative model context blocks", () => {
 test("primary lane applies its declared runtime projection and history limit", () => {
   const modelContext = createModelContext({
     messageBlocks: {
-      system: [{ role: "system", content: "base system" }],
+      system: [contextMessage({ role: "system", content: "base system", messageUid: "s1" })],
       history: [
-        { role: "user", content: "old", dialogProcessId: "d1" },
-        { role: "assistant", content: "old answer", dialogProcessId: "d1" },
-        { role: "user", content: "latest", dialogProcessId: "d2" },
-        { role: "assistant", content: "latest answer", dialogProcessId: "d2" },
+        contextMessage({ role: "user", content: "old", dialogProcessId: "d1", messageUid: "h1" }),
+        contextMessage({
+          role: "assistant",
+          content: "old answer",
+          dialogProcessId: "d1",
+          messageUid: "h2",
+        }),
+        contextMessage({
+          role: "user",
+          content: "latest",
+          dialogProcessId: "d2",
+          messageUid: "h3",
+        }),
+        contextMessage({
+          role: "assistant",
+          content: "latest answer",
+          dialogProcessId: "d2",
+          messageUid: "h4",
+        }),
       ],
       incremental: [],
     },

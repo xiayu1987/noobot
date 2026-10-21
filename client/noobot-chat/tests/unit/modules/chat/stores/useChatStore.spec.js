@@ -356,13 +356,13 @@ describe("useChatStore sub session projection", () => {
         },
       ],
     });
-    commitPresentation(store, { messageId: "authoritative-assistant-1" });
+    commitPresentation(store, { presentationMessageId: "authoritative-assistant-1" });
 
     const result = store.reduceSubSessionMessageEvent(
       createSubSessionEvent({
         eventId: "authoritative-final-1",
         eventType: "authoritative_final_content",
-        messageId: "authoritative-assistant-1",
+        presentationMessageId: "authoritative-assistant-1",
         sequence: 1,
         revision: 1,
         text: "authoritative child result",
@@ -408,14 +408,14 @@ describe("useChatStore sub session projection", () => {
     );
     commitPresentation(store, {
       ...identity,
-      messageId: "authoritative-assistant-after-node-state",
+      presentationMessageId: "authoritative-assistant-after-node-state",
     });
     const finalMessage = store.reduceSubSessionMessageEvent(
       createSubSessionEvent({
         ...identity,
         eventId: "authoritative-final-after-node-state",
         eventType: "authoritative_final_content",
-        messageId: "authoritative-assistant-after-node-state",
+        presentationMessageId: "authoritative-assistant-after-node-state",
         sequence: 1,
         revision: 1,
         text: "done",
@@ -502,23 +502,23 @@ describe("useChatStore sub session projection", () => {
 
   it("keeps multiple assistant turns and distinct tool calls separate during realtime projection", () => {
     const store = useChatStore();
-    commitPresentation(store, { turnScopeId: "turn-1", messageId: "msg-1" });
+    commitPresentation(store, { turnScopeId: "turn-1", presentationMessageId: "msg-1" });
     applyMessageEvent(
       store,
       createSubSessionEvent({
         eventId: "assistant-1",
-        messageId: "msg-1",
+        presentationMessageId: "msg-1",
         turnScopeId: "turn-1",
         sequence: 1,
         content: "first",
       }),
     );
-    commitPresentation(store, { turnScopeId: "turn-2", messageId: "msg-2" });
+    commitPresentation(store, { turnScopeId: "turn-2", presentationMessageId: "msg-2" });
     applyMessageEvent(
       store,
       createSubSessionEvent({
         eventId: "assistant-2",
-        messageId: "msg-2",
+        presentationMessageId: "msg-2",
         turnScopeId: "turn-2",
         sequence: 1,
         content: "second",
@@ -529,7 +529,7 @@ describe("useChatStore sub session projection", () => {
       createSubSessionEvent({
         eventType: "tool_call_start",
         eventId: "tool-1",
-        messageId: "msg-2",
+        presentationMessageId: "msg-2",
         turnScopeId: "turn-2",
         sequence: 1,
         toolCallId: "call-1",
@@ -542,7 +542,7 @@ describe("useChatStore sub session projection", () => {
       createSubSessionEvent({
         eventType: "tool_call_start",
         eventId: "tool-2",
-        messageId: "msg-2",
+        presentationMessageId: "msg-2",
         turnScopeId: "turn-2",
         sequence: 2,
         toolCallId: "call-2",

@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import {
+  readContextMessageValue,
+  resolveContextMessageId,
+} from "@noobot/context-protocol/message/codec";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -56,48 +60,58 @@ function createIndexedSessionContextService(messages = []) {
   });
 }
 
-test("getContextProjection excludes history without dialog identity", async () => {
+test("getContextProjection rejects history without dialog identity", async () => {
   const messages = [
     {
+      messageUid: "fixture-msg-1",
       role: "assistant",
       content: "",
       tool_calls: [{ id: "call_old", function: { name: "execute_script", arguments: "{}" } }],
     },
     {
+      messageUid: "fixture-msg-2",
       role: "tool",
       content: '{"toolName":"execute_script","ok":true}',
       tool_call_id: "call_old",
     },
     {
+      messageUid: "fixture-msg-3",
       role: "user",
       content: "next task",
     },
     {
+      messageUid: "fixture-msg-4",
       role: "tool",
       content: '{"toolName":"execute_script","ok":true}',
       tool_call_id: "call_old",
     },
   ];
   const service = createSessionContextService(messages);
-  const result = await projectMessages(service, {
-    userId: "u1",
-    sessionId: "s1",
-  });
 
-  assert.deepEqual(result, []);
+  await assert.rejects(
+    projectMessages(service, { userId: "u1", sessionId: "s1" }),
+    /history context message requires additional_kwargs\.dialogProcessId/,
+  );
 });
 
 test("getContextProjection keeps explicit dialog group content in original order", async () => {
   const messages = [
-    { role: "user", content: "please continue", dialogProcessId: "dlg_1" },
-    { role: "assistant", content: "", dialogProcessId: "dlg_1" },
     {
+      messageUid: "fixture-msg-5",
+      role: "user",
+      content: "please continue",
+      dialogProcessId: "dlg_1",
+    },
+    { messageUid: "fixture-msg-6", role: "assistant", content: "", dialogProcessId: "dlg_1" },
+    {
+      messageUid: "fixture-msg-7",
       role: "assistant",
       content: "",
       dialogProcessId: "dlg_1",
       tool_calls: [{ id: "call_1", function: { name: "task_summary", arguments: "{}" } }],
     },
     {
+      messageUid: "fixture-msg-8",
       role: "tool",
       content: '{"toolName":"task_summary","ok":true}',
       dialogProcessId: "dlg_1",
@@ -118,9 +132,27 @@ test("getContextProjection keeps explicit dialog group content in original order
 
 test("getContextProjection respects summarized filter before window normalization", async () => {
   const messages = [
-    { role: "user", content: "keep me", summarized: false, dialogProcessId: "dlg_1" },
-    { role: "assistant", content: "old", summarized: true, dialogProcessId: "dlg_1" },
-    { role: "assistant", content: "new", summarized: false, dialogProcessId: "dlg_1" },
+    {
+      messageUid: "fixture-msg-9",
+      role: "user",
+      content: "keep me",
+      summarized: false,
+      dialogProcessId: "dlg_1",
+    },
+    {
+      messageUid: "fixture-msg-10",
+      role: "assistant",
+      content: "old",
+      summarized: true,
+      dialogProcessId: "dlg_1",
+    },
+    {
+      messageUid: "fixture-msg-11",
+      role: "assistant",
+      content: "new",
+      summarized: false,
+      dialogProcessId: "dlg_1",
+    },
   ];
   const service = createSessionContextService(messages);
   const result = await projectMessages(service, {
@@ -236,19 +268,16 @@ test("getContextProjection applies the terminal-history protocol before summariz
 
   const result = await projectMessages(service, { userId: "u1", sessionId: "s1" });
 
-  assert.deepEqual(
-    result.map((item) => item.messageUid),
-    [
-      "stopped-user",
-      "stopped-guidance-new",
-      "turn_stopped::terminal_status",
-      "completed-user",
-      "completed-old-injection",
-      "completed-new-injection",
-    ],
-  );
+  assert.deepEqual(result.map(resolveContextMessageId), [
+    "stopped-user",
+    "stopped-guidance-new",
+    "turn_stopped::terminal_status",
+    "completed-user",
+    "completed-old-injection",
+    "completed-new-injection",
+  ]);
   assert.equal(result[2].role, "user");
-  assert.equal(result[2].terminalHistoryExplanation, true);
+  assert.equal(readContextMessageValue(result[2], "terminalHistoryExplanation"), true);
 });
 
 test("getContextProjection projects error and timeout explanations as assistant messages", async () => {
@@ -274,7 +303,7 @@ test("getContextProjection projects error and timeout explanations as assistant 
   const result = await projectMessages(service, { userId: "u1", sessionId: "s1" });
 
   assert.deepEqual(
-    result.map((item) => [item.messageUid, item.role]),
+    result.map((item) => [resolveContextMessageId(item), item.role]),
     [
       ["error-user", "user"],
       ["error-turn::terminal_status", "assistant"],
@@ -316,32 +345,66 @@ test("getContextProjection rejects a terminal lifecycle without canonical messag
 
 test("getContextProjection keeps latest fixed dialog rounds and all unsummarized injected messages", async () => {
   const messages = [
-    { role: "user", content: "first real question", dialogProcessId: "dlg_1" },
     {
+      messageUid: "fixture-msg-12",
+      role: "user",
+      content: "first real question",
+      dialogProcessId: "dlg_1",
+    },
+    {
+      messageUid: "fixture-msg-13",
       role: "user",
       content: "[Relay from plugin/planning]\nold plan 1",
       dialogProcessId: "dlg_1",
     },
-    { role: "assistant", content: "first real answer", dialogProcessId: "dlg_1" },
-    { role: "user", content: "second real question", dialogProcessId: "dlg_2" },
     {
+      messageUid: "fixture-msg-14",
+      role: "assistant",
+      content: "first real answer",
+      dialogProcessId: "dlg_1",
+    },
+    {
+      messageUid: "fixture-msg-15",
+      role: "user",
+      content: "second real question",
+      dialogProcessId: "dlg_2",
+    },
+    {
+      messageUid: "fixture-msg-16",
       role: "user",
       content: "[Relay from plugin/planning_revision]\nold plan 2",
       dialogProcessId: "dlg_2",
     },
     {
+      messageUid: "fixture-msg-17",
       role: "user",
       content: "[Relay from plugin/planning_revision]\nlatest plan 2",
       dialogProcessId: "dlg_2",
     },
-    { role: "assistant", content: "second real answer", dialogProcessId: "dlg_2" },
-    { role: "user", content: "third real question", dialogProcessId: "dlg_3" },
     {
+      messageUid: "fixture-msg-18",
+      role: "assistant",
+      content: "second real answer",
+      dialogProcessId: "dlg_2",
+    },
+    {
+      messageUid: "fixture-msg-19",
+      role: "user",
+      content: "third real question",
+      dialogProcessId: "dlg_3",
+    },
+    {
+      messageUid: "fixture-msg-20",
       role: "user",
       content: "[Relay from plugin/planning]\ncurrent plan",
       dialogProcessId: "dlg_3",
     },
-    { role: "assistant", content: "third real answer", dialogProcessId: "dlg_3" },
+    {
+      messageUid: "fixture-msg-21",
+      role: "assistant",
+      content: "third real answer",
+      dialogProcessId: "dlg_3",
+    },
   ];
   const service = createSessionContextService(messages);
   const result = await projectMessages(service, {
@@ -369,24 +432,28 @@ test("getContextProjection keeps latest fixed dialog rounds and all unsummarized
 test("getContextProjection excludes current turn user when reusing an edited turn", async () => {
   const messages = [
     {
+      messageUid: "fixture-msg-22",
       role: "user",
       content: "上一轮问题",
       dialogProcessId: "dlg_old",
       turnScopeId: "client-turn:old",
     },
     {
+      messageUid: "fixture-msg-23",
       role: "assistant",
       content: "上一轮回答",
       dialogProcessId: "dlg_old",
       turnScopeId: "client-turn:old",
     },
     {
+      messageUid: "fixture-msg-24",
       role: "user",
       content: "全仓回归测试",
       dialogProcessId: "dlg_current",
       turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
     },
     {
+      messageUid: "fixture-msg-25",
       role: "assistant",
       content: "旧的待替换回答",
       dialogProcessId: "dlg_current",
@@ -409,24 +476,28 @@ test("getContextProjection excludes current turn user when reusing an edited tur
 test("getContextProjection passes current turn filter through recent history", async () => {
   const messages = [
     {
+      messageUid: "fixture-msg-26",
       role: "user",
       content: "历史问题",
       dialogProcessId: "dlg_old",
       turnScopeId: "client-turn:old",
     },
     {
+      messageUid: "fixture-msg-27",
       role: "assistant",
       content: "历史回答",
       dialogProcessId: "dlg_old",
       turnScopeId: "client-turn:old",
     },
     {
+      messageUid: "fixture-msg-28",
       role: "user",
       content: "全仓回归测试",
       dialogProcessId: "dlg_current",
       turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
     },
     {
+      messageUid: "fixture-msg-29",
       role: "assistant",
       content: "旧回答",
       dialogProcessId: "dlg_current",
@@ -484,6 +555,7 @@ test("getContextProjection selects fixed latest previous dialogProcessId rounds"
   const messages = [];
   for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_current"]) {
     messages.push({
+      messageUid: "fixture-msg-30",
       role: "user",
       content: `${id} user`,
       dialogProcessId: id,
@@ -491,6 +563,7 @@ test("getContextProjection selects fixed latest previous dialogProcessId rounds"
     });
     if (id !== "dlg_current") {
       messages.push({
+        messageUid: "fixture-msg-31",
         role: "assistant",
         content: `${id} assistant`,
         dialogProcessId: id,
@@ -523,9 +596,20 @@ test("getContextProjection selects fixed latest previous dialogProcessId rounds"
 
 test("getContextProjection uses fixed latest dialog history", async () => {
   const messages = [
-    { role: "user", content: "origin user", dialogProcessId: "dlg_1" },
-    { role: "assistant", content: "old answer", dialogProcessId: "dlg_1" },
     {
+      messageUid: "fixture-msg-32",
+      role: "user",
+      content: "origin user",
+      dialogProcessId: "dlg_1",
+    },
+    {
+      messageUid: "fixture-msg-33",
+      role: "assistant",
+      content: "old answer",
+      dialogProcessId: "dlg_1",
+    },
+    {
+      messageUid: "fixture-msg-34",
       role: "assistant",
       content: "",
       taskStatus: "start",
@@ -533,12 +617,18 @@ test("getContextProjection uses fixed latest dialog history", async () => {
       tool_calls: [{ id: "call_run", function: { name: "execute_script", arguments: "{}" } }],
     },
     {
+      messageUid: "fixture-msg-35",
       role: "tool",
       content: '{"toolName":"execute_script","ok":true}',
       tool_call_id: "call_run",
       dialogProcessId: "dlg_2",
     },
-    { role: "user", content: "latest user", dialogProcessId: "dlg_3" },
+    {
+      messageUid: "fixture-msg-36",
+      role: "user",
+      content: "latest user",
+      dialogProcessId: "dlg_3",
+    },
   ];
   const service = createSessionContextService(messages);
 
@@ -555,13 +645,18 @@ test("getContextProjection uses fixed latest dialog history", async () => {
 
 test("getContextProjection uses message first occurrence as the only model history order", async () => {
   const messages = [
-    { role: "user", content: "d6 user", dialogProcessId: "d6" },
-    { role: "assistant", content: "d1 late append", dialogProcessId: "d1" },
-    { role: "user", content: "d1 user", dialogProcessId: "d1" },
-    { role: "user", content: "d2 user", dialogProcessId: "d2" },
-    { role: "user", content: "d3 user", dialogProcessId: "d3" },
-    { role: "user", content: "d4 user", dialogProcessId: "d4" },
-    { role: "user", content: "d5 user", dialogProcessId: "d5" },
+    { messageUid: "fixture-msg-37", role: "user", content: "d6 user", dialogProcessId: "d6" },
+    {
+      messageUid: "fixture-msg-38",
+      role: "assistant",
+      content: "d1 late append",
+      dialogProcessId: "d1",
+    },
+    { messageUid: "fixture-msg-39", role: "user", content: "d1 user", dialogProcessId: "d1" },
+    { messageUid: "fixture-msg-40", role: "user", content: "d2 user", dialogProcessId: "d2" },
+    { messageUid: "fixture-msg-41", role: "user", content: "d3 user", dialogProcessId: "d3" },
+    { messageUid: "fixture-msg-42", role: "user", content: "d4 user", dialogProcessId: "d4" },
+    { messageUid: "fixture-msg-43", role: "user", content: "d5 user", dialogProcessId: "d5" },
   ];
   const service = createIndexedSessionContextService(messages);
 

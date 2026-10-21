@@ -26,7 +26,11 @@ import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 const SCAN = Object.freeze({ repositoryRoot, extensions: [".js", ".mjs"], includeTests: true });
 const ASSET_PACKAGE_DIR = "user-template/default-user";
 const PURE_PACKAGE_IMPORTS = Object.freeze({
-  "memory-protocol": ["@noobot/context-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
+  "memory-protocol": [
+    "@noobot/context-protocol/",
+    "@noobot/session-protocol",
+    ...PROTOCOL_LEAF_IMPORT_PREFIXES,
+  ],
   "memory-repair": ["@noobot/memory-protocol/", ...PROTOCOL_LEAF_IMPORT_PREFIXES],
 });
 const REMOVED_PATHS = Object.freeze(

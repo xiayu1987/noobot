@@ -48,7 +48,7 @@ function getTransferAttachments(value = null) {
       size: reference.size,
       preview: reference.preview,
       transferId: envelope.transferId,
-      messageId: envelope.messageId,
+      presentationMessageId: envelope.presentationMessageId,
       transferRole: reference.role,
     }));
   });

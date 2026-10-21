@@ -45,14 +45,7 @@ export function createRunner({
   const defaultRuntime = runtime || createTestRuntimeContext();
   let authorityEventSequence = 0;
   const sessionManager = {
-    async commitMessageEvent({
-      sessionId,
-      turnScopeId,
-      messageId,
-      commandId,
-      correlationId,
-      payload,
-    }) {
+    async commitMessageEvent({ sessionId, turnScopeId, commandId, correlationId, payload }) {
       authorityEventSequence += 1;
       return {
         committed: true,
@@ -63,12 +56,11 @@ export function createRunner({
             eventType: MESSAGE_EVENT_WIRE_EVENT,
             sessionId,
             turnScopeId,
-            messageId,
           },
           causality: { commandId, correlationId },
           ordering: {
             domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-            scopeId: messageId,
+            scopeId: payload.presentationMessageId,
             sequence: authorityEventSequence,
           },
           producer: { type: "test", id: "session-execution-runner-fixture" },
@@ -94,6 +86,7 @@ export function createRunner({
           traces: [{ id: "trace-1" }],
           turnMessages: [
             {
+              messageUid: "sm_test-assistant",
               messageId: "message-test-assistant",
               role: "assistant",
               type: "message",
@@ -145,7 +138,7 @@ export function createRunner({
                 rootSessionId: "s-1",
                 parentSessionId: "",
                 runId: "r-1",
-                messageId: "m-1",
+                presentationMessageId: "p-1",
               },
             });
             return { agentContext, userMessageAttachments: [] };

@@ -23,7 +23,7 @@ describe("2. 字段对齐测试", () => {
       const normalized = normalizeMessageEntity({
         role: "assistant",
         content: "hello",
-        additional_kwargs: { noobotMessageId: "message-1" },
+        messageId: "message-1",
       });
       assert.equal("id" in normalized, false);
       assert.equal(normalized.messageId, "message-1");

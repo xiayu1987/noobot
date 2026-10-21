@@ -14,13 +14,18 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 test("canonical tool-call projections retain declared context policy", () => {
   const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   const calls = [{ id: "call-1", name: "control", args: { value: 1 }, contextPolicy }];
 
   const stored = formatToolCallsForStorage(calls);
-  const modelMessage = buildAssistantModelMessageForToolCalls({ toolCalls: calls });
+  const modelMessage = buildAssistantModelMessageForToolCalls({
+    toolCalls: calls,
+    messageUid: createMessageUid(),
+    modelMessageId: "model-message-policy",
+  });
 
   assert.deepEqual(stored[0].contextPolicy, contextPolicy);
   assert.deepEqual(modelMessage.tool_calls[0].contextPolicy, contextPolicy);
@@ -30,7 +35,11 @@ test("ordinary tool-call projections do not synthesize context policy", () => {
   const calls = [{ id: "call-1", name: "read_file", args: {} }];
 
   const stored = formatToolCallsForStorage(calls);
-  const modelMessage = buildAssistantModelMessageForToolCalls({ toolCalls: calls });
+  const modelMessage = buildAssistantModelMessageForToolCalls({
+    toolCalls: calls,
+    messageUid: createMessageUid(),
+    modelMessageId: "model-message-ordinary",
+  });
 
   assert.equal(Object.hasOwn(stored[0], "contextPolicy"), false);
   assert.equal(Object.hasOwn(modelMessage.tool_calls[0], "contextPolicy"), false);

@@ -4,33 +4,39 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  buildHarnessInjectedMessage,
-  persistHarnessMessageToCurrentTurn,
-  resolvePromptInjectionId as resolvePromptInjectionIdFromMetadata,
+  buildHarnessInjectedRecord,
+  harnessPromptInjectedMessageType,
+  isAnyHarnessPromptMessage,
+  isHarnessPromptMessage,
+  persistHarnessRecordToCurrentTurn,
 } from "../capabilities/handlers/shared/message/injected-message-utils.js";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import {
+  getMessageId,
   replaceMessageProjection,
   resolveModelMessageBlocks,
   resolveModelMessages,
   writeMessageBlocks,
 } from "../core/message-store.js";
-import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
-import { isPlainObject, text } from "@noobot/shared/value";
+import {
+  isContextSystemMessage,
+  resolveContextInjectedMessageType,
+} from "@noobot/context-protocol/message/codec";
+import { text } from "@noobot/shared/value";
 
 const injectedPromptCache = new WeakMap();
 
-function scanInjectedIdsInMessage(message = {}, target = new Set()) {
-  const metadataId = resolvePromptInjectionIdFromMetadata(message);
-  if (metadataId) target.add(metadataId);
+function scanInjectedPromptTypes(message = {}, target = new Set()) {
+  if (isAnyHarnessPromptMessage(message)) target.add(resolveContextInjectedMessageType(message));
   return target;
 }
 
 function rebuildInjectedPromptCache(messages = []) {
-  const ids = new Set();
+  const types = new Set();
   for (const msg of messages) {
-    scanInjectedIdsInMessage(msg, ids);
+    scanInjectedPromptTypes(msg, types);
   }
-  const entry = { ids, scannedLength: messages.length };
+  const entry = { types, scannedLength: messages.length };
   injectedPromptCache.set(messages, entry);
   return entry;
 }
@@ -41,13 +47,13 @@ function getOrCreateInjectedPromptCache(messages = []) {
   const scannedLength = Number.isFinite(Number(current.scannedLength))
     ? Number(current.scannedLength)
     : 0;
-  const ids = current.ids instanceof Set ? current.ids : new Set();
+  const types = current.types instanceof Set ? current.types : new Set();
   if (messages.length < scannedLength) return rebuildInjectedPromptCache(messages);
   if (messages.length > scannedLength) {
     for (let index = scannedLength; index < messages.length; index += 1) {
-      scanInjectedIdsInMessage(messages[index], ids);
+      scanInjectedPromptTypes(messages[index], types);
     }
-    current.ids = ids;
+    current.types = types;
     current.scannedLength = messages.length;
   }
   return current;
@@ -57,10 +63,11 @@ export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
   if (!id) return false;
   if (!Array.isArray(messages)) return false;
   const cache = getOrCreateInjectedPromptCache(messages);
-  if (cache.ids.has(id)) return true;
-  const found = messages.some((msg) => resolvePromptInjectionIdFromMetadata(msg) === id);
+  const promptType = harnessPromptInjectedMessageType(id);
+  if (cache.types.has(promptType)) return true;
+  const found = messages.some((msg) => isHarnessPromptMessage(msg, id));
   if (found) {
-    cache.ids.add(id);
+    cache.types.add(promptType);
     cache.scannedLength = messages.length;
   }
   return found;
@@ -73,9 +80,6 @@ function normalizePromptEntries(prompts = []) {
       content: String(item?.content || ""),
       priority: Number.isFinite(Number(item?.priority)) ? Number(item.priority) : 50,
       mode: (text(item?.mode) || "prepend").toLowerCase(),
-      messageBlockPolicy: isPlainObject(item?.messageBlockPolicy)
-        ? { ...item.messageBlockPolicy }
-        : null,
     }))
     .filter((item) => item.id && item.content);
 }
@@ -83,11 +87,7 @@ function normalizePromptEntries(prompts = []) {
 function isPromptMessage(message = {}, id = "") {
   const promptId = text(id);
   if (!promptId) return false;
-  return resolvePromptInjectionIdFromMetadata(message) === promptId;
-}
-
-function isAnyPromptInjectionMessage(message = {}) {
-  return !!resolvePromptInjectionIdFromMetadata(message);
+  return isHarnessPromptMessage(message, promptId);
 }
 
 function removePromptMessagesFromList(messages = [], id = "", { removeSystem = false } = {}) {
@@ -151,7 +151,7 @@ function commitPromptMessages(
   { replaceExisting = false } = {},
 ) {
   const blocks = resolveModelMessageBlocks(ctx);
-  const keep = (message) => !(replaceExisting && isAnyPromptInjectionMessage(message));
+  const keep = (message) => !(replaceExisting && isAnyHarnessPromptMessage(message));
   const nextBlocks = {
     system: (blocks.system || []).filter(keep),
     history: [...(blocks.history || [])],
@@ -164,12 +164,13 @@ function commitPromptMessages(
   const committedByUid = new Map();
   for (const blockName of ["system", "incremental"]) {
     for (const message of resolveModelMessageBlocks(ctx)[blockName]) {
-      if (message?.messageUid) committedByUid.set(message.messageUid, message);
+      const messageUid = getMessageId(message);
+      if (messageUid) committedByUid.set(messageUid, message);
     }
   }
   replaceMessageProjection(
     ctx,
-    nextMessages.map((message) => committedByUid.get(message?.messageUid) || message),
+    nextMessages.map((message) => committedByUid.get(getMessageId(message)) || message),
   );
 }
 
@@ -181,17 +182,16 @@ function findAfterLeadingSystemIndex(messages = []) {
   return index;
 }
 
-function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
+function persistPromptRecordsToCurrentTurn(ctx = {}, promptRecords = []) {
   let count = 0;
-  for (const message of Array.isArray(promptMessages) ? promptMessages : []) {
-    if (persistHarnessMessageToCurrentTurn(ctx, message, true)) count += 1;
+  for (const record of promptRecords) {
+    if (persistHarnessRecordToCurrentTurn(ctx, record, true)) count += 1;
   }
   return count;
 }
 
 export function injectSystemMessages(ctx = {}, options = {}) {
   const messages = resolveModelMessages(ctx);
-  let nextMessages = [...messages];
 
   const promptEntries = normalizePromptEntries(options?.prompts);
   if (!promptEntries.length) return false;
@@ -204,57 +204,46 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     normalizeSystemPromptPlacement(ctx, id);
   }
 
+  let nextMessages = [...messages];
+
   let injected = false;
   let replaceExisting = false;
   const cache = getOrCreateInjectedPromptCache(messages);
-  const existingIds = cache.ids;
+  const existingTypes = cache.types;
 
   const sorted = promptEntries
-    .filter((item) => item.mode === "replace" || !existingIds.has(item.id))
+    .filter(
+      (item) =>
+        item.mode === "replace" || !existingTypes.has(harnessPromptInjectedMessageType(item.id)),
+    )
     .sort((a, b) => b.priority - a.priority);
 
   const prependItems = [];
   const afterSystemItems = [];
   const appendItems = [];
 
-  for (const { id, content, mode, messageBlockPolicy } of sorted) {
+  const promptRecords = [];
+  const buildPromptMessage = (id, promptContent) => {
+    const record = buildHarnessInjectedRecord(promptContent, {
+      injectedMessageType: harnessPromptInjectedMessageType(id),
+    });
+    promptRecords.push(record);
+    return projectSessionRecordToContextMessage(record);
+  };
+  for (const { id, content, mode } of sorted) {
     if (options.skipIds?.has(id)) continue;
 
     const promptContent = content;
     if (mode === "replace") {
       replaceExisting = true;
-      nextMessages = nextMessages.filter((message) => !isAnyPromptInjectionMessage(message));
-      prependItems.push(
-        buildHarnessInjectedMessage(promptContent, {
-          injectedMessageType: `harness_prompt:${id}`,
-          promptInjectionId: id,
-          messageBlockPolicy,
-        }),
-      );
+      nextMessages = nextMessages.filter((message) => !isAnyHarnessPromptMessage(message));
+      prependItems.push(buildPromptMessage(id, promptContent));
     } else if (mode === "append") {
-      appendItems.push(
-        buildHarnessInjectedMessage(promptContent, {
-          injectedMessageType: `harness_prompt:${id}`,
-          promptInjectionId: id,
-          messageBlockPolicy,
-        }),
-      );
+      appendItems.push(buildPromptMessage(id, promptContent));
     } else if (mode === "after_system") {
-      afterSystemItems.push(
-        buildHarnessInjectedMessage(promptContent, {
-          injectedMessageType: `harness_prompt:${id}`,
-          promptInjectionId: id,
-          messageBlockPolicy,
-        }),
-      );
+      afterSystemItems.push(buildPromptMessage(id, promptContent));
     } else {
-      prependItems.push(
-        buildHarnessInjectedMessage(promptContent, {
-          injectedMessageType: `harness_prompt:${id}`,
-          promptInjectionId: id,
-          messageBlockPolicy,
-        }),
-      );
+      prependItems.push(buildPromptMessage(id, promptContent));
     }
     injected = true;
   }
@@ -276,7 +265,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
 
   if (injected) {
     if (options.persistToCurrentTurn !== false) {
-      persistPromptMessagesToCurrentTurn(ctx, promptMessages);
+      persistPromptRecordsToCurrentTurn(ctx, promptRecords);
     }
     rebuildInjectedPromptCache(updatedMessages);
   }

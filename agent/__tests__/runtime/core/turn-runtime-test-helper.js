@@ -96,10 +96,16 @@ function bindActiveTurnIdentity(modelContext, identity) {
   modelContext.activeTurnIdentity = expected;
 }
 
-export function prepareTestTurnExecution(modelState, loopState, identity, presentationMessageId) {
+export function prepareTestTurnExecution(
+  modelState,
+  loopState,
+  turnIdentity,
+  presentationMessageId,
+) {
   if (typeof presentationMessageId !== "string" || !presentationMessageId) {
     throw new TypeError("test turn execution requires explicit presentationMessageId");
   }
+  const identity = overrideTestTurnIdentity(turnIdentity, { presentationMessageId });
   if (identity.dialogProcessId !== loopState.dialogProcessId) {
     throw new TypeError("test turn identity dialogProcessId must equal loopState.dialogProcessId");
   }
@@ -128,8 +134,7 @@ export function prepareTestTurnExecution(modelState, loopState, identity, presen
     createCanonicalMessageEventSessionManager({ producerId: identity.runId });
   applyTestIdentityToRuntime(runtime, identity);
   bindAssistantMessageEventStream(runtime, {
-    messageId: identity.messageId,
-    presentationMessageId,
+    presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,
   });
   bindActiveTurnIdentity(loopState.modelContext, identity);

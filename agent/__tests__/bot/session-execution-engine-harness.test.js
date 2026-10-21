@@ -18,6 +18,16 @@ import { createStateCommitter } from "../../src/runtime/tool-execution/state-com
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext, getMessageId } from "@noobot/context-protocol";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+
+function contextMessage(role, content, turn = {}) {
+  return writeContextMessageMetadata(
+    { role, content },
+    { messageUid: createMessageUid(), ...turn },
+  );
+}
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
@@ -130,7 +140,7 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
   assert.equal(prepared.hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 1);
   assert.equal(prepared.hookManager.list(HOOK_POINT.AGENT.AFTER_TOOL_CALL).length, 1);
 
-  const messages = [{ role: "user", content: "hello" }];
+  const messages = [contextMessage("user", "hello")];
   const hookCtx = {
     userId: "u1",
     sessionId: "s1",
@@ -203,34 +213,26 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
   });
   const modelContext = createModelContext({
     messageBlocks: {
-      system: [{ role: "system", content: "system" }],
+      system: [contextMessage("system", "system")],
       history: [
-        {
-          role: "user",
-          content: "history-user",
+        contextMessage("user", "history-user", {
           dialogProcessId: "d-history",
           turnScopeId: "t-history",
-        },
-        {
-          role: "assistant",
-          content: "history-assistant",
+        }),
+        contextMessage("assistant", "history-assistant", {
           dialogProcessId: "d-history",
           turnScopeId: "t-history",
-        },
+        }),
       ],
       incremental: [
-        {
-          role: "user",
-          content: "current-user",
+        contextMessage("user", "current-user", {
           dialogProcessId: "d-current",
           turnScopeId: "t-current",
-        },
-        {
-          role: "assistant",
-          content: "current-assistant",
+        }),
+        contextMessage("assistant", "current-assistant", {
           dialogProcessId: "d-current",
           turnScopeId: "t-current",
-        },
+        }),
       ],
     },
   });
@@ -426,7 +428,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         path.join(tempRoot, "u1", "runtime", "session", sessionId),
       );
       assert.equal(currentUserMessage.messageUid, "sm_turn-scope-smoke");
-      const messages = [currentUserMessage];
+      const messages = [projectSessionRecordToContextMessage(currentUserMessage)];
       await capturedRuntime.hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, {
         userId: "u1",
         sessionId,
@@ -443,6 +445,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         traces: [{ type: "fake" }],
         turnMessages: [
           {
+            messageUid: createMessageUid(),
             messageId: "harness-assistant-message",
             role: "assistant",
             type: "message",
@@ -638,7 +641,10 @@ test("harness records tool call and state commit hook artifacts", async () => {
     runtime,
     agentContext,
   });
-  await committer.pushAssistantMessage({ content: "assistant committed" });
+  await committer.pushAssistantMessage({
+    content: "assistant committed",
+    messageUid: createMessageUid(),
+  });
   await committer.pushToolResult({
     call: successCall,
     toolResultText: successResult.toolResultText,

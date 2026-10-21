@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import {
   test,
   assert,
@@ -52,7 +53,7 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   assert.equal(result.message, "文件内容过长，请分批写入");
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.equal(result.transferEnvelopes.length, 1);
-  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
   assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "large.txt.tool-input.txt");
   assert.equal(

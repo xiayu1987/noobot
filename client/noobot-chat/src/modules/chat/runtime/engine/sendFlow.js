@@ -118,7 +118,7 @@ export function createChatEngineSender({
       reuseExistingUserTurn,
       turnScopeId,
       userMessageId,
-      assistantMessageId,
+      presentationMessageId,
       sessionId,
     } = request;
     const runtimeView = () =>
@@ -164,7 +164,7 @@ export function createChatEngineSender({
       messageText: explicitMessageText,
       turnScopeId,
       userMessageId,
-      assistantMessageId,
+      presentationMessageId,
       reuseExistingUserTurn,
       attachmentFiles: explicitAttachmentFiles,
       userAttachments: explicitUserAttachments,
@@ -172,7 +172,7 @@ export function createChatEngineSender({
     debugLogger.prepareAfter({
       reuseExistingUserTurn,
       userMessageId,
-      assistantMessageId,
+      presentationMessageId,
       userMessage,
       botMessage: botMsg,
       explicitUserAttachments,

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -20,9 +21,9 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 function canonicalTransferEnvelope(sessionId) {
   return {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer:multimodal-parse-1",
-    messageId: "message-1",
+    presentationMessageId: "message-1",
     identity: {
       sessionId,
       producer: { type: "tool", id: "call-1" },

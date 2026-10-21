@@ -66,23 +66,20 @@ function summarizePreferences(resolvedRunConfig) {
 function summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatchRuntime }) {
   const persistedUserMessageId = clean(currentUserMessage?.messageId);
   const requestedUserMessageId = clean(resolvedRunConfig?.userMessageId);
-  const requestedAssistantMessageId = clean(resolvedRunConfig?.presentationMessageId);
-  const messageEventStream = dispatchRuntime?.systemRuntime?.messageEventStream;
-  const boundAssistantMessageId = clean(
-    messageEventStream?.presentationMessageId ||
-      messageEventStream?.activePresentationMessageId ||
-      requestedAssistantMessageId,
+  const requestedPresentationMessageId = clean(resolvedRunConfig?.presentationMessageId);
+  const boundPresentationMessageId = clean(
+    dispatchRuntime?.systemRuntime?.messageEventStream?.activePresentationMessageId,
   );
   return {
     requestedUserMessageId,
     persistedUserMessageId,
     userMessageIdConsumed:
       Boolean(requestedUserMessageId) && requestedUserMessageId === persistedUserMessageId,
-    requestedAssistantMessageId,
-    boundAssistantMessageId,
-    assistantMessageIdConsumed:
-      Boolean(requestedAssistantMessageId) &&
-      requestedAssistantMessageId === boundAssistantMessageId,
+    requestedPresentationMessageId,
+    boundPresentationMessageId,
+    presentationMessageIdConsumed:
+      Boolean(requestedPresentationMessageId) &&
+      requestedPresentationMessageId === boundPresentationMessageId,
   };
 }
 

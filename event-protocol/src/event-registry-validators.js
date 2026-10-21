@@ -57,11 +57,10 @@ export const validateTurnLifecycleEventEnvelope = (envelope) => {
   return { valid: errors.length === 0, errors };
 };
 
-const collectMessageOrderingErrors = (envelope, messageId, errors) => {
+const collectMessageOrderingErrors = (envelope, presentationMessageId, errors) => {
   const ordering = envelope?.ordering;
-  if (!messageId) errors.push("missing_message_id");
   if (ordering?.domain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) errors.push("sequence_domain_mismatch");
-  if (messageId && ordering?.scopeId !== messageId) errors.push("sequence_scope_mismatch");
+  if (text(ordering?.scopeId) !== presentationMessageId) errors.push("sequence_scope_mismatch");
   const sequence = Number(ordering?.sequence);
   if (isTransientMessageEventType(envelope?.payload?.eventType)) {
     if (sequence !== TRANSIENT_MESSAGE_EVENT_SEQUENCE) errors.push("transient_event_sequenced");
@@ -101,7 +100,6 @@ const collectInterjectionIdentityErrors = (envelope, errors) => {
   for (const [factField, envelopeValue] of [
     ["sessionId", identity?.sessionId],
     ["turnScopeId", identity?.turnScopeId],
-    ["messageId", identity?.messageId],
     ["presentationMessageId", payload.presentationMessageId],
     ["dialogProcessId", payload.dialogProcessId],
   ]) {
@@ -113,7 +111,7 @@ const collectInterjectionIdentityErrors = (envelope, errors) => {
 
 export const validateMessageEnvelope = (envelope) => {
   const errors = [];
-  collectMessageOrderingErrors(envelope, text(envelope?.identity?.messageId), errors);
+  collectMessageOrderingErrors(envelope, text(envelope?.payload?.presentationMessageId), errors);
   const eventType = envelope?.payload?.eventType;
   if (eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     collectPresentationIdentityErrors(envelope, errors);

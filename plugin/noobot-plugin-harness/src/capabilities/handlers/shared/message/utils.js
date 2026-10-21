@@ -10,7 +10,12 @@ import {
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
+import {
+  isInjectedSessionMessageRecord,
+  resolveSessionMessageRecordInjectedType,
+} from "@noobot/session-protocol";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { HARNESS_INJECTED_MESSAGE_BY_VALUE } from "../constants.js";
 
 export function readAfterLlmCallText(ctx) {
   const modelResponse = ctx.modelResponse;
@@ -25,9 +30,20 @@ export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } 
   const expectedType = text(type);
   return (
     isInjectedMessage(message) &&
-    readContextMessageField(message, "injectedBy") === "harness-plugin" &&
-    (!expectedRole || text(message?.role) === expectedRole) &&
-    (!expectedType || text(message?.injectedMessageType) === expectedType)
+    readContextMessageField(message, "injectedBy") === HARNESS_INJECTED_MESSAGE_BY_VALUE &&
+    (!expectedRole || resolveContextMessageRole(message) === expectedRole) &&
+    (!expectedType || readContextMessageField(message, "injectedMessageType") === expectedType)
+  );
+}
+
+export function isHarnessInjectedSessionRecord(record = {}, { role = "", type = "" } = {}) {
+  const expectedRole = text(role);
+  const expectedType = text(type);
+  return (
+    isInjectedSessionMessageRecord(record) &&
+    text(record?.injectedBy) === HARNESS_INJECTED_MESSAGE_BY_VALUE &&
+    (!expectedRole || text(record?.role) === expectedRole) &&
+    (!expectedType || resolveSessionMessageRecordInjectedType(record) === expectedType)
   );
 }
 

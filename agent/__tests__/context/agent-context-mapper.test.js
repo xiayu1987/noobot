@@ -24,7 +24,7 @@ function buildEnvelope() {
         rootSessionId: "r1",
         dialogProcessId: "dp1",
       },
-      runConfig: { turnScopeId: "turn1", executionId: "run1", messageId: "message1" },
+      runConfig: { turnScopeId: "turn1", executionId: "run1", presentationMessageId: "message1" },
       staticInfo: {
         cwd: "/workspace",
         basePath: "/workspace/u1",
@@ -62,7 +62,7 @@ test("explicit envelope input creates a serializable versioned envelope", () => 
     dialogProcessId: "dp1",
     turnScopeId: "turn1",
     runId: "run1",
-    messageId: "message1",
+    presentationMessageId: "message1",
   });
   assert.equal(context.environment.permissions.isSuperUser, true);
   assert.equal(context.environment.workspace.basePath, "/workspace/u1");

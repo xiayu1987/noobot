@@ -66,7 +66,6 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
       activeTurnScopeId: "t1",
       activeTurn: {
         turnScopeId: "t1",
-        messageId: "message-1",
         presentationMessageId: "message-1",
         revision: 3,
         sequence: 3,
@@ -192,7 +191,6 @@ test("reconnect buffers live events until after the authoritative baseline", asy
       activeTurnScopeId: "turn-reconnect-live-buffer",
       activeTurn: {
         turnScopeId: "turn-reconnect-live-buffer",
-        messageId: "message-reconnect-live-buffer",
         presentationMessageId: "message-reconnect-live-buffer",
         revision: 3,
         sequence: 3,
@@ -373,7 +371,6 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
       activeTurnScopeId: "turn-reconnect-superseded",
       activeTurn: {
         turnScopeId: "turn-reconnect-superseded",
-        messageId: "message-superseded-gap-3",
         presentationMessageId: "presentation-superseded-gap-3",
         revision: 3,
         sequence: 3,
@@ -450,7 +447,6 @@ function snapshotEnvelope({ commandId, sessionId, sequence, recovery, activeTurn
 
 const processingOrphan = {
   turnScopeId: "turn-orphan",
-  messageId: "message-orphan",
   presentationMessageId: "message-orphan",
   revision: 3,
   sequence: 3,

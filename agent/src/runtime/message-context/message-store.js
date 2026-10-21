@@ -6,6 +6,7 @@
 
 import { ToolMessage } from "@langchain/core/messages";
 import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 export function appendToolResultModelMessage({
@@ -25,12 +26,10 @@ export function appendToolResultModelMessage({
   }
   return appendContextMessage(
     modelContext,
-    new ToolMessage({
-      tool_call_id: canonicalToolCallId,
-      content: String(content || ""),
-      additional_kwargs: { noobotMessageId: canonicalMessageUid },
-      ...(contextPolicy ? { contextPolicy } : {}),
-    }),
+    writeContextMessageMetadata(
+      new ToolMessage({ tool_call_id: canonicalToolCallId, content: String(content || "") }),
+      { messageUid: canonicalMessageUid, contextPolicy: contextPolicy || undefined },
+    ),
     { block: "incremental" },
   );
 }

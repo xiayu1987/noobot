@@ -18,7 +18,7 @@ export const ATTACHMENT_LIFECYCLE_WIRE_EVENT = "attachment_lifecycle";
 const FIELDS = new Set([
   "eventType",
   "eventVersion",
-  "messageId",
+  "attachmentEventId",
   "identity",
   "status",
   "occurredAt",
@@ -56,7 +56,7 @@ export function createAttachmentLifecycleEvent(value) {
   return freezeDefined({
     eventType,
     eventVersion: 1,
-    messageId: requireNonEmptyString(s.messageId, "invalid_attachment_event_message_id"),
+    attachmentEventId: requireNonEmptyString(s.attachmentEventId, "invalid_attachment_event_id"),
     identity,
     status: expected,
     occurredAt: requireNonEmptyString(s.occurredAt, "invalid_attachment_event_occurred_at"),

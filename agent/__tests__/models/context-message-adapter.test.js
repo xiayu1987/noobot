@@ -15,8 +15,12 @@ import {
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
-  resolveToolContextPolicy,
+  resolveContextMessageContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+
+const toContext = (records = []) =>
+  records.map((record) => projectSessionRecordToContextMessage(record));
 
 const checkpointEvidencePolicy = createFlowControlContextPolicy(
   FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
@@ -44,7 +48,7 @@ test("toLangChainToolCalls preserves canonical context policy for both tool-call
 
 test("restored task_check history remains checkpoint evidence after LangChain projection", () => {
   const history = buildHistoryMessages({
-    effectiveHistoryMessages: [
+    effectiveHistoryMessages: toContext([
       {
         role: "assistant",
         content: "",
@@ -63,7 +67,7 @@ test("restored task_check history remains checkpoint evidence after LangChain pr
         messageUid: "sm_task_check_result",
         tool_call_id: "task-check-1",
       },
-    ],
+    ]),
   });
 
   assert.deepEqual(collectLatestCheckpointEvidenceMessageIndexes(history), new Set([0, 1]));
@@ -120,9 +124,9 @@ test("restored checkpoint tool results retain policy in history and close summar
     { role: "assistant", content: "done", messageUid: "assistant-final", dialogProcessId },
   ];
 
-  const history = buildHistoryMessages({ effectiveHistoryMessages: source });
-  assert.deepEqual(resolveToolContextPolicy(history[2]), boundaryPolicy);
-  assert.deepEqual(resolveToolContextPolicy(history[4]), evidencePolicy);
+  const history = buildHistoryMessages({ effectiveHistoryMessages: toContext(source) });
+  assert.deepEqual(resolveContextMessageContextPolicy(history[2]), boundaryPolicy);
+  assert.deepEqual(resolveContextMessageContextPolicy(history[4]), evidencePolicy);
   assert.deepEqual(
     collectDialogScopedMessagesToSummarize(history, {
       maxMessages: history.length,

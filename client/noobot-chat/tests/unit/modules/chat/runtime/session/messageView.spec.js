@@ -20,7 +20,6 @@ describe("session message view", () => {
     });
     const presentation = canonicalMessageEvent({
       eventType: "turn_presentation_committed",
-      messageId: "stream-1",
       presentationMessageId: "assistant-1",
       presentation: {
         userMessage: {

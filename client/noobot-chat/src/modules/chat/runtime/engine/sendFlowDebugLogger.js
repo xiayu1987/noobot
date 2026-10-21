@@ -46,7 +46,7 @@ function logPrepareAfter(ctx, params) {
     turnScopeId: ctx.turnScopeId,
     reuseExistingUserTurn: params.reuseExistingUserTurn,
     requestedUserMessageId: params.userMessageId,
-    requestedPresentationMessageId: params.assistantMessageId,
+    requestedPresentationMessageId: params.presentationMessageId,
     userMessage: summarizeStateMachineMessage(params.userMessage),
     assistantMessage: summarizeStateMachineMessage(params.botMessage),
     messages: sessionMessages(ctx).map(summarizeStateMachineMessage),

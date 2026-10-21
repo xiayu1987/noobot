@@ -20,8 +20,6 @@ import {
   initializeMessageEventState,
   appendConsumedMessageEvent,
   hasConsumedMessageEvent,
-  resolveMessageEventLaneState,
-  syncMessageEventAggregateState,
 } from "../../model/messageEventState.js";
 import { reduceToolTimeline, selectToolTimelineLogs } from "./toolTimeline.js";
 import { reduceActivityTimeline } from "./activityTimeline.js";
@@ -50,10 +48,6 @@ export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
   FINAL_CONTENT_LOCKED: "final_content_locked",
 });
 
-function stateFor(message, event) {
-  return resolveMessageEventLaneState(message, event);
-}
-
 function conflicts(message, event) {
   const messageId = text(message.messageId);
   const presentationId = text(message.presentationMessageId);
@@ -73,7 +67,6 @@ function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, ga
   if (transient) return { result: MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
   state.lastSequence = sequence;
   appendConsumedMessageEvent(state, event.identity.eventId);
-  syncMessageEventAggregateState(targetMessage, event.identity.eventId);
   return {
     result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
     applied: true,
@@ -89,11 +82,7 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
   if (conflicts(targetMessage, event))
     return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
 
-  const aggregateState = initializeMessageEventState(targetMessage).messageEventState;
-  if (hasConsumedMessageEvent(aggregateState, event.identity.eventId)) {
-    return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
-  }
-  const state = stateFor(targetMessage, event);
+  const state = initializeMessageEventState(targetMessage).messageEventState;
   if (hasConsumedMessageEvent(state, event.identity.eventId)) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
@@ -107,7 +96,6 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
   if (event.payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     state.lastSequence = sequence;
     appendConsumedMessageEvent(state, event.identity.eventId);
-    syncMessageEventAggregateState(targetMessage, event.identity.eventId);
     return {
       result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
       applied: true,

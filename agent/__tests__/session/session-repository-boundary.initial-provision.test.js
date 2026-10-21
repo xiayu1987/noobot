@@ -342,8 +342,8 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
     const persistenceScope = createSessionPersistenceScope({
       scopeId: "agent:node-1",
       parentSessionId: "parent-session-1",
-      relativeDir: "runtime/workflow-runs/run-1/nodes/node-1/child-session",
-      allowedRoot: "runtime/workflow-runs/run-1",
+      relativeDir: "runtime/plugin-data/workflow/session/run-1/node-1",
+      allowedRoot: "runtime/plugin-data/workflow/session",
     });
     await session.createSession({
       userId: "u1",

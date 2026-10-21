@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -19,10 +20,9 @@ function messageEvent(eventId, eventType, sequence, payload = {}) {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "session-1",
       turnScopeId: "turn-1",
-      messageId: "message-1",
     },
     causality: {},
-    ordering: { domain: "message-event", scopeId: "message-1", sequence },
+    ordering: { domain: "message-event", scopeId: "presentation-1", sequence },
     producer: { type: "agent", id: "agent-1" },
     occurredAt: `2026-09-05T03:39:0${sequence}.000Z`,
     payload: {
@@ -52,9 +52,9 @@ test("tool result transfer envelopes project onto the canonical assistant turn",
   initializeCurrentTurnMessageEventProjection(runtime);
   const transferEnvelope = {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer-1",
-    messageId: "message-1",
+    presentationMessageId: "presentation-1",
   };
 
   await runtime.projectCurrentTurnMessageEvent(
@@ -114,14 +114,13 @@ test("model analysis activity projects once and awaits its durable checkpoint", 
     chain: "",
     relayCorrelationId: "",
     sequence: 1,
-    sequenceScopeId: "message-1",
+    sequenceScopeId: "presentation-1",
     sequenceDomain: "message-event",
     authority: "authoritative",
     timestamp: "2026-09-05T03:39:01.000Z",
     sessionId: "session-1",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
-    messageId: "message-1",
     presentationMessageId: "presentation-1",
   });
 });
@@ -198,7 +197,9 @@ test("a completed activity attaches to its own model message, not the latest ass
   );
   assert.deepEqual(store.toArray()[0].activityTimeline, []);
 
-  const own = runtime.materializePendingCurrentTurnMessageEvents({ messageId: "model-message-2" });
+  const own = runtime.materializePendingCurrentTurnMessageEvents({
+    modelMessageId: "model-message-2",
+  });
   assert.equal(own.activityTimeline.length, 1);
   assert.equal(own.activityTimeline[0].text, "第二次调用的分析。");
 });
@@ -223,18 +224,21 @@ test("pending materialization keeps events owned by another invocation pending",
   );
 
   const first = runtime.materializePendingCurrentTurnMessageEvents({
-    messageId: "model-message-1",
+    modelMessageId: "model-message-1",
   });
   assert.deepEqual(
     first.activityTimeline.map((item) => item.eventId),
     ["unowned-1"],
   );
   const second = runtime.materializePendingCurrentTurnMessageEvents({
-    messageId: "model-message-2",
+    modelMessageId: "model-message-2",
   });
   assert.deepEqual(
     second.activityTimeline.map((item) => item.eventId),
     ["owned-2"],
   );
-  assert.throws(() => runtime.materializePendingCurrentTurnMessageEvents(), /requires messageId/);
+  assert.throws(
+    () => runtime.materializePendingCurrentTurnMessageEvents(),
+    /requires modelMessageId/,
+  );
 });

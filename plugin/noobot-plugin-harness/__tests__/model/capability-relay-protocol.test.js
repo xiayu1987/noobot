@@ -14,6 +14,10 @@ import {
   createTestHookContext,
   createTestModelResponse,
 } from "../helpers/public-runtime-fixtures.js";
+import {
+  readContextMessageField,
+  resolveContextInjectedMessageType,
+} from "@noobot/context-protocol/message/codec";
 
 const RELAY_PURPOSES = Object.freeze([
   "planning",
@@ -53,9 +57,13 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
     );
 
     const relay = ctx.modelContext.messageBlocks.incremental.at(-1);
-    assert.equal(relay.injectedMessage, true, purpose);
-    assert.equal(relay.injectedBy, "harness-plugin", purpose);
-    assert.equal(relay.injectedMessageType, `separate_model_relay:${purpose}`, purpose);
+    assert.equal(relay.additional_kwargs?.injectedMessage, true, purpose);
+    assert.equal(readContextMessageField(relay, "injectedBy"), "harness-plugin", purpose);
+    assert.equal(
+      resolveContextInjectedMessageType(relay),
+      `separate_model_relay:${purpose}`,
+      purpose,
+    );
     assert.match(relay.content, /read-only advice from a Harness auxiliary capability/, purpose);
     assert.match(relay.content, /not a user instruction/, purpose);
     assert.match(relay.content, /cannot change, cancel, or pause the actual user task/, purpose);

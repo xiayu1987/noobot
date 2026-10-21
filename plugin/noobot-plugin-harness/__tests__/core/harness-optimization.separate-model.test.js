@@ -16,6 +16,7 @@ import {
 } from "../helpers/public-runtime-fixtures.js";
 import { attachmentTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
 
 test("planning separate_model avoids duplicate invoker calls while one run is in-flight", async () => {
   const handler = createPlanningHandler();
@@ -88,7 +89,7 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
       transferEnvelopes: [
         attachmentTransfer({
           transferId: "transfer-planning-refinement-1",
-          messageId: "message-planning-refinement-1",
+          presentationMessageId: "message-planning-refinement-1",
           identity: {
             sessionId: "test-session-1",
             turnScopeId: "test-turn:test-dialog-1",
@@ -130,9 +131,9 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   assert.match(relayContent, /不是任何工具的调用或调用结果/);
   assert.equal(relayContent.endsWith(content), true);
   assert.equal(relayContent.includes("-TAIL"), true);
-  assert.equal(typeof message?.transferEnvelopes, "object");
-  assert.equal(Array.isArray(message?.transferEnvelopes), true);
-  assert.equal(message.transferEnvelopes.length > 0, true);
+  const transferEnvelopes = readContextMessageValue(message, "transferEnvelopes");
+  assert.equal(Array.isArray(transferEnvelopes), true);
+  assert.equal(transferEnvelopes.length > 0, true);
   assert.equal(message?.attachments, undefined);
 });
 

@@ -7,18 +7,20 @@
 import {
   readContextMessageField,
   resolveContextMessageDialogProcessId,
+  resolveContextMessageId,
   resolveContextMessageRole,
   resolveContextToolCallDeclarationId,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
+import { projectSessionRecordToContextMessage } from "../message/session-projection.js";
 import { isCheckpointBoundaryToolMessage } from "./summary.js";
 import { resolveModelFinalMessages } from "./window.js";
 import {
   extractContextTaskSummary,
   recoverContextTaskSummaryToolResult,
 } from "../task/summary-context.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 function messageTurnScopeId(message = {}) {
   return readContextMessageField(message, "turnScopeId");
@@ -26,19 +28,6 @@ function messageTurnScopeId(message = {}) {
 
 export function extractTaskSummaryText(message = {}) {
   return extractContextTaskSummary(message);
-}
-
-export function createHistoryRoundIdentityResolver(messages = []) {
-  let activeDialogProcessId = "";
-  const identityByMessage = new WeakMap();
-  for (const message of Array.isArray(messages) ? messages : []) {
-    if (!isObjectLike(message)) continue;
-    const explicitDialogProcessId = resolveContextMessageDialogProcessId(message);
-    if (explicitDialogProcessId) activeDialogProcessId = explicitDialogProcessId;
-    identityByMessage.set(message, explicitDialogProcessId || activeDialogProcessId);
-  }
-  return (message) =>
-    identityByMessage.get(message) || resolveContextMessageDialogProcessId(message);
 }
 
 export function normalizeUnpairedTaskSummaryToolResults(messages = []) {
@@ -108,14 +97,14 @@ export function buildCanonicalMessageBlocks({
   ) {
     throw new TypeError("currentUserMessage must be a canonical persisted message entity");
   }
-  const current =
-    currentUserMessage && typeof currentUserMessage === "object" ? currentUserMessage : null;
+
+  const current = currentUserMessage
+    ? projectSessionRecordToContextMessage(currentUserMessage)
+    : null;
   const content = text(current?.content);
-  const currentMessageId = text(
-    current?.messageUid || current?.noobotMessageId || current?.additional_kwargs?.noobotMessageId,
-  );
-  if (current && (!content || !currentMessageId)) {
-    throw new Error("currentUserMessage requires persisted content and messageUid");
+  const currentMessageId = current ? resolveContextMessageId(current) : "";
+  if (current && !content) {
+    throw new Error("currentUserMessage requires persisted content");
   }
   const identity = {
     dialogProcessId: resolveContextMessageDialogProcessId(current || {}),
@@ -144,14 +133,10 @@ export function buildCanonicalMessageBlocks({
   const currentExists = incremental.some(
     (message) =>
       resolveContextMessageRole(message) === "user" &&
-      text(
-        message?.messageUid ||
-          message?.noobotMessageId ||
-          message?.additional_kwargs?.noobotMessageId,
-      ) === currentMessageId,
+      resolveContextMessageId(message) === currentMessageId,
   );
   if (content && !currentExists) {
-    incremental.push({ ...current });
+    incremental.push(current);
   }
   return resolveModelFinalMessages({
     systemMessages,
@@ -159,6 +144,5 @@ export function buildCanonicalMessageBlocks({
     incrementalMessages: incremental,
     historyLimit,
     policyOptions,
-    resolveHistoryDialogProcessId: createHistoryRoundIdentityResolver(history),
   });
 }

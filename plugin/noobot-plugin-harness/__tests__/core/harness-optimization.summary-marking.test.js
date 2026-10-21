@@ -13,6 +13,12 @@ import {
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared/index.js";
 import { appendMessage, replaceMessageProjection } from "../../src/core/message-store.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
+import {
+  markContextMessageSummarized,
+  resolveContextMessageSummarized,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -23,7 +29,10 @@ const checkpointEvidencePolicy = createFlowControlContextPolicy(
 );
 
 function stampRoundIdentity(messages = [], dialogProcessId = "dp-1", turnScopeId = "turn-1") {
-  for (const message of messages) Object.assign(message, { dialogProcessId, turnScopeId });
+  for (const message of messages) {
+    canonicalizeTestContextMessage(message);
+    writeContextMessageMetadata(message, { dialogProcessId, turnScopeId });
+  }
   return messages;
 }
 
@@ -60,29 +69,30 @@ test("relayed injections keep one identity across context and current-turn persi
   );
 
   const [injected] = ctx.modelContext.messageBlocks.incremental;
-  assert.match(injected.messageUid, /^sm_/);
-  assert.equal(injected.additional_kwargs.noobotMessageId, injected.messageUid);
-  assert.equal(persisted[0].messageUid, injected.messageUid);
-  assert.equal(persisted[0].additional_kwargs.noobotMessageId, injected.messageUid);
+
+  assert.match(injected.additional_kwargs.messageUid, /^sm_/);
+  assert.equal(injected.messageUid, undefined);
+  assert.equal(persisted[0].messageUid, injected.additional_kwargs.messageUid);
+  assert.equal(persisted[0].additional_kwargs, undefined);
 });
 
 test("summary checkpoint requests restored incremental messages missing from the flat projection", async () => {
   const restoredCall = {
     role: "assistant",
     content: "",
-    additional_kwargs: { noobotMessageId: "restored-call" },
+    additional_kwargs: { messageUid: "restored-call" },
     tool_calls: [{ id: "restored", function: { name: "read_file" } }],
   };
   const restoredResult = {
     role: "tool",
     content: "restored-result",
-    additional_kwargs: { noobotMessageId: "restored-result" },
+    additional_kwargs: { messageUid: "restored-result" },
     tool_call_id: "restored",
   };
   const resumedCall = {
     role: "assistant",
     content: "",
-    additional_kwargs: { noobotMessageId: "resumed-call" },
+    additional_kwargs: { messageUid: "resumed-call" },
     tool_calls: [{ id: "resumed", function: { name: "read_file" } }],
   };
   stampRoundIdentity([restoredCall, restoredResult, resumedCall]);
@@ -125,9 +135,18 @@ test("summary checkpoint requests restored incremental messages missing from the
 
   assert.deepEqual(ids, ["restored-call", "restored-result"]);
   assert.ok(markedCount >= 2);
-  assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, undefined);
-  assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
-  assert.equal(ctx.modelContext.messageBlocks.incremental[2].summarized, undefined);
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[0]),
+    false,
+  );
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[1]),
+    false,
+  );
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[2]),
+    false,
+  );
   assert.deepEqual(
     ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
       .summarizedMessageIds,
@@ -140,25 +159,25 @@ test("summary checkpoint covers persisted history and active incremental message
   const historyUser = {
     role: "user",
     content: "previous task",
-    additional_kwargs: { noobotMessageId: "history-user" },
+    additional_kwargs: { messageUid: "history-user" },
   };
   const historyAnswer = {
     role: "assistant",
     content: "previous answer",
-    additional_kwargs: { noobotMessageId: "history-answer" },
+    additional_kwargs: { messageUid: "history-answer" },
   };
   stampRoundIdentity([historyUser, historyAnswer], "dp-history", "turn-history");
   const incrementalCall = {
     role: "assistant",
     content: "",
     tool_calls: [{ id: "current-call", function: { name: "read_file" } }],
-    additional_kwargs: { noobotMessageId: "incremental-call" },
+    additional_kwargs: { messageUid: "incremental-call" },
   };
   const incrementalResult = {
     role: "tool",
     content: "current result",
     tool_call_id: "current-call",
-    additional_kwargs: { noobotMessageId: "incremental-result" },
+    additional_kwargs: { messageUid: "incremental-result" },
   };
   stampRoundIdentity([incrementalCall, incrementalResult]);
   const state = { pending: {} };
@@ -211,13 +230,13 @@ test("summary checkpoint accepts unsummarized persisted history as part of the p
     role: "assistant",
     content: "",
     tool_calls: [{ id: "history-call", function: { name: "read_file" } }],
-    additional_kwargs: { noobotMessageId: "history-call-message" },
+    additional_kwargs: { messageUid: "history-call-message" },
   };
   const historyResult = {
     role: "tool",
     content: "history result",
     tool_call_id: "history-call",
-    additional_kwargs: { noobotMessageId: "history-result-message" },
+    additional_kwargs: { messageUid: "history-result-message" },
   };
   stampRoundIdentity([historyCall, historyResult], "dp-history", "turn-history");
   const state = { pending: {} };
@@ -253,7 +272,7 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
   const oldGuidance = {
     role: "user",
     additional_kwargs: {
-      noobotMessageId: "old-guidance",
+      messageUid: "old-guidance",
       injectedMessage: true,
       injectedBy: "harness-plugin",
       injectedMessageType: "separate_model_relay:guidance",
@@ -264,14 +283,14 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
     injectedMessage: true,
     injectedBy: "harness-plugin",
     injectedMessageType: "separate_model_relay:guidance",
-    additional_kwargs: { noobotMessageId: "latest-guidance" },
+    additional_kwargs: { messageUid: "latest-guidance" },
   };
   const oldSummary = {
     role: "user",
     injectedMessage: true,
     injectedBy: "harness-plugin",
     injectedMessageType: "separate_model_relay:summary",
-    additional_kwargs: { noobotMessageId: "old-summary" },
+    additional_kwargs: { messageUid: "old-summary" },
   };
   stampRoundIdentity([oldGuidance, latestGuidance, oldSummary]);
   const state = { pending: {} };
@@ -312,17 +331,17 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
     injectedMessage: true,
     injectedBy: "harness-plugin",
     injectedMessageType: "separate_model_relay:summary",
-    additional_kwargs: { noobotMessageId: "completed-summary" },
+    additional_kwargs: { messageUid: "completed-summary" },
   };
-  Object.assign(completedSummary, ctx.modelContext.activeTurnIdentity);
+  stampRoundIdentity([completedSummary]);
   appendMessage(ctx, completedSummary, { block: "incremental" });
 
   await markGuidanceSummarizedMessages(ctx, {});
 
-  assert.equal(oldGuidance.summarized, undefined);
-  assert.equal(latestGuidance.summarized, undefined);
-  assert.equal(oldSummary.summarized, undefined);
-  assert.equal(completedSummary.summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(oldGuidance), false);
+  assert.equal(resolveContextMessageSummarized(latestGuidance), false);
+  assert.equal(resolveContextMessageSummarized(oldSummary), false);
+  assert.equal(resolveContextMessageSummarized(completedSummary), false);
   assert.deepEqual(
     new Set(
       ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
@@ -377,7 +396,7 @@ test("guidance summary selects checkpoint identities without mutating canonical 
     harness: {
       markMessagesSummarized: ({ messages = [] } = {}) => {
         injectedCalled += 1;
-        for (const item of messages) item.summarized = true;
+        for (const item of messages) markContextMessageSummarized(item);
         return Array.isArray(messages) ? messages.length : 0;
       },
     },
@@ -385,8 +404,8 @@ test("guidance summary selects checkpoint identities without mutating canonical 
 
   const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
   assert.equal(markedCount, 2);
-  assert.equal(toolCall.summarized, undefined);
-  assert.equal(toolResult.summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(toolCall), false);
+  assert.equal(resolveContextMessageSummarized(toolResult), false);
   assert.equal(injectedCalled, 0);
 });
 
@@ -446,15 +465,15 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
     },
   );
   ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds = [
-    oldToolCall.additional_kwargs.noobotMessageId,
-    oldToolResult.additional_kwargs.noobotMessageId,
+    oldToolCall.additional_kwargs.messageUid,
+    oldToolResult.additional_kwargs.messageUid,
   ];
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
   assert.equal(markedCount >= 2, true);
-  assert.equal(oldToolCall.summarized, undefined);
-  assert.equal(oldToolResult.summarized, undefined);
-  assert.equal(newToolCall.summarized, undefined);
-  assert.equal(newToolResult.summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(oldToolCall), false);
+  assert.equal(resolveContextMessageSummarized(oldToolResult), false);
+  assert.equal(resolveContextMessageSummarized(newToolCall), false);
+  assert.equal(resolveContextMessageSummarized(newToolResult), false);
   assert.equal(
     ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds,
     null,
@@ -464,10 +483,7 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
       ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
         .summarizedMessageIds,
     ),
-    new Set([
-      oldToolCall.additional_kwargs.noobotMessageId,
-      oldToolResult.additional_kwargs.noobotMessageId,
-    ]),
+    new Set([oldToolCall.additional_kwargs.messageUid, oldToolResult.additional_kwargs.messageUid]),
   );
 });
 
@@ -528,7 +544,7 @@ test("guidance summary checkpoint retains classified Harness control-tool eviden
       activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
   );
-  const messageId = (message) => message.additional_kwargs.noobotMessageId;
+  const messageId = (message) => message.additional_kwargs.messageUid;
   ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds =
     messages.map(messageId);
 
@@ -570,6 +586,9 @@ test("guidance summary checkpoint selects matching messageBlocks instead of flat
     role: "user",
     content: "[来自harness外部模型输出/summary]\nsummary",
     additional_kwargs: {
+      messageUid: "summary-relay",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
       injectedMessageType: "separate_model_relay:summary",
       dialogProcessId: "dp-1",
     },
@@ -636,27 +655,29 @@ test("guidance summary checkpoint selects matching messageBlocks instead of flat
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
   assert.equal(markedCount, 4);
-  assert.equal(oldToolCall.summarized, undefined);
-  assert.equal(oldToolResult.summarized, undefined);
-  assert.equal(nextToolCall.summarized, undefined);
-  assert.equal(nextToolResult.summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(oldToolCall), false);
+  assert.equal(resolveContextMessageSummarized(oldToolResult), false);
+  assert.equal(resolveContextMessageSummarized(nextToolCall), false);
+  assert.equal(resolveContextMessageSummarized(nextToolResult), false);
   assert.deepEqual(
     new Set(
       ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
         .summarizedMessageIds,
     ),
     new Set([
-      oldToolCall.additional_kwargs.noobotMessageId,
-      oldToolResult.additional_kwargs.noobotMessageId,
-      nextToolCall.additional_kwargs.noobotMessageId,
-      nextToolResult.additional_kwargs.noobotMessageId,
+      oldToolCall.additional_kwargs.messageUid,
+      oldToolResult.additional_kwargs.messageUid,
+      nextToolCall.additional_kwargs.messageUid,
+      nextToolResult.additional_kwargs.messageUid,
     ]),
   );
   assert.equal(
-    ctx.modelContext.messageBlocks.system.some((message) => message.summarized === true),
+    ctx.modelContext.messageBlocks.system.some((message) =>
+      resolveContextMessageSummarized(message),
+    ),
     false,
   );
-  assert.equal(summaryRelay.summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(summaryRelay), false);
 });
 
 test("guidance summary checkpoint uses canonical message ids only", async () => {
@@ -732,21 +753,33 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
     },
   );
   ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds = [
-    oldToolCall.additional_kwargs.noobotMessageId,
-    oldToolResult.additional_kwargs.noobotMessageId,
+    oldToolCall.additional_kwargs.messageUid,
+    oldToolResult.additional_kwargs.messageUid,
   ];
 
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
   assert.equal(markedCount, 2);
-  assert.equal(oldToolCall.summarized, undefined);
-  assert.equal(oldToolResult.summarized, undefined);
-  assert.equal(newToolCall.summarized, undefined);
-  assert.equal(newToolResult.summarized, undefined);
-  assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
-  assert.equal(ctx.modelContext.messageBlocks.incremental[2].summarized, undefined);
-  assert.equal(ctx.modelContext.messageBlocks.incremental[3].summarized, undefined);
-  assert.equal(ctx.modelContext.messageBlocks.incremental[4].summarized, undefined);
+  assert.equal(resolveContextMessageSummarized(oldToolCall), false);
+  assert.equal(resolveContextMessageSummarized(oldToolResult), false);
+  assert.equal(resolveContextMessageSummarized(newToolCall), false);
+  assert.equal(resolveContextMessageSummarized(newToolResult), false);
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[1]),
+    false,
+  );
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[2]),
+    false,
+  );
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[3]),
+    false,
+  );
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[4]),
+    false,
+  );
   assert.equal(
     ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds,
     null,
@@ -757,10 +790,7 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
       ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
         .summarizedMessageIds,
     ),
-    new Set([
-      oldToolCall.additional_kwargs.noobotMessageId,
-      oldToolResult.additional_kwargs.noobotMessageId,
-    ]),
+    new Set([oldToolCall.additional_kwargs.messageUid, oldToolResult.additional_kwargs.messageUid]),
   );
   assert.equal(
     ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0].action,

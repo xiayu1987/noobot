@@ -3,14 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
-  version: 2,
+  version: TRANSFER_VERSION,
   transferId: "transfer-model-1",
-  messageId: "message-model-1",
+  presentationMessageId: "message-model-1",
   identity: {
     sessionId: "test-session",
     turnScopeId: "turn-1",

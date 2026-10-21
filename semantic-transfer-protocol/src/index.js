@@ -24,6 +24,7 @@ export * from "./vocabulary.js";
 export * from "./policies/transfer-envelope-fields.js";
 export * from "./policies/transfer-intent.js";
 export * from "./policies/transfer-result.js";
+export * from "./migrations.js";
 
 const PRODUCER_KEYS = new Set(["type", "id"]);
 const INTENT_KEYS = new Set([
@@ -163,7 +164,7 @@ export function createAttachmentReference({
 
 export function createTransferEnvelope({
   transferId,
-  messageId,
+  presentationMessageId,
   identity,
   direction,
   payload,
@@ -180,7 +181,10 @@ export function createTransferEnvelope({
     protocol: TRANSFER_PROTOCOL,
     version: TRANSFER_VERSION,
     transferId: required(transferId, "invalid_transfer_id"),
-    messageId: required(messageId, "invalid_transfer_message_id"),
+    presentationMessageId: required(
+      presentationMessageId,
+      "invalid_transfer_presentation_message_id",
+    ),
     identity: createTransferIdentity(identity),
     direction: required(direction, "invalid_transfer_direction"),
     payload: clean(payload),
@@ -231,7 +235,7 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
         "protocol",
         "version",
         "transferId",
-        "messageId",
+        "presentationMessageId",
         "identity",
         "direction",
         "payload",
@@ -243,7 +247,7 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
     if (value.protocol !== TRANSFER_PROTOCOL) throw new Error("invalid_protocol");
     if (value.version !== TRANSFER_VERSION) throw new Error("invalid_version");
     required(value.transferId, "invalid_transfer_id");
-    required(value.messageId, "invalid_message_id");
+    required(value.presentationMessageId, "invalid_presentation_message_id");
     createTransferIdentity(value.identity);
     if (!Object.values(TRANSFER_DIRECTION).includes(value.direction))
       throw new Error("invalid_direction");
@@ -303,7 +307,7 @@ export function assertTransferEnvelope(value) {
 export function transferIdentityKey(value) {
   return JSON.stringify([
     required(value.transferId, "invalid_transfer_id"),
-    required(value.messageId, "invalid_message_id"),
+    required(value.presentationMessageId, "invalid_presentation_message_id"),
   ]);
 }
 

@@ -7,6 +7,12 @@ import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext, writeMessageBlocks } from "@noobot/context-protocol";
+import {
+  readContextMessageValue,
+  resolveContextMessageId,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 
 import { invokeWithToolsTurn as invokeWithToolsTurnProduction } from "../../../src/runtime/turn/turn-executor.js";
@@ -28,6 +34,13 @@ const TEST_MODEL_SPEC = Object.freeze(
   }),
 );
 
+function contextMessage(native = {}, metadata = {}) {
+  return writeContextMessageMetadata(
+    { ...native },
+    { messageUid: createMessageUid(), ...metadata },
+  );
+}
+
 function invokeWithToolsTurn({ identity, ...turnArgs }) {
   prepareTestTurnExecution(
     turnArgs.modelState,
@@ -40,7 +53,7 @@ function invokeWithToolsTurn({ identity, ...turnArgs }) {
 
 test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invoke", async () => {
   let capturedMessages = [];
-  const harnessSystem = { role: "developer", content: "harness-policy" };
+  const harnessSystem = contextMessage({ role: "developer", content: "harness-policy" });
   const runtime = createTestRuntimeContext({
     runConfig: {
       hookManager: {
@@ -70,9 +83,12 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     },
   };
 
-  const system = { role: "system", content: "constructed-system" };
-  const history = { role: "assistant", content: "recent-history", dialogProcessId: "d-old" };
-  const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
+  const system = contextMessage({ role: "system", content: "constructed-system" });
+  const history = contextMessage(
+    { role: "assistant", content: "recent-history" },
+    { dialogProcessId: "d-old", turnScopeId: "t-old" },
+  );
+  const current = contextMessage({ role: "user", content: "current-user" });
   const modelState = {
     modelPort: createTestModelPort(llm),
     runtime,
@@ -114,23 +130,20 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
 
 test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stopped-snapshot resume turn", async () => {
   let capturedMessages = [];
-  const harnessSystem = {
-    role: "developer",
-    content: "harness-policy",
-    messageUid: "hook-system",
-    dialogProcessId: "d-resume",
-    turnScopeId: "turn-current",
-  };
-  const latestGuidance = {
-    role: "user",
-    content: "latest-guidance",
-    messageUid: "latest-guidance",
-    injectedMessage: true,
-    injectedBy: "noobot-plugin-harness",
-    injectedMessageType: "separate_model_relay:guidance",
-    dialogProcessId: "d-resume",
-    turnScopeId: "turn-current",
-  };
+  const harnessSystem = contextMessage(
+    { role: "developer", content: "harness-policy" },
+    { dialogProcessId: "d-resume", turnScopeId: "turn-current" },
+  );
+  const latestGuidance = contextMessage(
+    { role: "user", content: "latest-guidance" },
+    {
+      injectedMessage: true,
+      injectedBy: "noobot-plugin-harness",
+      injectedMessageType: "separate_model_relay:guidance",
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+    },
+  );
   const runtime = createTestRuntimeContext({
     runConfig: {
       hookManager: {
@@ -154,9 +167,9 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
           capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
             role: item.role || item.type || "",
             content: item.content,
-            dialogProcessId: item.dialogProcessId || item.additional_kwargs?.dialogProcessId || "",
-            turnScopeId: item.turnScopeId || item.additional_kwargs?.turnScopeId || "",
-            internalType: item.additional_kwargs?.noobotInternalMessageType || "",
+            dialogProcessId: readContextMessageValue(item, "dialogProcessId") || "",
+            turnScopeId: readContextMessageValue(item, "turnScopeId") || "",
+            internalType: readContextMessageValue(item, "noobotInternalMessageType") || "",
           }));
           return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
         },
@@ -164,37 +177,38 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     },
   };
 
-  const snapshotSystem = { role: "system", content: "snapshot-system" };
-  const snapshotHistory = {
-    role: "assistant",
-    content: "snapshot-history",
-    dialogProcessId: "d-stopped",
-  };
-  const resumedUser = {
-    role: "user",
-    content: "resume-user",
-    additional_kwargs: { dialogProcessId: "d-resume", turnScopeId: "turn-current" },
-  };
-  const staleGuidance = {
-    role: "user",
-    content: "stale-guidance",
-    messageUid: "stale-guidance",
-    dialogProcessId: "d-resume",
-    turnScopeId: "turn-current",
-    injectedMessage: true,
-    injectedBy: "noobot-plugin-harness",
-    injectedMessageType: "separate_model_relay:guidance",
-  };
-  const userMeta = {
-    role: "user",
-    content:
-      '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
-    additional_kwargs: {
+  const snapshotSystem = contextMessage({ role: "system", content: "snapshot-system" });
+
+  const snapshotHistory = contextMessage(
+    { role: "assistant", content: "snapshot-history" },
+    { dialogProcessId: "d-stopped", turnScopeId: "turn-stopped" },
+  );
+  const resumedUser = contextMessage(
+    { role: "user", content: "resume-user" },
+    { dialogProcessId: "d-resume", turnScopeId: "turn-current" },
+  );
+  const staleGuidance = contextMessage(
+    { role: "user", content: "stale-guidance" },
+    {
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+      injectedMessage: true,
+      injectedBy: "noobot-plugin-harness",
+      injectedMessageType: "separate_model_relay:guidance",
+    },
+  );
+  const userMeta = contextMessage(
+    {
+      role: "user",
+      content:
+        '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
+    },
+    {
       dialogProcessId: "d-resume",
       turnScopeId: "turn-current",
       noobotInternalMessageType: "user_meta",
     },
-  };
+  );
   const modelState = {
     modelPort: createTestModelPort(llm),
     runtime,
@@ -253,7 +267,7 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
       role: "assistant",
       content: "snapshot-history",
       dialogProcessId: "d-stopped",
-      turnScopeId: "",
+      turnScopeId: "turn-stopped",
       internalType: "",
     },
     {
@@ -334,7 +348,7 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
       };
     },
   };
-  const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
+  const current = contextMessage({ role: "user", content: "current-user" });
   const modelState = {
     modelPort: createTestModelPort(llm),
     runtime,
@@ -413,7 +427,7 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     messageBlocks: {
       system: [],
       history: [],
-      incremental: [{ role: "user", content: "run tool" }],
+      incremental: [contextMessage({ role: "user", content: "run tool" })],
     },
     traces: [],
     tools: [{ name: "execute_script" }],
@@ -441,7 +455,7 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     { type: "tool_use", id: "call_1", name: "execute_script", input: {} },
   ]);
   assert.equal(
-    assistantToolCall.additional_kwargs.noobotMessageId,
+    resolveContextMessageId(assistantToolCall),
     result.turnMessageStore.toArray().at(-1).messageUid,
   );
 });

@@ -31,7 +31,6 @@ const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revi
     userId: "u1",
     sessionId: "s1",
     turnScopeId: "t1",
-    messageId: "msg-event-t1",
     presentationMessageId: "msg-t1",
     dialogProcessId: "dp1",
     revision,
@@ -98,7 +97,6 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
           eventType: TURN_LIFECYCLE_WIRE_EVENT,
           sessionId: payload.sessionId,
           turnScopeId: payload.turnScopeId,
-          messageId: payload.messageId,
         },
         causality: { commandId: payload.commandId },
         ordering: {

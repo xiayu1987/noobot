@@ -61,47 +61,46 @@ test("task summary context recovery accepts only a classified canonical v1 bound
     transferEnvelopes: [{ protocol: "noobot.semantic-transfer", version: 1 }],
   });
   const recovered = recoverContextTaskSummaryToolResult({
-    messageUid: "summary-result-message",
     role: "tool",
-    type: "tool_result",
     content,
     tool_call_id: "summary-call-1",
-    contextPolicy: boundaryPolicy,
-    lc_kwargs: {
-      role: "tool",
-      tool_call_id: "summary-call-1",
-      contextPolicy: boundaryPolicy,
-    },
     additional_kwargs: {
+      messageUid: "summary-result-message",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      tool_call_id: "summary-call-1",
       contextPolicy: boundaryPolicy,
     },
   });
-  assert.equal(recovered.role, "user");
-  assert.equal(recovered.content, content);
-  assert.equal(recovered.phaseSummaryMemory, true);
-  assert.equal(recovered.messageUid, "summary-result-message");
-  assert.equal(recovered.tool_call_id, undefined);
-  assert.equal(recovered.type, undefined);
-  assert.equal(recovered.contextPolicy, undefined);
-  assert.equal(recovered.lc_kwargs, undefined);
-  assert.equal(recovered.original_tool_call_id, "summary-call-1");
-  assert.deepEqual(recovered.additional_kwargs, {
-    noobotMessageId: "summary-result-message",
-    dialogProcessId: "dialog-1",
-    turnScopeId: "turn-1",
-    noobotInternalMessageType: "phase_summary_memory",
-    recoveredFromUnpairedTaskSummary: true,
-    original_tool_call_id: "summary-call-1",
+
+  assert.deepEqual(recovered, {
+    role: "user",
+    content,
+    additional_kwargs: {
+      messageUid: "summary-result-message::phase_summary",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      noobotInternalMessageType: "phase_summary_memory",
+      recoveredFromUnpairedTaskSummary: true,
+      original_tool_call_id: "summary-call-1",
+    },
   });
+
+  assert.throws(
+    () =>
+      recoverContextTaskSummaryToolResult({
+        role: "tool",
+        content,
+        tool_call_id: "summary-call-1",
+        additional_kwargs: { contextPolicy: boundaryPolicy },
+      }),
+    /requires additional_kwargs\.messageUid/,
+  );
 
   assert.equal(
     recoverContextTaskSummaryToolResult({
       role: "tool",
       content: JSON.stringify({ toolName: "task_summary", summaryContent: valid }),
-      contextPolicy: boundaryPolicy,
+      additional_kwargs: { messageUid: "summary-legacy", contextPolicy: boundaryPolicy },
     }),
     null,
   );
@@ -110,6 +109,7 @@ test("task summary context recovery accepts only a classified canonical v1 bound
       role: "tool",
       content,
       tool_call_id: "unclassified-call",
+      additional_kwargs: { messageUid: "unclassified-result" },
     }),
     null,
   );

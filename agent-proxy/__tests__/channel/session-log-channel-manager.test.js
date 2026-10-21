@@ -86,7 +86,7 @@ test("ChannelManager counts nested authoritative message events without session 
     channel,
     MESSAGE_EVENT_WIRE_EVENT,
     canonicalMessageEvent({
-      messageId: "message-1",
+      presentationMessageId: "message-1",
       text: "authoritative result",
     }),
   );

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createNoopMemoryPostProcessService } from "../helpers/memory-postprocess-service.js";
@@ -14,9 +15,9 @@ import { buildLoopResult } from "../../src/runtime/turn/turn-result-aggregator.j
 function semanticTransferEnvelope() {
   return {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId: "transfer:assistant-message:tool:tool-call-1:output:tool_result_text",
-    messageId: "assistant-message",
+    presentationMessageId: "assistant-message",
     identity: {
       sessionId: "s1",
       turnScopeId: "turn-1",

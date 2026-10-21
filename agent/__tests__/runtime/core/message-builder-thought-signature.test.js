@@ -72,7 +72,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   assert.equal(aiMessage.tool_calls?.[0]?.id, "call_task_summary");
   assert.equal(aiMessage.tool_calls?.[0]?.name, "task_summary");
   assert.deepEqual(aiMessage.additional_kwargs || {}, {
-    noobotMessageId: "message-thought-signature",
+    messageUid: "message-thought-signature",
     dialogProcessId: "dialog-thought-signature",
     turnScopeId: "turn-thought-signature",
   });

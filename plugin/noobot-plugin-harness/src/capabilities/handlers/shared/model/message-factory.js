@@ -21,11 +21,6 @@ function markContextMessage(message = {}, source = {}) {
   if (!sourceMessageId) {
     throw new TypeError("Harness auxiliary Context message requires canonical message identity");
   }
-  Object.defineProperty(message, "noobotMessageId", {
-    value: sourceMessageId,
-    enumerable: false,
-    configurable: true,
-  });
   return declareAuxiliarySequenceIdentity(message, {
     kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
     key: sourceMessageId,

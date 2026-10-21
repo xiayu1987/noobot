@@ -442,7 +442,8 @@ function authorityEventInput(source = {}) {
     sessionId: source.sessionId ?? source.identity?.sessionId,
     turnScopeId: source.turnScopeId ?? source.identity?.turnScopeId,
     dialogProcessId: source.dialogProcessId ?? source.identity?.dialogProcessId,
-    presentationMessageId: source.presentationMessageId ?? source.presentation?.assistantMessageId,
+    presentationMessageId:
+      source.presentationMessageId ?? source.presentation?.presentationMessageId,
   };
 }
 

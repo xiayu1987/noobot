@@ -15,6 +15,7 @@ import {
 } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
+import { resolveTurnPresentationMessageId } from "@noobot/event-protocol/message-event";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 const authoritative = (eventType, sequence, extra = {}) =>
@@ -22,7 +23,6 @@ const authoritative = (eventType, sequence, extra = {}) =>
     eventId: `event-${sequence}`,
     eventType,
     sessionId: "session-1",
-    messageId: "message-1",
     presentationMessageId: "message-1",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
@@ -41,7 +41,6 @@ describe("reconnect authoritative message event replay", () => {
   it("materializes the atomic Turn presentation before applying its event tail", () => {
     const messages = [];
     const presentation = authoritative("turn_presentation_committed", 1, {
-      messageId: "stream-1",
       presentationMessageId: "assistant-1",
       presentation: {
         userMessage: {
@@ -55,7 +54,6 @@ describe("reconnect authoritative message event replay", () => {
         },
         assistantMessage: {
           id: "assistant-1",
-          messageId: "assistant-1",
           presentationMessageId: "assistant-1",
           role: "assistant",
           sessionId: "session-1",
@@ -66,12 +64,11 @@ describe("reconnect authoritative message event replay", () => {
       },
     });
     const delta = authoritative("llm_delta", 2, {
-      messageId: "stream-1",
       presentationMessageId: "assistant-1",
       text: "answer",
     });
     const findCanonicalMessageById = (_sessionId, messageId) =>
-      messages.find((message) => message.messageId === messageId) || null;
+      messages.find((message) => resolveTurnPresentationMessageId(message) === messageId) || null;
     const materializeTurnPresentation = (envelope) => {
       for (const message of Object.values(envelope.payload.presentation))
         messages.push({ ...message });
@@ -117,11 +114,10 @@ describe("reconnect authoritative message event replay", () => {
       sessionId === "session-1" ? canonicalMessages.get(messageId) || null : null;
 
     const first = authoritative("authoritative_final_content", 1, {
-      messageId: "message-1",
+      presentationMessageId: "message-1",
       text: "first",
     });
     const second = authoritative("authoritative_final_content", 1, {
-      messageId: "message-2",
       presentationMessageId: "message-2",
       eventId: "message-2-event-1",
       text: "second",
@@ -146,11 +142,11 @@ describe("reconnect authoritative message event replay", () => {
     expect(canonicalMessages.get("message-2").messageEventState.lastSequence).toBe(1);
   });
 
-  it("rejects reconnect message events without an authoritative messageId", () => {
+  it("rejects reconnect message events without an authoritative presentationMessageId", () => {
     const findCanonicalMessageById = () => {
       throw new Error("must not upsert an unidentified message");
     };
-    const envelope = authoritative("llm_delta", 1, { messageId: "", text: "wrong" });
+    const envelope = authoritative("llm_delta", 1, { presentationMessageId: "", text: "wrong" });
 
     const applied = applyReconnectEnvelopeToTargetMessage({
       envelope,
@@ -159,7 +155,7 @@ describe("reconnect authoritative message event replay", () => {
     });
 
     expect(applied).toBe(false);
-    expect(envelope.identity.messageId).toBe("");
+    expect(envelope.payload.presentationMessageId).toBe("");
   });
 
   it("uses the canonical reducer and consumes no-text tool events idempotently", () => {
@@ -232,7 +228,6 @@ describe("reconnect authoritative message event replay", () => {
         sessionId: "session-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
-        messageId: "message-1",
         presentationMessageId: "message-1",
       },
     });
@@ -262,10 +257,8 @@ describe("reconnect authoritative message event replay", () => {
     const guidance = (sequence, output) =>
       authoritative("thinking", sequence, {
         eventId: `guidance-analysis-${sequence}`,
-        messageId: "model-message-1",
         presentationMessageId: "message-1",
         sequenceDomain: "message-event",
-        sequenceScopeId: "model-message-1",
         activityKind: "guidance_analysis",
         purpose: "guidance",
         pluginFlow: "analysis",

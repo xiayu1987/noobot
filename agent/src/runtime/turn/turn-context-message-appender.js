@@ -6,7 +6,8 @@
 
 import { HumanMessage } from "@langchain/core/messages";
 import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
-import { createSessionMessageUid } from "../../context/session/message-uid.js";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import {
   CONTEXT_CONTROL_MESSAGE_TYPES,
   CONTEXT_INJECTED_MESSAGE_TYPE,
@@ -53,14 +54,7 @@ export function appendTurnContextControlMessage({
     turnScopeId,
     internalType: normalizedInternalType,
   });
-  const messageUid = createSessionMessageUid();
-  const additionalKwargs = {
-    noobotMessageId: messageUid,
-    noobotInternalMessageType: normalizedInternalType,
-    injectedMessage: true,
-    injectedMessageType: normalizedInternalType,
-    chatPresentation: false,
-  };
+  const messageUid = createMessageUid();
   const persistedMessage = turnMessageStore.push({
     messageUid,
     role: "user",
@@ -72,13 +66,16 @@ export function appendTurnContextControlMessage({
     content: String(content || ""),
     dialogProcessId,
     turnScopeId,
-    additional_kwargs: additionalKwargs,
   });
   appendContextMessage(
     modelContext,
-    new HumanMessage({
-      content: persistedMessage.content,
-      additional_kwargs: additionalKwargs,
+    writeContextMessageMetadata(new HumanMessage({ content: persistedMessage.content }), {
+      messageUid,
+      dialogProcessId,
+      turnScopeId,
+      noobotInternalMessageType: normalizedInternalType,
+      injectedMessage: true,
+      injectedMessageType: normalizedInternalType,
     }),
     { block: "incremental" },
   );
@@ -112,13 +109,6 @@ export function appendUserInterjectionMessage({
     .toArray()
     .find((message = {}) => text(message.messageUid) === messageUid);
   if (existing) return existing;
-  const additionalKwargs = {
-    noobotMessageId: messageUid,
-    noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
-    injectedMessage: true,
-    injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
-    chatPresentation: false,
-  };
   const persistedMessage = turnMessageStore.push({
     messageUid,
     role: "user",
@@ -132,16 +122,15 @@ export function appendUserInterjectionMessage({
     interjectionSequence,
     dialogProcessId,
     turnScopeId,
-    additional_kwargs: additionalKwargs,
   });
-  const modelMessage = new HumanMessage({ content, additional_kwargs: additionalKwargs });
-  modelMessage.messageUid = messageUid;
-  modelMessage.dialogProcessId = dialogProcessId;
-  modelMessage.turnScopeId = turnScopeId;
-  modelMessage.injectedMessage = true;
-  modelMessage.injectedMessageType = CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION;
-  modelMessage.noobotInternalMessageType = CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION;
-  modelMessage.interjectionSequence = interjectionSequence;
+  const modelMessage = writeContextMessageMetadata(new HumanMessage({ content }), {
+    messageUid,
+    dialogProcessId,
+    turnScopeId,
+    noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    injectedMessage: true,
+    injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+  });
   appendContextMessage(modelContext, modelMessage, { block: "incremental" });
   return persistedMessage;
 }

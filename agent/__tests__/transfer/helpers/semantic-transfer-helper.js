@@ -34,7 +34,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 export const TOOL_INPUT_OVERFLOW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars;
 export const BASE_IDENTITY = Object.freeze({
   transferId: "transfer-test-1",
-  messageId: "message-test-1",
+  presentationMessageId: "message-test-1",
   sessionId: "session-test-1",
   turnScopeId: "turn-test-1",
   runId: "run-test-1",

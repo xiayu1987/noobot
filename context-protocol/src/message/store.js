@@ -12,6 +12,7 @@ import {
   isContextSystemMessage,
   markContextMessageSummarized,
   readContextMessageField,
+  withContextMessageMetadata,
   resolveContextMessageId,
   resolveContextMessageRole,
   resolveContextMessageSummarized,
@@ -24,6 +25,8 @@ import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];
 }
+
+const UPDATABLE_NATIVE_FIELDS = new Set(["content"]);
 
 const ROUND_IDENTITY_FIELDS = ["dialogProcessId", "turnScopeId"];
 
@@ -59,34 +62,11 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
       throw new Error(`canonical message ${field} conflicts with the active turn identity`);
     }
   }
-  return { ...message, ...active };
+  return withContextMessageMetadata(message, active);
 }
 
 export function deriveMessageProjectionId(sourceMessageId = "", projectionType = "") {
   return deriveContextMessageProjectionId(sourceMessageId, projectionType);
-}
-
-function ensureMessageMetadata(message = {}) {
-  if (!isObjectLike(message)) return {};
-  if (!isObjectLike(message.additional_kwargs)) {
-    message.additional_kwargs = {};
-  }
-  return message.additional_kwargs;
-}
-
-function assignMessageId(message = {}, id = "") {
-  const normalizedId = text(id);
-  if (!isObjectLike(message) || !normalizedId) return "";
-  const additionalKwargs = ensureMessageMetadata(message);
-  additionalKwargs.noobotMessageId = normalizedId;
-  if (isObjectLike(message.lc_kwargs)) {
-    message.lc_kwargs.noobotMessageId = normalizedId;
-    if (!isObjectLike(message.lc_kwargs.additional_kwargs)) {
-      message.lc_kwargs.additional_kwargs = {};
-    }
-    message.lc_kwargs.additional_kwargs.noobotMessageId = normalizedId;
-  }
-  return normalizedId;
 }
 
 function mergeMessageState(target = {}, source = {}) {
@@ -98,7 +78,7 @@ function mergeMessageState(target = {}, source = {}) {
 }
 
 function resolveMessageContent(message = {}) {
-  const content = message?.content ?? message?.lc_kwargs?.content ?? "";
+  const content = message?.content ?? "";
   return typeof content === "string" ? content : JSON.stringify(content);
 }
 
@@ -121,47 +101,7 @@ function resolveStore(holder = {}) {
   const store = runtime.messageStore;
   if (!(store.byId instanceof Map)) store.byId = new Map();
   if (!Array.isArray(store.messages)) store.messages = [];
-  if (!Number.isFinite(Number(store.nextId))) {
-    store.nextId = store.messages.length + 1;
-  }
   return store;
-}
-
-function nextMessageId(store = {}) {
-  let next = Math.max(1, Math.trunc(Number(store.nextId) || 1));
-  let id = `am_${next.toString(36)}`;
-  while (store.byId instanceof Map && store.byId.has(id)) {
-    next += 1;
-    id = `am_${next.toString(36)}`;
-  }
-  store.nextId = next + 1;
-  return id;
-}
-
-function bumpNextMessageId(store = {}, id = "") {
-  if (!isObjectLike(store)) return;
-  const normalizedId = text(id);
-  const match = normalizedId.match(/^am_([0-9a-z]+)$/i);
-  if (!match) return;
-  const numeric = Number.parseInt(match[1], 36);
-  if (!Number.isFinite(numeric) || numeric < 1) return;
-  const current = Math.max(1, Math.trunc(Number(store.nextId) || 1));
-  if (current <= numeric) store.nextId = numeric + 1;
-}
-
-function reserveExplicitMessageIds(store = null, messageLists = []) {
-  if (!isObjectLike(store)) return;
-  if (store.byId instanceof Map) {
-    for (const id of store.byId.keys()) bumpNextMessageId(store, id);
-  }
-  for (const message of normalizeList(store.messages)) {
-    bumpNextMessageId(store, resolveContextMessageId(message));
-  }
-  for (const messages of normalizeList(messageLists)) {
-    for (const message of normalizeList(messages)) {
-      bumpNextMessageId(store, resolveContextMessageId(message));
-    }
-  }
 }
 
 function canonicalizeMessage(store = null, message = null) {
@@ -175,16 +115,15 @@ function canonicalizeMessage(store = null, message = null) {
     mergeMessageState(existingById, message);
     return existingById;
   }
-  const id = existingId || nextMessageId(store);
-  assignMessageId(message, id);
-  bumpNextMessageId(store, id);
-  store.byId.set(id, message);
+  if (!existingId) {
+    throw new Error("canonical context message requires additional_kwargs.messageUid");
+  }
+  store.byId.set(existingId, message);
   store.messages.push(message);
   return message;
 }
 
 function canonicalizeList(store = null, messages = []) {
-  reserveExplicitMessageIds(store, [messages]);
   return normalizeList(messages).map((message) => canonicalizeMessage(store, message));
 }
 
@@ -233,12 +172,6 @@ export function canonicalizeMessageStore(holder = {}) {
   if (!isObjectLike(holder)) return null;
   const store = resolveStore(holder);
   const blocks = isPlainObject(holder.messageBlocks) ? holder.messageBlocks : null;
-  reserveExplicitMessageIds(store, [
-    holder.messages,
-    blocks?.system,
-    blocks?.history,
-    blocks?.incremental,
-  ]);
   if (Array.isArray(holder.messages)) {
     holder.messages.splice(0, holder.messages.length, ...canonicalizeList(store, holder.messages));
   }
@@ -301,6 +234,11 @@ export function updateMessageById(holder = {}, messageId = "", patch = {}) {
   if (!normalizedId) throw new TypeError("messageId is required");
   if (!isPlainObject(patch)) {
     throw new TypeError("message patch must be an object");
+  }
+  for (const key of Object.keys(patch)) {
+    if (!UPDATABLE_NATIVE_FIELDS.has(key)) {
+      throw new TypeError(`message patch field is not updatable by id: ${key}`);
+    }
   }
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const message = store.byId.get(normalizedId);
@@ -404,7 +342,6 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
     ...normalizeList(blocks.history),
     ...normalizeList(blocks.incremental),
   ]);
-  reserveExplicitMessageIds(store, [blocks.system, blocks.history, blocks.incremental]);
   for (const blockName of ["system", "history", "incremental"]) {
     if (Object.prototype.hasOwnProperty.call(blocks, blockName)) {
       existing[blockName] = canonicalizeList(

@@ -20,7 +20,6 @@ function processing() {
       executionId,
       executionKind: EXECUTION_KIND.AGENT,
       rootExecutionId: executionId,
-      messageId: "message-1",
       presentationMessageId: "presentation-1",
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       startedAt: "2026-07-18T00:00:00.000Z",

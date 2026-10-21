@@ -5,7 +5,6 @@
  */
 import { mergeConfig } from "../config/index.js";
 import { normalizeContextPolicy } from "@noobot/agent-config-protocol/enums";
-import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/message/session-projection";
 import {
   resolveRuntimeBasePath,
   buildStaticInfo,
@@ -330,14 +329,10 @@ export class ContextBuilder {
       dialogProcessId,
       longMemory,
     });
-    return this.buildAgentContext(
-      systemContext,
-      projectSessionRecordsToContextMessages(sessionRecords),
-      {
-        dialogProcessId,
-        attachments,
-      },
-    );
+    return this.buildAgentContext(systemContext, sessionRecords, {
+      dialogProcessId,
+      attachments,
+    });
   }
 
   async buildNewSessionContext({ dialogProcessId }) {

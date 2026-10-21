@@ -125,12 +125,11 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
           eventType: MESSAGE_EVENT_WIRE_EVENT,
           sessionId: "s-refresh",
           turnScopeId: "turn-refresh",
-          messageId: "msg-refresh",
         },
         causality: { correlationId: "turn-refresh" },
         ordering: {
           domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-          scopeId: "msg-refresh",
+          scopeId: "msg-refresh-presentation",
           sequence: 1,
         },
         producer: { type: "agent", id: "test-agent" },

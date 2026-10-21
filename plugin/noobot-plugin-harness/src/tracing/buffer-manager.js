@@ -27,12 +27,6 @@ import { normalizeFsmState } from "../fsm/transitions.js";
 import { readHarnessBucket } from "../capabilities/handlers/shared/bucket-utils.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import {
-  HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD,
-  HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD,
-  HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
-  HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD,
-} from "../capabilities/handlers/shared/constants.js";
-import {
   HARNESS_I18N_KEYSET,
   resolveLocale as resolveHarnessLocale,
   translateI18nText,
@@ -213,13 +207,6 @@ export async function injectPrompt(point, ctx, options) {
         content,
         priority: options.promptPriority,
         mode: refreshPolicyPrompt ? "replace" : "after_system",
-        messageBlockPolicy: isPolicyPrompt
-          ? {
-              [HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD]: HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
-              [HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD]: true,
-              [HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD]: "policy",
-            }
-          : null,
       },
     ],
     systemBlockIds: isPolicyPrompt ? new Set([id]) : new Set(),

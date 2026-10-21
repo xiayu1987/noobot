@@ -6,11 +6,6 @@
 
 import { isPlainObject, text } from "@noobot/shared/value";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
-import {
-  readContextMessageField,
-  resolveContextMessageDialogProcessId,
-  resolveContextUserMetaMaterialized,
-} from "@noobot/context-protocol/message/codec";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { emitEvent } from "../../events/index.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
@@ -42,16 +37,6 @@ function filterSessionTransferEnvelopes(transferEnvelopes = []) {
 function resolveMessageAttachments(message = {}) {
   if (Array.isArray(message?.attachments)) return message.attachments;
   return [];
-}
-
-function resolveMessageBooleanField(message = {}, field = "") {
-  return (
-    message?.[field] === true || readContextMessageField(message, field).toLowerCase() === "true"
-  );
-}
-
-function resolveAuthoritativeMessageId(message = {}) {
-  return text(message?.messageId) || readContextMessageField(message, "noobotMessageId");
 }
 
 function valueOrDefault(value, defaultValue) {
@@ -317,7 +302,7 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     sessionId: input.sessionId,
     role: firstTruthyValue([messageItem.role], MESSAGE_ROLE.ASSISTANT),
     messageUid: stringValue(messageItem?.messageUid).trim(),
-    messageId: resolveAuthoritativeMessageId(messageItem),
+    messageId: text(messageItem?.messageId),
     presentationMessageId: stringValue(messageItem.presentationMessageId).trim(),
     ...(typeof messageItem.chatPresentation === "boolean"
       ? { chatPresentation: messageItem.chatPresentation }
@@ -325,7 +310,7 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     content: stringValue(messageItem.content),
     type: stringValue(messageItem.type),
     dialogProcessId: firstTruthyValue([
-      resolveContextMessageDialogProcessId(messageItem),
+      text(messageItem?.dialogProcessId),
       normalizeDialogProcessId(input.dialogProcessId),
     ]),
     parentDialogProcessId: firstTruthyValue([
@@ -344,15 +329,15 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     toolName: text(messageItem.toolName),
     rawModelContent: normalizedRawModelContent(messageItem.rawModelContent),
     modelAdditionalKwargs: normalizedOptionalObject(messageItem.modelAdditionalKwargs),
-    injectedMessage: resolveMessageBooleanField(messageItem, "injectedMessage"),
-    noobotInternalMessageType: readContextMessageField(messageItem, "noobotInternalMessageType"),
-    injectedBy: readContextMessageField(messageItem, "injectedBy"),
-    injectedMessageType: readContextMessageField(messageItem, "injectedMessageType"),
-    relayCorrelationId: readContextMessageField(messageItem, "relayCorrelationId"),
+    injectedMessage: messageItem?.injectedMessage === true,
+    noobotInternalMessageType: text(messageItem?.noobotInternalMessageType),
+    injectedBy: text(messageItem?.injectedBy),
+    injectedMessageType: text(messageItem?.injectedMessageType),
+    relayCorrelationId: text(messageItem?.relayCorrelationId),
     interjectionSequence: positiveIntegerValue(messageItem.interjectionSequence),
-    messageOrigin: readContextMessageField(messageItem, "messageOrigin").toLowerCase(),
-    userMetaMaterialized: resolveContextUserMetaMaterialized(messageItem),
-    pluginMessage: resolveMessageBooleanField(messageItem, "pluginMessage"),
+    messageOrigin: text(messageItem?.messageOrigin).toLowerCase(),
+    userMetaMaterialized: messageItem?.userMetaMaterialized === true,
+    pluginMessage: messageItem?.pluginMessage === true,
     pluginMeta: normalizedOptionalObject(messageItem.pluginMeta),
     transferEnvelopes: arrayValue(messageItem.transferEnvelopes),
     modelResponseMetadata: normalizedOptionalObject(messageItem.modelResponseMetadata),

@@ -14,10 +14,15 @@ import {
   removeContextMessagesByIds,
 } from "../src/mutation/context.js";
 import { getModelContextRevision } from "../src/assembly/model-runtime.js";
+import { contextMessage } from "./helpers/context-message.js";
 
 test("model context document excludes runtime capabilities and is JSON serializable", () => {
   const document = createModelContext({
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [contextMessage({ role: "user", content: "hello", messageUid: "m1" })],
+    },
     onCanonicalMessageAdded() {},
   });
 
@@ -35,7 +40,7 @@ test("context mutation consumes one exact revision and rejects replay", () => {
     },
   });
   const command = createContextMutation(document, CONTEXT_MUTATION_TYPES.APPEND_MESSAGE, {
-    message: { role: "user", content: "hello" },
+    message: contextMessage({ role: "user", content: "hello", messageUid: "m1" }),
     block: "incremental",
   });
 
@@ -48,17 +53,13 @@ test("context mutation consumes one exact revision and rejects replay", () => {
 });
 
 test("remove-by-id mutation updates authoritative blocks and projection atomically", () => {
-  const retained = {
-    role: "user",
-    content: "retained",
-    additional_kwargs: { noobotMessageId: "retained_1" },
-  };
-  const removed = {
+  const retained = contextMessage({ role: "user", content: "retained", messageUid: "retained_1" });
+  const removed = contextMessage({
     role: "assistant",
     content: "",
     tool_calls: [{ id: "call_1", name: "task_summary" }],
-    additional_kwargs: { noobotMessageId: "removed_1" },
-  };
+    messageUid: "removed_1",
+  });
   const document = createModelContext({
     messageBlocks: { system: [], history: [retained], incremental: [removed] },
   });

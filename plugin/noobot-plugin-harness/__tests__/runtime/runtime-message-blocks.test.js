@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { canonicalizeTestContextMessage, contextMessage } from "../helpers/context-message.js";
 
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
@@ -226,7 +227,7 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
         return [
           ...resolverCtx.modelContext.messageBlocks.system,
           ...resolverCtx.modelContext.messageBlocks.history,
-          { role: "assistant", content: "h2" },
+          contextMessage({ messageUid: "resolver-h2", role: "assistant", content: "h2" }),
           ...resolverCtx.modelContext.messageBlocks.incremental.filter(
             (item) => item?.role === "user",
           ),
@@ -353,7 +354,11 @@ test("capability runtime applies message blocks only once per runtime turn conte
     harness: { resolveModelMessages: resolveFromBlocks },
   });
   assert.equal(ctx.modelContext.messageBlocks, originalMessageBlocks);
-  appendMessage(ctx, { role: "assistant", content: "after-first-call" }, { block: "incremental" });
+  appendMessage(
+    ctx,
+    canonicalizeTestContextMessage({ role: "assistant", content: "after-first-call" }),
+    { block: "incremental" },
+  );
   await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
@@ -393,31 +398,31 @@ test("capability runtime keeps repeated unsummarized guidance across tool rounds
   });
   appendMessage(
     ctx,
-    {
+    canonicalizeTestContextMessage({
       role: "assistant",
       content: "",
       tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
-    },
+    }),
     { block: "incremental" },
   );
   appendMessage(
     ctx,
-    {
+    canonicalizeTestContextMessage({
       role: "tool",
       content: "tool result",
       tool_call_id: "call-1",
-    },
+    }),
     { block: "incremental" },
   );
   appendMessage(
     ctx,
-    {
+    canonicalizeTestContextMessage({
       role: "user",
       content: "second guidance",
       injectedMessage: true,
       injectedBy: "harness-plugin",
       injectedMessageType: "separate_model_relay:guidance",
-    },
+    }),
     { block: "incremental" },
   );
 
@@ -463,7 +468,7 @@ test("capability runtime preserves history and incremental user messages in bloc
           dialogProcessId: "d-current",
           additional_kwargs: {
             turnScopeId: "client-turn:current",
-            noobotMessageId: "am_current_user",
+            messageUid: "current-user",
           },
         },
       ],
@@ -476,7 +481,7 @@ test("capability runtime preserves history and incremental user messages in bloc
             turnScopeId: "client-turn:current",
             messageOrigin: "natural",
             userMetaMaterialized: true,
-            noobotMessageId: "am_current_user",
+            messageUid: "current-user",
           },
         },
         {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
-import { createSecureUuid } from "../../../../shared/identity/secureIdentity.js";
+import { createSecureUuid } from "@noobot/shared/secure-identity";
 import { text } from "@noobot/shared/value";
 
 export function isImageMime(mimeType = "") {

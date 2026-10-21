@@ -20,6 +20,7 @@
     "./tool-name": "./tool-name.js",
     "./event-stream": "./event-stream.js",
     "./value": "./value.js",
+    "./secure-identity": "./secure-identity.js",
     "./session-caller": "./session-caller.js",
     "./package.json": "./package.json"
   }

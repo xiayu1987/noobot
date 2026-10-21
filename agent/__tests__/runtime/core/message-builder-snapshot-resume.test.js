@@ -8,22 +8,37 @@ import assert from "node:assert/strict";
 import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
+import { withContextMessageMetadata } from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 const human = (value = {}) => ({
   role: "user",
-  ...value,
   content: value.content ?? "",
+  ...(value.additional_kwargs ? { additional_kwargs: value.additional_kwargs } : {}),
 });
 const assistant = (value = {}) => ({
   role: "assistant",
   content: value.content ?? "",
   ...(value.tool_calls ? { tool_calls: value.tool_calls } : {}),
+  ...(value.additional_kwargs ? { additional_kwargs: value.additional_kwargs } : {}),
 });
 const tool = (value = {}) => ({
   role: "tool",
   content: value.content ?? "",
   tool_call_id: value.tool_call_id,
+  ...(value.additional_kwargs ? { additional_kwargs: value.additional_kwargs } : {}),
 });
+
+function snapshotMessages(round, messages) {
+  return messages.map((message) =>
+    withContextMessageMetadata(message, {
+      messageUid: createMessageUid(),
+      dialogProcessId: round.dialogProcessId,
+      turnScopeId: round.turnScopeId,
+      ...(message.additional_kwargs || {}),
+    }),
+  );
+}
 
 test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool or user_meta degradation", () => {
   const toolCallIds = [
@@ -31,45 +46,55 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
     "call_PMqXx6xngxfSr9sRMxcECFGs",
     "call_TGw9JMNVsToP2ZkZDPPBX8Ex",
   ];
-  const history = [
-    human({
-      content: "测试所有工具",
-      additional_kwargs: {
-        dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
-        turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-      },
-    }),
-    human({
-      content: '[用户元信息]\n{\n  "userName": "admin"\n}',
-      additional_kwargs: {
-        dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
-        turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-        noobotInternalMessageType: "user_meta",
-      },
-    }),
-    human({ content: "[来自harness外部模型输出/guidance]\n先从文件读写和脚本执行开始。" }),
-    assistant({
-      content: "",
-      tool_calls: [{ id: toolCallIds[0], name: "execute_script", args: { command: "echo test" } }],
-    }),
-    tool({ tool_call_id: toolCallIds[0], content: "execute_script result" }),
-    human({ content: "[来自harness外部模型输出/guidance]\nwrite_file 成功，接下来读回验证内容。" }),
-    assistant({
-      content: "",
-      tool_calls: [{ id: toolCallIds[1], name: "write_file", args: { filePath: "hello.txt" } }],
-    }),
-    tool({ tool_call_id: toolCallIds[1], content: "write_file result" }),
-    human({ content: "[来自harness外部模型输出/guidance]\n现在读回文件。" }),
-    assistant({
-      content: "",
-      tool_calls: [{ id: toolCallIds[2], name: "read_file", args: { filePath: "hello.txt" } }],
-    }),
-    tool({ tool_call_id: toolCallIds[2], content: "read_file result" }),
-  ];
+  const history = snapshotMessages(
+    {
+      dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
+      turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
+    },
+    [
+      human({
+        content: "测试所有工具",
+        additional_kwargs: {
+          dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
+          turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+        },
+      }),
+      human({
+        content: '[用户元信息]\n{\n  "userName": "admin"\n}',
+        additional_kwargs: {
+          dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
+          turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+          noobotInternalMessageType: "user_meta",
+        },
+      }),
+      human({ content: "[来自harness外部模型输出/guidance]\n先从文件读写和脚本执行开始。" }),
+      assistant({
+        content: "",
+        tool_calls: [
+          { id: toolCallIds[0], name: "execute_script", args: { command: "echo test" } },
+        ],
+      }),
+      tool({ tool_call_id: toolCallIds[0], content: "execute_script result" }),
+      human({
+        content: "[来自harness外部模型输出/guidance]\nwrite_file 成功，接下来读回验证内容。",
+      }),
+      assistant({
+        content: "",
+        tool_calls: [{ id: toolCallIds[1], name: "write_file", args: { filePath: "hello.txt" } }],
+      }),
+      tool({ tool_call_id: toolCallIds[1], content: "write_file result" }),
+      human({ content: "[来自harness外部模型输出/guidance]\n现在读回文件。" }),
+      assistant({
+        content: "",
+        tool_calls: [{ id: toolCallIds[2], name: "read_file", args: { filePath: "hello.txt" } }],
+      }),
+      tool({ tool_call_id: toolCallIds[2], content: "read_file result" }),
+    ],
+  );
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
@@ -142,32 +167,35 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
   const realDialogProcessId = "dlg-real-user";
   const realTurnScopeId = "client-turn:real-user";
   const guidanceDialogProcessId = "dlg-guidance";
-  const history = [
-    human({
-      content: "测试所有工具",
-      additional_kwargs: {
-        dialogProcessId: realDialogProcessId,
-        turnScopeId: realTurnScopeId,
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-      },
-    }),
-    assistant({
-      content: "",
-      tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "a.txt" } }],
-    }),
-    tool({ tool_call_id: toolCallId, content: '{"ok":true}' }),
-    human({
-      content: "继续推进任务",
-      additional_kwargs: {
-        dialogProcessId: guidanceDialogProcessId,
-        turnScopeId: "client-turn:guidance",
-        injectedMessage: true,
-        injectedBy: "harness-plugin",
-        injectedMessageType: "guidance",
-      },
-    }),
-  ];
+  const history = snapshotMessages(
+    { dialogProcessId: realDialogProcessId, turnScopeId: realTurnScopeId },
+    [
+      human({
+        content: "测试所有工具",
+        additional_kwargs: {
+          dialogProcessId: realDialogProcessId,
+          turnScopeId: realTurnScopeId,
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+        },
+      }),
+      assistant({
+        content: "",
+        tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "a.txt" } }],
+      }),
+      tool({ tool_call_id: toolCallId, content: '{"ok":true}' }),
+      human({
+        content: "继续推进任务",
+        additional_kwargs: {
+          dialogProcessId: guidanceDialogProcessId,
+          turnScopeId: "client-turn:guidance",
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+          injectedMessageType: "guidance",
+        },
+      }),
+    ],
+  );
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
@@ -221,47 +249,48 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
     attachmentSource: "user",
     sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
   };
-  const history = [
-    human({
-      content: "测试所有工具",
-      userName: "admin",
-      sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
-      dialogProcessId: stoppedDialogProcessId,
-      turnScopeId: stoppedTurnScopeId,
-      attachments: [snapshotAttachment],
-      additional_kwargs: {
-        dialogProcessId: stoppedDialogProcessId,
-        turnScopeId: stoppedTurnScopeId,
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-      },
-    }),
-    human({
-      content: `[用户元信息]\n${JSON.stringify(
-        {
+  const history = snapshotMessages(
+    { dialogProcessId: stoppedDialogProcessId, turnScopeId: stoppedTurnScopeId },
+    [
+      human({
+        content: "测试所有工具",
+        additional_kwargs: {
           userName: "admin",
           sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
-          parentSessionId: "",
           dialogProcessId: stoppedDialogProcessId,
-          parentDialogProcessId: "",
           turnScopeId: stoppedTurnScopeId,
           attachments: [snapshotAttachment],
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
         },
-        null,
-        2,
-      )}\n[/用户元信息]`,
-      additional_kwargs: {
-        dialogProcessId: stoppedDialogProcessId,
-        turnScopeId: stoppedTurnScopeId,
-        noobotInternalMessageType: "user_meta",
-      },
-    }),
-    assistant({
-      content: "",
-      tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "hello.txt" } }],
-    }),
-    tool({ tool_call_id: toolCallId, content: "write_file result" }),
-  ];
+      }),
+      human({
+        content: `[用户元信息]\n${JSON.stringify(
+          {
+            userName: "admin",
+            sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+            parentSessionId: "",
+            dialogProcessId: stoppedDialogProcessId,
+            parentDialogProcessId: "",
+            turnScopeId: stoppedTurnScopeId,
+            attachments: [snapshotAttachment],
+          },
+          null,
+          2,
+        )}\n[/用户元信息]`,
+        additional_kwargs: {
+          dialogProcessId: stoppedDialogProcessId,
+          turnScopeId: stoppedTurnScopeId,
+          noobotInternalMessageType: "user_meta",
+        },
+      }),
+      assistant({
+        content: "",
+        tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "hello.txt" } }],
+      }),
+      tool({ tool_call_id: toolCallId, content: "write_file result" }),
+    ],
+  );
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
@@ -364,52 +393,53 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
     attachmentSource: "user",
     sessionId: "1ec8e12c-6c66-4f93-b4dc-57680c5c627a",
   };
-  const history = [
-    human({
-      content: "添加附件发送后编辑重发",
-      userName: "admin",
-      sessionId: "1ec8e12c-6c66-4f93-b4dc-57680c5c627a",
-      dialogProcessId: firstResendDialogProcessId,
-      turnScopeId: firstResendTurnScopeId,
-      attachments: [attachmentB],
-      additional_kwargs: {
-        dialogProcessId: firstResendDialogProcessId,
-        turnScopeId: firstResendTurnScopeId,
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-      },
-    }),
-    human({
-      content: `[用户元信息]\n${JSON.stringify(
-        {
+  const history = snapshotMessages(
+    { dialogProcessId: firstResendDialogProcessId, turnScopeId: firstResendTurnScopeId },
+    [
+      human({
+        content: "添加附件发送后编辑重发",
+        additional_kwargs: {
           userName: "admin",
           sessionId: "1ec8e12c-6c66-4f93-b4dc-57680c5c627a",
-          parentSessionId: "",
           dialogProcessId: firstResendDialogProcessId,
-          parentDialogProcessId: "",
           turnScopeId: firstResendTurnScopeId,
           attachments: [attachmentB],
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
         },
-        null,
-        2,
-      )}\n[/用户元信息]`,
-      additional_kwargs: {
-        dialogProcessId: firstResendDialogProcessId,
-        turnScopeId: firstResendTurnScopeId,
-        noobotInternalMessageType: "user_meta",
-      },
-    }),
-    human({
-      content: "继续前同一快照里的上一条用户消息",
-      additional_kwargs: {
-        dialogProcessId: "dlg-1ec8e12c-first-stop",
-        turnScopeId: "client-turn:mriksgyb:first-stop",
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-        attachments: [attachmentA],
-      },
-    }),
-  ];
+      }),
+      human({
+        content: `[用户元信息]\n${JSON.stringify(
+          {
+            userName: "admin",
+            sessionId: "1ec8e12c-6c66-4f93-b4dc-57680c5c627a",
+            parentSessionId: "",
+            dialogProcessId: firstResendDialogProcessId,
+            parentDialogProcessId: "",
+            turnScopeId: firstResendTurnScopeId,
+            attachments: [attachmentB],
+          },
+          null,
+          2,
+        )}\n[/用户元信息]`,
+        additional_kwargs: {
+          dialogProcessId: firstResendDialogProcessId,
+          turnScopeId: firstResendTurnScopeId,
+          noobotInternalMessageType: "user_meta",
+        },
+      }),
+      human({
+        content: "继续前同一快照里的上一条用户消息",
+        additional_kwargs: {
+          dialogProcessId: "dlg-1ec8e12c-first-stop",
+          turnScopeId: "client-turn:mriksgyb:first-stop",
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+          attachments: [attachmentA],
+        },
+      }),
+    ],
+  );
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
@@ -491,49 +521,55 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
 
 test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot resume", () => {
   const toolCallId = "call_G91UDe5fSfBb3uhw35jQlnIO";
-  const history = [
-    human({
-      content: "测试所有工具",
-      userName: "admin",
-      sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+  const history = snapshotMessages(
+    {
       dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
       turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
-      attachments: [],
-      additional_kwargs: {
+    },
+    [
+      human({
+        content: "测试所有工具",
+        userName: "admin",
+        sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
         dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
         turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-      },
-    }),
-    human({
-      content: `[用户元信息]\n${JSON.stringify(
-        {
-          userName: "admin",
-          sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
-          parentSessionId: "",
+        attachments: [],
+        additional_kwargs: {
           dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
-          parentDialogProcessId: "",
           turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
-          attachments: [],
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
         },
-        null,
-        2,
-      )}\n[/用户元信息]`,
-      additional_kwargs: {
-        dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
-        turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-        noobotInternalMessageType: "user_meta",
-      },
-    }),
-    assistant({
-      content: "",
-      tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "tool_test.txt" } }],
-    }),
-    tool({ tool_call_id: toolCallId, content: '{"ok":true}' }),
-  ];
+      }),
+      human({
+        content: `[用户元信息]\n${JSON.stringify(
+          {
+            userName: "admin",
+            sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+            parentSessionId: "",
+            dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
+            parentDialogProcessId: "",
+            turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
+            attachments: [],
+          },
+          null,
+          2,
+        )}\n[/用户元信息]`,
+        additional_kwargs: {
+          dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
+          turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+          noobotInternalMessageType: "user_meta",
+        },
+      }),
+      assistant({
+        content: "",
+        tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "tool_test.txt" } }],
+      }),
+      tool({ tool_call_id: toolCallId, content: '{"ok":true}' }),
+    ],
+  );
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(

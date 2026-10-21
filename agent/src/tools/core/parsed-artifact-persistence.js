@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { randomUUID } from "node:crypto";
 import {
   ATTACHMENT_EVENT_TYPE,
   ATTACHMENT_LIFECYCLE,
   ATTACHMENT_LIFECYCLE_WIRE_EVENT,
   ATTACHMENT_RELATION_TYPE,
   ATTACHMENT_SOURCE,
+  createAttachmentEventId,
   createAttachmentLifecycleEvent,
   findAttachmentRelation,
   projectAttachmentIdentity,
@@ -74,7 +74,7 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
   const event = createAttachmentLifecycleEvent({
     eventType: ATTACHMENT_EVENT_TYPE.PARSED,
     eventVersion: 1,
-    messageId: `attachment-event:${randomUUID()}`,
+    attachmentEventId: createAttachmentEventId(),
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: new Date().toISOString(),
@@ -93,7 +93,6 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
     identity: {
       eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
       turnScopeId: event.turnScopeId,
-      messageId: event.messageId,
     },
     causality: { correlationId: event.runId },
     ordering: {

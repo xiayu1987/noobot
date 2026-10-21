@@ -57,7 +57,6 @@ function workflowEnvelope(eventType, payload, ordering = {}) {
       eventType,
       sessionId: ordering.authoritySessionId || payload.sessionId,
       turnScopeId: payload.turnScopeId,
-      messageId: payload.messageId,
       executionId: payload.nodeExecutionId,
     },
     causality: { correlationId: payload.workflowRunId },
@@ -80,7 +79,6 @@ test("validates canonical planning envelope with explicit ownership", () => {
     {
       sessionId: "session-1",
       turnScopeId: "turn-1",
-      messageId: "message-1",
       presentationMessageId: "assistant-1",
       workflowRunId: "run-1",
       workflowPayload: { semantic: { nodes: [{ id: "node-1" }], flowtos: [] } },

@@ -43,12 +43,11 @@ function messageEnvelope(payload = null) {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "root-session",
       turnScopeId: "turn-1",
-      messageId: "message-1",
     },
     causality: { commandId: "command-1" },
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      scopeId: "message-1",
+      scopeId: "presentation-1",
       sequence: 1,
       aggregateVersion: 2,
     },

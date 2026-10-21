@@ -11,6 +11,7 @@ import {
   createGuidanceHandler,
   createAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
+import { resolveContextInjectedMessageType } from "@noobot/context-protocol/message/codec";
 
 test("separate_model mode: when turn-summary and revision are both pending, planning_revision runs before summary", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -141,14 +142,16 @@ test("separate_model simultaneous plan update follows up with summary before ana
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
-        item?.pluginFlow === "analysis" && String(item?.content || "").includes("疑点"),
+        resolveContextInjectedMessageType(item) === "separate_model_relay:guidance" &&
+        String(item?.content || "").includes("疑点"),
     ),
     false,
   );
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
-        item?.purpose === "summary" && String(item?.content || "").includes("小结完成"),
+        resolveContextInjectedMessageType(item) === "separate_model_relay:summary" &&
+        String(item?.content || "").includes("小结完成"),
     ),
     true,
   );

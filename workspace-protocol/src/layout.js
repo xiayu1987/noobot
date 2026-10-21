@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const WORKSPACE_LAYOUT_VERSION = 5;
+export const WORKSPACE_LAYOUT_VERSION = 6;
 
 export const WORKSPACE_ROOT_LAYOUT = Object.freeze({
   USERS_FILE: "user.json",
@@ -91,6 +91,27 @@ export function resolvePluginAssetsRelativePath(pluginId, ...segments) {
 
 export function resolvePluginDataRelativePath(pluginId, ...segments) {
   return joinRelative(WORKSPACE_LAYOUT.PLUGIN_DATA_DIR, pluginId, segments);
+}
+
+export const AGENT_SCOPED_SESSION_ROOTS = Object.freeze([WORKSPACE_LAYOUT.AGENT_SESSION_DIR]);
+
+export function resolveScopedSessionRoots(pluginDeclarations = []) {
+  if (!Array.isArray(pluginDeclarations)) {
+    throw new TypeError("scoped session root declarations must be an array");
+  }
+  const roots = [...AGENT_SCOPED_SESSION_ROOTS];
+  for (const { pluginId, scopedSessionRoots } of pluginDeclarations) {
+    if (!Array.isArray(scopedSessionRoots)) {
+      throw new TypeError(`plugin ${pluginId} scopedSessionRoots must be an array`);
+    }
+    for (const root of scopedSessionRoots) {
+      roots.push(resolvePluginDataRelativePath(pluginId, ...String(root ?? "").split("/")));
+    }
+  }
+  if (new Set(roots).size !== roots.length) {
+    throw new TypeError(`scoped session roots must be unique: ${roots.join(",")}`);
+  }
+  return Object.freeze(roots);
 }
 
 export function isWorkspaceRuntimeRelativePath(value) {

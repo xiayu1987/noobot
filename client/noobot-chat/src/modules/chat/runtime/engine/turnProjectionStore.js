@@ -6,7 +6,7 @@
 import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer.js";
 import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity.js";
-import { resolveMessageEventLaneState } from "../../model/messageEventState.js";
+import { initializeMessageEventState } from "../../model/messageEventState.js";
 import { mergeToolTimelines } from "./toolTimeline.js";
 import { mergeActivityTimelines } from "./activityTimeline.js";
 import { createTurnObservation } from "./turnObservation.js";
@@ -145,7 +145,6 @@ export function dispatchTurnEnvelope({
       source,
       eventId: String(envelope?.identity?.eventId || ""),
       eventType: String(envelope?.payload?.eventType || ""),
-      messageId: String(envelope?.identity?.messageId || ""),
       presentationMessageId: String(envelope?.payload?.presentationMessageId || ""),
       protocolFamily: String(envelope?.protocol?.family || ""),
       protocolVersion: Number(envelope?.protocol?.version || 0),
@@ -202,7 +201,7 @@ export function dispatchTurnEnvelope({
       reason: targetMessage ? "turn_identity_conflict" : "target_missing",
     });
   }
-  const state = resolveMessageEventLaneState(targetMessage, envelope);
+  const state = initializeMessageEventState(targetMessage).messageEventState;
   const sequence = Number(envelope?.ordering?.sequence || 0);
   const lastSequence = Number(state.lastSequence || 0);
   if (lastSequence && sequence > lastSequence + 1) {

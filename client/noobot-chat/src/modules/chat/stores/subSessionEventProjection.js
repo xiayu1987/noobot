@@ -7,6 +7,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   isTransientMessageEvent,
   resolveMessageEventPresentationId,
+  resolveTurnPresentationMessageId,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
@@ -146,7 +147,7 @@ export function materializeTurnPresentationMessages({
 }) {
   for (const source of [turnPresentation?.userMessage, turnPresentation?.assistantMessage]) {
     if (!source) continue;
-    const sourceId = text(source.messageId);
+    const sourceId = resolveTurnPresentationMessageId(source);
     const sourceIndex = findSubSessionMessageIndex(messages, sourceId);
     const materialized = {
       ...source,
@@ -172,7 +173,6 @@ export function applySubSessionMessageIdentity({
   targetMessage.dialogProcessId = text(targetMessage.dialogProcessId || payload.dialogProcessId);
   targetMessage.turnScopeId = text(targetMessage.turnScopeId || identity.turnScopeId);
   targetMessage.presentationMessageId = messageKey;
-  targetMessage.sourceMessageId = text(targetMessage.sourceMessageId || identity.messageId);
   targetMessage.createdAt = targetMessage.createdAt || occurredAt;
   if (typeof targetMessage.pending !== "boolean") targetMessage.pending = true;
   if (!targetMessage.messageId) targetMessage.messageId = messageKey;

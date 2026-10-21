@@ -11,6 +11,15 @@ import { createTestAgentExecutionScope } from "../../helpers/agent-execution-sco
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+
+function sessionContextHistory(records) {
+  return records.map((record) =>
+    projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record }),
+  );
+}
 
 function createMessageBlockScope(identity, runtime, messageBlocks) {
   return createTestAgentExecutionScope(createTestRuntimeContext(runtime), {
@@ -30,15 +39,15 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
         parentSessionId: "",
         turnScopeId: "t-1",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
       { systemRuntime: { sessionId: "s1", dialogProcessId: "dlg1" } },
       {
         system: ["sys-1"],
-        history: [
+        history: sessionContextHistory([
           { role: "user", content: "h-u", dialogProcessId: "dlg-history" },
           { role: "assistant", content: "h-1", dialogProcessId: "dlg-history" },
-        ],
+        ]),
         incremental: [],
       },
     ),
@@ -56,12 +65,9 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(blocks.messages[1]?.content, "h-u");
   assert.equal(blocks.messages[2]?.content, "h-1");
   assert.equal(blocks.messages[3]?.content, "u-1");
-  assert.equal(blocks.messages[3]?.additional_kwargs?.noobotMessageId, "sm_current_user_fixture");
+  assert.equal(resolveContextMessageId(blocks.messages[3]), "sm_current_user_fixture");
   assert.equal(blocks.messages[4]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
-  assert.equal(
-    blocks.messages[4]?.additional_kwargs?.noobotMessageId,
-    "sm_current_user_fixture::user_meta",
-  );
+  assert.equal(resolveContextMessageId(blocks.messages[4]), "sm_current_user_fixture::user_meta");
 });
 
 test("buildContextMessageBlocks appends resume user message meta with attachments", () => {
@@ -75,7 +81,7 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
         turnScopeId: "turn-resume-new",
         rootSessionId: "parent-s1",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
       {
         userMessageAttachments: [
@@ -96,7 +102,7 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
       },
       {
         system: ["snapshot system"],
-        history: [
+        history: sessionContextHistory([
           {
             role: "user",
             content: "snapshot user",
@@ -112,7 +118,7 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
             dialogProcessId: "dlg-stopped",
             turnScopeId: "turn-stopped",
           },
-        ],
+        ]),
         incremental: [],
       },
     ),
@@ -171,7 +177,7 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
         rootSessionId: "s1",
         parentSessionId: "",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
       {
         userMessageAttachments: [
@@ -191,7 +197,7 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
       },
       {
         system: ["[HARNESS_POLICY_SELECTION]\nsnapshot policy"],
-        history: [
+        history: sessionContextHistory([
           {
             role: "user",
             content: "snapshot history user",
@@ -204,7 +210,7 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
             dialogProcessId: "dlg-stopped",
             turnScopeId: "turn-stopped",
           },
-        ],
+        ]),
         incremental: [],
       },
     ),
@@ -262,7 +268,7 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
         rootSessionId: "s1",
         parentSessionId: "",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
       {
         userMessageAttachments: [],
@@ -274,7 +280,7 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
       },
       {
         system: ["snapshot system"],
-        history: [
+        history: sessionContextHistory([
           {
             role: "assistant",
             content: "",
@@ -287,7 +293,7 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
             content: "tool result text",
             dialogProcessId: "dlg-stopped",
           },
-        ],
+        ]),
         incremental: [],
       },
     ),
@@ -320,7 +326,7 @@ test("buildContextMessageBlocks removes current turn user residue from history",
         rootSessionId: "s1",
         parentSessionId: "",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
       {
         systemRuntime: {
@@ -331,7 +337,7 @@ test("buildContextMessageBlocks removes current turn user residue from history",
       },
       {
         system: [],
-        history: [
+        history: sessionContextHistory([
           {
             role: "user",
             content: "上一轮问题",
@@ -350,7 +356,7 @@ test("buildContextMessageBlocks removes current turn user residue from history",
             dialogProcessId: "dlg-resend-stale",
             turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
           },
-        ],
+        ]),
         incremental: [],
       },
     ),
@@ -394,7 +400,7 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
         rootSessionId: "s1",
         parentSessionId: "",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
       {
         systemRuntime: {
@@ -405,7 +411,7 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
       },
       {
         system: [],
-        history: [
+        history: sessionContextHistory([
           {
             role: "user",
             content: "上一轮",
@@ -418,9 +424,9 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
             dialogProcessId: "dlg-old",
             turnScopeId: "client-turn:old",
           },
-        ],
+        ]),
         incremental: [
-          {
+          projectSessionRecordToContextMessage({
             messageUid: "sm_current_user_fixture",
             role: "user",
             content: "全仓回归测试",
@@ -428,7 +434,7 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
             userMetaMaterialized: true,
             dialogProcessId: "dlg-current",
             turnScopeId: "client-turn:current",
-          },
+          }),
         ],
       },
     ),

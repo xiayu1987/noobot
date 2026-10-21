@@ -532,18 +532,14 @@ test("detached sub-session does not inherit parent turn transaction identity", a
         commandId: "root-continue-command",
         reuseExistingUserTurn: true,
         thinkingStartedAt: "2026-07-26T12:00:00.000Z",
-        messageId: "root-canonical-message",
         presentationMessageId: "root-presentation-message",
-        assistantMessageId: "root-assistant-message",
       },
     }),
     runConfigPatch: {
       turnScopeId: "child-turn",
       workflowRunId: "workflow-run-1",
       workflowNodeExecutionId: "node-execution-1",
-      messageId: "root-canonical-message-from-patch",
       presentationMessageId: "root-presentation-message-from-patch",
-      assistantMessageId: "root-assistant-message-from-patch",
     },
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy({
@@ -565,10 +561,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.match(runConfig.presentationMessageId, /^msg_/);
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message");
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message-from-patch");
-  assert.equal(runConfig.messageId, `msg_event_${runConfig.presentationMessageId}`);
-  assert.notEqual(runConfig.messageId, "root-canonical-message");
-  assert.notEqual(runConfig.messageId, "root-canonical-message-from-patch");
-  assert.equal(runConfig.assistantMessageId, undefined);
+  assert.equal(runConfig.messageId, undefined);
   assert.equal(runConfig.streaming, true);
   assert.equal(runConfig.workflowRunId, "workflow-run-1");
   assert.equal(runConfig.workflowNodeExecutionId, "node-execution-1");

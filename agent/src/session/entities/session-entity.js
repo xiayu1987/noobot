@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { validateProtocolEvent } from "@noobot/event-protocol";
@@ -12,6 +11,7 @@ import {
   assertSessionAggregateInvariants,
   assertSessionAggregateShape,
   requireSessionAggregateVersion,
+  normalizeDialogProcessId,
 } from "@noobot/session-protocol";
 import {
   assertDialogOrderCoversMessages,
@@ -49,7 +49,7 @@ function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
 function normalizeTurnTimingEntity(timing = {}) {
   if (!isPlainObject(timing)) return null;
   const turnScopeId = text(timing?.turnScopeId);
-  const dialogProcessId = resolveContextMessageDialogProcessId(timing);
+  const dialogProcessId = normalizeDialogProcessId(timing?.dialogProcessId);
   if (!turnScopeId) return null;
   const thinkingStartedAt = text(timing?.thinkingStartedAt);
   const thinkingFinishedAt = text(timing?.thinkingFinishedAt);

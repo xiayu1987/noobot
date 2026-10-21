@@ -8,6 +8,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { appendContextMessage, writeMessageBlocks } from "@noobot/context-protocol";
 import { createEmptyHookResult } from "@noobot/hook-protocol";
+import {
+  readContextMessageValue,
+  resolveContextMessageId,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 import {
   invokeNoToolsTurn as invokeNoToolsTurnProduction,
@@ -20,6 +26,13 @@ import {
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+
+function contextMessage(native = {}, metadata = {}) {
+  return writeContextMessageMetadata(
+    { ...native },
+    { messageUid: createMessageUid(), ...metadata },
+  );
+}
 
 const TEST_MODEL_SPEC = Object.freeze(
   normalizeRuntimeModelSpec({
@@ -72,14 +85,14 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
       system: [],
       history: [],
       incremental: [
-        {
+        contextMessage({
           role: "assistant",
           content: "",
           tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
-        },
-        { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
-        { role: "assistant", content: "summarized", summarized: true },
-        { role: "user", content: "keep-user" },
+        }),
+        contextMessage({ role: "tool", content: '{"ok":true}', tool_call_id: "c1" }),
+        contextMessage({ role: "assistant", content: "summarized" }, { summarized: true }),
+        contextMessage({ role: "user", content: "keep-user" }),
       ],
     },
     traces: [],
@@ -137,15 +150,15 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
       system: [],
       history: [],
       incremental: [
-        {
+        contextMessage({
           role: "assistant",
           content: "",
           tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
-        },
-        { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
-        { role: "assistant", content: "keep-assistant" },
-        { role: "user", content: "keep-user" },
-        { role: "assistant", content: "drop-summarized", summarized: true },
+        }),
+        contextMessage({ role: "tool", content: '{"ok":true}', tool_call_id: "c1" }),
+        contextMessage({ role: "assistant", content: "keep-assistant" }),
+        contextMessage({ role: "user", content: "keep-user" }),
+        contextMessage({ role: "assistant", content: "drop-summarized" }, { summarized: true }),
       ],
     },
     traces: [],
@@ -198,9 +211,12 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     },
   };
 
-  const system = { role: "system", content: "sys" };
-  const history = { role: "assistant", content: "hist", dialogProcessId: "d-old" };
-  const incremental = { role: "user", content: "current", dialogProcessId: "d-current" };
+  const system = contextMessage({ role: "system", content: "sys" });
+  const history = contextMessage(
+    { role: "assistant", content: "hist" },
+    { dialogProcessId: "d-old", turnScopeId: "t-old" },
+  );
+  const incremental = contextMessage({ role: "user", content: "current" });
   const modelState = {
     modelPort: createTestModelPort(llm),
     runtime,
@@ -240,16 +256,17 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
           if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
           appendContextMessage(
             ctx.modelContext,
-            {
-              role: "user",
-              content: "[来自harness外部模型输出/guidance]\\n分析结果",
-              injectedMessage: true,
-              injectedBy: "harness-plugin",
-              injectedMessageType: "separate_model_relay:guidance",
-              purpose: "guidance",
-              pluginFlow: "analysis",
-              chain: "auxiliary",
-            },
+            contextMessage(
+              { role: "user", content: "[来自harness外部模型输出/guidance]\\n分析结果" },
+              {
+                injectedMessage: true,
+                injectedBy: "harness-plugin",
+                injectedMessageType: "separate_model_relay:guidance",
+                purpose: "guidance",
+                pluginFlow: "analysis",
+                chain: "auxiliary",
+              },
+            ),
             { block: "incremental" },
           );
           return createEmptyHookResult(point, ctx);
@@ -267,7 +284,7 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
       };
     },
   };
-  const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
+  const current = contextMessage({ role: "user", content: "current-user" });
   const modelState = {
     modelPort: createTestModelPort(llm),
     runtime,
@@ -289,27 +306,30 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
 
   await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
 
-  const relay = capturedMessages.find((item = {}) => item?.injectedMessageType);
+  const relay = capturedMessages.find((item = {}) =>
+    readContextMessageValue(item, "injectedMessageType"),
+  );
   assert.equal(relay?.role, "user");
-  assert.equal(relay?.pluginFlow, "analysis");
-  assert.equal(relay?.chain, "auxiliary");
+  assert.equal(readContextMessageValue(relay, "pluginFlow"), "analysis");
+  assert.equal(readContextMessageValue(relay, "chain"), "auxiliary");
   assert.match(String(relay?.content || ""), /分析结果/);
 });
 
 test("invokeWithToolsTurn commits a separate-model summary checkpoint before model projection", async () => {
   let capturedMessages = [];
-  const current = { role: "user", content: "current-user" };
-  const toolCall = {
+  const current = contextMessage({ role: "user", content: "current-user" });
+  const toolCall = contextMessage({
     role: "assistant",
     content: "",
     tool_calls: [{ id: "call-covered", function: { name: "execute_script" } }],
-  };
-  const toolResult = {
+  });
+  const toolResult = contextMessage({
     role: "tool",
     content: "covered-result",
     tool_call_id: "call-covered",
-  };
-  const summary = { role: "user", content: "summary-relay" };
+  });
+  const summary = contextMessage({ role: "user", content: "summary-relay" });
+  const coveredIds = new Set([toolCall, toolResult].map(resolveContextMessageId));
   let loopState = null;
   let checkpointCount = 0;
   const runtime = createTestRuntimeContext({
@@ -322,7 +342,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
           });
           requestMainFlowSummaryCheckpoint(runtime, {
             source: "plugin.summary",
-            summarizedMessageIds: ["tool-call", "tool-result"],
+            summarizedMessageIds: [...coveredIds],
           });
           return createEmptyHookResult(point, ctx);
         },
@@ -333,7 +353,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     checkpointCount += 1;
     writeMessageBlocks(loopState.modelContext, {
       incremental: loopState.modelContext.messageBlocks.incremental.filter(
-        (message) => message !== toolCall && message !== toolResult,
+        (message) => !coveredIds.has(resolveContextMessageId(message)),
       ),
     });
     return { committed: true };

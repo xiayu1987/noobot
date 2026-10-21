@@ -52,7 +52,7 @@ import {
   summarizeDiagnosticMessages,
 } from "@noobot/context-protocol/assembly/diagnostics";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
-import { createSessionMessageUid } from "../../context/session/message-uid.js";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
 import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
@@ -238,13 +238,15 @@ export async function invokeNoToolsTurn({
   });
   await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
   const responseContentText = String(modelResponse?.text || "");
+  const assistantMessageUid = createMessageUid();
   appendMessage(
     modelContext,
     buildAssistantModelMessageForToolCalls({
       ai: modelResponse,
       contentText: responseContentText,
       toolCalls: [],
-      noobotMessageId: assistantMessageId,
+      messageUid: assistantMessageUid,
+      modelMessageId: assistantMessageId,
     }),
     { block: "incremental" },
   );
@@ -256,6 +258,7 @@ export async function invokeNoToolsTurn({
     responseContentText,
     turn,
     messageId: assistantMessageId,
+    messageUid: assistantMessageUid,
     presentationMessageId,
   });
   return {
@@ -447,20 +450,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }),
   });
   const finalAiContentText = normalizedAiContentText;
-  const assistantMessageUid = createSessionMessageUid();
-  if (!calls.length) {
-    ai = {
-      ...ai,
-      messageId: assistantMessageUid,
-    };
-  }
+  const assistantMessageUid = createMessageUid();
   appendMessage(
     modelContext,
     buildAssistantModelMessageForToolCalls({
       ai,
       contentText: finalAiContentText,
       toolCalls: calls,
-      noobotMessageId: assistantMessageUid,
+      messageUid: assistantMessageUid,
+      modelMessageId: assistantMessageId,
     }),
     { block: "incremental" },
   );

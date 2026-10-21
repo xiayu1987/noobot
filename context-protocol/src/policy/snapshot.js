@@ -5,20 +5,19 @@
  */
 
 import {
+  CONTEXT_MESSAGE_NATIVE_FIELDS,
   CONTEXT_MESSAGE_ROLE,
-  markContextMessageSummarized,
-  normalizeContextMessageRole,
   readContextMessageField,
-  resolveContextMessageSummarized,
   resolveContextMessageFlags,
   resolveContextMessageId,
+  withContextMessageMetadata,
   resolveContextMessageRole,
   resolveContextToolResultCallId,
 } from "../message/codec.js";
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
-const SNAPSHOT_VERSION = 3;
+const SNAPSHOT_VERSION = 4;
 const IDENTITY_FIELDS = [
   "userId",
   "sessionId",
@@ -26,33 +25,12 @@ const IDENTITY_FIELDS = [
   "dialogProcessId",
   "turnScopeId",
 ];
-const SERIALIZATION_KEYS = new Set([
-  "lc",
-  "id",
-  "kwargs",
-  "type",
-  "lc_namespace",
-  "lc_serializable",
-  "lc_aliases",
-  "lc_attributes",
-  "lc_secrets",
-  "tool_calls",
-  "invalid_tool_calls",
-  "tool_call_id",
-  "name",
-  "status",
-  "artifact",
-  "response_metadata",
-  "usage_metadata",
-]);
+
+const NATIVE_TOP_LEVEL_KEYS = new Set(CONTEXT_MESSAGE_NATIVE_FIELDS);
 
 function cloneJson(value) {
   if (value == null) return value;
-  try {
-    return JSON.parse(JSON.stringify(value));
-  } catch {
-    return value;
-  }
+  return JSON.parse(JSON.stringify(value));
 }
 
 const SNAPSHOT_TYPE_BY_ROLE = Object.freeze({
@@ -62,52 +40,38 @@ const SNAPSHOT_TYPE_BY_ROLE = Object.freeze({
   [CONTEXT_MESSAGE_ROLE.USER]: "human",
 });
 
-function messageType(message = {}) {
-  return String(message?.type || message?.role || message?.lc_kwargs?.type || "").toLowerCase();
-}
-
 export function normalizeSnapshotIdentity(identity = {}) {
   return Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, text(identity?.[field])]));
 }
 
-export function serializeContextMessage(message = {}) {
-  const type = messageType(message);
-  const normalizedType = SNAPSHOT_TYPE_BY_ROLE[normalizeContextMessageRole(type)] || "human";
-  const additionalKwargs =
-    message?.additional_kwargs || message?.lc_kwargs?.additional_kwargs || {};
-  const serialized = {
-    raw: {},
-    type: normalizedType,
-    content: typeof message?.content === "string" ? message.content : (message?.content ?? ""),
-    additional_kwargs: cloneJson(additionalKwargs) || {},
-    lc_kwargs: cloneJson(message?.lc_kwargs) || {},
-    summarized: resolveContextMessageSummarized(message),
-  };
+function assertProtocolTopLevelKeys(message = {}) {
   for (const key of Object.keys(message || {})) {
-    if (
-      key in serialized ||
-      ["content", "additional_kwargs", "lc_kwargs"].includes(key) ||
-      SERIALIZATION_KEYS.has(key) ||
-      String(key).startsWith("lc_")
-    )
-      continue;
-    const value = cloneJson(message[key]);
-    if (value !== undefined) serialized.raw[key] = value;
+    if (NATIVE_TOP_LEVEL_KEYS.has(key) || key.startsWith("lc_")) continue;
+    throw new Error(`context message top-level field is not part of the protocol: ${key}`);
   }
+}
+
+export function serializeContextMessage(message = {}) {
+  assertProtocolTopLevelKeys(message);
+  const normalizedType = SNAPSHOT_TYPE_BY_ROLE[resolveContextMessageRole(message)];
+  if (!normalizedType) {
+    throw new Error("context message snapshot requires a declared role");
+  }
+  const serialized = {
+    type: normalizedType,
+    content: message?.content ?? "",
+    additional_kwargs: cloneJson(message?.additional_kwargs) || {},
+  };
   if (normalizedType === "ai") {
-    serialized.tool_calls = Array.isArray(message?.tool_calls)
-      ? cloneJson(message.tool_calls) || []
-      : [];
+    serialized.tool_calls = Array.isArray(message?.tool_calls) ? cloneJson(message.tool_calls) : [];
     serialized.invalid_tool_calls = Array.isArray(message?.invalid_tool_calls)
-      ? cloneJson(message.invalid_tool_calls) || []
+      ? cloneJson(message.invalid_tool_calls)
       : [];
     if (
       isObjectLike(message?.response_metadata) &&
       Array.isArray(message.response_metadata.output)
     ) {
-      serialized.response_metadata = {
-        output: cloneJson(message.response_metadata.output) || [],
-      };
+      serialized.response_metadata = { output: cloneJson(message.response_metadata.output) };
     }
   }
   if (normalizedType === "tool") {
@@ -120,34 +84,24 @@ export function serializeContextMessage(message = {}) {
 }
 
 function deserializeContextMessageRecord(item = {}) {
-  const raw = item?.raw && typeof item.raw === "object" ? cloneJson(item.raw) : {};
   const message = {
-    ...raw,
-    type: item?.type || "human",
-    content: item?.content ?? "",
-    additional_kwargs: {
-      ...(raw?.additional_kwargs || {}),
-      ...(cloneJson(item?.additional_kwargs) || {}),
-    },
-    lc_kwargs: cloneJson(item?.lc_kwargs) || raw?.lc_kwargs || {},
+    type: item.type,
+    content: item.content ?? "",
+    additional_kwargs: cloneJson(item.additional_kwargs) || {},
   };
-  if (item?.type === "ai") {
-    message.tool_calls = cloneJson(item?.tool_calls) || [];
-    message.invalid_tool_calls = cloneJson(item?.invalid_tool_calls) || [];
-    if (isObjectLike(item?.response_metadata) && Array.isArray(item.response_metadata.output)) {
-      message.response_metadata = {
-        output: cloneJson(item.response_metadata.output) || [],
-      };
+  if (item.type === "ai") {
+    message.tool_calls = cloneJson(item.tool_calls) || [];
+    message.invalid_tool_calls = cloneJson(item.invalid_tool_calls) || [];
+    if (isObjectLike(item.response_metadata) && Array.isArray(item.response_metadata.output)) {
+      message.response_metadata = { output: cloneJson(item.response_metadata.output) };
     }
   }
-  if (item?.type === "tool") {
-    message.tool_call_id = item?.tool_call_id || "";
-    if (item?.name) message.name = item.name;
-    if (item?.status) message.status = item.status;
-    if (item?.artifact !== undefined) message.artifact = cloneJson(item.artifact);
+  if (item.type === "tool") {
+    message.tool_call_id = text(item.tool_call_id);
+    if (item.name) message.name = item.name;
+    if (item.status) message.status = item.status;
+    if (item.artifact !== undefined) message.artifact = cloneJson(item.artifact);
   }
-  if (item?.summarized === true || resolveContextMessageSummarized(raw))
-    markContextMessageSummarized(message);
   return message;
 }
 
@@ -278,10 +232,9 @@ export function restoreSnapshotUserAttachmentFactsFromSessionAuthority(
       if (authoritative.attachments !== undefined && !Array.isArray(authoritative.attachments)) {
         throw new TypeError(`Session authority attachments must be an array: ${messageUid}`);
       }
-      return {
-        ...message,
+      return withContextMessageMetadata(message, {
         attachments: cloneJson(authoritative.attachments || []),
-      };
+      });
     });
   return {
     system: Array.isArray(messageBlocks?.system) ? messageBlocks.system : [],

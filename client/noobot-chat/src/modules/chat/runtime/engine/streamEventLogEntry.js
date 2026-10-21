@@ -38,7 +38,6 @@ function buildStreamEventLogData({ authoritativeEvent, data, event }) {
     schemaVersion: num(protocol.schemaVersion),
     eventId: str(identity.eventId),
     eventType: str(identity.eventType),
-    messageId: str(identity.messageId),
     presentationMessageId: str(payload.presentationMessageId),
     sequence: num(ordering.sequence),
     sequenceDomain: str(ordering.domain),

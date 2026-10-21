@@ -6,6 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { resolveWorkflowSemanticContextMessages } from "../../src/core/hooks/messages.js";
 
 import {
@@ -14,6 +16,10 @@ import {
   registerWorkflowAgentHooks,
   createTestHookInvocation,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
+
+function sessionContextMessage(record) {
+  return projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record });
+}
 
 function assertSystemBlockPrecedesConversation(messages = []) {
   const roles = messages.map((message = {}) => String(message?.role || "").trim());
@@ -115,14 +121,14 @@ test("workflow semantic planning passes conversation context before current user
           system: [],
           history: [],
           incremental: [
-            { role: "user", content: "前文：我要处理报销审批" },
-            { role: "assistant", content: "已记录报销审批背景" },
-            {
+            sessionContextMessage({ role: "user", content: "前文：我要处理报销审批" }),
+            sessionContextMessage({ role: "assistant", content: "已记录报销审批背景" }),
+            sessionContextMessage({
               role: "user",
               content: "请基于前文生成工作流",
               messageOrigin: "natural",
               userMetaMaterialized: true,
-            },
+            }),
           ],
         },
       }),
@@ -204,12 +210,12 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
       runConfig: { locale: "zh-CN" },
       modelContext: createModelContext({
         messageBlocks: {
-          system: [{ role: "system", content: "你是流程专家" }],
+          system: [sessionContextMessage({ role: "system", content: "你是流程专家" })],
           history: [
-            { role: "user", content: "背景：这是采购审批流程" },
-            { role: "assistant", content: "收到采购审批背景" },
+            sessionContextMessage({ role: "user", content: "背景：这是采购审批流程" }),
+            sessionContextMessage({ role: "assistant", content: "收到采购审批背景" }),
           ],
-          incremental: [{ role: "user", content: "请继续" }],
+          incremental: [sessionContextMessage({ role: "user", content: "请继续" })],
         },
       }),
     },

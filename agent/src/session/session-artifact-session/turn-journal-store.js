@@ -11,6 +11,7 @@ import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-ar
 import { text, isObjectLike } from "@noobot/shared/value";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
+export const SUMMARY_SNAPSHOT_SCHEMA_VERSION = 2;
 
 export function journalPath(sessionDir, turnId) {
   return path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir, `${turnId}.jsonl`);
@@ -123,7 +124,7 @@ export async function readSummarySnapshots(sessionDir, indexes = []) {
     const payload = await readJsonArtifactFile(resolveSummarySnapshotPath(sessionDir, file), null);
     if (
       !payload ||
-      Number(payload.schemaVersion) !== 2 ||
+      Number(payload.schemaVersion) !== SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
       !Array.isArray(payload.records) ||
       Object.hasOwn(payload, "messages") ||
       payload.previousCheckpointHash !== previousCheckpointHash ||

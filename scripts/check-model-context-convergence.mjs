@@ -77,7 +77,7 @@ export const CHECK = defineCheck({
     summaryMutationCall: 0,
     messageIdFallback: 0,
     legacyWindowMarker: 0,
-    exemptions: 11,
+    exemptions: 10,
   },
   measure,
 });

@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isDialogAnchorMessage } from "@noobot/context-protocol/policy/message";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import {
+  isDialogAnchorMessageRecord,
+  resolveSessionMessageRecordDialogProcessId,
+} from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function dialogOrderError(message, code = "SESSION_DIALOG_ORDER_INVALID") {
@@ -46,7 +48,7 @@ export function normalizeDialogOrderEntity(dialogOrder) {
 export function assertDialogOrderCoversMessages(dialogOrder, messages) {
   const registered = new Set(dialogOrder.map((entry) => entry.dialogProcessId));
   for (const message of messages) {
-    const dialogProcessId = resolveContextMessageDialogProcessId(message);
+    const dialogProcessId = resolveSessionMessageRecordDialogProcessId(message);
     if (dialogProcessId && !registered.has(dialogProcessId)) {
       throw dialogOrderError(
         `session dialog is not registered: ${dialogProcessId}`,
@@ -57,9 +59,9 @@ export function assertDialogOrderCoversMessages(dialogOrder, messages) {
 }
 
 export function registerDialogOrderMessage(dialogOrder, message) {
-  const dialogProcessId = resolveContextMessageDialogProcessId(message);
+  const dialogProcessId = resolveSessionMessageRecordDialogProcessId(message);
   if (!dialogProcessId) return dialogOrder;
-  const anchorUid = isDialogAnchorMessage(message) ? text(message.messageUid) : "";
+  const anchorUid = isDialogAnchorMessageRecord(message) ? text(message.messageUid) : "";
   const index = dialogOrder.findIndex((entry) => entry.dialogProcessId === dialogProcessId);
   if (index >= 0) {
     if (!anchorUid || dialogOrder[index].userMessageUid) return dialogOrder;
@@ -84,6 +86,6 @@ export function registerDialogOrderMessage(dialogOrder, message) {
 }
 
 export function pruneDialogOrder(dialogOrder, messages) {
-  const live = new Set(messages.map(resolveContextMessageDialogProcessId));
+  const live = new Set(messages.map(resolveSessionMessageRecordDialogProcessId));
   return dialogOrder.filter((entry) => live.has(entry.dialogProcessId));
 }

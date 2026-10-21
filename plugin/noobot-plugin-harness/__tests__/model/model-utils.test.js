@@ -18,6 +18,7 @@ import {
 import { buildHarnessInjectedMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../src/capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { markHarnessTurnLifecycle } from "../../src/capabilities/handlers/shared/runtime/lifecycle-utils.js";
+import { contextMessage } from "../helpers/context-message.js";
 
 function withoutNoScriptConstraint(messages = []) {
   return messages.filter(
@@ -33,7 +34,7 @@ test("resolveCapabilityModelMessages respects empty array from resolver", () => 
       },
     },
     {
-      messages: [{ role: "user", content: "should-not-fallback" }],
+      messages: [contextMessage({ role: "user", content: "should-not-fallback" })],
     },
   );
   assert.deepEqual(result, []);
@@ -42,11 +43,14 @@ test("resolveCapabilityModelMessages respects empty array from resolver", () => 
 test("buildHarnessInjectedMessage includes dialogProcessId when provided", () => {
   const message = buildHarnessInjectedMessage("relay text", {
     dialogProcessId: "dlg_1",
+    injectedMessageType: "relay_test",
   });
   assert.equal(message.role, "system");
-  assert.equal(message.injectedMessage, true);
-  assert.equal(message.injectedBy, "harness-plugin");
-  assert.equal(message.dialogProcessId, "dlg_1");
+  assert.equal(message.additional_kwargs.injectedMessage, true);
+  assert.equal(message.additional_kwargs.injectedBy, "harness-plugin");
+  assert.equal(message.additional_kwargs.injectedMessageType, "relay_test");
+  assert.equal(message.additional_kwargs.dialogProcessId, "dlg_1");
+  assert.ok(message.additional_kwargs.messageUid);
 });
 
 test("resolveDialogProcessIdFromContext reads the explicit hook identity", () => {
@@ -61,8 +65,12 @@ test("resolveCapabilityModelMessages preserves authoritative resolver output wit
     {
       harness: {
         resolveModelMessages: () => [
-          { role: "user", content: "keep-resolved" },
-          { role: "assistant", content: "summarized-resolved", lc_kwargs: { summarized: true } },
+          contextMessage({ role: "user", content: "keep-resolved" }),
+          contextMessage({
+            role: "assistant",
+            content: "summarized-resolved",
+            lc_kwargs: { summarized: true },
+          }),
         ],
       },
     },
@@ -93,8 +101,8 @@ test("resolveCapabilityModelMessages delegates the authoritative modelContext to
         modelContext: {
           protocolVersion: 3,
           messageBlocks: {
-            history: [{ role: "user", content: "history-from-block" }],
-            incremental: [{ role: "assistant", content: "incremental-from-block" }],
+            history: [contextMessage({ role: "user", content: "history-from-block" })],
+            incremental: [contextMessage({ role: "assistant", content: "incremental-from-block" })],
           },
         },
       },
@@ -120,8 +128,13 @@ test("invokeCapabilityModel preserves provided messages before invoking capabili
     invokePayload: {
       messages: buildCapabilityModelMessages({
         agentMessages: [
-          { role: "user", content: "keep", messageUid: "keep-1" },
-          { role: "assistant", content: "drop", summarized: true, messageUid: "drop-1" },
+          contextMessage({ role: "user", content: "keep", messageUid: "keep-1" }),
+          contextMessage({
+            role: "assistant",
+            content: "drop",
+            summarized: true,
+            messageUid: "drop-1",
+          }),
         ],
       }),
     },
@@ -153,7 +166,7 @@ test("invokeCapabilityModel advances one checkpoint append-only auxiliary sequen
     invokePayload: {
       purpose: "analysis",
       messages: buildCapabilityModelMessages({
-        agentMessages: [{ role: "user", content: "u1", messageUid: "u1" }],
+        agentMessages: [contextMessage({ role: "user", content: "u1", messageUid: "u1" })],
         constraints: ["sys"],
         task: "analysis-request-1",
       }),
@@ -168,8 +181,8 @@ test("invokeCapabilityModel advances one checkpoint append-only auxiliary sequen
       purpose: "analysis",
       messages: buildCapabilityModelMessages({
         agentMessages: [
-          { role: "user", content: "u1", messageUid: "u1" },
-          {
+          contextMessage({ role: "user", content: "u1", messageUid: "u1" }),
+          contextMessage({
             role: "assistant",
             content: "",
             messageUid: "assistant-tool-call-1",
@@ -180,13 +193,13 @@ test("invokeCapabilityModel advances one checkpoint append-only auxiliary sequen
                 function: { name: "read_file", arguments: "{}" },
               },
             ],
-          },
-          {
+          }),
+          contextMessage({
             role: "tool",
             content: "file-content",
             tool_call_id: "call-1",
             messageUid: "tool-result-1",
-          },
+          }),
         ],
         constraints: ["sys"],
         task: "analysis-request-2",
@@ -231,7 +244,9 @@ test("invokeCapabilityModel rebuilds from authoritative Context after checkpoint
     purpose: "summary",
     invokePayload: {
       messages: buildCapabilityModelMessages({
-        agentMessages: [{ role: "user", content: "before checkpoint", messageUid: "before" }],
+        agentMessages: [
+          contextMessage({ role: "user", content: "before checkpoint", messageUid: "before" }),
+        ],
         task: "request before",
       }),
     },
@@ -243,7 +258,9 @@ test("invokeCapabilityModel rebuilds from authoritative Context after checkpoint
     purpose: "summary",
     invokePayload: {
       messages: buildCapabilityModelMessages({
-        agentMessages: [{ role: "user", content: "summary baseline", messageUid: "summary" }],
+        agentMessages: [
+          contextMessage({ role: "user", content: "summary baseline", messageUid: "summary" }),
+        ],
         task: "request after",
       }),
     },
@@ -391,16 +408,16 @@ test("invokeCapabilityModel strips internal source markers from each authoritati
     );
     return createTestModelResponse("ok");
   };
-  const firstSource = {
+  const firstSource = contextMessage({
     role: "user",
     content: "first source",
-    additional_kwargs: { noobotMessageId: "source-1" },
-  };
-  const secondSource = {
+    additional_kwargs: { messageUid: "source-1" },
+  });
+  const secondSource = contextMessage({
     role: "assistant",
     content: "second source",
-    additional_kwargs: { noobotMessageId: "source-2" },
-  };
+    additional_kwargs: { messageUid: "source-2" },
+  });
 
   await invokeCapabilityModel({
     invoker,
@@ -453,14 +470,19 @@ test("invokeCapabilityModel strips internal source markers from each authoritati
 test("buildCapabilityModelMessages assigns protocol-owned identity to every capability message", () => {
   const messages = buildCapabilityModelMessages({
     agentMessages: [
-      {
+      contextMessage({
         role: "assistant",
         content: "",
         messageUid: "call-message-1",
         tool_calls: [{ id: "call_1", function: { name: "read_file", arguments: "{}" } }],
-      },
-      { role: "tool", content: "tool result", tool_call_id: "call_1", messageUid: "result-1" },
-      { role: "user", content: "plain user", messageUid: "user-1" },
+      }),
+      contextMessage({
+        role: "tool",
+        content: "tool result",
+        tool_call_id: "call_1",
+        messageUid: "result-1",
+      }),
+      contextMessage({ role: "user", content: "plain user", messageUid: "user-1" }),
     ],
     constraints: ["constraint"],
     task: "task",
@@ -487,8 +509,8 @@ test("resolveCapabilityModelMessages does not filter resolver output or use payl
     {
       harness: {
         resolveModelMessages: () => [
-          { role: "assistant", content: "drop-resolver", summarized: true },
-          { role: "user", content: "keep-resolver" },
+          contextMessage({ role: "assistant", content: "drop-resolver", summarized: true }),
+          contextMessage({ role: "user", content: "keep-resolver" }),
         ],
       },
     },

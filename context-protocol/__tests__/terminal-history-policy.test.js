@@ -8,17 +8,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { projectTerminalHistoryMessages } from "../src/policy/terminal-history.js";
+import {
+  readContextMessageField,
+  readContextMessageValue,
+  resolveContextMessageId,
+  resolveContextMessageSummarized,
+} from "../src/message/codec.js";
+import { contextMessage } from "./helpers/context-message.js";
 
 function message(overrides = {}) {
-  return {
+  return contextMessage({
     messageUid: overrides.messageUid || `m_${Math.random()}`,
     role: "user",
     content: "",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
     ...overrides,
-  };
+  });
 }
+
+const ids = (messages) => messages.map(resolveContextMessageId);
 
 function status(overrides = {}) {
   return {
@@ -79,33 +88,28 @@ test("user-stopped history ignores summary flags and projects only user, latest 
 
   const result = projectTerminalHistoryMessages({ messages: source, terminalStatuses: [status()] });
 
-  assert.deepEqual(
-    result.map((item) => item.messageUid),
-    ["user-1", "plan", "guide-new", "turn-1::terminal_status"],
-  );
+  assert.deepEqual(ids(result), ["user-1", "plan", "guide-new", "turn-1::terminal_status"]);
   assert.deepEqual(
     result.map((item) => item.role),
     ["user", "user", "user", "user"],
   );
-  assert.ok(result.every((item) => item.summarized === false));
-  assert.ok(result.every((item) => item.terminalHistoryProjection === true));
+  assert.ok(result.every((item) => resolveContextMessageSummarized(item) === false));
+  assert.ok(
+    result.every((item) => readContextMessageValue(item, "terminalHistoryProjection") === true),
+  );
+
+  assert.equal(resolveContextMessageSummarized(source[0]), true);
   assert.deepEqual(result.at(-1), {
-    messageUid: "turn-1::terminal_status",
     role: "user",
-    type: "message",
     content: "用户停止了本轮生成",
-    dialogProcessId: "dialog-1",
-    parentDialogProcessId: "",
-    turnScopeId: "turn-1",
-    summarized: false,
-    terminalHistoryProjection: true,
-    terminalHistoryExplanation: true,
-    terminalStatus: "user_stopped",
-    terminalReason: "user_stop",
-    messageOrigin: "internal",
     additional_kwargs: {
-      noobotMessageId: "turn-1::terminal_status",
+      messageUid: "turn-1::terminal_status",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      messageOrigin: "internal",
       noobotInternalMessageType: "terminal_history_explanation",
+      terminalHistoryProjection: true,
+      terminalHistoryExplanation: true,
       terminalStatus: "user_stopped",
       terminalReason: "user_stop",
     },
@@ -134,7 +138,7 @@ for (const terminalStatus of ["error", "timeout"]) {
 
     assert.equal(result.length, 2);
     assert.equal(result[1].role, "assistant");
-    assert.equal(result[1].terminalStatus, terminalStatus);
+    assert.equal(readContextMessageField(result[1], "terminalStatus"), terminalStatus);
     assert.equal(
       result[1].content,
       terminalStatus === "error" ? "本轮对话异常停止" : "本轮对话运行超时",
@@ -157,7 +161,7 @@ test("completed rounds remain untouched for summarized filtering by the history 
     terminalStatuses: [status({ status: "completed", reason: "run_completed" })],
   });
   assert.equal(result, source);
-  assert.equal(result[1].summarized, true);
+  assert.equal(resolveContextMessageSummarized(result[1]), true);
 });
 
 test("latest injected selection is scoped independently to each terminal dialog", () => {
@@ -197,10 +201,14 @@ test("latest injected selection is scoped independently to each terminal dialog"
     messages: source,
     terminalStatuses: [status(), status({ dialogProcessId: "dialog-2", turnScopeId: "turn-2" })],
   });
-  assert.deepEqual(
-    result.map((item) => item.messageUid),
-    ["u1", "g1", "turn-1::terminal_status", "u2", "g2", "turn-2::terminal_status"],
-  );
+  assert.deepEqual(ids(result), [
+    "u1",
+    "g1",
+    "turn-1::terminal_status",
+    "u2",
+    "g2",
+    "turn-2::terminal_status",
+  ]);
 });
 
 test("terminal status requires the complete round identity", () => {

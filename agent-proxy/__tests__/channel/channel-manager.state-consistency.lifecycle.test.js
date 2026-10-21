@@ -83,7 +83,7 @@ test("channel transport preserves strict event payloads during broadcast and rep
   const lifecycle = {
     eventType: "attachment.parsed",
     eventVersion: 1,
-    messageId: "attachment-event-1",
+    attachmentEventId: "attachment-event-1",
     identity: { attachmentId: "attachment-1", sessionId, attachmentSource: "user" },
     status: "parsed",
     occurredAt: "2026-08-17T00:00:00.000Z",
@@ -99,10 +99,9 @@ test("channel transport preserves strict event payloads during broadcast and rep
   const attachmentEnvelope = createEventEnvelope({
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
     identity: {
-      eventId: lifecycle.messageId,
+      eventId: lifecycle.attachmentEventId,
       eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
       sessionId,
-      messageId: lifecycle.messageId,
     },
     causality: {},
     ordering: {
@@ -219,7 +218,6 @@ test("invalid authoritative lifecycle has no journal or state projection side ef
     commandId: "invalid-completed-command",
     sessionId: "session-invalid-lifecycle",
 
-    messageId: "message-invalid",
     presentationMessageId: "message-invalid",
     dialogProcessId: "dialog-invalid",
     revision: 1,
@@ -828,7 +826,6 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
     sessionId,
     turnScopeId: "turn-lifecycle-live",
     dialogProcessId: "dialog-lifecycle-live",
-    messageId: "message-lifecycle-live",
     presentationMessageId: "message-lifecycle-live",
     revision: 4,
     sequence: 4,

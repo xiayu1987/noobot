@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import {
   executeToolCall as executeToolCallWithoutTurn,
   executeToolCallInTurn,
@@ -20,13 +21,11 @@ export function executeToolCall({
   call,
   runtime = createTestRuntimeContext(),
   identity = createTestTurnIdentity(call.id),
-  presentationMessageId = `presentation-${identity.messageId}`,
   ...options
 }) {
   applyTestIdentityToRuntime(runtime, identity);
   bindAssistantMessageEventStream(runtime, {
-    messageId: identity.messageId,
-    presentationMessageId,
+    presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,
   });
   if (runtime.eventListener && !runtime.sessionManager) {
@@ -61,16 +60,16 @@ export function attachmentEnvelope({
   callId,
   attachmentId,
   sessionId = "test-session",
-  messageId = `message-${callId}`,
+  presentationMessageId = `presentation-${callId}`,
   name = "result.txt",
   mimeType = "text/plain",
   size = 0,
 } = {}) {
   return {
     protocol: "noobot.semantic-transfer",
-    version: 2,
-    transferId: `transfer:${messageId}:tool:${callId}:output:tool_result_text:structured`,
-    messageId,
+    version: TRANSFER_VERSION,
+    transferId: `transfer:${presentationMessageId}:tool:${callId}:output:tool_result_text:structured`,
+    presentationMessageId,
     identity: {
       sessionId,
       turnScopeId: "test-turn",

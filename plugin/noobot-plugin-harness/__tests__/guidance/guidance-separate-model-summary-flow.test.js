@@ -11,6 +11,7 @@ import {
   createGuidanceHandler,
   createAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
+import { markContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 
 test("separate_model summary uses the canonical checkpoint protocol", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -33,7 +34,7 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
         assert.equal(summaryScope?.maxMessages, 2);
         assert.equal(summaryScope?.limitToProvidedMessagesOnly, true);
         for (const item of messages) {
-          item.summarized = true;
+          markContextMessageSummarized(item);
         }
         return messages.length;
       },
@@ -72,7 +73,7 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
     new Set(
       ctx.modelContext.messageBlocks.incremental
         .slice(0, 2)
-        .map((message) => message.additional_kwargs.noobotMessageId),
+        .map((message) => message.additional_kwargs.messageUid),
     ),
   );
 });

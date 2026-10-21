@@ -48,7 +48,6 @@ export function canonicalActivity({
   sessionId = "session-1",
   dialogProcessId = "dialog-1",
   turnScopeId = "turn-1",
-  messageId = "message-1",
   presentationMessageId = "presentation-1",
   purpose = "",
   pluginFlow = "",
@@ -70,7 +69,6 @@ export function canonicalActivity({
     sessionId,
     dialogProcessId,
     turnScopeId,
-    messageId,
     presentationMessageId,
   };
 }

@@ -20,6 +20,7 @@ export async function commitNoToolsTurnState({
   responseContentText = "",
   turn,
   messageId = "",
+  messageUid = "",
   presentationMessageId = "",
 } = {}) {
   const { currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
@@ -53,6 +54,7 @@ export async function commitNoToolsTurnState({
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
     messageId,
+    messageUid,
     presentationMessageId,
     chatPresentation: true,
     attachments: await persistModelGeneratedArtifacts({

@@ -28,7 +28,7 @@ function isHistoricalMultimodalParseEnvelope(envelope) {
     candidate.protocol === TRANSFER_PROTOCOL,
     candidate.version === TRANSFER_VERSION,
     text(candidate.transferId),
-    text(candidate.messageId),
+    text(candidate.presentationMessageId),
     producer.type === "tool",
     text(producer.id),
     payload.mode === TRANSFER_MODE.ATTACHMENT,

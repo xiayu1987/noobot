@@ -48,7 +48,6 @@ export function normalizeTurnTransportEnvelope({
           sequenceScopeId: text(messageEvent.ordering.scopeId),
           sequence: Number(messageEvent.ordering.sequence),
           eventId: text(messageEvent.identity.eventId),
-          messageId: text(messageEvent.identity.messageId),
         }
       : null,
   };

@@ -33,7 +33,6 @@ const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
     "sessionId",
     "dialogProcessId",
     "turnScopeId",
-    "messageId",
     "presentationMessageId",
     "activityId",
   ]),
@@ -73,7 +72,6 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}, { position 
     sessionId: text(identity.sessionId),
     dialogProcessId: text(payload.dialogProcessId),
     turnScopeId: text(identity.turnScopeId),
-    messageId: text(identity.messageId),
     presentationMessageId: text(payload.presentationMessageId),
   };
   const activityId = text(payload.activityId);
@@ -142,7 +140,6 @@ export function isCanonicalActivityTimelineFact(value = {}) {
     text(value.timestamp) &&
     text(value.sessionId) &&
     text(value.turnScopeId) &&
-    text(value.messageId) &&
     text(value.presentationMessageId) &&
     Object.keys(value).every((field) => ACTIVITY_TIMELINE_FACT_FIELDS.has(field)),
   );

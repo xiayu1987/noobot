@@ -8,11 +8,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { appendMessage } from "../../src/core/message-store.js";
 import { clearAuxiliarySnapshotsForContext } from "../../src/capabilities/handlers/shared/model/auxiliary-snapshot-store.js";
+import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
 
 import {
   createGuidanceHandler,
   createAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
+import {
+  readContextMessageField,
+  resolveContextInjectedMessageType,
+} from "@noobot/context-protocol/message/codec";
 
 test("separate_model analysis uses aligned agent context then user request and user responsibility", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -97,9 +102,7 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
-        item?.purpose === "guidance" &&
-        item?.pluginFlow === "analysis" &&
-        item?.chain === "auxiliary" &&
+        resolveContextInjectedMessageType(item) === "separate_model_relay:guidance" &&
         String(item?.content || "").includes("疑点"),
     ),
     true,
@@ -147,12 +150,12 @@ test("separate_model analysis relays canonical Responses continuation output to 
   });
 
   const relayMessages = ctx.modelContext.messageBlocks.incremental.filter(
-    (message = {}) => message?.injectedMessageType === "separate_model_relay:guidance",
+    (message = {}) =>
+      resolveContextInjectedMessageType(message) === "separate_model_relay:guidance",
   );
   assert.equal(result.changed, true);
   assert.equal(relayMessages.length, 1);
-  assert.equal(relayMessages[0]?.pluginFlow, "analysis");
-  assert.equal(relayMessages[0]?.chain, "auxiliary");
+  assert.ok(readContextMessageField(relayMessages[0], "relayCorrelationId"));
   assert.match(String(relayMessages[0]?.content || ""), /已定位协议校验问题/);
   assert.equal(
     agentContext.bindings.extensions.harness.logs.guidance.some(
@@ -197,7 +200,7 @@ test("separate_model skips analysis when trailing assistant tool call has conten
 
   appendMessage(
     ctx,
-    { role: "tool", content: "读取完成", tool_call_id: "call-1" },
+    canonicalizeTestContextMessage({ role: "tool", content: "读取完成", tool_call_id: "call-1" }),
     { block: "incremental" },
   );
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
@@ -511,8 +514,7 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
-        item?.purpose === "guidance" &&
-        item?.pluginFlow === undefined &&
+        resolveContextInjectedMessageType(item) === "separate_model_relay:guidance" &&
         String(item?.content || "").includes("建议先确认失败工具"),
     ),
     true,

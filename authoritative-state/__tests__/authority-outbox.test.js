@@ -31,7 +31,6 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
     turn: {
       turnScopeId: "outbox-turn-1",
       commandId: "outbox-command-1",
-      messageId: "outbox-message-1",
       presentationMessageId: "outbox-presentation-1",
       revision: 1,
       sequence: 1,
@@ -97,7 +96,6 @@ test("outbox compaction reclaims only events every attempting consumer delivered
       turn: {
         turnScopeId: "turn-1",
         commandId: `command-${eventId}`,
-        messageId: "message-1",
         presentationMessageId: "presentation-1",
         revision: sequence,
         sequence,
@@ -166,7 +164,6 @@ test("authority outbox tracks each consumer independently so one ack never hides
     turn: {
       turnScopeId: "turn-1",
       commandId: "multi-consumer-command",
-      messageId: "message-1",
       presentationMessageId: "presentation-1",
       revision: 1,
       sequence: 1,
@@ -236,7 +233,6 @@ test("legacy single-slot outbox delivery migrates to the recorded consumer only"
     turn: {
       turnScopeId: "turn-1",
       commandId: "legacy-command",
-      messageId: "message-1",
       presentationMessageId: "presentation-1",
       revision: 1,
       sequence: 1,

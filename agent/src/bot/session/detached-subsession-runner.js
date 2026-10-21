@@ -3,14 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomUUID } from "node:crypto";
+import { createPresentationMessageId } from "@noobot/context-protocol/message/message-identity";
 import { AGENT_RUN_EVENT, createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
   TURN_ACTION,
   TURN_EVENT,
   TURN_PHASE,
-  createAssistantMessageEventId,
   createSessionPersistenceScope,
   createTurnAcceptanceReceipt,
   createTurnLifecycleCommandId,
@@ -244,10 +243,8 @@ function createDetachedRunConfig(
   config.origin = identity.origin;
   config.stage = identity.stage;
   config.commandId = identity.commandId;
-  const presentationMessageId = `msg_${randomUUID()}`;
+  const presentationMessageId = createPresentationMessageId();
   config.presentationMessageId = presentationMessageId;
-  config.messageId = createAssistantMessageEventId(presentationMessageId);
-  delete config.assistantMessageId;
   if (!text(config.thinkingStartedAt)) {
     config.thinkingStartedAt = String(dependencies.now()).trim();
   }
@@ -263,8 +260,6 @@ function assertPreparedRunConfig(config) {
 function bindDetachedMessageIdentity(effectiveRunConfig, mergedRunConfig) {
   effectiveRunConfig.commandId = mergedRunConfig.commandId;
   effectiveRunConfig.presentationMessageId = mergedRunConfig.presentationMessageId;
-  effectiveRunConfig.messageId = mergedRunConfig.messageId;
-  delete effectiveRunConfig.assistantMessageId;
 }
 
 async function resolveDetachedSystemMessages(systemMessageFactory, attachments) {
@@ -329,7 +324,6 @@ function createLifecycleIdentity(identity, config, persistenceScope) {
     persistenceScope,
     turnScopeId: identity.turnScopeId,
     dialogProcessId: identity.subDialogProcessId,
-    messageId: config.messageId,
     presentationMessageId: config.presentationMessageId,
     executionId: identity.executionId,
     executionKind: EXECUTION_KIND.AGENT,
@@ -576,9 +570,7 @@ function clearParentTurnTransactionIdentity(runConfig = {}) {
   delete runConfig.commandId;
   delete runConfig.reuseExistingUserTurn;
   delete runConfig.thinkingStartedAt;
-  delete runConfig.messageId;
   delete runConfig.presentationMessageId;
-  delete runConfig.assistantMessageId;
   return runConfig;
 }
 

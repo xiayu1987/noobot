@@ -17,7 +17,7 @@ const IDENTITY = Object.freeze({
   dialogProcessId: "d-snapshot",
   turnScopeId: "t-snapshot",
   runId: "r-snapshot",
-  messageId: "m-snapshot",
+  presentationMessageId: "m-snapshot",
 });
 
 const ENVIRONMENT = Object.freeze({

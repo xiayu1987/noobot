@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import { computed, reactive } from "vue";
 import { selectTurnPresentations } from "../../../../../../src/modules/chat/runtime/engine/turnPresentation.js";
@@ -12,9 +13,9 @@ const SESSION_ID = "session-1";
 function envelope(turnScopeId = "turn-1", transferId = "transfer-1") {
   return {
     protocol: "noobot.semantic-transfer",
-    version: 2,
+    version: TRANSFER_VERSION,
     transferId,
-    messageId: "message-1",
+    presentationMessageId: "message-1",
     identity: {
       sessionId: SESSION_ID,
       turnScopeId,

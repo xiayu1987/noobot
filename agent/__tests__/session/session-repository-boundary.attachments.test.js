@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -157,10 +157,10 @@ test("session display summary derives attachments from transfer envelopes", () =
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            version: 2,
+            version: TRANSFER_VERSION,
             transferId:
               "transfer:message-transfer-attachments:plugin:harness-plugin:output:tool_result_text:structured",
-            messageId: "message-transfer-attachments",
+            presentationMessageId: "message-transfer-attachments",
             identity: {
               sessionId: "s-transfer-attachments",
               turnScopeId: "turn-transfer-attachments",
@@ -245,9 +245,9 @@ test("session display summary binds completed tool artifacts to one explicit ass
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            version: 2,
+            version: TRANSFER_VERSION,
             transferId: "transfer:assistant-one:tool:call-one:output:tool_result_text:artifact",
-            messageId: "assistant-one",
+            presentationMessageId: "assistant-one",
             identity: {
               sessionId: "s-tool-artifacts",
               turnScopeId: "turn-one",
@@ -322,9 +322,9 @@ test("session display summary does not guess ownership for an unmatched tool art
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            version: 2,
+            version: TRANSFER_VERSION,
             transferId: "transfer:other:tool:call-other:output:tool_result_text:artifact",
-            messageId: "other",
+            presentationMessageId: "other",
             identity: {
               sessionId: "s-unmatched-artifact",
               turnScopeId: "turn-other",

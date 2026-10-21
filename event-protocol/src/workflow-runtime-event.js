@@ -62,7 +62,6 @@ export function createWorkflowRuntimeEnvelope({
   eventType = "",
   authoritySessionId = "",
   turnScopeId = "",
-  messageId = "",
   executionId = "",
   eventId = "",
   workflowRunId = "",
@@ -81,7 +80,6 @@ export function createWorkflowRuntimeEnvelope({
       eventType: text(eventType),
       sessionId: text(authoritySessionId),
       turnScopeId: canonicalizeTurnScopeId(turnScopeId),
-      messageId: text(messageId),
       executionId: text(executionId),
     },
     causality,
@@ -126,9 +124,8 @@ function validateEnvelopeIdentity(envelope, eventType, payload, errors) {
   return envelopeTurnScopeId;
 }
 
-function validatePlanningFields(envelope, payload, envelopeTurnScopeId, errors) {
+function validatePlanningFields(payload, envelopeTurnScopeId, errors) {
   if (!envelopeTurnScopeId) errors.push("missing_planning_turn_scope");
-  if (!text(envelope?.identity?.messageId)) errors.push("missing_planning_message_identity");
   if (!text(payload?.presentationMessageId)) errors.push("missing_planning_presentation");
   if (!isPlainObject(payload?.workflowPayload)) errors.push("missing_planning_workflow_payload");
   if (!Array.isArray(payload?.nodeSessions) || !payload.nodeSessions.length)
@@ -175,7 +172,7 @@ export function validateWorkflowRuntimeEnvelope(envelope = {}) {
   }
   const envelopeTurnScopeId = validateEnvelopeIdentity(envelope, eventType, payload, errors);
   if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
-    validatePlanningFields(envelope, payload, envelopeTurnScopeId, errors);
+    validatePlanningFields(payload, envelopeTurnScopeId, errors);
   }
   if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
     validateNodeStateFields(envelope, payload, errors);

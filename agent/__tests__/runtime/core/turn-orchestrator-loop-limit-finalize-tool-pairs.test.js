@@ -7,6 +7,7 @@ import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { createHookManager } from "@noobot/hook-protocol";
@@ -288,7 +289,7 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
   assert.ok(
     loopState.modelContext.messageBlocks.incremental
       .slice(-6)
-      .every((message) => message.additional_kwargs?.noobotMessageId),
+      .every((message) => resolveContextMessageId(message)),
   );
 
   const syntheticBeforeLlm = beforeLlmContexts.filter((ctx) => ctx?.fakeTurn === true);

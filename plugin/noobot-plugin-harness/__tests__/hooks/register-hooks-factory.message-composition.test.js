@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { appendMessage } from "../../src/core/message-store.js";
@@ -13,6 +14,10 @@ import {
   createTestHookContext,
   invokeTestHookHandler,
 } from "../helpers/public-runtime-fixtures.js";
+import {
+  markContextMessageSummarized,
+  resolveContextMessageSummarized,
+} from "@noobot/context-protocol/message/codec";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
   const blocks =
@@ -47,7 +52,11 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      appendMessage(ctx, { role: "user", content: "harness prompt" }, { block: "incremental" });
+      appendMessage(
+        ctx,
+        canonicalizeTestContextMessage({ role: "user", content: "harness prompt" }),
+        { block: "incremental" },
+      );
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -111,7 +120,7 @@ test("createRegisterHarnessHooks composes by system history incremental message 
     injectPrompt: async (_point, ctx) => {
       appendMessage(
         ctx,
-        { role: "user", content: "injected incremental" },
+        canonicalizeTestContextMessage({ role: "user", content: "injected incremental" }),
         { block: "incremental" },
       );
     },
@@ -182,7 +191,9 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      appendMessage(ctx, { role: "user", content: "injected" }, { block: "incremental" });
+      appendMessage(ctx, canonicalizeTestContextMessage({ role: "user", content: "injected" }), {
+        block: "incremental",
+      });
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -234,10 +245,13 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
   );
   assert.ok(toolCallMessage);
   assert.equal(ctx.modelContext.messageBlocks.incremental[0], toolCallMessage);
-  assert.ok(toolCallMessage.additional_kwargs.noobotMessageId);
+  assert.ok(toolCallMessage.additional_kwargs.messageUid);
   assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
-  toolCallMessage.summarized = true;
-  assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, true);
+  markContextMessageSummarized(toolCallMessage);
+  assert.equal(
+    resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[0]),
+    true,
+  );
 });
 
 test("createRegisterHarnessHooks ignores messages outside agent-provided message blocks", async () => {
@@ -255,7 +269,11 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      appendMessage(ctx, { role: "user", content: "block incremental" }, { block: "incremental" });
+      appendMessage(
+        ctx,
+        canonicalizeTestContextMessage({ role: "user", content: "block incremental" }),
+        { block: "incremental" },
+      );
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });

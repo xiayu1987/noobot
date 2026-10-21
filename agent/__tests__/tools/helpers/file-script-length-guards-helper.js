@@ -27,12 +27,12 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 const TEST_RUN_IDENTITY = Object.freeze({
   turnScopeId: "t-1",
   executionId: "r-1",
-  messageId: "m-1",
+  presentationMessageId: "p-1",
 });
 
 function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
   const { runtime: runtimeOverrides = {}, environment = TEST_AGENT_ENVIRONMENT } = overrides;
-  const { turnScopeId, executionId, messageId } = TEST_RUN_IDENTITY;
+  const { turnScopeId, executionId, presentationMessageId } = TEST_RUN_IDENTITY;
   const { systemRuntime: systemRuntimeOverrides = {} } = runtimeOverrides;
   const { sessionId = "s-1", rootSessionId = "s-1" } = systemRuntimeOverrides;
   const runtime = createTestRuntimeContext({
@@ -48,7 +48,7 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
     userConfig: {},
     sharedTools: {},
     ...runtimeOverrides,
-    runConfig: { turnScopeId, executionId, messageId },
+    runConfig: { turnScopeId, executionId, presentationMessageId },
     systemRuntime: {
       userId,
       config: {},
@@ -69,7 +69,7 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
       dialogProcessId: "d-1",
       turnScopeId,
       runId: executionId,
-      messageId,
+      presentationMessageId,
     },
     environment,
   });

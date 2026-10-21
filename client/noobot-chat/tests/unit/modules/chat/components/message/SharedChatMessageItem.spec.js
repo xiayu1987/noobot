@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
@@ -515,9 +516,9 @@ describe("SharedChatMessageItem", () => {
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            version: 2,
+            version: TRANSFER_VERSION,
             transferId: "transfer-shared-1",
-            messageId: "msg-transfer",
+            presentationMessageId: "msg-transfer",
             identity: {
               sessionId: "session-1",
               turnScopeId: "turn-1",

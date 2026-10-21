@@ -81,14 +81,12 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       locale: "zh-CN",
       streaming: false,
       turnScopeId: "root-turn-1",
-      messageId: "assistant-message-1",
       presentationMessageId: "assistant-presentation-1",
     },
     agentContext: {
       bindings: {
         runtime: {
-          materializePendingCurrentTurnMessageEvents({ messageId } = {}) {
-            assert.equal(messageId, "assistant-message-1");
+          materializeUnownedCurrentTurnMessageEvents() {
             return {
               activityTimeline: [
                 {
@@ -185,9 +183,9 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(workflowTurnMessage?.type, "workflow");
   assert.equal(workflowTurnMessage?.chatPresentation, true);
   assert.equal(workflowTurnMessage?.presentationMessageId, "assistant-presentation-1");
-  assert.equal(workflowTurnMessage?.messageId, "assistant-message-1");
-  assert.equal(workflowTurnMessage?.id, "assistant-message-1");
-  assert.equal(agentResult?.assistantMessageId, "assistant-message-1");
+  assert.match(workflowTurnMessage?.messageId, /^msg_[0-9a-f-]{36}$/);
+  assert.equal(workflowTurnMessage?.id, workflowTurnMessage.messageId);
+  assert.equal(agentResult?.assistantMessageId, workflowTurnMessage.messageId);
   assert.equal(workflowTurnMessage?.attachments, undefined);
   assert.equal(
     workflowTurnMessage?.transferEnvelopes?.some(
@@ -293,7 +291,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
                           producerType: "plugin",
                           producerId: "workflow-final-summary",
                           transferId: "transfer-wf-semantic-final-1",
-                          messageId: "message-wf-semantic-final-1",
+                          presentationMessageId: "presentation-wf-semantic-final-1",
                           name: "final-summary.md",
                           scenario: "workflow",
                           strategy: "workflow_final_plan",
@@ -396,7 +394,7 @@ test("workflow hook routes final attachment summary composition through semantic
                   producerType: "plugin",
                   producerId: `workflow-${suffix}-summary`,
                   transferId: `transfer-wf-semantic-${suffix}-1`,
-                  messageId: `message-wf-semantic-${suffix}-1`,
+                  presentationMessageId: `presentation-wf-semantic-${suffix}-1`,
                   name: `${suffix}-summary.md`,
                   scenario: String(payload?.scenario || "").trim(),
                   strategy: String(payload?.strategy || "").trim(),

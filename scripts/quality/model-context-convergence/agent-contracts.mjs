@@ -17,7 +17,7 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       [
         "session message entity owns messageUid default identity",
-        /function resolveRuntimeMessageId\([^)]*\)\s*\{\s*return firstText\(\s*message\?\.messageId,\s*readContextMessageField\(message, "noobotMessageId"\),\s*messageUid,?\s*\);/,
+        /function resolveRuntimeMessageId\([^)]*\)\s*\{\s*return firstText\(\s*message\?\.messageId,\s*messageUid,?\s*\);/,
       ],
     ],
   },
@@ -26,7 +26,7 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       [
         "history assembly delegates canonical identity metadata",
-        /additional_kwargs:\s*projectContextMessageIdentityMetadata\(msg\)/,
+        /additional_kwargs:\s*projectContextMessageModelMetadata\(msg\)/,
       ],
     ],
   },
@@ -57,7 +57,7 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       [
         "summary checkpoint matches canonical ids",
-        /summarizedMessageIds\.has\(resolveContextMessageId\(message\)\)/,
+        /summarizedMessageIds\.has\(resolveMessageUid\(record\)\)/,
       ],
     ],
     forbidden: [
@@ -125,7 +125,7 @@ export const AGENT_CONTRACTS = Object.freeze([
       ["owns tool result LangChain message construction", /new\s+ToolMessage\s*\(/],
       [
         "tool result shares persistence identity with model context",
-        /additional_kwargs:\s*\{\s*noobotMessageId:\s*canonicalMessageUid\s*\}/,
+        /writeContextMessageMetadata\(\s*new\s+ToolMessage\([\s\S]*?\{\s*messageUid:\s*canonicalMessageUid\b/,
       ],
       [
         "owns canonical incremental model-context mutation",

@@ -115,7 +115,6 @@ function lifecycleEvent(sequence) {
       eventType: TURN_LIFECYCLE_WIRE_EVENT,
       sessionId: payload.sessionId,
       turnScopeId: payload.turnScopeId,
-      messageId: payload.messageId,
     },
     causality: { commandId: payload.commandId },
     ordering: {

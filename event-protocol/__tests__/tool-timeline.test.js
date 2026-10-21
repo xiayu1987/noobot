@@ -40,10 +40,9 @@ function event(eventType, sequence, extra = {}) {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "session-1",
       turnScopeId: "turn-1",
-      messageId: "message-1",
     },
     causality: {},
-    ordering: { domain: "message-event", scopeId: "message-1", sequence },
+    ordering: { domain: "message-event", scopeId: "presentation-1", sequence },
     producer: { type: "agent", id: "agent-1" },
     occurredAt: `2026-08-15T01:00:0${sequence}.000Z`,
     payload: {

@@ -217,3 +217,26 @@ test("plugin lifecycle and contribution identities have one protocol shape", () 
     /unsupported plugin lifecycle event/,
   );
 });
+
+test("scoped session roots are unique agent contributions", () => {
+  const withRoots = (surface, roots) => ({
+    ...manifest,
+    contributes: {
+      ...manifest.contributes,
+      [surface]: { ...manifest.contributes[surface], scopedSessionRoots: roots },
+    },
+  });
+  assert.deepEqual(
+    parsePluginManifest(withRoots("agent", ["session"])).contributes.agent.scopedSessionRoots,
+    ["session"],
+  );
+  assert.throws(
+    () => parsePluginManifest(withRoots("frontend", ["session"])),
+    /scoped session roots are agent contributions/,
+  );
+  assert.throws(
+    () => parsePluginManifest(withRoots("agent", ["session", "session"])),
+    /scoped session roots must be unique/,
+  );
+  assert.throws(() => parsePluginManifest(withRoots("agent", [""])), /too_small|at least/i);
+});

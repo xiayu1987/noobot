@@ -64,8 +64,8 @@ test("compact model view retains only V2 transfer envelopes and canonical attach
 test("consumer returns only validated V2 envelopes and canonical attachment references", () => {
   const envelopes = [
     attachmentTransfer({
-      ...identity({ transferId: "t-1", messageId: "m-1" }),
-      identity: identity({ transferId: "t-1", messageId: "m-1" }),
+      ...identity({ transferId: "t-1", presentationMessageId: "m-1" }),
+      identity: identity({ transferId: "t-1", presentationMessageId: "m-1" }),
       direction: "output",
       attachments: [attachment("att-1")],
       intent: {
@@ -76,8 +76,8 @@ test("consumer returns only validated V2 envelopes and canonical attachment refe
       },
     }),
     attachmentTransfer({
-      ...identity({ transferId: "t-2", messageId: "m-2" }),
-      identity: identity({ transferId: "t-2", messageId: "m-2" }),
+      ...identity({ transferId: "t-2", presentationMessageId: "m-2" }),
+      identity: identity({ transferId: "t-2", presentationMessageId: "m-2" }),
       direction: "output",
       attachments: [attachment("att-2")],
       intent: {

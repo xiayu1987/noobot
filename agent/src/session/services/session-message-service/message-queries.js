@@ -3,8 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
-import { createEmptyTurnLifecycle, normalizeDialogProcessId } from "@noobot/session-protocol";
+import {
+  createEmptyTurnLifecycle,
+  normalizeDialogProcessId,
+  resolveSessionMessageRecordDialogProcessId,
+} from "@noobot/session-protocol";
 import { repairOrphanedTerminalTurns } from "@noobot/authoritative-state/application";
 import { text } from "@noobot/shared/value";
 
@@ -51,6 +54,6 @@ export async function hasDialogProcessIdInSession({
   if (!session) return false;
   return session.messages.some(
     (messageItem) =>
-      resolveContextMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
+      resolveSessionMessageRecordDialogProcessId(messageItem) === normalizedDialogProcessId,
   );
 }

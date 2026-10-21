@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import {
   test,
   assert,
@@ -63,7 +64,7 @@ import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol
 
 const TEST_TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:execute-script:output",
-  messageId: "message:test-execute-script",
+  presentationMessageId: "message:test-execute-script",
   sessionId: "session:test-execute-script",
   turnScopeId: "turn:test-execute-script",
   runId: "run:test-execute-script",
@@ -107,7 +108,7 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
   assert.equal(result.message, "脚本内容过长，请分批执行或拆分脚本/文本后重试");
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.equal(result.transferEnvelopes.length, 1);
-  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
   assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
   assert.equal(
     result.transferEnvelopes[0].payload.attachments[0].name,
@@ -337,7 +338,7 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
   assert.equal(result.outputDelivery, "file");
   assert.equal(result.outputTransferReason, "execute_script_background");
   assert.equal(result.transferEnvelopes.length, 1);
-  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
   assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
   assert.equal(stdoutArtifact?.content, "out");
   assert.equal(stderrArtifact?.content, "err");

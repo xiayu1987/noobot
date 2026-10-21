@@ -42,7 +42,6 @@ function logRouteEvaluation(event, messageEvent, shouldProjectMain, context) {
     shouldProjectMain,
     eventId: identity.eventId || "",
     eventType: payload.eventType || "",
-    messageId: identity.messageId || "",
     presentationMessageId: resolveMessageEventPresentationId(payload),
   }));
 }
@@ -128,7 +127,6 @@ function projectionEventFields(identity, payload, context) {
     turnScopeId: identity.turnScopeId || context.turnScopeId,
     eventId: identity.eventId || "",
     eventType: payload.eventType || "",
-    messageId: identity.messageId || "",
   };
 }
 
@@ -151,7 +149,6 @@ function logProjectionReduction({
       source: "normal_live",
       eventId: fields.eventId,
       eventType: fields.eventType,
-      messageId: fields.messageId,
       presentationMessageId,
       sequence: ordering.sequence ?? null,
       result: reduction.result,
@@ -185,7 +182,6 @@ function projectMainSessionEvent(messageEvent, context) {
     data: {
       eventId: fields.eventId,
       eventType: fields.eventType,
-      messageId: fields.messageId,
       presentationMessageId,
       targetSessionId,
       target: targetBefore,

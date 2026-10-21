@@ -20,11 +20,10 @@ function resolveWorkflowPersistenceScope(runtime) {
   return runtime?.systemRuntime?.persistenceScope || null;
 }
 
-function projectWorkflowEventIdentity({ eventType, messageId, executionId, turnScopeId }) {
+function projectWorkflowEventIdentity({ eventType, executionId, turnScopeId }) {
   return {
     eventType: text(eventType),
     turnScopeId,
-    messageId: text(messageId),
     executionId: text(executionId),
   };
 }
@@ -83,7 +82,6 @@ export async function commitWorkflowRuntimeEvent({
   orderingDomain = "",
   orderingScopeId = "",
   revision = 1,
-  messageId = "",
   executionId = "",
 } = {}) {
   const runtime = resolveWorkflowCommitRuntime(ctx);
@@ -94,7 +92,7 @@ export async function commitWorkflowRuntimeEvent({
     userId,
     sessionId,
     family: WORKFLOW_RUNTIME_FAMILY,
-    identity: projectWorkflowEventIdentity({ eventType, messageId, executionId, turnScopeId }),
+    identity: projectWorkflowEventIdentity({ eventType, executionId, turnScopeId }),
     causality: projectWorkflowEventCausality({ commandId, payload }),
     ordering: projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision }),
     producer: { type: "plugin", id: PLUGIN_ID },

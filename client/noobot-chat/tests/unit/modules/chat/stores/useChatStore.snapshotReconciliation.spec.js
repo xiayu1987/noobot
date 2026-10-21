@@ -79,13 +79,13 @@ describe("useChatStore sub session snapshot reconciliation", () => {
         },
       ],
     });
-    commitPresentation(store, { messageId: "canonical-message-1" });
+    commitPresentation(store, { presentationMessageId: "canonical-message-1" });
 
     const result = applyMessageEvent(
       store,
       createSubSessionEvent({
         eventId: "canonical-event-1",
-        messageId: "canonical-message-1",
+        presentationMessageId: "canonical-message-1",
         sequence: 1,
         content: "answer",
       }),
@@ -105,12 +105,12 @@ describe("useChatStore sub session snapshot reconciliation", () => {
 
   it("keeps stable identities separate when a different REST message arrives after realtime", () => {
     const store = useChatStore();
-    commitPresentation(store, { messageId: "canonical-message-1" });
+    commitPresentation(store, { presentationMessageId: "canonical-message-1" });
     applyMessageEvent(
       store,
       createSubSessionEvent({
         eventId: "canonical-event-1",
-        messageId: "canonical-message-1",
+        presentationMessageId: "canonical-message-1",
         sequence: 1,
         content: "answer",
       }),

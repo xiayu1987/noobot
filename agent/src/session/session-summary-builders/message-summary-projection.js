@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
+import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import {
@@ -154,7 +154,7 @@ const DISPLAY_PASSTHROUGH_KEYS = ["pluginMessage", "done", "pending", "error"];
 function readDisplayRole(message) {
   if (!isPlainObject(message)) return "";
   const role = text(message.role);
-  if (!role || isInjectedMessage(message)) return "";
+  if (!role || isInjectedSessionMessageRecord(message)) return "";
   return DISPLAY_ROLES.has(role) ? role : "";
 }
 

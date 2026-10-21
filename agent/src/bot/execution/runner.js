@@ -218,7 +218,6 @@ export class SessionExecutionRunner {
         resolvedRunConfig: initializedRunConfig,
         turnScopeId: resolvedTurnScopeId,
         presentationMessageId,
-        messageId,
         resumeFromStoppedSnapshot,
         contextMode,
         lifecycle: initializedLifecycle,
@@ -270,7 +269,6 @@ export class SessionExecutionRunner {
       const dispatchRuntime = await bindAgentDispatchRuntime({
         runtimeAgentContext,
         lifecycle,
-        messageId,
         presentationMessageId,
         userMessageAttachments,
         appendAgentMessages: this.appendAgentMessages,

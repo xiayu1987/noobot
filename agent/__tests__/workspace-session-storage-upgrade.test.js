@@ -9,6 +9,7 @@ import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
+import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { EXECUTION_REPORT_VERSION } from "@noobot/session-protocol/execution-report";
 import { ensureUserWorkspace } from "../src/workspace-lifecycle/index.js";
@@ -34,7 +35,13 @@ async function createFixture() {
   const at = (relativePath) => path.join(userPath, relativePath);
   return {
     userPath,
-    options: { workspaceRoot, assetPackagePath, userId: "user-1", baseValues: {} },
+    options: {
+      workspaceRoot,
+      assetPackagePath,
+      userId: "user-1",
+      baseValues: {},
+      scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+    },
     at,
     write: async (relativePath, value) => {
       await mkdir(path.dirname(at(relativePath)), { recursive: true });
@@ -326,7 +333,6 @@ test("v4 workspace fills session tree callers from nested session documents", as
       nodes: {
         root: { sessionId: "root", parentSessionId: "" },
         child: { sessionId: "child", parentSessionId: "root" },
-        broken: { sessionId: "broken", parentSessionId: "root" },
       },
     };
     await fixture.write(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE, { version: 4 });
@@ -335,13 +341,11 @@ test("v4 workspace fills session tree callers from nested session documents", as
     await fixture.write("runtime/session/root/child/session.json", {
       caller: SESSION_CALLER.BOT,
     });
-    await fixture.write("runtime/session/root/broken/session.json", "{not json");
     await ensureUserWorkspace(fixture.options);
     assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
       nodes: {
         root: { sessionId: "root", parentSessionId: "", caller: SESSION_CALLER.USER },
         child: { sessionId: "child", parentSessionId: "root", caller: SESSION_CALLER.BOT },
-        broken: { sessionId: "broken", parentSessionId: "root", caller: SESSION_CALLER.USER },
       },
     });
     const stamp = await readBackupStamp(fixture);
@@ -349,10 +353,35 @@ test("v4 workspace fills session tree callers from nested session documents", as
       await fixture.readJson(`${stamp}/${WORKSPACE_LAYOUT.SESSION_TREE_FILE}`),
       tree,
     );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("layout upgrade rejects a corrupted session manifest and leaves it untouched", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE, { version: 5 });
+    await fixture.write(WORKSPACE_LAYOUT.SESSION_TREE_FILE, {
+      nodes: {
+        root: { sessionId: "root", parentSessionId: "", caller: SESSION_CALLER.USER },
+        broken: { sessionId: "broken", parentSessionId: "root", caller: SESSION_CALLER.USER },
+      },
+    });
+    await fixture.write("runtime/session/root/session.json", { caller: SESSION_CALLER.USER });
+    await fixture.write("runtime/session/root/broken/session.json", "{not json");
+    await assert.rejects(ensureUserWorkspace(fixture.options), {
+      code: "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID",
+      details: {
+        reason: "invalid_json",
+        filePath: fixture.at("runtime/session/root/broken/session.json"),
+      },
+    });
     assert.equal(
       await readFile(fixture.at("runtime/session/root/broken/session.json"), "utf8"),
       "{not json",
     );
+    assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), { version: 5 });
   } finally {
     await fixture.restore();
   }

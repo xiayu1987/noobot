@@ -449,7 +449,6 @@ describe("ThinkingPanel canonical details", () => {
           sessionId: "session-live-interjection",
           dialogProcessId: "dialog-live-interjection",
           turnScopeId: "turn-live-interjection",
-          messageId: "assistant-live-interjection",
           presentationMessageId: "assistant-live-interjection",
         },
       ],

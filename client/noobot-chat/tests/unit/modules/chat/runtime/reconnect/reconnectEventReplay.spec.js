@@ -266,7 +266,7 @@ describe("applyReconnectEventReplay", () => {
     const envelope = canonicalMessageEvent({
       eventType: "llm_delta",
       sessionId: "s-1",
-      messageId: "message-1",
+      presentationMessageId: "message-1",
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       text: "hello",
@@ -293,7 +293,7 @@ describe("applyReconnectEventReplay", () => {
     const envelope = canonicalMessageEvent({
       eventType: "llm_delta",
       sessionId: "s-2",
-      messageId: "message-2",
+      presentationMessageId: "message-2",
       turnScopeId: "turn-2",
       dialogProcessId: "dp-2",
       text: "cached",

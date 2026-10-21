@@ -10,7 +10,10 @@ import {
   injectSystemMessages,
   isHarnessPromptAlreadyInjected,
 } from "../../src/prompt/prompt-injector.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
+import {
+  harnessPromptInjectedMessageType,
+  isHarnessPromptMessage,
+} from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 import { AIMessage, ToolMessage } from "@langchain/core/messages";
 import { replaceMessageProjection } from "../../src/core/message-store.js";
@@ -24,7 +27,9 @@ test("injectSystemMessages skips already injected prompt IDs and injects missing
           {
             role: "system",
             content: "policy",
-            [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-policy",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            injectedMessageType: harnessPromptInjectedMessageType("noobot-harness-policy"),
           },
         ],
         history: [],
@@ -44,14 +49,11 @@ test("injectSystemMessages skips already injected prompt IDs and injects missing
   assert.equal(isHarnessPromptAlreadyInjected(messages, "noobot-harness-policy"), true);
   assert.equal(isHarnessPromptAlreadyInjected(messages, "noobot-harness-final-response"), true);
   assert.equal(
-    messages.filter((item) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy")
-      .length,
+    messages.filter((item) => isHarnessPromptMessage(item, "noobot-harness-policy")).length,
     1,
   );
   assert.equal(
-    messages.filter(
-      (item) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-final-response",
-    ).length,
+    messages.filter((item) => isHarnessPromptMessage(item, "noobot-harness-final-response")).length,
     1,
   );
   assert.equal(
@@ -69,12 +71,16 @@ test("replace mode refreshes cache after removing old harness prompts", () => {
           {
             role: "system",
             content: "policy",
-            [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-policy",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            injectedMessageType: harnessPromptInjectedMessageType("noobot-harness-policy"),
           },
           {
             role: "system",
             content: "final",
-            [HARNESS_PROMPT_INJECTION_ID_FIELD]: "noobot-harness-final-response",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            injectedMessageType: harnessPromptInjectedMessageType("noobot-harness-final-response"),
           },
         ],
         history: [],
@@ -114,7 +120,7 @@ test("after_system mode preserves leading system messages", () => {
 
   assert.equal(changed, true);
   assert.equal(messages[0]?.content, "system context");
-  assert.equal(messages[1]?.[HARNESS_PROMPT_INJECTION_ID_FIELD], "noobot-harness-policy");
+  assert.equal(isHarnessPromptMessage(messages[1], "noobot-harness-policy"), true);
   assert.equal(String(messages[1]?.content || ""), "policy");
   assert.equal(messages[2]?.content, "user task");
 });
@@ -139,7 +145,7 @@ test("injectSystemMessages writes back through message store", () => {
   });
 
   assert.equal(changed, true);
-  assert.ok(ctx.modelContext.messages[1]?.additional_kwargs?.noobotMessageId);
+  assert.ok(ctx.modelContext.messages[1]?.additional_kwargs?.messageUid);
   assert.equal(ctx.modelContext.messages[2], ctx.modelContext.messageBlocks.incremental[0]);
   assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
 });
@@ -165,7 +171,7 @@ test("injectSystemMessages syncs system block arrays through message store", () 
   assert.equal(changed, true);
   assert.equal(ctx.modelContext.messageBlocks.system.length, 1);
   assert.equal(ctx.modelContext.messageBlocks.system[0], ctx.modelContext.messages[0]);
-  assert.ok(ctx.modelContext.messages[0].additional_kwargs.noobotMessageId);
+  assert.ok(ctx.modelContext.messages[0].additional_kwargs.messageUid);
   assert.equal(ctx.modelContext.messageBlocks.systemIds, undefined);
 });
 

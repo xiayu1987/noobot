@@ -18,7 +18,6 @@ const envelope = (overrides) =>
   canonicalMessageEvent({
     sessionId: identity.sessionId,
     turnScopeId: identity.turnScopeId,
-    messageId: "message-1",
     presentationMessageId: "message-1",
     occurredAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -124,7 +123,6 @@ describe("turnProjectionStore convergence", () => {
           protocolFamily: "message.timeline",
           protocolVersion: 3,
           eventId: "guidance-1",
-          messageId: "message-1",
           presentationMessageId: "message-1",
           sequenceDomain: "message-event",
           sequenceScopeId: "message-1",
@@ -216,109 +214,6 @@ describe("turnProjectionStore convergence", () => {
     expect(target.messageEventState.lastSequence).toBe(3);
     expect(target.toolTimeline).toHaveLength(1);
     expect(target.toolTimeline[0]).toMatchObject({ status: "completed" });
-  });
-
-  it("aggregates explicit source-message lanes into one presentation message", () => {
-    const target = {
-      ...identity,
-      id: "optimistic-turn-message",
-      messageId: "optimistic-turn-message",
-      content: "",
-    };
-    const multiMessageEvents = [
-      envelope({
-        messageId: "assistant-tools-1",
-        eventId: "tools-1-start-a",
-        eventType: "tool_call_start",
-        sequence: 1,
-        timestamp: "2026-01-01T00:00:01.000Z",
-        tool: "read_file",
-        toolCallId: "call-a",
-        args: {},
-      }),
-      envelope({
-        messageId: "assistant-tools-1",
-        eventId: "tools-1-start-b",
-        eventType: "tool_call_start",
-        sequence: 2,
-        timestamp: "2026-01-01T00:00:02.000Z",
-        tool: "read_file",
-        toolCallId: "call-b",
-        args: {},
-      }),
-      envelope({
-        messageId: "assistant-tools-1",
-        eventId: "tools-1-end-a",
-        eventType: "tool_call_end",
-        sequence: 3,
-        timestamp: "2026-01-01T00:00:03.000Z",
-        tool: "read_file",
-        toolCallId: "call-a",
-        result: { ok: true },
-        success: true,
-      }),
-      envelope({
-        messageId: "assistant-tools-1",
-        eventId: "tools-1-end-b",
-        eventType: "tool_call_end",
-        sequence: 4,
-        timestamp: "2026-01-01T00:00:04.000Z",
-        tool: "read_file",
-        toolCallId: "call-b",
-        result: { ok: true },
-        success: true,
-      }),
-      envelope({
-        messageId: "assistant-tools-2",
-        eventId: "tools-2-start",
-        eventType: "tool_call_start",
-        sequence: 1,
-        timestamp: "2026-01-01T00:00:05.000Z",
-        tool: "write_file",
-        toolCallId: "call-c",
-        args: {},
-      }),
-      envelope({
-        messageId: "assistant-tools-2",
-        eventId: "tools-2-end",
-        eventType: "tool_call_end",
-        sequence: 2,
-        timestamp: "2026-01-01T00:00:06.000Z",
-        tool: "write_file",
-        toolCallId: "call-c",
-        result: { ok: true },
-        success: true,
-      }),
-      envelope({
-        messageId: "assistant-final",
-        eventId: "final-content",
-        eventType: "authoritative_final_content",
-        sequence: 1,
-        timestamp: "2026-01-01T00:00:07.000Z",
-        text: "finished",
-      }),
-    ];
-    multiMessageEvents.forEach((eventItem) => {
-      eventItem.payload.presentationMessageId = "optimistic-turn-message";
-    });
-
-    const results = multiMessageEvents.map((eventItem) =>
-      dispatchTurnEnvelope({
-        targetMessage: target,
-        envelope: eventItem,
-        source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
-      }),
-    );
-
-    expect(results.every((result) => result.applied === true)).toBe(true);
-    expect(target.content).toBe("finished");
-    expect(target.toolTimeline || []).toHaveLength(3);
-    expect(Object.keys(target.messageEventState.sequenceLanesByScopeId)).toEqual([
-      "assistant-tools-1",
-      "assistant-tools-2",
-      "assistant-final",
-    ]);
-    expect(target.messageEventState.consumedEventIds).toHaveLength(7);
   });
 
   it("hydrates idempotently, replays buffered increments, and excludes Turn UI state", () => {

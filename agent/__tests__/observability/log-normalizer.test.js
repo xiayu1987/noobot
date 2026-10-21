@@ -20,16 +20,15 @@ import {
 } from "../../src/events/message-event-stream.js";
 
 function runtimeForTurn({
-  messageId = "turn-message-1",
   presentationMessageId = "presentation-1",
   streamIdentity = { parentSessionId: "" },
 } = {}) {
   let sequence = 0;
   const runtime = {
-    runConfig: { messageId, presentationMessageId },
+    runConfig: { presentationMessageId },
     systemRuntime: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
     sessionManager: {
-      async commitMessageEvent({ sessionId, turnScopeId, messageId: committedMessageId, payload }) {
+      async commitMessageEvent({ sessionId, turnScopeId, payload }) {
         sequence += 1;
         return {
           committed: true,
@@ -40,11 +39,10 @@ function runtimeForTurn({
               eventType: MESSAGE_EVENT_WIRE_EVENT,
               sessionId,
               turnScopeId,
-              messageId: committedMessageId,
             },
             ordering: {
               domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-              scopeId: messageId,
+              scopeId: payload.presentationMessageId,
               sequence,
             },
             producer: { type: "test", id: "message-event-commit" },
@@ -55,7 +53,7 @@ function runtimeForTurn({
       },
     },
   };
-  bindAssistantMessageEventStream(runtime, { messageId, presentationMessageId, ...streamIdentity });
+  bindAssistantMessageEventStream(runtime, { presentationMessageId, ...streamIdentity });
   return runtime;
 }
 
@@ -96,7 +94,7 @@ test("authoritative message events declare the message-event sequence domain", a
   );
 
   assert.equal(envelope.ordering.domain, MESSAGE_EVENT_SEQUENCE_DOMAIN);
-  assert.equal(envelope.ordering.scopeId, envelope.identity.messageId);
+  assert.equal(envelope.ordering.scopeId, envelope.payload.presentationMessageId);
   assert.equal(emitted[0]?.event, "authority_event_committed");
   assert.equal(emitted[0]?.data?.envelope, envelope);
 });
@@ -158,23 +156,20 @@ test("one Turn Aggregate owns a contiguous event sequence across model messages"
     [first.ordering.sequence, second.ordering.sequence, next.ordering.sequence],
     [1, 2, 3],
   );
-  assert.equal(first.ordering.scopeId, "turn-message-1");
-  assert.equal(next.ordering.scopeId, "turn-message-1");
+  assert.equal(first.ordering.scopeId, "presentation-1");
+  assert.equal(next.ordering.scopeId, "presentation-1");
 });
 
 test("model streams keep independent identities while sharing the run presentation identity", async () => {
-  const runtime = runtimeForTurn({
-    messageId: "turn-message-preallocated",
-    presentationMessageId: "msg_preallocated",
-  });
+  const runtime = runtimeForTurn({ presentationMessageId: "msg_preallocated" });
   const firstMessageId = beginAssistantMessageEventStream(runtime);
   const first = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "first" });
   const nextMessageId = beginAssistantMessageEventStream(runtime);
   const next = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
-  assert.equal(first.identity.messageId, "turn-message-preallocated");
-  assert.equal(next.identity.messageId, "turn-message-preallocated");
+  assert.equal(Object.hasOwn(first.identity, "messageId"), false);
+  assert.equal(next.ordering.scopeId, "msg_preallocated");
   assert.equal(first.payload.presentationMessageId, "msg_preallocated");
   assert.equal(next.payload.presentationMessageId, "msg_preallocated");
   assert.equal(first.protocol.version, 3);
@@ -186,18 +181,16 @@ test("Turn message event identity is immutable after binding", () => {
   assert.throws(
     () =>
       bindAssistantMessageEventStream(runtime, {
-        messageId: "other-message",
-        presentationMessageId: "presentation-1",
+        presentationMessageId: "presentation-other",
         parentSessionId: "",
       }),
-    /messageId conflict/,
+    /presentationMessageId conflict/,
   );
 });
 
 test("workflow ownership is immutable and emitted by the common message stream", async () => {
   const runtime = {
     runConfig: {
-      messageId: "workflow-message",
       presentationMessageId: "workflow-presentation",
       workflowRunId: "workflow-run-1",
       workflowNodeExecutionId: "node-execution-1",
@@ -211,7 +204,7 @@ test("workflow ownership is immutable and emitted by the common message stream",
   };
   let sequence = 0;
   runtime.sessionManager = {
-    async commitMessageEvent({ sessionId, turnScopeId, messageId, payload }) {
+    async commitMessageEvent({ sessionId, turnScopeId, payload }) {
       sequence += 1;
       return {
         committed: true,
@@ -222,9 +215,12 @@ test("workflow ownership is immutable and emitted by the common message stream",
             eventType: MESSAGE_EVENT_WIRE_EVENT,
             sessionId,
             turnScopeId,
-            messageId,
           },
-          ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: messageId, sequence },
+          ordering: {
+            domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+            scopeId: payload.presentationMessageId,
+            sequence,
+          },
           producer: { type: "test", id: "workflow-message-event-commit" },
           occurredAt: "2026-01-01T00:00:00.000Z",
           payload,
@@ -233,7 +229,6 @@ test("workflow ownership is immutable and emitted by the common message stream",
     },
   };
   bindAssistantMessageEventStream(runtime, {
-    messageId: "workflow-message",
     presentationMessageId: "workflow-presentation",
     parentSessionId: "root-session",
     workflowRunId: "workflow-run-1",
@@ -249,7 +244,6 @@ test("workflow ownership is immutable and emitted by the common message stream",
   assert.throws(
     () =>
       bindAssistantMessageEventStream(runtime, {
-        messageId: "workflow-message",
         presentationMessageId: "workflow-presentation",
         parentSessionId: "root-session",
         workflowRunId: "workflow-run-1",
@@ -267,9 +261,8 @@ test("authoritative message envelope validation rejects partial events", () => {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "session-1",
       turnScopeId: "turn-1",
-      messageId: "message-1",
     },
-    ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: "message-1", sequence: 0 },
+    ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: "presentation-1", sequence: 0 },
     producer: { type: "test", id: "message-event-validation" },
     occurredAt: "2026-01-01T00:00:00.000Z",
     payload: {
@@ -290,7 +283,8 @@ test("authoritative message envelope validation rejects partial events", () => {
     false,
   );
   assert.equal(
-    validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, messageId: "" } }).valid,
+    validateProtocolEvent({ ...envelope, ordering: { ...envelope.ordering, scopeId: "other" } })
+      .valid,
     false,
   );
   assert.equal(

@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { appendMessage } from "../../src/core/message-store.js";
@@ -13,6 +14,7 @@ import {
   createTestHookContext,
   invokeTestHookHandler,
 } from "../helpers/public-runtime-fixtures.js";
+import { markContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
   const blocks =
@@ -138,11 +140,11 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     injectPrompt: async (_point, ctx) => {
       appendMessage(
         ctx,
-        {
+        canonicalizeTestContextMessage({
           role: "user",
           content:
             "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
-        },
+        }),
         { block: "incremental" },
       );
     },
@@ -260,7 +262,7 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
     injectPrompt: async (_point, ctx) => {
       appendMessage(
         ctx,
-        { role: "user", content: "current harness prompt" },
+        canonicalizeTestContextMessage({ role: "user", content: "current harness prompt" }),
         { block: "incremental" },
       );
     },
@@ -387,6 +389,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     content: "harness current-turn injection",
     injectedMessage: true,
     injectedBy: "harness-plugin",
+    injectedMessageType: "harness_prompt:current-turn",
     dialogProcessId: "dlg-current",
   };
   const noisyMessages = [
@@ -429,7 +432,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
   );
 
   for (const message of noisyMessages) {
-    message.summarized = true;
+    markContextMessageSummarized(message);
   }
 
   await invokeTestHookHandler(

@@ -16,7 +16,6 @@ function summarizeReceivedEventIdentity(identity = {}) {
     sessionId: normalizeTrimmedString(identity.sessionId),
     turnScopeId: normalizeTrimmedString(identity.turnScopeId),
     eventId: normalizeTrimmedString(identity.eventId),
-    messageId: normalizeTrimmedString(identity.messageId),
   };
 }
 

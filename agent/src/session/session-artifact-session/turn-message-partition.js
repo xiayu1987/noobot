@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveSessionMessageRecordDialogProcessId } from "@noobot/session-protocol";
 import { resolveScopedArtifactPath } from "@noobot/path-resolver";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { text } from "@noobot/shared/value";
 
@@ -29,7 +29,7 @@ export function splitSessionMessages(messages, dialogOrder) {
   const logicalOrder = dialogLogicalOrder(dialogOrder);
   const buckets = new Map();
   source.forEach((message, sourceIndex) => {
-    const dialogProcessId = resolveContextMessageDialogProcessId(message);
+    const dialogProcessId = resolveSessionMessageRecordDialogProcessId(message);
     const turnScopeId = text(message?.turnScopeId);
     if (!turnScopeId || !dialogProcessId) {
       const error = new TypeError(

@@ -487,8 +487,7 @@ describe("useChatEngine.send-stream", () => {
         createAuthoritativeMessageEnvelope("authoritative_final_content", {
           eventId: "evt-final-answer",
           sessionId: "local-1",
-          messageId: "model-output-final-answer",
-          presentationMessageId: payload.presentation.assistantMessageId,
+          presentationMessageId: payload.presentation.presentationMessageId,
           dialogProcessId: "dp-new",
           turnScopeId: payload.identity.turnScopeId,
           seq: 1,
@@ -511,7 +510,7 @@ describe("useChatEngine.send-stream", () => {
             { role: RoleEnum.USER, content: "hello" },
             {
               role: RoleEnum.ASSISTANT,
-              messageId: payload.presentation.assistantMessageId,
+              messageId: payload.presentation.presentationMessageId,
               dialogProcessId: "dp-new",
               turnScopeId: payload.identity.turnScopeId,
               content: "final answer",
@@ -553,7 +552,6 @@ describe("useChatEngine.send-stream", () => {
         debugType: "transport-diagnostics",
         sessionId: "local-1",
         data: expect.objectContaining({
-          messageId: "model-output-final-answer",
           presentationMessageId: expect.any(String),
           result: "applied",
           errors: [],
@@ -718,8 +716,7 @@ describe("useChatEngine.send-stream", () => {
         createAuthoritativeMessageEnvelope("authoritative_final_content", {
           eventId: "evt-channel-final-content",
           sessionId: "local-channel-complete",
-          messageId: "model-output-channel-complete",
-          presentationMessageId: payload.presentation.assistantMessageId,
+          presentationMessageId: payload.presentation.presentationMessageId,
           dialogProcessId: "dp-channel-complete",
           turnScopeId: payload.identity.turnScopeId,
           seq: 1,

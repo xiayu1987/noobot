@@ -73,3 +73,4 @@ export * from "./lifecycle/execution-abort.js";
 export * from "./lifecycle/execution-cancellation-scope.js";
 export * from "./aggregate/session-invariants.js";
 export * from "./aggregate/turn-commit-metadata.js";
+export * from "./aggregate/session-message-record.js";

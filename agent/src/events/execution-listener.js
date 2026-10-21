@@ -28,7 +28,6 @@ function projectExecutionLogRecord(event = "", data = {}) {
     data: {
       ...envelope.payload,
       eventId: envelope.identity.eventId,
-      messageId: envelope.identity.messageId,
       executionId: envelope.identity.executionId,
       sequence: envelope.ordering.sequence,
       sequenceDomain: envelope.ordering.domain,
@@ -121,7 +120,6 @@ export function createExecutionEventListener({
       dialogProcessId: deliveryRoute.dialogProcessId,
       turnScopeId: deliveryRoute.turnScopeId,
     },
-    messageId: text(data?.envelope?.identity?.messageId),
     presentationMessageId: text(data?.presentationMessageId),
     sequence: Number(data?.envelope?.ordering?.sequence || 0),
     contentLength: String(data?.text || data?.content || "").length,
@@ -134,7 +132,7 @@ export function createExecutionEventListener({
   const forwardUpstream = ({ event, data, ts, route: deliveryRoute }) => {
     const transportData = projectExecutionTransportPayload({ event, data, route: deliveryRoute });
     const diagnostic = summarizeDelivery(event, transportData, deliveryRoute);
-    const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.messageId);
+    const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.presentationMessageId);
     const enqueuedAt = deliveryTiming ? performance.now() : 0;
     const task = deliveryTail.then(async () => {
       const startedAt = deliveryTiming ? performance.now() : 0;

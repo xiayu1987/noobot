@@ -132,7 +132,7 @@ export function createV2AttachmentTransferEnvelope({
   producerType = "subagent",
   producerId = "workflow-test-producer",
   transferId = `transfer-${attachmentId}`,
-  messageId = `message-${attachmentId}`,
+  presentationMessageId = `presentation-${attachmentId}`,
   name = "workflow-result.md",
   mimeType = "text/markdown",
   strategy = "workflow_subagent",
@@ -141,7 +141,7 @@ export function createV2AttachmentTransferEnvelope({
 } = {}) {
   return createTransferEnvelope({
     transferId,
-    messageId,
+    presentationMessageId,
     identity: createTransferIdentity({
       sessionId,
       turnScopeId,
@@ -204,7 +204,7 @@ export function createSemanticTransferTool({
       ).trim();
       const envelope = createTransferEnvelope({
         transferId: `transfer-${prefix}-${strategyKey}-${scopedCount}`,
-        messageId: `message-${prefix}-${strategyKey}-${scopedCount}`,
+        presentationMessageId: `presentation-${prefix}-${strategyKey}-${scopedCount}`,
         identity: createTransferIdentity({
           sessionId: effectiveSessionId,
           turnScopeId: effectiveTurnScopeId,
@@ -292,9 +292,6 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   if (!text(runConfig.rootExecutionId)) {
     runConfig.rootExecutionId = runConfig.executionId;
   }
-  if (!text(runConfig.messageId)) {
-    runConfig.messageId = `test-message:${sessionId}:${dialogProcessId}`;
-  }
   if (!text(runConfig.presentationMessageId)) {
     runConfig.presentationMessageId = `test-presentation:${sessionId}:${dialogProcessId}`;
   }
@@ -366,9 +363,8 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   if (!isFunction(target?.eventListener?.onEvent)) {
     target.eventListener = { async onEvent() {} };
   }
-  if (!isFunction(runtime.materializePendingCurrentTurnMessageEvents)) {
-    runtime.materializePendingCurrentTurnMessageEvents = ({ messageId } = {}) => {
-      assert.ok(text(messageId), "materializer requires messageId");
+  if (!isFunction(runtime.materializeUnownedCurrentTurnMessageEvents)) {
+    runtime.materializeUnownedCurrentTurnMessageEvents = () => {
       return { activityTimeline: [], toolTimeline: [] };
     };
   }

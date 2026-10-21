@@ -15,13 +15,12 @@ import { createTurnKey } from "../../../../../../src/modules/chat/runtime/engine
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 function authoritative(eventType, sequence, extra = {}) {
-  const messageId = extra.messageId || "message-1";
+  const presentationMessageId = extra.presentationMessageId || "message-1";
   return canonicalMessageEvent({
-    eventId: extra.eventId || `${messageId}-event-${sequence}`,
+    eventId: extra.eventId || `${presentationMessageId}-event-${sequence}`,
     eventType,
     sessionId: "s-1",
-    messageId,
-    presentationMessageId: extra.presentationMessageId || messageId,
+    presentationMessageId,
     dialogProcessId: extra.dialogProcessId || "dp-1",
     turnScopeId: extra.turnScopeId || "turn-1",
     sequence,
@@ -76,7 +75,6 @@ describe("replayCacheConsumer", () => {
         eventType: "thinking",
         sessionId: "child-session-1",
         turnScopeId: "workflow-node:node-1",
-        messageId: "child-message-1",
         presentationMessageId: "child-message-1",
         workflowRunId: "workflow-run-1",
         nodeExecutionId: "node-1",
@@ -108,14 +106,14 @@ describe("replayCacheConsumer", () => {
   it("consumes cached replay groups for a session and removes the session cache", async () => {
     const turnOne = authoritative("llm_delta", 1, {
       eventId: "turn-1-event-1",
-      messageId: "turn-1-message",
+      presentationMessageId: "turn-1-message",
       text: "a",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
     });
     const turnTwo = authoritative("llm_delta", 1, {
       eventId: "turn-2-event-1",
-      messageId: "turn-2-message",
+      presentationMessageId: "turn-2-message",
       text: "b",
       dialogProcessId: "dp-2",
       turnScopeId: "turn-2",
@@ -123,7 +121,7 @@ describe("replayCacheConsumer", () => {
     const otherSession = authoritative("llm_delta", 1, {
       eventId: "turn-3-event-1",
       sessionId: "s-2",
-      messageId: "turn-3-message",
+      presentationMessageId: "turn-3-message",
       text: "c",
       dialogProcessId: "dp-3",
       turnScopeId: "turn-3",
@@ -309,7 +307,7 @@ describe("replayCacheConsumer", () => {
       turnScopeId: "turn-continuation",
       messages: [
         authoritative("thinking", 1, {
-          messageId: "message-continuation",
+          presentationMessageId: "message-continuation",
           text: "continuation tool",
           dialogProcessId: "dp-shared",
           turnScopeId: "turn-continuation",

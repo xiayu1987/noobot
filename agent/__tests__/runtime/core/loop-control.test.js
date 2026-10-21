@@ -7,6 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createModelContext } from "@noobot/context-protocol";
+import {
+  resolveContextMessageId,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 import {
   maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
@@ -15,6 +20,13 @@ import {
   maybeRequestPhaseSummary,
   maybeRequestTaskCheck,
 } from "../../../src/runtime/loop-control.js";
+
+function longUserContextMessage() {
+  return writeContextMessageMetadata(
+    { role: "user", content: "0123456789012345" },
+    { messageUid: createMessageUid(), summarized: false },
+  );
+}
 
 function attachCanonicalTurn(modelState, loopState) {
   modelState.runtime.currentTurnMessages = createCurrentTurnMessagesStore();
@@ -49,15 +61,8 @@ test("task check prompt is periodic and independent from phase summary state", (
   const taskCheckEntity = modelState.runtime.currentTurnMessages.toArray()[0];
   assert.equal(taskCheckEntity.role, "user");
   assert.equal(taskCheckEntity.chatPresentation, false);
-  assert.equal(modelContext.messages[0].additional_kwargs.chatPresentation, false);
-  assert.equal(
-    taskCheckEntity.messageUid,
-    modelContext.messages[0].additional_kwargs.noobotMessageId,
-  );
-  assert.equal(
-    taskCheckEntity.additional_kwargs.noobotInternalMessageType,
-    "noobot.task_check_prompt",
-  );
+  assert.equal(taskCheckEntity.messageUid, resolveContextMessageId(modelContext.messages[0]));
+  assert.equal(taskCheckEntity.noobotInternalMessageType, "noobot.task_check_prompt");
   assert.equal(
     modelContext.messageBlocks.incremental[0].additional_kwargs.noobotInternalMessageType,
     "noobot.task_check_prompt",
@@ -129,7 +134,7 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
     loopState.modelContext.messageBlocks.incremental[0],
     loopState.modelContext.messages[0],
   );
-  assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
+  assert.ok(resolveContextMessageId(loopState.modelContext.messages[0]));
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
   assert.equal(
     events.some((item) => item?.event === "help_tool_failure_prompted"),
@@ -167,7 +172,7 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
   );
   assert.deepEqual(loopState.modelContext.messageBlocks.system, []);
   assert.equal(modelState.runtime.currentTurnMessages.toArray()[0].role, "user");
-  assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
+  assert.ok(resolveContextMessageId(loopState.modelContext.messages[0]));
   assert.equal(loopState.modelContext.messageBlocks.systemIds, undefined);
   assert.equal(
     events.some((item) => item?.event === "help_tool_loop_prompted"),
@@ -210,15 +215,9 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
   );
   const phaseEntity = modelState.runtime.currentTurnMessages.toArray()[0];
   assert.equal(phaseEntity.role, "user");
-  assert.equal(
-    phaseEntity.messageUid,
-    loopState.modelContext.messages[0].additional_kwargs.noobotMessageId,
-  );
-  assert.equal(
-    phaseEntity.additional_kwargs.noobotInternalMessageType,
-    "noobot.phase_summary_prompt",
-  );
-  assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(phaseEntity.messageUid, resolveContextMessageId(loopState.modelContext.messages[0]));
+  assert.equal(phaseEntity.noobotInternalMessageType, "noobot.phase_summary_prompt");
+  assert.ok(resolveContextMessageId(loopState.modelContext.messages[0]));
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
   assert.equal(
     events.some((item) => item?.event === "phase_summary_required"),
@@ -273,7 +272,7 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
       messageBlocks: {
         system: [],
         history: [],
-        incremental: [{ role: "user", content: "0123456789012345", summarized: false }],
+        incremental: [longUserContextMessage()],
       },
     }),
   };
@@ -291,7 +290,7 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
     loopState.modelContext.messageBlocks.incremental[1],
     loopState.modelContext.messages[1],
   );
-  assert.ok(loopState.modelContext.messages[1].additional_kwargs.noobotMessageId);
+  assert.ok(resolveContextMessageId(loopState.modelContext.messages[1]));
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
   const event = events.find((item) => item?.event === "phase_summary_required") || {};
   assert.equal(event.data?.trigger, "message_chars");
@@ -318,7 +317,7 @@ test("maybeRequestPhaseSummary marks no-tools when overflow remains after the re
       messageBlocks: {
         system: [],
         history: [],
-        incremental: [{ role: "user", content: "0123456789012345", summarized: false }],
+        incremental: [longUserContextMessage()],
       },
     }),
   };
@@ -349,7 +348,7 @@ test("maybeRequestPhaseSummary marks no-tools when overflow remains after the re
 
 test("maybeFinalizeNoToolsAfterPhaseSummaryOverflow catches post-summary overflow before next model call", () => {
   const events = [];
-  const longUserMessage = { role: "user", content: "0123456789012345", summarized: false };
+  const longUserMessage = longUserContextMessage();
   const modelState = {
     runtime: {
       eventListener: {

@@ -5,10 +5,10 @@
  */
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 import {
-  persistHarnessMessageToCurrentTurn,
-  buildHarnessInjectedMessage,
+  persistHarnessRecordToCurrentTurn,
+  buildHarnessInjectedRecord,
 } from "./injected-message-utils.js";
-import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
 import {
   resolveContextToolCallDeclarationId,
@@ -76,10 +76,6 @@ export function injectMessageWithPolicy(
     injectAt = "append",
     dedupe = false,
     injectedMessageType = "",
-    injectionType = "",
-    purpose = "",
-    pluginFlow = "",
-    chain = "",
     relayCorrelationId = "",
     avoidBreakToolCallContinuity = true,
     persistToCurrentTurn = true,
@@ -92,18 +88,14 @@ export function injectMessageWithPolicy(
     return { injected: false, target: "none", blockedByTurnEnded: true };
   }
   const resolvedRole = resolveHarnessMainFlowRole({ role });
-  const message = buildHarnessInjectedMessage(normalizedContent, {
+  const record = buildHarnessInjectedRecord(normalizedContent, {
     role: resolvedRole,
     attachments: Array.isArray(attachments) ? attachments : [],
     transferEnvelopes,
-    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
     injectedMessageType,
-    injectionType,
-    purpose,
-    pluginFlow,
-    chain,
     relayCorrelationId,
   });
+  const message = projectSessionRecordToContextMessage(record);
 
   if (dedupe && dedupeExists(messages, message)) {
     return { injected: false, target: "ctx_messages", deduped: true };
@@ -121,20 +113,19 @@ export function injectMessageWithPolicy(
       if (dedupe && dedupeExists(systemContextMessages, message)) {
         return { injected: false, target: "agent_system", deduped: true };
       }
-      const canonicalMessage = appendMessage(ctx, message, { block: "system" });
-      persistHarnessMessageToCurrentTurn(ctx, canonicalMessage, persistToCurrentTurn);
+      appendMessage(ctx, message, { block: "system" });
+      persistHarnessRecordToCurrentTurn(ctx, record, persistToCurrentTurn);
       return { injected: true, target: "agent_system" };
     }
   }
 
-  let canonicalMessage;
   if (normalizedInjectAt === "prepend") {
-    [canonicalMessage] = replaceMessages(ctx, [message, ...messages]);
+    replaceMessages(ctx, [message, ...messages]);
   } else {
-    canonicalMessage = appendMessage(ctx, message, {
+    appendMessage(ctx, message, {
       block: isSystemLikeMessageRole(resolvedRole) ? "system" : "incremental",
     });
   }
-  persistHarnessMessageToCurrentTurn(ctx, canonicalMessage, persistToCurrentTurn);
+  persistHarnessRecordToCurrentTurn(ctx, record, persistToCurrentTurn);
   return { injected: true, target: "ctx_messages" };
 }

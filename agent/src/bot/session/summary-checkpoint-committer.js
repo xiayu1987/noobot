@@ -15,10 +15,8 @@ import {
   hasCheckpointBoundaryToolCall,
 } from "@noobot/context-protocol/policy/summary";
 import { applyPendingUserMetaBackwrites } from "../../context/assembly/message-builder/user-meta-backwrite.js";
-import {
-  resolveContextMessageId,
-  resolveContextMessageSummarized,
-} from "@noobot/context-protocol/message/codec";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { isSummarizedSessionMessageRecord } from "@noobot/session-protocol";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 function createSummaryCompletionMarker(summaryCompletion = null) {
@@ -27,7 +25,7 @@ function createSummaryCompletionMarker(summaryCompletion = null) {
   const summarizedMessageIds = new Set(
     summaryCompletion.summarizedMessageIds.map((id) => text(id)).filter(Boolean),
   );
-  return () => (message) => summarizedMessageIds.has(resolveContextMessageId(message));
+  return () => (record) => summarizedMessageIds.has(resolveMessageUid(record));
 }
 
 function compactPromotionSource(message = {}) {
@@ -89,13 +87,16 @@ function canCommitSummaryCheckpoint({ session, runtime, userId, sessionId } = {}
 }
 
 function resolveRetainedCheckpointEvidenceIds(turnMessages = []) {
-  const summaryCallIndex = turnMessages.findLastIndex((message) =>
+  const contextMessages = turnMessages.map(projectSessionRecordToContextMessage);
+  const summaryCallIndex = contextMessages.findLastIndex((message) =>
     hasCheckpointBoundaryToolCall(message),
   );
   const checkpointEvidenceScope =
     summaryCallIndex >= 0 ? turnMessages.slice(0, summaryCallIndex) : turnMessages;
+  const checkpointEvidenceContext =
+    summaryCallIndex >= 0 ? contextMessages.slice(0, summaryCallIndex) : contextMessages;
   return new Set(
-    [...collectLatestCheckpointEvidenceMessageIndexes(checkpointEvidenceScope)]
+    [...collectLatestCheckpointEvidenceMessageIndexes(checkpointEvidenceContext)]
       .map((index) => resolveMessageUid(checkpointEvidenceScope[index]))
       .filter(Boolean),
   );
@@ -163,7 +164,7 @@ function resolvePersistedMessageUids({
 function resolveSummarizedMessageUids({ hasMarker, completion, turnMessages = [] } = {}) {
   if (!hasMarker)
     return turnMessages
-      .filter(resolveContextMessageSummarized)
+      .filter(isSummarizedSessionMessageRecord)
       .map(resolveMessageUid)
       .filter(Boolean);
   return [
@@ -253,17 +254,17 @@ function applyCheckpointMarks({ runtime, createSummaryMarker, summarizedMessageU
   const currentTurnMarker = createSummaryMarker();
   currentTurnMessages.updateWhere(
     { summarized: true },
-    (message) => !resolveContextMessageSummarized(message) && currentTurnMarker(message),
+    (message) => !isSummarizedSessionMessageRecord(message) && currentTurnMarker(message),
   );
   if (hasActiveContext(runtime)) {
     markMessagesSummarizedByIds(runtime.activeMessageContext, summarizedMessageUids);
   }
   const markedTurnMessages = currentTurnMessages.toArray();
   const retainedMessages = markedTurnMessages.filter(
-    (message) => !resolveContextMessageSummarized(message),
+    (message) => !isSummarizedSessionMessageRecord(message),
   );
   const promotionSources = markedTurnMessages
-    .filter(resolveContextMessageSummarized)
+    .filter(isSummarizedSessionMessageRecord)
     .map(compactPromotionSource)
     .filter(Boolean);
   if (promotionSources.length) {

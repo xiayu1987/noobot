@@ -54,9 +54,8 @@ export function applyReconnectEnvelopeToTargetMessage({
   if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
     return false;
   }
-  const sourceMessageId = _trimStr(envelope.identity.messageId);
   const presentationMessageId = resolveMessageEventPresentationId(envelope.payload);
-  if (!sourceMessageId || !presentationMessageId) return false;
+  if (!presentationMessageId) return false;
   const targetSessionId = _trimStr(envelope.identity.sessionId);
   if (envelope.payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     const materialized = materializeTurnPresentation?.(envelope);
@@ -95,7 +94,6 @@ export function applyReconnectEnvelopeToTargetMessage({
     sessionId: String(envelope.identity.sessionId),
     dialogProcessId: String(envelope.payload.dialogProcessId || normalizedDpId),
     turnScopeId: String(envelope.identity.turnScopeId || ""),
-    messageId: sourceMessageId,
     presentationMessageId,
     eventId: String(envelope.identity.eventId),
     eventType: String(envelope.payload.eventType),

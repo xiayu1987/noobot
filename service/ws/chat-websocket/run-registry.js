@@ -191,7 +191,6 @@ export async function publishRunEvent(handle = {}, eventName, data = {}) {
   const diagnostic = {
     eventId: text(data?.event?.eventId || data?.eventId),
     eventType: text(data?.event?.eventType || data?.eventType || eventName),
-    messageId: text(data?.event?.messageId || data?.messageId),
     presentationMessageId: text(data?.event?.presentationMessageId || data?.presentationMessageId),
     runHandleId: text(handle?.runHandleId),
     bindingId: text(binding?.id),

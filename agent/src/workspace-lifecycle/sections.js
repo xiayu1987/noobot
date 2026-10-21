@@ -25,10 +25,12 @@ import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { repairWorkspaceMemoryDocuments } from "../memory/storage/repair.js";
 import { upgradeSessionStorage } from "./session-storage-upgrade.js";
 import { upgradeSessionLifecycle } from "./session-lifecycle-upgrade.js";
+import { upgradeSessionTransferEnvelopes } from "./session-transfer-envelope-upgrade.js";
 
 const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE]: upgradeSessionStorage,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE]: upgradeSessionLifecycle,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE]: upgradeSessionTransferEnvelopes,
 });
 
 async function pathExists(filePath) {
@@ -66,11 +68,15 @@ async function readInstalledLayoutVersion(base, created) {
   }
 }
 
-export async function upgradeWorkspaceLayout({ base, backupBase, created }) {
+export async function upgradeWorkspaceLayout({ base, backupBase, created, scopedSessionRoots }) {
   const installedVersion = await readInstalledLayoutVersion(base, created);
   const applied = [];
   for (const upgrade of planWorkspaceLayoutUpgrades({ installedVersion })) {
-    const result = await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({ base, backupBase });
+    const result = await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({
+      base,
+      backupBase,
+      scopedSessionRoots,
+    });
     applied.push({ id: upgrade.id, toVersion: upgrade.toVersion, result });
   }
   const statePath = path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE);

@@ -37,7 +37,7 @@ function createRuntime(abortSignal = new AbortController().signal) {
     runConfig: {
       executionId: "run-tool-batch",
       turnScopeId: "turn-tool-batch",
-      messageId: "message-tool-batch",
+      presentationMessageId: "presentation-tool-batch",
     },
     systemRuntime: {
       userId: "admin",
@@ -48,7 +48,6 @@ function createRuntime(abortSignal = new AbortController().signal) {
     },
   });
   bindAssistantMessageEventStream(runtime, {
-    messageId: "message-tool-batch",
     presentationMessageId: "presentation-tool-batch",
     parentSessionId: "",
   });

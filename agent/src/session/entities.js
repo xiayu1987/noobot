@@ -5,7 +5,6 @@
  */
 
 export {
-  createSessionMessageUid,
   normalizeMessageEntity,
   normalizeMessagesEntity,
   normalizeSelectedConnectorIds,

@@ -15,6 +15,7 @@ import {
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
 import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experience/default-model";
 import { WORKSPACE_LAYOUT, WORKSPACE_RUNTIME_DIRECTORIES } from "@noobot/workspace-protocol";
+import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import {
   ensureUserWorkspace,
   resetUserWorkspace,
@@ -35,7 +36,13 @@ async function createFixture() {
   await mkdir(path.join(assetPackagePath, "skills", "demo"), { recursive: true });
   await writeFile(path.join(assetPackagePath, "services", "built-in.js"), "export default 'v1';\n");
   await writeFile(path.join(assetPackagePath, "skills", "demo", "SKILL.md"), "# demo v1\n");
-  const options = { workspaceRoot, assetPackagePath, userId: "user-1", baseValues: BASE_VALUES };
+  const options = {
+    workspaceRoot,
+    assetPackagePath,
+    userId: "user-1",
+    baseValues: BASE_VALUES,
+    scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+  };
   return {
     root,
     userPath,

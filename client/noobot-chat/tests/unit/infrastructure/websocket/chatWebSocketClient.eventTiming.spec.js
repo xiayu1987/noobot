@@ -25,7 +25,7 @@ function emitAssistantContent(socket) {
       sessionId: "session-timing",
       dialogProcessId: "dialog-timing",
       turnScopeId: "turn-timing",
-      messageId: "message-timing",
+      presentationMessageId: "message-timing",
       sequence: 1,
       content: "assistant body",
     }),

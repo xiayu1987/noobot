@@ -28,7 +28,6 @@ describe("turnTransportEnvelope", () => {
         ...canonicalMessageEvent({
           eventId: "event-1",
           eventType: "model_analysis_delta",
-          messageId: "message-1",
           presentationMessageId: "message-1",
           sessionId: "session-1",
           dialogProcessId: "dialog-1",
@@ -65,7 +64,6 @@ describe("turnTransportEnvelope", () => {
       data: canonicalMessageEvent({
         eventId: "event-2",
         eventType: "thinking",
-        messageId: "message-2",
         presentationMessageId: "message-2",
         sessionId: "session-2",
         sequence: 99,
@@ -114,7 +112,6 @@ describe("turnTransportEnvelope", () => {
         eventType: TURN_LIFECYCLE_WIRE_EVENT,
         sessionId: lifecycle.sessionId,
         turnScopeId: lifecycle.turnScopeId,
-        messageId: lifecycle.messageId,
       },
       causality: { commandId: lifecycle.commandId },
       ordering: { domain: "session", scopeId: lifecycle.sessionId, sequence: 2, revision: 2 },

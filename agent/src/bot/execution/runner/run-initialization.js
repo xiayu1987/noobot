@@ -15,7 +15,6 @@ import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
   "presentationMessageId",
-  "messageId",
   "executionId",
   "executionKind",
   "rootExecutionId",
@@ -33,7 +32,6 @@ function requireAcceptedRunIdentity(runConfig = {}) {
   return {
     turnScopeId: text(runConfig.turnScopeId),
     presentationMessageId: text(runConfig.presentationMessageId),
-    messageId: text(runConfig.messageId),
   };
 }
 
@@ -116,8 +114,7 @@ export async function initializeSessionRun({
     typeof prepareRunConfig === "function"
       ? prepareRunConfig({ userId, runConfig: scenarioResolvedRunConfig, userConfig })
       : scenarioResolvedRunConfig;
-  const { turnScopeId, presentationMessageId, messageId } =
-    requireAcceptedRunIdentity(resolvedRunConfig);
+  const { turnScopeId, presentationMessageId } = requireAcceptedRunIdentity(resolvedRunConfig);
   const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
   const lifecycle = createAgentLifecycleMachine({
     eventListener: runtimeEventListener,
@@ -201,7 +198,6 @@ export async function initializeSessionRun({
     resolvedRunConfig,
     turnScopeId,
     presentationMessageId,
-    messageId,
     resumeFromStoppedSnapshot,
     contextMode: sessionLoadState === "loaded" ? "existing_session" : "new_session",
     lifecycle,

@@ -6,20 +6,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
+
+function sessionContextMessage(record) {
+  return projectSessionRecordToContextMessage({ messageUid: createMessageUid(), ...record });
+}
 
 const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
 
 test("ModelMessageRuntimeHelpers resolveModelMessages uses explicit block arrays only", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
-  const canonicalIncremental = { role: "assistant", content: "drop-by-id", summarized: true };
+  const canonicalIncremental = sessionContextMessage({
+    role: "assistant",
+    content: "drop-by-id",
+    summarized: true,
+  });
   const ctx = {
     agentContext,
     modelContext: createModelContext({
       messageBlocks: {
-        system: [{ role: "system", content: "sys" }],
+        system: [sessionContextMessage({ role: "system", content: "sys" })],
         history: [],
         incremental: [canonicalIncremental],
       },
@@ -41,9 +51,11 @@ test("ModelMessageRuntimeHelpers ignores stray block id views", () => {
     agentContext,
     modelContext: createModelContext({
       messageBlocks: {
-        system: [{ role: "system", content: "sys" }],
-        history: [{ role: "user", content: "hist", dialogProcessId: "d1" }],
-        incremental: [{ role: "user", content: "cur", dialogProcessId: "d2" }],
+        system: [sessionContextMessage({ role: "system", content: "sys" })],
+        history: [sessionContextMessage({ role: "user", content: "hist", dialogProcessId: "d1" })],
+        incremental: [
+          sessionContextMessage({ role: "user", content: "cur", dialogProcessId: "d2" }),
+        ],
       },
     }),
   };

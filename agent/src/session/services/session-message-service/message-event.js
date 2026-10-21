@@ -15,7 +15,6 @@ export async function commitMessageEvent({
   userId,
   sessionId,
   turnScopeId,
-  messageId,
   executionId = "",
   commandId = "",
   causationId = "",
@@ -28,10 +27,9 @@ export async function commitMessageEvent({
     userId: text(userId),
     sessionId: text(sessionId),
     turnScopeId: text(turnScopeId),
-    messageId: text(messageId),
   };
-  if (!identity.userId || !identity.sessionId || !identity.turnScopeId || !identity.messageId) {
-    throw new TypeError("message event commit requires user, session, Turn and message identity");
+  if (!identity.userId || !identity.sessionId || !identity.turnScopeId) {
+    throw new TypeError("message event commit requires user, session and Turn identity");
   }
   const domainPayload = Object.freeze({ ...payload });
   assertMessageEventPayload(domainPayload);
@@ -42,7 +40,6 @@ export async function commitMessageEvent({
     identity: {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       turnScopeId: identity.turnScopeId,
-      messageId: identity.messageId,
       executionId: text(executionId),
     },
     causality: {
@@ -52,7 +49,7 @@ export async function commitMessageEvent({
     },
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      scopeId: identity.messageId,
+      scopeId: domainPayload.presentationMessageId,
     },
     producer: { type: text(producer?.type), id: text(producer?.id) },
     payload: domainPayload,

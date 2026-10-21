@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import {
   buildContextMessages,
   buildHumanMessagesForUser,
@@ -27,6 +28,8 @@ function parseUserMeta(content) {
 function userAttachment(attachmentId, sessionId, metadata = {}) {
   return { attachmentId, sessionId, attachmentSource: "user", ...metadata };
 }
+
+const contextMessage = projectSessionRecordToContextMessage;
 
 test("buildContextMessages uses current runtime userMessageAttachments in user meta", () => {
   const messages = buildContextMessages(
@@ -176,9 +179,12 @@ test("buildContextMessages does not use fallback meta attachments as current use
         messageBlocks: {
           system: [],
           history: [
-            {
+            contextMessage({
+              messageUid: "sm_stale_history",
               role: "user",
               content: "history with stale attachments",
+              dialogProcessId: "dialog-history",
+              turnScopeId: "turn-history",
               attachments: [
                 {
                   attachmentId: "stale-history-attachment",
@@ -186,7 +192,7 @@ test("buildContextMessages does not use fallback meta attachments as current use
                   mimeType: "text/plain",
                 },
               ],
-            },
+            }),
           ],
           incremental: [],
         },
@@ -255,11 +261,18 @@ test("buildContextMessages projects only model attachment metadata", () => {
 test("buildHumanMessagesForUser projects user metadata attachments only from the message itself", () => {
   const attachmentFreeHistory = buildHumanMessagesForUser(
     {},
-    { role: "user", content: "first", turnScopeId: "turn-1", attachments: [] },
+    contextMessage({
+      messageUid: "sm_history_first",
+      role: "user",
+      content: "first",
+      turnScopeId: "turn-1",
+      attachments: [],
+    }),
   );
   const attachedHistory = buildHumanMessagesForUser(
     {},
-    {
+    contextMessage({
+      messageUid: "sm_history_attached",
       role: "user",
       content: "historical attachment",
       turnScopeId: "turn-2",
@@ -269,7 +282,7 @@ test("buildHumanMessagesForUser projects user metadata attachments only from the
           mimeType: "text/plain",
         }),
       ],
-    },
+    }),
   );
 
   const emptyMeta = parseUserMeta(attachmentFreeHistory[1].content);
@@ -303,7 +316,8 @@ test("buildContextMessages keeps complete metadata per historical user turn with
         messageBlocks: {
           system: [],
           history: [
-            {
+            contextMessage({
+              messageUid: "sm_historical_user",
               role: "user",
               content: "first historical turn",
               messageOrigin: "natural",
@@ -315,28 +329,31 @@ test("buildContextMessages keeps complete metadata per historical user turn with
               parentDialogProcessId: "historical-parent-dialog",
               turnScopeId: "historical-turn",
               attachments: [],
-            },
-            {
+            }),
+            contextMessage({
+              messageUid: "sm_historical_answer",
               role: "assistant",
               content: "first historical answer",
               dialogProcessId: "historical-dialog",
               turnScopeId: "historical-turn",
-            },
-            {
+            }),
+            contextMessage({
+              messageUid: "sm_partial_user",
               role: "user",
-              content: "legacy history missing identity",
+              content: "history turn with partial session facts",
               messageOrigin: "natural",
               userMetaMaterialized: true,
               dialogProcessId: "legacy-dialog",
               turnScopeId: "legacy-turn",
               attachments: [],
-            },
-            {
+            }),
+            contextMessage({
+              messageUid: "sm_partial_answer",
               role: "assistant",
-              content: "legacy historical answer",
+              content: "partial historical answer",
               dialogProcessId: "legacy-dialog",
               turnScopeId: "legacy-turn",
-            },
+            }),
           ],
           incremental: [],
         },
@@ -403,7 +420,13 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
       turnScopeId: "turn-1",
       attachments: [],
     },
-    { role: "assistant", content: "answer-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    {
+      role: "assistant",
+      content: "answer-1",
+      messageUid: "stopped-answer-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+    },
     {
       role: "user",
       content: "你好",
@@ -414,7 +437,13 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
       turnScopeId: "turn-2",
       attachments: [],
     },
-    { role: "assistant", content: "answer-2", dialogProcessId: "dialog-2", turnScopeId: "turn-2" },
+    {
+      role: "assistant",
+      content: "answer-2",
+      messageUid: "stopped-answer-2",
+      dialogProcessId: "dialog-2",
+      turnScopeId: "turn-2",
+    },
     {
       role: "user",
       content: "你好",
@@ -430,7 +459,7 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
         }),
       ],
     },
-  ];
+  ].map(contextMessage);
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
       {
@@ -492,23 +521,30 @@ test("buildContextMessages discards classified user_meta without inferring from 
         messageBlocks: {
           system: [],
           history: [
-            {
+            contextMessage({
+              messageUid: "sm_hello",
               role: "user",
               content: "hello",
               messageOrigin: "natural",
               userMetaMaterialized: true,
               dialogProcessId: "dialog-current",
               turnScopeId: "turn-current",
-            },
-            {
+            }),
+            contextMessage({
+              messageUid: "sm_hello_derived_meta",
               role: "user",
               content: '[用户元信息]\n{"dialogProcessId":"dialog-current"}\n[/用户元信息]',
-              additional_kwargs: { noobotInternalMessageType: "user_meta" },
-            },
-            {
+              dialogProcessId: "dialog-current",
+              turnScopeId: "turn-current",
+              noobotInternalMessageType: "user_meta",
+            }),
+            contextMessage({
+              messageUid: "sm_unclassified_text",
               role: "user",
               content: "[用户元信息]\n{}\n[/用户元信息]",
-            },
+              dialogProcessId: "dialog-current",
+              turnScopeId: "turn-current",
+            }),
           ],
           incremental: [],
         },
@@ -545,32 +581,29 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
         messageBlocks: {
           system: [],
           history: [
-            {
-              type: "human",
+            contextMessage({
+              messageUid: "sm_stopped_user",
+              role: "user",
               content: "parse attachment",
               userName: "admin",
               sessionId: "s1",
               parentSessionId: "parent-1",
               parentDialogProcessId: "parent-dialog-1",
+              dialogProcessId: "dialog-stopped",
               turnScopeId: "turn-stopped",
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
               attachments: [userAttachment("attachment-a", "s1", { name: "stopped.docx" })],
-              additional_kwargs: {
-                dialogProcessId: "dialog-stopped",
-                turnScopeId: "turn-stopped",
-                messageOrigin: "natural",
-                userMetaMaterialized: true,
-              },
-            },
-            {
-              type: "human",
+            }),
+            contextMessage({
+              messageUid: "sm_stopped_derived_meta",
+              role: "user",
               content:
                 '[用户元信息]\n{"userName":"wrong","attachments":[{"attachmentRef":"attachment:v1:wrong/user/wrong"}]}\n[/用户元信息]',
-              additional_kwargs: {
-                dialogProcessId: "dialog-stopped",
-                turnScopeId: "turn-stopped",
-                noobotInternalMessageType: "user_meta",
-              },
-            },
+              dialogProcessId: "dialog-stopped",
+              turnScopeId: "turn-stopped",
+              noobotInternalMessageType: "user_meta",
+            }),
           ],
           incremental: [],
         },
@@ -651,13 +684,14 @@ test("buildContextMessages does not project frontend user metadata for internal 
         messageBlocks: {
           system: [],
           history: [
-            {
+            contextMessage({
+              messageUid: "sm_internal_task",
               role: "user",
               content: "internal task",
               messageOrigin: "internal",
               dialogProcessId: "dialog-previous-child",
               turnScopeId: "internal-turn:1",
-            },
+            }),
           ],
           incremental: [],
         },

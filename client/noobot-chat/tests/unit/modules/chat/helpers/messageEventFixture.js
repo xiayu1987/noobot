@@ -12,7 +12,7 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { projectCanonicalActivityTimelineEvent } from "@noobot/event-protocol/activity-timeline";
 
-const IDENTITY_FIELDS = new Set(["eventId", "sessionId", "turnScopeId", "messageId"]);
+const IDENTITY_FIELDS = new Set(["eventId", "sessionId", "turnScopeId"]);
 const CAUSALITY_FIELDS = new Set(["commandId", "causationId", "correlationId"]);
 const ORDERING_FIELDS = new Set([
   "sequence",
@@ -23,6 +23,9 @@ const ORDERING_FIELDS = new Set([
 ]);
 
 export function canonicalMessageEvent(overrides = {}) {
+  if (Object.hasOwn(overrides, "messageId")) {
+    throw new Error("canonicalMessageEvent: messageId is not a message event field");
+  }
   const eventType = overrides.eventType || "tool_call_start";
 
   const transient = isTransientMessageEventType(eventType);
@@ -30,7 +33,6 @@ export function canonicalMessageEvent(overrides = {}) {
     eventId: transient ? `evt-transient-${overrides.sequence ?? 1}` : "evt-1",
     eventType,
     sessionId: "session-1",
-    messageId: "message-1",
     presentationMessageId: "message-1",
     dialogProcessId: "dialog-1",
     sequence: 1,
@@ -68,7 +70,6 @@ export function canonicalMessageEvent(overrides = {}) {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: values.sessionId,
       turnScopeId: values.turnScopeId,
-      messageId: values.messageId,
     },
     causality: Object.fromEntries(
       [...CAUSALITY_FIELDS]
@@ -77,7 +78,7 @@ export function canonicalMessageEvent(overrides = {}) {
     ),
     ordering: {
       domain: values.sequenceDomain || MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      scopeId: values.sequenceScopeId || values.messageId,
+      scopeId: values.sequenceScopeId || values.presentationMessageId,
       sequence: transient ? TRANSIENT_MESSAGE_EVENT_SEQUENCE : values.sequence,
       ...(!transient && values.revision !== undefined ? { revision: values.revision } : {}),
       ...(!transient && values.aggregateVersion !== undefined
@@ -92,14 +93,11 @@ export function canonicalMessageEvent(overrides = {}) {
 
 export function canonicalActivityFact(overrides = {}) {
   const eventType = String(overrides.eventType || "thinking");
-  const messageId = String(overrides.messageId || overrides.sequenceScopeId || "message-1");
   return projectCanonicalActivityTimelineEvent(
     canonicalMessageEvent({
       eventType,
       eventId: "activity-1",
       text: "analysis",
-      messageId,
-      sequenceScopeId: messageId,
       ...(eventType === "thinking" ? { activityKind: "analysis" } : {}),
       ...overrides,
     }),

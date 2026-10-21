@@ -56,7 +56,6 @@ function projectUserPresentationMessage({
 export async function bindAgentDispatchRuntime({
   runtimeAgentContext,
   lifecycle,
-  messageId,
   presentationMessageId,
   userMessageAttachments,
   appendAgentMessages,
@@ -98,7 +97,6 @@ export async function bindAgentDispatchRuntime({
     invocationIdentity: getAgentContextEnvelope(runtimeAgentContext).identity,
   });
   bindAssistantMessageEventStream(dispatchRuntime, {
-    messageId,
     presentationMessageId,
     parentSessionId,
     workflowRunId: text(resolvedRunConfig?.workflowRunId),
@@ -125,7 +123,6 @@ export async function bindAgentDispatchRuntime({
         }),
         assistantMessage: {
           id: presentationMessageId,
-          messageId: presentationMessageId,
           presentationMessageId,
           sessionId,
           parentSessionId,

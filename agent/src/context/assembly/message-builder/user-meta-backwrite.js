@@ -10,6 +10,7 @@ import {
 } from "@noobot/context-protocol/policy/user-meta-backwrite";
 import { deriveContextMessageProjectionId } from "@noobot/context-protocol/message/codec";
 import { resolveMessagesByIds } from "@noobot/context-protocol/message/store";
+import { projectContextMessageToSessionRecord } from "@noobot/context-protocol/message/session-projection";
 import { updateContextMessageById } from "@noobot/context-protocol/mutation/context";
 import { appendUserMetaParsedResult } from "./user-meta.js";
 import { text, isObjectLike } from "@noobot/shared/value";
@@ -75,6 +76,8 @@ export async function applyPendingUserMetaBackwrites(
     }
     const nextContent = appendUserMetaParsedResult(message.content, record.result);
     updateContextMessageById(modelContext, record.userMetaMessageUid, { content: nextContent });
+
+    const [updatedMessage] = resolveMessagesByIds(modelContext, [record.userMetaMessageUid]);
     await turnPersister.appendAgentMessages({
       userId,
       sessionId,
@@ -82,12 +85,7 @@ export async function applyPendingUserMetaBackwrites(
       turnScopeId,
       eventListener,
       persistenceScope,
-      messages: [
-        {
-          ...message,
-          content: nextContent,
-        },
-      ],
+      messages: [projectContextMessageToSessionRecord(updatedMessage)],
     });
     remaining = remaining.slice(1);
     setBackwrites(runtime, remaining);

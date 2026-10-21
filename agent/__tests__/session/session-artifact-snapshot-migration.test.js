@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -29,9 +30,9 @@ test("snapshot reads legacy transfer reasons only after canonical Session migrat
             transferEnvelopes: [
               {
                 protocol: "noobot.semantic-transfer",
-                version: 2,
+                version: TRANSFER_VERSION,
                 transferId: "transfer:legacy-1",
-                messageId: "message-legacy-1",
+                presentationMessageId: "message-legacy-1",
                 identity: {
                   sessionId: "legacy-transfer-session",
                   producer: { type: "tool", id: "call-legacy" },

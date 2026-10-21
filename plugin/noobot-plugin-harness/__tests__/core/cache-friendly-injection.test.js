@@ -15,6 +15,8 @@ import {
   createTestResolveModelMessages,
   invokeTestHookHandler,
 } from "../helpers/public-runtime-fixtures.js";
+import { contextMessage } from "../helpers/context-message.js";
+import { markContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 
 test("dynamic harness main-flow system injections stay in system block", () => {
   const ctx = createTestHookContext();
@@ -28,9 +30,9 @@ test("dynamic harness main-flow system injections stay in system block", () => {
   assert.equal(result.injected, true);
   assert.equal(ctx.modelContext.messages.length, 1);
   assert.equal(ctx.modelContext.messages[0]?.role, "system");
-  assert.equal(ctx.modelContext.messages[0]?.injectedMessage, true);
-  assert.equal(ctx.modelContext.messages[0]?.injectedBy, "harness-plugin");
-  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.noobotMessageId);
+  assert.equal(ctx.modelContext.messages[0]?.additional_kwargs?.injectedMessage, true);
+  assert.equal(ctx.modelContext.messages[0]?.additional_kwargs?.injectedBy, "harness-plugin");
+  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.messageUid);
   assert.equal(ctx.modelContext.messageBlocks.system[0], ctx.modelContext.messages[0]);
   assert.deepEqual(ctx.modelContext.messageBlocks.incremental, []);
   assert.equal(ctx.modelContext.messageBlocks.systemIds, undefined);
@@ -172,37 +174,41 @@ test("planning preserves typed base system context while adding harness prompts"
   );
   assert.equal(
     ctx.modelContext.messageBlocks.system.some(
-      (message) => message?.injectedBy === "harness-plugin",
+      (message) => message?.additional_kwargs?.injectedBy === "harness-plugin",
     ),
     true,
   );
 });
 
 test("main model incremental context keeps unsummarized same-type harness relays append-only", () => {
-  const relayOne = {
+  const relayOne = contextMessage({
+    messageUid: "relay-1",
     role: "user",
     content: "[来自harness外部模型输出/guidance]\nfirst guidance",
     injectedMessage: true,
     injectedBy: "harness-plugin",
     injectedMessageType: "separate_model_relay:guidance",
-  };
-  const assistant = {
+  });
+  const assistant = contextMessage({
+    messageUid: "assistant-1",
     role: "assistant",
     content: "",
     tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
-  };
-  const tool = {
+  });
+  const tool = contextMessage({
+    messageUid: "tool-1",
     role: "tool",
     content: '{"toolName":"read_file","ok":true}',
     tool_call_id: "call-1",
-  };
-  const relayTwo = {
+  });
+  const relayTwo = contextMessage({
+    messageUid: "relay-2",
     role: "user",
     content: "[来自harness外部模型输出/guidance]\nsecond guidance",
     injectedMessage: true,
     injectedBy: "harness-plugin",
     injectedMessageType: "separate_model_relay:guidance",
-  };
+  });
 
   const beforeSummary = resolveMainModelFinalMessages({
     incrementalMessages: [relayOne, assistant, tool, relayTwo],
@@ -218,7 +224,7 @@ test("main model incremental context keeps unsummarized same-type harness relays
     ],
   );
 
-  relayOne.summarized = true;
+  markContextMessageSummarized(relayOne);
   const afterSummary = resolveMainModelFinalMessages({
     incrementalMessages: [relayOne, assistant, tool, relayTwo],
   }).messages;

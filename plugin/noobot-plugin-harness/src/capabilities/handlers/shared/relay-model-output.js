@@ -90,8 +90,6 @@ export function relaySeparateModelOutputAsUserMessage(
   {
     locale = LOCALE.ZH_CN,
     purpose = "",
-    pluginFlow = undefined,
-    chain = undefined,
     relayCorrelationId = "",
     content = "",
     dedupe = false,
@@ -109,9 +107,6 @@ export function relaySeparateModelOutputAsUserMessage(
     role: "user",
     content: relayContent,
     injectedMessageType: `separate_model_relay:${text(purpose) || "unknown"}`,
-    purpose: optionalText(purpose),
-    pluginFlow: optionalText(pluginFlow),
-    chain: optionalText(chain),
     relayCorrelationId: optionalText(relayCorrelationId),
     ...resolvedTransferPayload,
     injectAt: "append",

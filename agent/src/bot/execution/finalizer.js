@@ -6,21 +6,23 @@
 
 import { emitEvent } from "../../events/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
-import { requireDialogProcessKey } from "@noobot/session-protocol";
+import {
+  isSummarizedSessionMessageRecord,
+  requireDialogProcessKey,
+} from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
   buildExecutionReport,
   EXECUTION_REPORT_STATUS,
 } from "@noobot/session-protocol/execution-report";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 import { emitContextIdentityDebug } from "../../observability/context-identity-debug.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "../../runtime/turn/final-assistant-artifact-projection.js";
 import { text } from "@noobot/shared/value";
 
 function summarizedMessageIds(messages = []) {
   return (Array.isArray(messages) ? messages : [])
-    .filter((message = {}) => message?.summarized === true)
-    .map((message = {}) => resolveContextMessageId(message))
+    .filter((message = {}) => isSummarizedSessionMessageRecord(message))
+    .map((message = {}) => text(message.messageUid))
     .filter(Boolean);
 }
 

@@ -25,7 +25,7 @@ function parseJsonObject(inputText = "") {
 
 function transferIdentityRequired(identity) {
   if (!isPlainObject(identity)) throw new Error("semantic_transfer_overflow_identity_required");
-  for (const key of ["transferId", "messageId", "sessionId", "turnScopeId", "runId"]) {
+  for (const key of ["transferId", "presentationMessageId", "sessionId", "turnScopeId", "runId"]) {
     if (typeof identity[key] !== "string" || !identity[key].trim()) {
       throw new Error(`semantic_transfer_overflow_${key}_required`);
     }
@@ -65,7 +65,7 @@ function buildReadFileSourceReference({ parsed = {}, identity }) {
   };
   return sourceReferenceTransfer({
     transferId: identity.transferId,
-    messageId: identity.messageId,
+    presentationMessageId: identity.presentationMessageId,
     identity,
     direction: "output",
     reference,

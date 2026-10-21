@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
+import { isHarnessPromptMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
 
 test("harness policy prompt is promoted to system when stale policy exists in messageBlocks", async () => {
   const policyMessage = {
@@ -39,22 +39,22 @@ test("harness policy prompt is promoted to system when stale policy exists in me
   });
 
   assert.equal(
-    ctx.modelContext.messages.filter(
-      (item = {}) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ctx.modelContext.messages.filter((item = {}) =>
+      isHarnessPromptMessage(item, "noobot-harness-policy"),
     ).length,
     1,
   );
   assert.equal(ctx.modelContext.messages[0]?.role, "system");
   assert.equal(
-    ctx.modelContext.messageBlocks.system.filter(
-      (item = {}) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ctx.modelContext.messageBlocks.system.filter((item = {}) =>
+      isHarnessPromptMessage(item, "noobot-harness-policy"),
     ).length,
     1,
   );
   assert.equal(
     ctx.modelContext.messageBlocks.incremental.filter(
       (item = {}) =>
-        item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy" ||
+        isHarnessPromptMessage(item, "noobot-harness-policy") ||
         String(item?.content || "").includes("noobot-harness-policy"),
     ).length,
     0,

@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -15,6 +15,7 @@ import {
   createPluginActivationScopeSync,
   createExtensionRegistry,
   createPluginHostFacade,
+  collectNoobotPluginScopedSessionRootDeclarations,
   loadNoobotPlugins,
   resolveLoadedNoobotPlugin,
 } from "../src/index.js";
@@ -502,4 +503,64 @@ test("runtime rejects legacy manifests instead of translating them", async () =>
   const runtime = await loadNoobotPlugins({ pluginRootDir: root, surface: "agent" });
   assert.equal(runtime.loadedCount, 0);
   assert.match(runtime.errors[0].message, /protocolVersion|unrecognized/i);
+});
+
+test("scoped session root declarations come from every installed manifest without loading entries", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "noobot-plugin-runtime-roots-"));
+  const writeManifest = async (id, agent, extra = {}) => {
+    await mkdir(path.join(root, id));
+    await writeFile(
+      path.join(root, id, "manifest.json"),
+      JSON.stringify({
+        protocolVersion: 2,
+        id,
+        name: id,
+        version: "1.0.0",
+        enabledByDefault: true,
+        entries: { agent: "missing-entry.mjs" },
+        contributes: { agent },
+        requires: { ports: [], permissions: [], authenticatedRoutes: [] },
+        ...extra,
+      }),
+    );
+  };
+  try {
+    await writeManifest(
+      "disabled",
+      { scopedSessionRoots: ["session"] },
+      { enabledByDefault: false },
+    );
+    await writeManifest("plain", {});
+    assert.deepEqual(
+      await collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir: root }),
+      [{ pluginId: "disabled", scopedSessionRoots: ["session"] }],
+    );
+    await writeManifest("invalid", { scopedSessionRoots: ["a", "a"] });
+    await assert.rejects(
+      collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir: root }),
+      /scoped session roots must be unique/,
+    );
+    assert.deepEqual(
+      await collectNoobotPluginScopedSessionRootDeclarations({
+        pluginRootDir: path.join(root, "absent"),
+      }),
+      [],
+    );
+
+    const lockedRoot = path.join(root, "locked-root");
+    await mkdir(lockedRoot);
+    await chmod(lockedRoot, 0o000);
+    try {
+      if (process.getuid?.() !== 0) {
+        await assert.rejects(
+          collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir: lockedRoot }),
+          { code: "EACCES" },
+        );
+      }
+    } finally {
+      await chmod(lockedRoot, 0o700);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

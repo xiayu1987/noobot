@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
+import { createSecureId } from "@noobot/shared/secure-identity";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";

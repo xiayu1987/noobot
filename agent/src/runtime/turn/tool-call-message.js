@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage } from "@langchain/core/messages";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { text, isPlainObject, isObjectLike } from "@noobot/shared/value";
 
@@ -53,13 +54,11 @@ function resolveAssistantRawContent(ai = {}, contentText = "") {
   return String(contentText || "");
 }
 
-function buildAssistantAdditionalKwargs(ai = {}, noobotMessageId = "") {
+function buildAssistantAdditionalKwargs(ai = {}) {
   const additionalKwargs = clonePlainObjectWithoutToolCalls(ai?.additional_kwargs) || {};
   if (isObjectLike(ai?.responseReasoning)) {
     additionalKwargs.reasoning = ai.responseReasoning;
   }
-  const canonicalMessageId = text(noobotMessageId);
-  if (canonicalMessageId) additionalKwargs.noobotMessageId = canonicalMessageId;
   return additionalKwargs;
 }
 
@@ -73,12 +72,22 @@ export function buildAssistantModelMessageForToolCalls({
   ai = {},
   contentText = "",
   toolCalls = [],
-  noobotMessageId = "",
+  messageUid = "",
+  modelMessageId = "",
 } = {}) {
-  return new AIMessage({
+  const canonicalMessageUid = text(messageUid);
+  const canonicalModelMessageId = text(modelMessageId);
+  if (!canonicalMessageUid || !canonicalModelMessageId) {
+    throw new TypeError("assistant model message requires messageUid and modelMessageId");
+  }
+  const message = new AIMessage({
     content: resolveAssistantRawContent(ai, contentText),
     tool_calls: formatToolCallsForLangChain(toolCalls),
-    additional_kwargs: buildAssistantAdditionalKwargs(ai, noobotMessageId),
+    additional_kwargs: buildAssistantAdditionalKwargs(ai),
     response_metadata: buildAssistantResponseMetadata(ai),
+  });
+  return writeContextMessageMetadata(message, {
+    messageUid: canonicalMessageUid,
+    modelMessageId: canonicalModelMessageId,
   });
 }

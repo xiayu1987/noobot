@@ -10,6 +10,10 @@ import { resolveRootSessionId } from "../../src/context/providers/session-tree-r
 import { resolveAttachments } from "../../src/context/providers/attachment-resolver.js";
 import { resolveLongMemory } from "../../src/context/providers/memory-resolver.js";
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
+import {
+  readContextMessageValue,
+  resolveContextMessageId,
+} from "@noobot/context-protocol/message/codec";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
 
 test("resolveRootSessionId rejects a missing session authority", async () => {
@@ -196,24 +200,31 @@ test("toConversationMessages preserves model payload fields and attachments", ()
     },
   ]);
   assert.equal(output.length, 1);
-  assert.equal(output[0].messageUid, "sm_stable_context_message");
-  assert.deepEqual(output[0].rawModelContent, [{ type: "text", text: "raw" }]);
-  assert.equal(output[0].dialogProcessId, "dlg_1");
-  assert.equal(output[0].userName, "admin");
-  assert.equal(output[0].sessionId, "session-1");
-  assert.equal(output[0].parentSessionId, "parent-1");
-  assert.equal(output[0].parentDialogProcessId, "parent-dlg-1");
-  assert.equal(output[0].turnScopeId, "client-turn:1");
-  assert.equal(output[0].summarized, false);
-  assert.equal(output[0].injectedMessage, true);
-  assert.equal(output[0].injectedBy, "harness-plugin");
-  assert.equal(output[0].injectedMessageType, "separate_model_relay:planning");
-  assert.equal(output[0].messageOrigin, "internal");
-  assert.equal(output[0].userMetaMaterialized, false);
-  assert.equal(output[0].pluginMessage, true);
-  assert.deepEqual(output[0].modelAdditionalKwargs, { k: 1 });
-  assert.deepEqual(output[0].modelResponseMetadata, { finish_reason: "tool_calls" });
-  assert.deepEqual(output[0].attachments, [{ attachmentId: "a1" }]);
+  assert.equal(resolveContextMessageId(output[0]), "sm_stable_context_message");
+  assert.deepEqual(readContextMessageValue(output[0], "rawModelContent"), [
+    { type: "text", text: "raw" },
+  ]);
+  assert.equal(readContextMessageValue(output[0], "dialogProcessId"), "dlg_1");
+  assert.equal(readContextMessageValue(output[0], "userName"), "admin");
+  assert.equal(readContextMessageValue(output[0], "sessionId"), "session-1");
+  assert.equal(readContextMessageValue(output[0], "parentSessionId"), "parent-1");
+  assert.equal(readContextMessageValue(output[0], "parentDialogProcessId"), "parent-dlg-1");
+  assert.equal(readContextMessageValue(output[0], "turnScopeId"), "client-turn:1");
+  assert.equal(readContextMessageValue(output[0], "summarized"), undefined);
+  assert.equal(readContextMessageValue(output[0], "injectedMessage"), true);
+  assert.equal(readContextMessageValue(output[0], "injectedBy"), "harness-plugin");
+  assert.equal(
+    readContextMessageValue(output[0], "injectedMessageType"),
+    "separate_model_relay:planning",
+  );
+  assert.equal(readContextMessageValue(output[0], "messageOrigin"), "internal");
+  assert.equal(readContextMessageValue(output[0], "userMetaMaterialized"), undefined);
+  assert.equal(readContextMessageValue(output[0], "pluginMessage"), true);
+  assert.deepEqual(readContextMessageValue(output[0], "modelAdditionalKwargs"), { k: 1 });
+  assert.deepEqual(readContextMessageValue(output[0], "modelResponseMetadata"), {
+    finish_reason: "tool_calls",
+  });
+  assert.deepEqual(readContextMessageValue(output[0], "attachments"), [{ attachmentId: "a1" }]);
 });
 
 test("resolveLongMemory only reads static long memory payload from memoryService", async () => {

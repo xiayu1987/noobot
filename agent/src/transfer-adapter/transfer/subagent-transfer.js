@@ -62,7 +62,7 @@ export async function transferBotPluginSubagentResult({
     if (forceAttachment !== true) {
       const envelope = directTransfer({
         transferId: itemIdentity.transferId,
-        messageId: itemIdentity.messageId,
+        presentationMessageId: itemIdentity.presentationMessageId,
         identity: itemIdentity,
         direction: "output",
         content: itemContent,

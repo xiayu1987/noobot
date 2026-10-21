@@ -133,7 +133,6 @@ describe("useReconnectReplay", () => {
     const { api, mocks } = createFixture();
     const messageEvent = createAuthoritativeMessageEnvelope("tool_call_start", {
       eventId: "evt-child-live-1",
-      messageId: "msg-child-live-1",
       presentationMessageId: "msg-child-live-1",
       sessionId: "child-session",
       dialogProcessId: "child-dialog",

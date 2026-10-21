@@ -8,9 +8,12 @@ import { resolveModelHistoryMessages } from "../policy/window.js";
 import { projectTerminalHistoryMessages } from "../policy/terminal-history.js";
 import { excludeActiveContextScopeItems } from "./scope.js";
 import { projectTurnTerminalStatuses } from "@noobot/session-protocol";
+import { projectSessionRecordsToContextMessages } from "../message/session-projection.js";
 
 export function projectContextSource({ source, scope, historyLimit }) {
-  const messages = excludeActiveContextScopeItems(source.messages, scope);
+  const messages = projectSessionRecordsToContextMessages(
+    excludeActiveContextScopeItems(source.messages, scope),
+  );
   const terminalStatuses = excludeActiveContextScopeItems(
     projectTurnTerminalStatuses(source.turnLifecycle),
     scope,

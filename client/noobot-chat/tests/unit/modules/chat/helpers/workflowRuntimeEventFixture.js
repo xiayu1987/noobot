@@ -64,13 +64,6 @@ export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
           ? data.turnScopeId
           : `workflow-node:${data.nodeExecutionId || "node-1"}`,
       ).trim(),
-      ...(eventType === WORKFLOW_RUNTIME_EVENT.PLANNING
-        ? {
-            messageId: String(
-              data.messageId || data.presentationMessageId || "workflow-message-1",
-            ).trim(),
-          }
-        : {}),
     },
     causality: {},
     ordering: {

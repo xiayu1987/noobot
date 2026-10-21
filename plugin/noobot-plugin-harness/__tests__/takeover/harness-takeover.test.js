@@ -9,12 +9,16 @@ import assert from "node:assert/strict";
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
 import { createModelContext } from "@noobot/context-protocol";
+import { canonicalizeTestMessageBlocks } from "../helpers/context-message.js";
+import { isHarnessPromptMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
 
 function withModelContext(ctx, { messageBlocks }) {
   return {
     ...ctx,
     contextProtocolVersion: 3,
-    modelContext: createModelContext({ messageBlocks }),
+    modelContext: createModelContext({
+      messageBlocks: canonicalizeTestMessageBlocks(messageBlocks),
+    }),
   };
 }
 
@@ -299,8 +303,8 @@ test("harness ctx message takeover writes through message store views", async ()
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /harness-store-note/);
   assert.equal(ctx.modelContext.messageBlocks.system[0], ctx.modelContext.messages[0]);
   assert.equal(ctx.modelContext.messageBlocks.incremental[0], ctx.modelContext.messages[1]);
-  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.noobotMessageId);
-  assert.ok(ctx.modelContext.messages[1]?.additional_kwargs?.noobotMessageId);
+  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.messageUid);
+  assert.ok(ctx.modelContext.messages[1]?.additional_kwargs?.messageUid);
   assert.equal(ctx.modelContext.messageBlocks.systemIds, undefined);
   assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
 });
@@ -384,7 +388,9 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
   const existingInjected = {
     role: "user",
     content: "<!-- harness-existing-note -->\nexisting takeover note",
-    promptInjectionId: "harness-existing-note",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "harness_prompt:harness-existing-note",
   };
   const ctx = withModelContext(
     {
@@ -414,7 +420,7 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
 
   assert.equal(ctx.modelContext.messages.length, 1);
   assert.equal(ctx.modelContext.messages[0], existingInjected);
-  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.noobotMessageId);
+  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.messageUid);
   assert.equal(
     ctx.modelContext.messages.some(
       (msg) =>
@@ -484,7 +490,7 @@ test("harness ctx message takeover ignores id markers echoed in tool results", a
   const { system, incremental } = ctx.modelContext.messageBlocks;
   assert.equal(incremental.length, 2);
   assert.equal(
-    system.filter((message) => message?.promptInjectionId === "harness-echo-note").length,
+    system.filter((message) => isHarnessPromptMessage(message, "harness-echo-note")).length,
     1,
   );
 });

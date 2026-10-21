@@ -48,7 +48,7 @@ function emitCompletedCommand(socket, commandId, sessionId, turnScopeId) {
 function messageEvent(overrides = {}) {
   return canonicalMessageEvent({
     eventType: "llm_delta",
-    messageId: "stream-message",
+    presentationMessageId: "stream-message",
     text: "",
     ...overrides,
   });
@@ -97,7 +97,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       eventType: "thinking",
       sessionId: "s-live-replay",
       turnScopeId: "turn-live-replay",
-      messageId: "message-live-replay",
+      presentationMessageId: "message-live-replay",
       sequence: 2,
       text: "continued thinking",
     });
@@ -106,7 +106,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       eventType: "llm_delta",
       sessionId: "s-live-replay",
       turnScopeId: "turn-live-replay",
-      messageId: "message-live-replay",
+      presentationMessageId: "message-live-replay",
       sequence: 3,
       text: "continued answer",
     });
@@ -163,7 +163,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       eventType: "tool_call_start",
       sessionId: "child-session",
       turnScopeId: "workflow-node:node-1",
-      messageId: "child-message",
+      presentationMessageId: "child-message",
       sequence: 1,
       parentSessionId: "root-session",
       workflowRunId: "workflow-1",
@@ -204,7 +204,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
         eventType: "tool_call_start",
         sessionId: "child-session",
         turnScopeId: "workflow-node:node-1",
-        messageId: "child-message",
+        presentationMessageId: "child-message",
         sequence: 99,
         parentSessionId: "root-session",
         workflowRunId: "workflow-1",

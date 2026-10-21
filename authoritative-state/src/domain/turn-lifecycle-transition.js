@@ -63,7 +63,6 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
   const phase = text(input.phase);
   const executionIdentity = pickExecutionIdentity(identitySource);
   const presentationMessageId = text(identitySource.presentationMessageId);
-  const messageId = text(identitySource.messageId);
   const dialogProcessId = text(identitySource.dialogProcessId);
   const action = resolveRequestAction(eventType, input, current);
   const continuationSource = normalizeTurnContinuationSource(identitySource.continuationSource);
@@ -77,7 +76,6 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
     phase,
     executionIdentity,
     presentationMessageId,
-    messageId,
     dialogProcessId,
     action,
     continuationSource,
@@ -85,7 +83,6 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
 }
 
 const STORED_IDENTITY_CONFLICTS = Object.freeze([
-  ["messageId", "turn_message_identity_conflict"],
   ["presentationMessageId", "turn_presentation_identity_conflict"],
   ["dialogProcessId", "turn_dialog_process_identity_conflict"],
 ]);
@@ -104,8 +101,7 @@ function validateRequestIdentity(request) {
     return "invalid_lifecycle_identity";
   }
   if (lifecycle.replacedTurns[turnScopeId]) return "turn_replaced";
-  if (!request.messageId || !request.presentationMessageId)
-    return "turn_message_identity_incomplete";
+  if (!request.presentationMessageId) return "turn_message_identity_incomplete";
   if (!current) return text(input.startedAt) ? "" : "turn_started_at_missing";
   return findStoredIdentityConflict(input, current);
 }
@@ -130,7 +126,6 @@ function requestHashFor(request) {
     startedAt: text(input.startedAt),
     finishedAt: text(input.finishedAt),
     presentationMessageId: request.presentationMessageId,
-    messageId: request.messageId,
     continuationSource: request.continuationSource,
     completionCommitId: text(input.completionCommitId),
     failure: input.failure && typeof input.failure === "object" ? input.failure : null,
@@ -308,7 +303,6 @@ export function projectLifecycleTransition(request, transition, nowValue) {
   const turn = {
     ...(current || {}),
     turnScopeId,
-    messageId: request.messageId,
     presentationMessageId: request.presentationMessageId,
     ...request.executionIdentity,
     dialogProcessId: request.dialogProcessId,

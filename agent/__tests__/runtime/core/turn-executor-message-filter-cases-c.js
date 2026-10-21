@@ -6,6 +6,8 @@
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 
 import {
   invokeNoToolsTurn as invokeNoToolsTurnProduction,
@@ -27,6 +29,13 @@ const TEST_MODEL_SPEC = Object.freeze(
     reasoning_effort_parameter: "reasoning_effort",
   }),
 );
+
+function contextMessage(native = {}, metadata = {}) {
+  return writeContextMessageMetadata(
+    { ...native },
+    { messageUid: createMessageUid(), ...metadata },
+  );
+}
 
 function invokeNoToolsTurn(args = {}) {
   prepareTestTurnExecution(
@@ -82,7 +91,7 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     messageBlocks: {
       system: [],
       history: [],
-      incremental: [{ role: "user", content: "keep-user" }],
+      incremental: [contextMessage({ role: "user", content: "keep-user" })],
     },
     traces: [],
     tools: [{ name: "execute_script" }],
@@ -116,7 +125,11 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "go" }] },
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [contextMessage({ role: "user", content: "go" })],
+    },
     traces: [],
     turnMessages: [],
     turnTasks: [],
@@ -150,7 +163,11 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
     activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "go" }] },
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [contextMessage({ role: "user", content: "go" })],
+    },
     traces: [],
     tools: [{ name: "execute_script" }],
     turnMessages: [],

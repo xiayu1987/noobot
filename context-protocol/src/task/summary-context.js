@@ -5,6 +5,7 @@
  */
 
 import {
+  CONTEXT_MESSAGE_PROJECTION_TYPE,
   CONTEXT_MESSAGE_ROLE,
   resolveContextMessageContent,
   resolveContextMessageDialogProcessId,
@@ -13,9 +14,11 @@ import {
   resolveContextMessageTurnScopeId,
   resolveContextToolResultCallId,
   readContextMessageField,
+  deriveContextMessageProjectionId,
+  writeContextMessageMetadata,
 } from "../message/codec.js";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
-import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
+import { FLOW_CONTROL_ROLE, hasContextMessageFlowControlRole } from "../tool/context-policy.js";
 import { TASK_SUMMARY_PROTOCOL_VERSION, parseTaskSummaryReceipt } from "./summary.js";
 
 export function extractContextTaskSummary(message = {}) {
@@ -33,38 +36,29 @@ export function extractContextTaskSummary(message = {}) {
 
 export function recoverContextTaskSummaryToolResult(message = {}) {
   if (resolveContextMessageRole(message) !== CONTEXT_MESSAGE_ROLE.TOOL) return null;
-  if (!hasFlowControlRole(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) return null;
+  if (!hasContextMessageFlowControlRole(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY))
+    return null;
   const summary = extractContextTaskSummary(message);
   if (!summary) return null;
   const sourceMessageId = resolveContextMessageId(message);
+  if (!sourceMessageId) {
+    throw new Error("checkpoint boundary tool result requires additional_kwargs.messageUid");
+  }
   const toolCallId = resolveContextToolResultCallId(message);
-  const dialogProcessId = resolveContextMessageDialogProcessId(message);
-  const parentDialogProcessId = readContextMessageField(message, "parentDialogProcessId");
-  const turnScopeId = resolveContextMessageTurnScopeId(message);
-  const identity = {
-    ...(sourceMessageId ? { noobotMessageId: sourceMessageId } : {}),
-    ...(dialogProcessId ? { dialogProcessId } : {}),
-    ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
-    ...(turnScopeId ? { turnScopeId } : {}),
-  };
-  return {
-    ...(sourceMessageId ? { messageUid: sourceMessageId } : {}),
-    role: CONTEXT_MESSAGE_ROLE.USER,
-    content: summary,
-    summarized: false,
-    phaseSummaryMemory: true,
-    recoveredFromUnpairedTaskSummary: true,
-    ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),
-    additional_kwargs: {
-      ...identity,
-      noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY,
-      recoveredFromUnpairedTaskSummary: true,
-      ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),
-    },
-    projection: {
-      type: "phase-summary",
+  const metadata = {
+    messageUid: deriveContextMessageProjectionId(
       sourceMessageId,
-    },
-    data: { summary },
+      CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY,
+    ),
+    dialogProcessId: resolveContextMessageDialogProcessId(message) || undefined,
+    parentDialogProcessId: readContextMessageField(message, "parentDialogProcessId") || undefined,
+    turnScopeId: resolveContextMessageTurnScopeId(message) || undefined,
+    noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY,
+    recoveredFromUnpairedTaskSummary: true,
+    original_tool_call_id: toolCallId || undefined,
   };
+  return writeContextMessageMetadata(
+    { role: CONTEXT_MESSAGE_ROLE.USER, content: summary },
+    metadata,
+  );
 }

@@ -51,7 +51,7 @@ const IDENTITY_KEYS = new Set([
   "turnScopeId",
 ]);
 const INPUT_KEYS = new Set(["message", "attachments"]);
-const PRESENTATION_KEYS = new Set(["userMessageId", "assistantMessageId"]);
+const PRESENTATION_KEYS = new Set(["userMessageId", "presentationMessageId"]);
 const RUN_CONCURRENCY_KEYS = new Set(["expectedTurnRevision", "expectedAggregateVersion"]);
 const STOP_CONCURRENCY_KEYS = new Set(["expectedTurnRevision"]);
 const SESSION_KEYS = new Set(["createIfAbsent", "selectedConnectorIds"]);
@@ -134,7 +134,7 @@ export function createTurnRunCommand(input = {}) {
     preferences: createRunPreferences(input.preferences),
     presentation: compactObject({
       userMessageId: clean(input.presentation?.userMessageId),
-      assistantMessageId: clean(input.presentation?.assistantMessageId),
+      presentationMessageId: clean(input.presentation?.presentationMessageId),
     }),
     concurrency: compactObject({
       expectedTurnRevision: input.concurrency?.expectedTurnRevision,
@@ -329,7 +329,8 @@ function validateRunPresentation(command, errors) {
     return;
   }
   if (!clean(command.presentation.userMessageId)) errors.push("missing_user_message_id");
-  if (!clean(command.presentation.assistantMessageId)) errors.push("missing_assistant_message_id");
+  if (!clean(command.presentation.presentationMessageId))
+    errors.push("missing_presentation_message_id");
 }
 
 function validateRunSession(command, commandType, errors) {

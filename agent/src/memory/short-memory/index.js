@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import { resolveSessionMessageRecordDialogProcessId } from "@noobot/session-protocol";
 import {
   excludeShortMemoryItemsBySessionIds,
   sortShortMemoryItems,
@@ -47,7 +47,7 @@ export class ShortMemoryManager {
     messages,
   }) {
     const dialogRecords = messages.filter(
-      (messageItem) => resolveContextMessageDialogProcessId(messageItem) === dialogProcessId,
+      (messageItem) => resolveSessionMessageRecordDialogProcessId(messageItem) === dialogProcessId,
     );
     const records = toShortMemoryRecords(dialogRecords);
     if (!records.length) return false;

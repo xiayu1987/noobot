@@ -75,7 +75,7 @@ export function createChatRunService({ normalizeLocale, defaultLocale } = {}) {
       ...(preferences.summaryPolicy ? { summaryPolicy: preferences.summaryPolicy } : {}),
       selectedPlugins,
       userMessageId: text(command.presentation?.userMessageId),
-      presentationMessageId: text(command.presentation?.assistantMessageId),
+      presentationMessageId: text(command.presentation?.presentationMessageId),
       commandId: String(command.commandId).trim(),
       expectedAggregateVersion: command.concurrency.expectedAggregateVersion,
       transportCommand: {

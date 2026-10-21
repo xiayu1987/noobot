@@ -17,7 +17,6 @@ describe("sendFlow sub-session message routing", () => {
           parentSessionId: "root-session-1",
           workflowRunId: "workflow-run-1",
           nodeExecutionId: "node-execution-1",
-          messageId: "msg_55f39303-4216-4103-b500-c98983a9eb1e",
           presentationMessageId: "msg_55f39303-4216-4103-b500-c98983a9eb1e",
           toolCallId: "call_rp9JoyKOqvVwNpAJUobrY6bU",
           result: { ok: true },

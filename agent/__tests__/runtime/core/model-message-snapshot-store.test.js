@@ -16,6 +16,10 @@ import {
 } from "../../../src/runtime/resume/model-message-snapshot-store.js";
 import { initializeSessionTree, persistSession } from "../../helpers/runtime-events-env.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import {
+  readContextMessageValue,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
 
 const identity = {
   userId: "admin",
@@ -190,15 +194,13 @@ test("stopped snapshot round trip preserves Anthropic thinking blocks and OpenAI
   assert.equal(loaded.messageBlocks.history[3].tool_call_id, "call_1");
 });
 
-test("stopped model message snapshot v3 preserves ids, summary state, lc metadata and arbitrary fields", async () => {
+test("stopped model message snapshot v4 preserves additional_kwargs facts and rejects off-protocol top-level fields", async () => {
   const workspaceRoot = await createWorkspace();
   const message = new HumanMessage({
     content: "full context",
-    additional_kwargs: { noobotMessageId: "am_full", attachmentMetas: [{ attachmentId: "att-1" }] },
+    additional_kwargs: { attachmentMetas: [{ attachmentId: "att-1" }] },
   });
-  message.summarized = true;
-  message.lc_kwargs = { content: "full context", summarized: true, custom: { kept: true } };
-  message.noobotBusinessMeta = { kept: true };
+  writeContextMessageMetadata(message, { messageUid: "sm_full", summarized: true });
   await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
@@ -209,14 +211,26 @@ test("stopped model message snapshot v3 preserves ids, summary state, lc metadat
     globalConfig: { workspaceRoot },
     identity,
   });
-  assert.equal(loaded.version, 3);
-  assert.equal(loaded.messages[0].additional_kwargs.noobotMessageId, "am_full");
-  assert.equal(loaded.messages[0].summarized, true);
-  assert.deepEqual(loaded.messages[0].lc_kwargs.custom, { kept: true });
-  assert.deepEqual(loaded.messages[0].noobotBusinessMeta, { kept: true });
-  assert.deepEqual(loaded.messages[0].additional_kwargs.attachmentMetas, [
+  assert.equal(loaded.version, 4);
+  assert.equal(readContextMessageValue(loaded.messages[0], "messageUid"), "sm_full");
+  assert.equal(readContextMessageValue(loaded.messages[0], "summarized"), true);
+  assert.equal("summarized" in loaded.messages[0], false);
+  assert.equal("lc_kwargs" in loaded.messages[0], false);
+  assert.deepEqual(readContextMessageValue(loaded.messages[0], "attachmentMetas"), [
     { attachmentId: "att-1" },
   ]);
+
+  const offProtocol = new HumanMessage("off protocol");
+  offProtocol.noobotBusinessMeta = { kept: true };
+  await assert.rejects(
+    () =>
+      saveStoppedModelMessageSnapshot({
+        globalConfig: { workspaceRoot },
+        identity,
+        messageBlocks: { system: [], history: [offProtocol], incremental: [] },
+      }),
+    /top-level field is not part of the protocol: noobotBusinessMeta/,
+  );
 });
 
 test("stopped snapshot round trip preserves injected messages by block, order, source, type and round identity", async () => {
@@ -231,14 +245,15 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
   }) => {
     const message = new MessageClass({
       content,
-      additional_kwargs: { injectedMessageType, marker: `${content}-marker` },
+      additional_kwargs: { marker: `${content}-marker` },
     });
-    message.injectedMessage = true;
-    message.injectedBy = injectedBy;
-    message.injectedMessageType = injectedMessageType;
-    message.dialogProcessId = dialogProcessId;
-    message.turnScopeId = turnScopeId;
-    return message;
+    return writeContextMessageMetadata(message, {
+      injectedMessage: true,
+      injectedBy,
+      injectedMessageType,
+      dialogProcessId,
+      turnScopeId,
+    });
   };
   const systemInjection = injected({
     MessageClass: SystemMessage,
@@ -299,12 +314,12 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
   ];
   assert.deepEqual(
     loadedInjections.map((message) => ({
-      injectedMessage: message.injectedMessage,
-      injectedBy: message.injectedBy,
-      injectedMessageType: message.injectedMessageType,
-      dialogProcessId: message.dialogProcessId,
-      turnScopeId: message.turnScopeId,
-      additionalType: message.additional_kwargs.injectedMessageType,
+      injectedMessage: readContextMessageValue(message, "injectedMessage"),
+      injectedBy: readContextMessageValue(message, "injectedBy"),
+      injectedMessageType: readContextMessageValue(message, "injectedMessageType"),
+      dialogProcessId: readContextMessageValue(message, "dialogProcessId"),
+      turnScopeId: readContextMessageValue(message, "turnScopeId"),
+      marker: readContextMessageValue(message, "marker"),
     })),
     [
       {
@@ -313,7 +328,7 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
         injectedMessageType: "workflow_system_context",
         dialogProcessId: "dialog-system",
         turnScopeId: "turn-system",
-        additionalType: "workflow_system_context",
+        marker: "system injection-marker",
       },
       {
         injectedMessage: true,
@@ -321,7 +336,7 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
         injectedMessageType: "guidance",
         dialogProcessId: "dialog-history",
         turnScopeId: "turn-history",
-        additionalType: "guidance",
+        marker: "history injection-marker",
       },
       {
         injectedMessage: true,
@@ -329,7 +344,7 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
         injectedMessageType: "noobot.user_interjection",
         dialogProcessId: "dialog-incremental",
         turnScopeId: "turn-incremental",
-        additionalType: "noobot.user_interjection",
+        marker: "user interjection-marker",
       },
     ],
   );
@@ -337,14 +352,14 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
   const recoveredInjections = [
     ...loaded.messageBlocks.history,
     ...loaded.messageBlocks.incremental,
-  ].filter((message) => message.injectedMessage === true);
+  ].filter((message) => readContextMessageValue(message, "injectedMessage") === true);
   assert.deepEqual(
     recoveredInjections.map((message) => [
       message.content,
-      message.injectedBy,
-      message.injectedMessageType,
-      message.dialogProcessId,
-      message.turnScopeId,
+      readContextMessageValue(message, "injectedBy"),
+      readContextMessageValue(message, "injectedMessageType"),
+      readContextMessageValue(message, "dialogProcessId"),
+      readContextMessageValue(message, "turnScopeId"),
     ]),
     [
       ["history injection", "harness-plugin", "guidance", "dialog-history", "turn-history"],

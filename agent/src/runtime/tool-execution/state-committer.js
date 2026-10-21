@@ -17,13 +17,13 @@ import {
   applyAuthoritativeMessageId,
   currentAssistantPresentationMessageId,
 } from "../../events/message-event-stream.js";
-import { createSessionMessageUid } from "../../context/session/message-uid.js";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
 } from "@noobot/session-protocol";
-import { isPlainObject, text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
@@ -69,11 +69,16 @@ export function createStateCommitter({
       if (!isFunction(runtime?.materializePendingCurrentTurnMessageEvents)) {
         throw new Error("Turn message event materializer is required");
       }
-      const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
+      const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents({
+        modelMessageId: messageId,
+      });
       const canonicalActivityTimeline = Array.isArray(pendingProjection.activityTimeline)
         ? pendingProjection.activityTimeline
         : [];
-      const canonicalMessageUid = text(messageUid) || createSessionMessageUid();
+      const canonicalMessageUid = text(messageUid);
+      if (!canonicalMessageUid) {
+        throw new TypeError("assistant message commit requires messageUid");
+      }
       let assistantMessage = {
         messageUid: canonicalMessageUid,
         role: "assistant",
@@ -104,10 +109,6 @@ export function createStateCommitter({
         modelResponseMetadata: isPlainObject(modelResponseMetadata) ? modelResponseMetadata : null,
       };
       assistantMessage = applyAuthoritativeMessageId(assistantMessage, messageId);
-      if (!isObjectLike(assistantMessage.additional_kwargs)) {
-        assistantMessage.additional_kwargs = {};
-      }
-      assistantMessage.additional_kwargs.noobotMessageId = canonicalMessageUid;
       await runAgentRuntimeHook({
         runtime,
         point: HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
@@ -151,7 +152,7 @@ export function createStateCommitter({
       const resolvedCallId = text(call.id);
       const resolvedCallName = text(call.name);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
-      const messageUid = createSessionMessageUid();
+      const messageUid = createMessageUid();
       const contextPolicy = resolveToolContextPolicy(call);
       const toolResultPayload = {
         messageUid,

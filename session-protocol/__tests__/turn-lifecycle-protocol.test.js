@@ -111,7 +111,6 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
       activeTurnScopeId: "turn-old",
       activeTurn: {
         turnScopeId: "turn-old",
-        messageId: "message-old",
         presentationMessageId: "presentation-old",
         revision: 1,
         sequence: 7,
@@ -134,7 +133,6 @@ test("snapshot recovery is an explicit read-side assessment bound to the active 
 
   const activeTurn = {
     turnScopeId: "turn-recovery",
-    messageId: "message-recovery",
     presentationMessageId: "presentation-recovery",
     state: TURN_STATE.PROCESSING,
     revision: 1,
@@ -170,7 +168,6 @@ test("active Turn snapshot requires its authoritative start time", () => {
     activeTurnScopeId: "turn-active",
     activeTurn: {
       turnScopeId: "turn-active",
-      messageId: "message-active",
       presentationMessageId: "presentation-active",
       state: TURN_STATE.PROCESSING,
       revision: 1,
@@ -214,7 +211,6 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
     commandId: "cmd-1",
     sessionId: "session-1",
     turnScopeId: "turn-1",
-    messageId: "turn-message-1",
     presentationMessageId: "assistant-1",
     revision: 2,
     sequence: 2,
@@ -223,7 +219,6 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
   });
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
   assert.equal(envelope.presentationMessageId, "assistant-1");
-  assert.equal(envelope.messageId, "turn-message-1");
 });
 
 test("turn lifecycle envelope rejects storage locator fields", () => {
@@ -239,7 +234,6 @@ test("turn lifecycle envelope rejects storage locator fields", () => {
     commandId: "cmd-scoped",
     sessionId: "child-session",
     turnScopeId: "turn-scoped",
-    messageId: "message-scoped",
     presentationMessageId: "presentation-scoped",
     revision: 2,
     sequence: 2,
@@ -262,7 +256,6 @@ test("turn lifecycle envelope preserves parent identity without leaking mutation
     sessionId: "child-session",
     parentSessionId: "parent-session",
     turnScopeId: "child-turn",
-    messageId: "child-turn-message",
     presentationMessageId: "child-presentation",
     revision: 1,
     sequence: 1,
@@ -290,7 +283,6 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
   assert.deepEqual(result.errors, [
     "missing_session_id",
     "missing_turn_scope_id",
-    "missing_message_id",
     "missing_presentation_message_id",
     "invalid_revision",
     "event_phase_mismatch",
@@ -305,7 +297,6 @@ test("turn lifecycle envelope rejects event, phase and state contradictions", ()
     commandId: "cmd-completed-contract",
     sessionId: "session-completed-contract",
     turnScopeId: "turn-completed-contract",
-    messageId: "message-completed-contract",
     presentationMessageId: "presentation-completed-contract",
     revision: 4,
     sequence: 4,
@@ -332,7 +323,6 @@ test("action acceptance enforces one continuation source contract", () => {
     commandId: "continue-contract-command",
     sessionId: "continue-contract-session",
     turnScopeId: "continue-contract-turn",
-    messageId: "continue-contract-message",
     presentationMessageId: "continue-contract-presentation",
     revision: 1,
     sequence: 1,

@@ -35,7 +35,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
     createAttachmentLifecycleEvent({
       eventType: ATTACHMENT_EVENT_TYPE.PARSED,
       eventVersion: 1,
-      messageId: "attachment-event-1",
+      attachmentEventId: "attachment-event-1",
       identity,
       status: ATTACHMENT_LIFECYCLE.PARSED,
       occurredAt: "2026-08-16T00:00:00.000Z",

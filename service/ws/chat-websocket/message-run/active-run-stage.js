@@ -72,7 +72,6 @@ function createRunMeta(context, command, run) {
     parentDialogProcessId: text(run.parentDialogProcessId),
     dialogProcessId: text(run.dialogProcessId),
     turnScopeId: text(run.turnScopeId),
-    messageId: text(run.normalizedRunConfig.messageId),
     presentationMessageId: text(run.normalizedRunConfig.presentationMessageId),
   };
 }

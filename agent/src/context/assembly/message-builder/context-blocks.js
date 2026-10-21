@@ -13,8 +13,35 @@ import {
 } from "../../agent-context-accessor.js";
 import { buildHistoryMessages } from "./history.js";
 import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { createMessageUid } from "@noobot/context-protocol/message/message-identity";
 import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
 import { text } from "@noobot/shared/value";
+
+function buildSystemContextMessage(source) {
+  if (typeof source === "string") {
+    return new SystemMessage({
+      content: source,
+      additional_kwargs: {
+        messageUid: createMessageUid(),
+        noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT,
+      },
+    });
+  }
+  const messageUid = resolveContextMessageId(source);
+  if (!messageUid) {
+    throw new Error("restored system context message requires additional_kwargs.messageUid");
+  }
+  if (typeof source?.content !== "string") {
+    throw new TypeError(`restored system context message content must be a string: ${messageUid}`);
+  }
+  return new SystemMessage({
+    content: source.content,
+    additional_kwargs: {
+      messageUid,
+      noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT,
+    },
+  });
+}
 
 export function buildContextMessageBlocks(agentContext, { currentUserMessage = null } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -24,9 +51,9 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     history: historyMessages,
     incremental: restoredIncrementalMessages,
   } = context.modelContext.messageBlocks;
-  const currentCanonicalId = resolveContextMessageId(currentUserMessage);
+
+  const currentCanonicalId = text(currentUserMessage?.messageUid);
   emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", {
-    messageUid: text(currentUserMessage?.messageUid),
     currentCanonicalId,
     systemCount: systemMessages.length,
     historyCount: historyMessages.length,
@@ -53,17 +80,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     incrementalCount: resolvedMainBlocks.incremental.length,
   });
 
-  const system = [];
-  for (const content of resolvedMainBlocks.system) {
-    system.push(
-      new SystemMessage({
-        content: typeof content === "string" ? content : String(content?.content || ""),
-        additional_kwargs: {
-          noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT,
-        },
-      }),
-    );
-  }
+  const system = resolvedMainBlocks.system.map(buildSystemContextMessage);
   const history = buildHistoryMessages({
     effectiveHistoryMessages: resolvedMainBlocks.history,
     runtime,
@@ -74,7 +91,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   });
   const projectedIds = incremental.map(resolveContextMessageId).filter(Boolean);
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {
-    sourceMessageUid: text(currentUserMessage?.messageUid),
+    sourceMessageUid: currentCanonicalId,
     contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",
     userMetaProjectionId:
       projectedIds.find((id) => id === `${currentCanonicalId}::user_meta`) || "",

@@ -18,6 +18,7 @@ test("internal message types are a frozen vocabulary distinct from injected prom
     SYSTEM_CONTEXT: "system_context",
     USER_META: "user_meta",
     PHASE_SUMMARY_MEMORY: "phase_summary_memory",
+    TERMINAL_HISTORY_EXPLANATION: "terminal_history_explanation",
   });
   const injected = new Set(Object.values(CONTEXT_INJECTED_MESSAGE_TYPE));
   for (const value of Object.values(CONTEXT_INTERNAL_MESSAGE_TYPE)) {
@@ -25,16 +26,16 @@ test("internal message types are a frozen vocabulary distinct from injected prom
   }
 });
 
-test("system context policy reads the internal type vocabulary across kwargs layers", () => {
+test("system context policy reads the internal type only from additional_kwargs", () => {
   const type = CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT;
-  assert.equal(isCurrentSystemContextMessage({ noobotInternalMessageType: type }), true);
   assert.equal(
     isCurrentSystemContextMessage({ additional_kwargs: { noobotInternalMessageType: type } }),
     true,
   );
+  assert.equal(isCurrentSystemContextMessage({ noobotInternalMessageType: type }), false);
   assert.equal(
     isCurrentSystemContextMessage({
-      noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META,
+      additional_kwargs: { noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META },
     }),
     false,
   );
@@ -45,7 +46,10 @@ test("recovered task summary memory carries the internal phase summary type", ()
   const recovered = recoverContextTaskSummaryToolResult({
     role: "tool",
     tool_call_id: "call_summary",
-    contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY),
+    additional_kwargs: {
+      messageUid: "sm_summary_result",
+      contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY),
+    },
     content: JSON.stringify({
       toolName: "task_summary",
       ok: true,

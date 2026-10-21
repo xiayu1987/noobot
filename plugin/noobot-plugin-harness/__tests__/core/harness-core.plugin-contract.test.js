@@ -12,7 +12,7 @@ import path from "node:path";
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
 
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
+import { isHarnessPromptMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
 
 test("harness plugin injects prompt into before_llm_call messages", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
@@ -29,7 +29,7 @@ test("harness plugin injects prompt into before_llm_call messages", async () => 
   const messages = messagesCtx.modelContext.messageBlocks.system;
 
   assert.equal(messages[0].role, "system");
-  assert.equal(messages[0]?.[HARNESS_PROMPT_INJECTION_ID_FIELD], "noobot-harness-policy");
+  assert.equal(isHarnessPromptMessage(messages[0], "noobot-harness-policy"), true);
   assert.doesNotMatch(messages[0].content, /noobot-harness-policy/);
   assert.match(messages[0].content, /用户隔离/);
 });

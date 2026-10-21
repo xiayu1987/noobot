@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createModelContext } from "@noobot/context-protocol";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 
@@ -43,11 +44,16 @@ test("an interjection accepted during the final model call is consumed before co
           injectedMessage: true,
           injectedMessageType: "noobot.user_interjection",
         });
-        modelContext.messages.push({
-          role: "user",
-          content: interjection.message,
-          additional_kwargs: { noobotMessageId: interjection.messageUid },
-        });
+        modelContext.messages.push(
+          writeContextMessageMetadata(
+            { role: "user", content: interjection.message },
+            {
+              messageUid: interjection.messageUid,
+              injectedMessage: true,
+              injectedMessageType: "noobot.user_interjection",
+            },
+          ),
+        );
       }
       return batch;
     },

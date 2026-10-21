@@ -54,14 +54,13 @@ describe("authoritative message event end-to-end fidelity", () => {
         persistenceScope: null,
       },
       sessionManager: {
-        commitMessageEvent: async ({ payload, sessionId, turnScopeId, messageId }) => ({
+        commitMessageEvent: async ({ payload, sessionId, turnScopeId }) => ({
           committed: true,
           envelope: canonicalMessageEvent({
             ...payload,
-            eventId: `${messageId}:${payload.eventType}:${produced.length + 1}`,
+            eventId: `${payload.presentationMessageId}:${payload.eventType}:${produced.length + 1}`,
             sessionId,
             turnScopeId,
-            messageId,
             sequence: produced.length + 1,
           }),
         }),
@@ -75,17 +74,15 @@ describe("authoritative message event end-to-end fidelity", () => {
       },
     });
 
-    const messageId = "child-turn-message";
     const presentationMessageId = "child-turn-presentation";
     bindAssistantMessageEventStream(runtime, {
-      messageId,
       presentationMessageId,
       parentSessionId: "parent-session",
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
     });
     const modelMessageId = beginAssistantMessageEventStream(runtime, { turn: 1 });
-    expect(modelMessageId).not.toBe(messageId);
+    expect(modelMessageId).not.toBe(presentationMessageId);
     produced.push(
       await emitMessageEvent(listener, runtime, "turn_presentation_committed", {
         presentation: {
@@ -100,7 +97,6 @@ describe("authoritative message event end-to-end fidelity", () => {
           },
           assistantMessage: {
             id: presentationMessageId,
-            messageId: presentationMessageId,
             presentationMessageId,
             role: "assistant",
             sessionId: "child-session",
@@ -142,7 +138,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     frames.forEach((frame, index) => {
       expect(frame).toEqual(produced[index]);
       expect(frame.identity.eventType).toBe("message_event");
-      expect(frame.ordering.scopeId).toBe(messageId);
+      expect(frame.ordering.scopeId).toBe(presentationMessageId);
       expect(deliverPacketToStore(store, frame).applied).toBe(true);
     });
 

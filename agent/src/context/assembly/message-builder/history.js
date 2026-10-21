@@ -6,8 +6,12 @@
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
 import {
+  CONTEXT_MESSAGE_PROJECTION_TYPE,
   deriveContextMessageProjectionId,
-  projectContextMessageIdentityMetadata,
+  projectContextMessageModelMetadata,
+  readContextMessageField,
+  readContextMessageValue,
+  resolveContextMessageId,
   resolveContextMessageRole,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
@@ -20,7 +24,7 @@ import {
   buildTaskSummaryFallbackHumanMessage,
   shouldSkipSummarizedHistoryMessage,
 } from "./task-summary.js";
-import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import {
   buildHumanMessageContent,
@@ -31,22 +35,34 @@ import {
 import { text } from "@noobot/shared/value";
 
 function hasMaterializedUserMeta(messages = [], index = 0, sourceMessage = {}) {
-  const sourceId = text(
-    sourceMessage?.messageUid ||
-      sourceMessage?.noobotMessageId ||
-      sourceMessage?.additional_kwargs?.noobotMessageId ||
-      sourceMessage?.lc_kwargs?.noobotMessageId,
-  );
+  const sourceId = resolveContextMessageId(sourceMessage);
   if (!sourceId) return false;
   const meta = messages[index + 1];
   if (!meta || !isDerivedUserMetaMessage(meta)) return false;
-  const metaId = text(
-    meta?.messageUid ||
-      meta?.noobotMessageId ||
-      meta?.additional_kwargs?.noobotMessageId ||
-      meta?.lc_kwargs?.noobotMessageId,
+  return (
+    resolveContextMessageId(meta) ===
+    deriveContextMessageProjectionId(sourceId, CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META)
   );
-  return metaId === deriveContextMessageProjectionId(sourceId, "user_meta");
+}
+
+function buildAssistantAdditionalKwargs(msg = {}) {
+  const metadata = projectContextMessageModelMetadata(msg);
+  const reasoning = readContextMessageValue(msg, "modelAdditionalKwargs")?.reasoning;
+  return reasoning && typeof reasoning === "object" ? { ...metadata, reasoning } : metadata;
+}
+
+function resolveAssistantModelContent(msg = {}) {
+  const rawModelContent = readContextMessageValue(msg, "rawModelContent");
+  return typeof rawModelContent === "string" || Array.isArray(rawModelContent)
+    ? rawModelContent
+    : msg.content || "";
+}
+
+function isPhaseSummaryMemoryMessage(msg = {}) {
+  return (
+    readContextMessageField(msg, "noobotInternalMessageType") ===
+    CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY
+  );
 }
 
 export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = {} } = {}) {
@@ -75,32 +91,22 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
       history.push(
         new SystemMessage({
           content: msg.content || "",
-          additional_kwargs: projectContextMessageIdentityMetadata(msg),
+          additional_kwargs: projectContextMessageModelMetadata(msg),
         }),
       );
       continue;
     }
     if (role === MESSAGE_ROLE.ASSISTANT) {
       const toolCalls = toLangChainToolCalls(resolveContextToolCalls(msg));
-      const resolvedAssistantContent =
-        typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
-          ? msg.rawModelContent
-          : msg.content || "";
-      const additionalKwargs = {
-        ...projectContextMessageIdentityMetadata(msg),
-        ...(msg?.modelAdditionalKwargs?.reasoning &&
-        typeof msg.modelAdditionalKwargs.reasoning === "object"
-          ? { reasoning: msg.modelAdditionalKwargs.reasoning }
-          : {}),
-      };
-      const responseMetadata = Array.isArray(msg?.modelResponseMetadata?.output)
-        ? { output: msg.modelResponseMetadata.output }
+      const modelResponseMetadata = readContextMessageValue(msg, "modelResponseMetadata");
+      const responseMetadata = Array.isArray(modelResponseMetadata?.output)
+        ? { output: modelResponseMetadata.output }
         : {};
       history.push(
         new AIMessage({
-          content: resolvedAssistantContent,
+          content: resolveAssistantModelContent(msg),
           tool_calls: toolCalls,
-          additional_kwargs: additionalKwargs,
+          additional_kwargs: buildAssistantAdditionalKwargs(msg),
           response_metadata: responseMetadata,
         }),
       );
@@ -117,27 +123,25 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
         }
         continue;
       }
+
+      const declaredContextPolicy = resolveToolContextPolicy(historyToolCallsById.get(toolCallId));
       history.push(
-        new ToolMessage(
-          projectToolContextPolicy(
-            {
-              tool_call_id: toolCallId,
-              content: compactToolResultTextForModel(msg.content || ""),
-              additional_kwargs: projectContextMessageIdentityMetadata(msg),
-            },
-            historyToolCallsById.get(toolCallId),
-          ),
-        ),
+        new ToolMessage({
+          tool_call_id: toolCallId,
+          content: compactToolResultTextForModel(msg.content || ""),
+          additional_kwargs: {
+            ...projectContextMessageModelMetadata(msg),
+            ...(declaredContextPolicy ? { contextPolicy: declaredContextPolicy } : {}),
+          },
+        }),
       );
       continue;
     }
-    if (msg?.phaseSummaryMemory === true) {
+    if (isPhaseSummaryMemoryMessage(msg)) {
       history.push(
         new HumanMessage({
           content: String(msg?.content || ""),
-          additional_kwargs: {
-            noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY,
-          },
+          additional_kwargs: projectContextMessageModelMetadata(msg),
         }),
       );
       continue;
@@ -152,22 +156,18 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
       history.push(
         new HumanMessage({
           content: buildHumanMessageContent(msg),
-          additional_kwargs: projectContextMessageIdentityMetadata(msg),
+          additional_kwargs: projectContextMessageModelMetadata(msg),
         }),
         new HumanMessage({
           content: buildHumanMessageContent(meta),
-
-          additional_kwargs: {
-            ...projectContextMessageIdentityMetadata(meta),
-            noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META,
-          },
+          additional_kwargs: projectContextMessageModelMetadata(meta),
         }),
       );
     } else {
       history.push(
         new HumanMessage({
           content: buildHumanMessageContent(msg),
-          additional_kwargs: projectContextMessageIdentityMetadata(msg),
+          additional_kwargs: projectContextMessageModelMetadata(msg),
         }),
       );
     }

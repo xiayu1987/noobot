@@ -31,7 +31,6 @@ export function collectRequiredFieldErrors(value, code) {
 export function collectTurnMaterializationErrors(turn = {}) {
   return [
     ...collectTurnScopeIdErrors(turn.turnScopeId),
-    ...collectRequiredFieldErrors(turn.messageId, "missing_message_id"),
     ...collectRequiredFieldErrors(turn.presentationMessageId, "missing_presentation_message_id"),
     ...collectPositiveIntegerErrors(turn.revision, "invalid_turn_revision"),
     ...collectPositiveIntegerErrors(turn.sequence, "invalid_turn_sequence"),

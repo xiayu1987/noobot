@@ -102,7 +102,7 @@ export function buildChatPayload({
   dialogProcessId = "",
   turnScopeId = "",
   userMessageId = "",
-  assistantMessageId = "",
+  presentationMessageId = "",
   continueFromStopped = false,
   resumeDialogProcessId = "",
   resumeTurnScopeId = "",
@@ -135,7 +135,7 @@ export function buildChatPayload({
     }),
     presentation: {
       userMessageId: normalizeTrimmedString(userMessageId),
-      assistantMessageId: normalizeTrimmedString(assistantMessageId),
+      presentationMessageId: normalizeTrimmedString(presentationMessageId),
     },
     concurrency: {
       expectedTurnRevision: 0,

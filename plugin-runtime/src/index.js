@@ -57,13 +57,14 @@ function resolveDefaultPluginRootDir() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../plugin");
 }
 
-async function discoverNoobotPluginManifests({ pluginRootDir = "" } = {}) {
+async function discoverNoobotPluginManifests({ pluginRootDir = "", strict = false } = {}) {
   const root = path.resolve(text(pluginRootDir) || resolveDefaultPluginRootDir());
   let directoryEntries;
   try {
     directoryEntries = await readdir(root, { withFileTypes: true });
   } catch (error) {
     if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") {
+      if (strict) throw error;
       console.warn("[plugin-runtime] plugin manifest discovery failed", { root, error });
     }
     return [];
@@ -78,6 +79,7 @@ async function discoverNoobotPluginManifests({ pluginRootDir = "" } = {}) {
       manifests.push({ directoryName: directoryEntry.name, pluginDir, manifestPath });
     } catch (error) {
       if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") {
+        if (strict) throw error;
         console.warn("[plugin-runtime] plugin manifest access failed", { manifestPath, error });
       }
     }
@@ -204,6 +206,23 @@ export async function getNoobotPluginRuntime(options = {}) {
   const key = runtimeCacheKey(options);
   if (!runtimeCache.has(key)) runtimeCache.set(key, loadNoobotPlugins(options));
   return runtimeCache.get(key);
+}
+
+export async function collectNoobotPluginScopedSessionRootDeclarations({
+  pluginRootDir = "",
+} = {}) {
+  const discovered = await discoverNoobotPluginManifests({ pluginRootDir, strict: true });
+  const declarations = [];
+  for (const item of discovered) {
+    const manifest = parsePluginManifest(JSON.parse(await readFile(item.manifestPath, "utf8")));
+    const scopedSessionRoots = contributionsForSurface(
+      manifest,
+      PLUGIN_SURFACE.AGENT,
+    )?.scopedSessionRoots;
+    if (!scopedSessionRoots?.length) continue;
+    declarations.push(Object.freeze({ pluginId: manifest.id, scopedSessionRoots }));
+  }
+  return Object.freeze(declarations);
 }
 
 export async function refreshNoobotPluginRuntime(options = {}) {

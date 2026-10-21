@@ -19,7 +19,7 @@ function requireIdentity(identity = {}) {
   if (!isPlainObject(identity)) {
     throw new Error("semantic_transfer_identity_required");
   }
-  for (const key of ["transferId", "messageId", "sessionId", "turnScopeId", "runId"]) {
+  for (const key of ["transferId", "presentationMessageId", "sessionId", "turnScopeId", "runId"]) {
     if (!safeStr(identity[key])) throw new Error(`semantic_transfer_${key}_required`);
   }
   if (!isObjectLike(identity.producer)) {
@@ -30,7 +30,7 @@ function requireIdentity(identity = {}) {
   }
   return {
     transferId: safeStr(identity.transferId),
-    messageId: safeStr(identity.messageId),
+    presentationMessageId: safeStr(identity.presentationMessageId),
     identity: {
       sessionId: safeStr(identity.sessionId),
       turnScopeId: safeStr(identity.turnScopeId),

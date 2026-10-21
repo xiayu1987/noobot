@@ -9,6 +9,10 @@ import assert from "node:assert/strict";
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createModelContext } from "@noobot/context-protocol";
+import {
+  resolveContextMessageSummarized,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
@@ -35,7 +39,7 @@ function createSummaryModelState(runtime) {
         rootSessionId: "s1",
         parentSessionId: "",
         runId: "r-1",
-        messageId: "m-1",
+        presentationMessageId: "m-1",
       },
     }),
   };
@@ -61,21 +65,27 @@ test("task_summary sends one checkpoint command without mutating messages before
     toolName: "task_summary",
   };
   const messages = [oldSystem, oldCall, oldResult, summaryCall, summaryResult];
-  messages.forEach((message, index) => {
-    message.messageUid = `sm_${index + 1}`;
-    message.dialogProcessId = "dialog-1";
-    message.turnScopeId = "scope-1";
-    message.additional_kwargs = { noobotMessageId: message.messageUid };
-  });
-  const currentTurnMessages = createCurrentTurnMessagesStore(structuredClone(messages));
+
+  const records = messages.map((message, index) => ({
+    ...structuredClone(message),
+    messageUid: `sm_${index + 1}`,
+    dialogProcessId: "dialog-1",
+    turnScopeId: "scope-1",
+  }));
+
+  const contextMessages = records.map(
+    ({ messageUid, dialogProcessId, turnScopeId, toolName, ...native }) =>
+      writeContextMessageMetadata(native, { messageUid, dialogProcessId, turnScopeId, toolName }),
+  );
+  const currentTurnMessages = createCurrentTurnMessagesStore(records);
   const checkpointCalls = [];
   const runtime = createSummaryRuntime(currentTurnMessages, async (payload) => {
     checkpointCalls.push(payload);
-    assert.equal(oldSystem.summarized, undefined);
-    assert.equal(oldCall.summarized, undefined);
-    assert.equal(oldResult.summarized, undefined);
-    assert.equal(summaryCall.summarized, undefined);
-    assert.equal(summaryResult.summarized, undefined);
+    assert.equal(contextMessages.some(resolveContextMessageSummarized), false);
+    assert.equal(
+      currentTurnMessages.toArray().some((record) => record.summarized === true),
+      false,
+    );
     return { committed: true };
   });
   let invocation = 0;
@@ -117,7 +127,7 @@ test("task_summary sends one checkpoint command without mutating messages before
       traces: [],
       maxTurns: 10,
       modelContext: createModelContext({
-        messageBlocks: { system: [], history: [], incremental: messages },
+        messageBlocks: { system: [], history: [], incremental: contextMessages },
         activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
       }),
       turnMessages: currentTurnMessages.toArray(),

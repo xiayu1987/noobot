@@ -37,7 +37,7 @@ export function resolveMessageEventTrace(eventName = "", data = {}, transportSeq
     transportSequence: Number(transportSequence || 0),
     eventId: text(authoritative?.identity?.eventId),
     eventType: text(authoritative?.identity?.eventType),
-    messageId: text(authoritative?.identity?.messageId),
+    presentationMessageId: text(authoritative?.payload?.presentationMessageId),
     authoritativeSequence: Number(authoritative?.ordering?.sequence || 0),
     sessionId: text(authoritative?.identity?.sessionId),
     turnScopeId: text(authoritative?.identity?.turnScopeId),

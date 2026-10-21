@@ -150,7 +150,7 @@ test("model tool results expose only canonical attachment references", () => {
   });
   const transferEnvelope = attachmentTransfer({
     transferId: "transfer-1",
-    messageId: "message-1",
+    presentationMessageId: "message-1",
     identity: transferIdentity,
     direction: "output",
     intent: {
