@@ -58,7 +58,6 @@ function auditActivity(activity = {}) {
 function auditMessage(message = {}) {
   return {
     messageUid: trimmedText(message?.messageUid),
-    messageId: trimmedText(message?.messageId),
     presentationMessageId: trimmedText(message?.presentationMessageId),
     role: trimmedText(message?.role),
     type: trimmedText(message?.type),

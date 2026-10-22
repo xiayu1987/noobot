@@ -4,66 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_PHASE_STATUS, WORKFLOW_PHASES, WORKFLOW_TRACE } from "../constants.js";
-import { appendWorkflowTrace } from "../hooks/phase.js";
-import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
 import { text } from "@noobot/shared/value";
 
-function resolveWorkflowErrorMessage(error = null) {
-  return String(error?.message || error || "");
-}
+const WORKFLOW_EXECUTION_FAILED = "WORKFLOW_EXECUTION_FAILED";
 
-export async function handleWorkflowFailure({
-  workflowRunId = "",
-  error,
-  options = {},
-  ctx = {},
-  agentResult = {},
-  sourceText = "",
-  phaseTracker,
-  retryMeta = {},
-  beforeDispatchMode = false,
-} = {}) {
-  const message = resolveWorkflowErrorMessage(error);
-  retryMeta.history.push({
-    attempt: 1,
-    status: WORKFLOW_PHASE_STATUS.FAILED,
-    timestamp: new Date().toISOString(),
-    message,
-  });
-  phaseTracker.end(WORKFLOW_PHASES.SEMANTIC_RESOLUTION, WORKFLOW_PHASE_STATUS.FAILED, {
-    message,
-  });
-  phaseTracker.end(WORKFLOW_PHASES.WORKFLOW_EXECUTION, WORKFLOW_PHASE_STATUS.FAILED, {
-    message,
-  });
-  const workflowPayload = buildWorkflowOrchestrationPayload({
-    workflowRunId,
-    ctx,
-    options,
-    sourceText,
-    semanticText: sourceText,
-    semantic: null,
-    execution: null,
-    phaseTimeline: phaseTracker.list(),
-    retryMeta,
-    error,
-  });
-  agentResult.workflow = workflowPayload;
-  appendWorkflowTrace(agentResult, {
-    stage: WORKFLOW_TRACE.STAGE_FAILED,
-    interactionId: workflowPayload.interactionId,
-    protocolVersion: workflowPayload.protocolVersion,
-    message,
-  });
-  if (!beforeDispatchMode) return null;
-
+export function handleWorkflowFailure(error) {
   return createBotDispatchHandled({
     owner: "workflow",
     failure: {
-      code: text(error?.code) || "WORKFLOW_EXECUTION_FAILED",
-      message,
+      code: text(error?.code) || WORKFLOW_EXECUTION_FAILED,
+      message: String(error?.message || error),
     },
   });
 }

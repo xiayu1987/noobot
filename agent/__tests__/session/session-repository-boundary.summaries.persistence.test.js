@@ -46,6 +46,7 @@ test("session save refreshes the display projection with live activity timeline"
       [
         {
           role: "assistant",
+          modelMessageId: "mm_session_repository_bound_1",
           type: "tool_call",
           chatPresentation: false,
           presentationMessageId: "presentation-live",
@@ -158,6 +159,8 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       {
         messageUid: "sm_historical",
         role: "assistant",
+        modelMessageId: "mm_historical",
+        presentationMessageId: "pm_turn-old",
         content: "historical guidance",
         dialogProcessId: "dialog-old",
         turnScopeId: "turn-old",
@@ -193,7 +196,10 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       dialogProcessId: "dialog-current",
       turnScopeId: "turn-current",
       checkpointId: "checkpoint-with-history",
+      expectedCheckpointRevision: 0,
+      persistedMessageUids: [],
       summarizedMessageUids: ["sm_historical"],
+      retainedMessageUids: [],
     };
     const committed = await runtime.sessionMessageService.commitTurnSummaryCheckpoint(
       withTreeContext(runtime, checkpoint),

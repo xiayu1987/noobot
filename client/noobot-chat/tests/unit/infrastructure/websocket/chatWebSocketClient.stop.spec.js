@@ -25,12 +25,10 @@ function stopCommand({
   dialogProcessId = "main-dp",
   turnScopeId = "main-turn",
   expectedTurnRevision = 2,
-  partialAssistant = { content: "" },
 } = {}) {
   return createTurnStopCommand({
     identity: { sessionId, dialogProcessId, turnScopeId },
     concurrency: { expectedTurnRevision },
-    stop: { partialAssistant },
   });
 }
 
@@ -114,7 +112,6 @@ describe("chatWebSocketClient stop transport", () => {
         stopCommand({
           commandId: "stop:turn-1",
           turnScopeId: "turn-1",
-          partialAssistant: { content: "partial" },
         }),
       ),
     ).rejects.toThrow("commandId request already pending");

@@ -179,8 +179,8 @@ function collectReplacementErrors(snapshot, errors) {
     if (!replacementTurnScopeId) errors.push("missing_replacement_turn_scope_id");
     else if (!isCanonicalTurnScopeId(replacement.replacementTurnScopeId))
       errors.push("non_canonical_replacement_turn_scope_id");
-    if (!clean(replacement?.replacementUserMessageId))
-      errors.push("missing_replacement_user_message_id");
+    if (!clean(replacement?.replacementUserMessageUid))
+      errors.push("missing_replacement_user_message_uid");
     if (!clean(replacement?.commandId)) errors.push("missing_replacement_command_id");
     if (
       !Number.isInteger(Number(replacement?.committedAggregateVersion)) ||

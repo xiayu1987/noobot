@@ -12,7 +12,8 @@
     "./events": "./src/events.js",
     "./reconnect": "./src/reconnect.js",
     "./package.json": "./package.json",
-    "./bot-dispatch": "./src/bot-dispatch.js"
+    "./bot-dispatch": "./src/bot-dispatch.js",
+    "./agent-turn-result": "./src/agent-turn-result.js"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

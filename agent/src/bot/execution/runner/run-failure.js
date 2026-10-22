@@ -19,6 +19,7 @@ import {
   EXECUTION_REPORT_STATUS,
 } from "@noobot/session-protocol/execution-report";
 import { summarizeExecutionLogs } from "../../../observability/execution-log/execution-log-summary.js";
+import { materializeStoppedAssistantDraft } from "../../../runtime/tool-execution/stopped-assistant-draft.js";
 
 function resolveFailureReportStatus(error, abortSignal) {
   if (!isAbortError(error, abortSignal)) return EXECUTION_REPORT_STATUS.FAILED;
@@ -76,6 +77,7 @@ async function recordSessionRunFailure({
   persistStoppedSnapshotFromRuntime,
   resolvedRuntimeEventListener,
   resolvedRunConfig,
+  preparedBotHookManager,
   resolvedUsedSessionId,
   resolvedDialogProcessId,
   errorLogger,
@@ -91,6 +93,7 @@ async function recordSessionRunFailure({
     if (userStopped) {
       if (lifecycleRuntime) {
         await lifecycleRuntime.consumeUserInterjections();
+        await materializeStoppedAssistantDraft(lifecycleRuntime);
         await lifecycleRuntime.persistCurrentTurnMessages();
       }
       const stoppedSnapshotPersistence =
@@ -124,10 +127,7 @@ async function recordSessionRunFailure({
   await runBotRuntimeHook({
     runtime: {
       eventListener: resolvedRuntimeEventListener,
-      botHookManager:
-        resolvedRunConfig?.botHookManager && typeof resolvedRunConfig.botHookManager === "object"
-          ? resolvedRunConfig.botHookManager
-          : null,
+      botHookManager: preparedBotHookManager,
       abortSignal,
     },
     point: HOOK_POINT.BOT.SESSION_RUN_ERROR,

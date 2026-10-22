@@ -278,16 +278,15 @@ export class SessionCrudService {
   }
 
   async maintainSessionDisplaySummaries({ userId }) {
+    await this.sessionRepo.ensureSessionsSummarySchema(userId);
     const sessionIds = await this.listSessionIds({ userId });
     const rebuiltSessionIds = [];
-    const migratedSessionIds = [];
     const failures = [];
     for (const sessionId of sessionIds) {
       try {
         const result = await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, {
           persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
         });
-        if (result.migrated) migratedSessionIds.push(sessionId);
         if (result.rebuilt) rebuiltSessionIds.push(sessionId);
       } catch (error) {
         failures.push({
@@ -297,7 +296,7 @@ export class SessionCrudService {
         });
       }
     }
-    return { userId, migratedSessionIds, rebuiltSessionIds, failures };
+    return { userId, rebuiltSessionIds, failures };
   }
 
   async getAllSessionsData({ userId, failures = null }) {

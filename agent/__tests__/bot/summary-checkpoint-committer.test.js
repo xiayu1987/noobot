@@ -5,8 +5,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { createSummaryCheckpointInstruction } from "@noobot/context-protocol/policy/main-flow-control";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import {
   resolveContextMessageSummarized,
@@ -20,6 +21,16 @@ import {
 
 const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+
+function createCommitterRuntime({ turnMessages, ...fields }) {
+  const runtime = createTestRuntimeContext(fields);
+  runtime.currentTurnMessages.replaceAll(turnMessages);
+  return runtime;
+}
+
+function emptyActiveContext() {
+  return createModelContext({ messageBlocks: { system: [], history: [], incremental: [] } });
+}
 
 function toContextMessage(record = {}, metadata = {}) {
   const { role, content, tool_calls, tool_call_id } = record;
@@ -48,7 +59,10 @@ test("summary checkpoint persists unmodified messages before atomically marking 
     { messageUid: "sm_2", role: "tool", content: "M2", attachments: [{ id: "a1" }] },
     { messageUid: "sm_3", role: "assistant", content: "M3" },
   ];
-  const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: messages,
+  });
   const persisted = [];
   let checkpointPayload = null;
   const result = await commitSummaryCheckpoint({
@@ -72,7 +86,10 @@ test("summary checkpoint persists unmodified messages before atomically marking 
     sessionId: "s1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
-    summaryCompletion: { source: "plugin.summary", summarizedMessageIds: ["sm_1", "sm_2"] },
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["sm_1", "sm_2"],
+    }),
   });
 
   assert.equal(result.committed, true);
@@ -91,7 +108,10 @@ test("failed summary transaction leaves canonical memory and persisted messages 
     { messageUid: "sm_1", role: "assistant", content: "M1" },
     { messageUid: "sm_2", role: "assistant", content: "M2" },
   ];
-  const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: messages,
+  });
   const persisted = [];
   await assert.rejects(
     commitSummaryCheckpoint({
@@ -110,7 +130,10 @@ test("failed summary transaction leaves canonical memory and persisted messages 
       sessionId: "s1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
-      summaryCompletion: { summarizedMessageIds: ["sm_1"] },
+      summaryCompletion: createSummaryCheckpointInstruction({
+        source: "plugin.summary",
+        summarizedMessageUids: ["sm_1"],
+      }),
     }),
     /checkpoint failed/,
   );
@@ -124,10 +147,10 @@ test("failed summary transaction leaves canonical memory and persisted messages 
 
 test("uncommitted summary receipt publishes no checkpoint runtime facts", async () => {
   const messages = [{ messageUid: "sm_1", role: "assistant", content: "M1" }];
-  const runtime = {
+  const runtime = createCommitterRuntime({
     summaryCheckpointRevision: 2,
     summaryCheckpointPersistedMessageUids: ["prior"],
-    currentTurnMessages: createCurrentTurnMessagesStore(messages),
+    turnMessages: messages,
     activeMessageContext: createModelContext({
       checkpointRevision: 2,
       messageBlocks: {
@@ -136,7 +159,7 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
         incremental: messages.map((message) => toContextMessage(message)),
       },
     }),
-  };
+  });
   await assert.rejects(
     commitSummaryCheckpoint({
       session: {
@@ -150,7 +173,10 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
       sessionId: "s1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
-      summaryCompletion: { summarizedMessageIds: ["sm_1"] },
+      summaryCompletion: createSummaryCheckpointInstruction({
+        source: "plugin.summary",
+        summarizedMessageUids: ["sm_1"],
+      }),
     }),
     /did not commit/,
   );
@@ -169,11 +195,8 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
 test("summary checkpoint atomically marks persisted scope and context control prompts", async () => {
   const persistedMessage = { messageUid: "sm_1", role: "assistant", content: "M1" };
   const phasePrompt = phasePromptContextMessage();
-  const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([
-      persistedMessage,
-      { ...PHASE_PROMPT_RECORD },
-    ]),
+  const runtime = createCommitterRuntime({
+    turnMessages: [persistedMessage, { ...PHASE_PROMPT_RECORD }],
     activeMessageContext: createModelContext({
       messageBlocks: {
         system: [],
@@ -181,7 +204,7 @@ test("summary checkpoint atomically marks persisted scope and context control pr
         incremental: [toContextMessage(persistedMessage), phasePrompt],
       },
     }),
-  };
+  });
 
   await commitSummaryCheckpoint({
     session: {
@@ -196,9 +219,10 @@ test("summary checkpoint atomically marks persisted scope and context control pr
     sessionId: "s1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
-    summaryCompletion: {
-      summarizedMessageIds: ["sm_1", "phase_prompt_1"],
-    },
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["sm_1", "phase_prompt_1"],
+    }),
   });
 
   assert.deepEqual(runtime.currentTurnMessages.toArray(), []);
@@ -208,15 +232,15 @@ test("summary checkpoint atomically marks persisted scope and context control pr
 
 test("failed summary checkpoint preserves context control prompts", async () => {
   const phasePrompt = phasePromptContextMessage();
-  const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([
+  const runtime = createCommitterRuntime({
+    turnMessages: [
       { messageUid: "sm_1", role: "assistant", content: "M1" },
       { ...PHASE_PROMPT_RECORD },
-    ]),
+    ],
     activeMessageContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: [phasePrompt] },
     }),
-  };
+  });
 
   await assert.rejects(
     commitSummaryCheckpoint({
@@ -231,9 +255,10 @@ test("failed summary checkpoint preserves context control prompts", async () => 
       sessionId: "s1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
-      summaryCompletion: {
-        summarizedMessageIds: ["sm_1", "phase_prompt_1"],
-      },
+      summaryCompletion: createSummaryCheckpointInstruction({
+        source: "plugin.summary",
+        summarizedMessageUids: ["sm_1", "phase_prompt_1"],
+      }),
     }),
     /checkpoint failed/,
   );
@@ -243,12 +268,13 @@ test("failed summary checkpoint preserves context control prompts", async () => 
 });
 
 test("summary completion never falls back to content identity", async () => {
-  const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: [
       { messageUid: "marked", role: "assistant", content: "same" },
       { messageUid: "keep", role: "assistant", content: "same" },
-    ]),
-  };
+    ],
+  });
   await commitSummaryCheckpoint({
     session: {
       async commitTurnSummaryCheckpoint(payload) {
@@ -262,7 +288,10 @@ test("summary completion never falls back to content identity", async () => {
     sessionId: "s1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
-    summaryCompletion: { summarizedMessageIds: ["marked"] },
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["marked"],
+    }),
   });
 
   assert.deepEqual(
@@ -276,8 +305,8 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
     { messageUid: "sm_1", role: "assistant", content: "M1", summarized: true },
     { messageUid: "sm_2", role: "assistant", content: "M2" },
   ];
-  const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore(messages),
+  const runtime = createCommitterRuntime({
+    turnMessages: messages,
     activeMessageContext: createModelContext({
       checkpointRevision: 0,
       messageBlocks: {
@@ -288,7 +317,7 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
         ),
       },
     }),
-  };
+  });
   let checkpointPayload = null;
   const result = await commitSummaryCheckpoint({
     session: {
@@ -303,13 +332,16 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
     sessionId: "s1",
     dialogProcessId: "dp",
     turnScopeId: "t",
-    summaryCompletion: { summarizedMessageIds: ["sm_1"] },
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["sm_1"],
+    }),
   });
 
   assert.equal(result.committed, true);
   assert.deepEqual(checkpointPayload.persistedMessageUids, ["sm_1", "sm_2"]);
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ["sm_1"]);
-  assert.equal(checkpointPayload.expectedCheckpointRevision, undefined);
+  assert.equal(checkpointPayload.expectedCheckpointRevision, 0);
   assert.equal(runtime.summaryCheckpointRevision, 4);
   assert.equal(runtime.activeMessageContext.checkpointRevision, 4);
   assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["sm_1", "sm_2"]);
@@ -366,7 +398,10 @@ test("successive summary checkpoints preserve the latest task_check before the c
       tool_calls: [{ id: "current-summary", name: "task_summary", contextPolicy: boundaryPolicy }],
     },
   ];
-  const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: messages,
+  });
   let checkpointPayload = null;
 
   await commitSummaryCheckpoint({
@@ -382,10 +417,10 @@ test("successive summary checkpoints preserve the latest task_check before the c
     sessionId: "s1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
-    summaryCompletion: {
+    summaryCompletion: createSummaryCheckpointInstruction({
       source: "task_summary",
-      summarizedMessageIds: messages.map((message) => message.messageUid),
-    },
+      summarizedMessageUids: messages.map((message) => message.messageUid),
+    }),
   });
 
   assert.deepEqual(checkpointPayload.summarizedMessageUids, [
@@ -424,7 +459,10 @@ test("summary checkpoint preserves classified control-tool evidence", async () =
     },
     { messageUid: "business", role: "assistant", content: "work" },
   ];
-  const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: messages,
+  });
   let checkpointPayload = null;
 
   await commitSummaryCheckpoint({
@@ -440,10 +478,10 @@ test("summary checkpoint preserves classified control-tool evidence", async () =
     sessionId: "s1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
-    summaryCompletion: {
+    summaryCompletion: createSummaryCheckpointInstruction({
       source: "plugin.summary",
-      summarizedMessageIds: messages.map((message) => message.messageUid),
-    },
+      summarizedMessageUids: messages.map((message) => message.messageUid),
+    }),
   });
 
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ["business"]);
@@ -455,13 +493,14 @@ test("summary checkpoint preserves classified control-tool evidence", async () =
 });
 
 test("summary checkpoint does not replay messages already persisted by the timeline checkpoint", async () => {
-  const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: [
       { messageUid: "sm_1", role: "assistant", content: "M1", summarized: true },
       { messageUid: "sm_2", role: "tool", content: "M2" },
-    ]),
+    ],
     timelineCheckpointPersistedMessageUids: ["sm_1", "sm_2"],
-  };
+  });
   let appendCount = 0;
   let checkpointPayload = null;
 
@@ -482,7 +521,10 @@ test("summary checkpoint does not replay messages already persisted by the timel
     sessionId: "s1",
     dialogProcessId: "dp",
     turnScopeId: "t",
-    summaryCompletion: { summarizedMessageIds: ["sm_1"] },
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["sm_1"],
+    }),
   });
 
   assert.equal(result.committed, true);
@@ -510,8 +552,8 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
     { messageUid: ids[1], role: "tool", content: "one", tool_call_id: "call_1" },
     { messageUid: ids[2], role: "tool", content: "two", tool_call_id: "call_2" },
   ];
-  const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore(turnMessages),
+  const runtime = createCommitterRuntime({
+    turnMessages,
     activeMessageContext: createModelContext({
       messageBlocks: {
         system: [],
@@ -519,7 +561,7 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
         incremental: turnMessages.map((message) => toContextMessage(message, { summarized: true })),
       },
     }),
-  };
+  });
   const persisted = [];
   let checkpointPayload = null;
 
@@ -540,10 +582,10 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
     sessionId: "s1",
     dialogProcessId: "dp1",
     turnScopeId: "turn1",
-    summaryCompletion: {
+    summaryCompletion: createSummaryCheckpointInstruction({
       source: "plugin.summary",
-      summarizedMessageIds: ids,
-    },
+      summarizedMessageUids: ids,
+    }),
   });
 
   assert.equal(result.committed, true);
@@ -561,8 +603,9 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
 });
 
 test("summary checkpoint passes restored historical UIDs to the active Turn transaction", async () => {
-  const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: [
       {
         messageUid: "sm_current_call",
         role: "assistant",
@@ -575,9 +618,9 @@ test("summary checkpoint passes restored historical UIDs to the active Turn tran
         content: "ok",
         tool_call_id: "call_current",
       },
-    ]),
+    ],
     timelineCheckpointPersistedMessageUids: ["sm_current_call", "sm_current_result"],
-  };
+  });
   let checkpointPayload = null;
 
   const result = await commitSummaryCheckpoint({
@@ -593,10 +636,10 @@ test("summary checkpoint passes restored historical UIDs to the active Turn tran
     sessionId: "s1",
     dialogProcessId: "dp-current",
     turnScopeId: "turn-current",
-    summaryCompletion: {
+    summaryCompletion: createSummaryCheckpointInstruction({
       source: "plugin.summary",
-      summarizedMessageIds: ["sm_history_call", "sm_history_result", "sm_current_call"],
-    },
+      summarizedMessageUids: ["sm_history_call", "sm_history_result", "sm_current_call"],
+    }),
   });
 
   assert.equal(result.committed, true);

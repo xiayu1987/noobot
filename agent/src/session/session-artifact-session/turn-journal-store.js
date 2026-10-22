@@ -5,6 +5,7 @@
  */
 import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import { SESSION_REPAIR_ERROR_CODE } from "@noobot/session-repair";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
@@ -170,7 +171,7 @@ export async function readJournalRecords(file, committedBytes) {
       records.push(JSON.parse(line));
     } catch (error) {
       const failure = new Error(`turn journal is corrupted: ${file}`);
-      failure.code = "ARTIFACT_JSON_CORRUPTED";
+      failure.code = SESSION_REPAIR_ERROR_CODE.ARTIFACT_JSON_CORRUPTED;
       failure.cause = error;
       throw failure;
     }

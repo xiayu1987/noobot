@@ -6,53 +6,90 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import {
   applyPendingUserMetaBackwrites,
   queueUserMetaBackwrite,
 } from "../../src/context/assembly/message-builder/user-meta-backwrite.js";
 
-test("user_meta backwrite persists the existing user_meta identity as a session record", async () => {
-  const userMetaMessageUid = "sm_user_1::user_meta";
-  const userMeta = projectSessionRecordToContextMessage({
-    messageUid: userMetaMessageUid,
+function createRuntime() {
+  const source = projectSessionRecordToContextMessage({
+    messageUid: "sm_user_1",
     role: "user",
-    content: '<user_meta>{"parsedResults":[]}</user_meta>',
+    content: "hello",
     dialogProcessId: "dp1",
     turnScopeId: "turn-1",
-    userMetaMaterialized: true,
+    messageOrigin: "natural",
   });
   const runtime = {
     currentUserMessageUid: "sm_user_1",
     currentUserMessageOrigin: "natural",
     activeMessageContext: createModelContext({
-      messageBlocks: { system: [], history: [], incremental: [userMeta] },
+      messageBlocks: { system: [], history: [], incremental: [source] },
     }),
   };
-  queueUserMetaBackwrite(runtime, {
+  return { runtime, source };
+}
+
+const result = { sourceAttachmentRef: "attach://a1", summary: "parsed" };
+
+test("user_meta backwrite records the parsed result on the source user message", async () => {
+  const { runtime, source } = createRuntime();
+  const backwrite = queueUserMetaBackwrite(runtime, {
     attachmentRef: "attach://a1",
-    result: { sourceAttachmentRef: "attach://a1", summary: "parsed" },
+    result,
     createdAt: "2026-10-21T00:00:00.000Z",
   });
-  const persisted = [];
-  const result = await applyPendingUserMetaBackwrites(runtime, {
-    turnPersister: {
-      async appendAgentMessages({ messages = [] }) {
-        persisted.push(...messages);
+  assert.equal(backwrite.userMetaSourceMessageUid, "sm_user_1");
+
+  const calls = [];
+  const persistenceScope = { kind: "test-scope" };
+  const outcome = await applyPendingUserMetaBackwrites(runtime, {
+    session: {
+      async recordUserMetaParsedResult(payload) {
+        calls.push(payload);
+        return { recorded: true };
       },
     },
     userId: "u1",
     sessionId: "s1",
-    dialogProcessId: "dp1",
-    turnScopeId: "turn-1",
+    persistenceScope,
   });
 
-  assert.equal(result.appliedCount, 1);
-  assert.equal(persisted.length, 1);
+  assert.deepEqual(outcome, { appliedCount: 1, remaining: [] });
+  assert.deepEqual(calls, [
+    {
+      userId: "u1",
+      sessionId: "s1",
+      persistenceScope,
+      userMetaSourceMessageUid: "sm_user_1",
+      result,
+    },
+  ]);
+  assert.deepEqual(readContextMessageValue(source, "userMetaParsedResults"), [result]);
+  assert.deepEqual(runtime.activeMessageContext.userMetaBackwrites, []);
+});
 
-  assert.equal(persisted[0].messageUid, userMetaMessageUid);
-  assert.equal(persisted[0].dialogProcessId, "dp1");
-  assert.equal(persisted[0].turnScopeId, "turn-1");
-  assert.equal(persisted[0].userMetaMaterialized, true);
-  assert.equal("additional_kwargs" in persisted[0], false);
+test("user_meta backwrite keeps the record pending when the session rejects it", async () => {
+  const { runtime } = createRuntime();
+  queueUserMetaBackwrite(runtime, { attachmentRef: "attach://a1", result });
+  await assert.rejects(
+    applyPendingUserMetaBackwrites(runtime, {
+      session: { recordUserMetaParsedResult: async () => ({ recorded: false }) },
+      userId: "u1",
+      sessionId: "s1",
+    }),
+    /was not recorded: sm_user_1/,
+  );
+  assert.equal(runtime.activeMessageContext.userMetaBackwrites.length, 1);
+});
+
+test("user_meta backwrite requires the current natural user message", () => {
+  const { runtime } = createRuntime();
+  runtime.currentUserMessageOrigin = "injected";
+  assert.throws(
+    () => queueUserMetaBackwrite(runtime, { attachmentRef: "attach://a1", result }),
+    /requires the current natural user message/,
+  );
 });

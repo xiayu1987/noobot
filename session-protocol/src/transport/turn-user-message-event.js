@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as trim, isPlainObject } from "@noobot/shared/value";
+import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
+import {
+  MESSAGE_REMOVED_FIELD_NAME,
+  acceptedMessageIdentityFieldsFor,
+} from "../identity/message-identity-schema.js";
+
+const ACCEPTED_USER_IDENTITY_FIELDS = acceptedMessageIdentityFieldsFor("user");
 
 function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
   const errors = [];
@@ -24,8 +31,13 @@ function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
     return { ok: false, errors };
   }
   if (trim(userMessage.role) !== "user") errors.push("user_message_role_invalid");
-  if (!trim(userMessage.messageUid)) errors.push("user_message_uid_missing");
-  if (!trim(userMessage.messageId)) errors.push("user_message_id_missing");
+  if (!trim(userMessage[MESSAGE_IDENTITY_FIELD.SESSION])) errors.push("user_message_uid_missing");
+  for (const field of ACCEPTED_USER_IDENTITY_FIELDS) {
+    if (!trim(userMessage[field])) errors.push(`user_message_${field}_missing`);
+  }
+  if (Object.hasOwn(userMessage, MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID)) {
+    errors.push("user_message_id_noncanonical");
+  }
   if (trim(userMessage.sessionId) !== sessionId) errors.push("user_message_session_mismatch");
   if (trim(userMessage.dialogProcessId) !== dialogProcessId) {
     errors.push("user_message_dialog_mismatch");

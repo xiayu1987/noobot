@@ -14,7 +14,7 @@ import {
   resolveMessageEventTrace,
 } from "../../src/shared/utils.js";
 import { createMockSocket } from "./channel-manager.state-consistency.test-helpers.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   createPluginArtifactEnvelope,
   PLUGIN_ARTIFACT_EVENT,
@@ -36,6 +36,7 @@ function messageEnvelope({
 } = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: `event-${sequence}`,
       eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -130,6 +131,11 @@ test("normal JOIN replay includes committed events during a socket gap", () => {
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
   const artifact = createPluginArtifactEnvelope({
+    sequence: 1,
+    revision: 1,
+    occurredAt: "2026-10-22T00:00:00.000Z",
+    operation: "created",
+    baseRevision: null,
     pluginId: "character",
     artifactType: "character.animation",
     artifactId: "animation-1",

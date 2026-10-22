@@ -12,8 +12,14 @@ describe("mergeCanonicalSessionDetail", () => {
     const persisted = {
       sessionId: "session-1",
       messages: [
-        { messageId: "u1", role: "user", content: "question", turnScopeId: "turn-1" },
-        { messageId: "a1", role: "assistant", content: "partial", turnScopeId: "turn-1" },
+        { messageUid: "u1", role: "user", content: "question", turnScopeId: "turn-1" },
+        {
+          messageUid: "a1",
+          presentationMessageId: "a1",
+          role: "assistant",
+          content: "partial",
+          turnScopeId: "turn-1",
+        },
       ],
       turnTimings: [
         { turnScopeId: "turn-1", thinkingStartedAt: "start", thinkingFinishedAt: "end" },
@@ -22,12 +28,20 @@ describe("mergeCanonicalSessionDetail", () => {
 
     const merged = mergeCanonicalSessionDetail(persisted, {
       sessionId: "session-1",
-      messages: [{ messageId: "a1", role: "assistant", content: "final", turnScopeId: "turn-1" }],
+      messages: [
+        {
+          messageUid: "a1",
+          presentationMessageId: "a1",
+          role: "assistant",
+          content: "final",
+          turnScopeId: "turn-1",
+        },
+      ],
     });
 
     expect(merged.messages).toHaveLength(2);
-    expect(merged.messages.find((item) => item.messageId === "u1")?.content).toBe("question");
-    expect(merged.messages.find((item) => item.messageId === "a1")?.content).toBe("final");
+    expect(merged.messages.find((item) => item.messageUid === "u1")?.content).toBe("question");
+    expect(merged.messages.find((item) => item.messageUid === "a1")?.content).toBe("final");
     expect(merged.turnTimings[0].thinkingFinishedAt).toBe("end");
   });
 
@@ -36,17 +50,17 @@ describe("mergeCanonicalSessionDetail", () => {
       { sessionId: "session-1" },
       {
         sessionId: "session-2",
-        messages: [{ messageId: "u2", role: "user", content: "new" }],
+        messages: [{ messageUid: "u2", role: "user", content: "new" }],
       },
     );
     expect(isolated.sessionId).toBe("session-2");
-    expect(isolated.messages.map((item) => item.messageId)).toEqual(["u2"]);
+    expect(isolated.messages.map((item) => item.messageUid)).toEqual(["u2"]);
   });
 
   it("only deletes facts through explicit replacement", () => {
     const base = {
       sessionId: "session-1",
-      messages: [{ messageId: "u1", role: "user", content: "old" }],
+      messages: [{ messageUid: "u1", role: "user", content: "old" }],
     };
     const sparse = mergeCanonicalSessionDetail(base, { sessionId: "session-1", messages: [] });
     expect(sparse.messages).toHaveLength(1);
@@ -63,7 +77,6 @@ describe("mergeCanonicalSessionDetail", () => {
 
   it("merges assistant records by presentation identity without duplicating final content", () => {
     const realtime = {
-      messageId: "presentation-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
       content: "final answer",
@@ -72,7 +85,6 @@ describe("mergeCanonicalSessionDetail", () => {
       toolTimeline: [{ eventId: "tool-1" }],
     };
     const persisted = {
-      messageId: "source-1",
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
@@ -89,7 +101,6 @@ describe("mergeCanonicalSessionDetail", () => {
 
     expect(merged.messages).toHaveLength(1);
     expect(merged.messages[0]).toMatchObject({
-      messageId: "source-1",
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
       content: "final answer",
@@ -100,7 +111,6 @@ describe("mergeCanonicalSessionDetail", () => {
 
   it("does not regress a persisted assistant terminal fact when a realtime shell arrives later", () => {
     const persisted = {
-      messageId: "source-1",
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
@@ -110,7 +120,6 @@ describe("mergeCanonicalSessionDetail", () => {
       turnScopeId: "turn-1",
     };
     const realtime = {
-      messageId: "presentation-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
       content: "",
@@ -126,7 +135,6 @@ describe("mergeCanonicalSessionDetail", () => {
 
     expect(merged.messages).toHaveLength(1);
     expect(merged.messages[0]).toMatchObject({
-      messageId: "source-1",
       messageUid: "uid-1",
       content: "final answer",
       pending: false,
@@ -138,7 +146,6 @@ describe("mergeCanonicalSessionDetail", () => {
 
   it("uses presentation identity when a persisted terminal assistant has no messageUid", () => {
     const persisted = {
-      messageId: "presentation-2",
       presentationMessageId: "presentation-2",
       role: "assistant",
       type: "message",
@@ -147,7 +154,6 @@ describe("mergeCanonicalSessionDetail", () => {
       turnScopeId: "workflow-node:node-2",
     };
     const realtime = {
-      messageId: "presentation-2",
       presentationMessageId: "presentation-2",
       role: "assistant",
       content: "",
@@ -171,18 +177,18 @@ describe("mergeCanonicalSessionDetail", () => {
   });
 
   it("does not treat the removed messageRole alias as assistant role for presentation merge", () => {
-    const message = (messageId) => ({
-      messageId,
+    const message = (messageUid) => ({
+      messageUid,
       messageRole: "assistant",
       presentationMessageId: "presentation-alias",
       type: "message",
-      content: messageId,
+      content: messageUid,
       pending: false,
     });
     const merged = mergeCanonicalSessionDetail(
       { sessionId: "session-1", messages: [message("a1")] },
       { sessionId: "session-1", messages: [message("a2")] },
     );
-    expect(merged.messages.map((item) => item.messageId)).toEqual(["a1", "a2"]);
+    expect(merged.messages.map((item) => item.messageUid)).toEqual(["a1", "a2"]);
   });
 });

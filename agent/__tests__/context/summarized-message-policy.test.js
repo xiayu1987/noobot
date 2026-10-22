@@ -20,7 +20,7 @@ import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/i
 import { filterForModelContext as protocolFilterForModelContext } from "@noobot/context-protocol/policy/message";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
 
 function sessionRecord(record) {
   return { messageUid: createMessageUid(), ...record };
@@ -341,7 +341,7 @@ test("user interjections remain fully retained through completion and history", 
     userInterjection,
   ]);
 
-  applyTurnCompletionPolicy({ turnMessageStore: store });
+  applyTurnCompletionPolicy({ modelMessages: [], turnMessageStore: store });
 
   const retained = store.toArray();
   assert.equal(retained.find((message) => message.messageUid === "guidance-old").summarized, true);
@@ -359,7 +359,7 @@ test("user interjections remain fully retained through completion and history", 
     false,
   );
   assert.deepEqual(
-    resolveModelHistoryMessages({ sourceMessages: retained }).map(resolveContextMessageId),
+    resolveModelHistoryMessages({ sourceMessages: retained }).map(resolveContextMessageKey),
     [latestGuidance.messageUid, earlierUserInterjection.messageUid, userInterjection.messageUid],
   );
 });
@@ -455,7 +455,7 @@ test("model and store projections apply one summarization scope policy", () => {
   const modelMessages = projectTurnCompletionMessages(structuredClone(source));
   const store = createCurrentTurnMessagesStore(structuredClone(source));
 
-  applyTurnCompletionPolicy({ turnMessageStore: store });
+  applyTurnCompletionPolicy({ modelMessages: [], turnMessageStore: store });
 
   assert.deepEqual(
     modelMessages.map((message) => message.summarized === true),

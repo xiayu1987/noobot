@@ -4,9 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { SESSION_REPAIR_ERROR_CODE } from "@noobot/session-repair";
 import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
+  createEmptyAuthorityOutboxCheckpoint,
+  parseAuthorityOutboxCheckpoint,
   projectAuthorityOutboxJournal,
+  serializeAuthorityOutboxCheckpoint,
 } from "@noobot/event-protocol/outbox";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
@@ -15,14 +19,9 @@ import { isPlainObject, text } from "@noobot/shared/value";
 export const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";
 const AUTHORITY_OUTBOX_CHECKPOINT_FILE = "outbox-checkpoint.json";
-const AUTHORITY_OUTBOX_CHECKPOINT_SCHEMA_VERSION = 1;
 
 const mutationTails = new Map();
 const mutationContext = new AsyncLocalStorage();
-
-export function authorityOutboxSequenceKey(orderingDomain = "", orderingScopeId = "") {
-  return `${text(orderingDomain)}\u0000${text(orderingScopeId)}`;
-}
 
 export async function withAuthorityOutboxMutation(sessionDir = "", operation) {
   const key = text(sessionDir);
@@ -62,42 +61,21 @@ function authorityOutboxCheckpointPath(sessionDir = "") {
   return path.join(authorityOutboxDir(sessionDir), AUTHORITY_OUTBOX_CHECKPOINT_FILE);
 }
 
-export async function readAuthorityOutboxCheckpoint(sessionDir = "") {
+export async function readAuthorityOutboxCheckpoint(sessionDir) {
   let raw;
   try {
     raw = await readFile(authorityOutboxCheckpointPath(sessionDir), "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT") return { sequenceFloors: {} };
+    if (error.code === "ENOENT") return createEmptyAuthorityOutboxCheckpoint();
     throw error;
   }
-  let payload = null;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    return { sequenceFloors: {} };
-  }
-  const source =
-    payload?.sequenceFloors && typeof payload.sequenceFloors === "object"
-      ? payload.sequenceFloors
-      : {};
-  const sequenceFloors = {};
-  for (const [key, value] of Object.entries(source)) {
-    const floor = Math.max(0, Number(value) || 0);
-    if (floor > 0) sequenceFloors[key] = floor;
-  }
-  return { sequenceFloors };
+  return parseAuthorityOutboxCheckpoint(JSON.parse(raw));
 }
 
-export async function writeAuthorityOutboxCheckpoint(
-  sessionDir = "",
-  { sequenceFloors = {} } = {},
-) {
+export async function writeAuthorityOutboxCheckpoint(sessionDir, checkpoint) {
   const file = authorityOutboxCheckpointPath(sessionDir);
   await mkdir(path.dirname(file), { recursive: true });
-  const payload = {
-    schemaVersion: AUTHORITY_OUTBOX_CHECKPOINT_SCHEMA_VERSION,
-    sequenceFloors,
-  };
+  const payload = serializeAuthorityOutboxCheckpoint(checkpoint);
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
   const handle = await open(temp, "w");
   try {
@@ -108,17 +86,6 @@ export async function writeAuthorityOutboxCheckpoint(
   }
   await rename(temp, file);
   return payload;
-}
-
-export function mergeAuthorityOutboxSequenceFloors(sequenceFloors = {}, outbox = []) {
-  const merged = { ...sequenceFloors };
-  for (const item of Array.isArray(outbox) ? outbox : []) {
-    const ordering = item?.envelope?.ordering;
-    if (!ordering) continue;
-    const key = authorityOutboxSequenceKey(ordering.domain, ordering.scopeId);
-    merged[key] = Math.max(Number(merged[key]) || 0, Number(ordering.sequence) || 0);
-  }
-  return merged;
 }
 
 export async function readAuthorityOutboxRecords(sessionDir = "") {
@@ -138,7 +105,7 @@ export async function readAuthorityOutboxRecords(sessionDir = "") {
         records.push(JSON.parse(line));
       } catch (error) {
         const failure = new Error(`authority outbox journal is corrupted: ${file}`);
-        failure.code = "ARTIFACT_JSON_CORRUPTED";
+        failure.code = SESSION_REPAIR_ERROR_CODE.ARTIFACT_JSON_CORRUPTED;
         failure.cause = error;
         throw failure;
       }

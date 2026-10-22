@@ -20,6 +20,7 @@ import {
   readContextMessageValue,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
+import { SNAPSHOT_VERSION } from "@noobot/context-protocol/policy/snapshot";
 
 const identity = {
   userId: "admin",
@@ -194,7 +195,7 @@ test("stopped snapshot round trip preserves Anthropic thinking blocks and OpenAI
   assert.equal(loaded.messageBlocks.history[3].tool_call_id, "call_1");
 });
 
-test("stopped model message snapshot v4 preserves additional_kwargs facts and rejects off-protocol top-level fields", async () => {
+test("stopped model message snapshot preserves additional_kwargs facts and rejects off-protocol top-level fields", async () => {
   const workspaceRoot = await createWorkspace();
   const message = new HumanMessage({
     content: "full context",
@@ -211,7 +212,7 @@ test("stopped model message snapshot v4 preserves additional_kwargs facts and re
     globalConfig: { workspaceRoot },
     identity,
   });
-  assert.equal(loaded.version, 4);
+  assert.equal(loaded.version, SNAPSHOT_VERSION);
   assert.equal(readContextMessageValue(loaded.messages[0], "messageUid"), "sm_full");
   assert.equal(readContextMessageValue(loaded.messages[0], "summarized"), true);
   assert.equal("summarized" in loaded.messages[0], false);

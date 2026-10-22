@@ -117,10 +117,9 @@ function requestHashFor(request) {
       input.userMessage && typeof input.userMessage === "object"
         ? {
             content: text(input.userMessage.content),
-            messageId: text(input.userMessage.messageId),
+            userMessageId: text(input.userMessage.userMessageId),
             parentDialogProcessId: text(input.userMessage.parentDialogProcessId),
             messageOrigin: input.userMessage.messageOrigin,
-            userMetaMaterialized: input.userMessage.userMetaMaterialized === true,
           }
         : null,
     startedAt: text(input.startedAt),
@@ -130,10 +129,6 @@ function requestHashFor(request) {
     completionCommitId: text(input.completionCommitId),
     failure: input.failure && typeof input.failure === "object" ? input.failure : null,
     terminalStatus: normalizeTurnTerminalStatus(input.terminalStatus),
-    finalizePayload:
-      input.finalizePayload && typeof input.finalizePayload === "object"
-        ? input.finalizePayload
-        : null,
     ...pickExecutionIdentity(input),
   });
 }
@@ -265,10 +260,6 @@ function createPendingFinalizeIntent(input, currentIntent, type, nowValue) {
     retryable: true,
     createdAt: text(currentIntent.createdAt) || nowValue,
     updatedAt: nowValue,
-    payload:
-      input.finalizePayload && typeof input.finalizePayload === "object"
-        ? input.finalizePayload
-        : {},
   };
 }
 
@@ -344,7 +335,8 @@ export function commitLifecycleTransition(request, projection, requestHash, nowV
   lifecycle.sequence = sequence;
   lifecycle.activeTurnScopeId =
     isTerminalTurnState(turn.state) && !isRetryableFinalizeFailure(turn) ? "" : turnScopeId;
-  lifecycle.commandReceipts.push({
+
+  const receiptDraft = {
     commandId,
     type: eventType,
     turnScopeId,
@@ -352,8 +344,6 @@ export function commitLifecycleTransition(request, projection, requestHash, nowV
     revision,
     sequence,
     committedAt: nowValue,
-    eventId: "",
-    envelope: null,
-  });
-  return { applied: true, lifecycle, turn };
+  };
+  return { applied: true, lifecycle, turn, receiptDraft };
 }

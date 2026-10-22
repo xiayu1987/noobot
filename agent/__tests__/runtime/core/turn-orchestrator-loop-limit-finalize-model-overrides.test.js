@@ -9,12 +9,9 @@ import assert from "node:assert/strict";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { resolveBoundToolModelRequestOverrides } from "../../../src/runtime/turn/tool-choice-strategy.js";
 import { createBoundLlmToolChoiceInvoker } from "../../../src/runtime/turn/tool-invoke-strategy.js";
-import {
-  createTestTurnMessagesStore,
-  createLoopTurnIdentity,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
+import { createLoopTurnIdentity, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(
@@ -57,17 +54,12 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     tools: tool ? [tool] : [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: createTestTurnMessagesStore(),
-    currentTurnTasks: null,
     dialogProcessId: "dialog-1",
     maxTurns,
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,
     toolFailureHelpCount: 0,
     taskSummaryTriggered: false,
-    toolConsecutiveFailureCount: 0,
     errorLogger: null,
   };
 }
@@ -88,6 +80,7 @@ function createModelState(modelPort, defaultModelSpec = null) {
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
     runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
       systemRuntime: { config: { safeConfirm: true } },
     }),
     defaultModelSpec: resolvedModelSpec,

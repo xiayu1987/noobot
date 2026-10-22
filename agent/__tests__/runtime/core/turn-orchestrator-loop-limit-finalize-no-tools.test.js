@@ -9,12 +9,12 @@ import assert from "node:assert/strict";
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import {
-  createTestTurnMessagesStore,
   createTestModelPort,
   createLoopTurnIdentity,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(
@@ -62,17 +62,12 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     tools: tool ? [tool] : [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: createTestTurnMessagesStore(),
-    currentTurnTasks: null,
     dialogProcessId: "dialog-1",
     maxTurns,
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,
     toolFailureHelpCount: 0,
     taskSummaryTriggered: false,
-    toolConsecutiveFailureCount: 0,
     errorLogger: null,
   };
 }
@@ -94,7 +89,10 @@ function createModelState(llm, defaultModelSpec = null) {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    runtime: createTestRuntimeContext({ systemRuntime: { config: { safeConfirm: true } } }),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+      systemRuntime: { config: { safeConfirm: true } },
+    }),
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,
@@ -145,15 +143,17 @@ test("when model returns no tool calls, return directly without a retry prompt",
     events.some((item) => item?.event === "tool_choice_required_retry_prompted"),
     false,
   );
-  const retryPrompt = loopState.modelContext.messageBlocks.incremental.find((messageItem) => {
-    const marker =
-      messageItem?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      "";
-    return marker === "tool_choice_required_retry_prompt";
-  });
+  const retryPrompt = modelState.runtime.activeMessageContext.messageBlocks.incremental.find(
+    (messageItem) => {
+      const marker =
+        messageItem?.additional_kwargs?.noobotInternalMessageType ||
+        messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+        "";
+      return marker === "tool_choice_required_retry_prompt";
+    },
+  );
   assert.equal(retryPrompt, undefined);
-  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
+  assert.equal(modelState.runtime.activeMessageContext.messageBlocks.incrementalIds, undefined);
 });
 
 test("safeConfirm does not force tool calls", async () => {

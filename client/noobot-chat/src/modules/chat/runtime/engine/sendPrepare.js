@@ -28,7 +28,7 @@ function resolveUserAttachments({ userAttachments, filesToSend, isImageMime }) {
 function findExistingUserMessage(activeSession, userMessageId) {
   const targetId = text(userMessageId);
   return (activeSession.value?.messages || []).find(
-    (message) => text(message?.messageId) === targetId,
+    (message) => text(message?.userMessageId) === targetId,
   );
 }
 
@@ -100,12 +100,10 @@ export function prepareChatSend({
         normalizedText || translate("chat.uploadOnly"),
         resolvedUserAttachments,
         {
-          id: userMessageId,
-          messageId: userMessageId,
+          userMessageId,
           sessionId,
           turnScopeId: normalizedTurnScopeId,
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         },
       );
   applyUserMessageIdentity({

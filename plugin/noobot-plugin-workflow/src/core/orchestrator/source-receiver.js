@@ -9,14 +9,7 @@ import { throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { resolveWorkflowSourceText } from "../hooks/messages.js";
 import { startWorkflowPhase, endWorkflowPhase } from "./phase-events.js";
 
-export async function receiveWorkflowSource({
-  options = {},
-  ctx = {},
-  signal,
-  sourceAgentResult = {},
-  hookPoint = "",
-  phaseTracker,
-} = {}) {
+export async function receiveWorkflowSource({ options = {}, ctx = {}, signal, phaseTracker } = {}) {
   await startWorkflowPhase({
     phaseTracker,
     phase: WORKFLOW_PHASES.HOOK_RECEIVED,
@@ -26,7 +19,7 @@ export async function receiveWorkflowSource({
   });
   throwIfWorkflowAborted(signal);
 
-  const sourceText = resolveWorkflowSourceText(ctx, sourceAgentResult, hookPoint);
+  const sourceText = resolveWorkflowSourceText(ctx);
   if (!sourceText) {
     await endWorkflowPhase({
       phaseTracker,

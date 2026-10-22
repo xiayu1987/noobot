@@ -334,7 +334,6 @@ test("patch_file: 用户配置不能授权 /project 沙箱挂载", async () => {
   const tools = createFileTool({
     agentContext: buildAgentContext(basePath, "u-test", {
       runtime: {
-        userId: "u-test",
         userConfig: {
           tools: {
             sandboxPathMappings: [{ source: basePath, target: "/project" }],
@@ -389,7 +388,6 @@ test("patch_file: 全局 sandbox 挂载可授权 workspace 外项目", async () 
   const tools = createFileTool({
     agentContext: buildAgentContext(userWorkspacePath, "admin", {
       runtime: {
-        userId: "admin",
         globalConfig: {
           workspaceRoot: path.join(rootPath, "workspace"),
           security: {

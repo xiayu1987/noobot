@@ -6,6 +6,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createTaskCheckTool } from "../../src/tools/collaboration/task-check-tool.js";
+import {
+  isMainFlowFinalNoToolsTurnEngaged,
+  peekMainFlowSummaryCheckpoint,
+} from "../../src/runtime/main-flow-control.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 const checkContent = [
   "NOOBOT_TASK_CHECK/1",
@@ -20,9 +25,10 @@ const checkContent = [
 ].join("\n");
 
 test("task_check returns only a receipt and creates no flow-control state", async () => {
-  const systemRuntime = { taskCheckLoopCount: 10 };
+  const runtime = createTestRuntimeContext({ systemRuntime: { taskCheckLoopCount: 10 } });
+  const { systemRuntime } = runtime;
   const [tool] = createTaskCheckTool({
-    agentContext: { bindings: { runtime: { systemRuntime } } },
+    agentContext: { bindings: { runtime } },
   });
   const payload = JSON.parse(await tool.invoke({ checkContent }));
   assert.equal(payload.toolName, "task_check");
@@ -37,7 +43,8 @@ test("task_check returns only a receipt and creates no flow-control state", asyn
   assert.equal(payload.summary.details, undefined);
   assert.equal(systemRuntime.taskCheckLoopCount, 0);
   assert.equal(systemRuntime.needsPhaseSummary, undefined);
-  assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(isMainFlowFinalNoToolsTurnEngaged(runtime), false);
+  assert.equal(peekMainFlowSummaryCheckpoint(runtime), null);
   assert.equal(systemRuntime.summaryCheckpointCommand, undefined);
 });
 

@@ -16,8 +16,8 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/session/entities/message-entity.js",
     required: [
       [
-        "session message entity owns messageUid default identity",
-        /function resolveRuntimeMessageId\([^)]*\)\s*\{\s*return firstText\(\s*message\?\.messageId,\s*messageUid,?\s*\);/,
+        "session message entity validates and projects record identity through session-protocol",
+        /projectSessionMessageRecordIdentity\(\s*assertSessionMessageRecordIdentity\(message\)\s*\)/,
       ],
     ],
   },
@@ -57,7 +57,7 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       [
         "summary checkpoint matches canonical ids",
-        /summarizedMessageIds\.has\(resolveMessageUid\(record\)\)/,
+        /summarizedSet\.has\(resolveMessageUid\(message\)\)/,
       ],
     ],
     forbidden: [
@@ -110,7 +110,7 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       [
         "guidance checkpoint captures canonical ids",
-        /summaryCheckpointMessageIds\s*=\s*messageIds/,
+        /summaryCheckpointMessageKeys\s*=\s*messageKeys/,
       ],
       ["guidance checkpoint capture delegates scope to protocol", /resolveSummaryScope\(blocks\)/],
     ],
@@ -208,12 +208,12 @@ export const AGENT_CONTRACTS = Object.freeze([
       ["main turn uses dual-lane context protocol", DUAL_LANE_IMPORT],
       ["main turn declares primary lane", PRIMARY_LANE],
       [
-        "before_llm hook passes authoritative modelContext",
-        /const\s+modelContext\s*=\s*requireLoopStateModelContext\(loopState\)[\s\S]*?buildHookContext\(HOOK_POINT\.AGENT\.BEFORE_LLM_CALL[\s\S]*?modelContext,/,
+        "before_llm hook reads modelContext only from runtime",
+        /buildHookContext\(HOOK_POINT\.AGENT\.BEFORE_LLM_CALL,\s*runtime,/,
       ],
       [
         "before_llm hook cannot replace authoritative entity",
-        /assertHookContextRetainsModelContext\(loopState,\s*beforeLlmHookContext\)/,
+        /assertHookContextRetainsModelContext\(runtime,\s*beforeLlmHookContext\)/,
       ],
     ],
   },
@@ -226,11 +226,11 @@ export const AGENT_CONTRACTS = Object.freeze([
       ],
       [
         "new-session context delegates to the shared session context builder",
-        /async\s+buildNewSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?"new_session"/,
+        /async\s+buildNewSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?AGENT_CONTEXT_MODE\.NEW_SESSION/,
       ],
       [
         "existing-session context delegates to the shared session context builder",
-        /async\s+buildExistingSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?"existing_session"/,
+        /async\s+buildExistingSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?AGENT_CONTEXT_MODE\.EXISTING_SESSION/,
       ],
       [
         "context passes current turnScopeId to session history",
@@ -262,9 +262,16 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/runtime/hooks/hook-context-builder.js",
     required: [
       [
-        "hook context accepts only supplied versioned modelContext",
-        /attachModelContext\(context,\s*modelContext\?\.protocolVersion\s*\?\s*modelContext\s*:\s*null\)/,
+        "hook context modelContext comes only from runtime.activeMessageContext",
+        /attachModelContext\(context,\s*readActiveModelContext\(runtime\)\)/,
       ],
+      [
+        "hook raw fields cannot supply modelContext",
+        /FORBIDDEN_HOOK_FIELDS\s*=\s*\[[^\]]*"modelContext"/,
+      ],
+    ],
+    forbidden: [
+      ["hook context protocolVersion probing fallback", /modelContext\?\.protocolVersion\s*\?/],
     ],
   },
   {

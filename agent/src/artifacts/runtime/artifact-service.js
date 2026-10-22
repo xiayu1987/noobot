@@ -128,7 +128,7 @@ export async function persistModelGeneratedArtifacts({
   runtime = {},
   eventListener = null,
   dialogProcessId = "",
-  messageId = "",
+  modelMessageId = "",
 }) {
   const attachmentService = runtime?.attachmentService || null;
   const userId = text(runtime?.systemRuntime?.userId);
@@ -162,7 +162,7 @@ export async function persistModelGeneratedArtifacts({
   const allMediaCandidates = [...localMediaCandidates, ...remoteMediaCandidates];
   if (!allMediaCandidates.length) return [];
   const ownership = resolveGeneratedArtifactOwnership(runtime, dialogProcessId);
-  if (!text(messageId) || !ownership.sessionId || !ownership.turnScopeId) {
+  if (!text(modelMessageId) || !ownership.sessionId || !ownership.turnScopeId) {
     throw new Error("model_generated_artifact_ownership_incomplete");
   }
   const attachmentRecords = await attachmentService.ingestGeneratedArtifacts({
@@ -176,7 +176,7 @@ export async function persistModelGeneratedArtifacts({
     },
     turnScopeId: ownership.turnScopeId,
     dialogProcessId: ownership.dialogProcessId,
-    owner: { type: "model", id: String(messageId).trim() },
+    owner: { type: "model", id: String(modelMessageId).trim() },
     artifacts: allMediaCandidates,
   });
   emitEvent(eventListener, "model_generated_attachments_saved", {

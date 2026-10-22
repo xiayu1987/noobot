@@ -354,7 +354,7 @@ describe("useReconnectReplay", () => {
             { role: RoleEnum.USER, content: "new-q", ts: 3 },
             createCanonicalAssistant({
               sessionId: "s-1",
-              messageId: "message-dp-new",
+              presentationMessageId: "message-dp-new",
               dialogProcessId: "dp-new",
               turnScopeId: "turn-dp-new",
               ts: 4,
@@ -379,7 +379,6 @@ describe("useReconnectReplay", () => {
         userId: "admin",
         sessionId: "s-1",
         turnScopeId: "turn-dp-new",
-        messageId: "message-dp-new",
         presentationMessageId: "message-dp-new",
         dialogProcessId: "dp-new",
         state: TURN_STATE.PROCESSING,
@@ -423,8 +422,7 @@ describe("useReconnectReplay", () => {
     expect(userIdx).toBeGreaterThanOrEqual(0);
     expect(assistantIdx).toBeGreaterThan(userIdx);
     expect(refs.activeSession.value.messages[assistantIdx]).toMatchObject({
-      id: "message-dp-new",
-      messageId: "message-dp-new",
+      presentationMessageId: "message-dp-new",
       content: "",
     });
   });

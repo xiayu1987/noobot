@@ -399,11 +399,12 @@ async function upsertWorkflowMessage({
   const sessionWorkflowPayload = buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId);
   const existing = findExistingWorkflowMessage(turnMessages, dialogProcessId);
 
-  const messageId = existing ? text(existing.messageId) : createModelMessageId();
-  if (!messageId) throw new Error("Existing workflow message requires a journal messageId");
+  const modelMessageId = existing ? text(existing.modelMessageId) : createModelMessageId();
+  if (!modelMessageId)
+    throw new Error("Existing workflow message requires a journal modelMessageId");
   const workflowMessage = {
     role: "assistant",
-    messageId,
+    modelMessageId,
     type: "workflow",
     chatPresentation: true,
     presentationMessageId,
@@ -426,7 +427,7 @@ async function upsertWorkflowMessage({
   };
   if (content) {
     agentResult.output = content;
-    agentResult.modelMessageId = messageId;
+    agentResult.modelMessageId = modelMessageId;
   }
   if (existing) {
     Object.assign(existing, workflowMessage);

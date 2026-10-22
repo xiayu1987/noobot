@@ -151,10 +151,10 @@ describe("workflow runtime architecture guard", () => {
     expect(reconnectComposable).not.toMatch(/upsertCanonicalAssistantMessage/);
     expect(reconnectComposable).toMatch(/protocolViolation[\s\S]*presentation_missing/);
     expect(batchReplay).toMatch(
-      /findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/,
+      /findMessagesByPresentationId\(targetSessionId, presentationMessageId\)/,
     );
     expect(batchReplay).toMatch(/materializeTurnPresentation\?\.\(envelope\)/);
-    expect(batchReplay).toMatch(/!canonicalTarget\s*\|\|[\s\S]*return false/);
+    expect(batchReplay).toMatch(/canonicalTargets\.length === 0\) return false/);
     expect(batchReplay).not.toMatch(
       /find.*(?:ByRole|LastAssistant|ByDialogProcessId|ByTurnScopeId)/,
     );
@@ -185,7 +185,7 @@ describe("workflow runtime architecture guard", () => {
   it("keeps live message events read-only after send preparation", () => {
     const projectionRouter = source("src/modules/chat/runtime/engine/messageProjectionRouter.js");
     expect(projectionRouter).toMatch(
-      /findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/,
+      /findMessagesByPresentationId\(\s*targetSessionId,\s*presentationMessageId,?\s*\)/,
     );
     expect(projectionRouter).not.toMatch(/upsertCanonicalAssistantMessage/);
   });

@@ -8,9 +8,18 @@ import {
   defineVersionChain,
   runVersionChain,
 } from "@noobot/shared/migration";
-import { createMessageUid } from "@noobot/session-protocol/message-identity";
-import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol/message-identity-schema";
+import {
+  createContextMessageId,
+  createMessageUid,
+} from "@noobot/session-protocol/message-identity";
+import {
+  MESSAGE_IDENTITY_STORE,
+  MESSAGE_REMOVED_FIELD_NAME,
+  messageFieldRenamesFor,
+} from "@noobot/session-protocol/message-identity-schema";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { CONTEXT_MESSAGE_PROJECTION_TYPE } from "../message/codec.js";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
 import {
   SNAPSHOT_VERSION,
   composeMessagesFromBlocks,
@@ -200,11 +209,92 @@ function migrateSnapshotV3(snapshot) {
   };
 }
 
+const V4_JOINED_SEPARATOR = "::";
+const V4_JOINED_SOURCE_FIELD = Object.freeze({
+  [CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META]: "sourceMessageUid",
+  [CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY]: "sourceMessageUid",
+  [CONTEXT_MESSAGE_PROJECTION_TYPE.TERMINAL_STATUS]: "sourceTurnScopeId",
+});
+const V5_BACKWRITE_RENAME = messageFieldRenamesFor(
+  MESSAGE_IDENTITY_STORE.MODEL_CONTEXT_SNAPSHOT,
+).find((entry) => entry.to === "userMetaSourceMessageUid");
+
+function splitV4JoinedId(value, at) {
+  const index = value.lastIndexOf(V4_JOINED_SEPARATOR);
+  if (index < 0) return null;
+  const source = value.slice(0, index);
+  const projectionType = value.slice(index + V4_JOINED_SEPARATOR.length);
+  const sourceField = V4_JOINED_SOURCE_FIELD[projectionType];
+  if (!source || !sourceField) {
+    throw unmappable(4, "joined_identity_unknown", { at, projectionType });
+  }
+  return { projectionType, [sourceField]: source };
+}
+
+function migrateV4Identity(metadata, block, at) {
+  const { messageUid, ...rest } = metadata;
+  const uid = text(messageUid);
+  if (!uid) throw unmappable(4, "message_identity_missing", { at });
+  const joined = splitV4JoinedId(uid, at);
+  if (joined) return { ...rest, ...joined };
+  if (
+    block === "system" &&
+    rest.noobotInternalMessageType === CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT
+  ) {
+    return { ...rest, contextMessageId: createContextMessageId() };
+  }
+  return metadata;
+}
+
+function migrateV4Backwrite(record, index) {
+  if (!isPlainObject(record)) throw unmappable(4, "backwrite_not_object", { index });
+  const legacyId = record[V5_BACKWRITE_RENAME.from];
+  const rest = Object.fromEntries(
+    Object.entries(record).filter(
+      ([key]) => key !== V5_BACKWRITE_RENAME.from && key !== "backwriteId",
+    ),
+  );
+  const joined = splitV4JoinedId(text(legacyId), `userMetaBackwrites[${index}]`);
+  if (joined?.projectionType !== CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META) {
+    throw unmappable(4, "backwrite_target_not_user_meta", { index });
+  }
+  return { ...rest, [V5_BACKWRITE_RENAME.to]: joined.sourceMessageUid };
+}
+
+function migrateSnapshotV4(snapshot) {
+  if (!isPlainObject(snapshot?.messageBlocks)) throw unmappable(4, "message_blocks_missing");
+  const messageBlocks = {};
+  for (const block of SNAPSHOT_BLOCKS) {
+    const messages = snapshot.messageBlocks[block];
+    if (!Array.isArray(messages)) throw unmappable(4, "message_block_missing", { block });
+    messageBlocks[block] = messages.map((message, index) => ({
+      ...message,
+      additional_kwargs: migrateV4Identity(
+        isPlainObject(message?.additional_kwargs) ? message.additional_kwargs : {},
+        block,
+        `${block}[${index}]`,
+      ),
+    }));
+  }
+  const backwrites = snapshot.userMetaBackwrites ?? [];
+  if (!Array.isArray(backwrites)) throw unmappable(4, "backwrites_not_array");
+  return {
+    ...snapshot,
+    version: 5,
+    messageBlocks,
+    messages: composeMessagesFromBlocks(messageBlocks),
+    userMetaBackwrites: backwrites.map(migrateV4Backwrite),
+  };
+}
+
 export const MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN = defineVersionChain({
   kind: MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND,
   currentVersion: SNAPSHOT_VERSION,
   readVersion: (snapshot) => snapshot?.version,
-  steps: [{ from: 3, to: 4, migrate: migrateSnapshotV3 }],
+  steps: [
+    { from: 3, to: 4, migrate: migrateSnapshotV3 },
+    { from: 4, to: 5, migrate: migrateSnapshotV4 },
+  ],
 });
 
 export function migrateModelContextSnapshot(snapshot) {

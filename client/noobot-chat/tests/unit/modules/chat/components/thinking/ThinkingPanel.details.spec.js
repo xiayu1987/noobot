@@ -537,7 +537,6 @@ describe("ThinkingPanel canonical details", () => {
     const content = "先确认当前真实状态。";
     const rootMessage = {
       messageUid: "final-source",
-      messageId: "presentation-authoritative",
       presentationMessageId: "presentation-authoritative",
       role: "assistant",
       type: "message",
@@ -549,7 +548,6 @@ describe("ThinkingPanel canonical details", () => {
       allMessages: [
         {
           messageUid: "assistant-tool-source",
-          messageId: "presentation-authoritative",
           presentationMessageId: "presentation-authoritative",
           role: "assistant",
           type: "tool_call",

@@ -48,8 +48,8 @@ function envelope(turnScopeId = "turn-1", transferId = "transfer-1") {
 
 function assistant(turnScopeId, overrides = {}) {
   return {
-    id: `assistant-${turnScopeId}`,
-    messageId: `assistant-${turnScopeId}`,
+    messageUid: `sm-assistant-${turnScopeId}`,
+    presentationMessageId: `assistant-${turnScopeId}`,
     sessionId: SESSION_ID,
     role: "assistant",
     turnScopeId,
@@ -66,9 +66,21 @@ function setup({ withEnvelope = false, terminal = "" } = {}) {
   const session = reactive({
     sessionId: SESSION_ID,
     messages: [
-      { id: "user-0", role: "user", sessionId: SESSION_ID, turnScopeId: "turn-0", content: "q0" },
+      {
+        messageUid: "sm-user-0",
+        role: "user",
+        sessionId: SESSION_ID,
+        turnScopeId: "turn-0",
+        content: "q0",
+      },
       history,
-      { id: "user-1", role: "user", sessionId: SESSION_ID, turnScopeId: "turn-1", content: "q1" },
+      {
+        messageUid: "sm-user-1",
+        role: "user",
+        sessionId: SESSION_ID,
+        turnScopeId: "turn-1",
+        content: "q1",
+      },
       live,
     ],
   });
@@ -114,14 +126,18 @@ describe("selectTurnPresentations reactivity", () => {
 
   it("keeps the live assistant reference when its own envelopes already cover the turn", () => {
     const { session, presented } = setup({ withEnvelope: true });
-    const live = presented.value.find((message) => message.id === "assistant-turn-1");
+    const live = presented.value.find(
+      (message) => message.presentationMessageId === "assistant-turn-1",
+    );
     expect(live).toBe(session.messages[3]);
   });
 
   it("still merges envelopes that only exist on sibling messages of the turn", () => {
     const { session, presented } = setup();
     session.messages[2].transferEnvelopes = [envelope("turn-1", "transfer-sibling")];
-    const live = presented.value.find((message) => message.id === "assistant-turn-1");
+    const live = presented.value.find(
+      (message) => message.presentationMessageId === "assistant-turn-1",
+    );
     expect(live).not.toBe(session.messages[3]);
     expect(live.transferEnvelopes.map((item) => item.transferId)).toEqual(["transfer-sibling"]);
   });

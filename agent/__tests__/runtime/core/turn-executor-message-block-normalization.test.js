@@ -13,6 +13,7 @@ import {
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
@@ -56,7 +57,9 @@ test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () =
   );
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: createTestRuntimeContext(),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+    }),
     activeModelSpec: MODEL,
   };
   const loopState = {

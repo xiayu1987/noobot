@@ -7,16 +7,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
-import {
-  SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
-  SESSION_ARTIFACT_SCHEMA_VERSION,
-} from "@noobot/session-protocol";
+import { SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   canonicalMessages,
@@ -99,7 +95,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
-test("list index under another schema is rejected on read and rebuilt only by listing reconciliation", async () => {
+test("list index under another schema is rejected on read and rebuilt by listing reconciliation", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -128,6 +124,34 @@ test("list index under another schema is rejected on read and rebuilt only by li
     );
     const repaired = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(repaired.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
+  });
+});
+
+test("startup display-summary maintenance rebuilds a list index under another schema first", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createTestSessionServices({ workspaceRoot });
+    for (const sessionId of ["A", "B"]) {
+      await provisionTestSession(runtime, {
+        userId,
+        sessionId,
+        parentSessionId: "",
+        caller: SESSION_CALLER.USER,
+      });
+    }
+    const summaryFile = path.join(workspaceRoot, userId, "runtime", "session", "sessions.json");
+    await writeFile(
+      summaryFile,
+      JSON.stringify({ schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION - 1, sessions: [] }),
+    );
+
+    const result = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
+
+    assert.deepEqual(result.failures, []);
+    const rebuilt = JSON.parse(await readFile(summaryFile, "utf8"));
+    assert.equal(rebuilt.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
+    assert.deepEqual(rebuilt.sessions.map((item) => item.sessionId).sort(), ["A", "B"]);
   });
 });
 
@@ -300,9 +324,9 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
   });
 });
 
-test("failed Session repair is marked and skipped on subsequent reads", async () => {
+test("unreadable Session is rejected with its read error and projected unavailable without a repair record", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const userId = "u-repair-failed";
+    const userId = "u-read-failed";
     const sessionId = "broken";
     await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createTestSessionServices({ workspaceRoot });
@@ -316,36 +340,26 @@ test("failed Session repair is marked and skipped on subsequent reads", async ()
     await writeFile(path.join(sessionDir, "session.json"), "{invalid-json", "utf8");
 
     const repository = runtime.repositories.sessionRepository;
-    let firstErrorCode = "";
-    await assert.rejects(
+    const read = () =>
       repository.findById(userId, sessionId, {
         persistenceContext: repository.treePersistenceContext(userId, sessionId),
-      }),
-      (error) => {
-        firstErrorCode = error.code;
-        return Boolean(firstErrorCode);
-      },
-    );
+      });
+    let firstErrorCode = "";
+    await assert.rejects(read(), (error) => {
+      firstErrorCode = error.code;
+      return Boolean(firstErrorCode) && error.repairSkipped === undefined;
+    });
+    await assert.rejects(read(), (error) => error.code === firstErrorCode);
     const lifecycleFile = path.join(
       workspaceRoot,
       userId,
       WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR,
       `${encodeURIComponent(sessionId)}.json`,
     );
-    const lifecycle = JSON.parse(await readFile(lifecycleFile, "utf8"));
-    assert.equal(lifecycle.repair.status, "failed");
-    assert.equal(typeof lifecycle.repair.trigger?.code, "string");
-    assert.ok(lifecycle.repair.trigger.message);
-
-    await assert.rejects(
-      repository.findById(userId, sessionId, {
-        persistenceContext: repository.treePersistenceContext(userId, sessionId),
-      }),
-      (error) =>
-        error.code === firstErrorCode && error.repairSkipped === true && Boolean(error.cause),
-    );
-    const unchanged = JSON.parse(await readFile(lifecycleFile, "utf8"));
-    assert.equal(unchanged.repair.failedAt, lifecycle.repair.failedAt);
+    await assert.rejects(readFile(lifecycleFile, "utf8"), { code: "ENOENT" });
+    const summary = await repository.readSessionsSummary(userId);
+    const projected = summary.sessions.find((item) => item.sessionId === sessionId);
+    assert.equal(projected.availability, "unavailable");
   });
 });
 
@@ -374,120 +388,7 @@ test("unavailable summary takes caller from the session tree when the manifest i
   });
 });
 
-test("stale Session repair failure marker is cleared once the artifact validates", async () => {
-  await withTempWorkspace(async (workspaceRoot) => {
-    const userId = "u-repair-heal";
-    const sessionId = "healed";
-    await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createTestSessionServices({ workspaceRoot });
-    await provisionTestSession(runtime, {
-      userId,
-      sessionId,
-      parentSessionId: "",
-      caller: SESSION_CALLER.USER,
-    });
-    const sessionFile = path.join(
-      workspaceRoot,
-      userId,
-      "runtime",
-      "session",
-      sessionId,
-      "session.json",
-    );
-    const original = await readFile(sessionFile, "utf8");
-    await writeFile(sessionFile, "{invalid-json", "utf8");
-    const repository = runtime.repositories.sessionRepository;
-    await assert.rejects(
-      repository.findById(userId, sessionId, {
-        persistenceContext: repository.treePersistenceContext(userId, sessionId),
-      }),
-    );
-    const lifecycleFile = path.join(
-      workspaceRoot,
-      userId,
-      WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR,
-      `${encodeURIComponent(sessionId)}.json`,
-    );
-    assert.equal(JSON.parse(await readFile(lifecycleFile, "utf8")).repair.status, "failed");
-
-    await writeFile(sessionFile, original, "utf8");
-    const session = await repository.findById(userId, sessionId, {
-      persistenceContext: repository.treePersistenceContext(userId, sessionId),
-    });
-    assert.equal(session.sessionId, sessionId);
-    await assert.rejects(readFile(lifecycleFile, "utf8"), { code: "ENOENT" });
-
-    await writeFile(sessionFile, "{invalid-json", "utf8");
-    await assert.rejects(
-      repository.findById(userId, sessionId, {
-        persistenceContext: repository.treePersistenceContext(userId, sessionId),
-      }),
-      (error) => error.repairSkipped !== true,
-    );
-  });
-});
-
-test("display maintenance migrates repairable artifacts through the Session repair project", async () => {
-  await withTempWorkspace(async (workspaceRoot) => {
-    const userId = "u1";
-    const sessionId = "legacy";
-    await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createTestSessionServices({ workspaceRoot });
-    await provisionTestSession(runtime, {
-      userId,
-      sessionId,
-      parentSessionId: "",
-      caller: SESSION_CALLER.USER,
-    });
-
-    const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        sessionId,
-      ),
-    });
-    session.messages = [
-      {
-        messageUid: "sm-legacy-user",
-        role: "user",
-        content: "legacy message",
-        turnScopeId: "turn-legacy",
-        dialogProcessId: "dialog-legacy",
-      },
-    ];
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        session.sessionId,
-      ),
-    });
-
-    const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
-    await writeFile(
-      path.join(sessionDir, "session.json"),
-      JSON.stringify({ ...session, schemaVersion: 5 }),
-      "utf8",
-    );
-    await writeFile(
-      path.join(sessionDir, "session-summary.json"),
-      JSON.stringify({ schemaVersion: 13, sessionId, messages: [] }),
-      "utf8",
-    );
-
-    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
-      userId,
-    });
-    assert.deepEqual(maintenance.failures, []);
-    assert.deepEqual(maintenance.migratedSessionIds, [sessionId]);
-    assert.deepEqual(maintenance.rebuiltSessionIds, []);
-
-    const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    assert.equal(manifest.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
-    assert.equal("messages" in manifest, false);
-  });
-});
-
-test("display summary repair migrates the previous canonical artifact before revision validation", async () => {
+test("Session reads reject a previous artifact schema instead of migrating it", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-previous-artifact";
     const sessionId = "previous-artifact";
@@ -499,78 +400,31 @@ test("display summary repair migrates the previous canonical artifact before rev
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
-
-    const repository = runtime.repositories.sessionRepository;
-    const session = await repository.findById(userId, sessionId, {
-      persistenceContext: repository.treePersistenceContext(userId, sessionId),
-    });
-    session.messages = canonicalMessages(
-      [
-        {
-          role: "user",
-          content: "previous protocol message",
-          turnCommit: {
-            action: "send",
-            commandId: "command-previous",
-            requestHash: "hash-previous",
-          },
-        },
-      ],
-      "previous",
-    );
-    await repository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: repository.treePersistenceContext(userId, session.sessionId),
-    });
-
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
     const manifestFile = path.join(sessionDir, "session.json");
     const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
-    const turn = manifest.turnOrder[0];
-    const journalFile = path.join(sessionDir, turn.file);
-    const records = (await readFile(journalFile, "utf8")).trim().split("\n").map(JSON.parse);
-    const messageRecord = records.find((record) => record?.op === "upsert");
-    messageRecord.message.turnCommit.runState = "pending_start";
-    messageRecord.hash = `sha256:${createHash("sha256")
-      .update(JSON.stringify(messageRecord.message))
-      .digest("hex")}`;
-    const journal = records.map((record) => `${JSON.stringify(record)}\n`).join("");
-    await writeFile(journalFile, journal, "utf8");
-    turn.committedBytes = Buffer.byteLength(journal);
-    turn.messageHashes[messageRecord.messageUid] = messageRecord.hash;
-    manifest.schemaVersion = SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION;
-    manifest.turnLifecycle.commandReceipts = [
-      {
-        commandId: "command-previous",
-        type: "session.turn.commit",
-        requestHash: "hash-previous",
-        aggregateVersion: 1,
-        committedAt: "2026-09-18T00:00:00.000Z",
-        result: { messageUid: messageRecord.messageUid, runState: "pending_start" },
-      },
-    ];
-    await writeFile(manifestFile, JSON.stringify(manifest), "utf8");
+    const legacyManifest = JSON.stringify({
+      ...manifest,
+      schemaVersion: SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
+    });
+    await writeFile(manifestFile, legacyManifest, "utf8");
 
-    const repaired = await repository.ensureSessionDisplaySummary(userId, sessionId, {
-      persistenceContext: repository.treePersistenceContext(userId, sessionId),
+    const repository = runtime.repositories.sessionRepository;
+    await assert.rejects(
+      repository.findById(userId, sessionId, {
+        persistenceContext: repository.treePersistenceContext(userId, sessionId),
+      }),
+      { code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED" },
+    );
+    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
+      userId,
     });
-    const repairedManifest = JSON.parse(await readFile(manifestFile, "utf8"));
-    const repairedSession = await repository.findById(userId, sessionId, {
-      persistenceContext: repository.treePersistenceContext(userId, sessionId),
-    });
-    const displaySummary = repaired.summary;
-
-    assert.equal(repaired.migrated, true);
-    assert.equal(repairedManifest.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
-    assert.equal(repairedSession.messages.length, 1);
-    assert.deepEqual(repairedSession.messages[0].turnCommit, {
-      action: "send",
-      commandId: "command-previous",
-      requestHash: "hash-previous",
-    });
-    assert.deepEqual(repairedSession.turnLifecycle.commandReceipts[0].result, {
-      messageUid: messageRecord.messageUid,
-    });
-    assert.equal(displaySummary.source.sessionSchemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
+    assert.deepEqual(
+      maintenance.failures.map(({ sessionId: id, code }) => ({ sessionId: id, code })),
+      [{ sessionId, code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED" }],
+    );
+    assert.deepEqual(maintenance.rebuiltSessionIds, []);
+    assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
   });
 });
 

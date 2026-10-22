@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
@@ -61,8 +62,8 @@ test("session execution preserves every user interjection into the next model hi
     async appendExecutionLog() {},
     async upsertTurnTiming() {},
     async saveExecutionReport() {},
-    async getTurnSummaryCheckpointState() {
-      return null;
+    async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
+      return createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId });
     },
     async getRootSessionId({ sessionId: rootSessionId }) {
       return rootSessionId;
@@ -150,7 +151,7 @@ test("session execution preserves every user interjection into the next model hi
       await runtime.commitSummaryCheckpoint({
         summaryCompletion: {
           source: "e2e.task_summary",
-          summarizedMessageIds: [currentUserMessage.messageUid],
+          summarizedMessageUids: [currentUserMessage.messageUid],
         },
       });
       runtime.currentTurnMessages.push({

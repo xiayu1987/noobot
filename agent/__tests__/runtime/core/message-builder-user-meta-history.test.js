@@ -12,7 +12,10 @@ import { createModelContext } from "@noobot/context-protocol/assembly/hook-conte
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { projectTerminalHistoryMessages } from "@noobot/context-protocol/policy/terminal-history";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import {
+  resolveContextMessageKey,
+  composeContextProjectionKey,
+} from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 function sessionHistory(records) {
@@ -66,7 +69,6 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
         role: "user",
         content: "停止轮问题",
         messageOrigin: "natural",
-        userMetaMaterialized: true,
         userName: "u1",
         sessionId: "s1",
         dialogProcessId: "dlg-stopped",
@@ -124,11 +126,11 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
     ["停止轮问题", blocks.history[1].content, "最新 guidance", "用户停止了本轮生成"],
   );
   assert.equal(blocks.history[1].content.startsWith("[用户元信息]"), true);
-  assert.deepEqual(blocks.history.map(resolveContextMessageId), [
+  assert.deepEqual(blocks.history.map(resolveContextMessageKey), [
     "stopped-user",
-    "stopped-user::user_meta",
+    composeContextProjectionKey("user_meta", "stopped-user"),
     "guidance-new",
-    "turn-stopped::terminal_status",
+    composeContextProjectionKey("terminal_status", "turn-stopped"),
   ]);
   assert.equal(blocks.history[3].type, "human");
 });
@@ -145,7 +147,6 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
             content: "历史附件问题",
             messageUid: "history-user-with-attachment",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             sessionId: "s-history",
             dialogProcessId: "dlg-history",
             turnScopeId: "client-turn:history",
@@ -203,7 +204,6 @@ test("historical user content and metadata remain distinct canonical projections
             content: "历史问题",
             messageUid: "sm_history_user",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             dialogProcessId: "dlg-history",
             turnScopeId: "turn-history",
           },
@@ -226,9 +226,9 @@ test("historical user content and metadata remain distinct canonical projections
     ["历史问题", historicalUsers[1].content],
   );
   assert.equal(historicalUsers[1].content.startsWith("[用户元信息]"), true);
-  assert.deepEqual(historicalUsers.map(resolveContextMessageId), [
+  assert.deepEqual(historicalUsers.map(resolveContextMessageKey), [
     "sm_history_user",
-    "sm_history_user::user_meta",
+    composeContextProjectionKey("user_meta", "sm_history_user"),
   ]);
   assert.notEqual(historicalUsers[0], historicalUsers[1]);
 });
@@ -259,7 +259,7 @@ test("persisted history keeps messageUid as its canonical model context identity
     },
   });
 
-  assert.equal(resolveContextMessageId(context.messageBlocks.history[0]), "sm_persisted_history");
+  assert.equal(resolveContextMessageKey(context.messageBlocks.history[0]), "sm_persisted_history");
 });
 
 test("buildContextMessageBlocks does not infer frontend user metadata from round identity", () => {

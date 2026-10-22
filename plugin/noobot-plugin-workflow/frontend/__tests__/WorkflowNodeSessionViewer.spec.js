@@ -45,6 +45,7 @@ function snapshotEnvelope(sessionId, messages, turnScopeId = `workflow-node:${se
     aggregateVersion: 1,
     occurredAt: "2026-08-19T00:00:00.000Z",
     producer: { type: "test", id: "workflow-viewer" },
+    causality: { correlationId: `workflow:${sessionId}` },
     payload: {
       workflowRunId: `workflow:${sessionId}`,
       nodeExecutionId: `node:${sessionId}`,
@@ -66,7 +67,8 @@ function detailResponse(sessionId, content) {
   const turnScopeId = `workflow-node:${sessionId}`;
   const messages = [
     {
-      messageId: `${sessionId}-message`,
+      messageUid: `sm-${sessionId}-message`,
+      presentationMessageId: `${sessionId}-message`,
       role: "assistant",
       content,
       turnScopeId,
@@ -403,7 +405,8 @@ describe("workflow node session view ownership", () => {
       stepId: "step-running",
     };
     const childUser = {
-      messageId: "child-user",
+      messageUid: "sm-child-user",
+      userMessageId: "child-user",
       role: "user",
       type: "message",
       content: "run child task",
@@ -581,7 +584,12 @@ describe("workflow node session view ownership", () => {
     });
 
     await viewer.openNodeSession(initialStep);
-    const finalMessage = { messageId: "final-message", role: "assistant", content: "final result" };
+    const finalMessage = {
+      messageUid: "sm-final-message",
+      presentationMessageId: "final-message",
+      role: "assistant",
+      content: "final result",
+    };
     sessionDocs["session-complete-live"].messages.push(finalMessage);
     flowNodes.value = [
       {
@@ -599,7 +607,9 @@ describe("workflow node session view ownership", () => {
 
     expect(state.selectedRuntimeStep.value.status).toBe("success");
     expect(
-      state.selectedNodeMessages.value.filter((message) => message.messageId === "final-message"),
+      state.selectedNodeMessages.value.filter(
+        (message) => message.presentationMessageId === "final-message",
+      ),
     ).toHaveLength(1);
     expect(diagnostics).toHaveBeenCalledWith(
       "frontend.workflowNodeDetail.runtimeStepRebound",
@@ -629,7 +639,7 @@ describe("workflow node session view ownership", () => {
         session: { sessionId: completedStep.sessionId },
         messages: [
           {
-            messageId: `${completedStep.sessionId}-message`,
+            presentationMessageId: `${completedStep.sessionId}-message`,
             role: "assistant",
             content: "final result",
             pending: false,
@@ -650,7 +660,14 @@ describe("workflow node session view ownership", () => {
     const sessionDocs = {
       "session-registry-live": {
         sessionId: "session-registry-live",
-        messages: [{ messageId: "authoritative-message", role: "assistant", content: "" }],
+        messages: [
+          {
+            messageUid: "sm-authoritative-message",
+            presentationMessageId: "authoritative-message",
+            role: "assistant",
+            content: "",
+          },
+        ],
       },
     };
     const { wrapper, state, viewer, viewerProps } = mountViewer({
@@ -672,7 +689,12 @@ describe("workflow node session view ownership", () => {
     sessionDocs["session-registry-live"] = {
       sessionId: "session-registry-live",
       messages: [
-        { messageId: "authoritative-message", role: "assistant", content: "final result" },
+        {
+          messageUid: "sm-authoritative-message",
+          presentationMessageId: "authoritative-message",
+          role: "assistant",
+          content: "final result",
+        },
       ],
     };
 
@@ -681,7 +703,10 @@ describe("workflow node session view ownership", () => {
     await nextTick();
 
     expect(state.selectedNodeMessages.value).toEqual([
-      expect.objectContaining({ messageId: "authoritative-message", content: "final result" }),
+      expect.objectContaining({
+        presentationMessageId: "authoritative-message",
+        content: "final result",
+      }),
     ]);
     wrapper.unmount();
   });
@@ -692,7 +717,14 @@ describe("workflow node session view ownership", () => {
     const sessionDocs = reactive({
       "session-registry-before-rest": {
         sessionId: "session-registry-before-rest",
-        messages: [{ messageId: "live-assistant", role: "assistant", content: "live result" }],
+        messages: [
+          {
+            messageUid: "sm-live-assistant",
+            presentationMessageId: "live-assistant",
+            role: "assistant",
+            content: "live result",
+          },
+        ],
       },
     });
     const { wrapper, state, viewer } = mountViewer({
@@ -706,7 +738,7 @@ describe("workflow node session view ownership", () => {
 
     expect(state.viewerLoading.value).toBe(false);
     expect(state.selectedNodeMessages.value).toEqual([
-      expect.objectContaining({ messageId: "live-assistant", content: "live result" }),
+      expect.objectContaining({ presentationMessageId: "live-assistant", content: "live result" }),
     ]);
 
     request.resolve(detailResponse("session-registry-before-rest", "REST result"));
@@ -746,7 +778,7 @@ describe("workflow node session view ownership", () => {
     expect(state.selectedNodeMessages.value.map((item) => item.content)).toEqual(["step B"]);
 
     sessionDocs["session-a"].messages.push({
-      messageId: "foreign-a",
+      presentationMessageId: "foreign-a",
       role: "assistant",
       content: "foreign A event",
     });
@@ -754,7 +786,7 @@ describe("workflow node session view ownership", () => {
     expect(state.selectedNodeMessages.value.map((item) => item.content)).toEqual(["step B"]);
 
     sessionDocs["session-b"].messages.push({
-      messageId: "current-b",
+      presentationMessageId: "current-b",
       role: "assistant",
       content: "current B event",
     });

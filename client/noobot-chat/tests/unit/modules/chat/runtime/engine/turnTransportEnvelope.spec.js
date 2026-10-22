@@ -10,7 +10,7 @@ import {
 } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -107,6 +107,7 @@ describe("turnTransportEnvelope", () => {
     });
     const protocolEnvelope = createEventEnvelope({
       family: EVENT_FAMILY.TURN_LIFECYCLE,
+      schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
       identity: {
         eventId: lifecycle.eventId,
         eventType: TURN_LIFECYCLE_WIRE_EVENT,
@@ -132,6 +133,7 @@ describe("turnTransportEnvelope", () => {
   it("projects interaction identity and payload through the protocol-declared reducer input", () => {
     const protocolEnvelope = createEventEnvelope({
       family: EVENT_FAMILY.INTERACTION_REQUEST,
+      schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
       identity: {
         eventId: "interaction-event-1",
         eventType: "interaction_request",

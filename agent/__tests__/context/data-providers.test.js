@@ -12,7 +12,7 @@ import { resolveLongMemory } from "../../src/context/providers/memory-resolver.j
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import {
   readContextMessageValue,
-  resolveContextMessageId,
+  resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
 
@@ -191,7 +191,6 @@ test("toConversationMessages preserves model payload fields and attachments", ()
       injectedBy: "harness-plugin",
       injectedMessageType: "separate_model_relay:planning",
       messageOrigin: "internal",
-      userMetaMaterialized: false,
       pluginMessage: true,
       rawModelContent: [{ type: "text", text: "raw" }],
       modelAdditionalKwargs: { k: 1 },
@@ -200,7 +199,7 @@ test("toConversationMessages preserves model payload fields and attachments", ()
     },
   ]);
   assert.equal(output.length, 1);
-  assert.equal(resolveContextMessageId(output[0]), "sm_stable_context_message");
+  assert.equal(resolveContextMessageKey(output[0]), "sm_stable_context_message");
   assert.deepEqual(readContextMessageValue(output[0], "rawModelContent"), [
     { type: "text", text: "raw" },
   ]);

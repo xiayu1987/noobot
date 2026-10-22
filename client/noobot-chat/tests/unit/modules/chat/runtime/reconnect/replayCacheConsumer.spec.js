@@ -36,8 +36,7 @@ function createActiveReplayFixture(overrides = {}) {
       sessionId: "s-1",
       messages: [
         {
-          id: "message-1",
-          messageId: "message-1",
+          presentationMessageId: "message-1",
           sessionId: "s-1",
           role: "assistant",
           dialogProcessId: "dp-1",
@@ -52,18 +51,14 @@ function createActiveReplayFixture(overrides = {}) {
     activeSession,
     ...overrides,
   };
-  fixture.findCanonicalMessageById =
-    overrides.findCanonicalMessageById ||
-    ((sessionId, messageId) => {
-      const targetSessionId =
-        fixture.activeSession.value.sessionId || fixture.activeSession.value.id;
-      if (sessionId !== targetSessionId) return null;
-      return (
-        fixture.activeSession.value.messages.find(
-          (message) => (message.messageId || message.id) === messageId,
-        ) || null
-      );
-    });
+  fixture.findMessagesByPresentationId =
+    overrides.findMessagesByPresentationId ||
+    ((sessionId, presentationMessageId) =>
+      sessionId === fixture.activeSession.value.sessionId
+        ? fixture.activeSession.value.messages.filter(
+            (message) => message.presentationMessageId === presentationMessageId,
+          )
+        : []);
   return fixture;
 }
 
@@ -183,8 +178,7 @@ describe("replayCacheConsumer", () => {
           messages: [
             {
               role: "assistant",
-              id: "message-1",
-              messageId: "message-1",
+              presentationMessageId: "message-1",
               sessionId: "s-1",
               dialogProcessId: "dp-1",
               turnScopeId: "turn-1",
@@ -271,8 +265,7 @@ describe("replayCacheConsumer", () => {
   it("derives the continuation turn from cached envelopes before resolving a reused dialog", async () => {
     const stoppedAssistant = {
       role: "assistant",
-      id: "message-stopped",
-      messageId: "message-stopped",
+      presentationMessageId: "message-stopped",
       sessionId: "s-1",
       dialogProcessId: "dp-shared",
       turnScopeId: "turn-stopped",
@@ -282,8 +275,7 @@ describe("replayCacheConsumer", () => {
     };
     const continuationAssistant = {
       role: "assistant",
-      id: "message-continuation",
-      messageId: "message-continuation",
+      presentationMessageId: "message-continuation",
       sessionId: "s-1",
       dialogProcessId: "dp-shared",
       turnScopeId: "turn-continuation",

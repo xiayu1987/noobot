@@ -13,7 +13,12 @@ import {
   getPendingAuthorityEvents,
   recordAuthorityEventAttempts,
 } from "./session-message-service/authority-event.js";
-import { pluginArtifactKey, projectPluginArtifacts } from "@noobot/event-protocol";
+import {
+  createPluginArtifactQueryResult,
+  pluginArtifactKey,
+  projectPluginArtifacts,
+} from "@noobot/event-protocol";
+import { createSessionNotFoundError } from "@noobot/session-protocol";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import {
   applyTurnLifecycleEvent,
@@ -28,6 +33,7 @@ import {
   hasDialogProcessIdInSession,
 } from "./session-message-service/message-queries.js";
 import { commitTurnSummaryCheckpoint } from "./session-message-service/turn-summary-checkpoint.js";
+import { recordUserMetaParsedResult } from "./session-message-service/user-meta-parsed-result.js";
 
 export class SessionMessageService {
   constructor({
@@ -48,26 +54,19 @@ export class SessionMessageService {
   async appendTurns(payload = {}) {
     return appendTurns.call(this, payload);
   }
-  async commitMessageEvent(payload = {}) {
+  async commitMessageEvent(payload) {
     return commitMessageEvent.call(this, payload);
   }
-  async commitAuthorityEvent(payload = {}) {
+  async commitAuthorityEvent(payload) {
     return commitAuthorityEvent.call(this, payload);
   }
-  async getPluginArtifact(payload = {}) {
+  async getPluginArtifact(payload) {
     const session = await this.sessionRepo.findById(payload.userId, payload.sessionId, {
       persistenceContext: payload.persistenceContext,
     });
-    const key = pluginArtifactKey(payload);
-    const current = projectPluginArtifacts(session?.sessionArtifactEvents || [])[key];
-    if (!current) return { found: false, artifact: null, revision: 0 };
-    return {
-      found: true,
-      revision: current.revision,
-      operation: current.operation,
-      artifact: current.data,
-      eventId: current.eventId,
-    };
+    if (!session) throw createSessionNotFoundError(payload);
+    const projected = projectPluginArtifacts(session.sessionArtifactEvents);
+    return createPluginArtifactQueryResult(projected[pluginArtifactKey(payload)] || null);
   }
   async deleteFromMessage(payload = {}) {
     return deleteFromMessage.call(this, payload);
@@ -99,8 +98,11 @@ export class SessionMessageService {
   async assertReusedUserTurnIdentity(payload = {}) {
     return assertReusedUserTurnIdentity.call(this, payload);
   }
-  async commitTurnSummaryCheckpoint(payload = {}) {
+  async commitTurnSummaryCheckpoint(payload) {
     return commitTurnSummaryCheckpoint.call(this, payload);
+  }
+  async recordUserMetaParsedResult(payload = {}) {
+    return recordUserMetaParsedResult.call(this, payload);
   }
   async getSessionTurns(payload = {}) {
     return getSessionTurns.call(this, payload);

@@ -17,7 +17,6 @@ describe("messageModel presentation identity", () => {
       [
         {
           messageUid: "sm-analysis-1",
-          messageId: "msg-model-1",
           presentationMessageId: "msg-chat-1",
           chatPresentation: false,
           role: "assistant",
@@ -39,7 +38,6 @@ describe("messageModel presentation identity", () => {
         },
         {
           messageUid: "sm-final-1",
-          messageId: "msg-model-2",
           presentationMessageId: "msg-chat-1",
           chatPresentation: true,
           role: "assistant",
@@ -55,8 +53,7 @@ describe("messageModel presentation identity", () => {
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
-      id: "msg-chat-1",
-      messageId: "msg-chat-1",
+      presentationMessageId: "msg-chat-1",
       content: "Final answer",
     });
     expect(selectActivityTimelineLogs(messages[0])).toEqual([
@@ -71,7 +68,6 @@ describe("messageModel presentation identity", () => {
     const messages = foldConversationMessages(
       [
         {
-          messageId: "model-tool-call-1",
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: false,
           role: "assistant",
@@ -90,7 +86,6 @@ describe("messageModel presentation identity", () => {
           ],
         },
         {
-          messageId: "model-tool-call-2",
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: false,
           role: "assistant",
@@ -100,7 +95,6 @@ describe("messageModel presentation identity", () => {
           tool_calls: [{ id: "call-2", name: "execute_script" }],
         },
         {
-          messageId: "model-final",
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: true,
           role: "assistant",
@@ -114,7 +108,7 @@ describe("messageModel presentation identity", () => {
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
-      id: "assistant-presentation-1",
+      presentationMessageId: "assistant-presentation-1",
       chatPresentation: true,
       content: "Final answer",
       type: "message",
@@ -129,7 +123,6 @@ describe("messageModel presentation identity", () => {
     const messages = foldConversationMessages(
       [
         {
-          messageId: "model-final-1",
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: true,
           role: "assistant",
@@ -137,7 +130,6 @@ describe("messageModel presentation identity", () => {
           turnScopeId: "client-turn:duplicate-presentation",
         },
         {
-          messageId: "model-final-2",
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: true,
           role: "assistant",
@@ -185,7 +177,6 @@ describe("messageModel presentation identity", () => {
     const messages = foldConversationMessages(
       [
         {
-          messageId: "msg-chat-running",
           presentationMessageId: "msg-chat-running",
           role: "assistant",
           type: "message",
@@ -194,7 +185,6 @@ describe("messageModel presentation identity", () => {
           turnScopeId: "client-turn:running",
         },
         {
-          messageId: "msg-model-tool-call",
           presentationMessageId: "msg-chat-running",
           role: "assistant",
           type: "tool_call",
@@ -209,8 +199,6 @@ describe("messageModel presentation identity", () => {
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
-      id: "msg-chat-running",
-      messageId: "msg-chat-running",
       presentationMessageId: "msg-chat-running",
       pending: true,
       turnScopeId: "client-turn:running",

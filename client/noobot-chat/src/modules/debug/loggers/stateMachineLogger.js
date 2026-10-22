@@ -25,9 +25,7 @@ export function summarizeStateMachineMessage(message = {}) {
   if (!isObjectLike(message)) return null;
   const channelState = getMessageRuntimeChannelState(message);
   return {
-    id: message.messageId || "",
-    messageId: message.messageId || "",
-    sourceMessageId: message.sourceMessageId || "",
+    messageUid: message.messageUid || "",
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.type || "",
     sessionId: message.sessionId || message.owner?.sessionId || "",

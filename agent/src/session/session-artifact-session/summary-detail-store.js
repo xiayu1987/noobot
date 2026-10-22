@@ -10,7 +10,7 @@ import { compactThinkingTimeline } from "../session-summary-builders/message-sum
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
-import { isObjectLike } from "@noobot/shared/value";
+import { isObjectLike, text } from "@noobot/shared/value";
 
 function resolveSummaryDetailPath(sessionDir = "", file = "") {
   return resolveScopedArtifactPath({
@@ -41,9 +41,7 @@ export async function writeSessionSummaryDetails({ storageService, sessionDir, s
       messages.push(message);
       continue;
     }
-    const presentationMessageId = String(
-      message?.presentationMessageId || message?.messageId || "",
-    ).trim();
+    const presentationMessageId = text(message?.presentationMessageId);
     if (!presentationMessageId)
       throw new TypeError("summary detail requires presentation message identity");
     const detail = { schemaVersion: 1, presentationMessageId, toolTimeline, activityTimeline };
@@ -90,8 +88,7 @@ export async function hydrateSessionSummaryDetails({ storageService, sessionDir,
       });
       if (
         !detail ||
-        detail.presentationMessageId !==
-          String(message?.presentationMessageId || message?.messageId || "") ||
+        detail.presentationMessageId !== text(message?.presentationMessageId) ||
         summaryDetailHash(detail) !== ref.contentHash
       ) {
         const error = new Error(`session summary detail does not match its reference: ${ref.file}`);

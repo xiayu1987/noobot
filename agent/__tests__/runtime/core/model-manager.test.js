@@ -11,7 +11,35 @@ import {
   resolveCurrentModelInfo,
   createStreamingCallbacks,
 } from "../../../src/models/runtime/model-manager.js";
+import {
+  beginAssistantMessageEventStream,
+  bindAssistantMessageEventStream,
+  currentAssistantDraft,
+} from "../../../src/events/message-event-stream.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
+
+function createBoundModelRuntime(producerId) {
+  const runtime = createTestRuntimeContext({
+    sessionManager: createCanonicalMessageEventSessionManager({ producerId }),
+    runConfig: { hookManager: null, executionId: "execution-1", commandId: "command-1" },
+    systemRuntime: {
+      userId: "user-1",
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+    },
+  });
+  bindAssistantMessageEventStream(runtime, {
+    presentationMessageId: "presentation-1",
+    parentSessionId: "",
+    workflowRunId: "",
+    nodeExecutionId: "",
+  });
+  initializeCurrentTurnMessageEventProjection(runtime);
+  return runtime;
+}
 
 test("resolveCurrentModelInfo should return trimmed alias/name", () => {
   const result = resolveCurrentModelInfo({
@@ -26,21 +54,15 @@ test("resolveCurrentModelInfo should return trimmed alias/name", () => {
 
 test("createStreamingCallbacks should emit llm_delta event", async () => {
   const events = [];
+  const runtime = createBoundModelRuntime("model-manager");
+  beginAssistantMessageEventStream(runtime, { turn: 0 });
   const callbacks = createStreamingCallbacks(
     {
       onEvent(payload = {}) {
         events.push(payload);
       },
     },
-    {
-      sessionManager: createCanonicalMessageEventSessionManager({ producerId: "model-manager" }),
-      systemRuntime: {
-        sessionId: "session-1",
-        dialogProcessId: "dialog-1",
-        turnScopeId: "turn-1",
-        messageEventStream: { sequence: 0, activePresentationMessageId: "presentation-1" },
-      },
-    },
+    runtime,
   );
   assert.equal(Array.isArray(callbacks), true);
   await callbacks[0].handleLLMNewToken("hello");
@@ -52,18 +74,8 @@ test("createStreamingCallbacks should emit llm_delta event", async () => {
 
 test("stream visibility filtering happens before the transient delta is emitted", async () => {
   const events = [];
-  const runtime = {
-    sessionManager: createCanonicalMessageEventSessionManager({ producerId: "model-filter" }),
-    systemRuntime: {
-      sessionId: "session-1",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-      messageEventStream: {
-        sequence: 0,
-        activePresentationMessageId: "presentation-1",
-      },
-    },
-  };
+  const runtime = createBoundModelRuntime("model-filter");
+  beginAssistantMessageEventStream(runtime, { turn: 0 });
   const [callback] = createStreamingCallbacks(
     {
       onEvent(payload = {}) {
@@ -82,6 +94,13 @@ test("stream visibility filtering happens before the transient delta is emitted"
   assert.equal(events.length, 1);
   assert.equal(events[0]?.data?.envelope?.payload?.text, "visible");
   assert.equal(events[0]?.data?.envelope?.ordering?.sequence, 0);
+  assert.equal(currentAssistantDraft(runtime).content, "visible");
+});
+
+test("streaming callbacks require an active model message stream", () => {
+  const runtime = createBoundModelRuntime("model-draft");
+  const [callback] = createStreamingCallbacks({ onEvent() {} }, runtime);
+  assert.throws(() => callback.handleLLMNewToken("hello"), /active model message stream/);
 });
 
 test("resolveLlmForTurn should switch model by runtimeModel and emit model_switched", () => {

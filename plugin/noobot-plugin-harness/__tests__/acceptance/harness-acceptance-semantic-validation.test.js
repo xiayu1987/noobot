@@ -101,7 +101,6 @@ test("harness acceptance semantic validation uses separate model when enabled", 
             role: "user",
             content: "用户原始需求：执行核心任务",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             dialogProcessId: "dp-history",
           },
           {

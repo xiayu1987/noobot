@@ -92,7 +92,8 @@ test("session-routes: workflow session returns summary and execution jsonl from 
       messages: [
         {
           messageUid: "workflow-message-1",
-          messageId: "workflow-message-1",
+          modelMessageId: "workflow-model-message-1",
+          presentationMessageId: "pm_wf_node_1",
           role: "assistant",
           content: "done",
           dialogProcessId: "wf_node_1",
@@ -176,7 +177,8 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
       messages: [
         {
           messageUid: "a1",
-          id: "a1",
+          modelMessageId: "model-a1",
+          presentationMessageId: "pm_node_turn",
           role: "assistant",
           type: "message",
           sessionId: "node-s",
@@ -201,7 +203,6 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "i1",
-          id: "i1",
           role: "system",
           sessionId: "node-s",
           dialogProcessId: "dp-1",
@@ -212,7 +213,8 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "t1",
-          id: "t1",
+          modelMessageId: "model-t1",
+          presentationMessageId: "pm_node_turn",
           role: "assistant",
           type: "tool_call",
           sessionId: "node-s",
@@ -222,8 +224,8 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "t2",
-          id: "t2",
           role: "tool",
+          presentationMessageId: "pm_node_turn",
           type: "tool_result",
           sessionId: "node-s",
           dialogProcessId: "dp-1",
@@ -232,7 +234,8 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "other",
-          id: "other",
+          modelMessageId: "model-other",
+          presentationMessageId: "pm_other_turn",
           role: "assistant",
           type: "tool_call",
           sessionId: "node-s",

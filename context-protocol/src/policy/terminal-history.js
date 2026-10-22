@@ -7,7 +7,6 @@
 import { isContextControlMessage } from "./injected-message.js";
 import {
   CONTEXT_MESSAGE_PROJECTION_TYPE,
-  deriveContextMessageProjectionId,
   readContextMessageField,
   resolveContextInjectedMessageType,
   resolveContextMessageDialogProcessId,
@@ -92,10 +91,8 @@ function buildTerminalExplanation(status = {}) {
   return writeContextMessageMetadata(
     { role, content: status.description },
     {
-      messageUid: deriveContextMessageProjectionId(
-        status.turnScopeId,
-        CONTEXT_MESSAGE_PROJECTION_TYPE.TERMINAL_STATUS,
-      ),
+      projectionType: CONTEXT_MESSAGE_PROJECTION_TYPE.TERMINAL_STATUS,
+      sourceTurnScopeId: status.turnScopeId,
       dialogProcessId: status.dialogProcessId,
       parentDialogProcessId: status.parentDialogProcessId || undefined,
       turnScopeId: status.turnScopeId,

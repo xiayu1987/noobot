@@ -5,11 +5,13 @@
  */
 import {
   createEmptyTurnLifecycle,
+  createSessionNotFoundError,
   normalizeDialogProcessId,
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { repairOrphanedTerminalTurns } from "@noobot/authoritative-state/application";
 import { text } from "@noobot/shared/value";
+import { readTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 
 export async function getSessionTurns({ userId, sessionId, persistenceContext } = {}) {
   const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
@@ -30,16 +32,15 @@ export async function getTurnSummaryCheckpointState({
   userId,
   sessionId,
   persistenceContext,
-  dialogProcessId = "",
-  turnScopeId = "",
-} = {}) {
-  const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
-  const normalizedTurnScopeId = text(turnScopeId);
-  if (!userId || !sessionId || !normalizedDialogProcessId || !normalizedTurnScopeId) return null;
+  dialogProcessId,
+  turnScopeId,
+}) {
+  if (!text(userId) || !text(sessionId)) {
+    throw new TypeError("getTurnSummaryCheckpointState requires userId and sessionId");
+  }
   const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
-  const state = session?.turnSummaryCheckpoints?.[normalizedTurnScopeId];
-  if (!state || text(state?.dialogProcessId) !== normalizedDialogProcessId) return null;
-  return structuredClone(state);
+  if (!session) throw createSessionNotFoundError({ userId, sessionId });
+  return structuredClone(readTurnSummaryCheckpointState(session, { dialogProcessId, turnScopeId }));
 }
 
 export async function hasDialogProcessIdInSession({

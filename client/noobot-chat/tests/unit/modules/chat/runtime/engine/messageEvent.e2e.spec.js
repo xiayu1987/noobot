@@ -10,6 +10,8 @@ import {
   beginAssistantMessageEventStream,
   emitMessageEvent,
 } from "../../../../../../../../agent/src/events/message-event-stream.js";
+import { initializeCurrentTurnMessageEventProjection } from "../../../../../../../../agent/src/events/current-turn-message-event-projection.js";
+import { createRuntimeContext } from "../../../../../../../../agent/src/runtime/runtime-context-factory.js";
 import { createRunEventListener } from "../../../../../../../../service/ws/chat-websocket/run-event-listener.js";
 import { shouldProjectSubSessionEvent } from "../../../../../../src/modules/chat/runtime/engine/sendFlow.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
@@ -44,14 +46,30 @@ describe("authoritative message event end-to-end fidelity", () => {
     const store = useChatStore();
     const frames = [];
     const produced = [];
-    const runtime = {
-      sessionId: "child-session",
-      userId: "user-1",
+    const runtime = createRuntimeContext({
+      basePath: "",
+      globalConfig: {},
+      userConfig: {},
+      eventListener: null,
+      attachmentService: null,
+      botManager: null,
+      userInteractionBridge: null,
+      abortSignal: new AbortController().signal,
+      runtimeModel: "",
+      allEnabledProviders: {},
+      userMessageAttachments: [],
+      sharedTools: {},
       systemRuntime: {
+        userId: "user-1",
         sessionId: "child-session",
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
         persistenceScope: null,
+      },
+      runConfig: {
+        hookManager: null,
+        executionId: "child-execution",
+        commandId: "child-command",
       },
       sessionManager: {
         commitMessageEvent: async ({ payload, sessionId, turnScopeId }) => ({
@@ -65,7 +83,8 @@ describe("authoritative message event end-to-end fidelity", () => {
           }),
         }),
       },
-    };
+    });
+    initializeCurrentTurnMessageEventProjection(runtime);
     const listener = createRunEventListener({
       sessionId: "parent-session",
       onAuthorityEventCommitted(envelope) {
@@ -87,8 +106,8 @@ describe("authoritative message event end-to-end fidelity", () => {
       await emitMessageEvent(listener, runtime, "turn_presentation_committed", {
         presentation: {
           userMessage: {
-            id: "child-turn-user",
-            messageId: "child-turn-user",
+            messageUid: "child-turn-user",
+            userMessageId: "child-turn-user",
             role: "user",
             sessionId: "child-session",
             turnScopeId: "child-turn",
@@ -96,7 +115,6 @@ describe("authoritative message event end-to-end fidelity", () => {
             attachments: [],
           },
           assistantMessage: {
-            id: presentationMessageId,
             presentationMessageId,
             role: "assistant",
             sessionId: "child-session",
@@ -146,8 +164,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     expect(session.messages).toHaveLength(2);
     let assistantMessage = session.messages.find((message) => message.role === "assistant");
     expect(assistantMessage).toMatchObject({
-      id: presentationMessageId,
-      messageId: presentationMessageId,
+      presentationMessageId,
       role: "assistant",
     });
     expect(assistantMessage.activityTimeline).toEqual([
@@ -171,8 +188,7 @@ describe("authoritative message event end-to-end fidelity", () => {
       sessionId: "child-session",
       messages: [
         {
-          id: presentationMessageId,
-          messageId: presentationMessageId,
+          messageUid: presentationMessageId,
           presentationMessageId,
           role: "assistant",
           content: "final answer",
@@ -183,7 +199,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     expect(session.messages).toHaveLength(2);
     assistantMessage = session.messages.find((message) => message.role === "assistant");
     expect(assistantMessage).toMatchObject({
-      id: presentationMessageId,
+      presentationMessageId,
       content: "final answer",
     });
     expect(assistantMessage.activityTimeline).toHaveLength(1);

@@ -12,7 +12,6 @@ import {
 } from "../capabilities/handlers/shared/message/injected-message-utils.js";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import {
-  getMessageId,
   replaceMessageProjection,
   resolveModelMessageBlocks,
   resolveModelMessages,
@@ -21,6 +20,7 @@ import {
 import {
   isContextSystemMessage,
   resolveContextInjectedMessageType,
+  resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import { text } from "@noobot/shared/value";
 
@@ -161,16 +161,15 @@ function commitPromptMessages(
     nextBlocks[isContextSystemMessage(message) ? "system" : "incremental"].push(message);
   }
   writeMessageBlocks(ctx, nextBlocks);
-  const committedByUid = new Map();
+  const committedByKey = new Map();
   for (const blockName of ["system", "incremental"]) {
     for (const message of resolveModelMessageBlocks(ctx)[blockName]) {
-      const messageUid = getMessageId(message);
-      if (messageUid) committedByUid.set(messageUid, message);
+      committedByKey.set(resolveContextMessageKey(message), message);
     }
   }
   replaceMessageProjection(
     ctx,
-    nextMessages.map((message) => committedByUid.get(getMessageId(message)) || message),
+    nextMessages.map((message) => committedByKey.get(resolveContextMessageKey(message)) || message),
   );
 }
 

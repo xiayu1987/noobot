@@ -28,8 +28,8 @@ function event(overrides = {}) {
 
 function message(overrides = {}) {
   return {
-    id: "message-1",
-    messageId: "message-1",
+    role: "assistant",
+    presentationMessageId: "message-1",
     turnScopeId: "turn-1",
     content: "",
     realtimeLogs: [],
@@ -658,13 +658,13 @@ describe("reduceMessageEvent", () => {
     expect(reduce(message(), event({ toolCallId: "" })).result).toBe(
       MESSAGE_EVENT_REDUCE_RESULT.INVALID,
     );
-    expect(reduce(message({ id: "other", messageId: "other" }), event()).result).toBe(
+    expect(reduce(message({ presentationMessageId: "other" }), event()).result).toBe(
       MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT,
     );
   });
 
   it("keeps guidance and model analysis on the same presentation activity timeline", () => {
-    const target = message({ id: "presentation-1", messageId: "presentation-1" });
+    const target = message({ presentationMessageId: "presentation-1" });
     expect(
       reduce(
         target,

@@ -95,6 +95,8 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
         {
           messageUid: "sm_lifecycle_assistant",
           role: "assistant",
+          presentationMessageId: "pm_fx1",
+          modelMessageId: "mm_turn_terminal_session_co_1",
           content: "done",
           turnScopeId: "t1",
           dialogProcessId: "dp1",
@@ -194,6 +196,8 @@ test("synthetic placeholders cannot enter persistence or summary", () => {
         {
           messageUid: "sm_placeholder_assistant",
           role: "assistant",
+          presentationMessageId: "pm_fx2",
+          modelMessageId: "mm_turn_terminal_session_co_2",
           content: "本轮异常停止",
           turnScopeId: "t1",
           synthetic: true,

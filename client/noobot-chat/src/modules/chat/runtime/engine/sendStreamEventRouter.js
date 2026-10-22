@@ -160,8 +160,8 @@ export function createSendStreamEventHandler(context) {
     setPendingInteractionRequest,
     tryAutoResolveInteraction,
     turnScopeId,
-    findCanonicalMessageById,
-    findCanonicalMessagesById,
+    findMessagesByPresentationId,
+    findUserMessageForCommit,
     materializeTurnPresentation,
     reduceSubSessionMessageEvent,
   } = context;
@@ -209,7 +209,7 @@ export function createSendStreamEventHandler(context) {
       routeCurrentTurnLifecycleEvent(event, data, {
         activeSession,
         applyTurnLifecycleEnvelope,
-        findCanonicalMessageById,
+        findUserMessageForCommit,
         logSessionEvent,
         makeViewMessage,
         sessionId,
@@ -232,8 +232,7 @@ export function createSendStreamEventHandler(context) {
       routeMessageProjectionEvent(event, data, {
         botMessage: botMsg,
         channelSessionId,
-        findCanonicalMessageById,
-        findCanonicalMessagesById,
+        findMessagesByPresentationId,
         materializeTurnPresentation,
         logSessionEvent,
         navigateOnFirstResponseOnce,

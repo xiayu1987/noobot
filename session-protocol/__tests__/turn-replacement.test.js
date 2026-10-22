@@ -19,7 +19,7 @@ test("turn replacement commit binds one replacement user to one committed sessio
     replacedTurnScopeIds: ["turn-old"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "request-hash-1",
     committedAt: "2026-07-31T00:00:00.000Z",
   });
@@ -32,14 +32,15 @@ test("turn replacement commit binds one replacement user to one committed sessio
       messages: [
         {
           role: "user",
-          messageId: "user-new",
+          messageUid: "user-new",
+          userMessageId: "um_new",
           dialogProcessId: "dialog-new",
           turnScopeId: "turn-new",
         },
       ],
     },
   });
-  assert.equal(materialized.replacementUser.messageId, "user-new");
+  assert.equal(materialized.replacementUser.messageUid, "user-new");
 });
 
 test("turn replacement materialization rejects a snapshot from another version", () => {
@@ -50,7 +51,7 @@ test("turn replacement materialization rejects a snapshot from another version",
     replacedTurnScopeIds: ["turn-old"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "request-hash-1",
   });
   assert.throws(
@@ -63,7 +64,8 @@ test("turn replacement materialization rejects a snapshot from another version",
           messages: [
             {
               role: "user",
-              messageId: "user-new",
+              messageUid: "user-new",
+              userMessageId: "um_new",
               dialogProcessId: "dialog-new",
               turnScopeId: "turn-new",
             },
@@ -82,7 +84,7 @@ test("turn replacement materialization rejects a snapshot that still contains a 
     replacedTurnScopeIds: ["turn-old"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "request-hash-2",
   });
   assert.throws(
@@ -93,10 +95,16 @@ test("turn replacement materialization rejects a snapshot that still contains a 
           sessionId: "session-1",
           aggregateVersion: 5,
           messages: [
-            { role: "user", messageId: "user-old", turnScopeId: "turn-old" },
             {
               role: "user",
-              messageId: "user-new",
+              messageUid: "user-old",
+              userMessageId: "um_old",
+              turnScopeId: "turn-old",
+            },
+            {
+              role: "user",
+              messageUid: "user-new",
+              userMessageId: "um_new",
               dialogProcessId: "dialog-new",
               turnScopeId: "turn-new",
             },
@@ -115,7 +123,7 @@ test("turn replacement materialization requires a user-only replacement scope", 
     replacedTurnScopeIds: ["turn-old"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "request-hash-3",
   });
   assert.throws(
@@ -128,13 +136,15 @@ test("turn replacement materialization requires a user-only replacement scope", 
           messages: [
             {
               role: "user",
-              messageId: "user-new",
+              messageUid: "user-new",
+              userMessageId: "um_new",
               dialogProcessId: "dialog-new",
               turnScopeId: "turn-new",
             },
             {
               role: "assistant",
-              messageId: "assistant-new",
+              messageUid: "assistant-new",
+              modelMessageId: "mm_new",
               dialogProcessId: "dialog-new",
               turnScopeId: "turn-new",
             },
@@ -153,7 +163,7 @@ test("turn replacement materialization requires the committed dialog identity", 
     replacedTurnScopeIds: ["turn-old"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "request-hash-4",
   });
   assert.throws(
@@ -166,7 +176,8 @@ test("turn replacement materialization requires the committed dialog identity", 
           messages: [
             {
               role: "user",
-              messageId: "user-new",
+              messageUid: "user-new",
+              userMessageId: "um_new",
               dialogProcessId: "dialog-other",
               turnScopeId: "turn-new",
             },

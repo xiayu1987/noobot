@@ -17,7 +17,6 @@ export async function publishWorkflowResult({
   workflowPayload = {},
   execution = {},
 } = {}) {
-  agentResult.workflow = workflowPayload;
   await publishWorkflowFinalMessage({
     options,
     agentResult,

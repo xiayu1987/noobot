@@ -95,7 +95,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
     false,
   );
   assert.ok(
-    runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.some((message) =>
+    runtime.activeMessageContext.messageBlocks.incremental.some((message) =>
       String(message.content || "").includes("stop after snapshot candidate"),
     ),
   );

@@ -70,7 +70,6 @@ function buildStopPayload({
   const session = targetSession || activeSession?.value || {};
   const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
   const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
-  const createdAtMs = nowMs();
   return createTurnStopCommand({
     identity: {
       sessionId: String(session.sessionId || ""),
@@ -88,17 +87,7 @@ function buildStopPayload({
     concurrency: {
       expectedTurnRevision: turnRuntime.revision,
     },
-    stop: {
-      executionId: normalizeTrimmedString(turnRuntime.executionId),
-      partialAssistant: {
-        content: String(pendingAssistantMessage?.content || ""),
-        dialogProcessId,
-        turnScopeId,
-        createdAtMs,
-        modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
-        modelName: String(pendingAssistantMessage?.modelName || ""),
-      },
-    },
+    stop: { executionId: normalizeTrimmedString(turnRuntime.executionId) },
   });
 }
 
@@ -165,7 +154,7 @@ export function stopSending({
     dialogProcessId: stopPayload.identity.dialogProcessId,
     turnScopeId: stopPayload.identity.turnScopeId,
     commandId: stopPayload.commandId,
-    createdAtMs: stopPayload.stop.partialAssistant.createdAtMs,
+    createdAtMs: nowMs(),
     source: "stop_sending",
   };
   if (applyRunStateEvent) {

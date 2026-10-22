@@ -20,6 +20,7 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/assembly/diagnostics";
+import { AGENT_CONTEXT_MODE } from "@noobot/context-protocol";
 import { emitEvent } from "../events/index.js";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/constants.js";
@@ -186,7 +187,7 @@ export class ContextBuilder {
   async buildAgentContext(
     systemMessages,
     conversationMessages,
-    { dialogProcessId = "", attachments = [], incrementalMessages = [] } = {},
+    { dialogProcessId, attachments, incrementalMessages, userMetaBackwrites },
   ) {
     const effectiveSystemMessages = [...systemMessages, ...this.additionalSystemMessages];
     const resolvedRuntimeBasePath = this._resolveRuntimeBasePath();
@@ -252,6 +253,7 @@ export class ContextBuilder {
       systemMessages: effectiveSystemMessages,
       conversationMessages,
       incrementalMessages,
+      userMetaBackwrites,
       attachments,
     });
   }
@@ -332,14 +334,19 @@ export class ContextBuilder {
     return this.buildAgentContext(systemContext, sessionRecords, {
       dialogProcessId,
       attachments,
+      incrementalMessages: [],
+      userMetaBackwrites: [],
     });
   }
 
   async buildNewSessionContext({ dialogProcessId }) {
-    return this._buildSessionContext({ dialogProcessId, mode: "new_session" });
+    return this._buildSessionContext({ dialogProcessId, mode: AGENT_CONTEXT_MODE.NEW_SESSION });
   }
 
   async buildExistingSessionContext({ dialogProcessId }) {
-    return this._buildSessionContext({ dialogProcessId, mode: "existing_session" });
+    return this._buildSessionContext({
+      dialogProcessId,
+      mode: AGENT_CONTEXT_MODE.EXISTING_SESSION,
+    });
   }
 }

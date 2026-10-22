@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventEnvelope } from "@noobot/event-protocol/envelope";
+import { getEventFamily } from "@noobot/event-protocol";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import {
   compareWorkflowRuntimeFacts,
@@ -23,6 +24,7 @@ test("constructs the canonical workflow snapshot envelope at its producing bound
     executionId: "agent:node-1",
     eventId: "snapshot:child-session:4",
     workflowRunId: "run-1",
+    causality: { correlationId: "run-1" },
     sequence: 4,
     aggregateVersion: 4,
     occurredAt: "2026-08-19T00:00:00.000Z",
@@ -49,9 +51,53 @@ test("constructs the canonical workflow snapshot envelope at its producing bound
   assert.equal(envelope.ordering.aggregateVersion, 4);
 });
 
+function snapshotWithMessages(messages) {
+  return createWorkflowRuntimeEnvelope({
+    eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
+    authoritySessionId: "root-session",
+    turnScopeId: "workflow-node:node-1",
+    executionId: "agent:node-1",
+    eventId: "snapshot:child-session:5",
+    workflowRunId: "run-1",
+    causality: { correlationId: "run-1" },
+    sequence: 5,
+    aggregateVersion: 5,
+    occurredAt: "2026-08-19T00:00:00.000Z",
+    producer: { type: "service", id: "workflow-session-read-model" },
+    payload: {
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
+      nodeSessionId: "child-session",
+      turnScopeId: "workflow-node:node-1",
+      messages,
+      turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+        commandId: "snapshot:child-session:5",
+        sessionId: "child-session",
+        sequence: 5,
+        generatedAt: "2026-08-19T00:00:00.000Z",
+      }),
+      turnTimings: [],
+    },
+  });
+}
+
+test("snapshot messages carry the record key and the role view key, never an alias", () => {
+  const user = { role: "user", messageUid: "sm_user", userMessageId: "um_1" };
+  const assistant = { role: "assistant", messageUid: "sm_ai", presentationMessageId: "pm_1" };
+  assert.equal(snapshotWithMessages([user, assistant]).payload.messages.length, 2);
+  for (const message of [
+    { role: "assistant", messageUid: "sm_ai" },
+    { role: "user", userMessageId: "um_1" },
+    { ...user, messageId: "um_1" },
+  ]) {
+    assert.throws(() => snapshotWithMessages([message]), /missing_snapshot_message_identity/);
+  }
+});
+
 function workflowEnvelope(eventType, payload, ordering = {}) {
   return createEventEnvelope({
     family: "workflow.runtime",
+    schemaVersion: getEventFamily("workflow.runtime").schemaVersion,
     identity: {
       eventId: `event-${eventType}`,
       eventType,

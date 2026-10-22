@@ -106,7 +106,6 @@ export function normalizeTurnTerminalStatus(value = null) {
 export function materializeTurnTerminalMessages({
   messages = [],
   terminalStatus = null,
-  assistantMessage = null,
   previousSummaryVersion = 0,
 } = {}) {
   if (normalizeTurnTerminalStatus(terminalStatus) === null) {
@@ -131,41 +130,6 @@ export function materializeTurnTerminalMessages({
       ? { ...message, pending: false }
       : message,
   );
-  const hasAssistant = nextMessages.some(
-    (message) =>
-      clean(message?.turnScopeId) === turnScopeId &&
-      clean(message?.role).toLowerCase() === "assistant",
-  );
-  if (!hasAssistant && isPlainObject(assistantMessage)) {
-    const content = String(assistantMessage.content || "");
-    const messageUid = clean(assistantMessage.messageUid);
-    if (content && !messageUid) {
-      return Object.freeze({
-        materialized: false,
-        reason: "assistant_message_identity_incomplete",
-      });
-    }
-    if (content) {
-      const assistantTurnScopeId = clean(assistantMessage.turnScopeId || turnScopeId);
-      const assistantDialogProcessId = clean(assistantMessage.dialogProcessId || dialogProcessId);
-      if (
-        assistantTurnScopeId !== turnScopeId ||
-        (dialogProcessId && assistantDialogProcessId !== dialogProcessId)
-      ) {
-        return Object.freeze({
-          materialized: false,
-          reason: "assistant_message_identity_conflict",
-        });
-      }
-      nextMessages.push({
-        ...assistantMessage,
-        role: "assistant",
-        pending: false,
-        turnScopeId,
-        ...(dialogProcessId ? { dialogProcessId } : {}),
-      });
-    }
-  }
   return Object.freeze({
     materialized: true,
     terminalStatus,

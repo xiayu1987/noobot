@@ -7,8 +7,10 @@ import { isPlainObject, text } from "@noobot/shared/value";
 import { canonicalizeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createEventEnvelope } from "./envelope.js";
+import { resolveMessageViewKey } from "./message-event.js";
 
 export const WORKFLOW_RUNTIME_FAMILY = "workflow.runtime";
+export const WORKFLOW_RUNTIME_SCHEMA_VERSION = 1;
 
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
   PLANNING: "workflow_planning_message_prepared",
@@ -59,22 +61,23 @@ export function workflowSequenceDomainForEvent(eventType = "") {
 }
 
 export function createWorkflowRuntimeEnvelope({
-  eventType = "",
-  authoritySessionId = "",
-  turnScopeId = "",
-  executionId = "",
-  eventId = "",
-  workflowRunId = "",
-  sequence = 0,
+  eventType,
+  authoritySessionId,
+  turnScopeId,
+  executionId,
+  eventId,
+  workflowRunId,
+  sequence,
   revision,
   aggregateVersion,
-  occurredAt = "",
-  producer = {},
-  causality = {},
-  payload = {},
-} = {}) {
+  occurredAt,
+  producer,
+  causality,
+  payload,
+}) {
   const envelope = createEventEnvelope({
     family: WORKFLOW_RUNTIME_FAMILY,
+    schemaVersion: WORKFLOW_RUNTIME_SCHEMA_VERSION,
     identity: {
       eventId: text(eventId),
       eventType: text(eventType),
@@ -86,9 +89,9 @@ export function createWorkflowRuntimeEnvelope({
     ordering: {
       domain: workflowSequenceDomainForEvent(eventType),
       scopeId: text(workflowRunId),
-      sequence: Number(sequence),
-      ...(revision === undefined ? {} : { revision: Number(revision) }),
-      ...(aggregateVersion === undefined ? {} : { aggregateVersion: Number(aggregateVersion) }),
+      sequence,
+      ...(revision === undefined ? {} : { revision }),
+      ...(aggregateVersion === undefined ? {} : { aggregateVersion }),
     },
     producer,
     occurredAt: text(occurredAt),
@@ -150,6 +153,14 @@ function validateSnapshotLifecycle(payload, errors) {
   }
 }
 
+function isCanonicalSnapshotMessage(message = {}) {
+  return (
+    Boolean(text(message?.messageUid)) &&
+    Boolean(resolveMessageViewKey(message)) &&
+    !Object.hasOwn(message, "messageId")
+  );
+}
+
 function validateSessionSnapshotFields(envelope, payload, errors) {
   if (!text(payload?.nodeExecutionId)) errors.push("missing_snapshot_node_execution");
   if (!text(payload?.nodeSessionId)) errors.push("missing_snapshot_node_session");
@@ -157,7 +168,7 @@ function validateSessionSnapshotFields(envelope, payload, errors) {
   if (!isPositiveIntegerLike(envelope?.ordering?.aggregateVersion))
     errors.push("invalid_aggregate_version");
   const messages = Array.isArray(payload?.messages) ? payload.messages : [];
-  if (messages.some((message) => !text(message?.messageId)))
+  if (messages.some((message) => !isCanonicalSnapshotMessage(message)))
     errors.push("missing_snapshot_message_identity");
   validateSnapshotLifecycle(payload, errors);
   if (!Array.isArray(payload?.turnTimings)) errors.push("invalid_turn_timings");

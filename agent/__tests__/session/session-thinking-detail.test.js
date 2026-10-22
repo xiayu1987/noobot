@@ -28,6 +28,8 @@ test("thinking detail message carries its session identity without duplicating s
             {
               messageUid: "final-assistant-source",
               role: "assistant",
+              presentationMessageId: "pm_turn_detail",
+              modelMessageId: "mm_session_thinking_detail__1",
               type: "message",
               turnScopeId: "turn-detail",
               toolTimeline: [{ key: "call:one" }],
@@ -35,6 +37,8 @@ test("thinking detail message carries its session identity without duplicating s
             {
               messageUid: "guidance-source",
               role: "assistant",
+              presentationMessageId: "pm_turn_detail",
+              modelMessageId: "mm_session_thinking_detail__2",
               type: "message",
               turnScopeId: "turn-detail",
               injectedMessage: true,
@@ -61,7 +65,7 @@ test("thinking detail message carries its session identity without duplicating s
       sessionId: "",
       dialogProcessId: "",
       turnScopeId: "turn-detail",
-      presentationMessageId: "",
+      presentationMessageId: "pm_turn_detail",
     },
   ]);
   assert.equal(payload.counts.thinkingContentCount, 1);
@@ -77,7 +81,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
           rawMessages: [
             {
               messageUid: "assistant-tool-source",
-              messageId: "presentation-content",
+              modelMessageId: "presentation-content",
               role: "assistant",
               type: "tool_call",
               turnScopeId: "content-turn",
@@ -106,8 +110,9 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
             },
             {
               messageUid: "final-source",
-              id: "presentation-content",
               role: "assistant",
+              presentationMessageId: "presentation-content",
+              modelMessageId: "mm_session_thinking_detail__3",
               type: "message",
               turnScopeId: "content-turn",
               content: "done",
@@ -136,8 +141,10 @@ test("thinking detail projects the complete turn timeline onto the final assista
           sessionId: "child-session",
           rawMessages: [
             {
-              id: "tool-call-message",
+              messageUid: "sm-tool-call-message",
               role: "assistant",
+              presentationMessageId: "final-assistant",
+              modelMessageId: "mm_session_thinking_detail__4",
               type: "tool_call",
               turnScopeId: "workflow-node:turn-1",
               toolTimeline: [
@@ -145,8 +152,9 @@ test("thinking detail projects the complete turn timeline onto the final assista
               ],
             },
             {
-              id: "tool-result-message",
+              messageUid: "sm-tool-result-message",
               role: "tool",
+              presentationMessageId: "final-assistant",
               type: "tool_result",
               turnScopeId: "workflow-node:turn-1",
               toolTimeline: [
@@ -154,8 +162,10 @@ test("thinking detail projects the complete turn timeline onto the final assista
               ],
             },
             {
-              id: "final-assistant",
+              messageUid: "sm-final-assistant",
               role: "assistant",
+              presentationMessageId: "final-assistant",
+              modelMessageId: "mm_session_thinking_detail__5",
               type: "message",
               turnScopeId: "workflow-node:turn-1",
               content: "done",
@@ -176,7 +186,7 @@ test("thinking detail projects the complete turn timeline onto the final assista
     { turnScopeId: "workflow-node:turn-1" },
   );
 
-  assert.equal(payload.messageItem.id, "final-assistant");
+  assert.equal(payload.messageItem.presentationMessageId, "final-assistant");
   assert.equal(payload.messageItem.toolTimeline.length, 1);
   assert.equal(payload.messageItem.toolTimeline[0].status, "completed");
   assert.equal(payload.messageItem.toolTimeline[0].call.eventId, "call-start");
@@ -197,6 +207,8 @@ test("thinking detail publishes its authoritative source revision", () => {
           rawMessages: [
             {
               role: "assistant",
+              presentationMessageId: "pm_fx7",
+              modelMessageId: "mm_session_thinking_detail__6",
               type: "message",
               turnScopeId: "revision-turn",
             },
@@ -219,8 +231,9 @@ test("stopped turn detail uses the persisted presentation identity without a fin
           sessionId: "stopped-session",
           rawMessages: [
             {
-              id: "tool-call-message",
+              messageUid: "sm-tool-call-message",
               role: "assistant",
+              modelMessageId: "mm_session_thinking_detail__7",
               type: "tool_call",
               chatPresentation: false,
               sessionId: "stopped-session",
@@ -255,8 +268,9 @@ test("stopped turn detail uses the persisted presentation identity without a fin
 test("session summary references canonical thinking detail without copying its timeline", () => {
   const messages = [
     {
-      messageId: "tool-call-one",
+      modelMessageId: "tool-call-one",
       role: "assistant",
+      presentationMessageId: "pm_workflow_turn_2",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
       toolTimeline: [
@@ -270,8 +284,9 @@ test("session summary references canonical thinking detail without copying its t
       ],
     },
     {
-      messageId: "tool-call-two",
+      modelMessageId: "tool-call-two",
       role: "assistant",
+      presentationMessageId: "pm_workflow_turn_2",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
       toolTimeline: [
@@ -285,7 +300,8 @@ test("session summary references canonical thinking detail without copying its t
       ],
     },
     {
-      messageId: "final-assistant",
+      modelMessageId: "final-assistant",
+      presentationMessageId: "final-assistant",
       role: "assistant",
       type: "message",
       turnScopeId: "workflow-node:turn-2",
@@ -299,7 +315,9 @@ test("session summary references canonical thinking detail without copying its t
     aggregateVersion: 0,
     messages,
   });
-  const summaryMessage = summary.messages.find((item) => item.messageId === "final-assistant");
+  const summaryMessage = summary.messages.find(
+    (item) => item.presentationMessageId === "final-assistant",
+  );
   const detail = buildThinkingDetailPayload(
     {
       sessionId: "child-session",
@@ -320,8 +338,10 @@ test("session summary does not copy large tool payloads retained by thinking det
   const largePayload = "x".repeat(512 * 1024);
   const messages = [
     {
-      id: "final-assistant",
+      messageUid: "sm-final-assistant",
       role: "assistant",
+      presentationMessageId: "pm_fx10",
+      modelMessageId: "mm_session_thinking_detail__8",
       type: "message",
       turnScopeId: "turn-large-detail",
       content: "done",
@@ -371,6 +391,8 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
           {
             messageUid: "sm-one",
             role: "assistant",
+            presentationMessageId: "pm_fx11",
+            modelMessageId: "mm_session_thinking_detail__9",
             type: "message",
             turnScopeId: "turn-one",
             dialogProcessId: "dialog-one",
@@ -380,6 +402,8 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
           {
             messageUid: "sm-two",
             role: "assistant",
+            presentationMessageId: "pm_fx12",
+            modelMessageId: "mm_session_thinking_detail__10",
             type: "message",
             turnScopeId: "turn-two",
             dialogProcessId: "dialog-two",

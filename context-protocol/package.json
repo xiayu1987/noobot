@@ -27,6 +27,7 @@
     "./policy/block": "./src/policy/block.js",
     "./policy/no-final-response-retry": "./src/policy/no-final-response-retry.js",
     "./policy/injected-message": "./src/policy/injected-message.js",
+    "./policy/main-flow-control": "./src/policy/main-flow-control.js",
     "./policy/message": "./src/policy/message.js",
     "./policy/snapshot": "./src/policy/snapshot.js",
     "./policy/snapshot-migration": "./src/policy/snapshot-migration.js",

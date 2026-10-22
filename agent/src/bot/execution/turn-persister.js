@@ -9,7 +9,7 @@ import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { emitEvent } from "../../events/index.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
-import { EXECUTION_LOG_EVENT, MESSAGE_ROLE, MESSAGE_TYPE } from "../config/constants.js";
+import { EXECUTION_LOG_EVENT, MESSAGE_ROLE } from "../config/constants.js";
 import { summarizeSessionTurnPayload } from "./turn-payload-summary.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
@@ -88,8 +88,9 @@ function normalizeSessionTurnInput(input = {}) {
     ...input,
     userName: valueOrDefault(input.userName, input.userId),
     messageUid: text(input.messageUid),
-    messageId: text(valueOrDefault(input.messageId, "")),
-    presentationMessageId: text(valueOrDefault(input.presentationMessageId, "")),
+    modelMessageId: text(input.modelMessageId),
+    userMessageId: text(input.userMessageId),
+    presentationMessageId: text(input.presentationMessageId),
     chatPresentation: input.chatPresentation === true,
     type: valueOrDefault(input.type, ""),
     taskId: valueOrDefault(input.taskId, null),
@@ -117,7 +118,6 @@ function normalizeSessionTurnInput(input = {}) {
     relayCorrelationId: valueOrDefault(input.relayCorrelationId, ""),
     interjectionSequence: positiveIntegerValue(input.interjectionSequence),
     messageOrigin: text(input.messageOrigin).toLowerCase(),
-    userMetaMaterialized: input.userMetaMaterialized === true,
     pluginMessage: input.pluginMessage === true,
     pluginMeta: valueOrDefault(input.pluginMeta, null),
     transferEnvelopes: filterSessionTransferEnvelopes(valueOrDefault(input.transferEnvelopes, [])),
@@ -138,7 +138,8 @@ function buildFullTurnPayload(input) {
   return {
     role: input.role,
     ...optionalValueField("messageUid", input.messageUid),
-    ...optionalValueField("messageId", input.messageId),
+    ...optionalValueField("modelMessageId", input.modelMessageId),
+    ...optionalValueField("userMessageId", input.userMessageId),
     ...optionalValueField("presentationMessageId", input.presentationMessageId),
     ...assistantPresentationField(input),
     content: stringValue(input.content),
@@ -167,7 +168,6 @@ function buildFullTurnPayload(input) {
     relayCorrelationId: stringValue(input.relayCorrelationId).trim(),
     ...optionalValueField("interjectionSequence", input.interjectionSequence),
     messageOrigin: input.messageOrigin,
-    userMetaMaterialized: input.userMetaMaterialized,
     pluginMessage: input.pluginMessage,
     pluginMeta: normalizedOptionalObject(input.pluginMeta),
     ...optionalListField("transferEnvelopes", input.transferEnvelopes),
@@ -237,7 +237,8 @@ function buildTurnPayload(input) {
   return {
     role: input.role,
     messageUid: input.messageUid,
-    messageId: input.messageId,
+    modelMessageId: input.modelMessageId,
+    userMessageId: input.userMessageId,
     presentationMessageId: input.presentationMessageId,
     chatPresentation: input.chatPresentation,
     content: String(input.content || ""),
@@ -268,7 +269,6 @@ function buildTurnPayload(input) {
     relayCorrelationId: input.relayCorrelationId,
     interjectionSequence: input.interjectionSequence,
     messageOrigin: input.messageOrigin,
-    userMetaMaterialized: input.userMetaMaterialized,
     pluginMessage: input.pluginMessage,
     pluginMeta: input.pluginMeta,
     ...(input.transferEnvelopes.length ? { transferEnvelopes: input.transferEnvelopes } : {}),
@@ -302,7 +302,8 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     sessionId: input.sessionId,
     role: firstTruthyValue([messageItem.role], MESSAGE_ROLE.ASSISTANT),
     messageUid: stringValue(messageItem?.messageUid).trim(),
-    messageId: text(messageItem?.messageId),
+    modelMessageId: text(messageItem?.modelMessageId),
+    userMessageId: text(messageItem?.userMessageId),
     presentationMessageId: stringValue(messageItem.presentationMessageId).trim(),
     ...(typeof messageItem.chatPresentation === "boolean"
       ? { chatPresentation: messageItem.chatPresentation }
@@ -336,7 +337,6 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     relayCorrelationId: text(messageItem?.relayCorrelationId),
     interjectionSequence: positiveIntegerValue(messageItem.interjectionSequence),
     messageOrigin: text(messageItem?.messageOrigin).toLowerCase(),
-    userMetaMaterialized: messageItem?.userMetaMaterialized === true,
     pluginMessage: messageItem?.pluginMessage === true,
     pluginMeta: normalizedOptionalObject(messageItem.pluginMeta),
     transferEnvelopes: arrayValue(messageItem.transferEnvelopes),
@@ -357,15 +357,6 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
 export class SessionTurnPersister {
   constructor({ session = null } = {}) {
     this.session = session;
-  }
-
-  buildDefaultAssistantTurn({ agentResult = {}, dialogProcessId = "" }) {
-    return {
-      role: MESSAGE_ROLE.ASSISTANT,
-      content: String(agentResult?.output || ""),
-      type: MESSAGE_TYPE.MESSAGE,
-      dialogProcessId,
-    };
   }
 
   async _prepareTurnPayload(payload = {}) {

@@ -3,12 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { commitAuthoritativeFinalResult } from "../../../src/runtime/engine.js";
-import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 import {
   beginAssistantMessageEventStream,
   bindAssistantMessageEventStream,
@@ -18,25 +19,28 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 test("authoritative final event owns generated attachment envelopes before persistence", async () => {
   const events = [];
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     eventListener: { onEvent: (event = {}) => events.push(event) },
     sessionManager: createCanonicalMessageEventSessionManager(),
-    userId: "user-1",
-    runConfig: { commandId: "command-1", turnScopeId: "turn-1" },
+    runConfig: { hookManager: null, commandId: "command-1", turnScopeId: "turn-1" },
     systemRuntime: {
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
     },
-  };
+  });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-1",
     parentSessionId: "",
+    workflowRunId: "",
+    nodeExecutionId: "",
   });
-  beginAssistantMessageEventStream(runtime);
+  initializeCurrentTurnMessageEventProjection(runtime);
+  beginAssistantMessageEventStream(runtime, { turn: 0 });
 
   const transferEnvelope = {
     protocol: "noobot.semantic-transfer",
@@ -80,33 +84,35 @@ test("authoritative final event owns generated attachment envelopes before persi
       },
     },
   };
-  runtime.currentTurnMessages = createCurrentTurnMessagesStore([
+  runtime.currentTurnMessages.replaceAll([
     {
       role: "tool",
       type: "tool_result",
       messageUid: "sm_tool_message_1",
-      messageId: "tool-message-1",
       transferEnvelopes: [transferEnvelope],
     },
     {
       role: "assistant",
       type: "message",
       messageUid: "sm_assistant_message_1",
-      messageId: "assistant-message-1",
+      modelMessageId: "assistant-message-1",
       presentationMessageId: "presentation-1",
       content: "draft",
     },
   ]);
-  const result = {
+  const result = createAgentTurnResult({
     output: "final answer",
     modelMessageId: "assistant-message-1",
+    traces: [],
     turnMessages: runtime.currentTurnMessages.toArray(),
-  };
+    modelMessages: [],
+    modelLoopRound: 0,
+    turnTasks: [],
+  });
   runtime.currentTurnMessages.push({
     role: "system",
     type: "message",
     messageUid: "sm_final_hook_control_1",
-    messageId: "final-hook-control-1",
     content: "final response policy",
     summarized: false,
   });
@@ -119,16 +125,17 @@ test("authoritative final event owns generated attachment envelopes before persi
   assert.deepEqual(
     runtime.currentTurnMessages
       .toArray()
-      .find((message) => message.messageId === "assistant-message-1")?.transferEnvelopes,
+      .find((message) => message.modelMessageId === "assistant-message-1")?.transferEnvelopes,
     [transferEnvelope],
   );
   assert.deepEqual(
-    result.turnMessages.find((message) => message.messageId === "assistant-message-1")
+    result.turnMessages.find((message) => message.modelMessageId === "assistant-message-1")
       ?.transferEnvelopes,
     [transferEnvelope],
   );
   assert.equal(
-    result.turnMessages.find((message) => message.messageId === "final-hook-control-1")?.summarized,
+    result.turnMessages.find((message) => message.messageUid === "sm_final_hook_control_1")
+      ?.summarized,
     true,
   );
 });
@@ -139,7 +146,7 @@ test("authoritative final completion retains classified checkpoint call-result p
   const toolCallMessage = (messageUid, callId, name, contextPolicy = null) => ({
     messageUid,
     id: `provider-${messageUid}`,
-    messageId: `provider-${messageUid}`,
+    modelMessageId: `provider-${messageUid}`,
     role: "assistant",
     type: "tool_call",
     tool_calls: [
@@ -154,30 +161,36 @@ test("authoritative final completion retains classified checkpoint call-result p
   const toolResultMessage = (messageUid, callId, name) => ({
     messageUid,
     id: messageUid,
-    messageId: messageUid,
+
     role: "tool",
     type: "tool_result",
     tool_call_id: callId,
     toolName: name,
     content: `${name} result`,
   });
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     eventListener: { onEvent: () => {} },
     sessionManager: createCanonicalMessageEventSessionManager(),
-    userId: "user-checkpoint",
-    runConfig: { commandId: "command-checkpoint", turnScopeId: "turn-checkpoint" },
+    runConfig: {
+      hookManager: null,
+      commandId: "command-checkpoint",
+      turnScopeId: "turn-checkpoint",
+    },
     systemRuntime: {
       sessionId: "session-checkpoint",
       dialogProcessId: "dialog-checkpoint",
       turnScopeId: "turn-checkpoint",
     },
-  };
+  });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "final-presentation",
     parentSessionId: "",
+    workflowRunId: "",
+    nodeExecutionId: "",
   });
-  beginAssistantMessageEventStream(runtime);
-  runtime.currentTurnMessages = createCurrentTurnMessagesStore([
+  initializeCurrentTurnMessageEventProjection(runtime);
+  beginAssistantMessageEventStream(runtime, { turn: 0 });
+  runtime.currentTurnMessages.replaceAll([
     toolCallMessage("ordinary-call-message", "ordinary-call", "execute_script"),
     toolResultMessage("ordinary-result-message", "ordinary-call", "execute_script"),
     toolCallMessage("evidence-call-message", "evidence-call", "task_check", evidencePolicy),
@@ -189,18 +202,22 @@ test("authoritative final completion retains classified checkpoint call-result p
     {
       messageUid: "final-message-uid",
       id: "final-message",
-      messageId: "final-message",
+      modelMessageId: "final-message",
       presentationMessageId: "final-presentation",
       role: "assistant",
       type: "message",
       content: "draft",
     },
   ]);
-  const result = {
+  const result = createAgentTurnResult({
     output: "final answer",
     modelMessageId: "final-message",
+    traces: [],
+    turnMessages: runtime.currentTurnMessages.toArray(),
     modelMessages: [],
-  };
+    modelLoopRound: 0,
+    turnTasks: [],
+  });
 
   assert.equal(await commitAuthoritativeFinalResult({ result, runtime }), true);
 

@@ -56,7 +56,7 @@ function replacement(commandId = "replace-old", replacementTurnScopeId = "turn-n
     replacedTurnScopeIds: ["turn-old"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId,
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: `request-hash-${commandId}`,
     committedAt: "2026-07-31T00:00:01.000Z",
   });
@@ -81,7 +81,7 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
     turnScopeId: "turn-old",
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "request-hash-replace-old",
     commandId: "replace-old",
     committedAggregateVersion: 2,
@@ -141,7 +141,7 @@ test("turn replacement rejects partial or mutated replay of one command", () => 
     replacedTurnScopeIds: ["turn-old", "turn-tail"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "request-hash-replace-many",
     committedAt: "2026-07-31T00:00:01.000Z",
   });
@@ -165,7 +165,7 @@ test("turn replacement rejects partial or mutated replay of one command", () => 
     lifecycle: committed.lifecycle,
     replacement: createTurnReplacementCommit({
       ...firstCommit,
-      replacementUserMessageId: "user-other",
+      replacementUserMessageUid: "user-other",
     }),
   });
   assert.equal(mutatedReplay.applied, false);
@@ -240,7 +240,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
       replacedTurnScopeIds: ["turn-target"],
       replacementDialogProcessId: "dialog-replacement",
       replacementTurnScopeId: "turn-replacement",
-      replacementUserMessageId: "user-replacement",
+      replacementUserMessageUid: "user-replacement",
       requestHash: "request-hash-replace-target",
       committedAt: "2026-07-31T00:00:02.000Z",
     }),

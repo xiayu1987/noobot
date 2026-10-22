@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createMessageUid } from "@noobot/session-protocol/message-identity";
+import { createMessageUid, createUserMessageId } from "@noobot/session-protocol/message-identity";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import {
@@ -18,7 +18,10 @@ import {
   pruneSessionMessageFacts,
   registerSessionMessageFacts,
 } from "../../entities/session-message-facts.js";
-import { pruneTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
+import {
+  pruneTurnSummaryCheckpoints,
+  writeTurnSummaryCheckpoints,
+} from "@noobot/context-protocol/policy/summary";
 import {
   appendCommandReceipt,
   assertTurnReplacementMaterialization,
@@ -42,9 +45,10 @@ import { text } from "@noobot/shared/value";
 function pruneTruncatedSessionFacts(session) {
   pruneSessionTurnTimings(session);
   pruneSessionMessageFacts(session);
-  session.turnSummaryCheckpoints = pruneTurnSummaryCheckpoints(
-    session.turnSummaryCheckpoints,
-    session.messages,
+  if (!("turnSummaryCheckpoints" in session)) return;
+  writeTurnSummaryCheckpoints(
+    session,
+    pruneTurnSummaryCheckpoints(session.turnSummaryCheckpoints, session.messages),
   );
 }
 
@@ -162,7 +166,7 @@ function normalizeAnchoredCommandRequest({ userId, sessionId, anchor, commandId 
 
 function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
   const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage);
-  for (const key of ["turnId", "messageId", "messageUid"]) {
+  for (const key of ["turnId", "messageUid", "userMessageId"]) {
     delete replacementBaseMessage[key];
   }
   const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(fields.attachments);
@@ -170,6 +174,7 @@ function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
     {
       ...replacementBaseMessage,
       messageUid: createMessageUid(),
+      userMessageId: createUserMessageId(),
       role: "user",
       type: "message",
       content: fields.content,
@@ -330,7 +335,7 @@ export async function replaceTurn({
       session.updatedAt = nowValue;
       session.aggregateVersion = nextAggregateVersion;
 
-      const replacementUserMessageId = text(newMessage.messageId);
+      const replacementUserMessageUid = text(newMessage.messageUid);
       const turnReplacement = createTurnReplacementCommit({
         commandId: normalizedCommandId,
         sessionId,
@@ -338,7 +343,7 @@ export async function replaceTurn({
         replacedTurnScopeIds: uniqueValues(replacedMessages.map(resolveTurnScopeId)),
         replacementDialogProcessId,
         replacementTurnScopeId: normalizedTurnScopeId,
-        replacementUserMessageId,
+        replacementUserMessageUid,
         requestHash,
         committedAt: nowValue,
       });

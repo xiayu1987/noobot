@@ -16,7 +16,7 @@ export function createTurnReplacementCommit({
   replacedTurnScopeIds = [],
   replacementDialogProcessId,
   replacementTurnScopeId,
-  replacementUserMessageId,
+  replacementUserMessageUid,
   requestHash,
   committedAt = new Date().toISOString(),
 } = {}) {
@@ -33,7 +33,7 @@ export function createTurnReplacementCommit({
     ]),
     replacementDialogProcessId: text(replacementDialogProcessId),
     replacementTurnScopeId: text(replacementTurnScopeId),
-    replacementUserMessageId: text(replacementUserMessageId),
+    replacementUserMessageUid: text(replacementUserMessageUid),
     requestHash: text(requestHash),
     committedAt: text(committedAt),
   });
@@ -56,7 +56,7 @@ export function validateTurnReplacementCommit(commit = {}) {
   if (!text(commit?.replacementDialogProcessId))
     errors.push("missing_replacement_dialog_process_id");
   if (!text(commit?.replacementTurnScopeId)) errors.push("missing_replacement_turn_scope_id");
-  if (!text(commit?.replacementUserMessageId)) errors.push("missing_replacement_user_message_id");
+  if (!text(commit?.replacementUserMessageUid)) errors.push("missing_replacement_user_message_uid");
   if (!text(commit?.requestHash)) errors.push("missing_request_hash");
   if (commit?.replacedTurnScopeIds?.map(text).includes(text(commit?.replacementTurnScopeId))) {
     errors.push("replacement_scope_reuses_replaced_scope");
@@ -85,7 +85,7 @@ export function assertTurnReplacementMaterialization({ commit = {}, session = {}
   }
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const replacementUsers = messages.filter(
-    (message = {}) => text(message?.messageId) === text(commit.replacementUserMessageId),
+    (message = {}) => text(message?.messageUid) === text(commit.replacementUserMessageUid),
   );
   if (replacementUsers.length !== 1 || text(replacementUsers[0]?.role).toLowerCase() !== "user") {
     throw new TypeError("invalid turn replacement materialization: replacement_user_missing");

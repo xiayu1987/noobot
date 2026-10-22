@@ -115,20 +115,20 @@ describe("messageModel conversation folding", () => {
     const messages = foldConversationMessages(
       [
         {
-          id: "storage-user-1",
+          messageUid: "storage-user-1",
           role: "user",
           content: "question",
           turnScopeId: "client-turn:render-1",
         },
         {
-          id: "storage-assistant-1",
+          presentationMessageId: "storage-assistant-1",
           role: "assistant",
           content: "answer part 1",
           dialogProcessId: "dp-render-1",
           turnScopeId: "client-turn:render-1",
         },
         {
-          id: "storage-assistant-1",
+          presentationMessageId: "storage-assistant-1",
           role: "assistant",
           content: "answer part 2",
           dialogProcessId: "dp-render-1",

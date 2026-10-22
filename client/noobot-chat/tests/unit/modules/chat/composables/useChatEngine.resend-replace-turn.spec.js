@@ -50,15 +50,14 @@ describe("useChatEngine.resend replace turn", () => {
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
     });
     const user = {
-      id: "old-user",
-      messageId: "old-user",
+      messageUid: "old-user",
+      userMessageId: "old-user",
       turnScopeId: "client-turn:old",
       role: RoleEnum.USER,
       content: "old question",
     };
     const assistant = {
-      id: "old-assistant",
-      messageId: "old-assistant",
+      presentationMessageId: "old-assistant",
       turnScopeId: "client-turn:old",
       role: RoleEnum.ASSISTANT,
       content: "old answer",
@@ -83,8 +82,8 @@ describe("useChatEngine.resend replace turn", () => {
         aggregateVersion: 2,
         replacedTurnScopeIds: ["client-turn:old"],
         replacementUser: {
-          id: "replacement-user",
-          messageId: "replacement-user",
+          messageUid: "replacement-user",
+          userMessageId: "replacement-user",
           turnScopeId: "client-turn:replacement",
           role: RoleEnum.USER,
           content: "edited question",
@@ -109,8 +108,8 @@ describe("useChatEngine.resend replace turn", () => {
     }));
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
-        id: "msg-user-replace-success",
-        messageId: "msg-user-replace-success",
+        messageUid: "msg-user-replace-success",
+        userMessageId: "msg-user-replace-success",
         turnScopeId,
         role: RoleEnum.USER,
         content: "edited question",
@@ -190,8 +189,7 @@ describe("useChatEngine.resend replace turn", () => {
       "",
       [],
       expect.objectContaining({
-        id: expect.stringMatching(/^pm_/),
-        messageId: expect.stringMatching(/^pm_/),
+        presentationMessageId: expect.stringMatching(/^pm_/),
         sessionId: "local-resend-replace-success",
         turnScopeId: expect.stringMatching(/^client-turn:/),
       }),
@@ -210,7 +208,8 @@ describe("useChatEngine.resend replace turn", () => {
       (message) => message.role === RoleEnum.USER && message.content === "edited question",
     );
     const canonicalAssistantIndex = activeSession.value.messages.findIndex(
-      (message) => message.role === RoleEnum.ASSISTANT && /^pm_/.test(message.messageId || ""),
+      (message) =>
+        message.role === RoleEnum.ASSISTANT && /^pm_/.test(message.presentationMessageId),
     );
     expect(canonicalAssistantIndex).toBeGreaterThan(replacementUserIndex);
     expect(activeSession.value.messages[canonicalAssistantIndex]).not.toHaveProperty(
@@ -256,8 +255,8 @@ describe("useChatEngine.resend replace turn", () => {
             : attachment,
         );
         const replacementUser = {
-          id: "msg-user-resend-attachments",
-          messageId: "msg-user-resend-attachments",
+          messageUid: "msg-user-resend-attachments",
+          userMessageId: "msg-user-resend-attachments",
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -361,8 +360,8 @@ describe("useChatEngine.resend replace turn", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
         const replacementUser = {
-          id: "msg-user-preserve-baseline",
-          messageId: "msg-user-preserve-baseline",
+          messageUid: "msg-user-preserve-baseline",
+          userMessageId: "msg-user-preserve-baseline",
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -437,8 +436,8 @@ describe("useChatEngine.resend replace turn", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
         const replacementUser = {
-          id: "msg-user-unchanged-attachment",
-          messageId: "msg-user-unchanged-attachment",
+          messageUid: "msg-user-unchanged-attachment",
+          userMessageId: "msg-user-unchanged-attachment",
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -543,8 +542,8 @@ describe("useChatEngine.resend replace turn", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
         const replacementUser = {
-          id: "msg-user-rich-raw",
-          messageId: "msg-user-rich-raw",
+          messageUid: "msg-user-rich-raw",
+          userMessageId: "msg-user-rich-raw",
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -632,8 +631,8 @@ describe("useChatEngine.resend replace turn", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
         const replacementUser = {
-          id: "msg-user-delete-attachments",
-          messageId: "msg-user-delete-attachments",
+          messageUid: "msg-user-delete-attachments",
+          userMessageId: "msg-user-delete-attachments",
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,

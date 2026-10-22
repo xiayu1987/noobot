@@ -9,12 +9,13 @@ import assert from "node:assert/strict";
 
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
 function messageEvent(eventId, eventType, sequence, payload = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId,
       eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -39,7 +40,7 @@ test("tool result transfer envelopes project onto the canonical assistant turn",
   const store = createCurrentTurnMessagesStore([
     {
       role: "assistant",
-      messageId: "model-message-1",
+      modelMessageId: "model-message-1",
       messageUid: "assistant-1",
       toolTimeline: [],
     },
@@ -81,7 +82,7 @@ test("model analysis activity projects once and awaits its durable checkpoint", 
   const store = createCurrentTurnMessagesStore([
     {
       role: "assistant",
-      messageId: "model-message-1",
+      modelMessageId: "model-message-1",
       messageUid: "assistant-1",
       activityTimeline: [],
     },
@@ -129,7 +130,7 @@ test("streamed activity deltas update the live projection and persist once on co
   const store = createCurrentTurnMessagesStore([
     {
       role: "assistant",
-      messageId: "model-message-1",
+      modelMessageId: "model-message-1",
       messageUid: "assistant-1",
       activityTimeline: [],
     },
@@ -176,7 +177,7 @@ test("a completed activity attaches to its own model message, not the latest ass
   const store = createCurrentTurnMessagesStore([
     {
       role: "assistant",
-      messageId: "model-message-1",
+      modelMessageId: "model-message-1",
       messageUid: "assistant-1",
       activityTimeline: [],
     },

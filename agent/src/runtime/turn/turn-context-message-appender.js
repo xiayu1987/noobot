@@ -13,6 +13,7 @@ import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
 } from "@noobot/context-protocol/policy/injected-message";
 import { text } from "@noobot/shared/value";
+import { requireActiveModelContext } from "../active-model-context.js";
 
 function requireTurnContextStores({
   turnMessageStore,
@@ -38,7 +39,7 @@ export function appendTurnContextControlMessage({
   internalType = "",
 } = {}) {
   const turnMessageStore = runtime?.currentTurnMessages;
-  const modelContext = loopState?.modelContext;
+  const modelContext = requireActiveModelContext(runtime);
   const dialogProcessId = text(loopState?.dialogProcessId);
   const turnScopeId = text(modelContext?.activeTurnIdentity?.turnScopeId);
   const normalizedInternalType = text(internalType);
@@ -88,7 +89,7 @@ export function appendUserInterjectionMessage({
   interjection = {},
 } = {}) {
   const turnMessageStore = runtime?.currentTurnMessages;
-  const modelContext = loopState?.modelContext || runtime?.activeMessageContext;
+  const modelContext = requireActiveModelContext(runtime);
   const dialogProcessId = text(
     loopState?.dialogProcessId || modelContext?.activeTurnIdentity?.dialogProcessId,
   );

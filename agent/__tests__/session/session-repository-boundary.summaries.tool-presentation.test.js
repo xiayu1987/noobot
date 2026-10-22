@@ -23,7 +23,7 @@ test("session summary projects attachment identities without object stringificat
     messages: [
       {
         id: "assistant-1",
-        messageId: "assistant-1",
+        modelMessageId: "assistant-1",
         messageUid: "sm-summary-1",
         presentationMessageId: "assistant-1",
         dialogProcessId: "dialog-summary-1",
@@ -67,7 +67,7 @@ test("session summary uses the canonical tool presentation protocol", () => {
     messages: [
       {
         id: "assistant-tool-summary",
-        messageId: "assistant-tool-summary",
+        modelMessageId: "assistant-tool-summary",
         messageUid: "sm-tool-summary",
         presentationMessageId: "assistant-tool-summary",
         dialogProcessId: "dialog-tool-summary",

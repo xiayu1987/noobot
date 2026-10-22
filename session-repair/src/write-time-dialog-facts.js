@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { pruneTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
+import {
+  pruneTurnSummaryCheckpoints,
+  writeTurnSummaryCheckpoints,
+} from "@noobot/context-protocol/policy/summary";
 import {
   SESSION_ARTIFACT_WRITE_TIME_DIALOG_FACTS_SCHEMA_VERSION,
   deriveSessionAutoTitle,
@@ -100,10 +103,10 @@ export function migrateWriteTimeDialogFacts(context) {
   const autoTitle = deriveSessionAutoTitle(messages);
   if (autoTitle) next.autoTitle = autoTitle;
   else delete next.autoTitle;
-  if (isPlainObject(next.turnSummaryCheckpoints)) {
-    next.turnSummaryCheckpoints = pruneTurnSummaryCheckpoints(
-      next.turnSummaryCheckpoints,
-      messages,
+  if ("turnSummaryCheckpoints" in next) {
+    writeTurnSummaryCheckpoints(
+      next,
+      pruneTurnSummaryCheckpoints(next.turnSummaryCheckpoints, messages),
     );
   }
   context.changed = true;

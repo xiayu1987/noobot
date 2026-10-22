@@ -89,7 +89,14 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
     userId: "u1",
     sessionId: "s1",
     turns: [
-      { messageUid: "sm_done", role: "assistant", content: "done", transferEnvelopes: [envelope] },
+      {
+        messageUid: "sm_done",
+        role: "assistant",
+        presentationMessageId: "pm_fx1",
+        modelMessageId: "mm_session_message_service__1",
+        content: "done",
+        transferEnvelopes: [envelope],
+      },
     ],
   });
 
@@ -141,6 +148,8 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
       {
         messageUid: "sm_done",
         role: "assistant",
+        presentationMessageId: "pm_fx2",
+        modelMessageId: "mm_session_message_service__2",
         content: "done",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
@@ -223,6 +232,8 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
       {
         messageUid: "sm_done",
         role: "assistant",
+        presentationMessageId: "pm_fx3",
+        modelMessageId: "mm_session_message_service__3",
         content: "done",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
@@ -255,7 +266,14 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
     parentSessionId: "",
     aggregateVersion: 1,
     messages: [
-      { role: "assistant", content: "keep", turnScopeId: "turn-keep", dialogProcessId: "dp-keep" },
+      {
+        role: "assistant",
+        presentationMessageId: "pm_fx4",
+        modelMessageId: "mm_session_message_service__4",
+        content: "keep",
+        turnScopeId: "turn-keep",
+        dialogProcessId: "dp-keep",
+      },
       { role: "user", content: "hi", turnScopeId: "turn-delete", dialogProcessId: "dp-delete" },
     ],
     turnTimings: [
@@ -317,7 +335,14 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
     aggregateVersion: 1,
     messages: [
       { role: "user", content: "keep", turnScopeId: "turn-keep", dialogProcessId: "dp-keep" },
-      { role: "assistant", content: "old", turnScopeId: "turn-old", dialogProcessId: "dp-old" },
+      {
+        role: "assistant",
+        presentationMessageId: "pm_fx5",
+        modelMessageId: "mm_session_message_service__5",
+        content: "old",
+        turnScopeId: "turn-old",
+        dialogProcessId: "dp-old",
+      },
     ],
     turnTimings: [
       {

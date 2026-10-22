@@ -132,8 +132,7 @@ describe("useChatSession reconnect replay", () => {
   it("projects live tool call and result received after refresh into the restored assistant", async () => {
     const store = useChatStore();
     const assistant = {
-      id: "msg-live",
-      messageId: "msg-live",
+      presentationMessageId: "msg-live",
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-live",
       turnScopeId: "turn-live",
@@ -198,8 +197,7 @@ describe("useChatSession reconnect replay", () => {
   it("keeps projecting message deltas that arrive after reconnect has completed", async () => {
     const store = useChatStore();
     const assistant = {
-      id: "msg-after-reconnect",
-      messageId: "msg-after-reconnect",
+      presentationMessageId: "msg-after-reconnect",
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-after-reconnect",
       turnScopeId: "turn-after-reconnect",
@@ -254,8 +252,7 @@ describe("useChatSession reconnect replay", () => {
       realtimeLogs: [{ type: "thinking", text: "old thinking" }],
     };
     const continuedAssistant = {
-      id: "msg-continued",
-      messageId: "msg-continued",
+      presentationMessageId: "msg-continued",
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-continued",
       turnScopeId: "turn-continued",
@@ -325,7 +322,6 @@ describe("useChatSession reconnect replay", () => {
           { role: RoleEnum.USER, content: "old q" },
           {
             role: RoleEnum.ASSISTANT,
-            messageId: "msg-old",
             presentationMessageId: "msg-old",
             dialogProcessId: "dp-old",
             turnScopeId: "turn-old",
@@ -334,7 +330,6 @@ describe("useChatSession reconnect replay", () => {
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
-            messageId: "msg-new",
             presentationMessageId: "msg-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",
@@ -382,7 +377,6 @@ describe("useChatSession reconnect replay", () => {
             { role: RoleEnum.USER, content: "old q" },
             {
               role: RoleEnum.ASSISTANT,
-              messageId: "msg-old",
               presentationMessageId: "msg-old",
               dialogProcessId: "dp-old",
               turnScopeId: "turn-old",
@@ -391,7 +385,6 @@ describe("useChatSession reconnect replay", () => {
             { role: RoleEnum.USER, content: "new q" },
             {
               role: RoleEnum.ASSISTANT,
-              messageId: "msg-new",
               presentationMessageId: "msg-new",
               dialogProcessId: "dp-new",
               turnScopeId: "turn-new",
@@ -426,7 +419,6 @@ describe("useChatSession reconnect replay", () => {
               { role: RoleEnum.USER, content: "old q" },
               {
                 role: RoleEnum.ASSISTANT,
-                messageId: "msg-old",
                 presentationMessageId: "msg-old",
                 dialogProcessId: "dp-old",
                 turnScopeId: "turn-old",
@@ -435,7 +427,6 @@ describe("useChatSession reconnect replay", () => {
               { role: RoleEnum.USER, content: "new q" },
               {
                 role: RoleEnum.ASSISTANT,
-                messageId: "msg-new",
                 presentationMessageId: "msg-new",
                 dialogProcessId: "dp-new",
                 turnScopeId: "turn-new",
@@ -449,7 +440,6 @@ describe("useChatSession reconnect replay", () => {
           { role: RoleEnum.USER, content: "old q" },
           {
             role: RoleEnum.ASSISTANT,
-            messageId: "msg-old",
             presentationMessageId: "msg-old",
             dialogProcessId: "dp-old",
             turnScopeId: "turn-old",
@@ -458,7 +448,6 @@ describe("useChatSession reconnect replay", () => {
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
-            messageId: "msg-new",
             presentationMessageId: "msg-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",

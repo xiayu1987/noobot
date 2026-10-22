@@ -13,7 +13,7 @@ import {
   projectSessionRecordToContextMessage,
   projectSessionRecordsToContextMessages,
 } from "../src/message/session-projection.js";
-import { readContextMessageValue, resolveContextMessageId } from "../src/message/codec.js";
+import { readContextMessageValue, resolveContextMessageKey } from "../src/message/codec.js";
 
 function transferEnvelope({ transferId = "transfer-1", content = "payload" } = {}) {
   return {
@@ -48,7 +48,7 @@ test("Session Record projection preserves explicit canonical facts", () => {
     transferEnvelopes: [envelope],
   });
 
-  assert.equal(resolveContextMessageId(projected), "message-1");
+  assert.equal(resolveContextMessageKey(projected), "message-1");
   assert.equal(projected.role, "assistant");
   assert.deepEqual(readContextMessageValue(projected, "transferEnvelopes"), [envelope]);
   assert.equal(projected.messageUid, undefined);

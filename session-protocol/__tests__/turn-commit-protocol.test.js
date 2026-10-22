@@ -19,7 +19,7 @@ function createCommit(overrides = {}) {
     turnScopeId: "turn-1",
     userMessage: {
       messageUid: "sm_1",
-      messageId: "frontend-user-1",
+      userMessageId: "frontend-user-1",
       role: "user",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",

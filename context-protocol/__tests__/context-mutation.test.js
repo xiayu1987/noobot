@@ -67,7 +67,7 @@ test("remove-by-id mutation updates authoritative blocks and projection atomical
 
   assert.deepEqual(removeContextMessagesByIds(document, ["removed_1"]), {
     removedCount: 1,
-    removedMessageIds: ["removed_1"],
+    removedMessageKeys: ["removed_1"],
   });
   assert.equal(getModelContextRevision(document), revision + 1);
   assert.deepEqual(document.messageBlocks.incremental, []);

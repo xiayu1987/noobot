@@ -233,7 +233,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     signals: { successfulToolCount: 1 },
     pending: {
       summary: true,
-      summaryCheckpointMessageIds: ["stale-checkpoint-message"],
+      summaryCheckpointMessageKeys: ["stale-checkpoint-message"],
     },
   };
   const agentContext = {
@@ -249,7 +249,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
   };
   await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
   state.pending.summary = true;
-  state.pending.summaryCheckpointMessageIds = ["stale-checkpoint-message"];
+  state.pending.summaryCheckpointMessageKeys = ["stale-checkpoint-message"];
   state.flags.summaryByCharsPrompted = true;
   const tool = agentContext.bindings.tools.find((item) => item.name === "request_task_acceptance");
   const toolCtx = createTestHookContext({
@@ -264,7 +264,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
   assert.equal(state.flags.acceptanceRequested, true);
   assert.equal(state.flags.acceptanceReviewing, false);
   assert.equal(state.pending.summary, false);
-  assert.equal(state.pending.summaryCheckpointMessageIds, null);
+  assert.equal(state.pending.summaryCheckpointMessageKeys, null);
   assert.equal(state.flags.summaryByCharsPrompted, false);
   assert.equal(
     agentContext.bindings.tools.some((item) => item.name === "request_task_acceptance"),

@@ -33,11 +33,9 @@ function projectUserPresentationMessage({
   parentDialogProcessId,
   turnScopeId,
 }) {
-  const messageId = text(currentUserMessage?.messageId);
   return {
-    id: messageId,
-    messageId,
     messageUid: text(currentUserMessage?.messageUid),
+    userMessageId: text(currentUserMessage?.userMessageId),
     sessionId,
     parentSessionId,
     dialogProcessId,
@@ -48,7 +46,6 @@ function projectUserPresentationMessage({
     content: String(currentUserMessage?.content || ""),
     attachments: projectPresentationAttachments(currentUserMessage?.attachments),
     messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),
-    userMetaMaterialized: currentUserMessage?.userMetaMaterialized === true,
     ts: currentUserMessage?.ts,
   };
 }
@@ -99,10 +96,8 @@ export async function bindAgentDispatchRuntime({
   bindAssistantMessageEventStream(dispatchRuntime, {
     presentationMessageId,
     parentSessionId,
-    workflowRunId: text(resolvedRunConfig?.workflowRunId),
-    nodeExecutionId: text(
-      resolvedRunConfig?.workflowNodeExecutionId || resolvedRunConfig?.nodeExecutionId,
-    ),
+    workflowRunId: text(resolvedRunConfig.workflowRunId),
+    nodeExecutionId: text(resolvedRunConfig.workflowNodeExecutionId),
   });
   applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
   syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
@@ -122,7 +117,6 @@ export async function bindAgentDispatchRuntime({
           turnScopeId,
         }),
         assistantMessage: {
-          id: presentationMessageId,
           presentationMessageId,
           sessionId,
           parentSessionId,

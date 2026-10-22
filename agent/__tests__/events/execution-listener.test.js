@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createExecutionEventListener } from "../../src/events/execution-listener.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   ATTACHMENT_EVENT_TYPE,
   ATTACHMENT_LIFECYCLE,
@@ -279,12 +279,14 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
 
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.ATTACHMENT_LIFECYCLE).schemaVersion,
     identity: {
       eventId: "attachment-authority-event-a",
       eventType: "attachment_lifecycle",
       sessionId: "session-a",
       turnScopeId: "turn-a",
     },
+    causality: {},
     ordering: { domain: "attachment-lifecycle", scopeId: "source-a:session-a:user", sequence: 1 },
     producer: { type: "tool", id: "multimodal_parse" },
     occurredAt: lifecycle.occurredAt,
@@ -311,6 +313,7 @@ test("execution listener persists the canonical message fact instead of the priv
   });
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: "tool-event-a",
       eventType: "message_event",
@@ -361,6 +364,7 @@ test("execution listener forwards transient message events without persisting th
   const messageEnvelope = (eventId, sequence, payload) =>
     createEventEnvelope({
       family: EVENT_FAMILY.MESSAGE_TIMELINE,
+      schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
       identity: {
         eventId,
         eventType: "message_event",
@@ -486,12 +490,14 @@ test("execution listener rejects committed authority events that violate the pro
   });
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: "event-invalid",
       eventType: "message_event",
       sessionId: "session-a",
       turnScopeId: "turn-a",
     },
+    causality: {},
     ordering: { domain: "message-event", scopeId: "presentation-invalid", sequence: 1 },
     producer: { type: "agent", id: "test-agent" },
     occurredAt: "2026-08-16T00:00:00.000Z",
@@ -525,12 +531,14 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
 
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: "event-final",
       eventType: "message_event",
       sessionId: "session-a",
       turnScopeId: "turn-a",
     },
+    causality: {},
     ordering: { domain: "message-event", scopeId: "presentation-final", sequence: 1 },
     producer: { type: "agent", id: "test-agent" },
     occurredAt: "2026-08-16T00:00:00.000Z",

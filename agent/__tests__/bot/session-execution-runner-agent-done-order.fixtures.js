@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import assert from "node:assert/strict";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import fs from "node:fs/promises";
@@ -22,13 +23,14 @@ import {
 import { AGENT_RUN_EVENT } from "../../src/events/run-event.js";
 import { loadStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
+import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 
 export function createRunner({
   callOrder,
@@ -39,7 +41,8 @@ export function createRunner({
   prepareAgentTurnExecution,
   runtime,
   getSessionTurns = async () => [],
-  getTurnSummaryCheckpointState = async () => null,
+  getTurnSummaryCheckpointState = async ({ dialogProcessId, turnScopeId }) =>
+    createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }),
   appendAgentMessages = async () => [],
 }) {
   const defaultRuntime = runtime || createTestRuntimeContext();
@@ -51,6 +54,7 @@ export function createRunner({
         committed: true,
         envelope: createEventEnvelope({
           family: EVENT_FAMILY.MESSAGE_TIMELINE,
+          schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
           identity: {
             eventId: `test-authority-event-${authorityEventSequence}`,
             eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -80,21 +84,23 @@ export function createRunner({
       agentRunner ||
       (async () => {
         callOrder.push("agentRunner");
-        return {
+        return createAgentTurnResult({
           output: "ok",
           modelMessageId: "message-test-assistant",
           traces: [{ id: "trace-1" }],
           turnMessages: [
             {
               messageUid: "sm_test-assistant",
-              messageId: "message-test-assistant",
+              modelMessageId: "message-test-assistant",
               role: "assistant",
               type: "message",
               content: "ok",
             },
           ],
           turnTasks: [],
-        };
+          modelMessages: [],
+          modelLoopRound: 0,
+        });
       }),
     errorLogger: {
       async log() {
@@ -116,6 +122,8 @@ export function createRunner({
     resolveScenarioRunConfig: (runConfig) => runConfig,
     prepareRunConfig: ({ runConfig: inputRunConfig }) => ({
       ...inputRunConfig,
+      hookManager: null,
+      botHookManager: null,
       ...runConfig,
     }),
     buildContextBuilder: () => ({ kind: "context-builder" }),
@@ -167,7 +175,7 @@ export function createRunner({
     const messageUid = `sm_test_${turnScopeId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
     acceptedUserMessages.set(turnScopeId, {
       messageUid,
-      messageId: acceptedRunConfig.userMessageId,
+      userMessageId: acceptedRunConfig.userMessageId,
       role: "user",
       type: "message",
       content: request.message,
@@ -176,7 +184,6 @@ export function createRunner({
       dialogProcessId: "dialog-1",
       turnScopeId,
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       attachments: [],
     });
     return runner.runSession(

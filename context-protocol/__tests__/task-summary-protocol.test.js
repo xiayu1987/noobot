@@ -76,7 +76,8 @@ test("task summary context recovery accepts only a classified canonical v1 bound
     role: "user",
     content,
     additional_kwargs: {
-      messageUid: "summary-result-message::phase_summary",
+      projectionType: "phase_summary",
+      sourceMessageUid: "summary-result-message",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       noobotInternalMessageType: "phase_summary_memory",
@@ -93,7 +94,7 @@ test("task summary context recovery accepts only a classified canonical v1 bound
         tool_call_id: "summary-call-1",
         additional_kwargs: { contextPolicy: boundaryPolicy },
       }),
-    /requires additional_kwargs\.messageUid/,
+    /context message identity must be exactly one shape, got: none/,
   );
 
   assert.equal(

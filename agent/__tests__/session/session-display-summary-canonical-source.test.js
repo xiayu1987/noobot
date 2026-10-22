@@ -75,6 +75,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
       [
         {
           role: "assistant",
+          presentationMessageId: "pm_fx1",
           content: "parsed",
           transferEnvelopes: [canonicalTransferEnvelope(sessionId)],
         },
@@ -126,7 +127,6 @@ test("session detail derives transfer envelopes from the canonical Session", asy
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
       userId,
     });
-    assert.deepEqual(maintenance.migratedSessionIds, []);
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
   });
 });

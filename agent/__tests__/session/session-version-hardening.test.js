@@ -70,10 +70,11 @@ test("accepted user message and bindTurnAttachments increment one aggregate vers
 
 test("accepted user message persists the preallocated user message identity", async () => {
   const h = harness();
-  const result = await acceptTurn(h.service, { turnScopeId: "t1", messageId: "msg_user-1" });
+  const result = await acceptTurn(h.service, { turnScopeId: "t1", userMessageId: "um_user-1" });
   assert.equal("id" in result.userMessage, false);
-  assert.equal(result.userMessage.messageId, "msg_user-1");
-  assert.equal(h.get().messages[0].messageId, "msg_user-1");
+  assert.equal("messageId" in result.userMessage, false);
+  assert.equal(result.userMessage.userMessageId, "um_user-1");
+  assert.equal(h.get().messages[0].userMessageId, "um_user-1");
 });
 
 test("accepted user message persists internal run origin without frontend user identity", async () => {
@@ -82,13 +83,12 @@ test("accepted user message persists internal run origin without frontend user i
     turnScopeId: "internal-turn:1",
     userMessage: {
       content: "internal task",
-      messageId: "msg_internal-1",
+      userMessageId: "um_internal-1",
       messageOrigin: "internal",
-      userMetaMaterialized: false,
     },
   });
   assert.equal(result.userMessage.messageOrigin, "internal");
-  assert.equal(result.userMessage.userMetaMaterialized, false);
+  assert.equal("userMetaMaterialized" in result.userMessage, false);
 });
 
 test("accepted turns receive allocated dialog identity and an immutable logical dialog ordinal", async () => {
@@ -135,7 +135,7 @@ test("dialog order accepts only canonical dialogOrdinal and messageUid fields", 
           dialogProcessId: "d1",
           turnScopeId: "t1",
           messageUid: "sm_m1",
-          messageId: "m1",
+          userMessageId: "m1",
           ts: "2026-01-01T00:00:00.000Z",
         },
       ],
@@ -177,8 +177,9 @@ test("messages without a persistent messageUid are rejected", () => {
     messages: [
       {
         role: "assistant",
+        presentationMessageId: "pm_fx1",
         content: "legacy",
-        messageId: "am_1",
+        modelMessageId: "am_1",
         dialogProcessId: "d1",
         turnScopeId: "t1",
         ts: "2026-01-01T00:00:00.000Z",
@@ -187,7 +188,7 @@ test("messages without a persistent messageUid are rejected", () => {
   };
   assert.throws(
     () => normalizeSessionEntity(invalid, { now: () => "2026-01-01T00:00:00.000Z" }),
-    /invalid session aggregate: missing_message_uid/,
+    /invalid session message identity: session_message_uid_missing/,
   );
 });
 
@@ -321,6 +322,8 @@ test("internal append and summary checkpoint use mutation lock without changing 
       {
         messageUid: "sm_a",
         role: "assistant",
+        presentationMessageId: "pm_fx2",
+        modelMessageId: "mm_session_version_hardenin_1",
         content: "a",
         turnScopeId: "t",
         dialogProcessId: "dp",
@@ -335,6 +338,9 @@ test("internal append and summary checkpoint use mutation lock without changing 
     turnScopeId: "t",
     checkpointId: "cp-lock",
     summarizedMessageUids: [targetUid],
+    expectedCheckpointRevision: 0,
+    persistedMessageUids: [],
+    retainedMessageUids: [],
   });
   assert.equal(h.get().aggregateVersion, 7);
   assert.equal(h.get().messages.find((m) => m.messageUid === targetUid).summarized, true);
@@ -350,15 +356,19 @@ test("summary checkpoint without complete transaction identity fails closed", as
     ],
   });
 
-  const result = await h.service.commitTurnSummaryCheckpoint({
-    userId: "u1",
-    sessionId: "s1",
-    checkpointId: "cp-missing-scope",
-    summarizedMessageUids: ["sm_old"],
-  });
+  await assert.rejects(
+    h.service.commitTurnSummaryCheckpoint({
+      userId: "u1",
+      sessionId: "s1",
+      checkpointId: "cp-missing-scope",
+      summarizedMessageUids: ["sm_old"],
+      expectedCheckpointRevision: 0,
+      persistedMessageUids: [],
+      retainedMessageUids: [],
+    }),
+    (error) => error.code === "DIALOG_PROCESS_ID_INVALID",
+  );
 
-  assert.equal(result.committed, false);
-  assert.equal(result.reason, "missing_checkpoint_identity");
   assert.equal(h.get().messages[0].summarized, undefined);
   assert.equal(h.locks(), 0);
 });
@@ -369,6 +379,8 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
       {
         messageUid: "sm_target",
         role: "assistant",
+        presentationMessageId: "pm_fx3",
+        modelMessageId: "mm_session_version_hardenin_2",
         content: "same",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -376,6 +388,8 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
       {
         messageUid: "sm_keep",
         role: "assistant",
+        presentationMessageId: "pm_fx4",
+        modelMessageId: "mm_session_version_hardenin_3",
         content: "same",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -383,6 +397,8 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
       {
         messageUid: "sm_history",
         role: "assistant",
+        presentationMessageId: "pm_fx5",
+        modelMessageId: "mm_session_version_hardenin_4",
         content: "same",
         dialogProcessId: "old",
         turnScopeId: "old-t",
@@ -402,6 +418,8 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
     checkpointId: "cp-1",
     persistedMessageUids: ["sm_target", "sm_keep"],
     summarizedMessageUids: ["sm_target"],
+    expectedCheckpointRevision: 0,
+    retainedMessageUids: [],
   };
 
   const committed = await h.service.commitTurnSummaryCheckpoint(input);
@@ -424,6 +442,8 @@ test("turn summary checkpoint restores explicitly retained messages to active co
       {
         messageUid: "sm_summary",
         role: "assistant",
+        presentationMessageId: "pm_fx6",
+        modelMessageId: "mm_session_version_hardenin_5",
         content: "old context",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -431,6 +451,8 @@ test("turn summary checkpoint restores explicitly retained messages to active co
       {
         messageUid: "sm_retained",
         role: "assistant",
+        presentationMessageId: "pm_fx7",
+        modelMessageId: "mm_session_version_hardenin_6",
         content: "latest check",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -453,6 +475,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
     persistedMessageUids: ["sm_summary", "sm_retained"],
     summarizedMessageUids: ["sm_summary"],
     retainedMessageUids: ["sm_retained"],
+    expectedCheckpointRevision: 0,
   });
 
   assert.equal(h.get().messages.find((m) => m.messageUid === "sm_summary").summarized, true);
@@ -472,6 +495,8 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
       {
         messageUid: "sm_call",
         role: "assistant",
+        presentationMessageId: "pm_fx8",
+        modelMessageId: "mm_session_version_hardenin_7",
         content: "",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -480,6 +505,7 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
       {
         messageUid: "sm_result",
         role: "tool",
+        presentationMessageId: "pm_fx9",
         content: "result",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -502,6 +528,8 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
       checkpointId: "cp-split",
       persistedMessageUids: ["sm_call", "sm_result"],
       summarizedMessageUids: ["sm_result"],
+      expectedCheckpointRevision: 0,
+      retainedMessageUids: [],
     }),
     (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT",
   );
@@ -518,6 +546,8 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
       {
         messageUid: "sm_current",
         role: "assistant",
+        presentationMessageId: "pm_fx10",
+        modelMessageId: "mm_session_version_hardenin_8",
         content: "current",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -525,6 +555,8 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
       {
         messageUid: "sm_old",
         role: "assistant",
+        presentationMessageId: "pm_fx11",
+        modelMessageId: "mm_session_version_hardenin_9",
         content: "old",
         dialogProcessId: "old",
         turnScopeId: "old-t",
@@ -543,6 +575,9 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
     turnScopeId: "t",
     checkpointId: "cp-cross",
     summarizedMessageUids: ["sm_old"],
+    expectedCheckpointRevision: 0,
+    persistedMessageUids: [],
+    retainedMessageUids: [],
   });
   assert.equal(historical.committed, true);
   assert.equal(
@@ -559,6 +594,9 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
     turnScopeId: "t",
     checkpointId: "cp-cross",
     summarizedMessageUids: ["sm_old"],
+    expectedCheckpointRevision: 0,
+    persistedMessageUids: [],
+    retainedMessageUids: [],
   });
   assert.equal(replay.deduplicated, true);
 
@@ -570,6 +608,9 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
       turnScopeId: "t",
       checkpointId: "cp-cross-persist",
       persistedMessageUids: ["sm_old"],
+      expectedCheckpointRevision: 1,
+      summarizedMessageUids: [],
+      retainedMessageUids: [],
     }),
     (error) => error.code === "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT",
   );
@@ -581,6 +622,8 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
       {
         messageUid: "sm_old_call",
         role: "assistant",
+        presentationMessageId: "pm_fx12",
+        modelMessageId: "mm_session_version_hardenin_10",
         content: "",
         dialogProcessId: "old",
         turnScopeId: "old-t",
@@ -589,6 +632,7 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
       {
         messageUid: "sm_old_result",
         role: "tool",
+        presentationMessageId: "pm_fx13",
         content: "result",
         dialogProcessId: "old",
         turnScopeId: "old-t",
@@ -610,6 +654,9 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
       turnScopeId: "t",
       checkpointId: "cp-old-split",
       summarizedMessageUids: ["sm_old_result"],
+      expectedCheckpointRevision: 0,
+      persistedMessageUids: [],
+      retainedMessageUids: [],
     }),
     (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT",
   );
@@ -621,6 +668,8 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
       {
         messageUid: "sm_done",
         role: "assistant",
+        presentationMessageId: "pm_fx14",
+        modelMessageId: "mm_session_version_hardenin_11",
         content: "done",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -639,6 +688,9 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
     turnScopeId: "t",
     checkpointId: "cp-terminal",
     summarizedMessageUids: ["sm_done"],
+    expectedCheckpointRevision: 0,
+    persistedMessageUids: [],
+    retainedMessageUids: [],
   });
   assert.equal(committed.committed, true);
   assert.equal(terminal.get().messages[0].summarized, true);
@@ -652,6 +704,8 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
       checkpointId: "cp-terminal-persist",
       persistedMessageUids: ["sm_done"],
       summarizedMessageUids: ["sm_done"],
+      expectedCheckpointRevision: 1,
+      retainedMessageUids: [],
     }),
     (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE",
   );

@@ -4,35 +4,57 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  SESSION_NOT_FOUND_REASON,
+  SESSION_ERROR_CODE,
+  createSessionNotFoundError,
   normalizeDialogProcessId,
+  requireDialogProcessKey,
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
+import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import {
   resolveContextToolCallDeclarationId,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
+import {
+  appendTurnSummaryCheckpointReceipt,
+  readTurnSummaryCheckpointState,
+  writeTurnSummaryCheckpoints,
+} from "@noobot/context-protocol/policy/summary";
 import { createHash } from "node:crypto";
 import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
-import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
 
-const EMPTY_CHECKPOINT_STATE = Object.freeze({ checkpointRevision: 0, receipts: [] });
+function invalidCheckpointRequest(detail) {
+  const error = new TypeError(`invalid turn summary checkpoint request: ${detail}`);
+  error.code = SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_REQUEST_INVALID;
+  error.statusCode = 400;
+  return error;
+}
 
-function normalizeMessageUids(values = []) {
-  return [
-    ...new Set((Array.isArray(values) ? values : []).map((value) => text(value)).filter(Boolean)),
-  ];
+function requireRequestText(value, field) {
+  if (typeof value !== "string" || !value || value !== value.trim()) {
+    throw invalidCheckpointRequest(`${field} must be a non-empty trimmed string`);
+  }
+  return value;
+}
+
+function requireRequestMessageUids(values, field) {
+  if (!Array.isArray(values)) throw invalidCheckpointRequest(`${field} must be an array`);
+  values.forEach((uid) => requireRequestText(uid, `${field}[]`));
+  if (new Set(values).size !== values.length) {
+    throw invalidCheckpointRequest(`${field} must not contain duplicates`);
+  }
+  return values;
 }
 
 function checkpointRequestHash({
-  dialogProcessId = "",
-  turnScopeId = "",
-  persistedMessageUids = [],
-  summarizedMessageUids = [],
-  retainedMessageUids = [],
-} = {}) {
+  dialogProcessId,
+  turnScopeId,
+  persistedMessageUids,
+  summarizedMessageUids,
+  retainedMessageUids,
+}) {
   return `sha256:${createHash("sha256")
     .update(
       JSON.stringify({
@@ -46,7 +68,7 @@ function checkpointRequestHash({
     .digest("hex")}`;
 }
 
-function checkpointConflict(message = "", code = "TURN_SUMMARY_CHECKPOINT_CONFLICT") {
+function checkpointConflict(message, code) {
   const error = new Error(message);
   error.code = code;
   error.statusCode = 409;
@@ -86,36 +108,38 @@ function assertSummarizedToolPairClosure(messages = [], summarizedMessageUids = 
     const callId = pairKey.slice(pairKey.lastIndexOf("\u0000") + 1);
     throw checkpointConflict(
       `summary checkpoint splits tool call pair: ${callId}`,
-      "TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT",
+      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT,
     );
   }
 }
 
-function normalizeCheckpointRequest(payload) {
+function parseCheckpointRequest(payload) {
+  if (!Number.isInteger(payload.expectedCheckpointRevision)) {
+    throw invalidCheckpointRequest("expectedCheckpointRevision must be an integer");
+  }
   const request = {
-    userId: payload.userId,
-    sessionId: payload.sessionId,
+    userId: requireRequestText(payload.userId, "userId"),
+    sessionId: requireRequestText(payload.sessionId, "sessionId"),
     persistenceContext: payload.persistenceContext,
-    dialogProcessId: normalizeDialogProcessId(payload.dialogProcessId || ""),
-    turnScopeId: text(payload.turnScopeId),
-    checkpointId: text(payload.checkpointId),
+    dialogProcessId: requireDialogProcessKey(payload.dialogProcessId),
+    turnScopeId: requireCanonicalTurnScopeId(payload.turnScopeId),
+    checkpointId: requireRequestText(payload.checkpointId, "checkpointId"),
     expectedCheckpointRevision: payload.expectedCheckpointRevision,
-    persistedMessageUids: normalizeMessageUids(payload.persistedMessageUids),
-    summarizedMessageUids: normalizeMessageUids(payload.summarizedMessageUids),
-    retainedMessageUids: normalizeMessageUids(payload.retainedMessageUids),
+    persistedMessageUids: requireRequestMessageUids(
+      payload.persistedMessageUids,
+      "persistedMessageUids",
+    ),
+    summarizedMessageUids: requireRequestMessageUids(
+      payload.summarizedMessageUids,
+      "summarizedMessageUids",
+    ),
+    retainedMessageUids: requireRequestMessageUids(
+      payload.retainedMessageUids,
+      "retainedMessageUids",
+    ),
   };
   request.requestHash = checkpointRequestHash(request);
   return request;
-}
-
-function hasCheckpointIdentity(request) {
-  return Boolean(
-    request.userId &&
-    request.sessionId &&
-    request.dialogProcessId &&
-    request.turnScopeId &&
-    request.checkpointId,
-  );
 }
 
 function assertCheckpointTargetsTurn(session, request) {
@@ -125,13 +149,13 @@ function assertCheckpointTargetsTurn(session, request) {
     if (normalizeDialogProcessId(lifecycleTurn?.dialogProcessId) !== request.dialogProcessId) {
       throw checkpointConflict(
         "checkpoint does not own the lifecycle turn",
-        "TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT",
+        SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT,
       );
     }
     if (isTerminalTurnLifecycleState(lifecycleTurn.state) && request.persistedMessageUids.length) {
       throw checkpointConflict(
         "terminal checkpoint cannot persist additional messages",
-        "TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE",
+        SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE,
       );
     }
   }
@@ -139,7 +163,7 @@ function assertCheckpointTargetsTurn(session, request) {
   if (activeTurnScopeId && activeTurnScopeId !== request.turnScopeId) {
     throw checkpointConflict(
       "checkpoint does not target the active turn",
-      "TURN_SUMMARY_CHECKPOINT_NOT_ACTIVE",
+      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_NOT_ACTIVE,
     );
   }
 }
@@ -152,7 +176,7 @@ function resolveDuplicateCheckpoint(currentState, request) {
   if (existingReceipt.requestHash !== request.requestHash) {
     throw checkpointConflict(
       "checkpointId was reused with a different payload",
-      "TURN_SUMMARY_CHECKPOINT_ID_REUSED",
+      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_ID_REUSED,
     );
   }
   return {
@@ -166,15 +190,10 @@ function resolveDuplicateCheckpoint(currentState, request) {
 }
 
 function assertCheckpointRevision(currentRevision, request) {
-  if (
-    request.expectedCheckpointRevision === undefined ||
-    Number(request.expectedCheckpointRevision) === currentRevision
-  ) {
-    return;
-  }
+  if (request.expectedCheckpointRevision === currentRevision) return;
   const error = checkpointConflict(
     "turn summary checkpoint revision conflict",
-    "TURN_SUMMARY_CHECKPOINT_REVISION_CONFLICT",
+    SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_REVISION_CONFLICT,
   );
   error.currentCheckpointRevision = currentRevision;
   throw error;
@@ -185,14 +204,14 @@ function assertCheckpointDisposition(request) {
   if (request.retainedMessageUids.some((messageUid) => summarizedSet.has(messageUid))) {
     throw checkpointConflict(
       "checkpoint cannot summarize and retain the same message",
-      "TURN_SUMMARY_CHECKPOINT_DISPOSITION_CONFLICT",
+      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_DISPOSITION_CONFLICT,
     );
   }
   const persistedSet = new Set(request.persistedMessageUids);
   if (request.retainedMessageUids.some((messageUid) => !persistedSet.has(messageUid))) {
     throw checkpointConflict(
       "checkpoint retained messages must belong to its persisted message set",
-      "TURN_SUMMARY_CHECKPOINT_RETAINED_MESSAGE_MISSING",
+      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_RETAINED_MESSAGE_MISSING,
     );
   }
 }
@@ -214,11 +233,13 @@ function assertCheckpointMessagesResolved(messages, request) {
   if (unresolvedMessageUids.length) {
     const error = checkpointConflict(
       `checkpoint contains ${unresolvedMessageUids.length} missing message UIDs`,
-      "TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING",
+      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING,
     );
-    error.requestedMessageIds = [...requestedUids];
-    error.resolvedMessageIds = [...messagesByUid.keys()];
-    error.unresolvedMessageIds = unresolvedMessageUids;
+    error.messageUidResolution = {
+      requestedMessageUids: [...requestedUids],
+      resolvedMessageUids: [...messagesByUid.keys()],
+      unresolvedMessageUids,
+    };
     throw error;
   }
   for (const messageUid of request.persistedMessageUids) {
@@ -229,7 +250,7 @@ function assertCheckpointMessagesResolved(messages, request) {
     ) {
       throw checkpointConflict(
         `persisted checkpoint message is outside the current turn: ${messageUid}`,
-        "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT",
+        SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT,
       );
     }
   }
@@ -268,34 +289,25 @@ function applyCheckpointCommit(session, currentState, request, committedAt) {
     committedAt,
   };
   session.messages = nextMessages;
-  session.turnSummaryCheckpoints = {
+  writeTurnSummaryCheckpoints(session, {
     ...session.turnSummaryCheckpoints,
-    [request.turnScopeId]: {
-      dialogProcessId: request.dialogProcessId,
-      turnScopeId: request.turnScopeId,
-      checkpointRevision,
-      receipts: [...currentState.receipts, receipt].slice(-50),
-    },
-  };
+    [request.turnScopeId]: appendTurnSummaryCheckpointReceipt(currentState, receipt),
+  });
   session.updatedAt = committedAt;
   return { committed: true, markedCount, checkpointRevision, receipt };
 }
 
-export async function commitTurnSummaryCheckpoint(payload = {}) {
-  const request = normalizeCheckpointRequest(payload);
-  if (!hasCheckpointIdentity(request)) {
-    return { committed: false, reason: "missing_checkpoint_identity", markedCount: 0 };
-  }
+export async function commitTurnSummaryCheckpoint(payload) {
+  const request = parseCheckpointRequest(payload);
   const { userId, sessionId, persistenceContext } = request;
-  const mutation = this.sessionRepo.withSessionMutation(
+  return this.sessionRepo.withSessionMutation(
     userId,
     sessionId,
     async () => {
       const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
-      if (!session) return { committed: false, reason: SESSION_NOT_FOUND_REASON, markedCount: 0 };
+      if (!session) throw createSessionNotFoundError({ userId, sessionId });
       assertCheckpointTargetsTurn(session, request);
-      const currentState =
-        session.turnSummaryCheckpoints?.[request.turnScopeId] || EMPTY_CHECKPOINT_STATE;
+      const currentState = readTurnSummaryCheckpointState(session, request);
       const duplicate = resolveDuplicateCheckpoint(currentState, request);
       if (duplicate) return duplicate;
       assertCheckpointRevision(currentState.checkpointRevision, request);
@@ -308,5 +320,4 @@ export async function commitTurnSummaryCheckpoint(payload = {}) {
     },
     { persistenceContext },
   );
-  return resolveDeletedSessionAs(mutation, { committed: false, markedCount: 0 });
 }

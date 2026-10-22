@@ -54,7 +54,14 @@ describe("useChatEngine.session-detail", () => {
     const turnScopeId = "client-turn:timing-race";
     const { applySessionDetail, turnRuntimeRegistry } = createApplySessionDetailHarness({
       sessionId: "s-timing-race",
-      messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-timing-race" }],
+      messages: [
+        {
+          presentationMessageId: "msg-timing-race",
+          role: RoleEnum.ASSISTANT,
+          turnScopeId,
+          dialogProcessId: "dp-timing-race",
+        },
+      ],
     });
     applyTurnTimingSnapshot(turnRuntimeRegistry.value, {
       sessionId: "s-timing-race",
@@ -73,7 +80,14 @@ describe("useChatEngine.session-detail", () => {
       sessions: [
         {
           sessionId: "s-timing-race",
-          messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-timing-race" }],
+          messages: [
+            {
+              presentationMessageId: "msg-timing-race",
+              role: RoleEnum.ASSISTANT,
+              turnScopeId,
+              dialogProcessId: "dp-timing-race",
+            },
+          ],
           turnTimings: [
             {
               turnScopeId,
@@ -104,8 +118,7 @@ describe("useChatEngine.session-detail", () => {
           sessionId: "s-hydrated-timing",
           messages: [
             {
-              id: "msg-hydrated-timing",
-              messageId: "msg-hydrated-timing",
+              presentationMessageId: "msg-hydrated-timing",
               role: RoleEnum.ASSISTANT,
               turnScopeId,
               dialogProcessId: "dp-hydrated-timing",
@@ -158,7 +171,14 @@ describe("useChatEngine.session-detail", () => {
         {
           sessionId: "s-renamed",
           title: "Renamed from server",
-          messages: [{ role: RoleEnum.USER, content: "old message title" }],
+          messages: [
+            {
+              messageUid: "sm-user-renamed",
+              userMessageId: "um-user-renamed",
+              role: RoleEnum.USER,
+              content: "old message title",
+            },
+          ],
         },
       ],
     });
@@ -172,7 +192,14 @@ describe("useChatEngine.session-detail", () => {
       sessionId: "s-apply-version",
       title: "current",
       aggregateVersion: 9,
-      messages: [{ role: RoleEnum.USER, content: "current", turnScopeId: "client-turn:version" }],
+      messages: [
+        {
+          messageUid: "sm-user-version",
+          role: RoleEnum.USER,
+          content: "current",
+          turnScopeId: "client-turn:version",
+        },
+      ],
       rawMessages: [],
     };
     const activeSessionId = ref("s-apply-version");
@@ -193,7 +220,14 @@ describe("useChatEngine.session-detail", () => {
         {
           sessionId: "s-apply-version",
           aggregateVersion: 7,
-          messages: [{ role: RoleEnum.USER, content: "stale", turnScopeId: "client-turn:version" }],
+          messages: [
+            {
+              messageUid: "sm-user-version",
+              role: RoleEnum.USER,
+              content: "stale",
+              turnScopeId: "client-turn:version",
+            },
+          ],
         },
       ],
     });
@@ -206,7 +240,14 @@ describe("useChatEngine.session-detail", () => {
         {
           sessionId: "s-apply-version",
           aggregateVersion: 10,
-          messages: [{ role: RoleEnum.USER, content: "fresh", turnScopeId: "client-turn:version" }],
+          messages: [
+            {
+              messageUid: "sm-user-version",
+              role: RoleEnum.USER,
+              content: "fresh",
+              turnScopeId: "client-turn:version",
+            },
+          ],
         },
       ],
     });
@@ -222,15 +263,14 @@ describe("useChatEngine.session-detail", () => {
       title: "current",
       messages: [
         {
-          id: "msg-user-same-scope-stopped",
-          messageId: "msg-user-same-scope-stopped",
+          messageUid: "msg-user-same-scope-stopped",
+          userMessageId: "msg-user-same-scope-stopped",
           role: RoleEnum.USER,
           content: "edited question",
           turnScopeId: freshTurnScopeId,
         },
         {
-          id: "msg-assistant-same-scope-stopped",
-          messageId: "msg-assistant-same-scope-stopped",
+          presentationMessageId: "msg-assistant-same-scope-stopped",
           role: RoleEnum.ASSISTANT,
           content: "",
           turnScopeId: freshTurnScopeId,
@@ -317,15 +357,14 @@ describe("useChatEngine.session-detail", () => {
           sessionId: "s-apply-same-scope-stopped",
           messages: [
             {
-              id: "msg-user-same-scope-stopped",
-              messageId: "msg-user-same-scope-stopped",
+              messageUid: "msg-user-same-scope-stopped",
+              userMessageId: "msg-user-same-scope-stopped",
               role: RoleEnum.USER,
               content: "edited question",
               turnScopeId: freshTurnScopeId,
             },
             {
-              id: "msg-assistant-same-scope-stopped",
-              messageId: "msg-assistant-same-scope-stopped",
+              presentationMessageId: "msg-assistant-same-scope-stopped",
               role: RoleEnum.ASSISTANT,
               content: "已停止",
               turnScopeId: freshTurnScopeId,
@@ -362,15 +401,14 @@ describe("useChatEngine.session-detail", () => {
       title: "current",
       messages: [
         {
-          id: "msg-user-same-scope-completed",
-          messageId: "msg-user-same-scope-completed",
+          messageUid: "msg-user-same-scope-completed",
+          userMessageId: "msg-user-same-scope-completed",
           role: RoleEnum.USER,
           content: "edited question",
           turnScopeId: freshTurnScopeId,
         },
         {
-          id: "msg-assistant-same-scope-completed",
-          messageId: "msg-assistant-same-scope-completed",
+          presentationMessageId: "msg-assistant-same-scope-completed",
           role: RoleEnum.ASSISTANT,
           content: "",
           turnScopeId: freshTurnScopeId,
@@ -400,15 +438,14 @@ describe("useChatEngine.session-detail", () => {
           sessionId: "s-apply-same-scope-completed",
           messages: [
             {
-              id: "msg-user-same-scope-completed",
-              messageId: "msg-user-same-scope-completed",
+              messageUid: "msg-user-same-scope-completed",
+              userMessageId: "msg-user-same-scope-completed",
               role: RoleEnum.USER,
               content: "edited question",
               turnScopeId: freshTurnScopeId,
             },
             {
-              id: "msg-assistant-same-scope-completed",
-              messageId: "msg-assistant-same-scope-completed",
+              presentationMessageId: "msg-assistant-same-scope-completed",
               role: RoleEnum.ASSISTANT,
               content: "answer done",
               turnScopeId: freshTurnScopeId,
@@ -478,15 +515,13 @@ describe("useChatEngine.session-detail", () => {
     const presentationMessageId = "msg_second_resend_active";
     const canonicalMessages = [
       {
-        id: "user_second_resend_active",
-        messageId: "user_second_resend_active",
+        messageUid: "user_second_resend_active",
+        userMessageId: "user_second_resend_active",
         role: RoleEnum.USER,
         content: "question",
         turnScopeId,
       },
       {
-        id: presentationMessageId,
-        messageId: presentationMessageId,
         presentationMessageId,
         role: RoleEnum.ASSISTANT,
         content: "",
@@ -518,7 +553,6 @@ describe("useChatEngine.session-detail", () => {
     expect(activeSession.messages).toHaveLength(2);
     expect(activeSession.messages[1]).toEqual(
       expect.objectContaining({
-        messageId: presentationMessageId,
         presentationMessageId,
         turnScopeId,
         turnPlaceholder: true,
@@ -535,23 +569,21 @@ describe("useChatEngine.session-detail", () => {
       sessionId,
       messages: [
         {
-          id: "user_second_resend",
-          messageId: "user_second_resend",
+          messageUid: "user_second_resend",
+          userMessageId: "user_second_resend",
           role: RoleEnum.USER,
           content: "question",
           turnScopeId,
         },
         {
-          id: "msg_previous_resend",
-          messageId: "msg_previous_resend",
+          presentationMessageId: "msg_previous_resend",
           role: RoleEnum.ASSISTANT,
           content: "stale answer",
           turnScopeId: "client-turn:previous-resend",
           pending: false,
         },
         {
-          id: presentationMessageId,
-          messageId: presentationMessageId,
+          presentationMessageId,
           role: RoleEnum.ASSISTANT,
           content: "",
           turnScopeId,
@@ -562,15 +594,14 @@ describe("useChatEngine.session-detail", () => {
     });
     activeSession.detailMessages = [
       {
-        id: "user_previous_resend",
-        messageId: "user_previous_resend",
+        messageUid: "user_previous_resend",
+        userMessageId: "user_previous_resend",
         role: RoleEnum.USER,
         content: "question",
         turnScopeId: "client-turn:previous-resend",
       },
       {
-        id: "msg_previous_resend",
-        messageId: "msg_previous_resend",
+        presentationMessageId: "msg_previous_resend",
         role: RoleEnum.ASSISTANT,
         content: "stale answer",
         turnScopeId: "client-turn:previous-resend",
@@ -585,17 +616,14 @@ describe("useChatEngine.session-detail", () => {
             sessionId,
             messages: [
               {
-                id: "user_second_resend",
-                messageId: "user_second_resend",
+                messageUid: "user_second_resend",
+                userMessageId: "user_second_resend",
                 role: RoleEnum.USER,
                 content: "question",
                 turnScopeId,
               },
               {
-                id: presentationMessageId,
-                messageId: presentationMessageId,
                 presentationMessageId,
-                sourceMessageId: "model_source_second_resend",
                 role: RoleEnum.ASSISTANT,
                 content: "authoritative answer",
                 turnScopeId,
@@ -614,17 +642,16 @@ describe("useChatEngine.session-detail", () => {
     expect(activeSession.messages.filter((message) => message.role === RoleEnum.ASSISTANT)).toEqual(
       [
         expect.objectContaining({
-          id: presentationMessageId,
-          messageId: presentationMessageId,
           presentationMessageId,
-          sourceMessageId: "model_source_second_resend",
           content: "authoritative answer",
           pending: false,
         }),
       ],
     );
     expect(
-      activeSession.messages.some((message) => message.messageId === "msg_previous_resend"),
+      activeSession.messages.some(
+        (message) => message.presentationMessageId === "msg_previous_resend",
+      ),
     ).toBe(false);
   });
 

@@ -39,7 +39,7 @@ function createInput(overrides = {}) {
 function committedUserMessage() {
   return {
     messageUid: "sm_1",
-    messageId: "msg_1",
+    userMessageId: "msg_1",
     role: "user",
     type: "message",
     content: "message with attachment",
@@ -50,7 +50,6 @@ function committedUserMessage() {
     parentDialogProcessId: "",
     turnScopeId: "t1",
     messageOrigin: "natural",
-    userMetaMaterialized: true,
     attachments: [],
   };
 }

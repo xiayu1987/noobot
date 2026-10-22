@@ -130,13 +130,12 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
       {
         role: "assistant",
         content: "done",
-
-        messageId: "message-1",
+        modelMessageId: "message-1",
       },
     ],
   });
 
-  assert.equal(turns[0].messageId, "message-1");
+  assert.equal(turns[0].modelMessageId, "message-1");
 });
 
 test("appendAgentMessages forwards the canonical internal control message type", async () => {
@@ -195,7 +194,7 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
         role: "assistant",
         content: "analysis",
         messageUid: "sm_analysis",
-        messageId: "msg_model_1",
+        modelMessageId: "msg_model_1",
         presentationMessageId: "msg_chat_1",
         chatPresentation: false,
         type: "tool_call",

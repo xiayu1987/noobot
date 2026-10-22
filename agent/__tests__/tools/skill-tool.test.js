@@ -9,12 +9,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createSkillTool } from "../../src/tools/execution/skill-tool.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function createRuntime(basePath) {
-  return {
+  return createTestRuntimeContext({
     basePath,
-    userId: "admin",
     globalConfig: { security: { executionIsolation: { mode: "host" } } },
     userConfig: {},
     systemRuntime: {
@@ -23,7 +23,7 @@ function createRuntime(basePath) {
       rootSessionId: "skill-session",
       config: { safeConfirm: false },
     },
-  };
+  });
 }
 
 test("list_skills uses the shared path authorization and resource protocol", async () => {

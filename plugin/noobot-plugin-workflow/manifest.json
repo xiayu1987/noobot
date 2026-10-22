@@ -12,7 +12,7 @@
     "agent": {
       "hooks": {
         "registers": [
-          { "id": "workflow_after_agent_dispatch", "point": "bot.before_agent_dispatch" }
+          { "id": "workflow_before_agent_dispatch", "point": "bot.before_agent_dispatch" }
         ],
         "emits": ["workflow.node_agent_execute"]
       },

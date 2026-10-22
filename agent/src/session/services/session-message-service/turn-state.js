@@ -33,17 +33,7 @@ import {
   withAuthorityOutboxMutation,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
-import { text, isPlainObject } from "@noobot/shared/value";
-
-function assignTerminalAssistantSessionIdentity(session, turnScopeId, assistantMessage) {
-  if (!isPlainObject(assistantMessage)) return assistantMessage;
-  const turn = session?.turnLifecycle?.turns?.[text(turnScopeId)] || {};
-  return normalizeMessageEntity({
-    ...assistantMessage,
-    messageUid: createMessageUid(),
-    presentationMessageId: text(turn.presentationMessageId),
-  });
-}
+import { text } from "@noobot/shared/value";
 
 async function appendCommittedTurnLifecycleEvent(sessionDir, committedEvent) {
   const eventId = text(committedEvent?.eventId);
@@ -149,7 +139,7 @@ function materializeAcceptedUserMessage({
   const userMessage = normalizeMessageEntity(
     {
       messageUid: createMessageUid(),
-      messageId: input.messageId,
+      userMessageId: input.userMessageId,
       role: "user",
       type: "message",
       content: input.content,
@@ -160,7 +150,6 @@ function materializeAcceptedUserMessage({
       parentDialogProcessId: input.parentDialogProcessId,
       turnScopeId: text(event.turnScopeId),
       messageOrigin: text(input.messageOrigin).toLowerCase(),
-      userMetaMaterialized: input.userMetaMaterialized === true,
       attachments: [],
       turnCommit: {
         action: requireTurnCommitAction(event.action),
@@ -285,11 +274,6 @@ export async function applyTurnLifecycleEvent({
         expectedAggregateVersion,
       );
       if (conflict) return conflict;
-      const terminalAssistantMessage = assignTerminalAssistantSessionIdentity(
-        session,
-        lifecycleEvent.turnScopeId,
-        lifecycleEvent.terminalStatus?.assistantMessage,
-      );
       const { outboxSessionDir, result } = await commitTurnLifecycleWithOutbox({
         service: this,
         userId,
@@ -301,7 +285,6 @@ export async function applyTurnLifecycleEvent({
           materializeTurnTerminalMessages({
             messages: session.messages,
             terminalStatus,
-            assistantMessage: terminalAssistantMessage,
             previousSummaryVersion,
           }),
       });

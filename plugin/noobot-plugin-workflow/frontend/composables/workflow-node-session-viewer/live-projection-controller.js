@@ -118,7 +118,8 @@ function logObserved({ props, refs, projection }) {
     messageCount: Array.isArray(detail.messages) ? detail.messages.length : 0,
     subSessionMessageRegistryVersion: Number(projection.subSessionMessageRegistryVersion || 0),
     messages: (Array.isArray(detail.messages) ? detail.messages : []).map((message = {}) => ({
-      id: text(message.messageId),
+      messageUid: text(message.messageUid),
+      presentationMessageId: text(message.presentationMessageId),
       role: text(message.role),
       contentLength: String(message.content || "").length,
     })),

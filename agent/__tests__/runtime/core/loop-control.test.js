@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createModelContext } from "@noobot/context-protocol";
 import {
-  resolveContextMessageId,
+  resolveContextMessageKey,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
@@ -20,6 +20,7 @@ import {
   maybeRequestPhaseSummary,
   maybeRequestTaskCheck,
 } from "../../../src/runtime/loop-control.js";
+import { peekMainFlowFinalNoToolsTurnInstruction } from "../../../src/runtime/main-flow-control.js";
 
 function longUserContextMessage() {
   return writeContextMessageMetadata(
@@ -29,9 +30,8 @@ function longUserContextMessage() {
 }
 
 function attachCanonicalTurn(modelState, loopState) {
-  modelState.runtime.currentTurnMessages = createCurrentTurnMessagesStore();
   loopState.dialogProcessId = "dialog-1";
-  loopState.modelContext.activeTurnIdentity = {
+  modelState.runtime.activeMessageContext.activeTurnIdentity = {
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
   };
@@ -43,16 +43,16 @@ test("task check prompt is periodic and independent from phase summary state", (
     messageBlocks: { system: [], history: [], incremental: [] },
   });
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       eventListener: { onEvent: (event) => events.push(event) },
       systemRuntime: { taskCheckLoopCount: 0, modelLoopRound: 10, needsPhaseSummary: true },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "task_check" }],
     taskCheckLoopTurns: 2,
-    modelContext,
   };
+  modelState.runtime.activeMessageContext = modelContext;
   attachCanonicalTurn(modelState, loopState);
 
   assert.equal(maybeRequestTaskCheck({ modelState, loopState }), false);
@@ -61,7 +61,7 @@ test("task check prompt is periodic and independent from phase summary state", (
   const taskCheckEntity = modelState.runtime.currentTurnMessages.toArray()[0];
   assert.equal(taskCheckEntity.role, "user");
   assert.equal(taskCheckEntity.chatPresentation, false);
-  assert.equal(taskCheckEntity.messageUid, resolveContextMessageId(modelContext.messages[0]));
+  assert.equal(taskCheckEntity.messageUid, resolveContextMessageKey(modelContext.messages[0]));
   assert.equal(taskCheckEntity.noobotInternalMessageType, "noobot.task_check_prompt");
   assert.equal(
     modelContext.messageBlocks.incremental[0].additional_kwargs.noobotInternalMessageType,
@@ -82,12 +82,14 @@ test("a task_check call starts the next periodic slice without adding a prompt",
   const modelContext = createModelContext({
     messageBlocks: { system: [], history: [], incremental: [] },
   });
-  const modelState = { runtime: { systemRuntime: { taskCheckLoopCount: 9 } } };
+  const modelState = {
+    runtime: createTestRuntimeContext({ systemRuntime: { taskCheckLoopCount: 9 } }),
+  };
   const loopState = {
     tools: [{ name: "task_check" }],
     taskCheckLoopTurns: 10,
-    modelContext,
   };
+  modelState.runtime.activeMessageContext = modelContext;
   attachCanonicalTurn(modelState, loopState);
   assert.equal(
     maybeRequestTaskCheck({
@@ -104,38 +106,36 @@ test("a task_check call starts the next periodic slice without adding a prompt",
 test("maybePromptHelpToolByFailure injects prompt and resets failure counter", () => {
   const events = [];
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       eventListener: {
         onEvent: (payload = {}) => events.push(payload),
       },
       systemRuntime: {
         toolConsecutiveFailureCount: 3,
       },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "help" }],
     toolFailureHelpCount: 3,
-    toolConsecutiveFailureCount: 3,
-    modelContext: createModelContext({
-      messageBlocks: { system: [], history: [], incremental: [] },
-    }),
   };
+  modelState.runtime.activeMessageContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
   attachCanonicalTurn(modelState, loopState);
   const triggered = maybePromptHelpToolByFailure({
     modelState,
     loopState,
   });
   assert.equal(triggered, true);
-  assert.equal(loopState.toolConsecutiveFailureCount, 0);
   assert.equal(modelState.runtime.systemRuntime.toolConsecutiveFailureCount, 0);
-  assert.equal(loopState.modelContext.messages.length, 1);
+  assert.equal(modelState.runtime.activeMessageContext.messages.length, 1);
   assert.equal(
-    loopState.modelContext.messageBlocks.incremental[0],
-    loopState.modelContext.messages[0],
+    modelState.runtime.activeMessageContext.messageBlocks.incremental[0],
+    modelState.runtime.activeMessageContext.messages[0],
   );
-  assert.ok(resolveContextMessageId(loopState.modelContext.messages[0]));
-  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
+  assert.ok(resolveContextMessageKey(modelState.runtime.activeMessageContext.messages[0]));
+  assert.equal(modelState.runtime.activeMessageContext.messageBlocks.incrementalIds, undefined);
   assert.equal(
     events.some((item) => item?.event === "help_tool_failure_prompted"),
     true,
@@ -145,35 +145,35 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
 test("maybePromptHelpToolByLoop injects prompt through message store", () => {
   const events = [];
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       eventListener: {
         onEvent: (payload = {}) => events.push(payload),
       },
       systemRuntime: {
         helpPromptLoopCount: 1,
       },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "help" }],
     helpPromptLoopTurns: 2,
-    modelContext: createModelContext({
-      messageBlocks: { system: [], history: [], incremental: [] },
-    }),
   };
+  modelState.runtime.activeMessageContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
   attachCanonicalTurn(modelState, loopState);
   const triggered = maybePromptHelpToolByLoop({ modelState, loopState });
 
   assert.equal(triggered, true);
-  assert.equal(loopState.modelContext.messages.length, 1);
+  assert.equal(modelState.runtime.activeMessageContext.messages.length, 1);
   assert.equal(
-    loopState.modelContext.messageBlocks.incremental[0],
-    loopState.modelContext.messages[0],
+    modelState.runtime.activeMessageContext.messageBlocks.incremental[0],
+    modelState.runtime.activeMessageContext.messages[0],
   );
-  assert.deepEqual(loopState.modelContext.messageBlocks.system, []);
+  assert.deepEqual(modelState.runtime.activeMessageContext.messageBlocks.system, []);
   assert.equal(modelState.runtime.currentTurnMessages.toArray()[0].role, "user");
-  assert.ok(resolveContextMessageId(loopState.modelContext.messages[0]));
-  assert.equal(loopState.modelContext.messageBlocks.systemIds, undefined);
+  assert.ok(resolveContextMessageKey(modelState.runtime.activeMessageContext.messages[0]));
+  assert.equal(modelState.runtime.activeMessageContext.messageBlocks.systemIds, undefined);
   assert.equal(
     events.some((item) => item?.event === "help_tool_loop_prompted"),
     true,
@@ -183,22 +183,22 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
 test("maybeRequestPhaseSummary injects summary prompt when threshold reached", () => {
   const events = [];
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       eventListener: {
         onEvent: (payload = {}) => events.push(payload),
       },
       systemRuntime: {
         phaseSummaryLoopCount: 2,
       },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "task_summary" }],
     phaseSummaryLoopTurns: 3,
-    modelContext: createModelContext({
-      messageBlocks: { system: [], history: [], incremental: [] },
-    }),
   };
+  modelState.runtime.activeMessageContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
   attachCanonicalTurn(modelState, loopState);
 
   const triggered = maybeRequestPhaseSummary({
@@ -208,17 +208,20 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
   });
   assert.equal(triggered, true);
   assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
-  assert.equal(loopState.modelContext.messages.length, 1);
+  assert.equal(modelState.runtime.activeMessageContext.messages.length, 1);
   assert.equal(
-    loopState.modelContext.messageBlocks.incremental[0],
-    loopState.modelContext.messages[0],
+    modelState.runtime.activeMessageContext.messageBlocks.incremental[0],
+    modelState.runtime.activeMessageContext.messages[0],
   );
   const phaseEntity = modelState.runtime.currentTurnMessages.toArray()[0];
   assert.equal(phaseEntity.role, "user");
-  assert.equal(phaseEntity.messageUid, resolveContextMessageId(loopState.modelContext.messages[0]));
+  assert.equal(
+    phaseEntity.messageUid,
+    resolveContextMessageKey(modelState.runtime.activeMessageContext.messages[0]),
+  );
   assert.equal(phaseEntity.noobotInternalMessageType, "noobot.phase_summary_prompt");
-  assert.ok(resolveContextMessageId(loopState.modelContext.messages[0]));
-  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
+  assert.ok(resolveContextMessageKey(modelState.runtime.activeMessageContext.messages[0]));
+  assert.equal(modelState.runtime.activeMessageContext.messageBlocks.incrementalIds, undefined);
   assert.equal(
     events.some((item) => item?.event === "phase_summary_required"),
     true,
@@ -227,20 +230,20 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
 
 test("failed task_summary attempt preserves the pending summary state", () => {
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       systemRuntime: {
         needsPhaseSummary: true,
         phaseSummaryLoopCount: 0,
       },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "task_summary" }],
     phaseSummaryLoopTurns: 1,
-    modelContext: createModelContext({
-      messageBlocks: { system: [], history: [], incremental: [] },
-    }),
   };
+  modelState.runtime.activeMessageContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
 
   const triggered = maybeRequestPhaseSummary({
     modelState,
@@ -255,27 +258,27 @@ test("failed task_summary attempt preserves the pending summary state", () => {
 test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars exceed threshold", () => {
   const events = [];
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       eventListener: {
         onEvent: (payload = {}) => events.push(payload),
       },
       systemRuntime: {
         phaseSummaryLoopCount: 0,
       },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "task_summary" }],
     phaseSummaryLoopTurns: 0,
     phaseSummaryMessageCharsThreshold: 10,
-    modelContext: createModelContext({
-      messageBlocks: {
-        system: [],
-        history: [],
-        incremental: [longUserContextMessage()],
-      },
-    }),
   };
+  modelState.runtime.activeMessageContext = createModelContext({
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [longUserContextMessage()],
+    },
+  });
   attachCanonicalTurn(modelState, loopState);
 
   const triggered = maybeRequestPhaseSummary({
@@ -285,13 +288,13 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
   });
   assert.equal(triggered, true);
   assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
-  assert.equal(loopState.modelContext.messages.length, 2);
+  assert.equal(modelState.runtime.activeMessageContext.messages.length, 2);
   assert.equal(
-    loopState.modelContext.messageBlocks.incremental[1],
-    loopState.modelContext.messages[1],
+    modelState.runtime.activeMessageContext.messageBlocks.incremental[1],
+    modelState.runtime.activeMessageContext.messages[1],
   );
-  assert.ok(resolveContextMessageId(loopState.modelContext.messages[1]));
-  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
+  assert.ok(resolveContextMessageKey(modelState.runtime.activeMessageContext.messages[1]));
+  assert.equal(modelState.runtime.activeMessageContext.messageBlocks.incrementalIds, undefined);
   const event = events.find((item) => item?.event === "phase_summary_required") || {};
   assert.equal(event.data?.trigger, "message_chars");
 });
@@ -299,7 +302,7 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
 test("maybeRequestPhaseSummary marks no-tools when overflow remains after the requested summary", () => {
   const events = [];
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       eventListener: {
         onEvent: (payload = {}) => events.push(payload),
       },
@@ -307,20 +310,20 @@ test("maybeRequestPhaseSummary marks no-tools when overflow remains after the re
         phaseSummaryLoopCount: 0,
         phaseSummaryByCharsPrompted: true,
       },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "task_summary" }],
     phaseSummaryLoopTurns: 0,
     phaseSummaryMessageCharsThreshold: 10,
-    modelContext: createModelContext({
-      messageBlocks: {
-        system: [],
-        history: [],
-        incremental: [longUserContextMessage()],
-      },
-    }),
   };
+  modelState.runtime.activeMessageContext = createModelContext({
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [longUserContextMessage()],
+    },
+  });
 
   const changed = maybeRequestPhaseSummary({
     modelState,
@@ -329,15 +332,15 @@ test("maybeRequestPhaseSummary marks no-tools when overflow remains after the re
   });
   assert.equal(changed, true);
   assert.equal(
-    modelState.runtime.systemRuntime.mainFlowControlInstruction?.action,
+    peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime)?.action,
     "final_no_tools_turn",
   );
   assert.equal(
-    modelState.runtime.systemRuntime.mainFlowControlInstruction?.reason,
+    peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime)?.reason,
     "context_overflow_after_summary",
   );
   assert.equal(
-    modelState.runtime.systemRuntime.mainFlowControlInstruction?.source,
+    peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime)?.source,
     "agent_phase_summary",
   );
   assert.equal(
@@ -350,7 +353,7 @@ test("maybeFinalizeNoToolsAfterPhaseSummaryOverflow catches post-summary overflo
   const events = [];
   const longUserMessage = longUserContextMessage();
   const modelState = {
-    runtime: {
+    runtime: createTestRuntimeContext({
       eventListener: {
         onEvent: (payload = {}) => events.push(payload),
       },
@@ -359,25 +362,25 @@ test("maybeFinalizeNoToolsAfterPhaseSummaryOverflow catches post-summary overflo
         phaseSummaryByCharsPrompted: true,
         phaseSummaryLoopCount: 0,
       },
-    },
+    }),
   };
   const loopState = {
     tools: [{ name: "task_summary" }],
     phaseSummaryMessageCharsThreshold: 10,
-    modelContext: createModelContext({
-      messageBlocks: { system: [], history: [], incremental: [longUserMessage] },
-    }),
   };
+  modelState.runtime.activeMessageContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental: [longUserMessage] },
+  });
 
   const changed = maybeFinalizeNoToolsAfterPhaseSummaryOverflow({ modelState, loopState });
 
   assert.equal(changed, true);
   assert.equal(
-    modelState.runtime.systemRuntime.mainFlowControlInstruction?.action,
+    peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime)?.action,
     "final_no_tools_turn",
   );
   assert.equal(
-    modelState.runtime.systemRuntime.mainFlowControlInstruction?.source,
+    peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime)?.source,
     "agent_phase_summary",
   );
   assert.equal(

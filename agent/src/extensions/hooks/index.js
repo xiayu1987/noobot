@@ -11,6 +11,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 import {
   HOOK_CANCELLATION_MODE,
+  assertOptionalHookManager,
   createEmptyHookResult,
   requireHookPointDescriptor,
 } from "@noobot/hook-protocol";
@@ -86,14 +87,6 @@ const PLUGIN_CAPABILITY_RESPONSE_ALLOWED_KEYS = new Set([
   "toolTurnLimitReached",
 ]);
 
-function resolveRuntimeHookManager(runtime = {}) {
-  return runtime?.hookManager && typeof runtime.hookManager.emit === "function"
-    ? runtime.hookManager
-    : null;
-}
-
-export { resolveRuntimeHookManager };
-
 function resolveHookRuntimeMeta(runtime = {}) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
@@ -107,11 +100,10 @@ function resolveHookRuntimeMeta(runtime = {}) {
   };
 }
 
-export function withHookRuntimeMeta(runtime = {}, context = {}) {
-  const safeContext = context && typeof context === "object" ? context : {};
+export function withHookRuntimeMeta(runtime, context) {
   return {
     ...resolveHookRuntimeMeta(runtime),
-    ...safeContext,
+    ...context,
   };
 }
 
@@ -231,8 +223,8 @@ export async function runAgentRuntimeHook({ runtime, point, context = {} }) {
   const descriptor = requireHookPointDescriptor(point);
   const normalizedPoint = descriptor.point;
   const listener = runtime.eventListener;
-  const manager = resolveRuntimeHookManager(runtime);
-  if (!manager) {
+  const manager = assertOptionalHookManager(runtime.hookManager, "runtime.hookManager");
+  if (manager === null) {
     return createEmptyHookResult(normalizedPoint, context);
   }
   const emitHookClientEvent = createHookClientEmitter({

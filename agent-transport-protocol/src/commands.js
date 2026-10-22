@@ -56,15 +56,8 @@ const RUN_CONCURRENCY_KEYS = new Set(["expectedTurnRevision", "expectedAggregate
 const STOP_CONCURRENCY_KEYS = new Set(["expectedTurnRevision"]);
 const SESSION_KEYS = new Set(["createIfAbsent", "selectedConnectorIds"]);
 const CONTINUATION_KEYS = new Set(["dialogProcessId", "turnScopeId"]);
-const STOP_KEYS = new Set(["executionId", "partialAssistant"]);
-const PARTIAL_ASSISTANT_KEYS = new Set([
-  "content",
-  "dialogProcessId",
-  "turnScopeId",
-  "createdAtMs",
-  "modelAlias",
-  "modelName",
-]);
+
+const STOP_KEYS = new Set(["executionId"]);
 const INTERACTION_KEYS = new Set(["requestId", "response"]);
 const QUERY_KEYS = new Set(["executionId", "rootExecutionId"]);
 const SNAPSHOT_OPTION_KEYS = new Set(["knownSequence", "terminalLimit"]);
@@ -162,16 +155,11 @@ export function createTurnStopCommand(input = {}) {
   if (!Number.isInteger(expectedTurnRevision) || expectedTurnRevision < 1) {
     throw new TypeError("invalid_expected_turn_revision");
   }
-  if (!isPlainObject(input.stop?.partialAssistant)) {
-    throw new TypeError("invalid_partial_assistant");
-  }
   return withDerivedCommandId(input, {
     ...createEnvelope(AGENT_COMMAND.STOP, input),
     concurrency: { expectedTurnRevision },
-    stop: {
-      ...compactObject({ executionId: clean(input.stop.executionId) }),
-      partialAssistant: { ...input.stop.partialAssistant },
-    },
+
+    stop: compactObject({ ...input.stop, executionId: clean(input.stop?.executionId) }),
   });
 }
 
@@ -379,13 +367,7 @@ function validateStopCommand(command, errors) {
       errors.push("invalid_expected_turn_revision");
     }
   }
-  if (!validateNestedObject(command.stop, STOP_KEYS, "stop", errors)) return;
-  validateNestedObject(
-    command.stop.partialAssistant,
-    PARTIAL_ASSISTANT_KEYS,
-    "partial_assistant",
-    errors,
-  );
+  validateNestedObject(command.stop, STOP_KEYS, "stop", errors);
 }
 
 function validateInterjectCommand(command, errors) {

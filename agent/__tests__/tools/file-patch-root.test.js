@@ -12,15 +12,15 @@ import path from "node:path";
 import { resolvePatchTargetsWithOptions } from "../../src/tools/execution/file-patch.js";
 import { classifyToolInputPath, TOOL_PATH_VIEWS } from "@noobot/path-resolver";
 import { ERROR_CODE } from "../../src/shared/errors/constants.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
     overrides?.runtime && typeof overrides.runtime === "object" ? overrides.runtime : {};
   return createTestAgentExecutionScope(
-    {
+    createTestRuntimeContext({
       basePath,
-      userId,
       globalConfig: {},
       userConfig: {},
       systemRuntime: {
@@ -30,7 +30,7 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
         config: {},
       },
       ...runtimeOverrides,
-    },
+    }),
     {
       identity: {
         userId,

@@ -9,12 +9,11 @@ import {
   CONTEXT_MESSAGE_ROLE,
   resolveContextMessageContent,
   resolveContextMessageDialogProcessId,
-  resolveContextMessageId,
+  resolveContextSourceMessageUid,
   resolveContextMessageRole,
   resolveContextMessageTurnScopeId,
   resolveContextToolResultCallId,
   readContextMessageField,
-  deriveContextMessageProjectionId,
   writeContextMessageMetadata,
 } from "../message/codec.js";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
@@ -40,16 +39,14 @@ export function recoverContextTaskSummaryToolResult(message = {}) {
     return null;
   const summary = extractContextTaskSummary(message);
   if (!summary) return null;
-  const sourceMessageId = resolveContextMessageId(message);
-  if (!sourceMessageId) {
+  const sourceMessageUid = resolveContextSourceMessageUid(message);
+  if (!sourceMessageUid) {
     throw new Error("checkpoint boundary tool result requires additional_kwargs.messageUid");
   }
   const toolCallId = resolveContextToolResultCallId(message);
   const metadata = {
-    messageUid: deriveContextMessageProjectionId(
-      sourceMessageId,
-      CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY,
-    ),
+    projectionType: CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY,
+    sourceMessageUid,
     dialogProcessId: resolveContextMessageDialogProcessId(message) || undefined,
     parentDialogProcessId: readContextMessageField(message, "parentDialogProcessId") || undefined,
     turnScopeId: resolveContextMessageTurnScopeId(message) || undefined,

@@ -5,13 +5,14 @@
  */
 
 import { isPlainObject, text as clean } from "@noobot/shared/value";
+import { assertAgentTurnResult } from "./agent-turn-result.js";
 
 const BOT_DISPATCH_OUTCOME_KIND = "noobot.bot_dispatch_outcome";
 const BOT_DISPATCH_OUTCOME_VERSION = 1;
 export const BOT_DISPATCH_DISPOSITION = Object.freeze({ PASS: "pass", HANDLED: "handled" });
 export const BOT_DISPATCH_ROOT_OWNER = "root_agent";
 
-export function createBotDispatchPass({ owner = "" } = {}) {
+export function createBotDispatchPass({ owner }) {
   const normalizedOwner = clean(owner);
   if (!normalizedOwner) throw new Error("pass bot dispatch outcome requires owner");
   return Object.freeze({
@@ -22,45 +23,42 @@ export function createBotDispatchPass({ owner = "" } = {}) {
   });
 }
 
-export function createBotDispatchHandled({ owner = "", result = {}, failure = null } = {}) {
+function assertDispatchFailure(failure) {
+  if (!isPlainObject(failure) || !clean(failure.code) || !clean(failure.message)) {
+    throw new TypeError("handled bot dispatch failure requires code and message");
+  }
+  return Object.freeze({ code: clean(failure.code), message: clean(failure.message) });
+}
+
+export function createBotDispatchHandled({ owner, result, failure }) {
   const normalizedOwner = clean(owner);
   if (!normalizedOwner) throw new Error("handled bot dispatch outcome requires owner");
-  const normalizedFailure = isPlainObject(failure) ? failure : null;
-  if (normalizedFailure) {
-    return Object.freeze({
-      kind: BOT_DISPATCH_OUTCOME_KIND,
-      version: BOT_DISPATCH_OUTCOME_VERSION,
-      disposition: BOT_DISPATCH_DISPOSITION.HANDLED,
-      owner: normalizedOwner,
-      failure: Object.freeze({
-        code: clean(normalizedFailure.code || "BOT_DISPATCH_FAILED"),
-        message: clean(normalizedFailure.message || "owned dispatch failed"),
-      }),
-    });
+  if ((result === undefined) === (failure === undefined)) {
+    throw new TypeError("handled bot dispatch outcome requires exactly one of result or failure");
   }
-  return Object.freeze({
+  const base = {
     kind: BOT_DISPATCH_OUTCOME_KIND,
     version: BOT_DISPATCH_OUTCOME_VERSION,
     disposition: BOT_DISPATCH_DISPOSITION.HANDLED,
     owner: normalizedOwner,
-    result: isPlainObject(result) ? result : {},
-    failure: null,
-  });
+  };
+  if (failure !== undefined) {
+    return Object.freeze({ ...base, failure: assertDispatchFailure(failure) });
+  }
+  return Object.freeze({ ...base, result: assertAgentTurnResult(result), failure: null });
 }
 
-export function isBotDispatchOutcome(value = null) {
-  return Boolean(
+export function isBotDispatchOutcome(value) {
+  return (
     isPlainObject(value) &&
     value.kind === BOT_DISPATCH_OUTCOME_KIND &&
-    Number(value.version) === BOT_DISPATCH_OUTCOME_VERSION &&
-    Object.values(BOT_DISPATCH_DISPOSITION).includes(clean(value.disposition)),
+    value.version === BOT_DISPATCH_OUTCOME_VERSION &&
+    Object.values(BOT_DISPATCH_DISPOSITION).includes(value.disposition)
   );
 }
 
-export function resolveBotDispatchOutcome(hookResult = {}) {
-  const outcomes = (Array.isArray(hookResult?.outcomes) ? hookResult.outcomes : [])
-    .map((outcome) => outcome?.value)
-    .filter(isBotDispatchOutcome);
+export function resolveBotDispatchOutcome(hookResult) {
+  const outcomes = hookResult.outcomes.map((outcome) => outcome.value).filter(isBotDispatchOutcome);
   const handled = outcomes.filter((item) => item.disposition === BOT_DISPATCH_DISPOSITION.HANDLED);
   if (handled.length > 1) {
     const error = new Error(

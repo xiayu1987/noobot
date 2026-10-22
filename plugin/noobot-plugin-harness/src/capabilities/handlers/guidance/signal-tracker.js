@@ -7,8 +7,11 @@ import { GUIDANCE_REASON, TOOL_NAME_SET, ensureHarnessBucket } from "./deps.js";
 import { resolveSummaryScope } from "@noobot/context-protocol/policy/summary";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import { getMessageId, resolveModelMessageBlocks } from "../../../core/message-store.js";
-import { requestSummaryCheckpointMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
+import { resolveModelMessageBlocks } from "../../../core/message-store.js";
+import {
+  resolveContextMessageKey,
+  resolveContextSessionMessageUid,
+} from "@noobot/context-protocol/message/codec";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 const FAILURE_THRESHOLD = Object.freeze({
@@ -28,39 +31,32 @@ export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
   if (!isObjectLike(state)) return [];
   const blocks = resolveSummaryMarkBlocks(ctx);
   const summaryScope = resolveSummaryScope(blocks);
-  const messageIds = [
-    ...new Set(
-      summaryScope.checkpointMessages.map((message) => getMessageId(message)).filter(Boolean),
-    ),
-  ];
+  const messageKeys = [...new Set(summaryScope.checkpointMessages.map(resolveContextMessageKey))];
   state.pending = state.pending && typeof state.pending === "object" ? state.pending : {};
-  state.pending.summaryCheckpointMessageIds = messageIds;
-  return messageIds;
+  state.pending.summaryCheckpointMessageKeys = messageKeys;
+  return messageKeys;
 }
 
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   void meta;
   const holder = ensureHarnessBucket(ctx);
-  const summaryCheckpointMessageIdsValue = holder?.state?.pending?.summaryCheckpointMessageIds;
-  const summaryCheckpointMessageIds = Array.isArray(summaryCheckpointMessageIdsValue)
-    ? summaryCheckpointMessageIdsValue.map((id) => text(id)).filter(Boolean)
-    : [];
-  const hasSummaryCheckpoint = Array.isArray(summaryCheckpointMessageIdsValue);
+  const summaryCheckpointMessageKeys = holder.state.pending.summaryCheckpointMessageKeys;
 
   const blocks = resolveSummaryMarkBlocks(ctx);
   const summaryScope = resolveSummaryScope(blocks, {
-    messageIds: hasSummaryCheckpoint ? summaryCheckpointMessageIds : null,
+    messageKeys: summaryCheckpointMessageKeys,
   });
   const summaryTargets = summaryScope.summaryMessages;
-  requestSummaryCheckpointMainFlowInstruction(ctx, {
-    source: "plugin.summary",
-    summarizedMessageIds: [
-      ...new Set(summaryTargets.map((message) => getMessageId(message)).filter(Boolean)),
-    ],
-  });
-  if (holder?.state?.pending && hasSummaryCheckpoint) {
-    holder.state.pending.summaryCheckpointMessageIds = null;
+  const summarizedMessageUids = [
+    ...new Set(summaryTargets.map(resolveContextSessionMessageUid).filter(Boolean)),
+  ];
+  if (summarizedMessageUids.length) {
+    ctx.agentContext.bindings.mainFlowControl.requestSummaryCheckpoint({
+      source: "plugin.summary",
+      summarizedMessageUids,
+    });
   }
+  holder.state.pending.summaryCheckpointMessageKeys = null;
   return summaryTargets.length;
 }
 
@@ -68,7 +64,7 @@ export function markToolSignals(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { state } = holder;
-  const toolName = text(ctx?.toolName || ctx?.call?.name);
+  const toolName = text(ctx.toolName);
   if (!toolName) return false;
   let changed = false;
   if (ctx?.success === true) {

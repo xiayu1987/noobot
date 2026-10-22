@@ -7,7 +7,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   isTransientMessageEvent,
   resolveMessageEventPresentationId,
-  resolveTurnPresentationMessageId,
+  resolveMessageViewKey,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
@@ -130,13 +130,9 @@ export function evaluateSubSessionEventGate({ eventData, registry, createEmptySe
   };
 }
 
-function sameMessageId(message = {}, targetId) {
-  return text(message?.messageId) === targetId;
-}
-
-export function findSubSessionMessageIndex(messages, targetId) {
-  if (!targetId) return -1;
-  return messages.findIndex((message = {}) => sameMessageId(message, targetId));
+export function findSubSessionMessageIndex(messages, viewKey) {
+  if (!viewKey) return -1;
+  return messages.findIndex((message = {}) => resolveMessageViewKey(message) === viewKey);
 }
 
 export function materializeTurnPresentationMessages({
@@ -147,12 +143,9 @@ export function materializeTurnPresentationMessages({
 }) {
   for (const source of [turnPresentation?.userMessage, turnPresentation?.assistantMessage]) {
     if (!source) continue;
-    const sourceId = resolveTurnPresentationMessageId(source);
-    const sourceIndex = findSubSessionMessageIndex(messages, sourceId);
+    const sourceIndex = findSubSessionMessageIndex(messages, resolveMessageViewKey(source));
     const materialized = {
       ...source,
-      id: sourceId,
-      messageId: sourceId,
       sessionId,
       createdAt: source.ts || occurredAt,
     };
@@ -175,8 +168,6 @@ export function applySubSessionMessageIdentity({
   targetMessage.presentationMessageId = messageKey;
   targetMessage.createdAt = targetMessage.createdAt || occurredAt;
   if (typeof targetMessage.pending !== "boolean") targetMessage.pending = true;
-  if (!targetMessage.messageId) targetMessage.messageId = messageKey;
-  if (!targetMessage.id) targetMessage.id = messageKey;
 }
 
 export function applySubSessionMessageOrdering({

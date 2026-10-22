@@ -26,6 +26,7 @@ function createContextSessionManager() {
 
 function executionRunConfig(turnScopeId, extra = {}) {
   return {
+    hookManager: null,
     turnScopeId,
     executionId: `run:${turnScopeId}`,
     presentationMessageId: `message:${turnScopeId}`,

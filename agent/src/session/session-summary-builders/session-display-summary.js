@@ -20,7 +20,7 @@ import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 28;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 29;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 function isValidTransferEnvelopeList(value) {

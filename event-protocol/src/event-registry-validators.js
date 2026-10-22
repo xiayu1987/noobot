@@ -61,7 +61,7 @@ const collectMessageOrderingErrors = (envelope, presentationMessageId, errors) =
   const ordering = envelope?.ordering;
   if (ordering?.domain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) errors.push("sequence_domain_mismatch");
   if (text(ordering?.scopeId) !== presentationMessageId) errors.push("sequence_scope_mismatch");
-  const sequence = Number(ordering?.sequence);
+  const sequence = ordering?.sequence;
   if (isTransientMessageEventType(envelope?.payload?.eventType)) {
     if (sequence !== TRANSIENT_MESSAGE_EVENT_SEQUENCE) errors.push("transient_event_sequenced");
   } else if (!(sequence >= 1)) {

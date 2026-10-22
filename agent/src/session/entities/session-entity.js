@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
+import { assertTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import {
@@ -121,20 +121,15 @@ export function normalizeSessionEntity(
   assertSessionAggregateShape(session);
   const context = resolveSessionNormalizationContext(session, { now });
   const normalizedMessages = normalizeMessagesEntity(session.messages, now);
-  const normalizedTurnSummaryCheckpoints = normalizeTurnSummaryCheckpoints(
-    session?.turnSummaryCheckpoints || {},
-  );
+  if ("turnSummaryCheckpoints" in session) {
+    assertTurnSummaryCheckpoints(session.turnSummaryCheckpoints);
+  }
   const normalizedSession = createNormalizedSessionEntity(session, context, normalizedMessages);
   assertDialogOrderCoversMessages(normalizedSession.dialogOrder, normalizedMessages);
   if (context.customTitle) normalizedSession.customTitle = context.customTitle;
   else delete normalizedSession.customTitle;
   if (context.autoTitle) normalizedSession.autoTitle = context.autoTitle;
   else delete normalizedSession.autoTitle;
-  if (Object.keys(normalizedTurnSummaryCheckpoints).length) {
-    normalizedSession.turnSummaryCheckpoints = normalizedTurnSummaryCheckpoints;
-  } else {
-    delete normalizedSession.turnSummaryCheckpoints;
-  }
   delete normalizedSession.turnTerminalCommits;
   return assertSessionAggregateInvariants(normalizedSession);
 }

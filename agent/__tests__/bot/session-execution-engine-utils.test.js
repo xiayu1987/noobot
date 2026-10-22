@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHookManager } from "@noobot/hook-protocol";
 import {
   normalizeTrimmedStringList,
   selectHookManager,
@@ -15,9 +16,9 @@ test("session-execution-engine-utils normalizes plugin selectors and resolves pl
 });
 
 test("session-execution-engine-utils selects only the canonical manager or creates one", () => {
-  const manager = { kind: "manager" };
-  const hooks = { kind: "hooks", on() {} };
-  const created = { kind: "created" };
+  const manager = createHookManager();
+  const hooks = createHookManager();
+  const created = createHookManager();
 
   assert.equal(
     selectHookManager({
@@ -42,5 +43,22 @@ test("session-execution-engine-utils selects only the canonical manager or creat
       createManager: () => created,
     }),
     created,
+  );
+  assert.equal(
+    selectHookManager({
+      runConfig: { hookManager: null },
+      managerKey: "hookManager",
+      createManager: () => created,
+    }),
+    created,
+  );
+  assert.throws(
+    () =>
+      selectHookManager({
+        runConfig: { hookManager: { kind: "stub" } },
+        managerKey: "hookManager",
+        createManager: () => created,
+      }),
+    /hookManager must be a hook manager with on\/emit or null/,
   );
 });

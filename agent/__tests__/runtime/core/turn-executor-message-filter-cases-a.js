@@ -10,7 +10,7 @@ import { appendContextMessage, writeMessageBlocks } from "@noobot/context-protoc
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 import {
   readContextMessageValue,
-  resolveContextMessageId,
+  resolveContextMessageKey,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
@@ -26,6 +26,7 @@ import {
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function contextMessage(native = {}, metadata = {}) {
   return writeContextMessageMetadata(
@@ -75,7 +76,9 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
 
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: createTestRuntimeContext(),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+    }),
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
@@ -96,10 +99,6 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
       ],
     },
     traces: [],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d1",
     maxTurns: 1,
   };
@@ -115,9 +114,12 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
     ],
   );
   assert.equal(result.output, "ok");
-  const finalResponse = loopState.modelContext.messages.at(-1);
+  const finalResponse = modelState.runtime.activeMessageContext.messages.at(-1);
   assert.equal(finalResponse.content, "ok");
-  assert.equal(loopState.modelContext.messageBlocks.incremental.at(-1), finalResponse);
+  assert.equal(
+    modelState.runtime.activeMessageContext.messageBlocks.incremental.at(-1),
+    finalResponse,
+  );
 });
 
 test("invokeWithToolsTurn filters only summarized messages before llm invoke", async () => {
@@ -140,7 +142,9 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
 
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: createTestRuntimeContext(),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+    }),
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
@@ -163,10 +167,6 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d2",
     maxTurns: 1,
   };
@@ -182,16 +182,21 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
       { role: "user", content: "keep-user" },
     ],
   );
-  const finalAssistant = loopState.modelContext.messages.at(-1);
+  const finalAssistant = modelState.runtime.activeMessageContext.messages.at(-1);
   assert.equal(finalAssistant.content, "ok-with-tools");
-  assert.equal(loopState.modelContext.messageBlocks.incremental.at(-1), finalAssistant);
+  assert.equal(
+    modelState.runtime.activeMessageContext.messageBlocks.incremental.at(-1),
+    finalAssistant,
+  );
 });
 
 test("invokeWithToolsTurn sends system history incremental order after before_llm_call hooks", async () => {
   let capturedMessages = [];
   const runtime = createTestRuntimeContext({
+    sessionManager: createCanonicalMessageEventSessionManager(),
     runConfig: {
       hookManager: {
+        on: () => () => {},
         async emit(point, ctx = {}) {
           if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
 
@@ -232,10 +237,6 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d-current",
     maxTurns: 1,
   };
@@ -250,8 +251,10 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
 test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook", async () => {
   let capturedMessages = [];
   const runtime = createTestRuntimeContext({
+    sessionManager: createCanonicalMessageEventSessionManager(),
     runConfig: {
       hookManager: {
+        on: () => () => {},
         async emit(point, ctx = {}) {
           if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
           appendContextMessage(
@@ -296,10 +299,6 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
     messageBlocks: { system: [], history: [], incremental: [current] },
     traces: [],
     tools: [{ name: "execute_script" }],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d-current",
     maxTurns: 1,
   };
@@ -329,12 +328,14 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     tool_call_id: "call-covered",
   });
   const summary = contextMessage({ role: "user", content: "summary-relay" });
-  const coveredIds = new Set([toolCall, toolResult].map(resolveContextMessageId));
+  const coveredIds = new Set([toolCall, toolResult].map(resolveContextMessageKey));
   let loopState = null;
   let checkpointCount = 0;
   const runtime = createTestRuntimeContext({
+    sessionManager: createCanonicalMessageEventSessionManager(),
     runConfig: {
       hookManager: {
+        on: () => () => {},
         async emit(point, ctx = {}) {
           if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
           writeMessageBlocks(ctx.modelContext, {
@@ -342,7 +343,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
           });
           requestMainFlowSummaryCheckpoint(runtime, {
             source: "plugin.summary",
-            summarizedMessageIds: [...coveredIds],
+            summarizedMessageUids: [...coveredIds],
           });
           return createEmptyHookResult(point, ctx);
         },
@@ -351,9 +352,9 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
   });
   runtime.commitSummaryCheckpoint = async () => {
     checkpointCount += 1;
-    writeMessageBlocks(loopState.modelContext, {
-      incremental: loopState.modelContext.messageBlocks.incremental.filter(
-        (message) => !coveredIds.has(resolveContextMessageId(message)),
+    writeMessageBlocks(modelState.runtime.activeMessageContext, {
+      incremental: modelState.runtime.activeMessageContext.messageBlocks.incremental.filter(
+        (message) => !coveredIds.has(resolveContextMessageKey(message)),
       ),
     });
     return { committed: true };
@@ -379,10 +380,6 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     messageBlocks: { system: [], history: [], incremental: [current, toolCall, toolResult] },
     traces: [],
     tools: [{ name: "execute_script" }],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d-summary",
     maxTurns: 1,
   };

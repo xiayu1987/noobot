@@ -19,6 +19,7 @@ export const MESSAGE_IDENTITY_FIELD = Object.freeze({
   MODEL: generatedField("modelMessageId"),
   SESSION: generatedField("messageUid"),
   USER: generatedField("userMessageId"),
+  CONTEXT: generatedField("contextMessageId"),
 });
 
 function randomId(field) {
@@ -39,6 +40,10 @@ export function createPresentationMessageId() {
 
 export function createUserMessageId() {
   return randomId(MESSAGE_IDENTITY_FIELD.USER);
+}
+
+export function createContextMessageId() {
+  return randomId(MESSAGE_IDENTITY_FIELD.CONTEXT);
 }
 
 export function isMessageIdentity(value) {

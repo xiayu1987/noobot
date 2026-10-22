@@ -26,7 +26,9 @@ test("snapshot reads legacy transfer reasons only after canonical Session migrat
         aggregateVersion: 0,
         messages: [
           {
-            ...canonicalMessages([{ role: "assistant", content: "parsed" }])[0],
+            ...canonicalMessages([
+              { role: "assistant", presentationMessageId: "pm_fx1", content: "parsed" },
+            ])[0],
             transferEnvelopes: [
               {
                 protocol: "noobot.semantic-transfer",

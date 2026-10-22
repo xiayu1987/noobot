@@ -35,7 +35,7 @@ test("session manifest stores ordered turn references and rejects noncanonical s
   withTemp(async (root) => {
     const messages = [
       { role: "user", content: "u1", turnScopeId: "a" },
-      { role: "assistant", content: "a1", turnScopeId: "a" },
+      { role: "assistant", presentationMessageId: "pm_fx1", content: "a1", turnScopeId: "a" },
       { role: "user", content: "u2", turnScopeId: "b" },
     ];
     await writeSessionArtifact({
@@ -87,9 +87,9 @@ test("session turns preserve non-contiguous scopes without reordering and reject
   withTemp(async (root) => {
     const messages = [
       { role: "user", content: "a first", turnScopeId: "a" },
-      { role: "assistant", content: "a answer", turnScopeId: "a" },
+      { role: "assistant", presentationMessageId: "pm_fx2", content: "a answer", turnScopeId: "a" },
       { role: "user", content: "b", turnScopeId: "b" },
-      { role: "assistant", content: "a again", turnScopeId: "a" },
+      { role: "assistant", presentationMessageId: "pm_fx3", content: "a again", turnScopeId: "a" },
     ];
     await writeSessionArtifact({
       sessionDir: root,
@@ -149,7 +149,6 @@ test("session artifacts group interleaved messages by logical dialog without cha
         dialogProcessId: "a",
         turnScopeId: "turn-a",
         messageOrigin: "natural",
-        userMetaMaterialized: true,
         ts: "2026-01-01T00:00:00Z",
       },
       {
@@ -158,11 +157,11 @@ test("session artifacts group interleaved messages by logical dialog without cha
         dialogProcessId: "b",
         turnScopeId: "turn-b",
         messageOrigin: "natural",
-        userMetaMaterialized: true,
         ts: "2026-01-01T00:01:00Z",
       },
       {
         role: "assistant",
+        presentationMessageId: "pm_fx4",
         content: "a late",
         dialogProcessId: "a",
         turnScopeId: "turn-a",
@@ -170,6 +169,7 @@ test("session artifacts group interleaved messages by logical dialog without cha
       },
       {
         role: "assistant",
+        presentationMessageId: "pm_fx5",
         content: "b answer",
         dialogProcessId: "b",
         turnScopeId: "turn-b",
@@ -235,6 +235,7 @@ test("session artifact publication rejects duplicate persistent message UIDs", a
             {
               messageUid: "sm_same",
               role: "assistant",
+              presentationMessageId: "pm_fx6",
               content: "two",
               dialogProcessId: "d1",
               turnScopeId: "t1",
@@ -248,8 +249,20 @@ test("session artifact publication rejects duplicate persistent message UIDs", a
 
 test("canonical turn journals append only changed messages and hide uncommitted tails", async () =>
   withTemp(async (root) => {
-    const first = { role: "assistant", content: "one", turnScopeId: "active", messageUid: "m1" };
-    const second = { role: "assistant", content: "two", turnScopeId: "active", messageUid: "m2" };
+    const first = {
+      role: "assistant",
+      presentationMessageId: "pm_fx7",
+      content: "one",
+      turnScopeId: "active",
+      messageUid: "m1",
+    };
+    const second = {
+      role: "assistant",
+      presentationMessageId: "pm_fx8",
+      content: "two",
+      turnScopeId: "active",
+      messageUid: "m2",
+    };
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: {
@@ -296,6 +309,7 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
       },
       {
         role: "assistant",
+        presentationMessageId: "pm_fx9",
         content: "answer",
         turnScopeId: "active",
         messageUid: "m2",
@@ -308,6 +322,8 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
       requestHash: "sha256:fixture",
       persistedMessageUids: ["m1", "m2"],
       summarizedMessageUids: ["m1"],
+      retainedMessageUids: [],
+      markedCount: 1,
       committedAt: "2026-01-01T00:00:00.000Z",
     };
     const sessionPayload = {
@@ -316,7 +332,12 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
       aggregateVersion: 0,
       messages,
       turnSummaryCheckpoints: {
-        active: { dialogProcessId: "dialog-active", turnScopeId: "active", receipts: [receipt] },
+        active: {
+          dialogProcessId: "dialog-active",
+          turnScopeId: "active",
+          checkpointRevision: 1,
+          receipts: [receipt],
+        },
       },
     };
     await writeSessionArtifact({ sessionDir: root, sessionPayload });
@@ -360,6 +381,7 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
       checkpointRevision: 2,
       persistedMessageUids: ["m1", "m2", "m3"],
       summarizedMessageUids: ["m1", "m2"],
+      markedCount: 2,
       committedAt: "2026-01-01T00:01:00.000Z",
     };
     const expandedPayload = {
@@ -368,6 +390,7 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
         ...messages,
         {
           role: "assistant",
+          presentationMessageId: "pm_fx10",
           content: "follow-up",
           turnScopeId: "active",
           messageUid: "m3",
@@ -378,6 +401,7 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
         active: {
           dialogProcessId: "dialog-active",
           turnScopeId: "active",
+          checkpointRevision: 2,
           receipts: [receipt, secondReceipt],
         },
       },
@@ -516,6 +540,7 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
     const stopped = {
       messageUid: "stopped",
       role: "assistant",
+      presentationMessageId: "pm_fx11",
       content: "partial",
       dialogProcessId: "d-stop",
       turnScopeId: "t-stop",
@@ -532,6 +557,7 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
     const continuation = {
       messageUid: "continued",
       role: "assistant",
+      presentationMessageId: "pm_fx12",
       content: "complete",
       dialogProcessId: "d-next",
       turnScopeId: "t-next",

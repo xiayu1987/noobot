@@ -82,12 +82,7 @@ function finalizeCommand(turn, identity) {
     eventType: isStop ? TURN_EVENT.STOP_COMPLETED : TURN_EVENT.COMPLETED,
     phase: isStop ? TURN_PHASE.STOP : TURN_PHASE.COMPLETION,
     expectedRevision: Number(turn.revision || 0),
-    terminalStatus: {
-      command: isStop ? "user_stopped" : "completed",
-      ...(isStop && intent.payload?.assistantMessage
-        ? { assistantMessage: intent.payload.assistantMessage }
-        : {}),
-    },
+    terminalStatus: { command: isStop ? "user_stopped" : "completed" },
   };
 }
 

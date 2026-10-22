@@ -9,10 +9,6 @@ import { text } from "@noobot/shared/value";
 function checkpointKey(message = {}, index = 0) {
   const messageUid = text(message?.messageUid);
   if (messageUid) return `uid:${messageUid}`;
-  const messageId = text(message?.messageId);
-  const dialogProcessId = text(message?.dialogProcessId);
-  const turnScopeId = text(message?.turnScopeId);
-  if (messageId) return `message:${dialogProcessId}:${turnScopeId}:${messageId}`;
   return `index:${index}:${String(message?.role || "")}:${String(message?.tool_call_id || "")}`;
 }
 
@@ -59,7 +55,7 @@ function projectActivityDurability(activityMessages, durableMessages) {
 function projectPersistedMessage(message = {}) {
   return {
     messageUid: text(message.messageUid),
-    messageId: text(message.messageId),
+    modelMessageId: text(message.modelMessageId),
     presentationMessageId: text(message.presentationMessageId),
     role: text(message.role),
     type: text(message.type),
@@ -102,7 +98,6 @@ export function bindCurrentTurnPersistence({
   let batchDepth = 0;
   let persistenceRequested = false;
   const persistedFingerprints = new Map();
-  dispatchRuntime.timelineCheckpointPersistedMessageUids = [];
 
   const enqueuePersistence = () => {
     const persist = async () => {
@@ -208,7 +203,7 @@ export function bindCurrentTurnPersistence({
     }
   };
   dispatchRuntime.commitSummaryCheckpoint = (payload = {}) =>
-    commitSummaryCheckpoint?.({
+    commitSummaryCheckpoint({
       runtime: dispatchRuntime,
       userId,
       sessionId,

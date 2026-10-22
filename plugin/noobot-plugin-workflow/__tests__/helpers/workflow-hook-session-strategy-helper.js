@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
+import { createEventEnvelope, getEventFamily, validateProtocolEvent } from "@noobot/event-protocol";
 import { deriveAgentExecutionId, deriveTurnCommandId } from "@noobot/session-protocol";
 import {
   createTransferEnvelope,
@@ -330,6 +330,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
         sequences.set(stream, sequence);
         const envelope = createEventEnvelope({
           family,
+          schemaVersion: getEventFamily(family).schemaVersion,
           identity: {
             ...identity,
             eventId: `test-event:${stream}:${sequence}`,
@@ -405,7 +406,7 @@ export function callsByNodeName(calls = []) {
 }
 
 export function workflowTurn(agentResult) {
-  return (agentResult?.turnMessages || []).find(
+  return agentResult.turnMessages.find(
     (item) => item?.pluginMessage === true && item?.pluginMeta?.kind === "workflow",
   );
 }

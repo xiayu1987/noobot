@@ -73,7 +73,6 @@ const PROJECTED_TEXT_FIELDS = Object.freeze([
 const PROJECTED_FLAG_FIELDS = Object.freeze([
   "summarized",
   "injectedMessage",
-  "userMetaMaterialized",
   "pluginMessage",
   "terminalHistoryProjection",
   "terminalHistoryExplanation",
@@ -109,6 +108,11 @@ export function projectSessionRecordToContextMessage(record = {}) {
     optionalPlainObject(source.modelResponseMetadata, "modelResponseMetadata") ?? undefined;
   metadata.attachments = attachments.length ? attachments : undefined;
   metadata.transferEnvelopes = transferEnvelopes.length ? transferEnvelopes : undefined;
+  const userMetaParsedResults = optionalArray(
+    source.userMetaParsedResults,
+    "userMetaParsedResults",
+  );
+  metadata.userMetaParsedResults = userMetaParsedResults.length ? userMetaParsedResults : undefined;
   return writeContextMessageMetadata(
     {
       role,
@@ -134,6 +138,7 @@ const PROJECTED_STRUCTURED_FIELDS = Object.freeze([
   "modelResponseMetadata",
   "attachments",
   "transferEnvelopes",
+  "userMetaParsedResults",
 ]);
 
 export function projectContextMessageToSessionRecord(message = {}) {

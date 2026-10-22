@@ -7,21 +7,31 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  MESSAGE_FIELD_REMOVALS,
   MESSAGE_FIELD_KIND,
   MESSAGE_FIELD_SCHEMA,
   MESSAGE_IDENTITY_CATEGORY,
   MESSAGE_IDENTITY_STORE,
+  MESSAGE_PATH_RULES,
+  MESSAGE_PATH_RULE_KIND,
+  MESSAGE_REMOVAL_REASON,
+  acceptedMessageIdentityFieldsFor,
   isCategorizedMessageIdentityName,
   isRegisteredMessageIdentityField,
+  messageFieldRemovalsFor,
   messageFieldRenamesFor,
+  messageRecordIdentityFieldsFor,
 } from "../src/identity/message-identity-schema.js";
 
-test("schema has exactly one key and every field declares a known kind and category", () => {
+test("schema has one key per identity category and every field declares a known kind", () => {
   const entries = Object.entries(MESSAGE_FIELD_SCHEMA);
   const keys = entries.filter(([, spec]) => spec.kind === MESSAGE_FIELD_KIND.KEY);
   assert.deepEqual(
-    keys.map(([name]) => name),
-    ["messageUid"],
+    keys.map(([name, spec]) => [name, spec.category]),
+    [
+      ["messageUid", MESSAGE_IDENTITY_CATEGORY.SESSION],
+      ["contextMessageId", MESSAGE_IDENTITY_CATEGORY.CONTEXT],
+    ],
   );
   for (const [name, spec] of entries) {
     assert.ok(Object.values(MESSAGE_FIELD_KIND).includes(spec.kind), name);
@@ -34,18 +44,15 @@ test("generated identity categories use distinct prefixes", () => {
   const prefixes = Object.values(MESSAGE_FIELD_SCHEMA)
     .map((spec) => spec.prefix)
     .filter(Boolean);
-  assert.deepEqual(prefixes, ["sm_", "mm_", "pm_", "um_"]);
+  assert.deepEqual(prefixes, ["sm_", "mm_", "pm_", "um_", "cm_"]);
   assert.equal(new Set(prefixes).size, prefixes.length);
 });
 
-test("references and derived fields point at the session key category", () => {
+test("references point at the session key category", () => {
   for (const [name, spec] of Object.entries(MESSAGE_FIELD_SCHEMA)) {
     if (spec.kind === MESSAGE_FIELD_KIND.REFERENCE) {
       assert.equal(spec.category, MESSAGE_IDENTITY_CATEGORY.SESSION, name);
       assert.match(name, /MessageUids?$/);
-    }
-    if (spec.kind === MESSAGE_FIELD_KIND.DERIVED) {
-      assert.equal(spec.derivedFrom, MESSAGE_IDENTITY_CATEGORY.SESSION, name);
     }
   }
 });
@@ -91,7 +98,9 @@ test("journal renames split bare messageId by role and drop the session uid dupl
       ["messageId", "userMessageId", ["user"]],
     ],
   );
-  assert.equal(renames.find((entry) => entry.to === "userMessageId").duplicateOf, "messageUid");
+  assert.deepEqual(renames.find((entry) => entry.to === "userMessageId").duplicateOf, [
+    "messageUid",
+  ]);
 });
 
 test("every legacy field maps to one target per store", () => {
@@ -103,4 +112,64 @@ test("every legacy field maps to one target per store", () => {
       seen.add(key);
     }
   }
+});
+
+test("record identity fields are derived per role from schema roles", () => {
+  assert.deepEqual(messageRecordIdentityFieldsFor("assistant"), {
+    allowed: ["modelMessageId", "presentationMessageId"],
+    forbidden: ["userMessageId"],
+    required: ["modelMessageId", "presentationMessageId"],
+  });
+  assert.deepEqual(messageRecordIdentityFieldsFor("user"), {
+    allowed: ["userMessageId"],
+    forbidden: ["modelMessageId", "presentationMessageId"],
+    required: [],
+  });
+  assert.deepEqual(messageRecordIdentityFieldsFor("tool"), {
+    allowed: ["presentationMessageId"],
+    forbidden: ["modelMessageId", "userMessageId"],
+    required: ["presentationMessageId"],
+  });
+});
+
+test("only newly accepted user messages require the client identity", () => {
+  assert.deepEqual(acceptedMessageIdentityFieldsFor("user"), ["userMessageId"]);
+  assert.deepEqual(acceptedMessageIdentityFieldsFor("assistant"), []);
+});
+
+test("every removal is lossless by duplicate, consistency or derivation", () => {
+  for (const entry of MESSAGE_FIELD_REMOVALS) {
+    const proven = Boolean(entry.duplicateOf?.length) || typeof entry.consistentWith === "function";
+    assert.ok(proven, entry.field);
+    assert.ok(entry.stores.length > 0, entry.field);
+  }
+  for (const rule of MESSAGE_PATH_RULES) {
+    const label = `${rule.store}:${rule.path.join(".")}`;
+    if (rule.kind === MESSAGE_PATH_RULE_KIND.RECORD) {
+      assert.equal(rule.fields, null, label);
+      continue;
+    }
+    assert.ok(rule.fields.length > 0, label);
+    if (rule.kind === MESSAGE_PATH_RULE_KIND.PROJECTION) {
+      assert.ok(rule.duplicateOf.length > 0, label);
+    } else if (rule.kind === MESSAGE_PATH_RULE_KIND.RENAME) {
+      const legacy = MESSAGE_FIELD_SCHEMA[rule.target].renamedFrom
+        .filter((entry) => entry.stores.includes(rule.store))
+        .map((entry) => entry.field);
+      assert.deepEqual(rule.fields, legacy, label);
+    } else {
+      assert.notEqual(rule.reason, MESSAGE_REMOVAL_REASON.DUPLICATE, label);
+    }
+  }
+  const userMeta = messageFieldRemovalsFor(MESSAGE_IDENTITY_STORE.JOURNAL).find(
+    (entry) => entry.field === "userMetaMaterialized",
+  );
+  assert.equal(userMeta.consistentWith(true, { messageOrigin: "natural" }), true);
+  assert.equal(userMeta.consistentWith(false, { messageOrigin: "internal" }), true);
+  assert.equal(userMeta.consistentWith(false, {}), true);
+  assert.equal(userMeta.consistentWith(true, {}), false);
+  const alias = messageFieldRemovalsFor(MESSAGE_IDENTITY_STORE.CHECKPOINT).find(
+    (entry) => entry.field === "id",
+  );
+  assert.deepEqual(alias.duplicateOf, ["messageUid", "messageId"]);
 });

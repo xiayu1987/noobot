@@ -64,11 +64,11 @@ function summarizePreferences(resolvedRunConfig) {
 }
 
 function summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatchRuntime }) {
-  const persistedUserMessageId = clean(currentUserMessage?.messageId);
+  const persistedUserMessageId = clean(currentUserMessage?.userMessageId);
   const requestedUserMessageId = clean(resolvedRunConfig?.userMessageId);
   const requestedPresentationMessageId = clean(resolvedRunConfig?.presentationMessageId);
   const boundPresentationMessageId = clean(
-    dispatchRuntime?.systemRuntime?.messageEventStream?.activePresentationMessageId,
+    dispatchRuntime.systemRuntime.messageEventStream.activePresentationMessageId,
   );
   return {
     requestedUserMessageId,

@@ -14,14 +14,13 @@ import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accesso
 import { resolveControlToolOutcome } from "../control-tool-outcome.js";
 import { text } from "@noobot/shared/value";
 
-function updateToolFailureState({ modelState, loopState, toolCallResult }) {
+function updateToolFailureState({ modelState, toolCallResult }) {
   const systemRuntime = getSystemRuntimeFromRuntime(modelState.runtime);
   const toolName = text(toolCallResult?.call?.name);
   if (!toolName) return;
   const nextFailureCount = toolCallResult?.success
     ? 0
-    : Number(loopState.toolConsecutiveFailureCount || 0) + 1;
-  loopState.toolConsecutiveFailureCount = nextFailureCount;
+    : systemRuntime.toolConsecutiveFailureCount + 1;
   systemRuntime.toolConsecutiveFailureCount = nextFailureCount;
 }
 
@@ -87,7 +86,7 @@ export async function processToolResults({
         toolResultText,
         transferEnvelopes: toolCallResult?.transferEnvelopes || [],
       });
-      updateToolFailureState({ modelState, loopState, toolCallResult });
+      updateToolFailureState({ modelState, toolCallResult });
     }
   };
   await runtime.withCurrentTurnPersistenceBatch(commitToolResults);
@@ -99,7 +98,6 @@ export async function processToolResults({
   if (rejectedSettlement) throw rejectedSettlement.error;
 
   if (hasHelpCall) {
-    loopState.toolConsecutiveFailureCount = 0;
     systemRuntime.toolConsecutiveFailureCount = 0;
   }
   await runAgentRuntimeHook({

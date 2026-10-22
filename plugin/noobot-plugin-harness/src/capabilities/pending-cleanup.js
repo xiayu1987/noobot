@@ -90,10 +90,10 @@ export function setPendingStateWithMeta(state = {}, key = "", value = null) {
 export function clearPendingSummaryState(state = {}) {
   if (!isObjectLike(state)) return false;
   const hadPendingSummary = state?.pending?.summary === true;
-  const hadCheckpoint = Array.isArray(state?.pending?.summaryCheckpointMessageIds);
+  const hadCheckpoint = state.pending.summaryCheckpointMessageKeys !== null;
   const hadCharTrigger = state?.flags?.summaryByCharsPrompted === true;
   setPendingStateWithMeta(state, "summary", false);
-  state.pending.summaryCheckpointMessageIds = null;
+  state.pending.summaryCheckpointMessageKeys = null;
   if (!isObjectLike(state.flags)) state.flags = {};
   state.flags.summaryByCharsPrompted = false;
   return hadPendingSummary || hadCheckpoint || hadCharTrigger;

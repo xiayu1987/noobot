@@ -90,7 +90,7 @@ test("dynamic harness system injections compose before history", async () => {
   const currentUser = {
     role: "user",
     content: "current user",
-    additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+    additional_kwargs: { messageOrigin: "natural" },
   };
   const ctx = createTestHookContext(
     {},
@@ -131,7 +131,7 @@ test("planning preserves typed base system context while adding harness prompts"
   const currentUser = {
     role: "user",
     content: "complete the task",
-    additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+    additional_kwargs: { messageOrigin: "natural" },
   };
   const ctx = createTestHookContext(
     {

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { text, isObjectLike } from "@noobot/shared/value";
+import { createContextMessageId } from "@noobot/session-protocol/message-identity";
 
 export const CONTEXT_MESSAGE_ROLE = Object.freeze({
   SYSTEM: "system",
@@ -120,20 +121,115 @@ export function isContextSystemMessage(message = {}) {
   return resolveContextMessageRole(message) === CONTEXT_MESSAGE_ROLE.SYSTEM;
 }
 
-export function resolveContextMessageId(message = {}) {
-  return readContextMessageField(message, "messageUid");
-}
-
 export const CONTEXT_MESSAGE_PROJECTION_TYPE = Object.freeze({
   USER_META: "user_meta",
   PHASE_SUMMARY: "phase_summary",
   TERMINAL_STATUS: "terminal_status",
 });
 
-export function deriveContextMessageProjectionId(sourceMessageId = "", projectionType = "") {
-  const sourceId = text(sourceMessageId);
+export const CONTEXT_MESSAGE_IDENTITY_SHAPE = Object.freeze({
+  SESSION: "session",
+  CONTEXT: "context",
+  MESSAGE_PROJECTION: "message_projection",
+  TURN_PROJECTION: "turn_projection",
+});
+
+const PROJECTION_SOURCE_FIELD = Object.freeze({
+  [CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META]: "sourceMessageUid",
+  [CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY]: "sourceMessageUid",
+  [CONTEXT_MESSAGE_PROJECTION_TYPE.TERMINAL_STATUS]: "sourceTurnScopeId",
+});
+
+const IDENTITY_FIELDS = Object.freeze([
+  "messageUid",
+  "contextMessageId",
+  "projectionType",
+  "sourceMessageUid",
+  "sourceTurnScopeId",
+]);
+
+function identityShapeOf(present) {
+  const fields = Object.keys(present).sort().join(",");
+  if (fields === "messageUid") return CONTEXT_MESSAGE_IDENTITY_SHAPE.SESSION;
+  if (fields === "contextMessageId") return CONTEXT_MESSAGE_IDENTITY_SHAPE.CONTEXT;
+  const sourceField = PROJECTION_SOURCE_FIELD[present.projectionType];
+  if (!sourceField || fields !== ["projectionType", sourceField].sort().join(",")) return "";
+  return sourceField === "sourceMessageUid"
+    ? CONTEXT_MESSAGE_IDENTITY_SHAPE.MESSAGE_PROJECTION
+    : CONTEXT_MESSAGE_IDENTITY_SHAPE.TURN_PROJECTION;
+}
+
+function readIdentityFields(message) {
+  const present = {};
+  for (const field of IDENTITY_FIELDS) {
+    const value = readContextMessageField(message, field);
+    if (value) present[field] = value;
+  }
+  return present;
+}
+
+function keyOfIdentity(identity) {
+  if (identity.shape === CONTEXT_MESSAGE_IDENTITY_SHAPE.SESSION) return identity.messageUid;
+  if (identity.shape === CONTEXT_MESSAGE_IDENTITY_SHAPE.CONTEXT) return identity.contextMessageId;
+  return composeContextProjectionKey(
+    identity.projectionType,
+    identity.sourceMessageUid || identity.sourceTurnScopeId,
+  );
+}
+
+export function inspectContextMessageIdentity(message = {}) {
+  const present = readIdentityFields(message);
+  const shape = identityShapeOf(present);
+  return Object.freeze({
+    shape,
+    key: shape ? keyOfIdentity({ shape, ...present }) : "",
+    fields: Object.freeze(present),
+  });
+}
+
+export function resolveContextMessageIdentity(message = {}) {
+  const present = readIdentityFields(message);
+  const shape = identityShapeOf(present);
+  if (!shape) {
+    const fields = Object.keys(present).join(", ") || "none";
+    throw new Error(`context message identity must be exactly one shape, got: ${fields}`);
+  }
+  return Object.freeze({ shape, ...present });
+}
+
+export function assignContextMessageIdentity(message) {
+  const present = Object.keys(readIdentityFields(message));
+  if (present.length) {
+    throw new TypeError(`context message already carries identity: ${present.join(", ")}`);
+  }
+  return writeContextMessageMetadata(message, { contextMessageId: createContextMessageId() });
+}
+
+export function resolveContextMessageKey(message = {}) {
+  return keyOfIdentity(resolveContextMessageIdentity(message));
+}
+
+export function composeContextProjectionKey(projectionType = "", source = "") {
   const type = text(projectionType);
-  return sourceId && type ? `${sourceId}::${type}` : "";
+  const sourceId = text(source);
+  if (!PROJECTION_SOURCE_FIELD[type] || !sourceId) {
+    throw new Error(`context projection key requires a known type and source: ${type}`);
+  }
+  return `${type}\u0000${sourceId}`;
+}
+
+export function resolveContextSourceMessageUid(message = {}) {
+  const identity = resolveContextMessageIdentity(message);
+  if (identity.shape === CONTEXT_MESSAGE_IDENTITY_SHAPE.SESSION) return identity.messageUid;
+  if (identity.shape === CONTEXT_MESSAGE_IDENTITY_SHAPE.MESSAGE_PROJECTION) {
+    return identity.sourceMessageUid;
+  }
+  return "";
+}
+
+export function resolveContextSessionMessageUid(message = {}) {
+  const identity = resolveContextMessageIdentity(message);
+  return identity.shape === CONTEXT_MESSAGE_IDENTITY_SHAPE.SESSION ? identity.messageUid : "";
 }
 
 export function resolveContextMessageDialogProcessId(message = {}) {
@@ -142,10 +238,6 @@ export function resolveContextMessageDialogProcessId(message = {}) {
 
 export function resolveContextMessageOrigin(message = {}) {
   return readContextMessageField(message, "messageOrigin").toLowerCase();
-}
-
-export function resolveContextUserMetaMaterialized(message = {}) {
-  return readContextMessageFlag(message, "userMetaMaterialized");
 }
 
 export function resolveContextMessageTurnScopeId(message = {}) {
@@ -203,12 +295,11 @@ export function resolveContextInjectedMessageType(message = {}) {
 }
 
 export const CONTEXT_MESSAGE_MODEL_METADATA_FIELDS = Object.freeze([
-  "messageUid",
+  ...IDENTITY_FIELDS,
   "dialogProcessId",
   "parentDialogProcessId",
   "turnScopeId",
   "messageOrigin",
-  "userMetaMaterialized",
   "injectedMessage",
   "injectedBy",
   "injectedMessageType",

@@ -22,6 +22,7 @@ import {
   mergeTransferEnvelopes,
 } from "../../model/transferEnvelopes.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 
 function sessionIdFromSession(session = {}) {
   return text(session?.sessionId);
@@ -123,7 +124,7 @@ function buildTerminalPresentation(status = {}, sessionId = "") {
   const dialogProcessId = text(status?.dialogProcessId);
   const timestamp = text(status?.updatedAt);
   return {
-    messageId: `turn-status-placeholder:${turnScopeId}`,
+    presentationMessageId: `turn-status-placeholder:${turnScopeId}`,
     sessionId: text(sessionId),
     role: "assistant",
     content: formatTerminalStatusContent(status),
@@ -152,7 +153,6 @@ function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId =
   if (!workflowRunId || !sessionId || !turnScopeId || !presentationMessageId || !workflowPayload)
     return null;
   return {
-    messageId: presentationMessageId,
     presentationMessageId,
     sessionId,
     role: "assistant",
@@ -179,22 +179,19 @@ function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
   const merged = {
     ...shell,
     ...workflowMessage,
-    messageId: shell?.messageId || workflowMessage?.messageId,
+    presentationMessageId: resolveMessageViewKey(shell) || resolveMessageViewKey(workflowMessage),
     ts: shell?.ts || workflowMessage?.ts,
     sessionId: getMessageSessionId(shell) || getMessageSessionId(workflowMessage),
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(workflowMessage),
     dialogProcessId: shell?.dialogProcessId || workflowMessage?.dialogProcessId || "",
     content,
-    __turnPresentationShellId: text(shell?.messageId || workflowMessage?.messageId),
   };
   logThinkingReplayDebug("frontend.turnPresentation.workflowMerged", () => ({
     sessionId: getMessageSessionId(merged),
     dialogProcessId: text(merged?.dialogProcessId),
     turnScopeId: getMessageTurnScopeId(merged),
-    canonicalMessageId: text(shell?.messageId),
-    presentationMessageId: text(
-      workflowMessage?.presentationMessageId || workflowMessage?.messageId,
-    ),
+    shellPresentationMessageId: resolveMessageViewKey(shell),
+    livePresentationMessageId: resolveMessageViewKey(workflowMessage),
     canonicalContentLength: canonicalContent.length,
     livePlanningContentLength: livePlanningContent.length,
     selectedContentSource: canonicalContent ? "canonical" : "live_planning",
@@ -216,7 +213,8 @@ function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
   return {
     ...shell,
     ...terminalPresentation,
-    messageId: shell?.messageId || terminalPresentation?.messageId,
+    presentationMessageId:
+      resolveMessageViewKey(shell) || resolveMessageViewKey(terminalPresentation),
     sessionId: getMessageSessionId(shell) || getMessageSessionId(terminalPresentation),
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(terminalPresentation),
     dialogProcessId: shell?.dialogProcessId || terminalPresentation?.dialogProcessId || "",

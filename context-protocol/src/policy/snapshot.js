@@ -9,7 +9,7 @@ import {
   CONTEXT_MESSAGE_ROLE,
   readContextMessageField,
   resolveContextMessageFlags,
-  resolveContextMessageId,
+  resolveContextSourceMessageUid,
   withContextMessageMetadata,
   resolveContextMessageRole,
   resolveContextToolResultCallId,
@@ -17,7 +17,7 @@ import {
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
-export const SNAPSHOT_VERSION = 4;
+export const SNAPSHOT_VERSION = 5;
 const IDENTITY_FIELDS = [
   "userId",
   "sessionId",
@@ -216,7 +216,7 @@ export function restoreSnapshotUserAttachmentFactsFromSessionAuthority(
   const restore = (messages) =>
     (Array.isArray(messages) ? messages : []).map((message) => {
       if (!isPersistedFrontendUserSource(message)) return message;
-      const messageUid = resolveContextMessageId(message);
+      const messageUid = resolveContextSourceMessageUid(message);
       if (!messageUid) {
         throw new Error("Persisted snapshot user source requires canonical message identity");
       }

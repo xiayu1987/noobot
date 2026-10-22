@@ -87,6 +87,7 @@ test("post-run hook failure never publishes completed and drains the failed life
     eventListener: listener,
     runConfig: {
       botHookManager: {
+        on: (...args) => hookManager.on(...args),
         async emit(point, ...args) {
           if (point === HOOK_POINT.BOT.AFTER_SESSION_RUN) throw hookError;
           return hookManager.emit(point, ...args);

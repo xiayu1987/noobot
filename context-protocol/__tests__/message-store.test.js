@@ -9,14 +9,16 @@ import assert from "node:assert/strict";
 import {
   appendMessage,
   canonicalizeMessageStore,
-  deriveMessageProjectionId,
-  getMessageId,
   pruneSummarizedIncrementalMessages,
   replaceMessages,
   resolveMessagesByIds,
   writeMessageBlocks,
 } from "../src/message/store.js";
-import { readContextMessageField, resolveContextMessageSummarized } from "../src/message/codec.js";
+import {
+  readContextMessageField,
+  resolveContextMessageKey,
+  resolveContextMessageSummarized,
+} from "../src/message/codec.js";
 import { attachModelContextRuntime } from "../src/assembly/model-runtime.js";
 import { contextMessage } from "./helpers/context-message.js";
 
@@ -36,11 +38,6 @@ function roundIdentity(message) {
   };
 }
 
-test("derived projections receive a deterministic identity distinct from their source", () => {
-  assert.equal(deriveMessageProjectionId("sm_user", "user_meta"), "sm_user::user_meta");
-  assert.notEqual(deriveMessageProjectionId("sm_user", "user_meta"), "sm_user");
-});
-
 test("persisted entities use messageUid as their only canonical context identity", () => {
   const message = msg("sm_injected", { role: "user", content: "injected" });
   const holder = { messages: [message] };
@@ -48,17 +45,17 @@ test("persisted entities use messageUid as their only canonical context identity
 
   canonicalizeMessageStore(holder);
 
-  assert.equal(getMessageId(message), "sm_injected");
+  assert.equal(resolveContextMessageKey(message), "sm_injected");
   assert.equal(message.additional_kwargs.noobotMessageId, undefined);
 });
 
-test("canonical store rejects context messages without messageUid", () => {
+test("canonical store rejects context messages without identity", () => {
   const holder = { messages: [contextMessage({ role: "system", content: "no-id" })] };
   attachRuntime(holder);
 
   assert.throws(
     () => canonicalizeMessageStore(holder),
-    /canonical context message requires additional_kwargs\.messageUid/,
+    /context message identity must be exactly one shape, got: none/,
   );
   assert.throws(
     () =>
@@ -70,7 +67,7 @@ test("canonical store rejects context messages without messageUid", () => {
         contextMessage({ role: "user", content: "no-id" }),
         { block: "incremental" },
       ),
-    /canonical context message requires additional_kwargs\.messageUid/,
+    /context message identity must be exactly one shape, got: none/,
   );
 });
 
@@ -106,7 +103,7 @@ test("agent message store canonicalizes messages and block views", () => {
   canonicalizeMessageStore(holder);
 
   assert.equal(holder.messages[1], holder.messageBlocks.incremental[0]);
-  assert.equal(getMessageId(holder.messages[1]), "cur");
+  assert.equal(resolveContextMessageKey(holder.messages[1]), "cur");
   assert.equal(holder.messageBlocks.incrementalIds, undefined);
 });
 
@@ -119,7 +116,7 @@ test("agent message store append and replace keep block arrays synchronized", ()
 
   assert.equal(holder.messages[0], appended);
   assert.equal(holder.messageBlocks.incremental[0], appended);
-  assert.equal(getMessageId(appended), "hello");
+  assert.equal(resolveContextMessageKey(appended), "hello");
   assert.equal(holder.messageBlocks.incrementalIds, undefined);
 
   const replacement = replaceMessages(holder, [
@@ -289,7 +286,10 @@ test("agent message store ignores provider and business ids for block identity",
   assert.equal(holder.messageBlocks.system[0], holder.messages[0]);
   assert.equal(holder.messageBlocks.history[0], holder.messages[1]);
   assert.deepEqual(
-    [getMessageId(holder.messageBlocks.system[0]), getMessageId(holder.messageBlocks.history[0])],
+    [
+      resolveContextMessageKey(holder.messageBlocks.system[0]),
+      resolveContextMessageKey(holder.messageBlocks.history[0]),
+    ],
     ["sys", "hist"],
   );
 });
@@ -411,5 +411,8 @@ test("summary pruning preserves every unmarked incremental message byte-for-byte
   pruneSummarizedIncrementalMessages(holder);
 
   assert.deepEqual(holder.messageBlocks.incremental, expectedIncremental);
-  assert.deepEqual(holder.messageBlocks.incremental.map(getMessageId), ["keep-1", "keep-2"]);
+  assert.deepEqual(holder.messageBlocks.incremental.map(resolveContextMessageKey), [
+    "keep-1",
+    "keep-2",
+  ]);
 });

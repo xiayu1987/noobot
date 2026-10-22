@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_TYPE,
@@ -19,6 +19,7 @@ import { createOutboundEventSender } from "../ws/chat-websocket/outbound-event-s
 function messageEnvelope({ eventId, sequence, payload }) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId,
       eventType: MESSAGE_EVENT_WIRE_EVENT,

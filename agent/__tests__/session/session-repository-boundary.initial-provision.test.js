@@ -62,9 +62,8 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     ...createAcceptedAgentExecution(turnScopeId, "session-1"),
     userMessage: {
       content: "persist me before execution",
-      messageId: `user-message-${turnScopeId}`,
+      userMessageId: `um_${turnScopeId}`,
       messageOrigin: "natural",
-      userMetaMaterialized: true,
     },
     expectedRevision: 0,
     createSessionIfAbsent: true,
@@ -359,8 +358,9 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
       turns: [
         {
           role: "assistant",
+          presentationMessageId: "pm_fx1",
           messageUid: "sm-child-1",
-          messageId: "msg-child-1",
+          modelMessageId: "msg-child-1",
           dialogProcessId: "dialog-child-1",
           turnScopeId: "turn-child-1",
           content: "child model response",

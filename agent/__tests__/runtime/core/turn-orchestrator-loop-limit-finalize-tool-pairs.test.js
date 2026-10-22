@@ -7,17 +7,17 @@ import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { createHookManager } from "@noobot/hook-protocol";
 import {
-  createTestTurnMessagesStore,
   createTestModelPort,
   createLoopTurnIdentity,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(
@@ -69,17 +69,12 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     tools: tool ? [tool] : [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: createTestTurnMessagesStore(),
-    currentTurnTasks: null,
     dialogProcessId: "dialog-1",
     maxTurns,
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,
     toolFailureHelpCount: 0,
     taskSummaryTriggered: false,
-    toolConsecutiveFailureCount: 0,
     errorLogger: null,
   };
 }
@@ -101,7 +96,10 @@ function createModelState(llm, defaultModelSpec = null) {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    runtime: createTestRuntimeContext({ systemRuntime: { config: { safeConfirm: true } } }),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+      systemRuntime: { config: { safeConfirm: true } },
+    }),
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,
@@ -147,10 +145,11 @@ test("completed tool loop keeps matching tool_call and tool_result in turnMessag
   assert.ok(resultMessage, "tool_result must survive into the final turnMessages");
   assert.equal(callMessage.tool_calls?.[0]?.id, "call_pair_1");
   assert.equal(resultMessage.tool_call_id, "call_pair_1");
-  assert.equal(resultMessage.messageId, resultMessage.messageUid);
+  assert.equal(Object.hasOwn(resultMessage, "messageId"), false);
+  assert.match(resultMessage.messageUid, /^sm_/);
   const assistantMessages = result.turnMessages.filter((item = {}) => item?.role === "assistant");
   assert.equal(assistantMessages.length, 2);
-  assert.equal(new Set(assistantMessages.map((item) => item.messageId)).size, 2);
+  assert.equal(new Set(assistantMessages.map((item) => item.modelMessageId)).size, 2);
   assert.deepEqual(
     [...new Set(assistantMessages.map((item) => item.presentationMessageId))],
     ["presentation-orchestrator-tool-pairs"],
@@ -236,11 +235,15 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
   );
   assert.equal(capturedInvocations.length, 2);
 
-  const toolCallMessages = loopState.turnMessages.filter(
-    (item) => item.role === "assistant" && item.type === "tool_call",
-  );
-  const toolResultMessages = loopState.turnMessages.filter((item) => item.role === "tool");
-  const userPromptMessages = loopState.turnMessages.filter((item) => item.role === "user");
+  const toolCallMessages = loopState.currentTurnMessages
+    .toArray()
+    .filter((item) => item.role === "assistant" && item.type === "tool_call");
+  const toolResultMessages = loopState.currentTurnMessages
+    .toArray()
+    .filter((item) => item.role === "tool");
+  const userPromptMessages = loopState.currentTurnMessages
+    .toArray()
+    .filter((item) => item.role === "user");
   assert.equal(toolCallMessages.length, 1);
   assert.equal(toolResultMessages.length, 3);
   assert.deepEqual(
@@ -278,18 +281,18 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
     .filter(Array.isArray)
     .map((toolCalls) => toolCalls.length);
   assert.equal(assistantToolCallCounts.at(-1), 3);
-  const incrementalToolCallIds = loopState.modelContext.messageBlocks.incremental
+  const incrementalToolCallIds = modelState.runtime.activeMessageContext.messageBlocks.incremental
     .filter((message) => Array.isArray(message?.tool_calls))
     .flatMap((message) => message.tool_calls.map((call) => call.id).filter(Boolean));
   assert.deepEqual(incrementalToolCallIds.slice(-3), ["call_1", "call_2", "call_3"]);
-  const incrementalToolResultIds = loopState.modelContext.messageBlocks.incremental
+  const incrementalToolResultIds = modelState.runtime.activeMessageContext.messageBlocks.incremental
     .map((message) => message?.tool_call_id || message?.lc_kwargs?.tool_call_id)
     .filter(Boolean);
   assert.deepEqual(incrementalToolResultIds.slice(-3), ["call_1", "call_2", "call_3"]);
   assert.ok(
-    loopState.modelContext.messageBlocks.incremental
+    modelState.runtime.activeMessageContext.messageBlocks.incremental
       .slice(-6)
-      .every((message) => resolveContextMessageId(message)),
+      .every((message) => resolveContextMessageKey(message)),
   );
 
   const syntheticBeforeLlm = beforeLlmContexts.filter((ctx) => ctx?.fakeTurn === true);

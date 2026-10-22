@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  SNAPSHOT_VERSION,
   createModelContextSnapshot,
   hydrateModelContextSnapshot,
   projectSnapshotIncrementalToContinuation,
@@ -60,7 +61,7 @@ test("snapshot policy preserves block boundaries and message protocol fields", (
   });
   const hydrated = hydrateModelContextSnapshot(snapshot, identity);
 
-  assert.equal(snapshot.version, 4);
+  assert.equal(snapshot.version, SNAPSHOT_VERSION);
   assert.deepEqual(hydrated.messageBlocks.history[0].tool_calls, [{ id: "call", name: "tool" }]);
   assert.deepEqual(readContextMessageValue(hydrated.messageBlocks.history[0], "custom"), {
     value: 1,
@@ -173,9 +174,9 @@ test("snapshot attachment facts come only from matching Session authority", () =
     type: "human",
     content: "[User Metadata]",
     additional_kwargs: {
-      messageUid: "source-user::user_meta",
+      projectionType: "user_meta",
+      sourceMessageUid: "source-user",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       noobotInternalMessageType: "user_meta",
     },
   };
@@ -189,7 +190,6 @@ test("snapshot attachment facts come only from matching Session authority", () =
           additional_kwargs: {
             messageUid: "source-user",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
           },
         },
       ],
@@ -220,13 +220,13 @@ test("persisted snapshot user sources require canonical identity", () => {
             {
               type: "human",
               content: "source",
-              additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+              additional_kwargs: { messageOrigin: "natural" },
             },
           ],
         },
         [],
       ),
-    /requires canonical message identity/,
+    /context message identity must be exactly one shape, got: none/,
   );
 });
 
@@ -249,7 +249,6 @@ test("persisted snapshot user sources must exist in Session authority", () => {
               additional_kwargs: {
                 messageUid: "missing-user",
                 messageOrigin: "natural",
-                userMetaMaterialized: true,
               },
             },
           ],
@@ -305,7 +304,6 @@ test("snapshot user source identity cannot resolve to another Session role", () 
               additional_kwargs: {
                 messageUid: "source-user",
                 messageOrigin: "natural",
-                userMetaMaterialized: true,
               },
             },
           ],

@@ -19,6 +19,7 @@ import {
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 const TEST_MODEL_SPEC = Object.freeze(
   normalizeRuntimeModelSpec({
@@ -76,7 +77,10 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
 
   const modelState = {
     modelPort: createTestModelPort(llm),
-    runtime: createTestRuntimeContext({ runConfig: { streaming: false } }),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+      runConfig: { hookManager: null, streaming: false },
+    }),
     globalConfig: { streaming: true },
     userConfig: {},
     eventListener: {
@@ -95,10 +99,6 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d-stream-disabled",
     maxTurns: 1,
   };
@@ -119,7 +119,9 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
         return { output: { text: "ok after retry", toolCalls: [] } };
       },
     },
-    runtime: createTestRuntimeContext(),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+    }),
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
@@ -131,10 +133,6 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
       incremental: [contextMessage({ role: "user", content: "go" })],
     },
     traces: [],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d-reasoning-no-tools",
     maxTurns: 1,
   };
@@ -142,9 +140,10 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
   const result = await invokeNoToolsTurn({ modelState, loopState, turn: 1 });
 
   assert.equal(result.output, "ok after retry");
-  const providerRetryPrompt = loopState.modelContext.messageBlocks.incremental.find((message) =>
-    String(message?.content || "").includes("thinking only"),
-  );
+  const providerRetryPrompt =
+    modelState.runtime.activeMessageContext.messageBlocks.incremental.find((message) =>
+      String(message?.content || "").includes("thinking only"),
+    );
   assert.equal(providerRetryPrompt, undefined);
 });
 
@@ -155,7 +154,10 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
         return { output: { text: "ok with tools after retry", toolCalls: [] } };
       },
     },
-    runtime: createTestRuntimeContext({ runConfig: { streaming: false } }),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+      runConfig: { hookManager: null, streaming: false },
+    }),
     globalConfig: { streaming: true },
     userConfig: {},
     eventListener: null,
@@ -170,10 +172,6 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
     dialogProcessId: "d-reasoning-tools",
     maxTurns: 1,
   };
@@ -181,8 +179,9 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
   const result = await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
 
   assert.equal(result.aiContentText, "ok with tools after retry");
-  const providerRetryPrompt = loopState.modelContext.messageBlocks.incremental.find((message) =>
-    String(message?.content || "").includes("thinking with tools"),
-  );
+  const providerRetryPrompt =
+    modelState.runtime.activeMessageContext.messageBlocks.incremental.find((message) =>
+      String(message?.content || "").includes("thinking with tools"),
+    );
   assert.equal(providerRetryPrompt, undefined);
 });

@@ -59,7 +59,6 @@ function createTransportDiagnostic({
   return {
     eventId: text(protocolEnvelope?.identity?.eventId || data?.eventId),
     eventType: eventType || text(protocolEnvelope?.identity?.eventType),
-    messageId: text(data?.messageId),
     presentationMessageId: text(data?.presentationMessageId),
     runHandleId: text(transportContext?.runHandleId),
     bindingId: text(transportContext?.bindingId),

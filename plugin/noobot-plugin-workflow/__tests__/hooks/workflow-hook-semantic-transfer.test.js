@@ -157,34 +157,53 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     /^runtime\/plugin-data\/workflow\/session\/s1\/wf_node_/,
   );
 
-  assert.ok(agentResult.workflow);
-  assert.ok(String(agentResult.workflow?.workflowRunId || "").trim());
-  assert.equal("workflowRunId" in agentResult.workflow.execution, false);
-  assert.equal("instanceId" in agentResult.workflow.execution, false);
-  assert.equal(agentResult.workflow?.runMeta?.dialogProcessId, "d1");
-  assert.equal("planningDialog" in agentResult.workflow, false);
-  assert.match(String(agentResult.workflow.nodeSessions[0]?.dialogProcessId || ""), /^wf_node_/);
-  assert.equal(agentResult.workflow.nodeSessions[0]?.dialogId, undefined);
+  assert.ok(workflowTurn(agentResult).pluginMeta.payload);
+  assert.ok(String(workflowTurn(agentResult).pluginMeta.payload?.workflowRunId || "").trim());
+  assert.equal("workflowRunId" in workflowTurn(agentResult).pluginMeta.payload.execution, false);
+  assert.equal("instanceId" in workflowTurn(agentResult).pluginMeta.payload.execution, false);
+  assert.equal(workflowTurn(agentResult).pluginMeta.payload?.runMeta?.dialogProcessId, "d1");
+  assert.equal("planningDialog" in workflowTurn(agentResult).pluginMeta.payload, false);
   assert.match(
-    String(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogProcessId || ""),
+    String(workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.dialogProcessId || ""),
     /^wf_node_/,
   );
-  assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogId, undefined);
-  assert.equal(Array.isArray(agentResult.workflow?.nodeSessions), true);
-  assert.equal(agentResult.workflow.nodeSessions.length, 1);
-  assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
-  assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
-  assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.status, undefined);
-  assert.equal(agentResult.workflow?.attachments, undefined);
-  assert.equal(agentResult.workflow.nodeSessions[0]?.attachments, undefined);
+  assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.dialogId, undefined);
+  assert.match(
+    String(
+      workflowTurn(agentResult).pluginMeta.payload?.execution?.nodeAgentRuns?.[0]
+        ?.nodeDialogProcessId || "",
+    ),
+    /^wf_node_/,
+  );
+  assert.equal(
+    workflowTurn(agentResult).pluginMeta.payload?.execution?.nodeAgentRuns?.[0]?.nodeDialogId,
+    undefined,
+  );
+  assert.equal(Array.isArray(workflowTurn(agentResult).pluginMeta.payload?.nodeSessions), true);
+  assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions.length, 1);
+  assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.rootSessionId, "s1");
+  assert.equal(
+    workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.sessionId,
+    "wf-node-session-1",
+  );
+  assert.equal(
+    workflowTurn(agentResult).pluginMeta.payload?.execution?.nodeAgentRuns?.[0]?.status,
+    undefined,
+  );
+  assert.equal(workflowTurn(agentResult).pluginMeta.payload?.attachments, undefined);
+  assert.equal(
+    workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.attachments,
+    undefined,
+  );
 
   const workflowTurnMessage = workflowTurn(agentResult);
   assert.ok(workflowTurnMessage);
   assert.equal(workflowTurnMessage?.type, "workflow");
   assert.equal(workflowTurnMessage?.chatPresentation, true);
   assert.equal(workflowTurnMessage?.presentationMessageId, "assistant-presentation-1");
-  assert.match(workflowTurnMessage?.messageId, /^mm_[0-9a-f-]{36}$/);
-  assert.equal(agentResult?.modelMessageId, workflowTurnMessage.messageId);
+  assert.match(workflowTurnMessage?.modelMessageId, /^mm_[0-9a-f-]{36}$/);
+  assert.equal(workflowTurnMessage?.messageId, undefined);
+  assert.equal(agentResult?.modelMessageId, workflowTurnMessage.modelMessageId);
   assert.equal(workflowTurnMessage?.attachments, undefined);
   assert.equal(
     workflowTurnMessage?.transferEnvelopes?.some(
@@ -203,7 +222,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(workflowTurnMessage?.pluginMeta?.source, "workflow-plugin");
   assert.equal(
     workflowTurnMessage?.pluginMeta?.payload?.workflowRunId,
-    agentResult.workflow?.workflowRunId,
+    workflowTurn(agentResult).pluginMeta.payload?.workflowRunId,
   );
   assert.equal(
     workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.nodeResultText,
@@ -309,13 +328,20 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
 
   const dispatchOutcome = await beforeDispatch.handler(ctx, createTestHookInvocation());
   const agentResult = dispatchOutcome?.result;
-  assert.ok(agentResult?.workflow);
+  assert.ok(workflowTurn(agentResult).pluginMeta.payload);
   assert.equal(fallbackArtifactCalls.length, 0);
-  assert.equal(agentResult.workflow?.transferEnvelopes?.length >= 1, true);
-  assert.equal(agentResult.workflow?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.length >= 1, true);
+  assert.equal(workflowTurn(agentResult).pluginMeta.payload?.transferEnvelopes?.length >= 1, true);
   assert.equal(
-    agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.[0]?.protocol,
+    workflowTurn(agentResult).pluginMeta.payload?.transferEnvelopes?.[0]?.protocol,
+    "noobot.semantic-transfer",
+  );
+  assert.equal(
+    workflowTurn(agentResult).pluginMeta.payload?.nodeSessions?.[0]?.transferEnvelopes?.length >= 1,
+    true,
+  );
+  assert.equal(
+    workflowTurn(agentResult).pluginMeta.payload?.nodeSessions?.[0]?.transferEnvelopes?.[0]
+      ?.protocol,
     "noobot.semantic-transfer",
   );
   const workflowTurnMessage = workflowTurn(agentResult);
@@ -424,8 +450,10 @@ test("workflow hook routes final attachment summary composition through semantic
   const transferEnvelopes = Array.isArray(workflowTurnMessage?.transferEnvelopes)
     ? workflowTurnMessage.transferEnvelopes
     : [];
-  const workflowPayloadTransferEnvelopes = Array.isArray(agentResult?.workflow?.transferEnvelopes)
-    ? agentResult.workflow.transferEnvelopes
+  const workflowPayloadTransferEnvelopes = Array.isArray(
+    workflowTurn(agentResult).pluginMeta.payload?.transferEnvelopes,
+  )
+    ? workflowTurn(agentResult).pluginMeta.payload.transferEnvelopes
     : [];
   assert.equal(
     transferEnvelopes.some(

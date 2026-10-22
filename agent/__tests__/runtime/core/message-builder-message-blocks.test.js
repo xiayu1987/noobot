@@ -13,7 +13,10 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import {
+  resolveContextMessageKey,
+  composeContextProjectionKey,
+} from "@noobot/context-protocol/message/codec";
 
 function sessionContextHistory(records) {
   return records.map((record) =>
@@ -65,9 +68,12 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(blocks.messages[1]?.content, "h-u");
   assert.equal(blocks.messages[2]?.content, "h-1");
   assert.equal(blocks.messages[3]?.content, "u-1");
-  assert.equal(resolveContextMessageId(blocks.messages[3]), "sm_current_user_fixture");
+  assert.equal(resolveContextMessageKey(blocks.messages[3]), "sm_current_user_fixture");
   assert.equal(blocks.messages[4]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
-  assert.equal(resolveContextMessageId(blocks.messages[4]), "sm_current_user_fixture::user_meta");
+  assert.equal(
+    resolveContextMessageKey(blocks.messages[4]),
+    composeContextProjectionKey("user_meta", "sm_current_user_fixture"),
+  );
 });
 
 test("buildContextMessageBlocks appends resume user message meta with attachments", () => {
@@ -107,7 +113,6 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
             role: "user",
             content: "snapshot user",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             dialogProcessId: "dlg-stopped",
             turnScopeId: "turn-stopped",
             attachments: [],
@@ -376,7 +381,7 @@ test("buildContextMessageBlocks removes current turn user residue from history",
   assert.equal(blocks.history.length, 2);
   assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
   assert.equal(blocks.incremental[0]?.additional_kwargs?.messageOrigin, "natural");
-  assert.equal(blocks.incremental[0]?.additional_kwargs?.userMetaMaterialized, true);
+  assert.equal("userMetaMaterialized" in (blocks.incremental[0]?.additional_kwargs || {}), false);
   assert.equal(
     blocks.incremental[0]?.additional_kwargs?.turnScopeId,
     "client-turn:mqrt1icf:lxcfigpr",
@@ -431,7 +436,6 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
             role: "user",
             content: "全仓回归测试",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             dialogProcessId: "dlg-current",
             turnScopeId: "client-turn:current",
           }),
@@ -453,7 +457,7 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
   assert.equal(visibleContents.filter((content) => content === "全仓回归测试").length, 1);
   assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
   assert.equal(blocks.incremental[0]?.additional_kwargs?.messageOrigin, "natural");
-  assert.equal(blocks.incremental[0]?.additional_kwargs?.userMetaMaterialized, true);
+  assert.equal("userMetaMaterialized" in (blocks.incremental[0]?.additional_kwargs || {}), false);
   assert.equal(blocks.incremental[0]?.additional_kwargs?.turnScopeId, "client-turn:current");
   assert.equal(blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
 });

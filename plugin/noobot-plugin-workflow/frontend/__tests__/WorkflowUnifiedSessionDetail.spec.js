@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import {
   buildUnifiedSessionDetail,
   mergeUnifiedSessionDetail,
@@ -17,7 +18,7 @@ const childIdentity = {
 
 function childAssistant(overrides = {}) {
   return {
-    messageId: "assistant-a",
+    presentationMessageId: "assistant-a",
     role: "assistant",
     content: "done",
     ...childIdentity,
@@ -54,7 +55,7 @@ describe("workflow child unified session detail", () => {
   });
 
   it("keeps the running placeholder outside canonical messages", () => {
-    const user = { messageId: "user-a", role: "user", content: "run", ...childIdentity };
+    const user = { messageUid: "user-a", role: "user", content: "run", ...childIdentity };
     const detail = buildUnifiedSessionDetail({
       nodeItem: {
         ...childIdentity,
@@ -85,9 +86,9 @@ describe("workflow child unified session detail", () => {
   });
 
   it("merges a terminal canonical assistant without retaining a view placeholder as a message", () => {
-    const user = { messageId: "user-a", role: "user", content: "run", ...childIdentity };
+    const user = { messageUid: "user-a", role: "user", content: "run", ...childIdentity };
     const finalAssistant = {
-      messageId: "assistant-final",
+      presentationMessageId: "assistant-final",
       role: "assistant",
       content: "done once",
       ...childIdentity,
@@ -99,19 +100,19 @@ describe("workflow child unified session detail", () => {
     );
 
     expect(detail.messages).toEqual([user, finalAssistant]);
-    expect(detail.messages.every((message) => Boolean(message.messageId))).toBe(true);
+    expect(detail.messages.every((message) => Boolean(resolveMessageViewKey(message)))).toBe(true);
   });
 
   it("keeps assistants with different stable message identities separate", () => {
     const liveAssistant = {
-      messageId: "assistant-live-tool-stream",
+      presentationMessageId: "assistant-live-tool-stream",
       role: "assistant",
       content: "done once",
       ...childIdentity,
       rawEvents: [{ type: "tool_call_start" }],
     };
     const finalAssistant = {
-      messageId: "assistant-terminal",
+      presentationMessageId: "assistant-terminal",
       role: "assistant",
       content: "done once",
       ...childIdentity,

@@ -207,6 +207,8 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
         {
           messageUid: "sm_tool_call",
           role: "assistant",
+          presentationMessageId: "pm_fx1",
+          modelMessageId: "mm_scoped_session_repositor_1",
           type: "tool_call",
           content: "",
           tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
@@ -214,11 +216,19 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
         {
           messageUid: "sm_tool_result",
           role: "tool",
+          presentationMessageId: "pm_fx2",
           type: "tool_result",
           content: "body",
           tool_call_id: "call-1",
         },
-        { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
+        {
+          messageUid: "sm_done",
+          role: "assistant",
+          presentationMessageId: "pm_fx3",
+          modelMessageId: "mm_scoped_session_repositor_2",
+          type: "message",
+          content: "done",
+        },
       ],
     });
 

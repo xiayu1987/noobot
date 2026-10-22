@@ -12,7 +12,6 @@ import {
 import {
   dedupeSubSessionMessagesByIdentity,
   mergeSnapshotWithRealtimeMessages,
-  subSessionMessageIdentity,
   summarizeSubSessionMessage,
 } from "./subSessionSnapshotMerge.js";
 import { text } from "@noobot/shared/value";
@@ -45,9 +44,7 @@ export function createSubSessionSnapshotReducer({
     if (!admission.admitted) return admission.result;
     const { lifecycleResult, timingResult, aggregateVersion, appliedAggregateVersion } = admission;
     const contextFacet = buildSnapshotContextFacet(snapshotContext);
-    const snapshotMessages = (
-      Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : []
-    ).filter((message = {}) => Boolean(subSessionMessageIdentity(message)));
+    const snapshotMessages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
     const realtimeMessages = Array.isArray(current.messages) ? current.messages : [];
     logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeStarted", () => ({
       sessionId,

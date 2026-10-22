@@ -77,7 +77,7 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
           turnScopeId: "turn-old",
           replacementDialogProcessId: "dialog-t1",
           replacementTurnScopeId: "t1",
-          replacementUserMessageId: "user-t1",
+          replacementUserMessageUid: "user-t1",
           commandId: "replace-turn-old",
           committedVersion: 4,
           replacedTurnScopeIds: ["turn-old"],

@@ -5,6 +5,7 @@
  */
 import { createHash } from "node:crypto";
 import { resolveScopedArtifactPath } from "@noobot/path-resolver";
+import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 export function stableId(prefix, parts) {
   return `${prefix}_${createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 32)}`;
@@ -20,7 +21,7 @@ export function resolveRepairArtifactPath(sessionDir, relativeFile, expectedRoot
     reference: relativeFile,
     scopeDir: expectedRoot,
     extensions,
-    errorCode: "SESSION_REPAIR_ARTIFACT_PATH_INVALID",
+    errorCode: SESSION_REPAIR_ERROR_CODE.ARTIFACT_PATH_INVALID,
     errorLabel: "Session repair artifact reference",
   });
 }

@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
+import {
+  MESSAGE_RECORD_REMOVED_FIELDS,
+  messageFieldRemovalsFor,
+  messageFieldRenamesFor,
+  messageRecordIdentityFieldsFor,
+} from "../identity/message-identity-schema.js";
 
 export const SESSION_AUTO_TITLE_MAX_LENGTH = 20;
-
-const ROLE_IDENTITY_FIELD = Object.freeze({
-  assistant: MESSAGE_IDENTITY_FIELD.MODEL,
-  user: MESSAGE_IDENTITY_FIELD.USER,
-});
-const ROLE_IDENTITY_FIELDS = Object.freeze(Object.values(ROLE_IDENTITY_FIELD));
 
 export function resolveSessionMessageRecordModelMessageId(record = {}) {
   return text(record?.role) === "assistant" ? text(record?.[MESSAGE_IDENTITY_FIELD.MODEL]) : "";
@@ -25,16 +25,18 @@ export function resolveSessionMessageRecordUserMessageId(record = {}) {
 export function validateSessionMessageRecordIdentity(record = {}) {
   const errors = [];
   if (!text(record?.[MESSAGE_IDENTITY_FIELD.SESSION])) errors.push("session_message_uid_missing");
-  if (Object.hasOwn(record ?? {}, "messageId")) errors.push("session_message_id_noncanonical");
+  for (const field of MESSAGE_RECORD_REMOVED_FIELDS) {
+    if (Object.hasOwn(record ?? {}, field)) errors.push(`session_message_${field}_removed`);
+  }
   const role = text(record?.role);
-  const ownField = ROLE_IDENTITY_FIELD[role] || "";
-  for (const field of ROLE_IDENTITY_FIELDS) {
-    if (field !== ownField && Object.hasOwn(record ?? {}, field)) {
+  const fields = messageRecordIdentityFieldsFor(role);
+  for (const field of fields.forbidden) {
+    if (Object.hasOwn(record ?? {}, field)) {
       errors.push(`session_message_${field}_forbidden_for_${role || "unknown"}`);
     }
   }
-  if (role === "assistant" && !resolveSessionMessageRecordModelMessageId(record)) {
-    errors.push("session_message_model_message_id_missing");
+  for (const field of fields.required) {
+    if (!text(record?.[field])) errors.push(`session_message_${field}_missing`);
   }
   return errors;
 }
@@ -46,6 +48,80 @@ export function assertSessionMessageRecordIdentity(record = {}) {
   error.code = "SESSION_MESSAGE_IDENTITY_INVALID";
   error.validationErrors = errors;
   throw error;
+}
+
+export const SESSION_MESSAGE_RECORD_MIGRATION_INVALID = "SESSION_MESSAGE_RECORD_MIGRATION_INVALID";
+
+function recordMigrationError(reason, field) {
+  const error = new TypeError(`session message record migration rejected: ${reason}:${field}`);
+  error.code = SESSION_MESSAGE_RECORD_MIGRATION_INVALID;
+  error.details = { reason, field };
+  return error;
+}
+
+function roleMatches(entry, role) {
+  return entry.roles === null || entry.roles.includes(role);
+}
+
+function duplicates(source, value, duplicateOf) {
+  return duplicateOf !== null && duplicateOf.some((field) => source[field] === value);
+}
+
+function applyRecordRename(source, next, rename) {
+  if (!Object.hasOwn(source, rename.from)) return false;
+  if (!roleMatches(rename, source.role)) return false;
+  const value = source[rename.from];
+  delete next[rename.from];
+  if (duplicates(source, value, rename.duplicateOf)) return true;
+  if (Object.hasOwn(source, rename.to) && source[rename.to] !== value) {
+    throw recordMigrationError("rename_conflict", rename.from);
+  }
+  next[rename.to] = value;
+  return true;
+}
+
+function applyRecordRemoval(source, next, removal) {
+  if (!Object.hasOwn(source, removal.field)) return false;
+  if (!roleMatches(removal, source.role)) return false;
+  const value = source[removal.field];
+  if (removal.duplicateOf !== null && !duplicates(source, value, removal.duplicateOf)) {
+    throw recordMigrationError("removal_not_duplicate", removal.field);
+  }
+  if (removal.consistentWith !== null && !removal.consistentWith(value, source)) {
+    throw recordMigrationError("removal_inconsistent", removal.field);
+  }
+  delete next[removal.field];
+  return true;
+}
+
+export function migrateSessionMessageRecordIdentity(record, store) {
+  if (!isPlainObject(record)) {
+    throw recordMigrationError("record_not_object", "record");
+  }
+  const next = { ...record };
+  const handled = new Set();
+  for (const rename of messageFieldRenamesFor(store)) {
+    if (applyRecordRename(record, next, rename)) handled.add(rename.from);
+  }
+  for (const removal of messageFieldRemovalsFor(store)) {
+    if (handled.has(removal.field)) continue;
+    if (applyRecordRemoval(record, next, removal)) handled.add(removal.field);
+  }
+  for (const field of MESSAGE_RECORD_REMOVED_FIELDS) {
+    if (Object.hasOwn(next, field)) throw recordMigrationError("unmapped_field", field);
+  }
+  return { record: next, changed: handled.size > 0 };
+}
+
+export function projectSessionMessageRecordIdentity(record = {}) {
+  const identity = {};
+  const messageUid = text(record?.[MESSAGE_IDENTITY_FIELD.SESSION]);
+  if (messageUid) identity[MESSAGE_IDENTITY_FIELD.SESSION] = messageUid;
+  for (const field of messageRecordIdentityFieldsFor(text(record?.role)).allowed) {
+    const value = text(record?.[field]);
+    if (value) identity[field] = value;
+  }
+  return identity;
 }
 
 export function isSummarizedSessionMessageRecord(record = {}) {

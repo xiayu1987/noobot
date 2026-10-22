@@ -24,7 +24,10 @@ import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
 import { removeContextMessagesByIds } from "@noobot/context-protocol/mutation/context";
-import { getMessageId } from "@noobot/context-protocol/message/store";
+import {
+  resolveContextMessageKey,
+  resolveContextSessionMessageUid,
+} from "@noobot/context-protocol/message/codec";
 import {
   clearMainFlowFinalNoToolsTurnInstruction,
   consumeMainFlowFinalNoToolsTurnInstruction,
@@ -38,6 +41,7 @@ import {
   resetNoFinalResponseRetryStreak,
 } from "./no-final-response-recovery.js";
 import { text } from "@noobot/shared/value";
+import { requireActiveModelContext } from "../active-model-context.js";
 
 function withNoFinalResponseRecovery(invokeTurn) {
   return async function invokeTurnWithNoFinalResponseRecovery(input = {}) {
@@ -96,11 +100,9 @@ export function createTurnOrchestrator({
       : null;
     const lastToolCalls = Array.isArray(lastMessage?.tool_calls) ? lastMessage.tool_calls : [];
     if (lastToolCalls.length) {
-      const messageId = getMessageId(lastMessage);
-      if (!messageId) {
-        throw new Error("assistant tool-call message requires a canonical context message id");
-      }
-      removeContextMessagesByIds(targetLoopState.modelContext, [messageId]);
+      removeContextMessagesByIds(targetLoopState.modelContext, [
+        resolveContextMessageKey(lastMessage),
+      ]);
     }
     if (turnMessageStore && typeof turnMessageStore.removeLast === "function") {
       turnMessageStore.removeLast(
@@ -238,15 +240,11 @@ export function createTurnOrchestrator({
       }
 
       const withToolsResult = await invokeWithToolsTurnFn({ modelState, loopState, turn });
-      await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
+      await consumeSummaryCheckpointCommand({ runtime, eventListener, turn });
       if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
-        const instruction =
-          consumeMainFlowFinalNoToolsTurnInstruction(runtime) ||
-          withToolsResult.mainFlowFinalNoToolsInstruction ||
-          null;
         return invokeFinalNoToolsTurn({
           finalTurn: turn,
-          instruction,
+          instruction: consumeMainFlowFinalNoToolsTurnInstruction(runtime),
           eventName: "main_flow_final_no_tools_turn_enforced",
         });
       }
@@ -264,7 +262,7 @@ export function createTurnOrchestrator({
             loopState,
             turnTaskStore,
             turnMessageStore,
-            modelMessages: loopState.modelContext.messages,
+            modelMessages: requireActiveModelContext(runtime).messages,
           });
         }
         return buildLoopResultFn({
@@ -274,7 +272,7 @@ export function createTurnOrchestrator({
           loopState,
           turnTaskStore,
           turnMessageStore,
-          modelMessages: loopState.modelContext.messages,
+          modelMessages: requireActiveModelContext(runtime).messages,
         });
       }
 
@@ -346,9 +344,6 @@ export function createTurnOrchestrator({
         stateCommitter,
       });
 
-      loopState.turnMessages = turnMessageStore.toArray();
-      loopState.turnTasks = turnTaskStore.toArray();
-
       maybeRequestPhaseSummaryFn({ modelState, loopState, toolCallResults });
       maybeRequestTaskCheckFn({ modelState, loopState, toolCallResults });
       maybePromptHelpToolByLoopFn({ modelState, loopState });
@@ -359,21 +354,22 @@ export function createTurnOrchestrator({
       });
 
       if (taskSummaryOutcome?.accepted === true) {
-        const incrementalMessages = Array.isArray(
-          loopState?.modelContext?.messageBlocks?.incremental,
-        )
-          ? loopState.modelContext.messageBlocks.incremental
-          : [];
+        const incrementalMessages = requireActiveModelContext(runtime).messageBlocks.incremental;
         const summaryTargets = collectScopedMessagesToSummarize(incrementalMessages, {
           maxMessages: incrementalMessages.length,
           limitToProvidedMessagesOnly: true,
           retentionMessages: incrementalMessages,
         }).messages;
-        requestMainFlowSummaryCheckpoint(runtime, {
-          source: "task_summary",
-          summarizedMessageIds: summaryTargets.map(getMessageId).filter(Boolean),
-        });
-        await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
+        const summarizedMessageUids = [
+          ...new Set(summaryTargets.map(resolveContextSessionMessageUid).filter(Boolean)),
+        ];
+        if (summarizedMessageUids.length) {
+          requestMainFlowSummaryCheckpoint(runtime, {
+            source: "task_summary",
+            summarizedMessageUids,
+          });
+          await consumeSummaryCheckpointCommand({ runtime, eventListener, turn });
+        }
       }
 
       return runFunctionCallLoop({

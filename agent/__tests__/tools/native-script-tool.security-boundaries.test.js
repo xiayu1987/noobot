@@ -114,14 +114,14 @@ test("execute_native_script manuals expose the authoritative static policy", () 
   const manuals = [
     [
       tToolManual(
-        createTestRuntimeContext({ runConfig: { locale: "en-US" } }),
+        createTestRuntimeContext({ runConfig: { hookManager: null, locale: "en-US" } }),
         "execute_native_script",
       ),
       /zero execution/,
     ],
     [
       tToolManual(
-        createTestRuntimeContext({ runConfig: { locale: "zh-CN" } }),
+        createTestRuntimeContext({ runConfig: { hookManager: null, locale: "zh-CN" } }),
         "execute_native_script",
       ),
       /零执行/,

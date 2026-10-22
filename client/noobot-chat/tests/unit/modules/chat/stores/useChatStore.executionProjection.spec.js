@@ -54,11 +54,18 @@ describe("useChatStore execution projection", () => {
     const store = useChatStore();
     store.sessions.push({
       sessionId: "main-session",
-      messages: [{ id: "main-message", content: "main" }],
+      messages: [{ role: "assistant", presentationMessageId: "main-message", content: "main" }],
     });
     applySessionSnapshot(store, {
       sessionId: "child-session",
-      messages: [{ id: "child-message", messageId: "child-message", content: "child" }],
+      messages: [
+        {
+          role: "assistant",
+          messageUid: "sm_child-message",
+          presentationMessageId: "child-message",
+          content: "child",
+        },
+      ],
     });
     applyExecutionTree(store.turnRuntimeRegistry, {
       rootExecutionId: MAIN_EXECUTION_ID,

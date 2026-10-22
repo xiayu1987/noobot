@@ -68,10 +68,6 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
       },
       stopPayload: {
         turnScopeId: "turn-stop-before-next",
-        partialAssistant: {
-          dialogProcessId: "dp-stop-before-next",
-          turnScopeId: "turn-stop-before-next",
-        },
       },
     });
     const stoppedEvent = stoppedEvents.find(

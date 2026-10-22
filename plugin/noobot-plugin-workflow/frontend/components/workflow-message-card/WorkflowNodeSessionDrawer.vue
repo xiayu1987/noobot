@@ -209,7 +209,8 @@ watch(
       (message = {}) => message?.pending === true,
     ).length,
     messages: props.displayNodeMessages.map((message = {}) => ({
-      messageId: String(message?.presentationMessageId || message?.messageId || ""),
+      messageUid: String(message?.messageUid || ""),
+      presentationMessageId: String(message?.presentationMessageId || ""),
       role: String(message?.role || ""),
       turnScopeId: String(message?.turnScopeId || ""),
       dialogProcessId: String(message?.dialogProcessId || ""),

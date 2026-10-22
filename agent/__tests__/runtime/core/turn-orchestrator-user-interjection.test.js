@@ -9,10 +9,10 @@ import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
-import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 test("an interjection accepted during the final model call is consumed before completion", async () => {
-  const currentTurnMessages = createCurrentTurnMessagesStore([]);
   const modelContext = createModelContext({
     messageBlocks: { system: [], history: [], incremental: [] },
     activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
@@ -25,9 +25,8 @@ test("an interjection accepted during the final model call is consumed before co
   let invocation = 0;
   let consumeCount = 0;
   let queueSealed = false;
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     systemRuntime: { sessionId: "session-1", turnScopeId: "scope-1" },
-    currentTurnMessages,
     sealUserInterjectionQueueIfEmpty() {
       if (pendingInterjections.length) return false;
       queueSealed = true;
@@ -57,7 +56,9 @@ test("an interjection accepted during the final model call is consumed before co
       }
       return batch;
     },
-  };
+  });
+  runtime.activeMessageContext = modelContext;
+  const { currentTurnMessages } = runtime;
   const run = createTurnOrchestrator({
     resolveLlmForTurnFn: () => {},
     assertNotAbortedFn: () => {},
@@ -81,12 +82,11 @@ test("an interjection accepted during the final model call is consumed before co
   });
 
   const result = await run({
-    modelState: { runtime, eventListener: null, abortSignal: null },
+    modelState: { runtime, agentContext: createTestAgentExecutionScope(runtime) },
     loopState: {
       tools: [{}],
       traces: [],
       maxTurns: 10,
-      modelContext,
       turnMessages: [],
       turnTasks: [],
     },

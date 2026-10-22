@@ -104,7 +104,7 @@ describe("useChatStore sub session projection", () => {
     const message = assistantMessages(store)[0];
     expect(message).toMatchObject({
       content: "authoritative final",
-      messageId: "msg-assistant-1",
+      presentationMessageId: "msg-assistant-1",
     });
     expect(message.messageEventState.finalContentSequence).toBe(2);
   });
@@ -306,8 +306,7 @@ describe("useChatStore sub session projection", () => {
       sessionId: "sub-session-1",
       messages: [
         {
-          id: "msg-assistant-1",
-          messageId: "msg-assistant-1",
+          presentationMessageId: "msg-assistant-1",
           role: "assistant",
           content: "persisted",
           turnScopeId: "turn-1",
@@ -344,8 +343,8 @@ describe("useChatStore sub session projection", () => {
       status: "running",
       messages: [
         {
-          id: "runtime-assistant-shell",
-          messageId: "runtime-assistant-shell",
+          messageUid: "sm-runtime-assistant-shell",
+          presentationMessageId: "runtime-assistant-shell",
           role: "assistant",
           content: "",
           turnScopeId: "turn-1",
@@ -372,10 +371,9 @@ describe("useChatStore sub session projection", () => {
 
     expect(result).toMatchObject({ applied: true });
     expect(assistantMessages(store)).toEqual([
-      expect.objectContaining({ id: "runtime-assistant-shell", content: "" }),
+      expect.objectContaining({ presentationMessageId: "runtime-assistant-shell", content: "" }),
       expect.objectContaining({
-        id: "authoritative-assistant-1",
-        messageId: "authoritative-assistant-1",
+        presentationMessageId: "authoritative-assistant-1",
         content: "authoritative child result",
         sequence: 2,
         sequenceDomain: "message-event",
@@ -440,7 +438,7 @@ describe("useChatStore sub session projection", () => {
     expect(child.workflowNodeState).toMatchObject({ status: "succeeded" });
     expect(assistantMessages(store)).toEqual([
       expect.objectContaining({
-        messageId: "authoritative-assistant-after-node-state",
+        presentationMessageId: "authoritative-assistant-after-node-state",
         content: "done",
       }),
     ]);
@@ -471,8 +469,8 @@ describe("useChatStore sub session projection", () => {
       status: "running",
       messages: [
         {
-          id: "msg-user-request",
-          messageId: "msg-user-request",
+          messageUid: "msg-user-request",
+          userMessageId: "msg-user-request",
           role: "user",
           content: "request",
           turnScopeId: "turn-1",

@@ -46,14 +46,12 @@ describe("useChatEngine.send-stream", () => {
     );
     expect(userMessage).toEqual(
       expect.objectContaining({
-        id: expect.stringMatching(/^um_/),
-        messageId: expect.stringMatching(/^um_/),
+        userMessageId: expect.stringMatching(/^um_/),
         sessionId: "s-user-message-identity",
         turnScopeId: capturedPayload.identity.turnScopeId,
       }),
     );
-    expect(userMessage.id).toBe(userMessage.messageId);
-    expect(capturedPayload.presentation.userMessageId).toBe(userMessage.messageId);
+    expect(capturedPayload.presentation.userMessageId).toBe(userMessage.userMessageId);
     expect(capturedPayload.concurrency.expectedTurnRevision).toBe(0);
     expect(capturedPayload.concurrency.expectedAggregateVersion).toBe(0);
     expect(capturedPayload).not.toHaveProperty("userMessageId");
@@ -104,7 +102,6 @@ describe("useChatEngine.send-stream", () => {
         expect.objectContaining({
           role: RoleEnum.USER,
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         }),
         expect.objectContaining({ role: RoleEnum.ASSISTANT }),
       ]),
@@ -510,7 +507,7 @@ describe("useChatEngine.send-stream", () => {
             { role: RoleEnum.USER, content: "hello" },
             {
               role: RoleEnum.ASSISTANT,
-              messageId: payload.presentation.presentationMessageId,
+              presentationMessageId: payload.presentation.presentationMessageId,
               dialogProcessId: "dp-new",
               turnScopeId: payload.identity.turnScopeId,
               content: "final answer",

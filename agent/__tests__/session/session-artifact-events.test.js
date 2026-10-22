@@ -121,6 +121,7 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     family: EVENT_FAMILY.PLUGIN_ARTIFACT,
     schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
     identity: { eventType: PLUGIN_ARTIFACT_EVENT, turnScopeId: "turn-1" },
+    causality: {},
     ordering: {
       domain: PLUGIN_ARTIFACT_SEQUENCE_DOMAIN,
       scopeId: "session-1:character:character.animation:session-animation",
@@ -258,6 +259,7 @@ test("plugin artifact replacement increments revision and rejects a stale base r
     sessionId: "session-1",
     family: EVENT_FAMILY.PLUGIN_ARTIFACT,
     schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
+    causality: {},
     identity: { eventType: PLUGIN_ARTIFACT_EVENT, turnScopeId: "turn-1" },
     ordering: {
       domain: PLUGIN_ARTIFACT_SEQUENCE_DOMAIN,

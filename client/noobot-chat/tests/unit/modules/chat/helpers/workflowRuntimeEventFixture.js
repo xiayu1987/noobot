@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   WORKFLOW_RUNTIME_EVENT,
   workflowSequenceDomainForEvent,
@@ -55,6 +55,7 @@ export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
 
   return createEventEnvelope({
     family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+    schemaVersion: getEventFamily(EVENT_FAMILY.WORKFLOW_RUNTIME).schemaVersion,
     identity: {
       eventId: text(data.eventId) || `${workflowRunId}:${eventType}:${sequence}`,
       eventType,

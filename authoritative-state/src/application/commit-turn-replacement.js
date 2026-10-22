@@ -18,7 +18,7 @@ function sameReplacement(left = {}, right = {}) {
     clean(left.commandId) === clean(right.commandId) &&
     clean(left.replacementDialogProcessId) === clean(right.replacementDialogProcessId) &&
     clean(left.replacementTurnScopeId) === clean(right.replacementTurnScopeId) &&
-    clean(left.replacementUserMessageId) === clean(right.replacementUserMessageId) &&
+    clean(left.replacementUserMessageUid) === clean(right.replacementUserMessageUid) &&
     clean(left.requestHash) === clean(right.requestHash) &&
     Number(left.committedAggregateVersion || 0) === Number(right.committedAggregateVersion || 0) &&
     clean(left.committedAt) === clean(right.committedAt) &&
@@ -93,7 +93,7 @@ export function commitTurnReplacement({ lifecycle = {}, replacement = {} } = {})
       turnScopeId,
       replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
       replacementTurnScopeId: clean(replacement.replacementTurnScopeId),
-      replacementUserMessageId: clean(replacement.replacementUserMessageId),
+      replacementUserMessageUid: clean(replacement.replacementUserMessageUid),
       requestHash: clean(replacement.requestHash),
       commandId: clean(replacement.commandId),
       committedAggregateVersion: Number(replacement.committedAggregateVersion),

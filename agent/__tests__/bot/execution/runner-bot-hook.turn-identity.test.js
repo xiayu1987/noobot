@@ -20,6 +20,7 @@ test("SessionExecutionRunner rejects a prepared turnScopeId that diverges from t
   const runner = createRunner({
     prepareRunConfig: (payload = {}) => ({
       ...(payload?.runConfig || {}),
+      botHookManager: null,
       turnScopeId: "client-turn:prepared",
     }),
   });

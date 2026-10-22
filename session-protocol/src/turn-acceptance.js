@@ -6,6 +6,9 @@
 import { text, isPlainObject } from "@noobot/shared/value";
 import { TURN_EVENT } from "./lifecycle/turn-event.js";
 import { TURN_ACTION } from "./lifecycle/turn-action.js";
+import { acceptedMessageIdentityFieldsFor } from "./identity/message-identity-schema.js";
+
+const ACCEPTED_USER_IDENTITY_FIELDS = acceptedMessageIdentityFieldsFor("user");
 
 export function validateTurnAcceptanceUserMessage(event = {}) {
   if (text(event.eventType) !== TURN_EVENT.ACTION_ACCEPTED) {
@@ -21,6 +24,9 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
     errors.push("accepted_user_message_required");
   } else {
     if (!text(input.content)) errors.push("accepted_user_message_content_required");
+    for (const field of ACCEPTED_USER_IDENTITY_FIELDS) {
+      if (!text(input[field])) errors.push(`accepted_user_${field}_required`);
+    }
     if (!text(event.turnScopeId)) errors.push("accepted_user_message_turn_scope_required");
     if (!text(event.dialogProcessId)) errors.push("accepted_user_message_dialog_required");
     const messageOrigin = text(input.messageOrigin).toLowerCase();
@@ -35,10 +41,11 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
       errors.length === 0
         ? {
             content: text(input.content),
-            messageId: text(input.messageId),
+            ...Object.fromEntries(
+              ACCEPTED_USER_IDENTITY_FIELDS.map((field) => [field, text(input[field])]),
+            ),
             parentDialogProcessId: text(input.parentDialogProcessId),
             messageOrigin: text(input.messageOrigin).toLowerCase(),
-            userMetaMaterialized: input.userMetaMaterialized === true,
           }
         : null,
     errors,

@@ -42,7 +42,7 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.USER, content: "s1-q" },
       createCanonicalAssistant({
         sessionId: "s-1",
-        messageId: "message-s1",
+        presentationMessageId: "message-s1",
         dialogProcessId: "dp-s1",
         turnScopeId: "turn-s1",
       }),
@@ -51,7 +51,7 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.USER, content: "s2-q" },
       createCanonicalAssistant({
         sessionId: "s-2",
-        messageId: "message-s2",
+        presentationMessageId: "message-s2",
         dialogProcessId: "dp-s2",
         turnScopeId: "turn-s2",
       }),

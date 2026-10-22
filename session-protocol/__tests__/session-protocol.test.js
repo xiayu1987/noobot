@@ -18,6 +18,8 @@ import {
   normalizeDialogProcessId,
   normalizeParentSessionId,
   normalizeSessionId,
+  isCanonicalSessionId,
+  isCanonicalParentSessionId,
   decideAggregateConcurrency,
   decideCommandIdempotency,
   normalizeCommandReceipt,
@@ -32,7 +34,7 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 12);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 13);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -42,15 +44,21 @@ test("Session artifact and Turn commit metadata have one canonical protocol shap
     }),
     { action: "send", commandId: "command-1", requestHash: "hash-1" },
   );
-  assert.deepEqual(
+  const commitReceipt = {
+    commandId: "command-1",
+    type: SESSION_COMMAND.TURN_COMMIT,
+    requestHash: "hash-1",
+    aggregateVersion: 1,
+    committedAt: "2026-07-18T00:00:00.000Z",
+    result: { messageUid: "message-1" },
+  };
+  assert.deepEqual(normalizeCommandReceipt(commitReceipt), commitReceipt);
+  assert.equal(
     normalizeCommandReceipt({
-      commandId: "command-1",
-      type: SESSION_COMMAND.TURN_COMMIT,
-      requestHash: "hash-1",
-      aggregateVersion: 1,
+      ...commitReceipt,
       result: { messageUid: "message-1", runState: "pending_start" },
-    }).result,
-    { messageUid: "message-1" },
+    }),
+    null,
   );
   assert.deepEqual(
     validateSessionAggregateInvariants({
@@ -180,10 +188,20 @@ test("Turn acceptance owns exactly one authoritative user-message rule", () => {
     action: "send",
     turnScopeId: "turn-1",
     dialogProcessId: "dialog-1",
-    userMessage: { content: "hello", messageOrigin: "natural", userMetaMaterialized: true },
+    userMessage: { content: "hello", userMessageId: "um_1", messageOrigin: "natural" },
   });
   assert.equal(accepted.valid, true);
   assert.equal(accepted.materialize, true);
+  assert.deepEqual(
+    validateTurnAcceptanceUserMessage({
+      eventType: "turn.action_accepted",
+      action: "send",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dialog-1",
+      userMessage: { content: "hello", messageOrigin: "natural" },
+    }).errors,
+    ["accepted_user_userMessageId_required"],
+  );
   assert.equal(
     validateTurnAcceptanceUserMessage({
       eventType: "turn.action_accepted",
@@ -226,6 +244,18 @@ test("session identity normalization has one protocol implementation", () => {
   assert.equal(normalizeSessionId(" session-1 "), "session-1");
   assert.equal(normalizeParentSessionId(` ${"p".repeat(220)} `), "p".repeat(200));
   assert.equal(normalizeDialogProcessId(" dialog-1 "), "dialog-1");
+});
+
+test("canonical session id predicates accept only normalized text", () => {
+  assert.equal(isCanonicalSessionId("session-1"), true);
+  for (const value of ["", " session-1", "session-1 ", "s".repeat(201), undefined, null, 1]) {
+    assert.equal(isCanonicalSessionId(value), false);
+  }
+  assert.equal(isCanonicalParentSessionId(""), true);
+  assert.equal(isCanonicalParentSessionId("root"), true);
+  for (const value of [" root", "p".repeat(201), undefined, null, 1]) {
+    assert.equal(isCanonicalParentSessionId(value), false);
+  }
 });
 
 test("command fingerprints use the protocol SHA-256 algorithm without Node runtime APIs", () => {
@@ -280,7 +310,7 @@ test("attachment binding event requires the bound canonical user message", () =>
     turnScopeId: "t1",
     userMessage: {
       messageUid: "sm_1",
-      messageId: "m1",
+      userMessageId: "m1",
       role: "user",
       sessionId: "s1",
       dialogProcessId: "d1",
@@ -339,16 +369,47 @@ test("session command has one strict identity and concurrency coordinate", () =>
 });
 
 test("command receipts own aggregate versions only for Session commands", () => {
-  const base = { commandId: "command-1", requestHash: "hash-1" };
-  assert.equal(normalizeCommandReceipt({ ...base, type: SESSION_COMMAND.TURN_COMMIT }), null);
-  assert.equal(
-    normalizeCommandReceipt({ ...base, type: "turn.accepted", aggregateVersion: 0 }),
-    null,
-  );
-  assert.equal(
-    Object.hasOwn(normalizeCommandReceipt({ ...base, type: "turn.accepted" }), "aggregateVersion"),
-    false,
-  );
+  const base = {
+    commandId: "command-1",
+    requestHash: "hash-1",
+    committedAt: "2026-07-18T00:00:00.000Z",
+    turnScopeId: "turn-1",
+  };
+  const sessionReceipt = {
+    ...base,
+    type: SESSION_COMMAND.TURN_COMMIT,
+    aggregateVersion: 2,
+    result: { messageUid: "message-1" },
+  };
+  const turnReceipt = {
+    ...base,
+    type: "turn.action_accepted",
+    revision: 1,
+    sequence: 1,
+    eventId: "event-1",
+    envelope: { identity: { eventId: "event-1" } },
+  };
+  assert.deepEqual(normalizeCommandReceipt(sessionReceipt), sessionReceipt);
+  assert.deepEqual(normalizeCommandReceipt(turnReceipt), turnReceipt);
+  const { aggregateVersion: _omitted, ...sessionWithoutVersion } = sessionReceipt;
+  for (const invalid of [
+    sessionWithoutVersion,
+
+    { ...sessionReceipt, eventId: "" },
+    { ...sessionReceipt, envelope: null },
+    { ...sessionReceipt, revision: 0, sequence: 0 },
+    { ...turnReceipt, aggregateVersion: 0 },
+    { ...turnReceipt, result: {} },
+
+    { ...turnReceipt, envelope: null },
+    { ...turnReceipt, eventId: "" },
+    { ...turnReceipt, envelope: { identity: { eventId: "event-2" } } },
+    { ...turnReceipt, revision: "1" },
+    { ...turnReceipt, type: "turn.accepted" },
+    { ...turnReceipt, committedAt: "" },
+  ]) {
+    assert.equal(normalizeCommandReceipt(invalid), null, JSON.stringify(invalid));
+  }
 });
 
 test("aggregate concurrency and command idempotency are deterministic", () => {
@@ -383,6 +444,8 @@ test("aggregate concurrency and command idempotency are deterministic", () => {
           type: SESSION_COMMAND.TURN_COMMIT,
           requestHash: "h1",
           aggregateVersion: 1,
+          committedAt: "2026-07-18T00:00:00.000Z",
+          result: { messageUid: "message-1" },
         },
       ],
     }).reason,

@@ -37,11 +37,26 @@ export async function withTemp(fn) {
   }
 }
 
+function roleIdentityOf(message = {}, index = 0, turnScopeId = "") {
+  if (message?.role === "assistant") {
+    return {
+      modelMessageId: `mm_fixture_${index + 1}`,
+      presentationMessageId: `pm_${turnScopeId}`,
+    };
+  }
+  if (message?.role === "tool") return { presentationMessageId: `pm_${turnScopeId}` };
+  if (message?.role === "user" && !message?.injectedMessage) {
+    return { userMessageId: `um_fixture_${index + 1}` };
+  }
+  return {};
+}
+
 export function canonicalMessages(messages = []) {
   return messages.map((message, index) => {
     const turnScopeId = String(message?.turnScopeId || `turn-fixture-${index + 1}`);
     return {
       messageUid: String(message?.messageUid || `sm_fixture_${index + 1}`),
+      ...roleIdentityOf(message, index, turnScopeId),
       dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
       turnScopeId,
       ...message,

@@ -29,10 +29,8 @@ export function buildAgentContextSummary(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const context = getAgentContextEnvelope(agentContext);
   const systemRuntime = getSystemRuntimeFromAgentContext(agentContext);
-  const userMessageAttachments = Array.isArray(runtime?.userMessageAttachments)
-    ? runtime.userMessageAttachments
-    : [];
-  const runtimeAttachments = Array.isArray(runtime?.attachments) ? runtime.attachments : [];
+  const userMessageAttachments = runtime.userMessageAttachments;
+  const runtimeAttachments = runtime.attachments;
   return {
     userId: context.identity.userId,
     sessionId: context.identity.sessionId,

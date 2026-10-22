@@ -6,14 +6,13 @@
 
 import { emitEvent } from "../events/index.js";
 import { text } from "@noobot/shared/value";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import {
+  inspectContextMessageIdentity,
+  readContextMessageField,
+} from "@noobot/context-protocol/message/codec";
 
 function messageField(message = {}, field = "") {
-  return text(
-    message?.[field] ||
-      message?.additional_kwargs?.[field] ||
-      message?.lc_kwargs?.additional_kwargs?.[field],
-  );
+  return text(message?.[field]) || readContextMessageField(message, field);
 }
 
 export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
@@ -24,8 +23,11 @@ export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
     : Array.isArray(message?.lc_kwargs?.tool_calls)
       ? message.lc_kwargs.tool_calls
       : [];
+  const identity = inspectContextMessageIdentity(message);
   return {
-    messageId: resolveContextMessageId(message),
+    messageKey: identity.key,
+    identityShape: identity.shape,
+    identityFields: identity.fields,
     role,
     operation: text(meta?.operation),
     block: text(meta?.block),

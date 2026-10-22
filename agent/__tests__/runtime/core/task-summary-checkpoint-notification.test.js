@@ -19,7 +19,7 @@ import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
 
 function createSummaryRuntime(currentTurnMessages, commitSummaryCheckpoint) {
   const runtime = createTestRuntimeContext({
-    runConfig: { turnScopeId: "scope-1" },
+    runConfig: { hookManager: null, turnScopeId: "scope-1" },
     systemRuntime: { sessionId: "s1", turnScopeId: "scope-1", dialogProcessId: "dialog-1" },
   });
   runtime.currentTurnMessages = currentTurnMessages;
@@ -27,7 +27,11 @@ function createSummaryRuntime(currentTurnMessages, commitSummaryCheckpoint) {
   return bindTestDispatchLifecycle(runtime);
 }
 
-function createSummaryModelState(runtime) {
+function createSummaryModelState(runtime, incremental) {
+  runtime.activeMessageContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental },
+    activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
+  });
   return {
     runtime,
     agentContext: createTestAgentExecutionScope(runtime, {
@@ -121,15 +125,11 @@ test("task_summary sends one checkpoint command without mutating messages before
   });
 
   const result = await run({
-    modelState: createSummaryModelState(runtime),
+    modelState: createSummaryModelState(runtime, contextMessages),
     loopState: {
       tools: [{}],
       traces: [],
       maxTurns: 10,
-      modelContext: createModelContext({
-        messageBlocks: { system: [], history: [], incremental: contextMessages },
-        activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
-      }),
       turnMessages: currentTurnMessages.toArray(),
       turnTasks: [],
     },
@@ -140,7 +140,7 @@ test("task_summary sends one checkpoint command without mutating messages before
   assert.equal(checkpointCalls.length, 1);
   assert.equal(checkpointCalls[0].summaryCompletion.source, "task_summary");
   assert.deepEqual(
-    new Set(checkpointCalls[0].summaryCompletion.summarizedMessageIds),
+    new Set(checkpointCalls[0].summaryCompletion.summarizedMessageUids),
     new Set(["sm_1", "sm_2", "sm_3", "sm_4", "sm_5"]),
   );
 });
@@ -185,15 +185,11 @@ test("rejected task_summary does not request a checkpoint", async () => {
   });
 
   const result = await run({
-    modelState: createSummaryModelState(runtime),
+    modelState: createSummaryModelState(runtime, []),
     loopState: {
       tools: [{}],
       traces: [],
       maxTurns: 10,
-      modelContext: createModelContext({
-        messageBlocks: { system: [], history: [], incremental: [] },
-        activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
-      }),
       turnMessages: [],
       turnTasks: [],
     },

@@ -147,7 +147,7 @@ test("createRegisterHarnessHooks composes by system history incremental message 
   const frontendUser = {
     role: "user",
     content: "real user message",
-    additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+    additional_kwargs: { messageOrigin: "natural" },
   };
   const ctx = createTestHookContext(
     {},

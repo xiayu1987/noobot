@@ -11,20 +11,17 @@ import { getTransferAttachments } from "../../../transfer-adapter/storage/consum
 import { projectAttachmentMetaForModel } from "../../../artifacts/index.js";
 import {
   CONTEXT_MESSAGE_PROJECTION_TYPE,
-  deriveContextMessageProjectionId,
   projectContextMessageModelMetadata,
   readContextMessageField,
   readContextMessageValue,
   resolveContextMessageFlags,
-  resolveContextMessageId,
+  resolveContextSessionMessageUid,
   resolveContextMessageTurnScopeId,
   resolveContextMessageDialogProcessId,
   resolveContextMessageOrigin,
   resolveContextMessageRole,
-  resolveContextUserMetaMaterialized,
 } from "@noobot/context-protocol/message/codec";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
-import { text, isPlainObject } from "@noobot/shared/value";
 
 function readContextMessageArray(msg = {}, field = "") {
   const value = readContextMessageValue(msg, field);
@@ -59,14 +56,19 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}) {
       buildUserMetaAttachmentInfo(attachmentItem),
     ),
   };
+  const parsedResults = readContextMessageArray(msg, "userMetaParsedResults");
+  if (parsedResults.length) payload.parsedResults = parsedResults;
   const userMetaTag = tEngine(runtime, "agent.userMetaTag");
   return `[${userMetaTag}]\n${JSON.stringify(payload, null, 2)}\n[/${userMetaTag}]`;
 }
 
 export function buildHumanMessagesForUser(runtime = {}, msg = {}) {
-  const messageUid = resolveContextMessageId(msg);
+  const messageUid = resolveContextSessionMessageUid(msg);
   if (!messageUid) throw new Error("user context message requires additional_kwargs.messageUid");
   const metadata = projectContextMessageModelMetadata(msg);
+  const projectionMetadata = Object.fromEntries(
+    Object.entries(metadata).filter(([key]) => key !== "messageUid"),
+  );
   const contentMessage = new HumanMessage({
     content: buildHumanMessageContent(msg),
     additional_kwargs: metadata,
@@ -74,11 +76,9 @@ export function buildHumanMessagesForUser(runtime = {}, msg = {}) {
   const metaMessage = new HumanMessage({
     content: buildUserMetaInfoContent(runtime, msg),
     additional_kwargs: {
-      ...metadata,
-      messageUid: deriveContextMessageProjectionId(
-        messageUid,
-        CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
-      ),
+      ...projectionMetadata,
+      projectionType: CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
+      sourceMessageUid: messageUid,
       noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META,
     },
   });
@@ -91,8 +91,7 @@ export function shouldBuildUserMetaForHistoryMessage(msg = {}) {
   if (messageOrigin !== "natural") return false;
   if (readContextMessageField(msg, "noobotInternalMessageType")) return false;
   const flags = resolveContextMessageFlags(msg);
-  if (flags.injected || flags.plugin) return false;
-  return resolveContextUserMetaMaterialized(msg);
+  return !flags.injected && !flags.plugin;
 }
 
 export function isDerivedUserMetaMessage(msg = {}) {
@@ -100,36 +99,4 @@ export function isDerivedUserMetaMessage(msg = {}) {
     readContextMessageField(msg, "noobotInternalMessageType") ===
     CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META
   );
-}
-
-function parseUserMetaPayload(content = "") {
-  const source = String(content || "");
-  const jsonStart = source.indexOf("{");
-  const jsonEnd = source.lastIndexOf("}");
-  if (jsonStart < 0 || jsonEnd < jsonStart) {
-    throw new Error("user_meta content does not contain a JSON payload");
-  }
-  const payload = JSON.parse(source.slice(jsonStart, jsonEnd + 1));
-  if (!isPlainObject(payload)) {
-    throw new Error("user_meta payload must be an object");
-  }
-  return { source, jsonStart, jsonEnd, payload };
-}
-
-export function appendUserMetaParsedResult(content = "", result = {}) {
-  if (!isPlainObject(result)) {
-    throw new TypeError("user_meta parsed result must be an object");
-  }
-  const parsed = parseUserMetaPayload(content);
-  const currentResults = Array.isArray(parsed.payload.parsedResults)
-    ? parsed.payload.parsedResults
-    : [];
-  const resultRef = text(result.sourceAttachmentRef);
-  if (!resultRef) throw new TypeError("user_meta parsed result requires sourceAttachmentRef");
-  const nextResults = currentResults.filter(
-    (item) => text(item?.sourceAttachmentRef) !== resultRef,
-  );
-  nextResults.push({ ...result });
-  parsed.payload.parsedResults = nextResults;
-  return `${parsed.source.slice(0, parsed.jsonStart)}${JSON.stringify(parsed.payload, null, 2)}${parsed.source.slice(parsed.jsonEnd + 1)}`;
 }

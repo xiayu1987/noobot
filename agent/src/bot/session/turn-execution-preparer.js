@@ -98,7 +98,6 @@ function scopeResumedAgentContext(agentContext, runConfig) {
 }
 
 function markRuntimeResumedFromSnapshot(runtime, { identity, snapshot }) {
-  runtime.userMetaBackwrites = snapshot.userMetaBackwrites;
   runtime.resumeFromStoppedSnapshot = true;
   runtime.resumedStoppedSnapshotIdentity = identity;
   runtime.resumedStoppedSnapshotTurnProgress = applySystemRuntimeTurnProgress(
@@ -133,6 +132,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, { payloa
       dialogProcessId: payload.dialogProcessId,
       attachments: payload.userMessageAttachments,
       incrementalMessages: continuedIncrementalMessages,
+      userMetaBackwrites: snapshot.userMetaBackwrites,
     },
   );
   const scopedAgentContext = scopeResumedAgentContext(agentContext, payload.runConfig);

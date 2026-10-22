@@ -73,7 +73,7 @@ export function harness(initial = {}) {
 
 export async function acceptTurn(
   service,
-  { turnScopeId, content = "message", messageId = `msg_${turnScopeId}`, ...extra },
+  { turnScopeId, content = "message", userMessageId = `um_${turnScopeId}`, ...extra },
 ) {
   const accepted = await service.applyTurnLifecycleEvent({
     userId: "u1",
@@ -85,15 +85,13 @@ export async function acceptTurn(
     turnScopeId,
     commandId: `accept-${turnScopeId}`,
     causationId: `accept-${turnScopeId}`,
-    messageId: `turn-${turnScopeId}`,
     presentationMessageId: `presentation-${turnScopeId}`,
     expectedRevision: 0,
     ...createAcceptedAgentExecution(turnScopeId, extra.sessionId ?? "s1"),
     userMessage: {
       content,
-      messageId,
+      userMessageId,
       messageOrigin: "natural",
-      userMetaMaterialized: true,
     },
     ...extra,
   });

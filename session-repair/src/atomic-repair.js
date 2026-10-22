@@ -6,13 +6,14 @@
 import { randomUUID } from "node:crypto";
 import { cp, rename, rm } from "node:fs/promises";
 import { text, isFunction } from "@noobot/shared/value";
+import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 export async function runAtomicSessionRepair({ sessionDir = "", repair, validate } = {}) {
   if (!text(sessionDir) || !isFunction(repair) || !isFunction(validate)) {
     throw Object.assign(
       new TypeError("Atomic Session repair requires sessionDir, repair and validate"),
       {
-        code: "SESSION_REPAIR_ARGUMENT_INVALID",
+        code: SESSION_REPAIR_ERROR_CODE.REPAIR_ARGUMENT_INVALID,
       },
     );
   }

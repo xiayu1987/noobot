@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { requireCommittedAuthorityEvent } from "@noobot/event-protocol/outbox";
 import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
 import { PLUGIN_ID } from "../constants.js";
 import { text, isFunction } from "@noobot/shared/value";
@@ -57,13 +58,6 @@ function requireWorkflowCommitCapability(runtime) {
   return sessionManager;
 }
 
-function requireCommittedWorkflowEnvelope(committed) {
-  if (!committed?.committed || !committed?.envelope) {
-    throw new Error(`workflow authority event commit failed: ${committed?.reason || "unknown"}`);
-  }
-  return committed.envelope;
-}
-
 async function dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope }) {
   if (!isFunction(ctx?.eventListener?.onEvent)) {
     throw new Error("workflow authority event dispatcher is required");
@@ -99,7 +93,7 @@ export async function commitWorkflowRuntimeEvent({
     payload,
     persistenceScope,
   });
-  const envelope = requireCommittedWorkflowEnvelope(committed);
+  const envelope = requireCommittedAuthorityEvent(committed);
   await dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope });
   return envelope;
 }

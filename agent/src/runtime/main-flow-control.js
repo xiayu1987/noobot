@@ -4,152 +4,90 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject, text } from "@noobot/shared/value";
+import {
+  assertMainFlowControlPort,
+  createFinalNoToolsTurnInstruction,
+  createSummaryCheckpointInstruction,
+} from "@noobot/context-protocol/policy/main-flow-control";
+import { isPlainObject } from "@noobot/shared/value";
 
-const MAIN_FLOW_CONTROL_ACTION = Object.freeze({
-  FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
-  SUMMARY_CHECKPOINT: "summary_checkpoint",
-});
-
-export const MAIN_FLOW_CONTROL_REASON = Object.freeze({
-  CONTEXT_OVERFLOW_AFTER_SUMMARY: "context_overflow_after_summary",
-  TASK_SUMMARY_COMPLETE: "task_summary_complete",
-  TASK_SUMMARY_BLOCKED: "task_summary_blocked",
-});
-
-function asObject(value) {
-  return isPlainObject(value) ? value : null;
+export function createMainFlowControlState() {
+  return {
+    summaryCheckpoints: [],
+    finalNoToolsInstruction: null,
+    finalNoToolsTurnActive: false,
+  };
 }
 
-function requireSystemRuntime(runtime) {
-  const systemRuntime = asObject(runtime?.systemRuntime);
-  if (!systemRuntime) {
+function requireState(runtime) {
+  const state = runtime?.mainFlowControlState;
+  if (!isPlainObject(state) || !Array.isArray(state.summaryCheckpoints)) {
     throw new TypeError(
-      "main flow control requires runtime.systemRuntime from createRuntimeContext",
+      "main flow control requires runtime.mainFlowControlState from createRuntimeContext",
     );
   }
-  return systemRuntime;
+  return state;
 }
 
-function normalizeFinalNoToolsInstruction(instruction = null) {
-  const value = asObject(instruction);
-  if (!value) return null;
-  const action = text(value.action);
-  if (action !== MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN) return null;
-  return {
-    action,
-    reason: text(value.reason) || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-    source: text(value.source),
-    requestedAt: text(value.requestedAt),
-    detail: asObject(value.detail) || {},
-  };
-}
-
-function normalizeSummaryCheckpointInstruction(instruction = null) {
-  const value = asObject(instruction);
-  if (!value || text(value.action) !== MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT) {
-    return null;
-  }
-  return {
-    action: MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
-    source: text(value.source),
-    summarizedMessageIds: (Array.isArray(value.summarizedMessageIds)
-      ? value.summarizedMessageIds
-      : []
-    )
-      .map((id) => text(id))
-      .filter(Boolean),
-  };
-}
-
-export function requestMainFlowSummaryCheckpoint(
-  runtime,
-  { source = "", summarizedMessageIds = [] } = {},
-) {
-  const systemRuntime = requireSystemRuntime(runtime);
-  const instruction = normalizeSummaryCheckpointInstruction({
-    action: MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
-    source,
-    summarizedMessageIds,
-  });
-  if (!instruction.summarizedMessageIds.length) return null;
-  const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
-    ? systemRuntime.mainFlowControlInstructions
-    : [];
-  pending.push(instruction);
-  systemRuntime.mainFlowControlInstructions = pending;
+export function requestMainFlowSummaryCheckpoint(runtime, input) {
+  const state = requireState(runtime);
+  const instruction = createSummaryCheckpointInstruction(input);
+  state.summaryCheckpoints.push(instruction);
   return instruction;
 }
 
 export function peekMainFlowSummaryCheckpoint(runtime) {
-  const systemRuntime = requireSystemRuntime(runtime);
-  const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
-    ? systemRuntime.mainFlowControlInstructions
-    : [];
-  const pendingIndex = pending.findIndex((item) => normalizeSummaryCheckpointInstruction(item));
-  const instruction =
-    pendingIndex >= 0
-      ? normalizeSummaryCheckpointInstruction(pending[pendingIndex])
-      : normalizeSummaryCheckpointInstruction(systemRuntime.mainFlowControlInstruction);
-  return instruction;
+  return requireState(runtime).summaryCheckpoints[0] || null;
 }
 
 export function acknowledgeMainFlowSummaryCheckpoint(runtime) {
-  const systemRuntime = requireSystemRuntime(runtime);
-  const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
-    ? systemRuntime.mainFlowControlInstructions
-    : [];
-  const pendingIndex = pending.findIndex((item) => normalizeSummaryCheckpointInstruction(item));
-  if (pendingIndex < 0) return false;
-  if (pendingIndex >= 0) pending.splice(pendingIndex, 1);
-  if (pending.length) systemRuntime.mainFlowControlInstructions = pending;
-  else delete systemRuntime.mainFlowControlInstructions;
+  const state = requireState(runtime);
+  if (!state.summaryCheckpoints.length) return false;
+  state.summaryCheckpoints.shift();
   return true;
 }
 
-export function requestMainFlowFinalNoToolsTurn(
-  runtime,
-  {
-    reason = MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-    source = "agent",
-    detail = {},
-  } = {},
-) {
-  const systemRuntime = requireSystemRuntime(runtime);
-  const instruction = {
-    action: MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN,
-    reason: text(reason) || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-    source: text(source),
-    requestedAt: new Date().toISOString(),
-    detail: asObject(detail) || {},
-  };
-  systemRuntime.mainFlowControlInstruction = instruction;
-  return instruction;
+export function requestMainFlowFinalNoToolsTurn(runtime, input) {
+  const state = requireState(runtime);
+  state.finalNoToolsInstruction = createFinalNoToolsTurnInstruction(input);
+  return state.finalNoToolsInstruction;
 }
 
 export function peekMainFlowFinalNoToolsTurnInstruction(runtime) {
-  const systemRuntime = requireSystemRuntime(runtime);
-  return normalizeFinalNoToolsInstruction(systemRuntime.mainFlowControlInstruction);
+  return requireState(runtime).finalNoToolsInstruction;
 }
 
 export function clearMainFlowFinalNoToolsTurnInstruction(runtime) {
-  const systemRuntime = requireSystemRuntime(runtime);
-  if (normalizeFinalNoToolsInstruction(systemRuntime.mainFlowControlInstruction)) {
-    delete systemRuntime.mainFlowControlInstruction;
-    return true;
-  }
-  return false;
+  const state = requireState(runtime);
+  const cleared = state.finalNoToolsInstruction !== null;
+  state.finalNoToolsInstruction = null;
+  return cleared;
 }
 
 export function consumeMainFlowFinalNoToolsTurnInstruction(runtime) {
   const instruction = peekMainFlowFinalNoToolsTurnInstruction(runtime);
-  if (!instruction) return null;
   clearMainFlowFinalNoToolsTurnInstruction(runtime);
   return instruction;
 }
 
-export function markMainFlowFinalNoToolsTurnActive(runtime, active = true) {
-  const systemRuntime = requireSystemRuntime(runtime);
-  systemRuntime.mainFlowFinalNoToolsTurnActive = active === true;
-  return true;
+export function markMainFlowFinalNoToolsTurnActive(runtime, active) {
+  if (typeof active !== "boolean") {
+    throw new TypeError("main flow final no-tools turn active flag must be boolean");
+  }
+  requireState(runtime).finalNoToolsTurnActive = active;
+}
+
+export function isMainFlowFinalNoToolsTurnEngaged(runtime) {
+  const state = requireState(runtime);
+  return state.finalNoToolsTurnActive || state.finalNoToolsInstruction !== null;
+}
+
+export function createMainFlowControlPort(runtime) {
+  requireState(runtime);
+  return assertMainFlowControlPort(
+    Object.freeze({
+      requestSummaryCheckpoint: (input) => requestMainFlowSummaryCheckpoint(runtime, input),
+      isFinalNoToolsTurnEngaged: () => isMainFlowFinalNoToolsTurnEngaged(runtime),
+    }),
+  );
 }

@@ -13,10 +13,12 @@ import {
   normalizeSnapshotIdentity,
 } from "@noobot/context-protocol/policy/snapshot";
 import {
+  inspectContextMessageIdentity,
   readContextMessageField,
-  resolveContextMessageId,
 } from "@noobot/context-protocol/message/codec";
+import { MESSAGE_BLOCK_LANES } from "@noobot/context-protocol/agent-context/schema";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { requireActiveModelContext } from "../active-model-context.js";
 import { emitEvent } from "../../events/emitter.js";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../../session/session-artifact-files.js";
 
@@ -49,16 +51,10 @@ function snapshotSkipReason(location = {}) {
   return location.deleted ? "session_deleted" : "session_missing";
 }
 
-function countSnapshotMessages(candidate = {}) {
-  const systemCount = Array.isArray(candidate.messageBlocks?.system)
-    ? candidate.messageBlocks.system.length
-    : 0;
-  const historyCount = Array.isArray(candidate.messageBlocks?.history)
-    ? candidate.messageBlocks.history.length
-    : 0;
-  const incrementalCount = Array.isArray(candidate.messageBlocks?.incremental)
-    ? candidate.messageBlocks.incremental.length
-    : 0;
+function countSnapshotMessages(messageBlocks) {
+  const systemCount = messageBlocks.system.length;
+  const historyCount = messageBlocks.history.length;
+  const incrementalCount = messageBlocks.incremental.length;
   return {
     messageCount: systemCount + historyCount + incrementalCount,
     systemCount,
@@ -67,64 +63,63 @@ function countSnapshotMessages(candidate = {}) {
   };
 }
 
-function summarizeSnapshotRoundIdentity(candidate = {}) {
-  const blocks =
-    candidate?.messageBlocks && typeof candidate.messageBlocks === "object"
-      ? candidate.messageBlocks
-      : {};
+function summarizeSnapshotRoundIdentity(messageBlocks) {
   const summary = {};
-  const partialMessageIds = [];
-  const missingScopedMessageIds = [];
-  for (const blockName of ["system", "history", "incremental"]) {
+  const partialMessageKeys = [];
+  const missingScopedMessageKeys = [];
+  let unidentifiedMessageCount = 0;
+  for (const blockName of MESSAGE_BLOCK_LANES) {
     const blockSummary = { total: 0, complete: 0, missing: 0, partial: 0 };
-    for (const message of Array.isArray(blocks?.[blockName]) ? blocks[blockName] : []) {
+    for (const message of messageBlocks[blockName]) {
       blockSummary.total += 1;
+      const { key } = inspectContextMessageIdentity(message);
+      if (!key) unidentifiedMessageCount += 1;
       const dialogProcessId = readContextMessageField(message, "dialogProcessId");
       const turnScopeId = readContextMessageField(message, "turnScopeId");
       const presentCount = Number(Boolean(dialogProcessId)) + Number(Boolean(turnScopeId));
       if (presentCount === 2) blockSummary.complete += 1;
       else if (presentCount === 1) {
         blockSummary.partial += 1;
-        partialMessageIds.push(resolveContextMessageId(message));
+        if (key) partialMessageKeys.push(key);
       } else {
         blockSummary.missing += 1;
-        if (blockName !== "system") missingScopedMessageIds.push(resolveContextMessageId(message));
+        if (key && blockName !== "system") missingScopedMessageKeys.push(key);
       }
     }
     summary[blockName] = blockSummary;
   }
   return {
     blocks: summary,
-    partialMessageIds: partialMessageIds.filter(Boolean).slice(-20),
-    truncatedPartialMessageIdCount: Math.max(0, partialMessageIds.filter(Boolean).length - 20),
-    missingScopedMessageIds: missingScopedMessageIds.filter(Boolean).slice(-20),
-    truncatedMissingScopedMessageIdCount: Math.max(
-      0,
-      missingScopedMessageIds.filter(Boolean).length - 20,
-    ),
+    unidentifiedMessageCount,
+    partialMessageKeys: partialMessageKeys.slice(-20),
+    truncatedPartialMessageKeyCount: Math.max(0, partialMessageKeys.length - 20),
+    missingScopedMessageKeys: missingScopedMessageKeys.slice(-20),
+    truncatedMissingScopedMessageKeyCount: Math.max(0, missingScopedMessageKeys.length - 20),
   };
+}
+
+function buildSkippedWithoutCandidateResult(source) {
+  return { status: "skipped", source, reason: "missing_candidate" };
 }
 
 function buildSnapshotPersistenceResult({
   status,
-  source = "",
+  source,
+  identity,
+  messageBlocks,
   reason = "",
-  identity = {},
   missingIdentityFields = [],
   error = "",
-  candidate = null,
-} = {}) {
+}) {
   return {
     status,
-    source: String(source || ""),
+    source,
     ...(reason ? { reason } : {}),
-    ...(identity && typeof identity === "object" ? { identity } : {}),
-    ...(Array.isArray(missingIdentityFields) && missingIdentityFields.length
-      ? { missingIdentityFields }
-      : {}),
-    ...(error ? { error: String(error || "") } : {}),
-    ...countSnapshotMessages(candidate || {}),
-    roundIdentityAudit: summarizeSnapshotRoundIdentity(candidate || {}),
+    identity,
+    ...(missingIdentityFields.length ? { missingIdentityFields } : {}),
+    ...(error ? { error } : {}),
+    ...countSnapshotMessages(messageBlocks),
+    roundIdentityAudit: summarizeSnapshotRoundIdentity(messageBlocks),
   };
 }
 
@@ -159,21 +154,18 @@ export async function saveStoppedModelMessageSnapshot({
   return { saved: true, snapshot };
 }
 
-export async function saveStoppedModelMessageSnapshotCandidate({
-  globalConfig = {},
-  candidate = null,
-  eventListener = null,
-  source = "",
-} = {}) {
+export async function saveStoppedModelMessageSnapshotFromRuntime({
+  runtime,
+  eventListener,
+  source,
+}) {
+  const candidate = runtime === null ? null : runtime.stoppedModelMessageSnapshotCandidate;
   if (!isPlainObject(candidate)) {
-    const result = buildSnapshotPersistenceResult({
-      status: "skipped",
-      source,
-      reason: "missing_candidate",
-    });
+    const result = buildSkippedWithoutCandidateResult(source);
     emitEvent(eventListener, "stopped_model_message_snapshot_save_skipped", result);
     return result;
   }
+  const { messageBlocks, userMetaBackwrites } = requireActiveModelContext(runtime);
   const identity = {
     userId: text(candidate.userId),
     sessionId: text(candidate.sessionId),
@@ -181,55 +173,48 @@ export async function saveStoppedModelMessageSnapshotCandidate({
     dialogProcessId: text(candidate.dialogProcessId),
     turnScopeId: text(candidate.turnScopeId),
   };
+  const resultBase = { source, identity, messageBlocks };
   const missingIdentityFields = ["userId", "sessionId", "dialogProcessId", "turnScopeId"].filter(
     (key) => !identity[key],
   );
   if (missingIdentityFields.length) {
     const result = buildSnapshotPersistenceResult({
+      ...resultBase,
       status: "skipped",
-      source,
       reason: "missing_identity",
       missingIdentityFields,
-      identity,
-      candidate,
     });
     emitEvent(eventListener, "stopped_model_message_snapshot_save_skipped", result);
     return result;
   }
   try {
     const saveResult = await saveStoppedModelMessageSnapshot({
-      globalConfig,
+      globalConfig: runtime.globalConfig,
       identity,
-      messageBlocks: candidate.messageBlocks,
-      userMetaBackwrites: candidate.userMetaBackwrites,
+      messageBlocks,
+      userMetaBackwrites,
       turnProgress: projectSystemRuntimeTurnProgress(candidate.systemRuntime),
     });
-    if (!saveResult.saved) {
-      const result = buildSnapshotPersistenceResult({
-        status: "skipped",
-        source,
-        reason: saveResult.reason,
-        identity,
-        candidate,
-      });
-      emitEvent(eventListener, "stopped_model_message_snapshot_save_skipped", result);
-      return result;
-    }
-    const result = buildSnapshotPersistenceResult({
-      status: "saved",
-      source,
-      identity,
-      candidate,
-    });
-    emitEvent(eventListener, "stopped_model_message_snapshot_saved", result);
+    const result = saveResult.saved
+      ? buildSnapshotPersistenceResult({ ...resultBase, status: "saved" })
+      : buildSnapshotPersistenceResult({
+          ...resultBase,
+          status: "skipped",
+          reason: saveResult.reason,
+        });
+    emitEvent(
+      eventListener,
+      saveResult.saved
+        ? "stopped_model_message_snapshot_saved"
+        : "stopped_model_message_snapshot_save_skipped",
+      result,
+    );
     return result;
   } catch (error) {
     const result = buildSnapshotPersistenceResult({
+      ...resultBase,
       status: "failed",
-      source,
-      identity,
-      error: String(error?.message || error || ""),
-      candidate,
+      error: String(error?.message || error),
     });
     emitEvent(eventListener, "stopped_model_message_snapshot_save_failed", result);
     return result;

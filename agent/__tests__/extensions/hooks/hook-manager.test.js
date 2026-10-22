@@ -7,17 +7,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
-import {
-  resolveRuntimeHookManager,
-  runAgentRuntimeHook,
-  withHookRuntimeMeta,
-} from "../../../src/extensions/hooks/index.js";
+import { runAgentRuntimeHook, withHookRuntimeMeta } from "../../../src/extensions/hooks/index.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
-test("agent adapter resolves only the canonical hookManager field", () => {
-  const hookManager = createHookManager();
-  assert.equal(resolveRuntimeHookManager({ hookManager }), hookManager);
-  assert.equal(resolveRuntimeHookManager({ hooks: hookManager }), null);
+test("agent adapter rejects a runtime without an explicit hookManager fact", async () => {
+  for (const runtime of [{}, { hooks: createHookManager() }, { hookManager: { emit() {} } }]) {
+    await assert.rejects(
+      runAgentRuntimeHook({ runtime, point: HOOK_POINT.AGENT.AFTER_TURN, context: {} }),
+      /runtime\.hookManager must be a hook manager with on\/emit or null/,
+    );
+  }
 });
 
 test("agent adapter executes protocol hooks and emits a summary", async () => {
@@ -45,10 +44,10 @@ test("agent adapter executes protocol hooks and emits a summary", async () => {
   assert.equal(events[0]?.data?.point, HOOK_POINT.AGENT.AFTER_TURN);
 });
 
-test("agent adapter returns a canonical empty result when no manager exists", async () => {
+test("agent adapter returns a canonical empty result when hookManager is null", async () => {
   const context = { value: 1 };
   const result = await runAgentRuntimeHook({
-    runtime: {},
+    runtime: { hookManager: null },
     point: HOOK_POINT.AGENT.AFTER_TURN,
     context,
   });
@@ -178,7 +177,11 @@ test("withHookRuntimeMeta projects resumeFromStoppedSnapshot from its single run
 });
 
 test("withHookRuntimeMeta reads identity only from systemRuntime", () => {
-  const context = withHookRuntimeMeta({ userId: "stale-user", sessionId: "stale-session" });
+  const context = withHookRuntimeMeta({
+    userId: "stale-user",
+    sessionId: "stale-session",
+    systemRuntime: {},
+  });
   assert.equal(context.userId, "");
   assert.equal(context.sessionId, "");
 });

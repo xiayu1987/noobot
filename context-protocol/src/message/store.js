@@ -8,12 +8,11 @@ import {
   resetModelContextMessageStore,
 } from "../assembly/model-runtime.js";
 import {
-  deriveContextMessageProjectionId,
   isContextSystemMessage,
   markContextMessageSummarized,
   readContextMessageField,
   withContextMessageMetadata,
-  resolveContextMessageId,
+  resolveContextMessageKey,
   resolveContextMessageRole,
   resolveContextMessageSummarized,
   resolveContextToolCallDeclarationId,
@@ -65,10 +64,6 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
   return withContextMessageMetadata(message, active);
 }
 
-export function deriveMessageProjectionId(sourceMessageId = "", projectionType = "") {
-  return deriveContextMessageProjectionId(sourceMessageId, projectionType);
-}
-
 function mergeMessageState(target = {}, source = {}) {
   if (!isObjectLike(target) || !isObjectLike(source)) return target;
   if (resolveContextMessageSummarized(source)) {
@@ -106,17 +101,14 @@ function resolveStore(holder = {}) {
 
 function canonicalizeMessage(store = null, message = null) {
   if (!store || !isObjectLike(message)) return message;
-  const existingId = resolveContextMessageId(message);
-  if (existingId && store.byId.has(existingId)) {
+  const existingId = resolveContextMessageKey(message);
+  if (store.byId.has(existingId)) {
     const existingById = store.byId.get(existingId);
     if (canonicalEntityShape(existingById) !== canonicalEntityShape(message)) {
       throw new Error(`canonical message id collision: ${existingId}`);
     }
     mergeMessageState(existingById, message);
     return existingById;
-  }
-  if (!existingId) {
-    throw new Error("canonical context message requires additional_kwargs.messageUid");
   }
   store.byId.set(existingId, message);
   store.messages.push(message);
@@ -130,8 +122,7 @@ function canonicalizeList(store = null, messages = []) {
 function isKnownCanonicalEntity(store = null, message = {}) {
   if (!store || !isObjectLike(message)) return false;
   if (normalizeList(store.messages).includes(message)) return true;
-  const id = resolveContextMessageId(message);
-  return Boolean(id && store.byId instanceof Map && store.byId.has(id));
+  return store.byId instanceof Map && store.byId.has(resolveContextMessageKey(message));
 }
 
 function prepareNewCanonicalEntities(holder = {}, store = null, messages = []) {
@@ -184,10 +175,6 @@ export function canonicalizeMessageStore(holder = {}) {
   return store;
 }
 
-export function getMessageId(message = {}) {
-  return resolveContextMessageId(message);
-}
-
 export function removeMessagesByIds(holder = {}, messageIds = []) {
   if (!isObjectLike(holder)) {
     throw new TypeError("modelContext document is required");
@@ -210,19 +197,19 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
   for (const blockName of ["system", "history", "incremental"]) {
     const source = normalizeList(blocks[blockName]);
     nextBlocks[blockName] = source.filter((message) => {
-      if (!normalizedIds.has(resolveContextMessageId(message))) return true;
+      if (!normalizedIds.has(resolveContextMessageKey(message))) return true;
       removedMessages.push(message);
       return false;
     });
   }
   if (removedMessages.length === 0) {
-    return { removedCount: 0, removedMessageIds: [] };
+    return { removedCount: 0, removedMessageKeys: [] };
   }
 
   writeMessageBlocks(holder, nextBlocks);
   return {
     removedCount: removedMessages.length,
-    removedMessageIds: [...new Set(removedMessages.map(resolveContextMessageId).filter(Boolean))],
+    removedMessageKeys: [...new Set(removedMessages.map(resolveContextMessageKey))],
   };
 }
 

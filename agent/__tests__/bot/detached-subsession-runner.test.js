@@ -38,7 +38,9 @@ test("detached sub-session delegates execution and persistence to the main runne
   const runner = createDetachedSubSessionRunner(deps);
   const result = await runner({
     abortSignal: new AbortController().signal,
-    parentExecutionScope: createParentExecutionScope({ runConfig: { runtimeModel: "gpt_5_4" } }),
+    parentExecutionScope: createParentExecutionScope({
+      runConfig: { hookManager: null, runtimeModel: "gpt_5_4" },
+    }),
     message: "hello",
     attachments: [{ name: "a.txt" }],
     systemMessageFactory: () => ["system"],
@@ -85,9 +87,9 @@ test("detached sub-session delegates execution and persistence to the main runne
     ),
     true,
   );
-  assert.equal(payload.runConfig.hookManager, undefined);
+  assert.equal(payload.runConfig.hookManager, null);
   assert.equal(payload.runConfig.hooks, undefined);
-  assert.equal(payload.runConfig.botHookManager, undefined);
+  assert.equal(payload.runConfig.botHookManager, null);
   assert.equal(payload.runConfig.botHooks, undefined);
   assert.deepEqual(payload.runConfig.disabledPlugins, ["workflow"]);
   assert.equal(payload.runConfig.executionId, "agent:turn-1");
@@ -200,7 +202,7 @@ test("detached sub-session uses the selected parent model over the parent runtim
   await runner({
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
-      runConfig: { selectedModel: "gpt_5_4", runtimeModel: "parent_override" },
+      runConfig: { hookManager: null, selectedModel: "gpt_5_4", runtimeModel: "parent_override" },
     }),
     message: "hello",
     metadata: DETACHED_REQUEST_METADATA,
@@ -216,7 +218,9 @@ test("detached sub-session explicit model override wins over the selected parent
 
   await runner({
     abortSignal: new AbortController().signal,
-    parentExecutionScope: createParentExecutionScope({ runConfig: { selectedModel: "gpt_5_4" } }),
+    parentExecutionScope: createParentExecutionScope({
+      runConfig: { hookManager: null, selectedModel: "gpt_5_4" },
+    }),
     message: "hello",
     runConfigPatch: { runtimeModel: "child_model" },
     metadata: DETACHED_REQUEST_METADATA,
@@ -232,7 +236,9 @@ test("detached sub-session empty model override preserves the selected parent mo
 
   await runner({
     abortSignal: new AbortController().signal,
-    parentExecutionScope: createParentExecutionScope({ runConfig: { selectedModel: "gpt_5_4" } }),
+    parentExecutionScope: createParentExecutionScope({
+      runConfig: { hookManager: null, selectedModel: "gpt_5_4" },
+    }),
     message: "hello",
     runConfigPatch: { runtimeModel: "  " },
     metadata: DETACHED_REQUEST_METADATA,
@@ -523,6 +529,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
       runConfig: {
+        hookManager: null,
         streaming: true,
         selectedPlugins: ["workflow"],
         resumeFromStoppedSnapshot: true,
@@ -579,7 +586,7 @@ test("detached sub-session derives commandId from the strategy turnScopeId and t
   await runner({
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
-      runConfig: { expectedAggregateVersion: 7, commandId: "root-command" },
+      runConfig: { hookManager: null, expectedAggregateVersion: 7, commandId: "root-command" },
     }),
     runConfigPatch: {
       turnScopeId: "child-turn",

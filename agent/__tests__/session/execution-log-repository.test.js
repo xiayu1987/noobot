@@ -176,8 +176,8 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
       type: "context_identity_debug",
       data: {
         sourceMessageUid: "sm_1",
-        contentProjectionId: "sm_1",
-        userMetaProjectionId: "sm_1::user_meta",
+        contentProjectionFound: true,
+        userMetaProjectionFound: true,
       },
     },
     "p1",
@@ -189,7 +189,7 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
   assert.equal(records[0].dialogProcessId, "d1");
   assert.equal(records[0].turnScopeId, "t1");
   assert.equal(records[0].data.sourceMessageUid, "sm_1");
-  assert.equal(records[0].data.userMetaProjectionId, "sm_1::user_meta");
+  assert.equal(records[0].data.userMetaProjectionFound, true);
 });
 
 test("appendLog routes model context traces to the registry-derived debug file, not system", async (t) => {

@@ -18,8 +18,10 @@ import { HELP_TOOL_NAME } from "../tools/collaboration/help-tool.js";
 import { TOOL_NAME } from "../tools/constants/index.js";
 import { resolveControlToolOutcome } from "./control-tool-outcome.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
-import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
+import { MAIN_FLOW_CONTROL_REASON } from "@noobot/context-protocol/policy/main-flow-control";
+import { requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { requireActiveModelContext } from "./active-model-context.js";
 
 function getSystemRuntime(runtime = {}) {
   return runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
@@ -66,7 +68,7 @@ function handlePostSummaryCharsOverflow({
   const charsThreshold = Number(loopState?.phaseSummaryMessageCharsThreshold || 0);
   if (!Number.isFinite(charsThreshold) || charsThreshold <= 0) return false;
 
-  const messages = loopState?.modelContext?.messages || [];
+  const messages = requireActiveModelContext(runtime).messages;
   const unsummarizedChars = resolveUnsummarizedMessageChars(messages);
   if (unsummarizedChars <= charsThreshold) {
     systemRuntime.phaseSummaryByCharsPrompted = false;
@@ -124,7 +126,7 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
     Number.isFinite(loopThreshold) && loopThreshold > 0 && nextCount >= loopThreshold;
   const charsThreshold = Number(loopState?.phaseSummaryMessageCharsThreshold || 0);
   const unsummarizedChars = resolveUnsummarizedMessageChars(
-    loopState?.modelContext?.messages || [],
+    requireActiveModelContext(runtime).messages,
   );
   const reachedCharsThreshold =
     Number.isFinite(charsThreshold) && charsThreshold > 0 && unsummarizedChars > charsThreshold;
@@ -238,8 +240,8 @@ export function maybePromptHelpToolByFailure({ modelState, loopState, hasHelpCal
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
   if (!hasTool(loopState?.tools || [], HELP_TOOL_NAME)) return false;
   if (hasHelpCall) return false;
-  const failureCount = Number(loopState?.toolConsecutiveFailureCount || 0);
-  if (!Number.isFinite(failureCount) || failureCount < threshold) return false;
+  const failureCount = systemRuntime.toolConsecutiveFailureCount;
+  if (failureCount < threshold) return false;
   appendTurnContextControlMessage({
     runtime,
     loopState,
@@ -250,7 +252,6 @@ export function maybePromptHelpToolByFailure({ modelState, loopState, hasHelpCal
     }),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_FAILURE_PROMPT,
   });
-  loopState.toolConsecutiveFailureCount = 0;
   systemRuntime.toolConsecutiveFailureCount = 0;
   emitEvent(runtime.eventListener, "help_tool_failure_prompted", {
     failureCount,

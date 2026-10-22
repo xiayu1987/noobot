@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   MESSAGE_IDENTITY_FIELD,
   assertMessageIdentity,
+  createContextMessageId,
   createMessageUid,
   createModelMessageId,
   createPresentationMessageId,
@@ -22,6 +23,7 @@ test("each identity kind has one field name", () => {
     MODEL: "modelMessageId",
     SESSION: "messageUid",
     USER: "userMessageId",
+    CONTEXT: "contextMessageId",
   });
   assert.equal(Object.isFrozen(MESSAGE_IDENTITY_FIELD), true);
 });
@@ -32,6 +34,7 @@ test("generators produce unique prefixed identities", () => {
     [createModelMessageId, /^mm_[0-9a-f-]{36}$/],
     [createPresentationMessageId, /^pm_[0-9a-f-]{36}$/],
     [createUserMessageId, /^um_[0-9a-f-]{36}$/],
+    [createContextMessageId, /^cm_[0-9a-f-]{36}$/],
   ];
   for (const [create, pattern] of cases) {
     const first = create();

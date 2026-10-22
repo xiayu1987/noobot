@@ -35,6 +35,9 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
     turnScopeId: "t",
     checkpointId: "cp-1",
     summarizedMessageUids: ["sm_1"],
+    expectedCheckpointRevision: 0,
+    persistedMessageUids: [],
+    retainedMessageUids: [],
   });
   await assert.rejects(
     h.service.commitTurnSummaryCheckpoint({
@@ -45,6 +48,8 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
       checkpointId: "cp-2",
       expectedCheckpointRevision: 0,
       summarizedMessageUids: ["sm_2"],
+      persistedMessageUids: [],
+      retainedMessageUids: [],
     }),
     (error) =>
       error.code === "TURN_SUMMARY_CHECKPOINT_REVISION_CONFLICT" &&
@@ -58,6 +63,9 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
       turnScopeId: "t",
       checkpointId: "cp-1",
       summarizedMessageUids: ["sm_2"],
+      expectedCheckpointRevision: 1,
+      persistedMessageUids: [],
+      retainedMessageUids: [],
     }),
     (error) => error.code === "TURN_SUMMARY_CHECKPOINT_ID_REUSED",
   );
@@ -173,5 +181,36 @@ test("replaceTurn idempotency keys reject reuse with a different request", async
       commandId: "replace-key",
     }),
     (error) => error.code === "SESSION_IDEMPOTENCY_KEY_REUSED",
+  );
+});
+
+test("user_meta parsed results attach only to an existing user source message", async () => {
+  const h = harness({
+    messages: [
+      { messageUid: "sm_u", role: "user", content: "q", turnScopeId: "t", dialogProcessId: "dp" },
+      {
+        messageUid: "sm_a",
+        role: "assistant",
+        content: "a",
+        turnScopeId: "t",
+        dialogProcessId: "dp",
+      },
+    ],
+  });
+  const record = (userMetaSourceMessageUid) =>
+    h.service.recordUserMetaParsedResult({
+      userId: "u1",
+      sessionId: "s1",
+      userMetaSourceMessageUid,
+      result: { attachmentId: "att-1", content: "parsed" },
+    });
+  await assert.rejects(
+    record("sm_missing"),
+    (error) => error.code === "USER_META_SOURCE_NOT_FOUND",
+  );
+  await assert.rejects(record("sm_a"), (error) => error.code === "USER_META_SOURCE_ROLE_CONFLICT");
+  assert.equal(
+    h.get().messages.some((message) => "userMetaParsedResults" in message),
+    false,
   );
 });

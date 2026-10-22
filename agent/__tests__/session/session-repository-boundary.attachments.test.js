@@ -44,7 +44,7 @@ test("session display summary should keep canonical attachment fields", () => {
         role: "assistant",
         content: "canonical attachment",
         chatPresentation: true,
-        messageId: "assistant-canonical",
+        modelMessageId: "assistant-canonical",
         presentationMessageId: "assistant-canonical",
         turnScopeId: "turn-canonical",
         attachments: [
@@ -153,6 +153,8 @@ test("session display summary derives attachments from transfer envelopes", () =
     messages: [
       {
         role: "assistant",
+        presentationMessageId: "pm_fx1",
+        modelMessageId: "mm_session_repository_bound_1",
         content: "transfer only attachment",
         transferEnvelopes: [
           {
@@ -212,7 +214,8 @@ test("session display summary binds completed tool artifacts to one explicit ass
     aggregateVersion: 0,
     messages: [
       {
-        messageId: "assistant-one",
+        modelMessageId: "assistant-one",
+        presentationMessageId: "assistant-one",
         role: "assistant",
         content: "first result",
         turnScopeId: "turn-one",
@@ -228,7 +231,8 @@ test("session display summary binds completed tool artifacts to one explicit ass
         ],
       },
       {
-        messageId: "assistant-two",
+        modelMessageId: "assistant-two",
+        presentationMessageId: "assistant-two",
         role: "assistant",
         content: "second result",
         turnScopeId: "turn-two",
@@ -236,6 +240,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
       },
       {
         role: "tool",
+        presentationMessageId: "pm_fx2",
         type: "tool_result",
         tool_call_id: "call-one",
         toolName: "execute_script",
@@ -283,8 +288,8 @@ test("session display summary binds completed tool artifacts to one explicit ass
     ],
   });
 
-  const first = summary.messages.find((item) => item.messageId === "assistant-one");
-  const second = summary.messages.find((item) => item.messageId === "assistant-two");
+  const first = summary.messages.find((item) => item.presentationMessageId === "assistant-one");
+  const second = summary.messages.find((item) => item.presentationMessageId === "assistant-two");
   assert.equal("toolLogSummaries" in summary, false);
   assert.equal(first.toolTimeline.length, 1);
   assert.equal(
@@ -309,12 +314,15 @@ test("session display summary does not guess ownership for an unmatched tool art
       {
         id: "assistant-one",
         role: "assistant",
+        presentationMessageId: "pm_fx3",
+        modelMessageId: "mm_session_repository_bound_2",
         content: "first result",
         turnScopeId: "turn-one",
         dialogProcessId: "dialog-one",
       },
       {
         role: "tool",
+        presentationMessageId: "pm_fx4",
         type: "tool_result",
         tool_call_id: "call-other",
         turnScopeId: "turn-other",
@@ -400,6 +408,8 @@ test("session artifact persistence should normalize attachment fields before wri
           {
             messageUid: "sm_attachment_assistant",
             role: "assistant",
+            presentationMessageId: "pm_fx5",
+            modelMessageId: "mm_session_repository_bound_3",
             content: "legacy only is ignored",
             dialogProcessId: "dialog-attachments",
             turnScopeId: "turn-attachments",

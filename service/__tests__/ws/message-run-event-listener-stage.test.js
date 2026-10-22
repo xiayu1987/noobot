@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AGENT_RUN_EVENT } from "#agent/event";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { createMessageRunEventListener } from "../../ws/chat-websocket/message-run/event-listener-stage.js";
 import { createTestLifecycleEnvelope } from "../routes/chat-websocket-server.turn-lifecycle.fixtures.js";
@@ -87,6 +87,7 @@ test("transient message events bypass the authority dispatcher", async () => {
   const { eventListener, calls } = createListener(null, runHandle);
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: "evt-delta-1",
       eventType: MESSAGE_EVENT_WIRE_EVENT,

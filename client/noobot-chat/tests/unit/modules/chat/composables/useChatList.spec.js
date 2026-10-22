@@ -223,8 +223,8 @@ describe("useChatList", () => {
               caller: RoleEnum.USER,
               messages: [
                 {
-                  id: "route-message",
-                  messageId: "route-message",
+                  messageUid: "route-message",
+                  userMessageId: "route-message",
                   role: RoleEnum.USER,
                   content: "authority",
                   turnScopeId: "route-turn",
@@ -334,14 +334,13 @@ describe("useChatList", () => {
               updatedAt: "2026-05-14T00:03:00.000Z",
               messages: [
                 {
-                  id: "refresh-user",
-                  messageId: "refresh-user",
+                  messageUid: "refresh-user",
+                  userMessageId: "refresh-user",
                   role: RoleEnum.USER,
                   content: "fresh server",
                 },
                 {
-                  id: "refresh-assistant",
-                  messageId: "refresh-assistant",
+                  presentationMessageId: "refresh-assistant",
                   role: RoleEnum.ASSISTANT,
                   content: "fresh answer",
                 },
@@ -490,14 +489,13 @@ describe("useChatList", () => {
           updatedAt: "2026-05-14T00:02:00.000Z",
           messages: [
             {
-              id: "restored-user",
-              messageId: "restored-user",
+              messageUid: "restored-user",
+              userMessageId: "restored-user",
               role: RoleEnum.USER,
               content: "restored question",
             },
             {
-              id: "restored-assistant",
-              messageId: "restored-assistant",
+              presentationMessageId: "restored-assistant",
               role: RoleEnum.ASSISTANT,
               content: "restored answer",
             },

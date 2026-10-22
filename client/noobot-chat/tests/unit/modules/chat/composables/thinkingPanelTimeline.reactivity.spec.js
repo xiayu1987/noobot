@@ -35,7 +35,7 @@ function toolMessage(index) {
     role: "assistant",
     type: "tool_call",
     messageUid: `uid-${index}`,
-    messageId: `message-${index}`,
+    presentationMessageId: `message-${index}`,
     sessionId: "session-a",
     turnScopeId: "turn-a",
     dialogProcessId: "process-a",
@@ -69,7 +69,7 @@ describe("thinking panel round timeline reactivity", () => {
     const live = {
       role: "assistant",
       messageUid: "uid-live",
-      messageId: "message-live",
+      presentationMessageId: "message-live",
       sessionId: "session-a",
       turnScopeId: "turn-a",
       dialogProcessId: "process-a",
@@ -131,7 +131,7 @@ describe("thinking panel round timeline reactivity", () => {
     const settled = {
       role: "assistant",
       messageUid: "uid-settled",
-      messageId: "message-settled",
+      presentationMessageId: "message-settled",
       sessionId: "session-a",
       turnScopeId: "turn-a",
       dialogProcessId: "process-a",

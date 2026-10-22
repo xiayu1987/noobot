@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
@@ -358,7 +359,7 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
         },
       ],
     });
-    const runtime = {
+    const runtime = createTestRuntimeContext({
       basePath: workspaceRoot,
       attachmentService: service,
       userMessageAttachments: [],
@@ -376,7 +377,7 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
         sessionId: "s1",
         config: {},
       },
-    };
+    });
     const agentContext = createTestAgentExecutionScope(runtime, {
       identity: {
         userId: "u1",

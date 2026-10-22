@@ -12,7 +12,10 @@ import {
 } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared/index.js";
 import { appendMessage, replaceMessageProjection } from "../../src/core/message-store.js";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestHookContext,
+  readTestMainFlowControl,
+} from "../helpers/public-runtime-fixtures.js";
 import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
 import {
   markContextMessageSummarized,
@@ -148,11 +151,10 @@ test("summary checkpoint requests restored incremental messages missing from the
     false,
   );
   assert.deepEqual(
-    ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
-      .summarizedMessageIds,
+    readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids,
     ids,
   );
-  assert.equal(state.pending.summaryCheckpointMessageIds, null);
+  assert.equal(state.pending.summaryCheckpointMessageKeys, null);
 });
 
 test("summary checkpoint covers persisted history and active incremental messages", async () => {
@@ -219,8 +221,7 @@ test("summary checkpoint covers persisted history and active incremental message
   ]);
   assert.equal(markedCount, 2);
   assert.deepEqual(
-    ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
-      .summarizedMessageIds,
+    readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids,
     ["incremental-call", "incremental-result"],
   );
 });
@@ -343,10 +344,7 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
   assert.equal(resolveContextMessageSummarized(oldSummary), false);
   assert.equal(resolveContextMessageSummarized(completedSummary), false);
   assert.deepEqual(
-    new Set(
-      ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
-        .summarizedMessageIds,
-    ),
+    new Set(readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids),
     new Set(["old-guidance", "old-summary"]),
   );
 });
@@ -464,7 +462,7 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
       activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
   );
-  ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds = [
+  ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys = [
     oldToolCall.additional_kwargs.messageUid,
     oldToolResult.additional_kwargs.messageUid,
   ];
@@ -475,14 +473,11 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
   assert.equal(resolveContextMessageSummarized(newToolCall), false);
   assert.equal(resolveContextMessageSummarized(newToolResult), false);
   assert.equal(
-    ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds,
+    ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys,
     null,
   );
   assert.deepEqual(
-    new Set(
-      ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
-        .summarizedMessageIds,
-    ),
+    new Set(readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids),
     new Set([oldToolCall.additional_kwargs.messageUid, oldToolResult.additional_kwargs.messageUid]),
   );
 });
@@ -545,15 +540,14 @@ test("guidance summary checkpoint retains classified Harness control-tool eviden
     },
   );
   const messageId = (message) => message.additional_kwargs.messageUid;
-  ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds =
+  ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys =
     messages.map(messageId);
 
   await markGuidanceSummarizedMessages(ctx, {});
 
-  const instruction =
-    ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0];
+  const instruction = readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0];
   assert.deepEqual(
-    new Set(instruction.summarizedMessageIds),
+    new Set(instruction.summarizedMessageUids),
     new Set([messageId(businessCall), messageId(businessResult)]),
   );
   assert.equal(Object.hasOwn(instruction, "retainedMessageIds"), false);
@@ -660,10 +654,7 @@ test("guidance summary checkpoint selects matching messageBlocks instead of flat
   assert.equal(resolveContextMessageSummarized(nextToolCall), false);
   assert.equal(resolveContextMessageSummarized(nextToolResult), false);
   assert.deepEqual(
-    new Set(
-      ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
-        .summarizedMessageIds,
-    ),
+    new Set(readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids),
     new Set([
       oldToolCall.additional_kwargs.messageUid,
       oldToolResult.additional_kwargs.messageUid,
@@ -725,7 +716,7 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
                 flags: {},
                 signals: {},
                 pending: {
-                  summaryCheckpointMessageIds: [],
+                  summaryCheckpointMessageKeys: [],
                 },
               },
               acceptanceReports: [],
@@ -752,7 +743,7 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
       activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
   );
-  ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds = [
+  ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys = [
     oldToolCall.additional_kwargs.messageUid,
     oldToolResult.additional_kwargs.messageUid,
   ];
@@ -781,19 +772,16 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
     false,
   );
   assert.equal(
-    ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds,
+    ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys,
     null,
   );
   assert.equal(directCheckpointCalls, 0);
   assert.deepEqual(
-    new Set(
-      ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
-        .summarizedMessageIds,
-    ),
+    new Set(readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids),
     new Set([oldToolCall.additional_kwargs.messageUid, oldToolResult.additional_kwargs.messageUid]),
   );
   assert.equal(
-    ctx.agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0].action,
+    readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].action,
     "summary_checkpoint",
   );
 });

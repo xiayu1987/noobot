@@ -7,32 +7,58 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createUserMetaBackwrite,
-  deriveUserMetaBackwriteId,
+  isSameUserMetaBackwrite,
+  mergeUserMetaParsedResults,
   normalizeUserMetaBackwrites,
 } from "../src/policy/user-meta-backwrite.js";
 
-test("user_meta backwrite identity is one-to-one per attachment", () => {
-  assert.equal(
-    deriveUserMetaBackwriteId("m1::user_meta", "attachment:v1:s1/user/a1"),
-    "m1::user_meta::backwrite::attachment:v1:s1/user/a1",
-  );
+const attachmentRef = "attachment:v1:s1/user/a1";
+
+test("user_meta backwrite targets the source user message per attachment", () => {
   const record = createUserMetaBackwrite({
-    userMetaMessageUid: "m1::user_meta",
-    attachmentRef: "attachment:v1:s1/user/a1",
-    result: { sourceAttachmentRef: "attachment:v1:s1/user/a1", name: "a1" },
+    userMetaSourceMessageUid: "sm_user",
+    attachmentRef,
+    result: { sourceAttachmentRef: attachmentRef, name: "a1" },
   });
+  assert.equal(record.userMetaSourceMessageUid, "sm_user");
   assert.equal(record.status, "pending");
+  assert.equal("backwriteId" in record, false);
   assert.deepEqual(normalizeUserMetaBackwrites([record]), [record]);
+  assert.equal(isSameUserMetaBackwrite(record, { ...record, result: {} }), true);
+  assert.equal(isSameUserMetaBackwrite(record, { ...record, attachmentRef: "other" }), false);
+});
+
+test("user_meta backwrite requires a source message and attachment", () => {
+  assert.throws(
+    () => createUserMetaBackwrite({ attachmentRef, result: {} }),
+    /requires userMetaSourceMessageUid and attachmentRef/,
+  );
+  assert.throws(
+    () =>
+      createUserMetaBackwrite({ userMetaSourceMessageUid: "sm_user", attachmentRef, result: [] }),
+    /result must be an object/,
+  );
 });
 
 test("user_meta backwrite rejects duplicate attachment relations", () => {
   const record = {
-    userMetaMessageUid: "m1::user_meta",
-    attachmentRef: "attachment:v1:s1/user/a1",
-    result: { sourceAttachmentRef: "attachment:v1:s1/user/a1" },
+    userMetaSourceMessageUid: "sm_user",
+    attachmentRef,
+    result: { sourceAttachmentRef: attachmentRef },
   };
   assert.throws(
     () => normalizeUserMetaBackwrites([record, record]),
     /duplicate user_meta backwrite/,
   );
+});
+
+test("parsed results replace the entry for the same attachment", () => {
+  const first = mergeUserMetaParsedResults([], { sourceAttachmentRef: attachmentRef, v: 1 });
+  const other = mergeUserMetaParsedResults(first, { sourceAttachmentRef: "attachment:b", v: 1 });
+  const replaced = mergeUserMetaParsedResults(other, { sourceAttachmentRef: attachmentRef, v: 2 });
+  assert.deepEqual(replaced, [
+    { sourceAttachmentRef: "attachment:b", v: 1 },
+    { sourceAttachmentRef: attachmentRef, v: 2 },
+  ]);
+  assert.throws(() => mergeUserMetaParsedResults([], { v: 1 }), /requires sourceAttachmentRef/);
 });

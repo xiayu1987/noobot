@@ -19,21 +19,19 @@ import {
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
-import { text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 
-function messageIdentity(message = {}) {
-  return text(message?.messageUid);
+function messageUidOf(message) {
+  return text(message.messageUid);
 }
 
-function summarizedMessageIds(messages = []) {
-  return (Array.isArray(messages) ? messages : [])
-    .filter((message = {}) => message?.summarized === true)
-    .map(messageIdentity)
-    .filter(Boolean);
+function summarizedMessageUids(messages) {
+  return messages.filter((message) => message.summarized === true).map(messageUidOf);
 }
 
-function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
-  const store = runtime?.currentTurnMessages;
+function acceptDispatchedTurnMessages(runtime, messages) {
+  const store = runtime.currentTurnMessages;
   if (
     !store ||
     !isFunction(store.push) ||
@@ -43,15 +41,17 @@ function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
     throw new Error("bot dispatch requires the canonical currentTurnMessages store");
   }
   const accepted = [];
-  for (const message of Array.isArray(messages) ? messages : []) {
-    if (!isObjectLike(message)) continue;
-    const identity = messageIdentity(message);
+  for (const message of messages) {
+    if (!isPlainObject(message)) {
+      throw new TypeError("dispatched turn message must be a plain object");
+    }
+    const identity = messageUidOf(message);
     if (!identity) {
       throw new Error("dispatched turn message requires messageUid");
     }
     const updatedCount = store.updateWhere(
       message,
-      (current) => messageIdentity(current) === identity,
+      (current) => messageUidOf(current) === identity,
     );
     if (updatedCount > 1) {
       throw new Error(`canonical turn store contains duplicate messageUid: ${identity}`);
@@ -81,7 +81,7 @@ function buildDispatchModelContext({ context, dispatchRuntime, runtimeEventListe
 
 function createDispatchClaim({ lifecycle, dispatchRuntime, syncLifecycleRuntimeState }) {
   const state = { claimed: false, owner: null };
-  const claim = ({ owner = "", source = "", ...unexpected } = {}) => {
+  const claim = ({ owner, source, ...unexpected }) => {
     const unexpectedFields = Object.keys(unexpected);
     if (unexpectedFields.length > 0) {
       throw new TypeError(
@@ -103,7 +103,7 @@ function createDispatchClaim({ lifecycle, dispatchRuntime, syncLifecycleRuntimeS
   return { state, claim };
 }
 
-function dispatchError(message, code, fields = {}) {
+function dispatchError(message, code, fields) {
   return Object.assign(new Error(message), { code, ...fields });
 }
 
@@ -112,7 +112,7 @@ function assertDispatchOwnership(hookResult, dispatchOutcome, claimState) {
   const isHandled = dispatchOutcome.disposition === BOT_DISPATCH_DISPOSITION.HANDLED;
   const hasStructuredHandledOutcome = hookResult.outcomes.some(
     (outcome) =>
-      isBotDispatchOutcome(outcome?.value) &&
+      isBotDispatchOutcome(outcome.value) &&
       outcome.value.disposition === BOT_DISPATCH_DISPOSITION.HANDLED,
   );
   if (claimed && dispatchOutcome.disposition === BOT_DISPATCH_DISPOSITION.PASS) {
@@ -144,30 +144,21 @@ function emitDispatchRouted(runtimeEventListener, dispatchOutcome, claimState) {
     disposition: dispatchOutcome.disposition,
     owner: dispatchOutcome.owner,
     claimed: claimState.claimed,
-    claimedSource: claimOwner?.source || "",
-    failureCode: text(dispatchOutcome?.failure?.code),
+    claimedSource: claimState.claimed ? claimOwner.source : null,
+    failureCode: dispatchOutcome.failure ? dispatchOutcome.failure.code : null,
   });
 }
 
 function resolveHandledDispatchResult(dispatchOutcome) {
-  if (dispatchOutcome.failure) {
-    const error = new Error(String(dispatchOutcome.failure.message || "owned dispatch failed"));
-    error.code = text(dispatchOutcome.failure.code) || "BOT_DISPATCH_FAILED";
-    error.dispatchOwner = dispatchOutcome.owner;
-    error.dispatchOutcome = dispatchOutcome;
-    throw error;
+  const { failure, owner, result } = dispatchOutcome;
+  if (failure) {
+    throw Object.assign(new Error(failure.message), {
+      code: failure.code,
+      dispatchOwner: owner,
+      dispatchOutcome,
+    });
   }
-  const override =
-    dispatchOutcome?.result && typeof dispatchOutcome.result === "object"
-      ? dispatchOutcome.result
-      : {};
-  return {
-    output: String(override?.output || ""),
-    traces: Array.isArray(override?.traces) ? override.traces : [],
-    turnMessages: Array.isArray(override?.turnMessages) ? override.turnMessages : [],
-    turnTasks: Array.isArray(override?.turnTasks) ? override.turnTasks : [],
-    ...override,
-  };
+  return result;
 }
 
 async function runRootAgent({
@@ -201,29 +192,25 @@ function acceptAgentResultMessages({
   dispatchOutcome,
   runtimeEventListener,
 }) {
-  const dispatchedSummarizedMessageIds = summarizedMessageIds(agentResult?.turnMessages);
+  assertAgentTurnResult(agentResult);
+  const dispatchedSummarizedMessageUids = summarizedMessageUids(agentResult.turnMessages);
   const acceptedTurnMessages = acceptDispatchedTurnMessages(
     dispatchRuntime,
-    agentResult?.turnMessages,
+    agentResult.turnMessages,
   );
   agentResult.turnMessages = acceptedTurnMessages.messages;
   emitContextIdentityDebug(runtimeEventListener, "completedTurnSummaryAccepted", {
-    resultMessageCount: Array.isArray(agentResult?.turnMessages)
-      ? agentResult.turnMessages.length
-      : 0,
-    dispatchedSummarizedMessageIds,
-    acceptedSummarizedMessageIds: summarizedMessageIds(acceptedTurnMessages.messages),
+    resultMessageCount: agentResult.turnMessages.length,
+    dispatchedSummarizedMessageUids,
+    acceptedSummarizedMessageUids: summarizedMessageUids(acceptedTurnMessages.messages),
   });
   emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
     disposition: dispatchOutcome.disposition,
     owner: dispatchOutcome.owner,
-    modelMessageId: text(agentResult?.modelMessageId),
-    outputChars: String(agentResult?.output || "").length,
-    resultAttachmentCount: Array.isArray(agentResult?.attachments)
-      ? agentResult.attachments.length
-      : 0,
+    modelMessageId: text(agentResult.modelMessageId),
+    outputChars: agentResult.output.length,
     accepted: acceptedTurnMessages.accepted,
-    storeMessageIds: acceptedTurnMessages.messages.map((message) => messageIdentity(message)),
+    storeMessageUids: acceptedTurnMessages.messages.map(messageUidOf),
   });
 }
 

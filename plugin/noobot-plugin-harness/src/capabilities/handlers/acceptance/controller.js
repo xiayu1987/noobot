@@ -41,7 +41,6 @@ import {
 import { resolvePendingPlanUpdateForWorkflow } from "../shared/workflow/scheduler.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
-import { hasFinalNoToolsMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
 import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
@@ -323,7 +322,8 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.ACCEPTANCE }) === true;
   const holder = ensureHarnessBucket(ctx);
   const mode = resolvePlanningGuidanceMode(meta);
-  const blockedByMainFlowFinalNoTools = hasFinalNoToolsMainFlowInstruction(ctx);
+  const blockedByMainFlowFinalNoTools =
+    ctx.agentContext.bindings.mainFlowControl.isFinalNoToolsTurnEngaged();
   const forceAcceptanceDueToOverflow =
     blockedByMainFlowFinalNoTools !== true &&
     LLM_SUMMARY_OVERFLOW_POLICY.FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW === true &&

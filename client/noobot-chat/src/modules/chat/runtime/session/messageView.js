@@ -24,7 +24,7 @@ import {
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
   projectTurnPresentation,
-  resolveTurnPresentationMessageId,
+  resolveMessageViewKey,
 } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
 
@@ -42,6 +42,58 @@ function isInternalControlMessage(messageItem = {}) {
   return Boolean(getMessageInternalType(messageItem));
 }
 
+function createSessionMessageLookup(sessions) {
+  function sessionMessages(sessionId) {
+    const normalizedSessionId = text(sessionId);
+    if (!normalizedSessionId) return [];
+    const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
+    const targetSession = sessionItems.find(
+      (sessionItem) => text(sessionItem?.sessionId) === normalizedSessionId,
+    );
+    return Array.isArray(targetSession?.messages) ? targetSession.messages : [];
+  }
+
+  function findMessageByViewKey(sessionId, viewKey) {
+    const normalizedViewKey = text(viewKey);
+    if (!normalizedViewKey) return null;
+    return (
+      sessionMessages(sessionId).find(
+        (message) => resolveMessageViewKey(message) === normalizedViewKey,
+      ) || null
+    );
+  }
+
+  function findMessagesByPresentationId(sessionId, presentationMessageId) {
+    const normalizedPresentationId = text(presentationMessageId);
+    if (!normalizedPresentationId) return [];
+    return sessionMessages(sessionId).filter(
+      (message) => text(message?.presentationMessageId) === normalizedPresentationId,
+    );
+  }
+
+  function findUncommittedUserMessage(sessionId, userMessageId) {
+    const normalizedUserMessageId = text(userMessageId);
+    if (!normalizedUserMessageId) return null;
+    return (
+      sessionMessages(sessionId).find(
+        (message) =>
+          getMessageRole(message) === RoleEnum.USER &&
+          !text(message?.messageUid) &&
+          text(message?.userMessageId) === normalizedUserMessageId,
+      ) || null
+    );
+  }
+
+  function findUserMessageForCommit(sessionId, committedUserMessage = {}) {
+    return (
+      findMessageByViewKey(sessionId, resolveMessageViewKey(committedUserMessage)) ||
+      findUncommittedUserMessage(sessionId, committedUserMessage.userMessageId)
+    );
+  }
+
+  return { findMessageByViewKey, findMessagesByPresentationId, findUserMessageForCommit };
+}
+
 export function createSessionMessageView({
   sessions,
   activeSession,
@@ -49,6 +101,9 @@ export function createSessionMessageView({
   userId,
   isImageMime,
 }) {
+  const { findMessageByViewKey, findMessagesByPresentationId, findUserMessageForCommit } =
+    createSessionMessageLookup(sessions);
+
   function appendMessage(role, content = "", attachments = [], options = {}) {
     const msg = reactive(buildAppendMessage(role, content, attachments, options));
     activeSession.value.messages.push(msg);
@@ -58,57 +113,17 @@ export function createSessionMessageView({
     return msg;
   }
 
-  function findCanonicalMessageById(sessionId, messageId) {
-    const normalizedSessionId = text(sessionId);
-    const normalizedMessageId = text(messageId);
-    if (!normalizedSessionId || !normalizedMessageId) return null;
-    const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
-    const targetSession = sessionItems.find((sessionItem) =>
-      [sessionItem?.sessionId, sessionItem?.sessionId, sessionItem?.sessionId].some(
-        (candidate) => text(candidate) === normalizedSessionId,
-      ),
-    );
-    const messages = Array.isArray(targetSession?.messages) ? targetSession.messages : [];
-    const matchingMessages = messages.filter((message) => {
-      const messageIdentity = text(message?.messageId);
-      const presentationIdentity = text(message?.presentationMessageId);
-      return (
-        messageIdentity === normalizedMessageId || presentationIdentity === normalizedMessageId
-      );
-    });
-    if (!matchingMessages.length) return null;
-
-    return matchingMessages[matchingMessages.length - 1] || null;
-  }
-
-  function findCanonicalMessagesById(sessionId, messageId) {
-    const normalizedSessionId = text(sessionId);
-    const normalizedMessageId = text(messageId);
-    if (!normalizedSessionId || !normalizedMessageId) return [];
-    const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
-    const targetSession = sessionItems.find(
-      (sessionItem) => text(sessionItem?.sessionId) === normalizedSessionId,
-    );
-    const messages = Array.isArray(targetSession?.messages) ? targetSession.messages : [];
-    return messages.filter(
-      (message) =>
-        text(message?.messageId) === normalizedMessageId ||
-        text(message?.presentationMessageId) === normalizedMessageId,
-    );
-  }
-
-  function upsertCanonicalAssistantMessage(messageId, identity = {}) {
-    const normalizedMessageId = text(messageId);
-    if (!normalizedMessageId) return null;
+  function upsertCanonicalAssistantMessage(presentationMessageId, identity = {}) {
+    const normalizedPresentationId = text(presentationMessageId);
+    if (!normalizedPresentationId) return null;
     const sessionId = text(
       identity?.sessionId || activeSession.value?.sessionId || activeSessionId.value,
     );
-    const existing = findCanonicalMessageById(sessionId, normalizedMessageId);
+    const existing = findMessageByViewKey(sessionId, normalizedPresentationId);
     if (existing) return existing;
     return appendMessage(RoleEnum.ASSISTANT, "", [], {
       ...identity,
-      id: normalizedMessageId,
-      messageId: normalizedMessageId,
+      presentationMessageId: normalizedPresentationId,
     });
   }
 
@@ -131,8 +146,10 @@ export function createSessionMessageView({
         sessionId,
         ts: source.ts || source.createdAt || envelope.occurredAt,
       };
-      const messageId = resolveTurnPresentationMessageId(sourceMessage);
-      const existing = messages.find((message) => text(message?.messageId) === messageId);
+      const existing =
+        getMessageRole(sourceMessage) === RoleEnum.USER
+          ? findUserMessageForCommit(sessionId, sourceMessage)
+          : findMessageByViewKey(sessionId, resolveMessageViewKey(sourceMessage));
       const canonical = makeViewMessage(sourceMessage);
       if (existing) {
         const runtime = Object.fromEntries(
@@ -186,8 +203,9 @@ export function createSessionMessageView({
 
   return {
     appendMessage,
-    findCanonicalMessageById,
-    findCanonicalMessagesById,
+    findMessageByViewKey,
+    findMessagesByPresentationId,
+    findUserMessageForCommit,
     materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage,

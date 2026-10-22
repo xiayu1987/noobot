@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { recordServiceWebSocketRuntimeError } from "./runtime-events.js";
-import { buildAbortErrorMessage, buildStoppedPartialAssistant } from "./stop-lifecycle.js";
+import { buildAbortErrorMessage } from "./stop-lifecycle.js";
 import {
   TURN_EVENT,
   TURN_PHASE,
@@ -88,12 +88,6 @@ export function createTurnFinalizer({
 
   const finalizeUserStopped = async (state) => {
     const stopPayload = resolveUserStopPayload({ abortSignal: state.abortSignal });
-    const stoppedMessage = translateText("ws.dialogStoppedByUser", state.locale);
-    const stoppedPartialAssistant = buildStoppedPartialAssistant({
-      stopPayload,
-      runMeta: state.runMeta,
-      fallbackMessage: stoppedMessage,
-    });
     const stopCommandId = text(stopPayload.commandId);
     const completionCommitId = createTurnLifecycleCommandId({
       commandId: stopCommandId,
@@ -102,9 +96,9 @@ export function createTurnFinalizer({
     });
     const processed = await commitTurnLifecycle({
       userId: state.identity.userId,
-      sessionId: stoppedPartialAssistant.sessionId,
-      turnScopeId: stoppedPartialAssistant.turnScopeId,
-      dialogProcessId: stoppedPartialAssistant.dialogProcessId,
+      sessionId: state.identity.sessionId,
+      turnScopeId: state.identity.turnScopeId,
+      dialogProcessId: state.identity.dialogProcessId,
       commandId: createTurnLifecycleCommandId({
         commandId: stopCommandId,
         eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
@@ -114,7 +108,6 @@ export function createTurnFinalizer({
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
       phase: TURN_PHASE.STOP,
       completionCommitId,
-      finalizePayload: { assistantMessage: stoppedPartialAssistant },
     });
     if (!processed?.applied && !processed?.deduplicated) {
       rejectUnpersistedTurnStatus({
@@ -126,17 +119,14 @@ export function createTurnFinalizer({
     }
     const completed = await commitTurnLifecycle({
       userId: state.identity.userId,
-      sessionId: stoppedPartialAssistant.sessionId,
-      turnScopeId: stoppedPartialAssistant.turnScopeId,
-      dialogProcessId: stoppedPartialAssistant.dialogProcessId,
+      sessionId: state.identity.sessionId,
+      turnScopeId: state.identity.turnScopeId,
+      dialogProcessId: state.identity.dialogProcessId,
       commandId: completionCommitId,
       causationId: stopCommandId,
       eventType: TURN_EVENT.STOP_COMPLETED,
       phase: TURN_PHASE.STOP,
-      terminalStatus: {
-        command: "user_stopped",
-        assistantMessage: stoppedPartialAssistant,
-      },
+      terminalStatus: { command: "user_stopped" },
     });
     if (!completed?.applied && !completed?.deduplicated) {
       rejectUnpersistedTurnStatus({

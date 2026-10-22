@@ -107,7 +107,6 @@ export function useWorkflowNodeMessages({
 
   function summarizeMessage(messageItem = {}) {
     return {
-      id: text(messageItem?.messageId),
       messageUid: text(messageItem?.messageUid),
       presentationMessageId: text(messageItem?.presentationMessageId),
       role: text(messageItem?.role),

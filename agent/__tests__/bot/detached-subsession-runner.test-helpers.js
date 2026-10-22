@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { TOOL_NAME } from "../../src/tools/constants/index.js";
 
@@ -93,6 +94,8 @@ export function createDeps(overrides = {}) {
       calls.prepareRunConfigPayload = payload;
       return {
         ...payload.runConfig,
+        hookManager: null,
+        botHookManager: null,
         selectedPlugins: ["harness", "workflow"],
         plugins: {
           harness: { enabled: true, mode: "on" },
@@ -105,16 +108,17 @@ export function createDeps(overrides = {}) {
 }
 
 export function createParentExecutionScope(runtimePatch = {}) {
-  return createTestAgentExecutionScope({
-    userId: "u1",
-    systemRuntime: {
-      sessionId: "parent1",
-      dialogProcessId: "parent-dialog",
-      turnScopeId: "parent-turn",
-    },
-    runConfig: { base: true },
-    ...runtimePatch,
-  });
+  return createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      systemRuntime: {
+        sessionId: "parent1",
+        dialogProcessId: "parent-dialog",
+        turnScopeId: "parent-turn",
+      },
+      runConfig: { hookManager: null, base: true },
+      ...runtimePatch,
+    }),
+  );
 }
 
 export function createCompleteStrategy(overrides = {}) {

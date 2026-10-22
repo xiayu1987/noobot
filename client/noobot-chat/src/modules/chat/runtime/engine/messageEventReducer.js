@@ -49,11 +49,9 @@ export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
 });
 
 function conflicts(message, event) {
-  const messageId = text(message.messageId);
   const presentationId = text(message.presentationMessageId);
   const eventPresentationId = resolveMessageEventPresentationId(event.payload);
-  if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId)
-    return true;
+  if (presentationId && presentationId !== eventPresentationId) return true;
   const messageTurn = text(message.turnScopeId);
   const eventTurn = text(event.identity.turnScopeId);
   return Boolean(eventTurn && messageTurn !== eventTurn);

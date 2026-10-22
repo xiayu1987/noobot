@@ -63,7 +63,7 @@ async function createWorkspace(t) {
   return base;
 }
 
-test("v7 migrates v3 snapshots in place and quarantines unmappable ones", async (t) => {
+test("snapshot upgrade migrates v3 snapshots in place and quarantines unmappable ones", async (t) => {
   const base = await createWorkspace(t);
   const backupBase = path.join(base, "backup");
   const v3Path = `${SNAPSHOT_DIR}/dp-1__client-turn_t-1.json`;
@@ -107,7 +107,46 @@ test("v7 migrates v3 snapshots in place and quarantines unmappable ones", async 
   assert.equal(JSON.parse(await readFile(quarantined, "utf8")).version, 2);
 });
 
-test("v7 leaves current snapshots untouched", async (t) => {
+test("snapshot upgrade splits v4 joined identities on disk", async (t) => {
+  const base = await createWorkspace(t);
+  const backupBase = path.join(base, "backup");
+  const v4Path = `${SNAPSHOT_DIR}/dp-1__client-turn_t-1.json`;
+  const user = { type: "human", content: "hi", additional_kwargs: { messageUid: "sm_user" } };
+  const userMeta = {
+    type: "human",
+    content: "meta",
+    additional_kwargs: { messageUid: "sm_user::user_meta" },
+  };
+  await writeFile(
+    path.join(base, v4Path),
+    JSON.stringify({
+      ...v3Snapshot(4),
+      messageBlocks: { system: [], history: [user, userMeta], incremental: [] },
+      messages: [user, userMeta],
+    }),
+  );
+
+  const result = await upgradeModelContextSnapshots({
+    base,
+    backupBase,
+    scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+  });
+
+  assert.deepEqual(
+    result.migrated.map(({ fromVersion, toVersion }) => ({ fromVersion, toVersion })),
+    [{ fromVersion: 4, toVersion: SNAPSHOT_VERSION }],
+  );
+  assert.deepEqual(result.quarantined, []);
+  const migrated = JSON.parse(await readFile(path.join(base, v4Path), "utf8"));
+  assert.equal(migrated.version, SNAPSHOT_VERSION);
+  assert.deepEqual(migrated.messageBlocks.history[1].additional_kwargs, {
+    projectionType: "user_meta",
+    sourceMessageUid: "sm_user",
+  });
+  assert.equal(JSON.parse(await readFile(path.join(backupBase, v4Path), "utf8")).version, 4);
+});
+
+test("snapshot upgrade leaves current snapshots untouched", async (t) => {
   const base = await createWorkspace(t);
   const filePath = path.join(base, SNAPSHOT_DIR, "dp-1__client-turn_t-1.json");
   const current = JSON.stringify({
@@ -125,7 +164,7 @@ test("v7 leaves current snapshots untouched", async (t) => {
   assert.equal(await readFile(filePath, "utf8"), current);
 });
 
-test("v7 records a per-file I/O failure in place and keeps migrating the rest", async (t) => {
+test("snapshot upgrade records a per-file I/O failure in place and keeps migrating the rest", async (t) => {
   const base = await createWorkspace(t);
   const backupBase = path.join(base, "backup");
   const blockedPath = `${SNAPSHOT_DIR}/dp-1__client-turn_t-1.json`;

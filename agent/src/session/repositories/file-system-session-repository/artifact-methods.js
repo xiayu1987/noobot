@@ -52,9 +52,9 @@ class SessionArtifactMethods {
 
   async ensureSessionDisplaySummary(userId, sessionId, { persistenceContext } = {}) {
     const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return { summary: null, migrated: false, rebuilt: false };
+    if (!normalizedSessionId) return { summary: null, rebuilt: false };
     const scope = await this.locateSessionScope(userId, normalizedSessionId, persistenceContext);
-    if (!scope) return { summary: null, migrated: false, rebuilt: false };
+    if (!scope) return { summary: null, rebuilt: false };
     try {
       const [manifest, summary] = await Promise.all([
         this.storageService.readJson(scope.sessionFile, null),
@@ -65,11 +65,10 @@ class SessionArtifactMethods {
         }),
       ]);
       if (isSessionDisplaySummaryCurrent(summary, manifest)) {
-        return { summary, migrated: false, rebuilt: false };
+        return { summary, rebuilt: false };
       }
-      const migrated = manifest?.schemaVersion !== SESSION_ARTIFACT_SCHEMA_VERSION;
       const session = await this.findById(userId, normalizedSessionId, { persistenceContext });
-      if (!session) return { summary: null, migrated, rebuilt: false };
+      if (!session) return { summary: null, rebuilt: false };
       let rebuilt = await readDisplaySummaryArtifact({
         storageService: this.storageService,
         sessionDir: scope.sessionDir,
@@ -81,7 +80,7 @@ class SessionArtifactMethods {
           listFacts: buildSessionListFacts(session),
           scope,
         });
-        return { summary: rebuilt, migrated, rebuilt: !migrated };
+        return { summary: rebuilt, rebuilt: true };
       }
       await this._refreshSessionDisplaySummary(
         userId,
@@ -96,7 +95,7 @@ class SessionArtifactMethods {
       });
       currentManifest = await this.storageService.readJson(scope.sessionFile, null);
       if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
-        return { summary: rebuilt, migrated, rebuilt: !migrated };
+        return { summary: rebuilt, rebuilt: true };
       }
       const error = new Error("rebuilt Session display summary is not current");
       error.code = "SESSION_DISPLAY_SUMMARY_REBUILD_INVALID";

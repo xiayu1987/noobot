@@ -33,9 +33,8 @@ test("session display summary materializes the active Turn presentation in the z
         type: "message",
         content: "resend request",
         messageUid: "sm-active-user",
-        messageId: "sm-active-user",
+        userMessageId: "sm-active-user",
         messageOrigin: "natural",
-        userMetaMaterialized: true,
         turnScopeId: "turn-active",
       },
     ],
@@ -57,20 +56,23 @@ test("session display summary materializes the active Turn presentation in the z
   assert.deepEqual(
     summary.messages.map((message) => ({
       role: message.role,
-      messageId: message.messageId,
+      userMessageId: message.userMessageId,
+      modelMessageId: message.modelMessageId,
       presentationMessageId: message.presentationMessageId || "",
       turnScopeId: message.turnScopeId,
     })),
     [
       {
         role: "user",
-        messageId: "sm-active-user",
+        userMessageId: "sm-active-user",
+        modelMessageId: undefined,
         presentationMessageId: "",
         turnScopeId: "turn-active",
       },
       {
         role: "assistant",
-        messageId: "presentation-active",
+        userMessageId: undefined,
+        modelMessageId: undefined,
         presentationMessageId: "presentation-active",
         turnScopeId: "turn-active",
       },
@@ -90,11 +92,12 @@ test("session display summary materializes stopped Turn details on its stable pr
         role: "user",
         type: "message",
         content: "run tools",
-        messageId: "stopped-user",
+        userMessageId: "stopped-user",
         turnScopeId: "turn-stopped",
       },
       {
         role: "assistant",
+        modelMessageId: "mm_session_repository_bound_1",
         type: "tool_call",
         chatPresentation: false,
         presentationMessageId: "presentation-stopped",
@@ -157,8 +160,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     session.messages = canonicalMessages(
       [
         {
-          id: "user-active-full",
-          messageId: "user-active-full",
+          userMessageId: "user-active-full",
           messageUid: "user-active-full",
           role: "user",
           type: "message",
@@ -204,12 +206,19 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     assert.equal(summaryDetail.messageProjection, fullDetail.messageProjection);
     assert.deepEqual(fullSession.messages, summarySession.messages);
     assert.deepEqual(
-      fullSession.messages.map((message) => message.messageId),
-      ["user-active-full", "presentation-active-full"],
+      fullSession.messages.map((message) => [
+        message.role,
+        message.messageUid,
+        message.presentationMessageId,
+      ]),
+      [
+        ["user", "user-active-full", undefined],
+        ["assistant", undefined, "presentation-active-full"],
+      ],
     );
     assert.equal(fullSession.messages[1].turnPlaceholder, true);
     assert.deepEqual(
-      fullSession.rawMessages.map((message) => message.messageId),
+      fullSession.rawMessages.map((message) => message.messageUid),
       ["user-active-full"],
     );
   });
@@ -227,7 +236,7 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
         role: "assistant",
         type: "tool_call",
         chatPresentation: false,
-        messageId: "source-tool-message",
+        modelMessageId: "source-tool-message",
         presentationMessageId,
         turnScopeId,
         toolTimeline: [
@@ -253,7 +262,7 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
         role: "assistant",
         type: "tool_call",
         chatPresentation: false,
-        messageId: "source-tool-message-2",
+        modelMessageId: "source-tool-message-2",
         presentationMessageId,
         turnScopeId,
         toolTimeline: [

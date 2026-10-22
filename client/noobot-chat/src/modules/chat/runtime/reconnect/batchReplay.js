@@ -45,8 +45,7 @@ export function prepareReconnectReplayBatchPlan({ messages = [] } = {}) {
 
 export function applyReconnectEnvelopeToTargetMessage({
   envelope,
-  findCanonicalMessageById,
-  findCanonicalMessagesById,
+  findMessagesByPresentationId,
   materializeTurnPresentation,
   normalizedDpId = "",
 } = {}) {
@@ -69,17 +68,8 @@ export function applyReconnectEnvelopeToTargetMessage({
     }));
     if (materialized?.applied !== true) return false;
   }
-  const canonicalTargets =
-    findCanonicalMessagesById?.(targetSessionId, presentationMessageId) ||
-    [findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
-  const canonicalTarget = canonicalTargets[canonicalTargets.length - 1] || null;
-  if (
-    !canonicalTarget ||
-    ![canonicalTarget?.messageId, canonicalTarget?.presentationMessageId, canonicalTarget?.id].some(
-      (candidate) => _trimStr(candidate) === presentationMessageId,
-    )
-  )
-    return false;
+  const canonicalTargets = findMessagesByPresentationId(targetSessionId, presentationMessageId);
+  if (canonicalTargets.length === 0) return false;
   const reductions = canonicalTargets.map((targetMessage) =>
     dispatchTurnEnvelope({
       targetMessage,
@@ -106,8 +96,7 @@ export function applyReconnectEnvelopeToTargetMessage({
 
 export function applyReconnectEnvelopeBatchToTargetMessage({
   messages = [],
-  findCanonicalMessageById,
-  findCanonicalMessagesById,
+  findMessagesByPresentationId,
   materializeTurnPresentation,
   normalizedDpId = "",
 } = {}) {
@@ -116,8 +105,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
     if (
       applyReconnectEnvelopeToTargetMessage({
         envelope,
-        findCanonicalMessageById,
-        findCanonicalMessagesById,
+        findMessagesByPresentationId,
         materializeTurnPresentation,
         normalizedDpId,
       })
@@ -129,8 +117,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
 
 export async function applyReconnectReplayBatchToActiveSession({
   activeSession,
-  findCanonicalMessageById,
-  findCanonicalMessagesById,
+  findMessagesByPresentationId,
   materializeTurnPresentation,
   messages = [],
   dialogProcessId = "",
@@ -176,8 +163,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   }
   const appliedCount = applyReconnectEnvelopeBatchToTargetMessage({
     messages: nextMessages,
-    findCanonicalMessageById,
-    findCanonicalMessagesById,
+    findMessagesByPresentationId,
     materializeTurnPresentation,
     normalizedDpId,
   });

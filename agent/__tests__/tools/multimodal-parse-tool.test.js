@@ -12,8 +12,11 @@ import {
   buildModelAttachment,
   createMultimodalParseTool,
 } from "../../src/tools/ai-models/multimodal-parse-tool.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createEventEnvelope } from "@noobot/event-protocol";
+import { createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
 import { createTestModelHost } from "../helpers/test-model-host.js";
 
 const TRANSFER_IDENTITY = Object.freeze({
@@ -80,7 +83,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   let ingestRequest = null;
   const linkRequests = [];
   const authorityRequests = [];
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     basePath,
     currentUserMessageUid: "user-source",
     currentUserMessageOrigin: "natural",
@@ -203,6 +206,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
           committed: true,
           envelope: createEventEnvelope({
             family,
+            schemaVersion: getEventFamily(family).schemaVersion,
             identity: {
               ...identity,
               eventId: `attachment-authority:${authorityRequests.length}`,
@@ -217,7 +221,21 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
         };
       },
     },
-  };
+  });
+  runtime.activeMessageContext = createModelContext({
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        projectSessionRecordToContextMessage({
+          messageUid: "user-source",
+          role: "user",
+          content: "parse these",
+          messageOrigin: "natural",
+        }),
+      ],
+    },
+  });
   const agentContext = createTestAgentExecutionScope(runtime);
   const [tool] = createMultimodalParseTool({ agentContext });
   const result = JSON.parse(
@@ -283,60 +301,62 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
   await fs.writeFile(inputPath, "not an attachment", "utf8");
   let modelCalled = false;
   let linkCalled = false;
-  const agentContext = createTestAgentExecutionScope({
-    basePath,
-    runtimeModel: "parse-model",
-    globalConfig: {
-      multimodal: { parsing: { default_models: { document: "parse-model" } } },
-      providers: {
-        "parse-model": {
-          enabled: true,
-          used_for_conversation: true,
-          api_key: "test-key",
-          model: "gpt-5.4",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
-        },
-      },
-    },
-    userConfig: {},
-    systemRuntime: {
-      persistenceScope: null,
-      userId: "admin",
-      sessionId: "session-1",
-      rootSessionId: "session-1",
-    },
-    userMessageAttachments: [],
-    modelHost: createTestModelHost({
-      modelPort: {
-        async invoke() {
-          modelCalled = true;
-          return { result: { rawText: "parsed ordinary file", output: [] } };
-        },
-      },
-      modelSpec: null,
-    }),
-    attachmentService: {
-      async ingestGeneratedArtifacts(request) {
-        return [
-          {
-            attachmentId: "parsed-ordinary",
-            sessionId: "session-1",
-            attachmentSource: "model",
-            name: request.artifacts[0].name,
-            mimeType: request.artifacts[0].mimeType,
-            size: 20,
-            path: path.join(basePath, request.artifacts[0].name),
-            relativePath: request.artifacts[0].name,
+  const agentContext = createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      basePath,
+      runtimeModel: "parse-model",
+      globalConfig: {
+        multimodal: { parsing: { default_models: { document: "parse-model" } } },
+        providers: {
+          "parse-model": {
+            enabled: true,
+            used_for_conversation: true,
+            api_key: "test-key",
+            model: "gpt-5.4",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            multimodal_parsing: { enabled: true, input_modalities: ["document"] },
           },
-        ];
+        },
       },
-      async linkParsedResultToAttachment() {
-        linkCalled = true;
+      userConfig: {},
+      systemRuntime: {
+        persistenceScope: null,
+        userId: "admin",
+        sessionId: "session-1",
+        rootSessionId: "session-1",
       },
-    },
-  });
+      userMessageAttachments: [],
+      modelHost: createTestModelHost({
+        modelPort: {
+          async invoke() {
+            modelCalled = true;
+            return { result: { rawText: "parsed ordinary file", output: [] } };
+          },
+        },
+        modelSpec: null,
+      }),
+      attachmentService: {
+        async ingestGeneratedArtifacts(request) {
+          return [
+            {
+              attachmentId: "parsed-ordinary",
+              sessionId: "session-1",
+              attachmentSource: "model",
+              name: request.artifacts[0].name,
+              mimeType: request.artifacts[0].mimeType,
+              size: 20,
+              path: path.join(basePath, request.artifacts[0].name),
+              relativePath: request.artifacts[0].name,
+            },
+          ];
+        },
+        async linkParsedResultToAttachment() {
+          linkCalled = true;
+        },
+      },
+    }),
+  );
   const [tool] = createMultimodalParseTool({ agentContext });
   const result = JSON.parse(
     await tool.invoke(
@@ -356,19 +376,21 @@ test("multimodal_parse rejects directly readable text before invoking a model", 
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-text-"));
   await fs.writeFile(path.join(basePath, "tool-result.txt"), '{"attachments":[]}', "utf8");
   let modelCalled = false;
-  const agentContext = createTestAgentExecutionScope({
-    basePath,
-    systemRuntime: { persistenceScope: null, userId: "admin" },
-    userMessageAttachments: [],
-    modelHost: createTestModelHost({
-      modelPort: {
-        async invoke() {
-          modelCalled = true;
+  const agentContext = createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      basePath,
+      systemRuntime: { persistenceScope: null, userId: "admin" },
+      userMessageAttachments: [],
+      modelHost: createTestModelHost({
+        modelPort: {
+          async invoke() {
+            modelCalled = true;
+          },
         },
-      },
-      modelSpec: null,
+        modelSpec: null,
+      }),
     }),
-  });
+  );
   const [tool] = createMultimodalParseTool({ agentContext });
 
   await assert.rejects(
@@ -383,57 +405,59 @@ test("multimodal_parse passes audio and video files to the configured model", as
   await fs.writeFile(path.join(basePath, "recording.wav"), Buffer.from([0x52, 0x49, 0x46, 0x46]));
   await fs.writeFile(path.join(basePath, "clip.mp4"), Buffer.from([0x00, 0x00, 0x00, 0x18]));
   let modelRequest = null;
-  const agentContext = createTestAgentExecutionScope({
-    basePath,
-    runtimeModel: "parse-model",
-    globalConfig: {
-      multimodal: {
-        parsing: { default_models: { audio: "parse-model", video: "parse-model" } },
-      },
-      providers: {
-        "parse-model": {
-          enabled: true,
-          model: "gemini-3.7-flash",
-          reasoning_effort_parameter: "enable_thinking",
-          reasoning_effort_options: ["none", "medium"],
-          multimodal_parsing: { enabled: true, input_modalities: ["audio", "video"] },
+  const agentContext = createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      basePath,
+      runtimeModel: "parse-model",
+      globalConfig: {
+        multimodal: {
+          parsing: { default_models: { audio: "parse-model", video: "parse-model" } },
         },
-      },
-    },
-    userConfig: {},
-    systemRuntime: {
-      persistenceScope: null,
-      userId: "admin",
-      sessionId: "session-1",
-      rootSessionId: "session-1",
-    },
-    userMessageAttachments: [],
-    modelHost: createTestModelHost({
-      modelPort: {
-        async invoke(request) {
-          modelRequest = request;
-          return { result: { rawText: "parsed media", output: [] } };
-        },
-      },
-      modelSpec: null,
-    }),
-    attachmentService: {
-      async ingestGeneratedArtifacts(request) {
-        return [
-          {
-            attachmentId: "parsed-media",
-            sessionId: "session-1",
-            attachmentSource: "model",
-            name: request.artifacts[0].name,
-            mimeType: request.artifacts[0].mimeType,
-            size: 12,
-            path: path.join(basePath, request.artifacts[0].name),
-            relativePath: request.artifacts[0].name,
+        providers: {
+          "parse-model": {
+            enabled: true,
+            model: "gemini-3.7-flash",
+            reasoning_effort_parameter: "enable_thinking",
+            reasoning_effort_options: ["none", "medium"],
+            multimodal_parsing: { enabled: true, input_modalities: ["audio", "video"] },
           },
-        ];
+        },
       },
-    },
-  });
+      userConfig: {},
+      systemRuntime: {
+        persistenceScope: null,
+        userId: "admin",
+        sessionId: "session-1",
+        rootSessionId: "session-1",
+      },
+      userMessageAttachments: [],
+      modelHost: createTestModelHost({
+        modelPort: {
+          async invoke(request) {
+            modelRequest = request;
+            return { result: { rawText: "parsed media", output: [] } };
+          },
+        },
+        modelSpec: null,
+      }),
+      attachmentService: {
+        async ingestGeneratedArtifacts(request) {
+          return [
+            {
+              attachmentId: "parsed-media",
+              sessionId: "session-1",
+              attachmentSource: "model",
+              name: request.artifacts[0].name,
+              mimeType: request.artifacts[0].mimeType,
+              size: 12,
+              path: path.join(basePath, request.artifacts[0].name),
+              relativePath: request.artifacts[0].name,
+            },
+          ];
+        },
+      },
+    }),
+  );
   const [tool] = createMultimodalParseTool({ agentContext });
 
   const result = JSON.parse(
@@ -468,19 +492,21 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
   await firstHandle.close();
   await secondHandle.close();
   let modelCalled = false;
-  const agentContext = createTestAgentExecutionScope({
-    basePath,
-    systemRuntime: { persistenceScope: null, userId: "admin" },
-    userMessageAttachments: [],
-    modelHost: createTestModelHost({
-      modelPort: {
-        async invoke() {
-          modelCalled = true;
+  const agentContext = createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      basePath,
+      systemRuntime: { persistenceScope: null, userId: "admin" },
+      userMessageAttachments: [],
+      modelHost: createTestModelHost({
+        modelPort: {
+          async invoke() {
+            modelCalled = true;
+          },
         },
-      },
-      modelSpec: null,
+        modelSpec: null,
+      }),
     }),
-  });
+  );
   const [tool] = createMultimodalParseTool({ agentContext });
 
   await assert.rejects(
@@ -493,32 +519,34 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
 test("multimodal_parse rejects an explicitly selected model without parsing capability", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-model-"));
   await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
-  const agentContext = createTestAgentExecutionScope({
-    basePath,
-    systemRuntime: { persistenceScope: null, userId: "admin" },
-    runtimeModel: "parse-model",
-    globalConfig: {
-      multimodal: { parsing: { default_models: { document: "parse-model" } } },
-      providers: {
-        "parse-model": {
-          enabled: true,
-          model: "gpt-5.4",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
-        },
-        "text-only": {
-          enabled: true,
-          model: "text-only",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          multimodal_parsing: { enabled: false },
+  const agentContext = createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      basePath,
+      systemRuntime: { persistenceScope: null, userId: "admin" },
+      runtimeModel: "parse-model",
+      globalConfig: {
+        multimodal: { parsing: { default_models: { document: "parse-model" } } },
+        providers: {
+          "parse-model": {
+            enabled: true,
+            model: "gpt-5.4",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            multimodal_parsing: { enabled: true, input_modalities: ["document"] },
+          },
+          "text-only": {
+            enabled: true,
+            model: "text-only",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            multimodal_parsing: { enabled: false },
+          },
         },
       },
-    },
-    userConfig: {},
-    userMessageAttachments: [],
-  });
+      userConfig: {},
+      userMessageAttachments: [],
+    }),
+  );
   const [tool] = createMultimodalParseTool({ agentContext });
 
   await assert.rejects(
@@ -533,57 +561,59 @@ test("multimodal_parse uses the configured modality default instead of the runti
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-fallback-"));
   await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
   let invokedModel = null;
-  const agentContext = createTestAgentExecutionScope({
-    basePath,
-    systemRuntime: { persistenceScope: null, userId: "admin" },
-    runtimeModel: "conversation-model",
-    globalConfig: {
-      multimodal: { parsing: { default_models: { document: "parse-model" } } },
-      providers: {
-        "conversation-model": {
-          enabled: true,
-          model: "text-only",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          multimodal_parsing: { enabled: false },
-        },
-        "parse-model": {
-          enabled: true,
-          model: "gpt-5.4",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
-        },
-      },
-    },
-    userConfig: {},
-    userMessageAttachments: [],
-    modelHost: createTestModelHost({
-      modelPort: {
-        async invoke(request) {
-          invokedModel = request.model;
-          return { result: { rawText: "parsed", output: [] } };
-        },
-      },
-      modelSpec: null,
-    }),
-    attachmentService: {
-      async ingestGeneratedArtifacts(request) {
-        return [
-          {
-            attachmentId: "parsed-fallback",
-            sessionId: "session-1",
-            attachmentSource: "model",
-            name: request.artifacts[0].name,
-            mimeType: request.artifacts[0].mimeType,
-            size: 6,
-            path: path.join(basePath, request.artifacts[0].name),
-            relativePath: request.artifacts[0].name,
+  const agentContext = createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      basePath,
+      systemRuntime: { persistenceScope: null, userId: "admin" },
+      runtimeModel: "conversation-model",
+      globalConfig: {
+        multimodal: { parsing: { default_models: { document: "parse-model" } } },
+        providers: {
+          "conversation-model": {
+            enabled: true,
+            model: "text-only",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            multimodal_parsing: { enabled: false },
           },
-        ];
+          "parse-model": {
+            enabled: true,
+            model: "gpt-5.4",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            multimodal_parsing: { enabled: true, input_modalities: ["document"] },
+          },
+        },
       },
-    },
-  });
+      userConfig: {},
+      userMessageAttachments: [],
+      modelHost: createTestModelHost({
+        modelPort: {
+          async invoke(request) {
+            invokedModel = request.model;
+            return { result: { rawText: "parsed", output: [] } };
+          },
+        },
+        modelSpec: null,
+      }),
+      attachmentService: {
+        async ingestGeneratedArtifacts(request) {
+          return [
+            {
+              attachmentId: "parsed-fallback",
+              sessionId: "session-1",
+              attachmentSource: "model",
+              name: request.artifacts[0].name,
+              mimeType: request.artifacts[0].mimeType,
+              size: 6,
+              path: path.join(basePath, request.artifacts[0].name),
+              relativePath: request.artifacts[0].name,
+            },
+          ];
+        },
+      },
+    }),
+  );
   const [tool] = createMultimodalParseTool({ agentContext });
 
   const result = JSON.parse(

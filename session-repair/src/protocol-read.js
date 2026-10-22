@@ -14,6 +14,7 @@ import {
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { resolveRepairArtifactPath } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
+import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 function materializeRepairRecords(records, order, baseMessages = []) {
   const byUid = new Map(
@@ -66,7 +67,7 @@ async function readLegacyCheckpointMessages(sessionDir, indexes) {
     throw Object.assign(
       new Error(`legacy cumulative checkpoint does not match its index: ${latest.file}`),
       {
-        code: "SESSION_REPAIR_CHECKPOINT_MISMATCH",
+        code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_MISMATCH,
       },
     );
   }
@@ -91,7 +92,7 @@ async function readPreviousCheckpointRecords(sessionDir, indexes) {
     ) {
       throw Object.assign(
         new Error(`previous Session checkpoint does not match its index: ${index.file}`),
-        { code: "SESSION_REPAIR_CHECKPOINT_MISMATCH" },
+        { code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_MISMATCH },
       );
     }
     checkpointRecords.push(...payload.records);
@@ -103,13 +104,13 @@ async function readPreviousCheckpointRecords(sessionDir, indexes) {
 export async function readSessionForProtocolRepair({ sessionDir = "", session = null } = {}) {
   if (!isPlainObject(session)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), {
-      code: "SESSION_REPAIR_SOURCE_INVALID",
+      code: SESSION_REPAIR_ERROR_CODE.REPAIR_SOURCE_INVALID,
     });
   }
   const schemaVersion = resolveSessionArtifactSchemaVersion(session.schemaVersion);
   if (schemaVersion > SESSION_ARTIFACT_SCHEMA_VERSION) {
     throw Object.assign(new TypeError("Session artifact schema is newer than this runtime"), {
-      code: "SESSION_ARTIFACT_SCHEMA_UNSUPPORTED",
+      code: SESSION_REPAIR_ERROR_CODE.ARTIFACT_SCHEMA_UNSUPPORTED,
     });
   }
   if (Array.isArray(session.messages)) return session;
@@ -140,7 +141,7 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
       const turn = await readRepairJson(artifact);
       if (!Array.isArray(turn?.messages)) {
         throw Object.assign(new Error(`legacy Session turn is invalid: ${relativeFile}`), {
-          code: "SESSION_TURN_ARTIFACT_MISSING",
+          code: SESSION_REPAIR_ERROR_CODE.TURN_ARTIFACT_MISSING,
         });
       }
       turnMessages = turn.messages;

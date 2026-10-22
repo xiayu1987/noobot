@@ -12,7 +12,7 @@ import {
   createReconnectComplete,
   createTurnRunCommand,
 } from "@noobot/agent-transport-protocol";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 
 export class MockWebSocket {
@@ -105,6 +105,7 @@ export function emitCommandReceipt(
 export function turnLifecycleProtocolEvent(payload) {
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: payload.eventId,
       eventType: TURN_LIFECYCLE_WIRE_EVENT,

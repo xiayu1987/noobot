@@ -57,6 +57,8 @@ test("session save persists thinking timing fields to full session and display s
       {
         messageUid: "sm_thinking_assistant_1",
         role: "assistant",
+        presentationMessageId: "pm_fx1",
+        modelMessageId: "mm_session_repository_bound_1",
         content: "first assistant chunk",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
@@ -65,6 +67,8 @@ test("session save persists thinking timing fields to full session and display s
       {
         messageUid: "sm_thinking_assistant_2",
         role: "assistant",
+        presentationMessageId: "pm_fx2",
+        modelMessageId: "mm_session_repository_bound_2",
         content: "final assistant chunk",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
@@ -141,6 +145,8 @@ test("session save keeps the model loop round on persisted turn timings", async 
       {
         messageUid: "sm_round_assistant",
         role: "assistant",
+        presentationMessageId: "pm_fx3",
+        modelMessageId: "mm_session_repository_bound_3",
         content: "answer",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",

@@ -13,7 +13,6 @@ import {
   normalizeTurnTerminalStatus,
   projectTurnTiming,
 } from "@noobot/session-protocol";
-import { validateProtocolEvent, EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   commitLifecycleTransition,
   decideLifecycleTransitionRequest,
@@ -80,7 +79,7 @@ function normalizeReplacedTurn(value, key) {
     turnScopeId,
     replacementDialogProcessId: clean(value.replacementDialogProcessId),
     replacementTurnScopeId,
-    replacementUserMessageId: clean(value.replacementUserMessageId),
+    replacementUserMessageUid: clean(value.replacementUserMessageUid),
     requestHash: clean(value.requestHash),
     commandId,
     committedAggregateVersion: integer(value.committedAggregateVersion),
@@ -93,30 +92,6 @@ function normalizeReplacedTurn(value, key) {
     ],
     sequence: integer(value.sequence),
     committedAt: clean(value.committedAt),
-  };
-}
-
-function normalizeCommandReceipt(item) {
-  const eventId = clean(item.eventId);
-  const envelope = isPlainObject(item.envelope) ? item.envelope : null;
-  const validation = validateProtocolEvent(envelope || {});
-  return {
-    ...item,
-    commandId: clean(item.commandId),
-    type: clean(item.type),
-    turnScopeId: clean(item.turnScopeId),
-    requestHash: clean(item.requestHash),
-    result: isPlainObject(item.result) ? structuredClone(item.result) : {},
-    revision: integer(item.revision),
-    sequence: integer(item.sequence),
-    committedAt: clean(item.committedAt),
-    eventId,
-    envelope:
-      validation.valid &&
-      validation.descriptor?.family === EVENT_FAMILY.TURN_LIFECYCLE &&
-      clean(envelope?.identity?.eventId) === eventId
-        ? envelope
-        : null,
   };
 }
 
@@ -133,9 +108,7 @@ function normalizeRecord(source, projector) {
 export function normalizeTurnLifecycleEntity(source) {
   const turns = normalizeRecord(source.turns, normalizeTurn);
   const replacedTurns = normalizeRecord(source.replacedTurns, normalizeReplacedTurn);
-  const commandReceipts = normalizeCommandReceipts(source.commandReceipts).map(
-    normalizeCommandReceipt,
-  );
+  const commandReceipts = normalizeCommandReceipts(source.commandReceipts);
   const activeTurnScopeId = clean(source.activeTurnScopeId);
   return {
     activeTurnScopeId:
@@ -169,6 +142,7 @@ function rejectionResult(request, decision) {
   }
   if (decision.deduplicated) {
     result.deduplicated = true;
+    result.receipt = decision.idempotency.receipt;
     result.turn = request.lifecycle.turns[decision.idempotency.receipt.turnScopeId];
   }
   return result;

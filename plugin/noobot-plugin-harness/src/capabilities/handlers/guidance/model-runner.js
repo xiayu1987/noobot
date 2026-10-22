@@ -280,9 +280,8 @@ function resolveAnalysisFlowTags(workflowPurpose) {
 }
 
 function summaryCheckpointMessageCount(state) {
-  return Array.isArray(state?.pending?.summaryCheckpointMessageIds)
-    ? state.pending.summaryCheckpointMessageIds.length
-    : 0;
+  const messageKeys = state.pending.summaryCheckpointMessageKeys;
+  return messageKeys === null ? 0 : messageKeys.length;
 }
 
 function isActionAllowed(requestedAction, decisionAction) {

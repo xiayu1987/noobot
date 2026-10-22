@@ -24,7 +24,7 @@ function consumptionInput({
     requestedAttachments: [{ id: "upload-1" }],
     canonicalAttachments: [{ attachmentId: "attachment-1" }],
     currentUserMessage: {
-      messageId: "user-message-1",
+      userMessageId: "user-message-1",
       content: "hello",
       attachments: [{ attachmentId: "attachment-1" }],
     },

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import test from "node:test";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
@@ -67,8 +68,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       return { appended: true, reason: "", turns: payload.turns };
     },
     async upsertTurnTiming() {},
-    async getTurnSummaryCheckpointState() {
-      return null;
+    async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
+      return createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId });
     },
     async getSessionTurns() {
       return persistedTurns;
@@ -78,7 +79,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       const userMessage = {
         messageUid,
         id: messageUid,
-        messageId: messageUid,
+        userMessageId: messageUid,
         role: "user",
         type: "message",
         content: acceptedTurn.content,
@@ -89,7 +90,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         parentDialogProcessId: acceptedTurn.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
-        userMetaMaterialized: true,
         attachments: [],
       };
       persistedTurns.push(userMessage);
@@ -201,7 +201,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         turnMessages: [
           {
             messageUid: "sm_closure-tool-call",
-            messageId: "closure-tool-call",
+            modelMessageId: "closure-tool-call",
             role: "assistant",
             type: "tool_call",
             content: "",
@@ -214,7 +214,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           },
           {
             messageUid: "sm_closure-tool-result",
-            messageId: "closure-tool-result",
+
             role: "tool",
             type: "tool_result",
             tool_call_id: "call_switch_model",
@@ -222,7 +222,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           },
           {
             messageUid: "sm_closure-assistant-message",
-            messageId: "closure-assistant-message",
+            modelMessageId: "closure-assistant-message",
             role: "assistant",
             type: "message",
             content: "已切换模型并生成附件",
@@ -243,6 +243,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             ],
           },
         ],
+        modelLoopRound: 0,
+        modelMessages: [],
       };
     },
   });
@@ -475,8 +477,8 @@ test("continue mode closed-loop: should build continue context and persist paren
       return { appended: true, reason: "", turns: payload.turns };
     },
     async upsertTurnTiming() {},
-    async getTurnSummaryCheckpointState() {
-      return null;
+    async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
+      return createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId });
     },
     async getSessionTurns() {
       return persistedTurns;
@@ -486,7 +488,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       const userMessage = {
         messageUid,
         id: messageUid,
-        messageId: messageUid,
+        userMessageId: messageUid,
         role: "user",
         type: "message",
         content: acceptedTurn.content,
@@ -497,7 +499,6 @@ test("continue mode closed-loop: should build continue context and persist paren
         parentDialogProcessId: acceptedTurn.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
-        userMetaMaterialized: true,
         attachments: [],
       };
       persistedTurns.push(userMessage);
@@ -547,7 +548,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       turnMessages: [
         {
           messageUid: "sm_continue-assistant-message",
-          messageId: "continue-assistant-message",
+          modelMessageId: "continue-assistant-message",
           role: "assistant",
           type: "message",
           content: "continue answer",
@@ -555,6 +556,8 @@ test("continue mode closed-loop: should build continue context and persist paren
           modelName: "gpt-4o",
         },
       ],
+      modelLoopRound: 0,
+      modelMessages: [],
     }),
   });
 

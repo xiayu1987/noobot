@@ -19,27 +19,45 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 describe("2. 字段对齐测试", () => {
   describe("normalizeMessageEntity 字段对齐", () => {
-    it("应把权威 messageId 规范化为唯一 messageId", () => {
+    it("assistant 记录保留按角色的 modelMessageId，不产生 messageId", () => {
       const normalized = normalizeMessageEntity({
         role: "assistant",
+        presentationMessageId: "pm_fx1",
         content: "hello",
-        messageId: "message-1",
+        messageUid: "sm_assistant-1",
+        modelMessageId: "mm_model-1",
       });
       assert.equal("id" in normalized, false);
-      assert.equal(normalized.messageId, "message-1");
+      assert.equal("messageId" in normalized, false);
+      assert.equal(normalized.modelMessageId, "mm_model-1");
     });
-    it("缺失运行时 ID 时应使用已落盘的 messageUid 作为稳定身份", () => {
+    it("携带裸 messageId 的记录被拒绝", () => {
+      assert.throws(
+        () =>
+          normalizeMessageEntity({
+            role: "assistant",
+            presentationMessageId: "pm_fx2",
+            content: "hello",
+            messageUid: "sm_assistant-2",
+            modelMessageId: "mm_model-2",
+            messageId: "message-2",
+          }),
+        /session_message_messageId_removed/,
+      );
+    });
+    it("user 只有 messageUid 时不派生任何 messageId", () => {
       const normalized = normalizeMessageEntity({
         role: "user",
         content: "legacy user message",
         messageUid: "sm_persisted-1",
       });
       assert.equal("id" in normalized, false);
-      assert.equal(normalized.messageId, "sm_persisted-1");
+      assert.equal("messageId" in normalized, false);
+      assert.equal("userMessageId" in normalized, false);
       assert.equal(normalized.messageUid, "sm_persisted-1");
     });
     it("应包含 role, content, type, ts 等核心字段", () => {
-      const raw = { role: "user", content: "hello", type: "text" };
+      const raw = { messageUid: "sm_fixture_4", role: "user", content: "hello", type: "text" };
       const normalized = normalizeMessageEntity(raw);
       assert.ok("role" in normalized, "应包含 role");
       assert.ok("content" in normalized, "应包含 content");
@@ -48,20 +66,33 @@ describe("2. 字段对齐测试", () => {
     });
 
     it("ts 应为字符串类型（ISO 时间或传入值转字符串）", () => {
-      const raw = { role: "user", content: "test", ts: 1234567890 };
+      const raw = { messageUid: "sm_fixture_5", role: "user", content: "test", ts: 1234567890 };
       const normalized = normalizeMessageEntity(raw);
       assert.equal(typeof normalized.ts, "string", "ts 应为字符串");
       assert.equal(normalized.ts, "1234567890", "数值 ts 应转为字符串");
     });
 
     it("缺失 ts 时应自动生成 ISO 时间字符串", () => {
-      const raw = { role: "assistant", content: "hi" };
+      const raw = {
+        messageUid: "sm_fixture_6",
+        modelMessageId: "mm_fixture_6",
+        role: "assistant",
+        presentationMessageId: "pm_fx3",
+        content: "hi",
+      };
       const normalized = normalizeMessageEntity(raw);
       assert.ok(typeof normalized.ts === "string" && normalized.ts.length > 0, "应自动生成 ts");
     });
 
     it("tool_calls 字段在 type=tool_call 时应保证为数组", () => {
-      const raw = { role: "assistant", type: "tool_call", content: "" };
+      const raw = {
+        messageUid: "sm_fixture_7",
+        modelMessageId: "mm_fixture_7",
+        role: "assistant",
+        presentationMessageId: "pm_fx4",
+        type: "tool_call",
+        content: "",
+      };
       const normalized = normalizeMessageEntity(raw);
       assert.ok(Array.isArray(normalized.tool_calls), "tool_call 类型应保证 tool_calls 为数组");
     });
@@ -69,12 +100,17 @@ describe("2. 字段对齐测试", () => {
     it("流程控制分类快照在调用和结果实体中保持一致", () => {
       const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
       const call = normalizeMessageEntity({
+        messageUid: "sm_fixture_8",
+        modelMessageId: "mm_fixture_8",
         role: "assistant",
+        presentationMessageId: "pm_fx5",
         type: "tool_call",
         tool_calls: [{ id: "call-1", function: { name: "control" }, contextPolicy }],
       });
       const result = normalizeMessageEntity({
+        messageUid: "sm_fixture_9",
         role: "tool",
+        presentationMessageId: "pm_fx6",
         type: "tool_result",
         tool_call_id: "call-1",
         toolName: "control",
@@ -86,18 +122,26 @@ describe("2. 字段对齐测试", () => {
     });
 
     it("summarized 字段默认应为 false", () => {
-      const raw = { role: "user", content: "test" };
+      const raw = { messageUid: "sm_fixture_10", role: "user", content: "test" };
       const normalized = normalizeMessageEntity(raw);
       assert.equal(normalized.summarized, false, "summarized 默认应为 false");
     });
 
     it("assistant 协议内容块必须落盘以支持 thinking/tool 轮次恢复", () => {
-      const raw1 = { role: "user", content: "test", rawModelContent: "raw text" };
+      const raw1 = {
+        messageUid: "sm_fixture_11",
+        role: "user",
+        content: "test",
+        rawModelContent: "raw text",
+      };
       const n1 = normalizeMessageEntity(raw1);
       assert.ok(!("rawModelContent" in n1), "string rawModelContent 默认不落盘");
 
       const rawSig = {
+        messageUid: "sm_fixture_12",
+        modelMessageId: "mm_fixture_12",
         role: "assistant",
+        presentationMessageId: "pm_fx7",
         content: "test",
         rawModelContent: [{ type: "text", text: "x", thought_signature: "sig-1" }],
       };
@@ -105,14 +149,22 @@ describe("2. 字段对齐测试", () => {
       assert.deepEqual(nSig.rawModelContent, rawSig.rawModelContent);
       assert.notEqual(nSig.rawModelContent, rawSig.rawModelContent);
 
-      const raw2 = { role: "user", content: "test", rawModelContent: 123 };
+      const raw2 = {
+        messageUid: "sm_fixture_13",
+        role: "user",
+        content: "test",
+        rawModelContent: 123,
+      };
       const n2 = normalizeMessageEntity(raw2);
       assert.ok(!("rawModelContent" in n2), "非 string/array rawModelContent 不应保留");
     });
 
     it("仅 OpenAI Responses 协议字段落盘，诊断字段不落盘", () => {
       const raw1 = {
+        messageUid: "sm_fixture_14",
+        modelMessageId: "mm_fixture_14",
         role: "assistant",
+        presentationMessageId: "pm_fx8",
         content: "test",
         modelAdditionalKwargs: {
           reasoning: { type: "reasoning", id: "rs_1", encrypted_content: "enc" },
@@ -131,7 +183,12 @@ describe("2. 字段对齐测试", () => {
         output: [{ type: "reasoning", id: "rs_1", encrypted_content: "enc" }],
       });
 
-      const raw2 = { role: "user", content: "test", modelAdditionalKwargs: [1, 2] };
+      const raw2 = {
+        messageUid: "sm_fixture_15",
+        role: "user",
+        content: "test",
+        modelAdditionalKwargs: [1, 2],
+      };
       const n2 = normalizeMessageEntity(raw2);
       assert.ok(!("modelAdditionalKwargs" in n2), "array modelAdditionalKwargs 不应保留");
     });
@@ -294,6 +351,7 @@ describe("3. Session 字段完整性测试", () => {
 
     it("Message 实体应包含 role, content, type, ts, summarized", () => {
       const message = normalizeMessageEntity({
+        messageUid: "sm_fixture_16",
         role: "user",
         content: "hello",
         type: "text",

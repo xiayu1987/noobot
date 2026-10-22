@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { AGENT_RUN_EVENT, emitEvent } from "../../../events/index.js";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
 import { assertTurnAttachmentsBoundEventData } from "@noobot/session-protocol/turn-attachment-bind";
@@ -60,11 +59,8 @@ function emitCurrentUserIdentityDebug({
     resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
     {
       messageUid: persistedMessageUid,
-      persistedMessageId: text(currentUserMessage?.messageId),
-      canonicalMessageId: resolveContextMessageId(currentUserMessage),
       role: text(currentUserMessage?.role),
       messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),
-      userMetaMaterialized: currentUserMessage?.userMetaMaterialized === true,
       contentLength: String(currentUserMessage?.content || "").length,
       attachmentCount: Array.isArray(currentUserMessage?.attachments)
         ? currentUserMessage.attachments.length

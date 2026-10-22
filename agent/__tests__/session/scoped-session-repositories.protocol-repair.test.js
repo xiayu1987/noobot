@@ -35,6 +35,9 @@ test("protocol repair moves v10 journal snapshot indexes into the manifest", asy
     const message = (messageUid, ts) => ({
       messageUid,
       role: messageUid === "m1" ? "user" : "assistant",
+      ...(messageUid === "m1"
+        ? {}
+        : { modelMessageId: `mm_${messageUid}`, presentationMessageId: "pm_active" }),
       content: messageUid,
       dialogProcessId: "dialog-active",
       turnScopeId: "active",
@@ -46,6 +49,8 @@ test("protocol repair moves v10 journal snapshot indexes into the manifest", asy
       requestHash: "sha256:fixture",
       persistedMessageUids: ["m1", "m2"],
       summarizedMessageUids: ["m1"],
+      retainedMessageUids: [],
+      markedCount: 1,
       committedAt: "2026-01-01T00:01:00.000Z",
     };
     await sessionRepo.save(
@@ -60,7 +65,12 @@ test("protocol repair moves v10 journal snapshot indexes into the manifest", asy
           message("m2", "2026-01-01T00:00:30.000Z"),
         ],
         turnSummaryCheckpoints: {
-          active: { dialogProcessId: "dialog-active", turnScopeId: "active", receipts: [receipt] },
+          active: {
+            dialogProcessId: "dialog-active",
+            turnScopeId: "active",
+            checkpointRevision: 1,
+            receipts: [receipt],
+          },
         },
       }),
       { createOnly: true, ...treeContext(sessionRepo, sessionId) },
@@ -155,6 +165,8 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     const replaced = {
       messageUid: "replaced-message",
       role: "assistant",
+      presentationMessageId: "pm_replaced",
+      modelMessageId: "mm_replaced",
       content: "replaced",
       dialogProcessId: "dialog-replaced",
       turnScopeId: "turn-replaced",
@@ -174,6 +186,8 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     const replacement = (suffix) => ({
       messageUid: `replacement-${suffix}`,
       role: "assistant",
+      presentationMessageId: `pm_${suffix}`,
+      modelMessageId: `mm_${suffix}`,
       content: `replacement-${suffix}`,
       dialogProcessId: `dialog-${suffix}`,
       turnScopeId: `turn-${suffix}`,

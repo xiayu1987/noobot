@@ -17,6 +17,7 @@ export function createAgentContextEnvelopeInput({
   systemMessages,
   conversationMessages,
   incrementalMessages,
+  userMetaBackwrites,
 }) {
   return {
     identity: {
@@ -59,5 +60,6 @@ export function createAgentContextEnvelopeInput({
       history: conversationMessages,
       incremental: incrementalMessages,
     },
+    userMetaBackwrites,
   };
 }

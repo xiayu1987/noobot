@@ -71,7 +71,7 @@ describe("useReconnectReplay channel_state contract", () => {
 
     expect(result).toMatchObject({ applied: false, reason: "transport_channel_state_ignored" });
     expect(refs.activeSession.value.messages).toHaveLength(1);
-    expect(mocks.findCanonicalMessageById).not.toHaveBeenCalled();
+    expect(mocks.findMessageByViewKey).not.toHaveBeenCalled();
   });
 
   it("does not use channel timestamps as timing facts", async () => {

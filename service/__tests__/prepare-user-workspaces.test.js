@@ -23,12 +23,11 @@ function createBot({ brokenWorkspace, partialSummary, layoutUpgrades = [] }) {
         if (userId === partialSummary) {
           return {
             userId,
-            migratedSessionIds: ["s-1"],
             rebuiltSessionIds: [],
             failures: [{ sessionId: "s-2", code: "E_SUMMARY", message: "bad" }],
           };
         }
-        return { userId, migratedSessionIds: [], rebuiltSessionIds: ["s-3"], failures: [] };
+        return { userId, rebuiltSessionIds: ["s-3"], failures: [] };
       },
     },
   };
@@ -43,7 +42,6 @@ test("a broken user workspace is reported without blocking other users", async (
   assert.deepEqual(bot.prepared, ["u-partial", "u-ok"]);
   assert.deepEqual(result, {
     userCount: 3,
-    migratedSessionCount: 1,
     rebuiltSessionCount: 1,
     failures: [
       { userId: "u-broken", stage: "workspace", code: "E_LAYOUT", message: "layout broken" },

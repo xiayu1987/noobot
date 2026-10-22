@@ -107,7 +107,7 @@ describe("main message download clicks", () => {
     const wrapper = await mountMessage("生成中");
     await wrapper.setProps({
       messageItem: {
-        id: "download-message",
+        presentationMessageId: "download-message",
         role: "assistant",
         content: ref,
         attachments: [attachment],

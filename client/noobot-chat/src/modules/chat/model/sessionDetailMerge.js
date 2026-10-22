@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject, text } from "@noobot/shared/value";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 
 function messageRole(item = {}) {
   return text(item?.role).toLowerCase();
@@ -12,7 +13,7 @@ function messageRole(item = {}) {
 function isPersistedFinalAssistant(item = {}) {
   return (
     messageRole(item) === "assistant" &&
-    Boolean(text(item?.presentationMessageId || item?.messageUid || item?.messageId)) &&
+    Boolean(resolveMessageViewKey(item)) &&
     text(item?.type).toLowerCase() === "message" &&
     Boolean(text(item?.content)) &&
     item?.pending === false
@@ -40,17 +41,9 @@ function object(value) {
 
 function entityKey(item = {}, index = 0, kind = "entity") {
   if (kind === "message") {
-    const role = messageRole(item);
-    if (role === "assistant") {
-      const presentationMessageId = text(item?.presentationMessageId);
-      if (presentationMessageId) return `assistant-presentation:${presentationMessageId}`;
-    }
-    const messageIdentity = text(item?.messageUid || item?.messageId);
-    return messageIdentity ? `message:${messageIdentity}` : "";
+    const viewKey = resolveMessageViewKey(item);
+    return viewKey ? `message:${viewKey}` : "";
   }
-  const stableId = text(item?.messageId || item?.toolCallId);
-  if (stableId) return `id:${stableId}`;
-
   const turnScopeId = text(item?.turnScopeId);
   if (turnScopeId) return `turn:${turnScopeId}:${kind}`;
   const dialogProcessId = text(item?.dialogProcessId);
@@ -83,8 +76,17 @@ function mergeSessionDetailEntities(
 ) {
   const base = Array.isArray(baseItems) ? baseItems : [];
   const incoming = Array.isArray(incomingItems) ? incomingItems : [];
-  const accepted = (items) =>
-    kind === "message" ? items.filter((item) => Boolean(entityKey(item, 0, kind))) : items;
+
+  const accepted = (items) => {
+    if (kind !== "message") return items;
+    const unkeyed = items.find((item) => !entityKey(item, 0, kind));
+    if (unkeyed) {
+      throw new TypeError(
+        `[session-detail] message without view identity: role=${messageRole(unkeyed)}`,
+      );
+    }
+    return items;
+  };
   if (replace) return accepted(incoming).map((item) => ({ ...object(item) }));
   const merged = new Map();
   accepted(base).forEach((item, index) =>

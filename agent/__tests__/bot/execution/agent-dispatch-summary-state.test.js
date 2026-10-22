@@ -20,7 +20,6 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
   const dispatchRuntime = createTestRuntimeContext();
   dispatchRuntime.currentTurnMessages.replaceAll([
     {
-      messageId: "sm_tool",
       messageUid: "sm_tool",
       role: "tool",
       type: "tool_result",
@@ -36,7 +35,6 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
       traces: [],
       turnMessages: [
         {
-          messageId: "sm_tool",
           messageUid: "sm_tool",
           role: "tool",
           type: "tool_result",
@@ -44,7 +42,7 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
           summarized: true,
         },
         {
-          messageId: "sm_final",
+          modelMessageId: "sm_final",
           messageUid: "sm_final",
           role: "assistant",
           type: "message",
@@ -53,6 +51,8 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
         },
       ],
       turnTasks: [],
+      modelLoopRound: 0,
+      modelMessages: [],
     }),
     errorLogger: null,
     lifecycle: { enterRunning() {} },
@@ -81,7 +81,7 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
     userMessageAttachments: [],
     resolvedRunConfig: {},
     runtimeEventListener,
-    botHookRuntime: {},
+    botHookRuntime: { botHookManager: null },
     botHookBase: {},
     agentContextSummary: {},
     syncLifecycleRuntimeState() {},
@@ -101,6 +101,6 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
     (event = {}) => event.event === "agent.contextIdentity.completedTurnSummaryAccepted",
   );
   assert.ok(acceptedEvent);
-  assert.deepEqual(acceptedEvent.data.dispatchedSummarizedMessageIds, ["sm_tool"]);
-  assert.deepEqual(acceptedEvent.data.acceptedSummarizedMessageIds, ["sm_tool"]);
+  assert.deepEqual(acceptedEvent.data.dispatchedSummarizedMessageUids, ["sm_tool"]);
+  assert.deepEqual(acceptedEvent.data.acceptedSummarizedMessageUids, ["sm_tool"]);
 });

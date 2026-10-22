@@ -5,25 +5,35 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { appendUserMetaParsedResult } from "../../../src/context/assembly/message-builder/user-meta.js";
+import { readContextMessageField } from "@noobot/context-protocol/message/codec";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { buildHumanMessagesForUser } from "../../../src/context/assembly/message-builder/user-meta.js";
 
-const content = `[用户元信息]\n${JSON.stringify({ attachments: [{ attachmentRef: "a1" }] })}\n[/用户元信息]`;
+function sourceMessage(userMetaParsedResults) {
+  return projectSessionRecordToContextMessage({
+    messageUid: "sm_user_1",
+    role: "user",
+    content: "hello",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn-1",
+    messageOrigin: "natural",
+    ...(userMetaParsedResults ? { userMetaParsedResults } : {}),
+  });
+}
 
-test("user_meta parsed result is a finite per-attachment projection", () => {
-  const next = appendUserMetaParsedResult(content, {
-    sourceAttachmentRef: "a1",
-    parsedAttachmentRef: "parsed-a1",
-    name: "scan.md",
-    mimeType: "text/markdown",
-    size: 12,
-  });
-  assert.match(next, /parsedResults/);
-  assert.match(next, /parsed-a1/);
-  const replaced = appendUserMetaParsedResult(next, {
-    sourceAttachmentRef: "a1",
-    parsedAttachmentRef: "parsed-a1-new",
-  });
-  assert.equal((replaced.match(/sourceAttachmentRef/g) || []).length, 1);
-  assert.match(replaced, /parsed-a1-new/);
-  assert.doesNotMatch(replaced, /parsed-a1\\"/);
+test("user_meta is a projection derived from the source user message", () => {
+  const parsed = { sourceAttachmentRef: "a1", parsedAttachmentRef: "parsed-a1" };
+  const [content, meta] = buildHumanMessagesForUser({}, sourceMessage([parsed]));
+
+  assert.equal(readContextMessageField(content, "messageUid"), "sm_user_1");
+  assert.equal(readContextMessageField(meta, "messageUid"), "");
+  assert.equal(readContextMessageField(meta, "projectionType"), "user_meta");
+  assert.equal(readContextMessageField(meta, "sourceMessageUid"), "sm_user_1");
+  assert.match(String(meta.content), /parsedResults/);
+  assert.match(String(meta.content), /parsed-a1/);
+});
+
+test("user_meta omits parsedResults when the source has none", () => {
+  const [, meta] = buildHumanMessagesForUser({}, sourceMessage());
+  assert.doesNotMatch(String(meta.content), /parsedResults/);
 });

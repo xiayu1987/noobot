@@ -15,8 +15,12 @@ function ctx(role, content, metadata = {}) {
   return { role, content, additional_kwargs: { ...metadata } };
 }
 
+let roundUserSequence = 0;
+
 function roundUser(content, dialogProcessId, turnScopeId, metadata = {}) {
+  roundUserSequence += 1;
   return ctx("user", content, {
+    messageUid: `sm_round_user_${roundUserSequence}`,
     ...(dialogProcessId ? { dialogProcessId } : {}),
     ...(turnScopeId ? { turnScopeId } : {}),
     ...metadata,
@@ -153,7 +157,6 @@ test("explicit blocks hydrate one stable identity for projections with the same 
   });
   const incrementalUser = roundUser("same text", "dialog-current", "turn-current", {
     messageOrigin: "natural",
-    userMetaMaterialized: true,
     messageUid: "sm_current",
   });
   const context = createModelContext({
@@ -190,15 +193,12 @@ test("same text in different turns remains distinct", () => {
   assert.deepEqual(result.messages, [historyUser, incrementalUser]);
 });
 
-test("messages without canonical ids are distinct protocol entities", () => {
-  const historyUser = roundUser("same text", "dialog-current", "");
-  const incrementalUser = roundUser("same text", "dialog-current", "");
-  const result = resolveModelFinalMessages({
-    historyMessages: [historyUser],
-    incrementalMessages: [incrementalUser],
-  });
-
-  assert.deepEqual(result.messages, [historyUser, incrementalUser]);
+test("messages without context identity are rejected", () => {
+  const historyUser = ctx("user", "same text", { dialogProcessId: "dialog-current" });
+  assert.throws(
+    () => resolveModelFinalMessages({ historyMessages: [], incrementalMessages: [historyUser] }),
+    /context message identity must be exactly one shape, got: none/,
+  );
 });
 
 test("distinct canonical message ids are never content-deduplicated", () => {

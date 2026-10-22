@@ -22,7 +22,6 @@ test("projects turn progress counters and summary flags only", () => {
     needsPhaseSummary: true,
     phaseSummaryByCharsPrompted: "yes",
     modelLoopRound: 9,
-    mainFlowFinalNoToolsTurnActive: true,
   });
   assert.deepEqual(progress, {
     phaseSummaryLoopCount: 7,
@@ -98,7 +97,6 @@ test("mutates the given system runtime in place", () => {
     modelLoopRound: 9,
     needsPhaseSummary: "yes",
     phaseSummaryByCharsPrompted: true,
-    mainFlowFinalNoToolsTurnActive: true,
   };
   const result = normalizeSystemRuntimeCounters(systemRuntime, "  hello  ");
   assert.equal(result, undefined);
@@ -109,7 +107,6 @@ test("mutates the given system runtime in place", () => {
   assert.equal(systemRuntime.modelLoopRound, 0);
   assert.equal(systemRuntime.needsPhaseSummary, false);
   assert.equal(systemRuntime.phaseSummaryByCharsPrompted, true);
-  assert.equal(systemRuntime.mainFlowFinalNoToolsTurnActive, false);
   assert.equal(systemRuntime.currentTurnUserMessage, "hello");
 });
 

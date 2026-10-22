@@ -41,6 +41,9 @@ import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import { stableId } from "./repair-primitives.js";
 import { migrateWriteTimeDialogFacts } from "./write-time-dialog-facts.js";
 import { migrateSessionCaller } from "./session-caller-migration.js";
+import { migrateCanonicalCommandReceipts } from "./command-receipt-migration.js";
+import { migrateMessageIdentity } from "./message-identity-migration.js";
+import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
 
@@ -64,7 +67,7 @@ function migrateArtifactSchema(document, migrations, sourceSchemaVersion) {
   if (sourceSchemaVersion === SESSION_ARTIFACT_SCHEMA_VERSION) return false;
   if (sourceSchemaVersion > SESSION_ARTIFACT_SCHEMA_VERSION) {
     throw Object.assign(new TypeError("Session artifact schema is newer than this runtime"), {
-      code: "SESSION_ARTIFACT_SCHEMA_UNSUPPORTED",
+      code: SESSION_REPAIR_ERROR_CODE.ARTIFACT_SCHEMA_UNSUPPORTED,
     });
   }
   document.schemaVersion = SESSION_ARTIFACT_SCHEMA_VERSION;
@@ -76,7 +79,7 @@ function requireMigratableTurnCommitAction(turnCommit) {
   if (isTurnCommitAction(turnCommit?.action)) return turnCommit.action;
   throw migrationError(
     "Session message turnCommit action is not a protocol commit action",
-    "SESSION_TURN_COMMIT_UNMIGRATABLE",
+    SESSION_REPAIR_ERROR_CODE.TURN_COMMIT_UNMIGRATABLE,
   );
 }
 
@@ -97,7 +100,7 @@ function migrateMessageIdField(message, index) {
   if (legacyId && messageId && legacyId !== messageId) {
     throw migrationError(
       `Session message ${index} has conflicting id and messageId`,
-      "SESSION_MESSAGE_ID_CONFLICT",
+      SESSION_REPAIR_ERROR_CODE.MESSAGE_ID_CONFLICT,
       Error,
     );
   }
@@ -145,7 +148,7 @@ function migrateMessage(
       throw Object.assign(
         new Error(`Session message ${index} has no migratable canonical identity`),
         {
-          code: "SESSION_MESSAGE_IDENTITY_UNMIGRATABLE",
+          code: SESSION_REPAIR_ERROR_CODE.MESSAGE_IDENTITY_UNMIGRATABLE,
         },
       );
     }
@@ -195,7 +198,7 @@ export function reconcileDuplicateCanonicalAssistantPresentations(document = {})
     if (!authoritativePresentationMessageId || authoritativeIndex === undefined) {
       throw Object.assign(
         new Error(`canonical assistant presentation repair is ambiguous for Turn ${turnScopeId}`),
-        { code: "SESSION_CANONICAL_PRESENTATION_REPAIR_AMBIGUOUS" },
+        { code: SESSION_REPAIR_ERROR_CODE.CANONICAL_PRESENTATION_REPAIR_AMBIGUOUS },
       );
     }
     for (const index of indexes) {
@@ -268,7 +271,7 @@ function isUncommittedAggregateConflictContinuation(turn, turns, messages) {
 export function reconcileUncommittedAggregateConflictContinuations(document = {}) {
   if (!isPlainObject(document)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), {
-      code: "SESSION_REPAIR_SOURCE_INVALID",
+      code: SESSION_REPAIR_ERROR_CODE.REPAIR_SOURCE_INVALID,
     });
   }
   const next = structuredClone(document);
@@ -317,7 +320,7 @@ function migrateEventTypedReceipt(context, receipt, eventType, commandIdMap) {
   if (text(receipt.type) && text(receipt.type) !== eventType) {
     throw migrationError(
       "Session lifecycle receipt type is ambiguous",
-      "SESSION_COMMAND_RECEIPT_TYPE_CONFLICT",
+      SESSION_REPAIR_ERROR_CODE.COMMAND_RECEIPT_TYPE_CONFLICT,
     );
   }
   const originalCommandId = text(receipt.commandId);
@@ -329,7 +332,7 @@ function migrateEventTypedReceipt(context, receipt, eventType, commandIdMap) {
   if (!commandId) {
     throw migrationError(
       "Session lifecycle receipt cannot be migrated",
-      "SESSION_COMMAND_RECEIPT_UNMIGRATABLE",
+      SESSION_REPAIR_ERROR_CODE.COMMAND_RECEIPT_UNMIGRATABLE,
     );
   }
   commandIdMap.set(originalCommandId, commandId);
@@ -361,23 +364,52 @@ function remapLifecycleCommandIds(context, commandIdMap) {
   context.migrations.push("turn-lifecycle-command-receipts-v1");
 }
 
+function dropLegacyTurnCommitRunState(receipt) {
+  if (receipt.type !== SESSION_COMMAND.TURN_COMMIT) return receipt;
+  if (!isPlainObject(receipt.result) || !Object.hasOwn(receipt.result, "runState")) return receipt;
+  const { runState: _runState, ...result } = receipt.result;
+  return { ...receipt, result };
+}
+
+function canonicalLegacyCommandReceipt(receipt) {
+  const normalized = normalizeCommandReceipt(dropLegacyTurnCommitRunState(receipt));
+  if (!normalized) {
+    throw migrationError(
+      "Session command receipt cannot be migrated to the canonical shape",
+      SESSION_REPAIR_ERROR_CODE.COMMAND_RECEIPT_UNMIGRATABLE,
+    );
+  }
+  return normalized;
+}
+
 function migrateLifecycleCommandReceipts(context) {
   const { lifecycle } = context;
-  const commandReceipts = Array.isArray(lifecycle.commandReceipts) ? lifecycle.commandReceipts : [];
   const commandIdMap = new Map();
-  let normalizedCommandReceipts = false;
-  lifecycle.commandReceipts = commandReceipts.map((receipt) => {
-    if (!isPlainObject(receipt)) return receipt;
+  const eventTypedCommandIds = new Set();
+  lifecycle.commandReceipts = lifecycle.commandReceipts.map((receipt) => {
+    if (!isPlainObject(receipt)) {
+      throw migrationError(
+        "Session command receipt must be an object",
+        SESSION_REPAIR_ERROR_CODE.COMMAND_RECEIPT_UNMIGRATABLE,
+      );
+    }
     const eventType = text(receipt.eventType);
-    if (eventType) return migrateEventTypedReceipt(context, receipt, eventType, commandIdMap);
-    if (!context.migrateArtifactProtocol) return receipt;
-    const normalized = normalizeCommandReceipt(receipt);
-    if (!normalized) return receipt;
+    if (!eventType) return receipt;
+    const migrated = migrateEventTypedReceipt(context, receipt, eventType, commandIdMap);
+    eventTypedCommandIds.add(migrated.commandId);
+    return migrated;
+  });
+  if (commandIdMap.size) remapLifecycleCommandIds(context, commandIdMap);
+  migrateCanonicalCommandReceipts(context);
+  if (!context.migrateArtifactProtocol) return;
+  let normalizedCommandReceipts = false;
+  lifecycle.commandReceipts = lifecycle.commandReceipts.map((receipt) => {
+    if (eventTypedCommandIds.has(receipt.commandId)) return receipt;
+    const normalized = canonicalLegacyCommandReceipt(receipt);
     if (JSON.stringify(normalized) !== JSON.stringify(receipt)) normalizedCommandReceipts = true;
     return normalized;
   });
   if (normalizedCommandReceipts) markMigrated(context, "session-command-receipt-canonical-v1");
-  if (commandIdMap.size) remapLifecycleCommandIds(context, commandIdMap);
 }
 
 function terminalStatusMatches(status, turns) {
@@ -399,7 +431,7 @@ function migrateTurnStatuses(context) {
     if (!terminalStatusMatches(status, context.turns)) {
       throw migrationError(
         "Session terminal fact sources conflict",
-        "SESSION_TERMINAL_FACT_CONFLICT",
+        SESSION_REPAIR_ERROR_CODE.TERMINAL_FACT_CONFLICT,
       );
     }
   }
@@ -437,7 +469,7 @@ function migrateTurnTerminalStatusShape(context) {
     if (!rebuilt) {
       throw migrationError(
         "Session turn terminalStatus is not a protocol terminal status",
-        "SESSION_TURN_TERMINAL_STATUS_UNMIGRATABLE",
+        SESSION_REPAIR_ERROR_CODE.TURN_TERMINAL_STATUS_UNMIGRATABLE,
       );
     }
     turn.terminalStatus = { ...rebuilt };
@@ -496,7 +528,7 @@ function migrateMutationReceipt(lifecycle, receipt) {
   if (!type || !commandId || !text(receipt?.requestHash)) {
     throw migrationError(
       "Session mutation receipt cannot be migrated",
-      "SESSION_MUTATION_RECEIPT_UNMIGRATABLE",
+      SESSION_REPAIR_ERROR_CODE.MUTATION_RECEIPT_UNMIGRATABLE,
     );
   }
   const existing = lifecycle.commandReceipts.find((item) => text(item?.commandId) === commandId);
@@ -504,7 +536,7 @@ function migrateMutationReceipt(lifecycle, receipt) {
     if (text(existing.type) !== type || text(existing.requestHash) !== text(receipt.requestHash)) {
       throw migrationError(
         "Session command receipt sources conflict",
-        "SESSION_COMMAND_RECEIPT_CONFLICT",
+        SESSION_REPAIR_ERROR_CODE.COMMAND_RECEIPT_CONFLICT,
       );
     }
     return;
@@ -515,7 +547,7 @@ function migrateMutationReceipt(lifecycle, receipt) {
     requestHash: text(receipt.requestHash),
     aggregateVersion: requireAggregateVersion(
       receipt.aggregateVersion,
-      "SESSION_MUTATION_RECEIPT_UNMIGRATABLE",
+      SESSION_REPAIR_ERROR_CODE.MUTATION_RECEIPT_UNMIGRATABLE,
     ),
     result: isPlainObject(receipt.result) ? structuredClone(receipt.result) : {},
     committedAt: text(receipt.committedAt),
@@ -549,12 +581,15 @@ function resolveContractAggregateVersion(next, lifecycle) {
     if (new Set(candidates).size !== 1) {
       throw migrationError(
         "Session aggregate version fields conflict",
-        "SESSION_AGGREGATE_VERSION_UNMIGRATABLE",
+        SESSION_REPAIR_ERROR_CODE.AGGREGATE_VERSION_UNMIGRATABLE,
       );
     }
     delete next.version;
     delete next.revision;
-    return requireAggregateVersion(candidates[0], "SESSION_AGGREGATE_VERSION_UNMIGRATABLE");
+    return requireAggregateVersion(
+      candidates[0],
+      SESSION_REPAIR_ERROR_CODE.AGGREGATE_VERSION_UNMIGRATABLE,
+    );
   }
   if (Object.hasOwn(next, "aggregateVersion")) {
     return requireAggregateVersion(
@@ -565,7 +600,7 @@ function resolveContractAggregateVersion(next, lifecycle) {
   if (isUncommittedSessionDocument(next, lifecycle)) return 0;
   throw migrationError(
     "Session aggregate version is missing for a committed Session",
-    "SESSION_AGGREGATE_VERSION_UNMIGRATABLE",
+    SESSION_REPAIR_ERROR_CODE.AGGREGATE_VERSION_UNMIGRATABLE,
   );
 }
 
@@ -636,9 +671,9 @@ function migrateDocumentMessages(context) {
 function resolveReplacementDialogProcessId(context, replacement) {
   const { next } = context;
   const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
-  const replacementUserMessageId = text(replacement.replacementUserMessageId);
+  const replacementUserMessageUid = text(replacement.replacementUserMessageUid);
   const message = (Array.isArray(next.messages) ? next.messages : []).find(
-    (item) => text(item.messageId || item.messageUid) === replacementUserMessageId,
+    (item) => text(item.messageUid) === replacementUserMessageUid,
   );
   const turn = (Array.isArray(next.turnOrder) ? next.turnOrder : []).find(
     (item) => text(item.turnScopeId) === replacementTurnScopeId,
@@ -647,7 +682,7 @@ function resolveReplacementDialogProcessId(context, replacement) {
   if (!resolved) {
     throw migrationError(
       `Cannot migrate replacement dialog identity for Session ${context.sessionId}`,
-      "SESSION_REPLACEMENT_IDENTITY_UNMIGRATABLE",
+      SESSION_REPAIR_ERROR_CODE.REPLACEMENT_IDENTITY_UNMIGRATABLE,
       Error,
     );
   }
@@ -699,7 +734,7 @@ function createDocumentMigrationContext(document) {
   if (!isPlainObject(document)) {
     throw migrationError(
       "Session repair source must be an object",
-      "SESSION_REPAIR_SOURCE_INVALID",
+      SESSION_REPAIR_ERROR_CODE.REPAIR_SOURCE_INVALID,
     );
   }
   const next = structuredClone(document);
@@ -724,6 +759,7 @@ function createDocumentMigrationContext(document) {
     sessionId,
     sourceSchemaVersion,
     transferMigration,
+    droppedCommandReceiptIds: [],
     migrateArtifactProtocol:
       sourceSchemaVersion <= SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   };
@@ -737,6 +773,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateTurnCommitReceipts,
   migrateMutationReceipts,
   migrateDocumentMessages,
+  migrateMessageIdentity,
   migrateReplacedTurns,
   dropLegacyTerminalCommits,
   migrateWriteTimeDialogFacts,
@@ -754,6 +791,7 @@ export function migrateSessionDocument(document = {}) {
     document: context.next,
     changed: context.changed,
     migrations: context.migrations,
+    droppedCommandReceiptIds: context.droppedCommandReceiptIds,
     legacyAuthorityEventOutbox,
   };
 }

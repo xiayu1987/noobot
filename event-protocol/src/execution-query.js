@@ -13,6 +13,7 @@ import { isPlainObject, text } from "@noobot/shared/value";
 import { createEventEnvelope } from "./envelope.js";
 
 export const EXECUTION_QUERY_SEQUENCE_DOMAIN = "execution";
+export const EXECUTION_QUERY_SCHEMA_VERSION = 1;
 
 const EXECUTION_QUERY_PRODUCER = Object.freeze({ type: "domain-service", id: "execution-query" });
 
@@ -140,6 +141,7 @@ export function createExecutionQueryEnvelope({
   }
   const envelope = createEventEnvelope({
     family: CONTRACT[wireEvent].family,
+    schemaVersion: EXECUTION_QUERY_SCHEMA_VERSION,
     identity: {
       eventId: `${commandId}:${wireEvent}`,
       eventType: wireEvent,

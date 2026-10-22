@@ -8,7 +8,7 @@ import { emitEvent } from "../../events/index.js";
 import { runBotRuntimeHook } from "../hook/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { syncLifecycleRuntimeState } from "../../runtime/lifecycle/state-machine.js";
-import { saveStoppedModelMessageSnapshotCandidate } from "../../runtime/resume/model-message-snapshot-store.js";
+import { saveStoppedModelMessageSnapshotFromRuntime } from "../../runtime/resume/model-message-snapshot-store.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import { dispatchAgentTurn } from "./runner/agent-dispatch.js";
 import {
@@ -98,6 +98,7 @@ export class SessionExecutionRunner {
   } = {}) {
     for (const [name, dependency] of Object.entries({
       agentRunner,
+      prepareRunConfig,
       buildContextBuilder,
       prepareTurnInput,
       assertReusedUserTurnIdentity,
@@ -160,6 +161,7 @@ export class SessionExecutionRunner {
       );
     }
     let resolvedRunConfig = runConfig;
+    let preparedBotHookManager = null;
     let resolvedUsedSessionId = sessionId;
     let resolvedDialogProcessId = "";
     let failureTurnScopeId = turnScopeId;
@@ -168,14 +170,12 @@ export class SessionExecutionRunner {
     let lifecycle = null;
     let lifecycleRuntime = null;
     let pluginActivationScope = null;
-    const persistStoppedSnapshotFromRuntime = (source = "") => {
-      return saveStoppedModelMessageSnapshotCandidate({
-        globalConfig: lifecycleRuntime?.globalConfig || {},
-        candidate: lifecycleRuntime?.stoppedModelMessageSnapshotCandidate,
+    const persistStoppedSnapshotFromRuntime = (source) =>
+      saveStoppedModelMessageSnapshotFromRuntime({
+        runtime: lifecycleRuntime,
         eventListener: resolvedRuntimeEventListener,
         source,
       });
-    };
     try {
       const initializedRun = await initializeSessionRun({
         normalizeRunMessage: this.normalizeRunMessage,
@@ -225,6 +225,7 @@ export class SessionExecutionRunner {
         botHookBase,
       } = initializedRun;
       resolvedRunConfig = initializedRunConfig;
+      preparedBotHookManager = initializedRunConfig.botHookManager;
       pluginActivationScope = initializedRunConfig?.pluginActivationScope || null;
       delete initializedRunConfig.pluginActivationScope;
       resolvedUsedSessionId = usedSessionId;
@@ -373,6 +374,7 @@ export class SessionExecutionRunner {
         persistStoppedSnapshotFromRuntime,
         resolvedRuntimeEventListener,
         resolvedRunConfig,
+        preparedBotHookManager,
         resolvedUsedSessionId,
         resolvedDialogProcessId,
         saveExecutionReport: this.saveExecutionReport,

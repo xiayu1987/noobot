@@ -35,7 +35,7 @@ function stopCommand(turnScopeId) {
   return createTurnStopCommand({
     identity: { sessionId: "session-stop", turnScopeId },
     concurrency: { expectedTurnRevision: 1 },
-    stop: { partialAssistant: { content: "" } },
+    stop: {},
   });
 }
 

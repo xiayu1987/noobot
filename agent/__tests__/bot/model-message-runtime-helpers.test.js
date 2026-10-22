@@ -10,7 +10,7 @@ import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/m
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import {
   readContextMessageValue,
-  resolveContextMessageId,
+  resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
@@ -82,13 +82,13 @@ test("ModelMessageRuntimeHelpers preserves canonical identity across normalized 
       ],
     },
   });
-  const sourceIds = modelContext.messages.map(resolveContextMessageId);
+  const sourceIds = modelContext.messages.map(resolveContextMessageKey);
 
   const resolved = resolver({ ctx: { agentContext, modelContext } });
 
   assert.equal(resolved[0], modelContext.messageBlocks.history[0]);
   assert.equal(resolved[1], modelContext.messageBlocks.incremental[0]);
-  assert.deepEqual(resolved.map(resolveContextMessageId), sourceIds);
+  assert.deepEqual(resolved.map(resolveContextMessageKey), sourceIds);
   assert.deepEqual(
     resolved.map((message) => readContextMessageValue(message, "turnScopeId")),
     ["t1", "t2"],

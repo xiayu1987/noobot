@@ -252,6 +252,19 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
   return Object.freeze({ on, once, off, clear, list, emit });
 }
 
+export function assertOptionalHookManager(manager, label = "hookManager") {
+  if (manager === null) return null;
+  if (
+    manager &&
+    typeof manager === "object" &&
+    typeof manager.on === "function" &&
+    typeof manager.emit === "function"
+  ) {
+    return manager;
+  }
+  throw new TypeError(`${label} must be a hook manager with on/emit or null`);
+}
+
 export function createEmptyHookResult(point, context = {}) {
   const descriptor = requireHookPointDescriptor(point);
   return Object.freeze({

@@ -26,9 +26,12 @@ export function getToolsFromAgentContext(scope = {}) {
   return tools;
 }
 
-export function getSystemRuntimeFromRuntime(runtime = {}) {
+export function getSystemRuntimeFromRuntime(runtime) {
   const systemRuntime = runtime?.systemRuntime;
-  return systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {};
+  if (!isPlainObject(systemRuntime)) {
+    throw new TypeError("runtime.systemRuntime is required");
+  }
+  return systemRuntime;
 }
 
 export function resolveRuntimeTurnScopeId(runtime = {}) {

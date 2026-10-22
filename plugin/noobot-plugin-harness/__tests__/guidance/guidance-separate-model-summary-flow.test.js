@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestModelResponse,
+  readTestMainFlowControl,
+} from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -66,10 +69,7 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
   assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, undefined);
   assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
   assert.deepEqual(
-    new Set(
-      agentContext.bindings.runtime.systemRuntime.mainFlowControlInstructions[0]
-        .summarizedMessageIds,
-    ),
+    new Set(readTestMainFlowControl(agentContext).summaryCheckpoints[0].summarizedMessageUids),
     new Set(
       ctx.modelContext.messageBlocks.incremental
         .slice(0, 2)
@@ -119,7 +119,7 @@ test("failed separate-model summary remains pending until a checkpoint succeeds"
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
   assert.ok(
     Array.isArray(
-      agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageIds,
+      agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys,
     ),
   );
   assert.equal(

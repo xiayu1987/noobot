@@ -32,11 +32,11 @@ function contextFor(messages, logSessionEvent = vi.fn()) {
     channelSessionId: "session-1",
     sessionId: "session-1",
     turnScopeId: "turn-1",
-    findCanonicalMessageById(sessionId, messageId) {
-      return (
-        messages.find(
-          (message) => message.sessionId === sessionId && message.messageId === messageId,
-        ) || null
+    findMessagesByPresentationId(sessionId, presentationMessageId) {
+      return messages.filter(
+        (message) =>
+          message.sessionId === sessionId &&
+          message.presentationMessageId === presentationMessageId,
       );
     },
     logSessionEvent,
@@ -81,8 +81,7 @@ describe("live canonical message projection", () => {
   it("rejects a split presentation identity without creating a second assistant entity", () => {
     const messages = [
       {
-        id: "assistant-message-1",
-        messageId: "assistant-message-1",
+        presentationMessageId: "assistant-message-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
         role: "assistant",
@@ -104,7 +103,10 @@ describe("live canonical message projection", () => {
     ).toBe(true);
 
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatchObject({ messageId: "assistant-message-1", content: "" });
+    expect(messages[0]).toMatchObject({
+      presentationMessageId: "assistant-message-1",
+      content: "",
+    });
     expect(logSessionEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         event: "frontend.messageEvent.reduced",
@@ -120,8 +122,7 @@ describe("live canonical message projection", () => {
   it("does not project a child authority message into the root channel Session", () => {
     const messages = [
       {
-        id: "assistant-message-1",
-        messageId: "assistant-message-1",
+        presentationMessageId: "assistant-message-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
         role: "assistant",
@@ -159,8 +160,7 @@ describe("live canonical message projection", () => {
   it("keeps the canonical entity set identical after live completion and snapshot hydration", () => {
     const messages = [
       {
-        id: "assistant-message-1",
-        messageId: "assistant-message-1",
+        presentationMessageId: "assistant-message-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
         role: "assistant",
@@ -172,7 +172,7 @@ describe("live canonical message projection", () => {
     expect(routeMessageProjectionEvent("message_event", packet(finalEvent()), context)).toBe(true);
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
-      messageId: "assistant-message-1",
+      presentationMessageId: "assistant-message-1",
       content: "final answer",
     });
     expect(context.logSessionEvent).not.toHaveBeenCalled();
@@ -199,8 +199,7 @@ describe("live canonical message projection", () => {
     const hydration = hydrateTurnSnapshot({
       targetMessage: messages[0],
       snapshot: {
-        id: "assistant-message-1",
-        messageId: "assistant-message-1",
+        presentationMessageId: "assistant-message-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
         role: "assistant",

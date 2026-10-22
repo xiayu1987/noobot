@@ -103,15 +103,7 @@ export async function runCliTurn({
           dialogProcessId: tracker.state.dialogProcessId,
         },
         concurrency: { expectedTurnRevision: tracker.state.revision },
-        stop: {
-          executionId: tracker.state.executionId,
-          partialAssistant: {
-            content: tracker.content(),
-            dialogProcessId: tracker.state.dialogProcessId,
-            turnScopeId: identity.turnScopeId,
-            createdAtMs: Date.now(),
-          },
-        },
+        stop: { executionId: tracker.state.executionId },
       }),
     );
     return true;

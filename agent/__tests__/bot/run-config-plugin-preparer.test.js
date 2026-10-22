@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { RunConfigPluginPreparer } from "../../src/bot/session/run-config-plugin-preparer.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestModelHost } from "../helpers/test-model-host.js";
 
@@ -70,8 +71,8 @@ test("pluginPolicy none disables plugin selection for tool sub-sessions", () => 
     },
   });
   assert.deepEqual(prepared.selectedPlugins, []);
-  assert.equal(prepared.hookManager, undefined);
-  assert.equal(prepared.botHookManager, undefined);
+  assert.equal(prepared.hookManager, null);
+  assert.equal(prepared.botHookManager, null);
 });
 
 test("activates selected Manifest ids and scopes declared hook registrations", () => {
@@ -233,10 +234,10 @@ test("agent lifecycle capability invoker prefixes flow with the plugin id", asyn
       throw new Error("request captured");
     },
   };
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     modelHost: createTestModelHost({ modelPort, modelSpec: {} }),
     systemRuntime: { turnScopeId: "turn-demo" },
-  };
+  });
   await assert.rejects(
     prepared.plugins.demo.capabilityModelInvoker({
       purpose: "planning",

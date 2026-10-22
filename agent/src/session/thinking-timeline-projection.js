@@ -70,8 +70,6 @@ function selectThinkingRootMessage(messages = [], filters = {}) {
         normalizeThinkingRoute(item?.presentationMessageId) === presentationMessageIds[0],
     ) || {};
   return {
-    id: presentationMessageIds[0],
-    messageId: presentationMessageIds[0],
     presentationMessageId: presentationMessageIds[0],
     role: "assistant",
     type: "message",

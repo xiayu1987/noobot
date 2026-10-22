@@ -75,7 +75,8 @@ function hasNothingToSend(normalized, { uploadFiles }) {
 function isUnresolvableUserTurnReuse(normalized, { activeSession }) {
   if (!normalized.reuseExistingUserTurn) return false;
   const existingUserMessage = (activeSession.value?.messages || []).find(
-    (message) => normalizeTrimmedString(message?.messageId) === normalized.requestedUserMessageId,
+    (message) =>
+      normalizeTrimmedString(message?.userMessageId) === normalized.requestedUserMessageId,
   );
   return !normalized.requestedUserMessageId || !existingUserMessage;
 }

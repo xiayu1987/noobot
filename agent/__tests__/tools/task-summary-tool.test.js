@@ -6,6 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createTaskSummaryTool } from "../../src/tools/collaboration/task-summary-tool.js";
+import { peekMainFlowFinalNoToolsTurnInstruction } from "../../src/runtime/main-flow-control.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function summaryContent(state = "CONTINUE") {
   return [
@@ -30,15 +33,15 @@ function createTool() {
     needsPhaseSummary: true,
     phaseSummaryLoopCount: 3,
   };
-  const runtime = { systemRuntime };
+  const runtime = createTestRuntimeContext({ systemRuntime });
   const [tool] = createTaskSummaryTool({
-    agentContext: { bindings: { runtime } },
+    agentContext: createTestAgentExecutionScope(runtime),
   });
   return { tool, runtime, systemRuntime };
 }
 
 test("task_summary returns only the derived receipt for CONTINUE", async () => {
-  const { tool, systemRuntime } = createTool();
+  const { tool, runtime, systemRuntime } = createTool();
   const fullContent = summaryContent();
   const payload = JSON.parse(await tool.invoke({ summaryContent: fullContent }));
 
@@ -54,7 +57,7 @@ test("task_summary returns only the derived receipt for CONTINUE", async () => {
   assert.match(payload.summary.contentHash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(JSON.stringify(payload).includes(fullContent), false);
   assert.equal(payload.summary.details, undefined);
-  assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(runtime), null);
   assert.equal(systemRuntime.needsPhaseSummary, false);
   assert.equal(systemRuntime.phaseSummaryLoopCount, 0);
 });
@@ -64,13 +67,13 @@ for (const [state, reason] of [
   ["BLOCKED", "task_summary_blocked"],
 ]) {
   test(`task_summary ${state} requests the canonical final no-tools turn`, async () => {
-    const { tool, systemRuntime } = createTool();
+    const { tool, runtime } = createTool();
     const payload = JSON.parse(await tool.invoke({ summaryContent: summaryContent(state) }));
     assert.equal(payload.summary.state, state);
-    assert.equal(systemRuntime.mainFlowControlInstruction.action, "final_no_tools_turn");
-    assert.equal(systemRuntime.mainFlowControlInstruction.reason, reason);
-    assert.equal(systemRuntime.mainFlowControlInstruction.source, "task_summary");
-    assert.deepEqual(systemRuntime.mainFlowControlInstruction.detail, payload.summary);
+    assert.equal(peekMainFlowFinalNoToolsTurnInstruction(runtime).action, "final_no_tools_turn");
+    assert.equal(peekMainFlowFinalNoToolsTurnInstruction(runtime).reason, reason);
+    assert.equal(peekMainFlowFinalNoToolsTurnInstruction(runtime).source, "task_summary");
+    assert.deepEqual(peekMainFlowFinalNoToolsTurnInstruction(runtime).detail, payload.summary);
   });
 }
 
@@ -91,18 +94,18 @@ test("task_summary receipt message only states the submitted state's next step",
 });
 
 test("task_summary rejects non-protocol text without mutating summary state", async () => {
-  const { tool, systemRuntime } = createTool();
+  const { tool, runtime, systemRuntime } = createTool();
   await assert.rejects(
     tool.invoke({ summaryContent: "普通自由文本小结" }),
     (error) => error?.code === "RECOVERABLE_INVALID_TOOL_INPUT",
   );
   assert.equal(systemRuntime.needsPhaseSummary, true);
   assert.equal(systemRuntime.phaseSummaryLoopCount, 3);
-  assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(runtime), null);
 });
 
 test("task_summary rejects calls that were not requested by the runtime", async () => {
-  const { tool, systemRuntime } = createTool();
+  const { tool, runtime, systemRuntime } = createTool();
   systemRuntime.needsPhaseSummary = false;
   await assert.rejects(
     tool.invoke({ summaryContent: summaryContent() }),
@@ -110,5 +113,5 @@ test("task_summary rejects calls that were not requested by the runtime", async 
   );
   assert.equal(systemRuntime.needsPhaseSummary, false);
   assert.equal(systemRuntime.phaseSummaryLoopCount, 3);
-  assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(runtime), null);
 });

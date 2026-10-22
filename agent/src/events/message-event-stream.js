@@ -3,11 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { requireCommittedAuthorityEvent } from "@noobot/event-protocol/outbox";
 import { createModelMessageId } from "@noobot/session-protocol/message-identity";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import {
   EVENT_FAMILY,
   createEventEnvelope,
+  getEventFamily,
   createEventId,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
@@ -16,56 +18,42 @@ import {
   MODEL_MESSAGE_SCOPED_EVENT_TYPES,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
+  MESSAGE_RUNTIME_PRODUCER,
   TRANSIENT_MESSAGE_EVENT_SEQUENCE,
   assertMessageEventPayload,
   isTransientMessageEventType,
 } from "@noobot/event-protocol/message-event";
 import { AGENT_RUN_EVENT } from "./run-event.js";
-import { firstText, text, isObjectLike } from "@noobot/shared/value";
+import { isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 export { assertMessageEventPayload };
 
+export function createMessageEventStreamState() {
+  return {
+    activePresentationMessageId: "",
+    parentSessionId: "",
+    workflowRunId: "",
+    nodeExecutionId: "",
+    activeAssistantDraft: null,
+    activeTurn: 0,
+  };
+}
+
 function runtimeState(runtime) {
-  const systemRuntime = runtime?.systemRuntime;
-  if (!isObjectLike(systemRuntime)) {
+  const systemRuntime = runtime.systemRuntime;
+  if (!isObjectLike(systemRuntime) || !isObjectLike(systemRuntime.messageEventStream)) {
     throw new TypeError(
-      "message event stream requires runtime.systemRuntime from createRuntimeContext",
+      "message event stream requires runtime.systemRuntime.messageEventStream from createRuntimeContext",
     );
-  }
-  if (!isObjectLike(systemRuntime.messageEventStream)) {
-    systemRuntime.messageEventStream = { activePresentationMessageId: "" };
   }
   return systemRuntime;
 }
 
-function resolveRequestedStreamIdentity(runConfig, state, requested) {
-  const config = state.config || {};
-  return {
-    presentationMessageId: firstText(
-      requested.presentationMessageId,
-      runConfig.presentationMessageId,
-      config.presentationMessageId,
-    ),
-
-    parentSessionId: requested.parentSessionId,
-    workflowRunId: firstText(
-      requested.workflowRunId,
-      runConfig.workflowRunId,
-      config.workflowRunId,
-    ),
-    nodeExecutionId: firstText(
-      requested.nodeExecutionId,
-      runConfig.workflowNodeExecutionId,
-      runConfig.nodeExecutionId,
-      config.workflowNodeExecutionId,
-      config.nodeExecutionId,
-    ),
-  };
-}
-
 function assertRequestedStreamIdentity(identity) {
-  if (typeof identity.parentSessionId !== "string") {
-    throw new TypeError("turn message event parentSessionId must be a string");
+  for (const [, identityKey] of STREAM_IDENTITY_BINDINGS) {
+    if (typeof identity[identityKey] !== "string") {
+      throw new TypeError(`turn message event ${identityKey} must be a string`);
+    }
   }
   if (!identity.presentationMessageId) {
     throw new Error("turn message event identity is incomplete");
@@ -87,7 +75,7 @@ const STREAM_IDENTITY_BINDINGS = Object.freeze([
 
 function assertStreamIdentityCompatible(stream, identity) {
   for (const [streamKey, identityKey] of STREAM_IDENTITY_BINDINGS) {
-    const current = text(stream[streamKey]);
+    const current = stream[streamKey];
     if (current && current !== identity[identityKey]) {
       throw new Error(`turn message event ${identityKey} conflict`);
     }
@@ -95,16 +83,11 @@ function assertStreamIdentityCompatible(stream, identity) {
 }
 
 export function bindAssistantMessageEventStream(
-  runtime = {},
-  { presentationMessageId = "", parentSessionId, workflowRunId = "", nodeExecutionId = "" } = {},
+  runtime,
+  { presentationMessageId, parentSessionId, workflowRunId, nodeExecutionId },
 ) {
   const state = runtimeState(runtime);
-  const identity = resolveRequestedStreamIdentity(runtime?.runConfig || {}, state, {
-    presentationMessageId,
-    parentSessionId,
-    workflowRunId,
-    nodeExecutionId,
-  });
+  const identity = { presentationMessageId, parentSessionId, workflowRunId, nodeExecutionId };
   assertRequestedStreamIdentity(identity);
   const stream = state.messageEventStream;
   assertStreamIdentityCompatible(stream, identity);
@@ -114,46 +97,76 @@ export function bindAssistantMessageEventStream(
   return stream;
 }
 
-export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}) {
+export function beginAssistantMessageEventStream(runtime, { turn, modelAlias, modelName }) {
+  if (!Number.isInteger(turn) || turn < 0) {
+    throw new TypeError("assistant message stream turn must be an integer >= 0");
+  }
   const state = runtimeState(runtime);
   const stream = state.messageEventStream;
-  if (!text(stream.activePresentationMessageId)) {
+  if (!stream.activePresentationMessageId) {
     throw new Error("Turn message event domain must be bound before model invocation");
   }
   const modelMessageId = createModelMessageId();
-  stream.activeModelMessageId = modelMessageId;
-  state.messageEventStream.activeTurn = Number(turn || 0);
+
+  stream.activeAssistantDraft = {
+    modelMessageId,
+    content: "",
+    modelAlias,
+    modelName,
+    committed: false,
+  };
+  stream.activeTurn = turn;
   return modelMessageId;
 }
 
-export function currentAssistantPresentationMessageId(runtime = {}) {
-  return text(runtimeState(runtime)?.messageEventStream?.activePresentationMessageId);
+export function appendAssistantDraftContent(runtime, visibleText) {
+  if (typeof visibleText !== "string") {
+    throw new TypeError("assistant draft content must be a string");
+  }
+  const draft = runtimeState(runtime).messageEventStream.activeAssistantDraft;
+  if (!draft) throw new Error("assistant draft requires an active model message stream");
+  draft.content += visibleText;
 }
 
-function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
+export function currentAssistantDraft(runtime) {
+  const draft = runtimeState(runtime).messageEventStream.activeAssistantDraft;
+  return draft ? Object.freeze({ ...draft }) : null;
+}
+
+export function markAssistantDraftCommitted(runtime, modelMessageId) {
+  const draft = runtimeState(runtime).messageEventStream.activeAssistantDraft;
+  if (draft && draft.modelMessageId === modelMessageId) draft.committed = true;
+}
+
+export function currentAssistantPresentationMessageId(runtime) {
+  return runtimeState(runtime).messageEventStream.activePresentationMessageId;
+}
+
+function createMessageEventPayload(runtime, eventType, data) {
   const state = runtimeState(runtime);
-  const stream = state.messageEventStream || (state.messageEventStream = {});
-  const presentationMessageId = text(stream.activePresentationMessageId);
-  if (data?.messageId !== undefined || data?.presentationMessageId !== undefined) {
+  const stream = state.messageEventStream;
+  const presentationMessageId = stream.activePresentationMessageId;
+  if (!isPlainObject(data)) {
+    throw new TypeError(`message event data must be a plain object: ${eventType}`);
+  }
+  if (Object.hasOwn(data, "messageId") || Object.hasOwn(data, "presentationMessageId")) {
     throw new Error(`message event payload must not carry stream identity: ${eventType}`);
   }
   if (!presentationMessageId) {
     throw new Error(`authoritative message event requires presentationMessageId: ${eventType}`);
   }
-  const toolCallId = text(data?.toolCallId);
-
-  const modelScoped = MODEL_MESSAGE_SCOPED_EVENT_TYPES.has(text(eventType));
-  const modelMessageId = modelScoped ? text(stream.activeModelMessageId) : "";
+  const draft = stream.activeAssistantDraft;
+  const modelMessageId =
+    MODEL_MESSAGE_SCOPED_EVENT_TYPES.has(eventType) && draft !== null ? draft.modelMessageId : "";
   const payload = deepFreeze({
     ...data,
-    eventType: text(eventType),
-    parentSessionId: text(stream.parentSessionId),
-    dialogProcessId: text(state?.dialogProcessId),
-    ...(text(stream.workflowRunId) ? { workflowRunId: text(stream.workflowRunId) } : {}),
-    ...(text(stream.nodeExecutionId) ? { nodeExecutionId: text(stream.nodeExecutionId) } : {}),
+    eventType,
+    parentSessionId: stream.parentSessionId,
+    dialogProcessId: state.dialogProcessId,
+    ...(stream.workflowRunId ? { workflowRunId: stream.workflowRunId } : {}),
+    ...(stream.nodeExecutionId ? { nodeExecutionId: stream.nodeExecutionId } : {}),
     presentationMessageId,
     ...(modelMessageId ? { modelMessageId } : {}),
-    ...(toolCallId ? { toolCallId } : {}),
   });
   assertMessageEventPayload(payload);
   return payload;
@@ -161,12 +174,13 @@ function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
 
 function messageEventCommitInput(runtime, state, payload) {
   return {
-    userId: text(runtime?.systemRuntime?.userId),
-    sessionId: text(state?.sessionId),
-    turnScopeId: text(state?.turnScopeId),
-    executionId: text(runtime?.runConfig?.executionId),
-    commandId: text(runtime?.runConfig?.commandId),
-    correlationId: text(runtime?.runConfig?.turnScopeId),
+    userId: state.userId,
+    sessionId: state.sessionId,
+    turnScopeId: state.turnScopeId,
+    executionId: runtime.runConfig.executionId,
+    commandId: runtime.runConfig.commandId,
+    correlationId: state.turnScopeId,
+    producer: MESSAGE_RUNTIME_PRODUCER,
     payload,
     persistenceScope: state.persistenceScope,
   };
@@ -178,6 +192,7 @@ function createTransientMessageEventEnvelope(input) {
   }
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: createEventId(),
       eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -195,7 +210,7 @@ function createTransientMessageEventEnvelope(input) {
       scopeId: input.payload.presentationMessageId,
       sequence: TRANSIENT_MESSAGE_EVENT_SEQUENCE,
     },
-    producer: { type: "agent", id: "message-runtime" },
+    producer: input.producer,
     occurredAt: new Date().toISOString(),
     payload: input.payload,
   });
@@ -207,26 +222,17 @@ function createTransientMessageEventEnvelope(input) {
 }
 
 async function commitDurableMessageEvent(runtime, input) {
-  const committed = await runtime?.sessionManager?.commitMessageEvent?.(input);
-  if (!committed?.committed || !committed?.envelope) {
-    throw new Error(`authoritative message event commit failed: ${committed?.reason || "unknown"}`);
-  }
-  return committed.envelope;
+  return requireCommittedAuthorityEvent(await runtime.sessionManager.commitMessageEvent(input));
 }
 
-export async function emitMessageEvent(eventListener, runtime = {}, eventType = "", data = {}) {
+export async function emitMessageEvent(eventListener, runtime, eventType, data) {
   const payload = createMessageEventPayload(runtime, eventType, data);
   const state = runtimeState(runtime);
   const input = messageEventCommitInput(runtime, state, payload);
   const envelope = isTransientMessageEventType(payload.eventType)
     ? createTransientMessageEventEnvelope(input)
     : await commitDurableMessageEvent(runtime, input);
-  const projected = await runtime?.projectCurrentTurnMessageEvent?.(envelope);
-  if (runtime?.projectCurrentTurnMessageEvent && !projected) {
-    throw new Error(
-      `canonical message event projector rejected event: ${envelope.identity.eventId}`,
-    );
-  }
+  await runtime.projectCurrentTurnMessageEvent(envelope);
   await emitEvent(eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope,
     persistenceScope: state.persistenceScope,

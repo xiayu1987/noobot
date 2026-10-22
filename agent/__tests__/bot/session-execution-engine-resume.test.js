@@ -145,7 +145,6 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
           additional_kwargs: {
             messageUid: "source-user",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             dialogProcessId: "dialog-stopped",
             turnScopeId: "turn-stopped",
           },
@@ -167,7 +166,6 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
             messageUid: "source-user",
             content: "incremental",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             attachments: [
               {
                 attachmentId: "attachment-source",

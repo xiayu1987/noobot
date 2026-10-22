@@ -19,14 +19,14 @@ function createActions({
   applyRunStateEvent = vi.fn(),
 } = {}) {
   const userMessage = {
-    id: "u1",
+    messageUid: "u1",
     role: RoleEnum.USER,
     content: "hello",
     turnScopeId: "turn-1",
     ts: "2026-07-02T00:00:00.000Z",
   };
   const assistantMessage = {
-    id: "a1",
+    presentationMessageId: "a1",
     role: RoleEnum.ASSISTANT,
     content: "world",
     turnScopeId: "turn-1",

@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEventEnvelope } from "@noobot/event-protocol/envelope";
+import { getEventFamily } from "@noobot/event-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -17,7 +19,7 @@ test("workflow authority commit uses the protocol persistence scope", async () =
     relativeDir: "runtime/plugin-data/workflow/session/child-session/node-1",
     allowedRoot: "runtime/plugin-data/workflow/session",
   });
-  const envelope = { identity: { eventId: "workflow-event-1" } };
+  let envelope = null;
   const ctx = {
     userId: "user-1",
     sessionId: "child-session",
@@ -34,6 +36,20 @@ test("workflow authority commit uses the protocol persistence scope", async () =
           sessionManager: {
             async commitAuthorityEvent(payload) {
               commits.push(payload);
+              envelope = createEventEnvelope({
+                family: payload.family,
+                schemaVersion: getEventFamily(payload.family).schemaVersion,
+                identity: {
+                  ...payload.identity,
+                  eventId: "workflow-event-1",
+                  sessionId: payload.sessionId,
+                },
+                causality: payload.causality,
+                ordering: { ...payload.ordering, sequence: 1 },
+                producer: payload.producer,
+                occurredAt: "2026-10-22T00:00:00.000Z",
+                payload: payload.payload,
+              });
               return { committed: true, envelope };
             },
           },

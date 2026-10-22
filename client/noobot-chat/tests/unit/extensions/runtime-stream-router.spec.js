@@ -10,7 +10,7 @@ import {
 } from "../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { routeRuntimeStreamEvent } from "../../../src/extensions/runtime-stream-router.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
@@ -19,6 +19,7 @@ import {
 function workflowNodeEvent() {
   return createEventEnvelope({
     family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+    schemaVersion: getEventFamily(EVENT_FAMILY.WORKFLOW_RUNTIME).schemaVersion,
     identity: {
       eventId: "workflow-node-event-7",
       eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,

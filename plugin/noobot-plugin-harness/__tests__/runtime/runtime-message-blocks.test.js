@@ -270,7 +270,7 @@ test("capability runtime filters summarized messages from incremental blocks by 
         {
           role: "user",
           content: "current user",
-          additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+          additional_kwargs: { messageOrigin: "natural" },
         },
       ],
     },
@@ -309,7 +309,7 @@ test("capability runtime does not let resolver reintroduce summarized messages",
         {
           role: "user",
           content: "current user",
-          additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+          additional_kwargs: { messageOrigin: "natural" },
         },
       ],
     },
@@ -480,7 +480,6 @@ test("capability runtime preserves history and incremental user messages in bloc
           additional_kwargs: {
             turnScopeId: "client-turn:current",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
             messageUid: "current-user",
           },
         },
@@ -544,7 +543,6 @@ test("capability runtime does not remove same-text user from a different turn", 
           additional_kwargs: {
             turnScopeId: "client-turn:current",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
           },
         },
         {

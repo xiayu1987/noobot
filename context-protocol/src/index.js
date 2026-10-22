@@ -23,6 +23,7 @@ export * from "./message/session-projection.js";
 export * from "./mutation/context.js";
 export * from "./policy/block.js";
 export * from "./policy/injected-message.js";
+export * from "./policy/main-flow-control.js";
 export * from "./policy/message.js";
 export * from "./policy/snapshot.js";
 export * from "./policy/user-meta-backwrite.js";

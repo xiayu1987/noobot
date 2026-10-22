@@ -86,9 +86,10 @@ function resolveProjectionTargets(messageEvent, context) {
   const { identity = {}, payload = {} } = messageEvent;
   const presentationMessageId = resolveMessageEventPresentationId(payload);
   const targetSessionId = text(identity.sessionId || context.sessionId);
-  const targetMessages =
-    context.findCanonicalMessagesById?.(targetSessionId, presentationMessageId) ||
-    [context.findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
+  const targetMessages = context.findMessagesByPresentationId(
+    targetSessionId,
+    presentationMessageId,
+  );
 
   addLiveBotProjection(targetMessages, targetSessionId, identity, context);
   return { presentationMessageId, targetSessionId, targetMessages };
@@ -97,8 +98,7 @@ function resolveProjectionTargets(messageEvent, context) {
 function describeProjectionTarget(targetMessage) {
   return {
     found: Boolean(targetMessage),
-    id: String(targetMessage?.id || ""),
-    messageId: String(targetMessage?.messageId || ""),
+    presentationMessageId: String(targetMessage?.presentationMessageId || ""),
     role: String(targetMessage?.role || ""),
     type: String(targetMessage?.type || ""),
     phase: String(targetMessage?.pluginMeta?.phase || ""),

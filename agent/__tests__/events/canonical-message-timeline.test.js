@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
@@ -15,12 +15,14 @@ import { reduceCanonicalToolTimeline } from "@noobot/event-protocol/tool-timelin
 const event = (eventType, eventId, sequence, extra = {}) =>
   createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId,
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "session-1",
       turnScopeId: "turn-1",
     },
+    causality: {},
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: "presentation-1",

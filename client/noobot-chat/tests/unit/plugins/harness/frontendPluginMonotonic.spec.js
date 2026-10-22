@@ -71,14 +71,14 @@ describe("noobot-chat monotonic message action rules", () => {
     const deleteMonotonicMessage = vi.fn();
     const resendMonotonicMessage = vi.fn();
     const userMessage = {
-      id: "u-stopped-object",
+      messageUid: "u-stopped-object",
       role: "user",
       turnScopeId: "turn-stopped-object",
       dialogProcessId: "dp-stopped-object",
       content: "stop me",
     };
     const stoppedAssistant = {
-      id: "a-stopped-object",
+      presentationMessageId: "a-stopped-object",
       role: "assistant",
       turnScopeId: "turn-stopped-object",
       dialogProcessId: "dp-stopped-object",
@@ -174,13 +174,13 @@ describe("noobot-chat monotonic message action rules", () => {
     const deleteMonotonicMessage = vi.fn();
     const resendMonotonicMessage = vi.fn();
     const userMessage = {
-      id: "u1",
+      messageUid: "u1",
       role: "user",
       dialogProcessId: "dp-1",
       content: "original question",
     };
     const messageItem = {
-      id: "m1",
+      presentationMessageId: "m1",
       role: "assistant",
       dialogProcessId: "dp-1",
       channelState: { state: "frontend_completed" },
@@ -226,14 +226,14 @@ describe("noobot-chat monotonic message action rules", () => {
   it("restores stopped single-turn actions after reload from persisted assistant state", () => {
     const action = getMonotonicAction();
     const userMessage = {
-      id: "u-reload-1",
+      messageUid: "u-reload-1",
       role: "user",
       turnScopeId: "client-turn:reload-1",
       dialogProcessId: "dp-reload-1",
       content: "你好",
     };
     const stoppedAssistant = {
-      messageId: "turn-status-placeholder:client-turn:reload-1",
+      presentationMessageId: "turn-status-placeholder:client-turn:reload-1",
       role: "assistant",
       turnStatusPlaceholder: true,
       turnStatus: { status: "user_stopped" },
@@ -249,7 +249,7 @@ describe("noobot-chat monotonic message action rules", () => {
     const action = getMonotonicAction();
     const deleteMonotonicMessage = vi.fn();
     const userMessage = {
-      id: "u-no-source",
+      messageUid: "u-no-source",
       role: "user",
       content: "你好",
     };
@@ -267,12 +267,12 @@ describe("noobot-chat monotonic message action rules", () => {
     const action = getMonotonicAction();
     const deleteMonotonicMessage = vi.fn();
     const userMessage = {
-      id: "u-no-source-middle",
+      messageUid: "u-no-source-middle",
       role: "user",
       content: "你好",
     };
     const assistantMessage = {
-      id: "a-after-orphan",
+      presentationMessageId: "a-after-orphan",
       role: "assistant",
       content: "later reply",
     };
@@ -289,27 +289,27 @@ describe("noobot-chat monotonic message action rules", () => {
   it("keeps actions only on the latest same-round user in multi-turn sessions", () => {
     const action = getMonotonicAction();
     const firstUser = {
-      id: "u-1",
+      messageUid: "u-1",
       role: "user",
       turnScopeId: "client-turn:multi-1",
       dialogProcessId: "dp-1",
       content: "first",
     };
     const firstAssistant = {
-      id: "a-1",
+      presentationMessageId: "a-1",
       role: "assistant",
       turnScopeId: "client-turn:multi-1",
       dialogProcessId: "dp-1",
     };
     const targetUser = {
-      id: "u-2",
+      messageUid: "u-2",
       role: "user",
       turnScopeId: "client-turn:multi-2",
       dialogProcessId: "dp-2",
       content: "second",
     };
     const targetAssistant = {
-      id: "a-2",
+      presentationMessageId: "a-2",
       role: "assistant",
       turnScopeId: "client-turn:multi-2",
       dialogProcessId: "dp-2",
@@ -471,12 +471,12 @@ describe("noobot-chat monotonic message action rules", () => {
   it("falls back to adjacent previous user when persisted round ids are missing", () => {
     const action = getMonotonicAction();
     const userMessage = {
-      id: "u-adjacent",
+      messageUid: "u-adjacent",
       role: "user",
       content: "question",
     };
     const assistantMessage = {
-      id: "a-adjacent",
+      presentationMessageId: "a-adjacent",
       role: "assistant",
       channelState: { state: "user_stopped" },
     };
@@ -488,7 +488,7 @@ describe("noobot-chat monotonic message action rules", () => {
   it("uses persisted user monotonic markers", () => {
     const action = getMonotonicAction();
     const userMessage = {
-      id: "u-persisted-marker",
+      messageUid: "u-persisted-marker",
       role: "user",
       stopState: "user_stopped",
       isMonotonic: true,

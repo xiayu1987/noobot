@@ -84,21 +84,21 @@ describe("useChatEngine.delete", () => {
   it("cascadeDeleteMessagesFrom removes matching rawMessages even when they are not the same objects", () => {
     const { engine, activeSession } = createHarness({ sessionId: "local-cascade-raw-copy" });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       role: RoleEnum.USER,
       content: "first",
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       role: RoleEnum.ASSISTANT,
       content: "target",
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
     };
     const tail = {
-      id: "m3",
+      messageUid: "m3",
       role: RoleEnum.USER,
       content: "tail",
       turnScopeId: "turn-2",
@@ -138,13 +138,13 @@ describe("useChatEngine.delete", () => {
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       turnScopeId: "client-turn:resend-stale",
       role: RoleEnum.USER,
       content: "first",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       turnScopeId: "client-turn:resend-stale",
       role: RoleEnum.ASSISTANT,
       content: "target",
@@ -189,13 +189,13 @@ describe("useChatEngine.delete", () => {
       stream,
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       turnScopeId: "client-turn:resend-no-flicker",
       role: RoleEnum.USER,
       content: "first",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       turnScopeId: "client-turn:resend-no-flicker",
       role: RoleEnum.ASSISTANT,
       content: "target",
@@ -316,13 +316,13 @@ describe("useChatEngine.delete", () => {
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
     });
     const first = {
-      id: "u1",
+      messageUid: "u1",
       turnScopeId: "turn-stopped-tail",
       role: RoleEnum.USER,
       content: "first",
     };
     const target = {
-      id: "a1",
+      presentationMessageId: "a1",
       turnScopeId: "turn-stopped-tail",
       role: RoleEnum.ASSISTANT,
       content: "target",
@@ -383,7 +383,7 @@ describe("useChatEngine.delete", () => {
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
     });
     const first = {
-      id: "u1",
+      messageUid: "u1",
       turnScopeId: "turn-stopped-sending",
       dialogProcessId: "dp-stopped-sending",
       role: RoleEnum.USER,
@@ -394,7 +394,7 @@ describe("useChatEngine.delete", () => {
       monotonic: true,
     };
     const target = {
-      id: "a1",
+      presentationMessageId: "a1",
       turnScopeId: "turn-stopped-sending",
       dialogProcessId: "dp-stopped-sending",
       role: RoleEnum.ASSISTANT,
@@ -460,13 +460,13 @@ describe("useChatEngine.delete", () => {
       sessionId: "local-delete-fail",
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       role: RoleEnum.USER,
       content: "first",
       turnScopeId: "turn-delete-fail",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       role: RoleEnum.ASSISTANT,
       content: "target",
       pending: true,
@@ -502,13 +502,13 @@ describe("useChatEngine.delete", () => {
       stream,
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       role: RoleEnum.USER,
       content: "first",
       turnScopeId: "turn-resend-fail",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       role: RoleEnum.ASSISTANT,
       content: "target",
       pending: true,
@@ -554,7 +554,7 @@ describe("useChatEngine.delete", () => {
     });
     const first = { id: "u1", turnScopeId, role: RoleEnum.USER, content: "first" };
     const target = {
-      id: "a1",
+      presentationMessageId: "a1",
       turnScopeId,
       role: RoleEnum.ASSISTANT,
       content: "target",

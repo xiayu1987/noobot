@@ -105,6 +105,7 @@ test("SessionExecutionRunner disposes the plugin activation scope exactly once a
   const runner = createRunner({
     prepareRunConfig: ({ runConfig = {} } = {}) => ({
       ...runConfig,
+      botHookManager: null,
       turnScopeId: runConfig.turnScopeId || "turn-plugin-scope-success",
       pluginActivationScope,
     }),
@@ -131,6 +132,7 @@ test("SessionExecutionRunner disposes the plugin activation scope exactly once a
   const runner = createRunner({
     prepareRunConfig: ({ runConfig = {} } = {}) => ({
       ...runConfig,
+      botHookManager: null,
       turnScopeId: runConfig.turnScopeId || "turn-plugin-scope-failure",
       pluginActivationScope,
     }),

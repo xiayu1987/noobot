@@ -15,6 +15,7 @@ import { isPlainObject, text } from "@noobot/shared/value";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
+export const MESSAGE_RUNTIME_PRODUCER = Object.freeze({ type: "agent", id: "message-runtime" });
 
 export const MESSAGE_EVENT_TYPE = Object.freeze({
   TURN_PRESENTATION_COMMITTED: "turn_presentation_committed",
@@ -92,6 +93,8 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
   REPLACE: "replace",
 });
 
+const PRESENTATION_IDENTITY_ALIASES = Object.freeze({ id: "id", messageId: "message_id" });
+
 function validatePresentationMessage(message, expectedRole, value) {
   const errors = [];
   if (!isPlainObject(message)) {
@@ -108,9 +111,12 @@ function validatePresentationMessage(message, expectedRole, value) {
     if (text(message.presentationMessageId) !== text(value.presentationMessageId)) {
       errors.push("assistant_presentation_id_mismatch");
     }
-    if (Object.hasOwn(message, "messageId")) errors.push("noncanonical_assistant_message_id");
-  } else if (!text(message.messageId)) {
-    errors.push("missing_user_message_id");
+  } else {
+    if (!text(message.messageUid)) errors.push("missing_user_message_uid");
+    if (!text(message.userMessageId)) errors.push("missing_user_message_id");
+  }
+  for (const [alias, code] of Object.entries(PRESENTATION_IDENTITY_ALIASES)) {
+    if (Object.hasOwn(message, alias)) errors.push(`noncanonical_${expectedRole}_${code}`);
   }
   return errors;
 }
@@ -148,10 +154,10 @@ export function resolveMessageEventPresentationId(value = {}) {
   return text(value?.presentationMessageId);
 }
 
-export function resolveTurnPresentationMessageId(message = {}) {
+export function resolveMessageViewKey(message = {}) {
   return text(message?.role) === "assistant"
     ? text(message?.presentationMessageId)
-    : text(message?.messageId);
+    : text(message?.messageUid);
 }
 
 const NONCANONICAL_PAYLOAD_FIELDS = Object.freeze([

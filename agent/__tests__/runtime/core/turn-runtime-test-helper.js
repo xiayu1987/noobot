@@ -10,8 +10,8 @@ import {
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import { createModelContext } from "@noobot/context-protocol";
+import { normalizeSystemRuntimeCounters } from "@noobot/agent-config-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
-import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 import {
   applyTestIdentityToRuntime,
   createTestTurnIdentity,
@@ -96,6 +96,15 @@ function bindActiveTurnIdentity(modelContext, identity) {
   modelContext.activeTurnIdentity = expected;
 }
 
+const LOOP_STATE_RUNTIME_FIELDS = Object.freeze([
+  "turnMessages",
+  "turnTasks",
+  "currentTurnMessages",
+  "currentTurnTasks",
+  "systemRuntime",
+  "toolConsecutiveFailureCount",
+]);
+
 export function prepareTestTurnExecution(
   modelState,
   loopState,
@@ -113,34 +122,44 @@ export function prepareTestTurnExecution(
   if (!isObjectLike(runtime)) {
     throw new Error("test Turn execution requires modelState.runtime");
   }
-  if (loopState.modelContext?.protocolVersion !== 3) {
-    loopState.modelContext = createModelContext({ messageBlocks: loopState.messageBlocks });
+  if (Object.hasOwn(loopState, "modelContext")) {
+    throw new TypeError(
+      "test loopState must not carry modelContext; runtime.activeMessageContext owns it",
+    );
   }
-  delete loopState.messageBlocks;
-  loopState.currentTurnMessages = createTestTurnMessagesStore(
-    typeof loopState?.currentTurnMessages?.toArray === "function"
-      ? loopState.currentTurnMessages.toArray()
-      : loopState.turnMessages,
-  );
-  loopState.currentTurnTasks = createTestTurnTasksStore(
-    typeof loopState?.currentTurnTasks?.toArray === "function"
-      ? loopState.currentTurnTasks.toArray()
-      : [],
-  );
-  runtime.currentTurnMessages = loopState.currentTurnMessages;
-  runtime.currentTurnTasks = loopState.currentTurnTasks;
-  runtime.sessionManager =
-    runtime.sessionManager ||
-    createCanonicalMessageEventSessionManager({ producerId: identity.runId });
+  const presetModelContext = runtime.activeMessageContext !== null;
+  if (presetModelContext === Object.hasOwn(loopState, "messageBlocks")) {
+    throw new TypeError(
+      "test turn requires exactly one of loopState.messageBlocks or runtime.activeMessageContext",
+    );
+  }
+  if (!presetModelContext) {
+    runtime.activeMessageContext = createModelContext({ messageBlocks: loopState.messageBlocks });
+    delete loopState.messageBlocks;
+  }
+  for (const field of LOOP_STATE_RUNTIME_FIELDS) {
+    if (Object.hasOwn(loopState, field)) {
+      throw new TypeError(`test loopState must not carry ${field}; runtime owns it`);
+    }
+  }
+  normalizeSystemRuntimeCounters(runtime.systemRuntime, "");
+  loopState.currentTurnMessages = runtime.currentTurnMessages;
+  loopState.currentTurnTasks = runtime.currentTurnTasks;
+  loopState.systemRuntime = runtime.systemRuntime;
+  if (runtime.sessionManager === null) {
+    throw new TypeError("test turn execution requires an explicit runtime.sessionManager");
+  }
   applyTestIdentityToRuntime(runtime, identity);
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,
+    workflowRunId: "",
+    nodeExecutionId: "",
   });
-  bindActiveTurnIdentity(loopState.modelContext, identity);
+  bindActiveTurnIdentity(runtime.activeMessageContext, identity);
   modelState.agentContext = createTestAgentExecutionScope(runtime, {
     identity,
-    messageBlocks: loopState.modelContext.messageBlocks,
+    messageBlocks: runtime.activeMessageContext.messageBlocks,
     tools: loopState.tools,
   });
   bindTestDispatchLifecycle(runtime);

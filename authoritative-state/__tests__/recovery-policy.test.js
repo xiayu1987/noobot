@@ -190,7 +190,7 @@ test("finalize recovery takes priority over orphan failure for a dead completion
   assert.equal(command.eventType, TURN_EVENT.COMPLETED);
 });
 
-test("stop finalize recovery carries the pending assistant into terminal materialization", async () => {
+test("stop finalize recovery completes the stop with a command-only terminal status", async () => {
   let command;
   const result = await recoverActiveTurn({
     turn: staleTurn({
@@ -200,14 +200,6 @@ test("stop finalize recovery carries the pending assistant into terminal materia
         type: "stop",
         commandId: "stable-stop-finalize",
         retryable: true,
-        payload: {
-          assistantMessage: {
-            role: "assistant",
-            content: "partial",
-            turnScopeId: "turn-stale",
-            dialogProcessId: "dialog-stale",
-          },
-        },
       },
     }),
     identity: { userId: "u1", sessionId: "s1" },
@@ -218,7 +210,7 @@ test("stop finalize recovery carries the pending assistant into terminal materia
   });
   assert.equal(result.recovered, true);
   assert.equal(command.eventType, TURN_EVENT.STOP_COMPLETED);
-  assert.equal(command.terminalStatus.assistantMessage.content, "partial");
+  assert.deepEqual(command.terminalStatus, { command: "user_stopped" });
 });
 
 test("finalize recovery exposes revision races without retrying a stale decision", async () => {

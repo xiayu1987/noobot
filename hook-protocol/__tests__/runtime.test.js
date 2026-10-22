@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertOptionalHookManager,
   collectSessionDeletionHookResult,
   createSessionDeletionHookResult,
   createHookManager,
@@ -182,4 +183,16 @@ test("observer point returns a canonical failure outcome without failing the flo
   assert.equal(result.failures.length, 1);
   assert.equal(result.outcomes[0].status, HOOK_OUTCOME_STATUS.FAILED);
   assert.equal(result.outcomes[0].error.message, "observer failure");
+});
+
+test("assertOptionalHookManager accepts a hook manager or null and rejects everything else", () => {
+  const manager = createHookManager();
+  assert.equal(assertOptionalHookManager(manager), manager);
+  assert.equal(assertOptionalHookManager(null), null);
+  for (const invalid of [undefined, {}, { on() {} }, { emit() {} }, "manager", 1]) {
+    assert.throws(
+      () => assertOptionalHookManager(invalid, "testManager"),
+      /testManager must be a hook manager with on\/emit or null/,
+    );
+  }
 });

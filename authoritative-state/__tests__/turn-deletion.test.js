@@ -9,6 +9,17 @@ import assert from "node:assert/strict";
 import { commitTurnDeletion } from "../src/application/commit-turn-deletion.js";
 
 test("turn deletion removes lifecycle facts and receipts for the deleted scopes", () => {
+  const turnReceipt = (commandId, type, turnScopeId) => ({
+    commandId,
+    type,
+    requestHash: `request-hash-${commandId}`,
+    turnScopeId,
+    revision: 1,
+    sequence: 1,
+    committedAt: "2026-07-18T00:00:00.000Z",
+    eventId: `event-${commandId}`,
+    envelope: { identity: { eventId: `event-${commandId}` } },
+  });
   const committed = commitTurnDeletion({
     lifecycle: {
       activeTurnScopeId: "turn-delete",
@@ -27,18 +38,8 @@ test("turn deletion removes lifecycle facts and receipts for the deleted scopes"
         },
       },
       commandReceipts: [
-        {
-          commandId: "keep",
-          type: "turn.completed",
-          requestHash: "request-hash-keep",
-          turnScopeId: "turn-keep",
-        },
-        {
-          commandId: "delete",
-          type: "turn.stop_completed",
-          requestHash: "request-hash-delete",
-          turnScopeId: "turn-delete",
-        },
+        turnReceipt("keep", "turn.completed", "turn-keep"),
+        turnReceipt("delete", "turn.stop_completed", "turn-delete"),
       ],
     },
     turnScopeIds: ["turn-delete", "turn-delete"],

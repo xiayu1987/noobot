@@ -33,9 +33,20 @@ export const CONTEXT_MUTATION_TYPES = Object.freeze({
   PRUNE_SUMMARIZED_INCREMENTAL: "context.incremental.prune-summarized",
   REMOVE_MESSAGES_BY_ID: "context.messages.remove-by-id",
   UPDATE_MESSAGE_BY_ID: "context.message.update-by-id",
+  ADVANCE_CHECKPOINT_REVISION: "context.checkpoint.advance-revision",
 });
 
 let nextCommandSequence = 1;
+
+function advanceCheckpointRevision(document, checkpointRevision) {
+  if (!Number.isInteger(checkpointRevision) || checkpointRevision <= document.checkpointRevision) {
+    throw new TypeError(
+      `modelContext checkpointRevision must advance beyond ${document.checkpointRevision}`,
+    );
+  }
+  document.checkpointRevision = checkpointRevision;
+  return checkpointRevision;
+}
 
 function requireDocument(document) {
   if (Number(document?.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
@@ -105,6 +116,9 @@ export function dispatchContextMutation(document, command = {}) {
     case CONTEXT_MUTATION_TYPES.UPDATE_MESSAGE_BY_ID:
       value = updateMessageById(document, payload.messageId, payload.patch);
       break;
+    case CONTEXT_MUTATION_TYPES.ADVANCE_CHECKPOINT_REVISION:
+      value = advanceCheckpointRevision(document, payload.checkpointRevision);
+      break;
     default:
       throw new TypeError(`unsupported context mutation command: ${command.commandType}`);
   }
@@ -151,6 +165,12 @@ export function pruneContextSummarizedIncremental(document) {
 export function removeContextMessagesByIds(document, messageIds) {
   return executeContextMutation(document, CONTEXT_MUTATION_TYPES.REMOVE_MESSAGES_BY_ID, {
     messageIds,
+  }).value;
+}
+
+export function advanceContextCheckpointRevision(document, checkpointRevision) {
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.ADVANCE_CHECKPOINT_REVISION, {
+    checkpointRevision,
   }).value;
 }
 

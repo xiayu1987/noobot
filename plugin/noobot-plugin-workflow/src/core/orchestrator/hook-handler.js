@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { HOOK_POINT } from "@noobot/hook-protocol";
 import { executeWorkflowText } from "../../workflow/adapter.js";
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { createPhaseTracker } from "../hooks/phase.js";
@@ -24,21 +23,17 @@ import {
   createBotDispatchHandled,
   createBotDispatchPass,
 } from "@noobot/agent-transport-protocol/bot-dispatch";
-import { text } from "@noobot/shared/value";
+import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 
-export async function handleBeforeAgentDispatch({
-  hookManager,
-  options = {},
-  ctx = {},
-  signal,
-  hookPoint = "",
-} = {}) {
-  const beforeDispatchMode = text(hookPoint) === HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
-  const sourceAgentResult =
-    ctx?.agentResult && typeof ctx.agentResult === "object" ? ctx.agentResult : {};
-  const agentResult = beforeDispatchMode
-    ? { output: "", traces: [], turnMessages: [] }
-    : sourceAgentResult;
+export async function handleBeforeAgentDispatch({ hookManager, options, ctx, signal }) {
+  const agentResult = createAgentTurnResult({
+    output: "",
+    traces: [],
+    turnMessages: [],
+    turnTasks: [],
+    modelMessages: [],
+    modelLoopRound: 0,
+  });
   const phaseTracker = createPhaseTracker();
   const retryMeta = createWorkflowRetryMeta();
 
@@ -46,8 +41,6 @@ export async function handleBeforeAgentDispatch({
     options,
     ctx,
     signal,
-    sourceAgentResult,
-    hookPoint,
     phaseTracker,
   });
   if (skipped) return createBotDispatchPass({ owner: "workflow" });
@@ -124,16 +117,6 @@ export async function handleBeforeAgentDispatch({
     if (isWorkflowAbortError(error, signal)) {
       throw error;
     }
-    return handleWorkflowFailure({
-      workflowRunId,
-      error,
-      options,
-      ctx,
-      agentResult,
-      sourceText,
-      phaseTracker,
-      retryMeta,
-      beforeDispatchMode,
-    });
+    return handleWorkflowFailure(error);
   }
 }

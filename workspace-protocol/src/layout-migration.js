@@ -17,6 +17,7 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_LIFECYCLE: "session-lifecycle",
   SESSION_TRANSFER_ENVELOPE: "session-transfer-envelope",
   MODEL_CONTEXT_SNAPSHOT: "model-context-snapshot",
+  SESSION_MESSAGE_IDENTITY: "session-message-identity",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -49,6 +50,16 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "model-context-snapshot-v7",
     toVersion: 7,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT,
+  }),
+  Object.freeze({
+    id: "model-context-snapshot-v8",
+    toVersion: 8,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT,
+  }),
+  Object.freeze({
+    id: "session-message-identity-v9",
+    toVersion: 9,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
   }),
 ]);
 

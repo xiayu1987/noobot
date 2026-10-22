@@ -14,34 +14,37 @@ import {
 import { buildHistoryMessages } from "./history.js";
 import {
   CONTEXT_MESSAGE_PROJECTION_TYPE,
-  deriveContextMessageProjectionId,
-  resolveContextMessageId,
+  composeContextProjectionKey,
+  assignContextMessageIdentity,
+  resolveContextMessageIdentity,
+  resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
 import { text } from "@noobot/shared/value";
 
 function buildSystemContextMessage(source) {
   if (typeof source === "string") {
-    return new SystemMessage({
-      content: source,
-      additional_kwargs: {
-        messageUid: createMessageUid(),
-        noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT,
-      },
-    });
+    return assignContextMessageIdentity(
+      new SystemMessage({
+        content: source,
+        additional_kwargs: {
+          noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT,
+        },
+      }),
+    );
   }
-  const messageUid = resolveContextMessageId(source);
-  if (!messageUid) {
-    throw new Error("restored system context message requires additional_kwargs.messageUid");
-  }
+  const identity = Object.fromEntries(
+    Object.entries(resolveContextMessageIdentity(source)).filter(([key]) => key !== "shape"),
+  );
   if (typeof source?.content !== "string") {
-    throw new TypeError(`restored system context message content must be a string: ${messageUid}`);
+    throw new TypeError(
+      `restored system context message content must be a string: ${resolveContextMessageKey(source)}`,
+    );
   }
   return new SystemMessage({
     content: source.content,
     additional_kwargs: {
-      messageUid,
+      ...identity,
       noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT,
     },
   });
@@ -67,7 +70,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
       : 0,
   });
   const resolvedMainBlocks = buildCanonicalMessageBlocks({
-    systemMessages,
+    systemMessages: systemMessages.map(buildSystemContextMessage),
     historyMessages,
     incrementalMessages: restoredIncrementalMessages,
     currentUserMessage,
@@ -77,14 +80,14 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     currentCanonicalId,
     currentMessagePresent: Boolean(currentCanonicalId),
     currentAlreadyInIncremental: restoredIncrementalMessages.some(
-      (message) => resolveContextMessageId(message) === currentCanonicalId,
+      (message) => resolveContextMessageKey(message) === currentCanonicalId,
     ),
     systemCount: resolvedMainBlocks.system.length,
     historyCount: resolvedMainBlocks.history.length,
     incrementalCount: resolvedMainBlocks.incremental.length,
   });
 
-  const system = resolvedMainBlocks.system.map(buildSystemContextMessage);
+  const system = resolvedMainBlocks.system;
   const history = buildHistoryMessages({
     effectiveHistoryMessages: resolvedMainBlocks.history,
     runtime,
@@ -93,15 +96,14 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     effectiveHistoryMessages: resolvedMainBlocks.incremental,
     runtime,
   });
-  const projectedIds = incremental.map(resolveContextMessageId).filter(Boolean);
-  const userMetaId = deriveContextMessageProjectionId(
-    currentCanonicalId,
-    CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
-  );
+  const projectedIds = incremental.map(resolveContextMessageKey);
+  const userMetaId = currentCanonicalId
+    ? composeContextProjectionKey(CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META, currentCanonicalId)
+    : "";
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {
     sourceMessageUid: currentCanonicalId,
-    contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",
-    userMetaProjectionId: projectedIds.find((id) => id === userMetaId) || "",
+    contentProjectionFound: projectedIds.includes(currentCanonicalId),
+    userMetaProjectionFound: projectedIds.includes(userMetaId),
     incrementalCount: incremental.length,
     flatMessageCount: system.length + history.length + incremental.length,
   });

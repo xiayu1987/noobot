@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
@@ -22,6 +22,7 @@ export function createCanonicalMessageEventSessionManager({
       commandId,
       causationId,
       correlationId,
+      producer,
       payload,
     }) {
       const scopeId = payload?.presentationMessageId;
@@ -31,6 +32,7 @@ export function createCanonicalMessageEventSessionManager({
         committed: true,
         envelope: createEventEnvelope({
           family: EVENT_FAMILY.MESSAGE_TIMELINE,
+          schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
           identity: {
             eventId: `${producerId}:${scopeId}:${sequence}`,
             eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -43,7 +45,7 @@ export function createCanonicalMessageEventSessionManager({
             scopeId,
             sequence,
           },
-          producer: { type: "test", id: producerId },
+          producer,
           occurredAt,
           payload,
         }),

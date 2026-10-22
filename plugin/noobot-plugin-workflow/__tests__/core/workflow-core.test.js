@@ -372,20 +372,17 @@ test("workflow hook skips when source text is empty", async () => {
   });
   const listener = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
-  const agentResult = { output: "", traces: [] };
-  await listener.handler(
+  const outcome = await listener.handler(
     {
       userId: "u1",
       sessionId: "s1",
       dialogProcessId: "d1",
       userMessage: "",
-      agentResult,
     },
     createTestHookInvocation(),
   );
-  assert.equal(agentResult.workflow, undefined);
-  assert.equal(Array.isArray(agentResult.traces), true);
-  assert.equal(agentResult.traces.length, 0);
+  assert.equal(outcome.disposition, "pass");
+  assert.equal(outcome.owner, "workflow");
 });
 
 test("workflow hook owns the turn and never falls back to main agent when semantic resolution fails", async () => {
@@ -473,7 +470,6 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请规划一个流程",
-    agentResult: null,
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
   const dispatchOutcome = await listener.handler(

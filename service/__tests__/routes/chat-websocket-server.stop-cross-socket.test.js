@@ -22,10 +22,8 @@ import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.tes
 useProvisionedRuntimeEventsWorkspace(["primary-user", "owner-a", "owner-b", "canonical-owner"]);
 
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
-  let capturedStopPayload = null;
   const server = await startServerWithWs({
-    materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
-      capturedStopPayload = { event, terminalStatus };
+    materializeTerminalMessages: ({ terminalStatus, previousSummaryVersion }) => {
       return {
         materialized: true,
         terminalStatus,
@@ -99,7 +97,6 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
               sessionId: "s-cross-stop",
               turnScopeId: "turn-cross-stop",
               expectedRevision: 2,
-              partialAssistant: { content: "partial", turnScopeId: "turn-cross-stop" },
             }),
           ),
         ),
@@ -162,10 +159,6 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-cross-stop");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
-    assert.equal(
-      capturedStopPayload?.event?.terminalStatus?.assistantMessage?.turnScopeId,
-      "turn-cross-stop",
-    );
   } finally {
     await closeServer(server);
   }
@@ -248,10 +241,6 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
               sessionId: "s-owner-isolation",
               turnScopeId: "turn-owner-isolation",
               expectedRevision: 2,
-              partialAssistant: {
-                dialogProcessId: "dp-owner-isolation",
-                turnScopeId: "turn-owner-isolation",
-              },
             }),
           ),
         ),
@@ -353,10 +342,6 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
               sessionId: "s-owner-stop",
               turnScopeId: "turn-owner-stop",
               expectedRevision: 2,
-              partialAssistant: {
-                dialogProcessId: "dp-owner-stop",
-                turnScopeId: "turn-owner-stop",
-              },
             }),
           ),
         ),

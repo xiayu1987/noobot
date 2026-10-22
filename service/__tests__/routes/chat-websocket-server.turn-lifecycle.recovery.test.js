@@ -134,7 +134,6 @@ test("a new action recovers a stale persisted turn lost after service restart", 
       messageId: "user-message:turn-before-restart",
       parentDialogProcessId: "",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
     },
   });
   await authoritative.bot.session.applyTurnLifecycleEvent({
@@ -207,7 +206,6 @@ test("snapshot get only annotates an orphan; finalize settles it exactly once", 
       messageId: "user-message:turn-snapshot-restart",
       parentDialogProcessId: "",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
     },
   });
   await authoritative.bot.session.applyTurnLifecycleEvent({
@@ -295,7 +293,6 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
       messageId: "user-message:turn-live-snapshot",
       parentDialogProcessId: "",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
     },
   });
   await authoritative.bot.session.applyTurnLifecycleEvent({

@@ -35,15 +35,13 @@ function projectPersistedMessages(messages) {
 function findPresentation(messages, presentationMessageId) {
   return messages.find(
     (message) =>
-      text(message?.presentationMessageId || message?.messageId) === presentationMessageId,
+      text(message?.role) === "assistant" &&
+      text(message?.presentationMessageId) === presentationMessageId,
   );
 }
 
 function insertLifecyclePresentation(messages, presentation) {
   const existing = findPresentation(messages, presentation.presentationMessageId);
-  if (existing && text(existing.role) !== "assistant") {
-    throw new TypeError("active Turn presentation invariant failed: presentation_role_conflict");
-  }
   if (existing && text(existing.turnScopeId) !== presentation.turnScopeId) {
     throw new TypeError(
       "active Turn presentation invariant failed: presentation_turn_scope_conflict",
@@ -75,11 +73,11 @@ function mergeAssistantPresentation(existing, incoming) {
 function dedupeDisplayMessages(messages) {
   const byIdentity = new Map();
   for (const message of messages) {
-    const identity = text(message?.presentationMessageId || message?.messageId);
-    if (!identity || message?.role !== "assistant") {
-      byIdentity.set(`${identity}:${byIdentity.size}`, message);
+    if (message?.role !== "assistant") {
+      byIdentity.set(`${message.role}:${byIdentity.size}`, message);
       continue;
     }
+    const identity = message.presentationMessageId;
     const existing = byIdentity.get(identity);
     byIdentity.set(identity, existing ? mergeAssistantPresentation(existing, message) : message);
   }

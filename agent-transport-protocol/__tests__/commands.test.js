@@ -135,14 +135,14 @@ test("command identity always carries every field as a trimmed string", () => {
       createTurnStopCommand({
         identity: { sessionId: " session-1 ", turnScopeId: "turn-1" },
         concurrency: { expectedTurnRevision: 1 },
-        stop: { partialAssistant: { content: "" } },
+        stop: {},
       }),
     /invalid_identity_field:sessionId/,
   );
   const command = createTurnStopCommand({
     identity: { sessionId: "session-1", turnScopeId: "turn-1" },
     concurrency: { expectedTurnRevision: 1 },
-    stop: { partialAssistant: { content: "" } },
+    stop: {},
   });
   assert.deepEqual(command.identity, {
     sessionId: "session-1",
@@ -200,7 +200,7 @@ test("turn stop requires the current positive authoritative turn revision", () =
   const command = createTurnStopCommand({
     identity: { sessionId: "session-1", turnScopeId: "turn-1" },
     concurrency: { expectedTurnRevision: 2 },
-    stop: { partialAssistant: { content: "" } },
+    stop: {},
   });
   assert.equal(parseAgentCommand(command), command);
   assert.equal(command.concurrency.expectedTurnRevision, 2);
@@ -210,7 +210,7 @@ test("turn stop requires the current positive authoritative turn revision", () =
       createTurnStopCommand({
         identity: { sessionId: "session-1", turnScopeId: "turn-1" },
         concurrency: {},
-        stop: { partialAssistant: { content: "" } },
+        stop: {},
       }),
     /invalid_expected_turn_revision/,
   );
@@ -218,21 +218,30 @@ test("turn stop requires the current positive authoritative turn revision", () =
   assert.throws(() => parseAgentCommand(command), /invalid_expected_turn_revision/);
 });
 
-test("turn stop requires a plain partialAssistant object", () => {
+test("turn stop rejects payload beyond the execution target", () => {
+  assert.throws(
+    () =>
+      createTurnStopCommand({
+        identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+        concurrency: { expectedTurnRevision: 1 },
+        stop: { partialAssistant: { content: "" } },
+      }),
+    /unknown_stop_field:partialAssistant/,
+  );
+});
+
+test("turn stop only targets an execution and never carries client output", () => {
   const input = {
     identity: { sessionId: "session-1", turnScopeId: "turn-1" },
     concurrency: { expectedTurnRevision: 1 },
   };
-  for (const stop of [{}, { partialAssistant: null }, { partialAssistant: "partial" }]) {
-    assert.throws(() => createTurnStopCommand({ ...input, stop }), /invalid_partial_assistant/);
-  }
-  const command = createTurnStopCommand({
-    ...input,
-    stop: { partialAssistant: { content: "partial" } },
-  });
-  assert.deepEqual(command.stop, { partialAssistant: { content: "partial" } });
-  delete command.stop.partialAssistant;
-  assert.throws(() => parseAgentCommand(command), /partial_assistant_not_object/);
+  const command = createTurnStopCommand({ ...input, stop: { executionId: " exec-1 " } });
+  assert.deepEqual(command.stop, { executionId: "exec-1" });
+  assert.equal(parseAgentCommand(command), command);
+  command.stop.partialAssistant = { content: "partial" };
+  assert.throws(() => parseAgentCommand(command), /stop/);
+  delete command.stop;
+  assert.throws(() => parseAgentCommand(command), /stop_not_object/);
 });
 
 test("protocol rejects legacy and unknown top-level fields", () => {
@@ -392,7 +401,7 @@ test("turn-scoped command ids are derived by the protocol and cannot be supplied
     createTurnStopCommand({
       identity: { sessionId: "session-1", turnScopeId: "turn-derived" },
       concurrency: { expectedTurnRevision: 1 },
-      stop: { partialAssistant: { content: "" } },
+      stop: {},
     }).commandId,
     "stop:turn-derived",
   );

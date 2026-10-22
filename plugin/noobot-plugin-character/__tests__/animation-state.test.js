@@ -106,20 +106,21 @@ test("same animation ID replaces one card and different IDs create cards", () =>
   let event = 0;
   const revisions = new Map();
   const envelope = (animationId, assetId) => {
-    const baseRevision = revisions.get(animationId) || 0;
-    const revision = baseRevision + 1;
+    const baseRevision = revisions.has(animationId) ? revisions.get(animationId) : null;
+    const revision = baseRevision === null ? 1 : baseRevision + 1;
     revisions.set(animationId, revision);
     event += 1;
     return createPluginArtifactEnvelope({
+      occurredAt: "2026-10-22T00:00:00.000Z",
       pluginId: CHARACTER_PLUGIN_ID,
       artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
       artifactId: animationId,
       sessionId: "session-a",
       turnScopeId: "turn-1",
       sequence: event,
-      operation: baseRevision ? "replaced" : "created",
+      operation: baseRevision === null ? "created" : "replaced",
       revision,
-      baseRevision: baseRevision || null,
+      baseRevision,
       data: { protocol: protocol(animationId, assetId), assets: [asset(assetId)] },
     });
   };
@@ -149,6 +150,7 @@ test("the character projector rejects another plugin's artifact", () => {
 test("a live event applies after establishing its session boundary", () => {
   resetAnimationRuntimeState("previous-session");
   const envelope = createPluginArtifactEnvelope({
+    occurredAt: "2026-10-22T00:00:00.000Z",
     pluginId: CHARACTER_PLUGIN_ID,
     artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
     artifactId: "animation-live",
@@ -157,6 +159,7 @@ test("a live event applies after establishing its session boundary", () => {
     sequence: 1,
     operation: "created",
     revision: 1,
+    baseRevision: null,
     data: { protocol: protocol("animation-live"), assets: [asset()] },
   });
   resetAnimationRuntimeState(envelope.identity.sessionId);

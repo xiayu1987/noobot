@@ -5,10 +5,7 @@
  */
 import { isPlainObject, text as clean } from "@noobot/shared/value";
 import { isSettledTurn } from "../lifecycle/turn-state.js";
-import {
-  normalizeCommandReceipt,
-  validateCommandReceiptResult,
-} from "../command/command-receipt.js";
+import { normalizeCommandReceipt } from "../command/command-receipt.js";
 import { validateTurnCommitMetadata } from "./turn-commit-metadata.js";
 import { validateCanonicalAssistantPresentation } from "../turn-presentation.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
@@ -65,8 +62,7 @@ export function validateSessionAggregateInvariants(session) {
   const canonicalAssistantTurns = new Set();
   for (const message of messages) {
     const messageUid = clean(message?.messageUid);
-    if (!messageUid) errors.push("missing_message_uid");
-    else if (messageUids.has(messageUid)) errors.push("duplicate_message_uid");
+    if (messageUid && messageUids.has(messageUid)) errors.push("duplicate_message_uid");
     messageUids.add(messageUid);
     if (message?.turnCommit && !validateTurnCommitMetadata(message.turnCommit).valid) {
       errors.push("invalid_turn_commit_metadata");
@@ -92,11 +88,7 @@ export function validateSessionAggregateInvariants(session) {
   const commandIds = new Set();
   for (const receipt of lifecycle.commandReceipts) {
     const normalized = normalizeCommandReceipt(receipt);
-    if (
-      !normalized ||
-      Object.hasOwn(receipt, "eventType") ||
-      !validateCommandReceiptResult(clean(receipt?.type), receipt?.result).valid
-    ) {
+    if (!normalized) {
       errors.push("invalid_command_receipt");
       continue;
     }

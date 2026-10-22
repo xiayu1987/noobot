@@ -15,6 +15,7 @@ const ENVELOPE_SECTION_FIELDS = Object.freeze({
 });
 
 function selectSectionFields(section, source) {
+  if (!isPlainObject(source)) throw new TypeError(`invalid_envelope_section: ${section}`);
   const allowed = ENVELOPE_SECTION_FIELDS[section];
   const unknown = Object.keys(source).filter((key) => !allowed.includes(key));
   if (unknown.length) {
@@ -32,16 +33,25 @@ export function createEventId() {
   return `evt_${globalThis.crypto.randomUUID()}`;
 }
 
-export function isEventProtocolEnvelope(value = {}) {
-  return isPlainObject(value) && value?.protocol?.name === EVENT_PROTOCOL_NAME;
+export function isEventProtocolEnvelope(value) {
+  return (
+    isPlainObject(value) &&
+    isPlainObject(value.protocol) &&
+    value.protocol.name === EVENT_PROTOCOL_NAME
+  );
 }
 
-export function asEventProtocolEnvelope(value = {}) {
+export function isLegacyEventEnvelope(value) {
+  if (!isPlainObject(value)) return false;
+  if (!isEventProtocolEnvelope(value)) return true;
+  return value.protocol.version !== EVENT_PROTOCOL_VERSION;
+}
+
+export function asEventProtocolEnvelope(value) {
   return isEventProtocolEnvelope(value) ? value : null;
 }
 
-const isIntegerAtLeast = (minimum) => (value) =>
-  Number.isInteger(Number(value)) && Number(value) >= minimum;
+const isIntegerAtLeast = (minimum) => (value) => Number.isInteger(value) && value >= minimum;
 
 const ENVELOPE_RULES = Object.freeze([
   {
@@ -53,7 +63,7 @@ const ENVELOPE_RULES = Object.freeze([
   {
     section: "protocol",
     field: "version",
-    predicate: (value) => Number(value) === EVENT_PROTOCOL_VERSION,
+    predicate: (value) => value === EVENT_PROTOCOL_VERSION,
     error: "unsupported_protocol_version",
   },
   { section: "protocol", field: "family", predicate: text, error: "missing_event_family" },
@@ -84,7 +94,7 @@ const ENVELOPE_RULES = Object.freeze([
   { field: "payload", predicate: isPlainObject, error: "invalid_payload" },
 ]);
 
-export function validateEventEnvelope(value = {}) {
+export function validateEventEnvelope(value) {
   if (!isPlainObject(value))
     return Object.freeze({ valid: false, errors: ["envelope_not_object"] });
   const errors = ENVELOPE_RULES.filter(({ section, field, predicate }) => {
@@ -94,7 +104,7 @@ export function validateEventEnvelope(value = {}) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-function assertEventEnvelope(value = {}) {
+function assertEventEnvelope(value) {
   const validation = validateEventEnvelope(value);
   if (!validation.valid)
     throw new TypeError(`invalid event protocol envelope: ${validation.errors.join(",")}`);
@@ -103,21 +113,21 @@ function assertEventEnvelope(value = {}) {
 
 export function createEventEnvelope({
   family,
-  schemaVersion = 1,
-  identity = {},
-  causality = {},
-  ordering = {},
-  producer = {},
+  schemaVersion,
+  identity,
+  causality,
+  ordering,
+  producer,
   occurredAt,
   payload,
-} = {}) {
+}) {
   return assertEventEnvelope(
     Object.freeze({
       protocol: Object.freeze({
         name: EVENT_PROTOCOL_NAME,
         version: EVENT_PROTOCOL_VERSION,
         family: text(family),
-        schemaVersion: Number(schemaVersion),
+        schemaVersion,
       }),
       identity: selectSectionFields("identity", identity),
       causality: selectSectionFields("causality", causality),

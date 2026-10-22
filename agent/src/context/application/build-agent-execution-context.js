@@ -7,6 +7,7 @@ import { createAgentContextEnvelope } from "@noobot/context-protocol/agent-conte
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { buildTools } from "../../tools/index.js";
 import { createRuntimeContext } from "../../runtime/runtime-context-factory.js";
+import { createMainFlowControlPort } from "../../runtime/main-flow-control.js";
 import { initializeRuntimeEnvironment } from "../../runtime/capabilities/runtime-capability-initializer.js";
 import { emitAgentContextDebug } from "../../observability/agent-context-debug.js";
 import { createAgentContextEnvelopeInput } from "../agent-context-envelope-input.js";
@@ -32,6 +33,7 @@ export async function buildAgentExecutionContext({
   systemMessages,
   conversationMessages,
   incrementalMessages,
+  userMetaBackwrites,
   attachments,
 }) {
   const runtime = createRuntimeContext({
@@ -69,11 +71,17 @@ export async function buildAgentExecutionContext({
       systemMessages,
       conversationMessages,
       incrementalMessages,
+      userMetaBackwrites,
     }),
   );
   const executionScope = createAgentExecutionScope({
     context: envelope,
-    bindings: { runtime, tools: [], extensions: {} },
+    bindings: {
+      runtime,
+      mainFlowControl: createMainFlowControlPort(runtime),
+      tools: [],
+      extensions: {},
+    },
   });
   const tools = await buildTools({
     sessionId: identity.sessionId,

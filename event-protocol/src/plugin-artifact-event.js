@@ -17,6 +17,11 @@ export const PLUGIN_ARTIFACT_ERROR_CODE = Object.freeze({
   ALREADY_EXISTS: "ARTIFACT_ALREADY_EXISTS",
   NOT_FOUND: "ARTIFACT_NOT_FOUND",
 });
+export const PLUGIN_ARTIFACT_REJECTION_REASON = Object.freeze({
+  [PLUGIN_ARTIFACT_ERROR_CODE.REVISION_CONFLICT]: "revision_conflict",
+  [PLUGIN_ARTIFACT_ERROR_CODE.ALREADY_EXISTS]: "artifact_exists",
+  [PLUGIN_ARTIFACT_ERROR_CODE.NOT_FOUND]: "artifact_not_found",
+});
 
 const tokenPattern = /^[A-Za-z][A-Za-z0-9_.-]{0,159}$/;
 
@@ -39,15 +44,15 @@ function collectCommitRequestErrors({ keys, sessionId, turnScopeId, data, baseRe
 }
 
 export function createPluginArtifactCommitRequest({
-  pluginId = "",
-  artifactType = "",
-  artifactId = "",
-  sessionId = "",
-  turnScopeId = "",
-  data = {},
-  operation = "created",
-  baseRevision = null,
-} = {}) {
+  pluginId,
+  artifactType,
+  artifactId,
+  sessionId,
+  turnScopeId,
+  data,
+  operation,
+  baseRevision,
+}) {
   const keys = {
     pluginId: text(pluginId),
     artifactType: text(artifactType),
@@ -60,7 +65,6 @@ export function createPluginArtifactCommitRequest({
   }
   return Object.freeze({
     family: PLUGIN_ARTIFACT_FAMILY,
-    schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
     identity: { eventType: PLUGIN_ARTIFACT_EVENT, turnScopeId: text(turnScopeId) },
     causality: { correlationId: text(turnScopeId) },
     ordering: {
@@ -73,15 +77,16 @@ export function createPluginArtifactCommitRequest({
 }
 
 export function createPluginArtifactEnvelope({
-  sessionId = "",
-  sequence = 1,
-  revision = 1,
-  occurredAt = new Date().toISOString(),
+  sessionId,
+  sequence,
+  revision,
+  occurredAt,
   ...request
-} = {}) {
+}) {
   const commitRequest = createPluginArtifactCommitRequest({ ...request, sessionId });
   const envelope = createEventEnvelope({
     ...commitRequest,
+    schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
     identity: {
       ...commitRequest.identity,
       eventId: createEventId(),
@@ -186,25 +191,96 @@ export function validatePluginArtifactEnvelope(envelope = {}) {
   return { valid: errors.length === 0, errors };
 }
 
-export function pluginArtifactKey(value = {}) {
-  const payload = value?.payload || value;
-  return `${text(payload?.pluginId)}:${text(payload?.artifactType)}:${text(payload?.artifactId)}`;
+export function pluginArtifactKey({ pluginId, artifactType, artifactId }) {
+  const parts = [pluginId, artifactType, artifactId].map(text);
+  if (parts.some((part) => !part)) {
+    throw new TypeError("plugin artifact key requires pluginId, artifactType and artifactId");
+  }
+  return parts.join(":");
 }
 
-export function reducePluginArtifact(current = null, envelope = {}) {
+function rejectArtifactCommit(code, currentRevision) {
+  return Object.freeze({
+    allowed: false,
+    code,
+    reason: PLUGIN_ARTIFACT_REJECTION_REASON[code],
+    currentRevision,
+  });
+}
+
+export function decidePluginArtifactCommit(current, { operation, baseRevision }) {
+  if (current !== null && !isIntegerAtLeast(current?.revision, 1)) {
+    throw new TypeError("plugin artifact commit decision requires a current artifact or null");
+  }
+  const currentRevision = current === null ? 0 : current.revision;
+  if (operation === "created") {
+    if (current !== null) {
+      return rejectArtifactCommit(PLUGIN_ARTIFACT_ERROR_CODE.ALREADY_EXISTS, currentRevision);
+    }
+    return Object.freeze({ allowed: true, revision: 1 });
+  }
+  if (operation !== "replaced") {
+    throw new TypeError(`invalid plugin artifact operation: ${operation}`);
+  }
+  if (current === null) {
+    return rejectArtifactCommit(PLUGIN_ARTIFACT_ERROR_CODE.NOT_FOUND, currentRevision);
+  }
+  if (baseRevision !== currentRevision) {
+    return rejectArtifactCommit(PLUGIN_ARTIFACT_ERROR_CODE.REVISION_CONFLICT, currentRevision);
+  }
+  return Object.freeze({ allowed: true, revision: currentRevision + 1 });
+}
+
+export function createPluginArtifactCommitReceipt(envelope) {
+  const validation = validatePluginArtifactEnvelope(envelope);
+  if (!validation.valid) {
+    throw new TypeError(`invalid committed plugin artifact: ${validation.errors.join(",")}`);
+  }
+  return Object.freeze({
+    committed: true,
+    eventId: envelope.identity.eventId,
+    operation: envelope.payload.operation,
+    revision: envelope.payload.revision,
+  });
+}
+
+export function createPluginArtifactCommitRejection(decision) {
+  if (decision?.allowed !== false || !PLUGIN_ARTIFACT_REJECTION_REASON[decision.code]) {
+    throw new TypeError("plugin artifact commit rejection requires a rejected commit decision");
+  }
+  if (!isIntegerAtLeast(decision.currentRevision, 0)) {
+    throw new TypeError("plugin artifact commit rejection requires an integer currentRevision");
+  }
+  return Object.freeze({
+    committed: false,
+    code: decision.code,
+    reason: decision.reason,
+    currentRevision: decision.currentRevision,
+  });
+}
+
+export function createPluginArtifactQueryResult(current) {
+  if (current === null) {
+    return Object.freeze({ found: false, artifact: null, revision: 0 });
+  }
+  if (!isIntegerAtLeast(current?.revision, 1) || !text(current.eventId)) {
+    throw new TypeError("plugin artifact query requires a projected artifact or null");
+  }
+  return Object.freeze({
+    found: true,
+    revision: current.revision,
+    operation: current.operation,
+    artifact: current.data,
+    eventId: current.eventId,
+  });
+}
+
+export function reducePluginArtifact(current, envelope) {
   const validation = validatePluginArtifactEnvelope(envelope);
   if (!validation.valid) return { applied: false, reason: "invalid_event", artifact: current };
   const payload = envelope.payload;
-  if (payload.operation === "created" && current) {
-    return { applied: false, reason: "artifact_exists", artifact: current };
-  }
-  if (payload.operation === "replaced" && (!current || current.revision !== payload.baseRevision)) {
-    return {
-      applied: false,
-      reason: current ? "revision_conflict" : "artifact_not_found",
-      artifact: current,
-    };
-  }
+  const decision = decidePluginArtifactCommit(current, payload);
+  if (!decision.allowed) return { applied: false, reason: decision.reason, artifact: current };
   return {
     applied: true,
     artifact: Object.freeze({
@@ -219,19 +295,20 @@ export function reducePluginArtifact(current = null, envelope = {}) {
   };
 }
 
-export function projectPluginArtifacts(events = []) {
+export function projectPluginArtifacts(events) {
+  if (!Array.isArray(events)) {
+    throw new TypeError("plugin artifact projection requires session artifact events");
+  }
   const artifacts = {};
-  const orderedEvents = (Array.isArray(events) ? events : [])
+  const orderedEvents = events
     .map((envelope, index) => ({ envelope, index }))
     .sort((left, right) => {
-      const sequenceDelta =
-        Number(left.envelope?.ordering?.sequence || 0) -
-        Number(right.envelope?.ordering?.sequence || 0);
+      const sequenceDelta = left.envelope.ordering.sequence - right.envelope.ordering.sequence;
       return sequenceDelta || left.index - right.index;
     })
     .map(({ envelope }) => envelope);
   for (const envelope of orderedEvents) {
-    const key = pluginArtifactKey(envelope);
+    const key = pluginArtifactKey(envelope.payload);
     const reduced = reducePluginArtifact(artifacts[key] || null, envelope);
     if (reduced.applied) artifacts[key] = reduced.artifact;
   }

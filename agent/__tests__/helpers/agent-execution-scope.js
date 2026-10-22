@@ -6,6 +6,7 @@
 
 import { createAgentContextEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
+import { createMainFlowControlPort } from "../../src/runtime/main-flow-control.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 export const TEST_AGENT_IDENTITY = Object.freeze({
@@ -62,6 +63,6 @@ export function createTestAgentExecutionScope(runtime, options = {}) {
   });
   return createAgentExecutionScope({
     context,
-    bindings: { runtime, tools, extensions },
+    bindings: { runtime, mainFlowControl: createMainFlowControlPort(runtime), tools, extensions },
   });
 }

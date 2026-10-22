@@ -5,8 +5,9 @@
  */
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import {
+  composeContextProjectionKey,
   readContextMessageValue,
-  resolveContextMessageId,
+  resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -173,7 +174,6 @@ test("getContextProjection applies the terminal-history protocol before summariz
       role: "user",
       content: "停止轮问题",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       summarized: true,
       dialogProcessId: "dlg_stopped",
       turnScopeId: "turn_stopped",
@@ -268,10 +268,10 @@ test("getContextProjection applies the terminal-history protocol before summariz
 
   const result = await projectMessages(service, { userId: "u1", sessionId: "s1" });
 
-  assert.deepEqual(result.map(resolveContextMessageId), [
+  assert.deepEqual(result.map(resolveContextMessageKey), [
     "stopped-user",
     "stopped-guidance-new",
-    "turn_stopped::terminal_status",
+    composeContextProjectionKey("terminal_status", "turn_stopped"),
     "completed-user",
     "completed-old-injection",
     "completed-new-injection",
@@ -286,7 +286,6 @@ test("getContextProjection projects error and timeout explanations as assistant 
     role: "user",
     content: `${terminalStatus} question`,
     messageOrigin: "natural",
-    userMetaMaterialized: true,
     dialogProcessId: `${terminalStatus}-dialog`,
     turnScopeId: `${terminalStatus}-turn`,
     summarized: true,
@@ -303,12 +302,12 @@ test("getContextProjection projects error and timeout explanations as assistant 
   const result = await projectMessages(service, { userId: "u1", sessionId: "s1" });
 
   assert.deepEqual(
-    result.map((item) => [resolveContextMessageId(item), item.role]),
+    result.map((item) => [resolveContextMessageKey(item), item.role]),
     [
       ["error-user", "user"],
-      ["error-turn::terminal_status", "assistant"],
+      [composeContextProjectionKey("terminal_status", "error-turn"), "assistant"],
       ["timeout-user", "user"],
-      ["timeout-turn::terminal_status", "assistant"],
+      [composeContextProjectionKey("terminal_status", "timeout-turn"), "assistant"],
     ],
   );
 });
@@ -320,7 +319,6 @@ test("getContextProjection rejects a terminal lifecycle without canonical messag
       role: "user",
       content: "previous question",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       dialogProcessId: "completed-dialog",
       turnScopeId: "completed-turn",
     },
@@ -524,7 +522,6 @@ test("current terminal round is excluded from both authoritative snapshot dimens
       role: "user",
       content: "当前问题",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       dialogProcessId: "dlg_current",
       turnScopeId: "turn_current",
     },

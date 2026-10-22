@@ -11,17 +11,15 @@ import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
 import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
 
 import { appendTurnContextControlMessage } from "../../../src/runtime/turn/turn-context-message-appender.js";
-import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 function createTurnScope() {
-  const runtime = { currentTurnMessages: createCurrentTurnMessagesStore() };
-  const loopState = {
-    dialogProcessId: "dlg_control",
-    modelContext: createModelContext({
-      messageBlocks: { system: [], history: [], incremental: [] },
-      activeTurnIdentity: { dialogProcessId: "dlg_control", turnScopeId: "turn_control" },
-    }),
-  };
+  const runtime = createTestRuntimeContext();
+  runtime.activeMessageContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental: [] },
+    activeTurnIdentity: { dialogProcessId: "dlg_control", turnScopeId: "turn_control" },
+  });
+  const loopState = { dialogProcessId: "dlg_control" };
   return { runtime, loopState };
 }
 
@@ -40,7 +38,7 @@ for (const internalType of [
     });
     assert.equal(isInjectedSessionMessageRecord(persisted), true);
     assert.equal(persisted.injectedMessageType, internalType);
-    const modelMessage = loopState.modelContext.messageBlocks.incremental.at(-1);
+    const modelMessage = runtime.activeMessageContext.messageBlocks.incremental.at(-1);
     assert.equal(isInjectedMessage(modelMessage), true);
     assert.equal(modelMessage.additional_kwargs.injectedMessageType, internalType);
   });

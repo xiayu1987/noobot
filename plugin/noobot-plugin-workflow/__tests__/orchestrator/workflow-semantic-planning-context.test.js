@@ -127,7 +127,6 @@ test("workflow semantic planning passes conversation context before current user
               role: "user",
               content: "请基于前文生成工作流",
               messageOrigin: "natural",
-              userMetaMaterialized: true,
             }),
           ],
         },

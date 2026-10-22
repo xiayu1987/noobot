@@ -8,7 +8,7 @@ import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createModelContext } from "@noobot/context-protocol";
 import {
   readContextMessageValue,
-  resolveContextMessageId,
+  resolveContextMessageKey,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
@@ -26,6 +26,19 @@ import {
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 import { initializeSessionTree, persistSession } from "../helpers/runtime-events-env.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+
+function activeContextFor(messageBlocks) {
+  return createModelContext({
+    messageBlocks: Object.fromEntries(
+      Object.entries(messageBlocks).map(([lane, messages]) => [
+        lane,
+        messages.map((message) =>
+          writeContextMessageMetadata(message, { messageUid: createMessageUid() }),
+        ),
+      ]),
+    ),
+  });
+}
 
 test("runSession emits interrupted branch lifecycle state for non-user abort errors", async () => {
   const callOrder = [];
@@ -121,28 +134,22 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   });
   const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
+    activeMessageContext: activeContextFor({
+      system: [{ type: "system", content: "system" }],
+      history: [],
+      incremental: [
+        writeContextMessageMetadata(
+          { type: "human", content: "hello" },
+          { dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+        ),
+      ],
+    }),
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
       sessionId: "session-used",
       parentSessionId: "",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      messages: [
-        writeContextMessageMetadata(
-          { type: "human", content: "hello" },
-          { dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
-        ),
-      ],
-      messageBlocks: {
-        system: [{ type: "system", content: "system" }],
-        history: [],
-        incremental: [
-          writeContextMessageMetadata(
-            { type: "human", content: "hello" },
-            { dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
-          ),
-        ],
-      },
     },
   });
   const eventListener = {
@@ -222,18 +229,17 @@ test("runSession persists stopped model message snapshot for plain user_stop err
   });
   const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
+    activeMessageContext: activeContextFor({
+      system: [{ type: "system", content: "system second" }],
+      history: [{ type: "ai", content: "previous assistant" }],
+      incremental: [{ type: "human", content: "second stop snapshot" }],
+    }),
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
       sessionId: "session-used",
       parentSessionId: "",
       dialogProcessId: "dialog-2",
       turnScopeId: "turn-2",
-      messages: [{ type: "human", content: "second stop snapshot" }],
-      messageBlocks: {
-        system: [{ type: "system", content: "system second" }],
-        history: [{ type: "ai", content: "previous assistant" }],
-        incremental: [{ type: "human", content: "second stop snapshot" }],
-      },
     },
   });
   const eventListener = {
@@ -298,18 +304,17 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   const abortController = new AbortController();
   const runtime = Object.assign(createTestRuntimeContext(), {
     globalConfig: { workspaceRoot },
+    activeMessageContext: activeContextFor({
+      system: [{ type: "system", content: "system" }],
+      history: [],
+      incremental: [{ type: "human", content: "hello before signal" }],
+    }),
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
       sessionId: "session-used",
       parentSessionId: "",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-signal",
-      messages: [{ type: "human", content: "hello before signal" }],
-      messageBlocks: {
-        system: [{ type: "system", content: "system" }],
-        history: [],
-        incremental: [{ type: "human", content: "hello before signal" }],
-      },
     },
   });
   const eventListener = {
@@ -326,7 +331,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
     agentRunner: async () => {
       abortController.abort({ type: "user_stop", reason: "user stop action" });
       await new Promise((resolve) => setImmediate(resolve));
-      runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.push(
+      runtime.activeMessageContext.messageBlocks.incremental.push(
         writeContextMessageMetadata(
           { type: "human", role: "user", content: "terminal hook injection after stop signal" },
           { injectedMessage: true, injectedMessageType: "separate_model_relay:guidance" },
@@ -414,8 +419,6 @@ test("runSession drains accepted user interjections before sealing the stopped s
       parentSessionId: "",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-stop-interjection",
-      messages: modelContext.messages,
-      messageBlocks: modelContext.messageBlocks,
     },
   });
   const abortError = new Error("stopped with interjections");
@@ -476,7 +479,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
   assert.deepEqual(
     restoredInterjections.map((message) => [
       message.content,
-      resolveContextMessageId(message),
+      resolveContextMessageKey(message),
       message.type,
     ]),
     [
@@ -504,13 +507,12 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
     callOrder,
     eventListener,
     runtime: Object.assign(createTestRuntimeContext(), {
+      activeMessageContext: activeContextFor({ system: [], history: [], incremental: [] }),
       stoppedModelMessageSnapshotCandidate: {
         userId: "u1",
         sessionId: "session-used",
         dialogProcessId: "dialog-1",
         turnScopeId: "",
-        messages: [],
-        messageBlocks: { system: [], history: [], incremental: [] },
       },
     }),
     agentRunner: async () => {

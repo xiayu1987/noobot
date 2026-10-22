@@ -11,6 +11,7 @@ import { normalizeMessageEntity } from "../../src/session/entities.js";
 
 test("normalizeMessageEntity preserves the canonical internal control message type", () => {
   const normalized = normalizeMessageEntity({
+    messageUid: "sm_fixture_17",
     role: "user",
     type: "context_control",
     chatPresentation: false,
@@ -27,6 +28,7 @@ test("normalizeMessageEntity preserves the canonical internal control message ty
 
 test("normalizeMessageEntity preserves canonical user interjection ordering", () => {
   const normalized = normalizeMessageEntity({
+    messageUid: "sm_fixture_18",
     role: "user",
     type: "message",
     content: "accepted constraint",
@@ -42,7 +44,10 @@ test("normalizeMessageEntity preserves canonical user interjection ordering", ()
 
 test("normalizeMessageEntity persists assistant protocol blocks but not diagnostics", () => {
   const normalized = normalizeMessageEntity({
+    messageUid: "sm_fixture_19",
+    modelMessageId: "mm_fixture_19",
     role: "assistant",
+    presentationMessageId: "pm_fx1",
     content: "fallback",
     rawModelContent: [{ type: "text", text: "x", thought_signature: "sig" }],
     modelAdditionalKwargs: {
@@ -103,7 +108,10 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
     meta: { persisted: true },
   };
   const normalized = normalizeMessageEntity({
+    messageUid: "sm_fixture_20",
+    modelMessageId: "mm_fixture_20",
     role: "assistant",
+    presentationMessageId: "pm_fx2",
     content: "done",
     transferEnvelopes: [envelope],
   });
@@ -119,7 +127,10 @@ test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
   assert.throws(
     () =>
       normalizeMessageEntity({
+        messageUid: "sm_fixture_21",
+        modelMessageId: "mm_fixture_21",
         role: "assistant",
+        presentationMessageId: "pm_fx3",
         content: "done",
         transferEnvelopes: { protocol: "noobot.semantic-transfer" },
       }),
@@ -129,10 +140,12 @@ test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
 
 test("normalizeMessageEntity omits empty attachments", () => {
   const withoutAttachments = normalizeMessageEntity({
+    messageUid: "sm_fixture_22",
     role: "user",
     content: "hello",
   });
   const withEmptyAttachments = normalizeMessageEntity({
+    messageUid: "sm_fixture_23",
     role: "user",
     content: "hello",
     attachments: [],
@@ -155,6 +168,7 @@ test("normalizeMessageEntity preserves compact non-empty attachments", () => {
     },
   ];
   const normalized = normalizeMessageEntity({
+    messageUid: "sm_fixture_24",
     role: "user",
     content: "see attachment",
     attachments,
@@ -179,6 +193,7 @@ test("normalizeMessageEntity preserves compact non-empty attachments", () => {
 
 test("normalizeMessageEntity preserves user attachment source fields for history rebuild", () => {
   const normalized = normalizeMessageEntity({
+    messageUid: "sm_fixture_25",
     role: "user",
     content: "see attachment",
     attachments: [
@@ -218,6 +233,7 @@ test("normalizeMessageEntity preserves user attachment source fields for history
 test("normalizeMessageEntity preserves message-scoped user identity for history rebuild", () => {
   const normalized = normalizeMessageEntity({
     role: "user",
+    messageUid: "sm_history",
     content: "hello",
     userName: "admin",
     sessionId: "session-history",
@@ -226,7 +242,6 @@ test("normalizeMessageEntity preserves message-scoped user identity for history 
     parentDialogProcessId: "parent-dialog-history",
     turnScopeId: "turn-history",
     messageOrigin: "natural",
-    userMetaMaterialized: true,
   });
 
   assert.equal(normalized.userName, "admin");
@@ -236,7 +251,7 @@ test("normalizeMessageEntity preserves message-scoped user identity for history 
   assert.equal(normalized.parentDialogProcessId, "parent-dialog-history");
   assert.equal(normalized.turnScopeId, "turn-history");
   assert.equal(normalized.messageOrigin, "natural");
-  assert.equal(normalized.userMetaMaterialized, true);
+  assert.equal("userMetaMaterialized" in normalized, false);
 });
 
 test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
@@ -245,12 +260,18 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
 
   assert.equal(
     "attachments" in
-      normalizeMessageEntity({ role: "user", content: "camel", attachmentMetas: camelAttachments }),
+      normalizeMessageEntity({
+        messageUid: "sm_fixture_27",
+        role: "user",
+        content: "camel",
+        attachmentMetas: camelAttachments,
+      }),
     false,
   );
   assert.equal(
     "attachments" in
       normalizeMessageEntity({
+        messageUid: "sm_fixture_28",
         role: "user",
         content: "snake",
         attachment_metas: snakeAttachments,
@@ -261,7 +282,10 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
 
 test("normalizeMessageEntity preserves thinking timing fields", () => {
   const normalized = normalizeMessageEntity({
+    messageUid: "sm_fixture_29",
+    modelMessageId: "mm_fixture_29",
     role: "assistant",
+    presentationMessageId: "pm_fx4",
     content: "done",
     thinkingStartedAt: " 2026-07-08T10:00:00.000Z ",
     thinkingFinishedAt: " 2026-07-08T10:00:03.500Z ",

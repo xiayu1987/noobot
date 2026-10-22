@@ -9,7 +9,6 @@ import {
   replaceContextProjection,
   writeContextBlocks,
 } from "@noobot/context-protocol/mutation/context";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context/schema";
 import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { isObjectLike } from "@noobot/shared/value";
@@ -36,8 +35,6 @@ export function resolveModelMessageBlocks(ctx = {}) {
   }
   return modelContext.messageBlocks;
 }
-
-export { resolveContextMessageId as getMessageId };
 
 export const appendMessage = (ctx, ...args) => appendContextMessage(resolveHolder(ctx), ...args);
 export const replaceMessages = (ctx, ...args) =>

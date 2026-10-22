@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject, text } from "@noobot/shared/value";
+
 function applyPatch(item = {}, patch = {}) {
   const nextItem = { ...item };
   for (const [key, value] of Object.entries(patch || {})) {
@@ -40,11 +42,20 @@ function createCurrentTurnStore(values = []) {
   };
 }
 
+function assertTurnMessage(message) {
+  if (!isPlainObject(message) || !text(message.messageUid)) {
+    throw new TypeError("current turn message requires messageUid");
+  }
+  return message;
+}
+
 export function createCurrentTurnMessagesStore(messages = []) {
-  const store = createCurrentTurnStore(messages);
+  const store = createCurrentTurnStore(messages.map(assertTurnMessage));
   const { items } = store;
   return {
-    push: store.push,
+    push(message) {
+      return store.push(assertTurnMessage(message));
+    },
     updateLast: store.updateLast,
     removeLast(matcher = null) {
       for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -63,8 +74,8 @@ export function createCurrentTurnMessagesStore(messages = []) {
       }
       return updatedCount;
     },
-    replaceAll(messagesToKeep = []) {
-      const nextItems = cloneItems(messagesToKeep);
+    replaceAll(messagesToKeep) {
+      const nextItems = cloneItems(messagesToKeep.map(assertTurnMessage));
       items.splice(0, items.length, ...nextItems);
       return items.length;
     },

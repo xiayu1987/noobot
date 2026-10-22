@@ -20,7 +20,12 @@ import { AGENT_CHANNEL_STATE } from "../../../../../../src/modules/chat/runtime/
 import { backendState, settleTerminal, snapshot } from "./turnRuntimeRegistryTestFixtures.js";
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
-import { createEventEnvelope, EVENT_FAMILY, replayEventTail } from "@noobot/event-protocol";
+import {
+  createEventEnvelope,
+  EVENT_FAMILY,
+  replayEventTail,
+  getEventFamily,
+} from "@noobot/event-protocol";
 import { createTurnLifecycleEnvelope, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 
 const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revision, sequence }) =>
@@ -92,6 +97,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     const protocolEvents = events.map((payload) =>
       createEventEnvelope({
         family: EVENT_FAMILY.TURN_LIFECYCLE,
+        schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
         identity: {
           eventId: payload.eventId,
           eventType: TURN_LIFECYCLE_WIRE_EVENT,
@@ -278,7 +284,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
           turnScopeId,
           replacementDialogProcessId: "dialog-new",
           replacementTurnScopeId: "turn-new",
-          replacementUserMessageId: "user-new",
+          replacementUserMessageUid: "user-new",
           requestHash: "request-hash-replace-old-chain",
           commandId: "replace-old-chain",
           committedAggregateVersion: 7,

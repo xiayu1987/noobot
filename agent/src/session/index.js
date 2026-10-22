@@ -308,14 +308,14 @@ export function createSessionFacade(runtime) {
       return sessionMessageService.appendTurns(bindPersistenceScope(payload));
     },
 
-    async commitMessageEvent(payload = {}) {
+    async commitMessageEvent(payload) {
       return sessionMessageService.commitMessageEvent(bindPersistenceScope(payload));
     },
 
-    async commitAuthorityEvent(payload = {}) {
+    async commitAuthorityEvent(payload) {
       return sessionMessageService.commitAuthorityEvent(bindPersistenceScope(payload));
     },
-    async getPluginArtifact(payload = {}) {
+    async getPluginArtifact(payload) {
       return sessionMessageService.getPluginArtifact(bindPersistenceScope(payload));
     },
 
@@ -378,8 +378,12 @@ export function createSessionFacade(runtime) {
       return sessionMessageService.assertReusedUserTurnIdentity(bindPersistenceScope(payload));
     },
 
-    async commitTurnSummaryCheckpoint(payload = {}) {
+    async commitTurnSummaryCheckpoint(payload) {
       return sessionMessageService.commitTurnSummaryCheckpoint(bindPersistenceScope(payload));
+    },
+
+    async recordUserMetaParsedResult(payload = {}) {
+      return sessionMessageService.recordUserMetaParsedResult(bindPersistenceScope(payload));
     },
 
     async getSessionTurns(payload = {}) {

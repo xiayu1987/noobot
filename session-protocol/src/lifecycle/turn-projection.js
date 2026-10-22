@@ -48,7 +48,7 @@ export function snapshotReplacedTurn(replacement = {}) {
     turnScopeId: canonicalizeTurnScopeId(replacement.turnScopeId),
     replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
     replacementTurnScopeId: canonicalizeTurnScopeId(replacement.replacementTurnScopeId),
-    replacementUserMessageId: clean(replacement.replacementUserMessageId),
+    replacementUserMessageUid: clean(replacement.replacementUserMessageUid),
     requestHash: clean(replacement.requestHash),
     commandId: clean(replacement.commandId),
     committedAggregateVersion: Number(replacement.committedAggregateVersion || 0),

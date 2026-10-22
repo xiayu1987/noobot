@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import test from "node:test";
@@ -17,7 +18,7 @@ import { createTestBotManager } from "../helpers/test-bot-manager.js";
 import { createStateCommitter } from "../../src/runtime/tool-execution/state-committer.js";
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
-import { createModelContext, getMessageId } from "@noobot/context-protocol";
+import { createModelContext, resolveContextMessageKey } from "@noobot/context-protocol";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
@@ -236,8 +237,8 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
       ],
     },
   });
-  const historyIds = modelContext.messageBlocks.history.map(getMessageId);
-  const incrementalIds = modelContext.messageBlocks.incremental.map(getMessageId);
+  const historyIds = modelContext.messageBlocks.history.map(resolveContextMessageKey);
+  const incrementalIds = modelContext.messageBlocks.incremental.map(resolveContextMessageKey);
   const hookCtx = {
     userId: "u-identity",
     sessionId: "s-identity",
@@ -249,13 +250,19 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
 
   await prepared.hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, hookCtx);
 
-  assert.deepEqual(modelContext.messageBlocks.history.map(getMessageId), historyIds);
-  assert.deepEqual(modelContext.messageBlocks.incremental.map(getMessageId), incrementalIds);
+  assert.deepEqual(modelContext.messageBlocks.history.map(resolveContextMessageKey), historyIds);
+  assert.deepEqual(
+    modelContext.messageBlocks.incremental.map(resolveContextMessageKey),
+    incrementalIds,
+  );
   assert.deepEqual(
     modelContext.messageBlocks.incremental.map((message) => message.content),
     ["current-user", "current-assistant"],
   );
-  assert.equal(new Set(modelContext.messages.map(getMessageId)).size, modelContext.messages.length);
+  assert.equal(
+    new Set(modelContext.messages.map(resolveContextMessageKey)).size,
+    modelContext.messages.length,
+  );
   assert.equal(
     historyIds.some((id) => incrementalIds.includes(id)),
     false,
@@ -353,8 +360,8 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       return { appended: true, reason: "", turns: payload.turns };
     },
     async upsertTurnTiming() {},
-    async getTurnSummaryCheckpointState() {
-      return null;
+    async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
+      return createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId });
     },
     async getSessionTurns() {
       return persistedTurns;
@@ -364,7 +371,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       const userMessage = {
         messageUid,
         id: messageUid,
-        messageId: messageUid,
+        userMessageId: messageUid,
         role: "user",
         type: "message",
         content: "hello plugin",
@@ -374,7 +381,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         dialogProcessId: payload.dialogProcessId,
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
-        userMetaMaterialized: true,
         attachments: [],
       };
       persistedTurns.push(userMessage);
@@ -446,13 +452,15 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         turnMessages: [
           {
             messageUid: createMessageUid(),
-            messageId: "harness-assistant-message",
+            modelMessageId: "harness-assistant-message",
             role: "assistant",
             type: "message",
             content: "ok from fake agent",
           },
         ],
         turnTasks: [{ taskId: "t1", status: "done" }],
+        modelLoopRound: 0,
+        modelMessages: [],
       };
     },
   });

@@ -58,8 +58,8 @@ describe("useChatEngine.resend stopped state", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
         const replacementUser = {
-          id: `msg-user-${turnScopeId}`,
-          messageId: `msg-user-${turnScopeId}`,
+          messageUid: `msg-user-${turnScopeId}`,
+          userMessageId: `msg-user-${turnScopeId}`,
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -86,14 +86,14 @@ describe("useChatEngine.resend stopped state", () => {
     });
     activeSession.value.aggregateVersion = 11;
     const stoppedUser = {
-      id: "user-immediate-stop",
+      messageUid: "user-immediate-stop",
       turnScopeId: stoppedTurnScopeId,
       dialogProcessId: "dp-immediate-stop",
       role: RoleEnum.USER,
       content: "original",
     };
     const stoppedAssistant = {
-      id: "assistant-immediate-stop",
+      presentationMessageId: "assistant-immediate-stop",
       turnScopeId: stoppedTurnScopeId,
       dialogProcessId: "dp-immediate-stop",
       role: RoleEnum.ASSISTANT,
@@ -188,8 +188,8 @@ describe("useChatEngine.resend stopped state", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
         const replacementUser = {
-          id: `msg-user-${turnScopeId}`,
-          messageId: `msg-user-${turnScopeId}`,
+          messageUid: `msg-user-${turnScopeId}`,
+          userMessageId: `msg-user-${turnScopeId}`,
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -300,8 +300,8 @@ describe("useChatEngine.resend stopped state", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
         const replacementUser = {
-          id: `msg-user-${turnScopeId}`,
-          messageId: `msg-user-${turnScopeId}`,
+          messageUid: `msg-user-${turnScopeId}`,
+          userMessageId: `msg-user-${turnScopeId}`,
           role: RoleEnum.USER,
           content: newContent,
           turnScopeId,
@@ -451,8 +451,8 @@ describe("useChatEngine.resend stopped state", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
         const replacementUser = {
-          id: `msg-user-${turnScopeId}`,
-          messageId: `msg-user-${turnScopeId}`,
+          messageUid: `msg-user-${turnScopeId}`,
+          userMessageId: `msg-user-${turnScopeId}`,
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -567,8 +567,8 @@ describe("useChatEngine.resend stopped state", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
         const replacementUser = {
-          id: `msg-user-${turnScopeId}`,
-          messageId: `msg-user-${turnScopeId}`,
+          messageUid: `msg-user-${turnScopeId}`,
+          userMessageId: `msg-user-${turnScopeId}`,
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -684,8 +684,8 @@ describe("useChatEngine.resend stopped state", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
         const replacementUser = {
-          id: `msg-user-${turnScopeId}`,
-          messageId: `msg-user-${turnScopeId}`,
+          messageUid: `msg-user-${turnScopeId}`,
+          userMessageId: `msg-user-${turnScopeId}`,
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,
@@ -748,8 +748,8 @@ describe("useChatEngine.resend stopped state", () => {
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
         const replacementUser = {
-          id: `msg-user-${turnScopeId}`,
-          messageId: `msg-user-${turnScopeId}`,
+          messageUid: `msg-user-${turnScopeId}`,
+          userMessageId: `msg-user-${turnScopeId}`,
           turnScopeId,
           role: RoleEnum.USER,
           content: newContent,

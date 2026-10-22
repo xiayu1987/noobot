@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 import { createTestModelHost } from "../../helpers/test-model-host.js";
@@ -33,7 +34,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
     },
   });
 
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     globalConfig: {},
     userConfig: {},
     systemRuntime: {},
@@ -81,7 +82,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
       },
       modelSpec: null,
     }),
-  };
+  });
 
   const result = await invoker({
     model: "GLM_5_1",

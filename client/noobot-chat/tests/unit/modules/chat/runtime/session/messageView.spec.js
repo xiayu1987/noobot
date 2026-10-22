@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
 import { createSessionMessageView } from "../../../../../../src/modules/chat/runtime/session/messageView.js";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 describe("session message view", () => {
@@ -23,8 +24,8 @@ describe("session message view", () => {
       presentationMessageId: "assistant-1",
       presentation: {
         userMessage: {
-          id: "user-1",
-          messageId: "user-1",
+          messageUid: "user-1",
+          userMessageId: "user-1",
           role: "user",
           sessionId: "session-1",
           turnScopeId: "turn-1",
@@ -32,8 +33,6 @@ describe("session message view", () => {
           attachments: [],
         },
         assistantMessage: {
-          id: "assistant-1",
-          messageId: "assistant-1",
           presentationMessageId: "assistant-1",
           role: "assistant",
           sessionId: "session-1",
@@ -53,9 +52,14 @@ describe("session message view", () => {
       createdCount: 0,
     });
     expect(sessions.value[0].messages).toHaveLength(2);
-    expect(sessions.value[0].messages.map(({ role, messageId }) => ({ role, messageId }))).toEqual([
-      { role: "user", messageId: "user-1" },
-      { role: "assistant", messageId: "assistant-1" },
+    expect(
+      sessions.value[0].messages.map((message) => ({
+        role: message.role,
+        viewKey: resolveMessageViewKey(message),
+      })),
+    ).toEqual([
+      { role: "user", viewKey: "user-1" },
+      { role: "assistant", viewKey: "assistant-1" },
     ]);
   });
   it("does not render internal control prompts as user messages", () => {

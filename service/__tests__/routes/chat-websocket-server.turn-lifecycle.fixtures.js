@@ -15,6 +15,7 @@ import {
   EVENT_FAMILY,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
+  getEventFamily,
 } from "@noobot/event-protocol";
 import {
   createTurnLifecycleEnvelope,
@@ -82,6 +83,7 @@ export function createTestLifecycleEnvelope({
   });
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: payload.eventId,
       eventType: "turn_lifecycle",
@@ -193,7 +195,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         if (input.eventType === TURN_EVENT.ACTION_ACCEPTED && input.action !== "resend") {
           userMessage = userMessages.get(input.turnScopeId) || {
             messageUid: `session-message:${input.turnScopeId}`,
-            messageId: input.userMessage.messageId,
+            userMessageId: input.userMessage.userMessageId,
             role: "user",
             type: "message",
             content: input.userMessage.content,
@@ -203,7 +205,6 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
             parentDialogProcessId: input.userMessage.parentDialogProcessId,
             turnScopeId: input.turnScopeId,
             messageOrigin: input.userMessage.messageOrigin,
-            userMetaMaterialized: input.userMessage.userMetaMaterialized,
             attachments: [],
           };
           userMessages.set(input.turnScopeId, userMessage);

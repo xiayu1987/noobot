@@ -11,7 +11,8 @@ import { projectTerminalHistoryMessages } from "../src/policy/terminal-history.j
 import {
   readContextMessageField,
   readContextMessageValue,
-  resolveContextMessageId,
+  composeContextProjectionKey,
+  resolveContextMessageKey,
   resolveContextMessageSummarized,
 } from "../src/message/codec.js";
 import { contextMessage } from "./helpers/context-message.js";
@@ -27,7 +28,8 @@ function message(overrides = {}) {
   });
 }
 
-const ids = (messages) => messages.map(resolveContextMessageId);
+const ids = (messages) => messages.map(resolveContextMessageKey);
+const terminalKey = (turnScopeId) => composeContextProjectionKey("terminal_status", turnScopeId);
 
 function status(overrides = {}) {
   return {
@@ -46,7 +48,6 @@ test("user-stopped history ignores summary flags and projects only user, latest 
       messageUid: "user-1",
       content: "原始问题",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       summarized: true,
     }),
     message({
@@ -88,7 +89,7 @@ test("user-stopped history ignores summary flags and projects only user, latest 
 
   const result = projectTerminalHistoryMessages({ messages: source, terminalStatuses: [status()] });
 
-  assert.deepEqual(ids(result), ["user-1", "plan", "guide-new", "turn-1::terminal_status"]);
+  assert.deepEqual(ids(result), ["user-1", "plan", "guide-new", terminalKey("turn-1")]);
   assert.deepEqual(
     result.map((item) => item.role),
     ["user", "user", "user", "user"],
@@ -103,7 +104,8 @@ test("user-stopped history ignores summary flags and projects only user, latest 
     role: "user",
     content: "用户停止了本轮生成",
     additional_kwargs: {
-      messageUid: "turn-1::terminal_status",
+      projectionType: "terminal_status",
+      sourceTurnScopeId: "turn-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       messageOrigin: "internal",
@@ -124,7 +126,6 @@ for (const terminalStatus of ["error", "timeout"]) {
           messageUid: "user-1",
           content: "原始问题",
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         }),
       ],
       terminalStatuses: [
@@ -152,7 +153,6 @@ test("completed rounds remain untouched for summarized filtering by the history 
       messageUid: "user-1",
       content: "question",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
     }),
     message({ messageUid: "answer-1", role: "assistant", content: "answer", summarized: true }),
   ];
@@ -170,7 +170,6 @@ test("latest injected selection is scoped independently to each terminal dialog"
       messageUid: "u1",
       content: "q1",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
     }),
     message({
       messageUid: "g1",
@@ -183,7 +182,6 @@ test("latest injected selection is scoped independently to each terminal dialog"
       messageUid: "u2",
       content: "q2",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       dialogProcessId: "dialog-2",
       turnScopeId: "turn-2",
     }),
@@ -204,10 +202,10 @@ test("latest injected selection is scoped independently to each terminal dialog"
   assert.deepEqual(ids(result), [
     "u1",
     "g1",
-    "turn-1::terminal_status",
+    terminalKey("turn-1"),
     "u2",
     "g2",
-    "turn-2::terminal_status",
+    terminalKey("turn-2"),
   ]);
 });
 
@@ -226,9 +224,7 @@ test("terminal status requires its authoritative explanation", () => {
   assert.throws(
     () =>
       projectTerminalHistoryMessages({
-        messages: [
-          message({ messageUid: "user-1", messageOrigin: "natural", userMetaMaterialized: true }),
-        ],
+        messages: [message({ messageUid: "user-1", messageOrigin: "natural" })],
         terminalStatuses: [status({ description: "" })],
       }),
     /requires an explanation description/,

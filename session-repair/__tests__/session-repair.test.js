@@ -187,7 +187,7 @@ test("migrates the historical multimodal parse reason from verified tool transfe
   assert.deepEqual(repeated.document, result.document);
 });
 
-test("migrates the legacy message id field into messageId", () => {
+test("migrates the legacy message id field into role identity fields", () => {
   const source = {
     schemaVersion: 7,
     sessionId: "session-1",
@@ -201,7 +201,10 @@ test("migrates the legacy message id field into messageId", () => {
   const result = migrateSessionDocument(source);
   assert.equal(result.document.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
   assert.deepEqual(
-    result.document.messages.map((message) => [message.messageId, Object.hasOwn(message, "id")]),
+    result.document.messages.map((message) => [
+      message.userMessageId || message.modelMessageId,
+      Object.hasOwn(message, "id") || Object.hasOwn(message, "messageId"),
+    ]),
     [
       ["m1", false],
       ["m2", false],
@@ -249,7 +252,8 @@ test("runs every message migration step even after an earlier step changed the m
   const result = migrateSessionDocument(source);
   const [message] = result.document.messages;
   assert.equal(Object.hasOwn(message, "id"), false);
-  assert.equal(message.messageId, "m1");
+  assert.equal(Object.hasOwn(message, "messageId"), false);
+  assert.equal(message.userMessageId, "m1");
   assert.deepEqual(message.turnCommit, {
     action: "send",
     commandId: "command-1",
@@ -258,6 +262,34 @@ test("runs every message migration step even after an earlier step changed the m
   const repeated = migrateSessionDocument(result.document);
   assert.equal(repeated.changed, false);
   assert.deepEqual(repeated.document, result.document);
+});
+
+test("drops the legacy runState from a turn commit receipt result", () => {
+  const source = {
+    schemaVersion: 6,
+    sessionId: "session-1",
+    aggregateVersion: 1,
+    turnLifecycle: {
+      turns: {},
+      commandReceipts: [
+        {
+          commandId: "command-1",
+          type: "session.turn.commit",
+          requestHash: "hash-1",
+          aggregateVersion: 1,
+          committedAt: "2026-09-18T00:00:00.000Z",
+          result: { messageUid: "message-1", runState: "pending_start" },
+        },
+      ],
+    },
+    messages: [],
+  };
+  const result = migrateSessionDocument(source);
+  assert.deepEqual(result.document.turnLifecycle.commandReceipts[0].result, {
+    messageUid: "message-1",
+  });
+  const repeated = migrateSessionDocument(result.document);
+  assert.equal(repeated.changed, false);
 });
 
 test("does not reinterpret non-canonical fields in the current artifact protocol", () => {
@@ -422,11 +454,11 @@ test("migrates duplicate terminal and command facts into the canonical lifecycle
       type,
     })),
     [
-      { commandId: "send-1:completed:turn.completed", type: "turn.completed" },
       { commandId: "send-1", type: "session.turn.commit" },
       { commandId: "delete-1", type: "session.message.delete_from" },
     ],
   );
+  assert.deepEqual(result.droppedCommandReceiptIds, ["send-1:completed:turn.completed"]);
   assert.equal(
     result.document.turnLifecycle.turns["turn-1"].completionCommitId,
     "send-1:completed:turn.completed",

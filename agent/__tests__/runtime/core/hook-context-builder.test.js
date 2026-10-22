@@ -11,8 +11,9 @@ import { writeContextMessageMetadata } from "@noobot/context-protocol/message/co
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { HOOK_POINT, HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { buildHookContext } from "../../../src/runtime/hooks/hook-context-builder.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
-test("before_final_output retains the supplied authoritative modelContext entity", () => {
+test("hook context reads the authoritative modelContext from runtime", () => {
   const modelContext = createModelContext({
     messageBlocks: {
       system: [],
@@ -30,14 +31,11 @@ test("before_final_output retains the supplied authoritative modelContext entity
       ],
     },
   });
-  const context = buildHookContext(
-    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
-    {},
-    {
-      modelContext,
-      result: { output: "final" },
-    },
-  );
+  const runtime = createTestRuntimeContext();
+  runtime.activeMessageContext = modelContext;
+  const context = buildHookContext(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, runtime, {
+    result: { output: "final" },
+  });
 
   assert.equal(context.contextProtocolVersion, HOOK_PROTOCOL_VERSION);
   assert.equal(context.modelContext, modelContext);
@@ -97,4 +95,35 @@ test("non-model hook context uses the canonical runtime turn identity and diagno
   }
   assert.equal(diagnostic.data.hasModelContext, true);
   assert.equal(diagnostic.data.modelContextProtocolVersion, modelContext.protocolVersion);
+});
+
+test("buildHookContext rejects malformed raw hook fields before projection", () => {
+  const runtime = createTestRuntimeContext();
+  const cases = [
+    [null, /raw fields must be a plain object/],
+    [[], /raw fields must be a plain object/],
+    [{ calls: {} }, /calls must be an array/],
+    [{ call: [] }, /call must be a plain object/],
+    [{ call: "tool" }, /call must be a plain object/],
+  ];
+  for (const [raw, message] of cases) {
+    assert.throws(() => buildHookContext(HOOK_POINT.BEFORE_TOOL_CALL, runtime, raw), {
+      name: "TypeError",
+      message,
+    });
+  }
+});
+
+test("hook context rejects caller-supplied modelContext and non-protocol runtime context", () => {
+  const runtime = createTestRuntimeContext();
+  assert.throws(
+    () => buildHookContext(HOOK_POINT.AGENT.BEFORE_TURN, runtime, { modelContext: {} }),
+    /forbids top-level modelContext/,
+  );
+  assert.equal(buildHookContext(HOOK_POINT.AGENT.BEFORE_TURN, runtime, {}).modelContext, null);
+  runtime.activeMessageContext = { messages: [] };
+  assert.throws(
+    () => buildHookContext(HOOK_POINT.AGENT.BEFORE_TURN, runtime, {}),
+    /runtime.activeMessageContext must be null/,
+  );
 });

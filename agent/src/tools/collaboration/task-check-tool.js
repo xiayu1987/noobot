@@ -6,7 +6,10 @@
 import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { TASK_STATUS } from "../../bot/config/constants.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { TOOL_NAME } from "../constants/index.js";
@@ -26,8 +29,8 @@ import { text } from "@noobot/shared/value";
 const TASK_CHECK_TOOL_NAME = TOOL_NAME.TASK_CHECK;
 
 export function createTaskCheckTool(ctx = {}) {
-  const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
-  const systemRuntime = runtime?.systemRuntime || {};
+  const runtime = getRuntimeFromAgentContext(ctx.agentContext);
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
 
   return [
     structuredTool(

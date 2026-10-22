@@ -9,6 +9,7 @@ import { AIMessage } from "@langchain/core/messages";
 
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 test("buildContextMessages preserves thought-signature payload/tool_calls and omits non-required kwargs", () => {
@@ -54,13 +55,13 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   ]);
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
+      createTestRuntimeContext({
         systemRuntime: {
           sessionId: "session-thought-signature",
           dialogProcessId: "dialog-thought-signature",
           turnScopeId: "turn-thought-signature",
         },
-      },
+      }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
     { currentUserMessage: null },
@@ -98,13 +99,13 @@ test("buildContextMessages restores OpenAI Responses reasoning output sequence",
   ]);
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
+      createTestRuntimeContext({
         systemRuntime: {
           sessionId: "session-responses",
           dialogProcessId: "dialog-responses",
           turnScopeId: "turn-responses",
         },
-      },
+      }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
     { currentUserMessage: null },

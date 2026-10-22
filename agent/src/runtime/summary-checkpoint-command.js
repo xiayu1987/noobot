@@ -9,24 +9,16 @@ import {
   acknowledgeMainFlowSummaryCheckpoint,
   peekMainFlowSummaryCheckpoint,
 } from "./main-flow-control.js";
-import { isObjectLike } from "@noobot/shared/value";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 
-export async function consumeSummaryCheckpointCommand({
-  runtime = null,
-  loopState = null,
-  eventListener = null,
-  turn = 0,
-} = {}) {
+export async function consumeSummaryCheckpointCommand({ runtime, eventListener, turn }) {
   const instruction = peekMainFlowSummaryCheckpoint(runtime);
   if (!instruction) return null;
   try {
-    const result = await runtime?.commitSummaryCheckpoint?.({
+    const result = await runtime.commitSummaryCheckpoint({
       summaryCompletion: instruction,
     });
-    if (result?.committed === true && isObjectLike(loopState)) {
-      loopState.turnMessages = runtime?.currentTurnMessages?.toArray?.() || loopState.turnMessages;
-    }
-    if (result?.committed !== true) {
+    if (result.committed !== true) {
       throw new Error("summary checkpoint was not committed");
     }
     acknowledgeMainFlowSummaryCheckpoint(runtime);
@@ -36,13 +28,10 @@ export async function consumeSummaryCheckpointCommand({
       turn,
       source: instruction.source,
       message: error?.message || String(error),
-      requestedMessageIds: Array.isArray(error?.requestedMessageIds)
-        ? error.requestedMessageIds
-        : instruction.summarizedMessageIds,
-      resolvedMessageIds: Array.isArray(error?.resolvedMessageIds) ? error.resolvedMessageIds : [],
-      unresolvedMessageIds: Array.isArray(error?.unresolvedMessageIds)
-        ? error.unresolvedMessageIds
-        : [],
+      summarizedMessageUids: instruction.summarizedMessageUids,
+      ...(error?.code === SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING
+        ? { messageUidResolution: error.messageUidResolution }
+        : {}),
     });
     throw error;
   }

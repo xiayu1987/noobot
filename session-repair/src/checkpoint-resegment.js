@@ -8,13 +8,14 @@ import path from "node:path";
 import { text } from "@noobot/shared/value";
 import { checkpointContentHash, resolveRepairArtifactPath } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
+import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 function messageTimestamp(record, turnId) {
   const timestamp = Date.parse(text(record?.message?.ts));
   if (Number.isFinite(timestamp)) return timestamp;
   throw Object.assign(
     new Error(`Cannot resegment checkpoint baseline with an invalid message timestamp: ${turnId}`),
-    { code: "SESSION_REPAIR_CHECKPOINT_MESSAGE_TIMESTAMP_INVALID" },
+    { code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_MESSAGE_TIMESTAMP_INVALID },
   );
 }
 
@@ -23,7 +24,7 @@ function checkpointTimestamp(payload, turnId) {
   if (Number.isFinite(timestamp)) return timestamp;
   throw Object.assign(
     new Error(`Cannot resegment checkpoint baseline with an invalid commit timestamp: ${turnId}`),
-    { code: "SESSION_REPAIR_CHECKPOINT_TIMESTAMP_INVALID" },
+    { code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_TIMESTAMP_INVALID },
   );
 }
 
@@ -38,7 +39,7 @@ function assertCheckpointIndex(payload, index, previousHash, turnId) {
     checkpointContentHash(payload) !== index.contentHash
   ) {
     throw Object.assign(new Error(`Cannot resegment an invalid checkpoint chain: ${turnId}`), {
-      code: "SESSION_REPAIR_CHECKPOINT_CHAIN_INVALID",
+      code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_CHAIN_INVALID,
     });
   }
 }
@@ -57,7 +58,7 @@ async function readCheckpointChain(sessionDir, indexes, turnId) {
     if (committedAt <= previousCommittedAt) {
       throw Object.assign(
         new Error(`Checkpoint commit order is not strictly increasing: ${turnId}`),
-        { code: "SESSION_REPAIR_CHECKPOINT_ORDER_INVALID" },
+        { code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_ORDER_INVALID },
       );
     }
     checkpoints.push({ index, checkpointFile, payload, committedAt });
@@ -77,7 +78,7 @@ function assertCanonicalBaseline(records, turnId) {
   if (!invalid) return;
   throw Object.assign(
     new Error(`Migrated checkpoint baseline is not a canonical upsert set: ${turnId}`),
-    { code: "SESSION_REPAIR_CHECKPOINT_BASELINE_INVALID" },
+    { code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_BASELINE_INVALID },
   );
 }
 

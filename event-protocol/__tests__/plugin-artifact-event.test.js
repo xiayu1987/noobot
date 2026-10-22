@@ -117,6 +117,9 @@ test("plugin artifacts have one authoritative registry descriptor", () => {
 
 test("plugin artifact ordering is scoped by plugin and artifact ID", () => {
   const envelope = createPluginArtifactEnvelope({
+    revision: 1,
+    operation: "created",
+    baseRevision: null,
     pluginId: "character",
     artifactType: "character.animation",
     artifactId: protocol.animationId,
@@ -142,6 +145,11 @@ test("plugin artifact authority rejects mismatched ordering", () => {
   assert.deepEqual(
     validateProtocolEvent({
       ...createPluginArtifactEnvelope({
+        sequence: 1,
+        revision: 1,
+        occurredAt: "2026-10-22T00:00:00.000Z",
+        operation: "created",
+        baseRevision: null,
         pluginId: "character",
         artifactType: "character.animation",
         artifactId: protocol.animationId,

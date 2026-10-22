@@ -6,95 +6,73 @@
 
 import {
   createUserMetaBackwrite,
+  isSameUserMetaBackwrite,
+  mergeUserMetaParsedResults,
   normalizeUserMetaBackwrites,
 } from "@noobot/context-protocol/policy/user-meta-backwrite";
-import {
-  CONTEXT_MESSAGE_PROJECTION_TYPE,
-  deriveContextMessageProjectionId,
-} from "@noobot/context-protocol/message/codec";
 import { resolveMessagesByIds } from "@noobot/context-protocol/message/store";
-import { projectContextMessageToSessionRecord } from "@noobot/context-protocol/message/session-projection";
-import { updateContextMessageById } from "@noobot/context-protocol/mutation/context";
-import { appendUserMetaParsedResult } from "./user-meta.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import {
+  readContextMessageValue,
+  writeContextMessageMetadata,
+} from "@noobot/context-protocol/message/codec";
+import { text } from "@noobot/shared/value";
+import { requireActiveModelContext } from "../../../runtime/active-model-context.js";
 
-function setBackwrites(runtime = {}, records = []) {
-  const normalized = normalizeUserMetaBackwrites(records);
-  runtime.userMetaBackwrites = normalized;
-  if (isObjectLike(runtime.activeMessageContext)) {
-    runtime.activeMessageContext.userMetaBackwrites = normalized;
-  }
-  if (isObjectLike(runtime.stoppedModelMessageSnapshotCandidate)) {
-    runtime.stoppedModelMessageSnapshotCandidate.userMetaBackwrites = normalized;
-  }
-  return normalized;
+function setBackwrites(modelContext, records) {
+  modelContext.userMetaBackwrites = normalizeUserMetaBackwrites(records);
 }
 
-export function queueUserMetaBackwrite(
-  runtime = {},
-  { attachmentRef = "", result = {}, createdAt = "" } = {},
-) {
-  const sourceMessageUid = text(runtime?.currentUserMessageUid);
-  const sourceOrigin = text(runtime?.currentUserMessageOrigin).toLowerCase();
+export function queueUserMetaBackwrite(runtime, { attachmentRef, result, createdAt = "" }) {
+  const sourceMessageUid = text(runtime.currentUserMessageUid);
+  const sourceOrigin = text(runtime.currentUserMessageOrigin).toLowerCase();
   if (!sourceMessageUid || sourceOrigin !== "natural") {
     throw new Error("user_meta backwrite requires the current natural user message");
   }
-  const userMetaMessageUid = deriveContextMessageProjectionId(
-    sourceMessageUid,
-    CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
-  );
   const backwrite = createUserMetaBackwrite({
-    userMetaMessageUid,
+    userMetaSourceMessageUid: sourceMessageUid,
     attachmentRef,
     result,
     createdAt: createdAt || new Date().toISOString(),
   });
-  const current = Array.isArray(runtime?.userMetaBackwrites) ? runtime.userMetaBackwrites : [];
-  if (current.some((item) => item?.backwriteId === backwrite.backwriteId)) return backwrite;
-  setBackwrites(runtime, [...current, backwrite]);
+  const modelContext = requireActiveModelContext(runtime);
+  const current = modelContext.userMetaBackwrites;
+  if (current.some((item) => isSameUserMetaBackwrite(item, backwrite))) return backwrite;
+  setBackwrites(modelContext, [...current, backwrite]);
   return backwrite;
 }
 
 export async function applyPendingUserMetaBackwrites(
-  runtime = {},
-  {
-    turnPersister,
-    userId = "",
-    sessionId = "",
-    dialogProcessId = "",
-    turnScopeId = "",
-    persistenceScope,
-    eventListener = null,
-  } = {},
+  runtime,
+  { session, userId, sessionId, persistenceScope },
 ) {
-  const records = normalizeUserMetaBackwrites(runtime?.userMetaBackwrites || []);
+  const modelContext = requireActiveModelContext(runtime);
+  const records = modelContext.userMetaBackwrites;
   if (!records.length) return { appliedCount: 0, remaining: [] };
-  const modelContext = runtime?.activeMessageContext;
-  if (!isObjectLike(modelContext)) {
-    throw new Error("user_meta backwrite requires the active model context");
-  }
   let remaining = records.slice();
   let appliedCount = 0;
   for (const record of records) {
-    const [message] = resolveMessagesByIds(modelContext, [record.userMetaMessageUid]);
-    if (!message) {
-      throw new Error(`user_meta backwrite target not found: ${record.userMetaMessageUid}`);
+    const [source] = resolveMessagesByIds(modelContext, [record.userMetaSourceMessageUid]);
+    if (!source) {
+      throw new Error(`user_meta backwrite source not found: ${record.userMetaSourceMessageUid}`);
     }
-    const nextContent = appendUserMetaParsedResult(message.content, record.result);
-    updateContextMessageById(modelContext, record.userMetaMessageUid, { content: nextContent });
-
-    const [updatedMessage] = resolveMessagesByIds(modelContext, [record.userMetaMessageUid]);
-    await turnPersister.appendAgentMessages({
+    const outcome = await session.recordUserMetaParsedResult({
       userId,
       sessionId,
-      dialogProcessId,
-      turnScopeId,
-      eventListener,
       persistenceScope,
-      messages: [projectContextMessageToSessionRecord(updatedMessage)],
+      userMetaSourceMessageUid: record.userMetaSourceMessageUid,
+      result: record.result,
+    });
+    if (outcome?.recorded !== true) {
+      throw new Error(`user_meta backwrite was not recorded: ${record.userMetaSourceMessageUid}`);
+    }
+    writeContextMessageMetadata(source, {
+      userMetaParsedResults: mergeUserMetaParsedResults(
+        readContextMessageValue(source, "userMetaParsedResults"),
+        record.result,
+      ),
     });
     remaining = remaining.slice(1);
-    setBackwrites(runtime, remaining);
+    setBackwrites(modelContext, remaining);
     appliedCount += 1;
   }
   return { appliedCount, remaining };

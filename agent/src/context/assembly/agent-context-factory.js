@@ -11,6 +11,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { getAgentContextEnvelope, getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
+import { AGENT_CONTEXT_MODE, assertAgentContextMode } from "@noobot/context-protocol";
 
 export class AgentContextFactory {
   constructor({ globalConfig, session, memory, attach, skill, botManager, errorLogger }) {
@@ -80,6 +81,7 @@ export class AgentContextFactory {
     if (!contextBuilder) {
       throw new Error(tSystem("context.contextBuilderRequired"));
     }
+    assertAgentContextMode(mode);
     const runtimeHookCarrier = {
       eventListener,
       hookManager: runConfig.hookManager,
@@ -101,15 +103,7 @@ export class AgentContextFactory {
     emitEvent(eventListener, "context_building", { sessionId, mode });
     let agentContext = null;
     try {
-      const isNewSession = mode === "new_session";
-      const isExistingSession = mode === "existing_session";
-      if (!isNewSession && !isExistingSession) {
-        const error = new Error(`unsupported context mode: ${String(mode || "<empty>")}`);
-        error.statusCode = 400;
-        error.code = "INVALID_CONTEXT_MODE";
-        throw error;
-      }
-      if (isNewSession) {
+      if (mode === AGENT_CONTEXT_MODE.NEW_SESSION) {
         agentContext = await contextBuilder.buildNewSessionContext({ dialogProcessId });
       } else {
         agentContext = await contextBuilder.buildExistingSessionContext({ dialogProcessId });

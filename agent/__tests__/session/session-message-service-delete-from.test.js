@@ -158,12 +158,22 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
             type: "turn.completed",
             turnScopeId: "scope-keep",
             requestHash: "keep",
+            committedAt: "2026-07-18T00:00:00.000Z",
+            revision: 1,
+            sequence: 1,
+            eventId: "event-keep-completed",
+            envelope: { identity: { eventId: "event-keep-completed" } },
           },
           {
             commandId: "delete-stopped",
             type: "turn.stop_completed",
             turnScopeId: "scope-delete",
             requestHash: "delete",
+            committedAt: "2026-07-18T00:00:00.000Z",
+            revision: 2,
+            sequence: 2,
+            eventId: "event-delete-stopped",
+            envelope: { identity: { eventId: "event-delete-stopped" } },
           },
         ],
       },
@@ -332,11 +342,15 @@ test("SessionMessageService.deleteFromMessage returns 409 when expectedAggregate
 });
 
 test("SessionMessageService.deleteFromMessage prunes write-time dialog facts of truncated turns", async () => {
-  const receipt = (checkpointId, uids) => ({
+  const receipt = (checkpointId, uids, checkpointRevision) => ({
     checkpointId,
+    checkpointRevision,
     requestHash: `sha256:${checkpointId}`,
     persistedMessageUids: uids,
     summarizedMessageUids: uids,
+    retainedMessageUids: [],
+    markedCount: uids.length,
+    committedAt: "2026-01-01T00:00:00.000Z",
   });
   const { service, saved } = createService({
     initialSession: {
@@ -373,12 +387,14 @@ test("SessionMessageService.deleteFromMessage prunes write-time dialog facts of 
         "t-keep": {
           dialogProcessId: "d-keep",
           turnScopeId: "t-keep",
-          receipts: [receipt("keep", ["k1"]), receipt("cross", ["k1", "x1"])],
+          checkpointRevision: 2,
+          receipts: [receipt("keep", ["k1"], 1), receipt("cross", ["k1", "x1"], 2)],
         },
         "t-drop": {
           dialogProcessId: "d-drop",
           turnScopeId: "t-drop",
-          receipts: [receipt("drop", ["x1"])],
+          checkpointRevision: 1,
+          receipts: [receipt("drop", ["x1"], 1)],
         },
       },
     },

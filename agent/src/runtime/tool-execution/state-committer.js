@@ -13,7 +13,10 @@ import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { appendToolResultModelMessage } from "../message-context/message-store.js";
-import { currentAssistantPresentationMessageId } from "../../events/message-event-stream.js";
+import {
+  currentAssistantPresentationMessageId,
+  markAssistantDraftCommitted,
+} from "../../events/message-event-stream.js";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
@@ -56,7 +59,7 @@ export function createStateCommitter({
       toolCalls = [],
       modelAlias = "",
       modelName = "",
-      messageId = "",
+      modelMessageId = "",
       messageUid = "",
       presentationMessageId = "",
       chatPresentation = false,
@@ -67,7 +70,7 @@ export function createStateCommitter({
         throw new Error("Turn message event materializer is required");
       }
       const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents({
-        modelMessageId: messageId,
+        modelMessageId,
       });
       const canonicalActivityTimeline = Array.isArray(pendingProjection.activityTimeline)
         ? pendingProjection.activityTimeline
@@ -78,7 +81,7 @@ export function createStateCommitter({
       }
       const assistantMessage = {
         messageUid: canonicalMessageUid,
-        messageId: text(messageId),
+        modelMessageId: text(modelMessageId),
         role: "assistant",
         content: String(content || ""),
         type,
@@ -131,6 +134,7 @@ export function createStateCommitter({
         );
       }
       turnMessageStore.push(assistantMessage);
+      markAssistantDraftCommitted(runtime, assistantMessage.modelMessageId);
 
       await runtime.persistCurrentTurnMessages();
       await runAgentRuntimeHook({
@@ -153,7 +157,6 @@ export function createStateCommitter({
       const contextPolicy = resolveToolContextPolicy(call);
       const toolResultPayload = {
         messageUid,
-        messageId: messageUid,
         role: "tool",
         content: compactedToolResultText,
         type: "tool_result",
@@ -162,9 +165,7 @@ export function createStateCommitter({
         tool_call_id: resolvedCallId,
         toolName: resolvedCallName,
         ...(contextPolicy ? { contextPolicy } : {}),
-        ...(currentAssistantPresentationMessageId(runtime)
-          ? { presentationMessageId: currentAssistantPresentationMessageId(runtime) }
-          : {}),
+        presentationMessageId: currentAssistantPresentationMessageId(runtime),
       };
       if (Array.isArray(transferEnvelopes) && transferEnvelopes.length) {
         toolResultPayload.transferEnvelopes = transferEnvelopes;
@@ -178,6 +179,7 @@ export function createStateCommitter({
           status: HOOK_PHASE_STATUS.RUNNING,
           payload: toolResultPayload,
           call,
+          toolName: resolvedCallName,
           agentContext,
         }),
       });
@@ -207,6 +209,7 @@ export function createStateCommitter({
           status: HOOK_PHASE_STATUS.SUCCESS,
           payload: toolResultPayload,
           call,
+          toolName: resolvedCallName,
           agentContext,
         }),
       });

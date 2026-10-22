@@ -6,12 +6,9 @@
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
 import {
-  CONTEXT_MESSAGE_PROJECTION_TYPE,
-  deriveContextMessageProjectionId,
   projectContextMessageModelMetadata,
   readContextMessageField,
   readContextMessageValue,
-  resolveContextMessageId,
   resolveContextMessageRole,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
@@ -33,17 +30,6 @@ import {
   isDerivedUserMetaMessage,
 } from "./user-meta.js";
 import { text } from "@noobot/shared/value";
-
-function hasMaterializedUserMeta(messages = [], index = 0, sourceMessage = {}) {
-  const sourceId = resolveContextMessageId(sourceMessage);
-  if (!sourceId) return false;
-  const meta = messages[index + 1];
-  if (!meta || !isDerivedUserMetaMessage(meta)) return false;
-  return (
-    resolveContextMessageId(meta) ===
-    deriveContextMessageProjectionId(sourceId, CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META)
-  );
-}
 
 function buildAssistantAdditionalKwargs(msg = {}) {
   const metadata = projectContextMessageModelMetadata(msg);
@@ -67,7 +53,6 @@ function isPhaseSummaryMemoryMessage(msg = {}) {
 
 export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = {} } = {}) {
   const history = [];
-  const consumedMetaIndexes = new Set();
   const knownHistoryToolCallIds = new Set();
   const historyToolCallsById = new Map();
   for (const msg of effectiveHistoryMessages) {
@@ -82,8 +67,7 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
       }
     }
   }
-  for (const [messageIndex, msg] of effectiveHistoryMessages.entries()) {
-    if (consumedMetaIndexes.has(messageIndex)) continue;
+  for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (isDerivedUserMetaMessage(msg)) continue;
     const role = resolveContextMessageRole(msg);
@@ -146,23 +130,8 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
       );
       continue;
     }
-    const materializedMeta = hasMaterializedUserMeta(effectiveHistoryMessages, messageIndex, msg);
-    if (shouldBuildUserMetaForHistoryMessage(msg) && !materializedMeta) {
+    if (shouldBuildUserMetaForHistoryMessage(msg)) {
       history.push(...buildHumanMessagesForUser(runtime, msg));
-    } else if (materializedMeta) {
-      const metaIndex = messageIndex + 1;
-      const meta = effectiveHistoryMessages[metaIndex];
-      consumedMetaIndexes.add(metaIndex);
-      history.push(
-        new HumanMessage({
-          content: buildHumanMessageContent(msg),
-          additional_kwargs: projectContextMessageModelMetadata(msg),
-        }),
-        new HumanMessage({
-          content: buildHumanMessageContent(meta),
-          additional_kwargs: projectContextMessageModelMetadata(meta),
-        }),
-      );
     } else {
       history.push(
         new HumanMessage({

@@ -253,7 +253,7 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
     owner: "workflow",
     claimed: true,
     claimedSource: "workflow_router",
-    failureCode: "",
+    failureCode: null,
   });
 });
 
@@ -351,7 +351,7 @@ test("a structured dispatch takeover must claim ownership before returning handl
   const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, () =>
-    createBotDispatchHandled({ owner: "workflow", result: { output: "done" } }),
+    createBotDispatchHandled({ owner: "workflow", result: createCanonicalHandledResult("done") }),
   );
   const runner = createRunner({
     botHookManager,

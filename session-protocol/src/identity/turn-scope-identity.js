@@ -24,6 +24,15 @@ export function isCanonicalTurnScopeId(value = "") {
   return Boolean(normalized) && normalized === canonicalizeTurnScopeId(normalized);
 }
 
+export function requireCanonicalTurnScopeId(value) {
+  if (typeof value === "string" && isCanonicalTurnScopeId(value) && value === text(value)) {
+    return value;
+  }
+  const error = new TypeError(`invalid turnScopeId: "${text(value)}"`);
+  error.code = "TURN_SCOPE_ID_INVALID";
+  throw error;
+}
+
 export function turnScopeIdentityKey(value = "") {
   const canonical = canonicalizeTurnScopeId(value);
   if (!canonical) return "";

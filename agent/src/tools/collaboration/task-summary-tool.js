@@ -11,17 +11,18 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import {
   TASK_SUMMARY_PROTOCOL_VERSION,
   TASK_SUMMARY_STATE,
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
 } from "@noobot/context-protocol/task/summary";
-import {
-  MAIN_FLOW_CONTROL_REASON,
-  requestMainFlowFinalNoToolsTurn,
-} from "../../runtime/main-flow-control.js";
+import { MAIN_FLOW_CONTROL_REASON } from "@noobot/context-protocol/policy/main-flow-control";
+import { requestMainFlowFinalNoToolsTurn } from "../../runtime/main-flow-control.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -36,8 +37,8 @@ const TASK_SUMMARY_RECEIPT_TEXT_KEY = Object.freeze({
 });
 
 export function createTaskSummaryTool(ctx = {}) {
-  const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
-  const systemRuntime = runtime?.systemRuntime || {};
+  const runtime = getRuntimeFromAgentContext(ctx.agentContext);
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
 
   const taskSummaryTool = structuredTool(
     async ({ summaryContent }) => {

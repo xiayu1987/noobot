@@ -12,18 +12,14 @@ import {
   AUXILIARY_SEQUENCE_MESSAGE_KIND,
   declareAuxiliarySequenceIdentity,
 } from "@noobot/context-protocol/assembly/auxiliary-sequence";
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
 import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
 import { text } from "@noobot/shared/value";
 
 function markContextMessage(message = {}, source = {}) {
-  const sourceMessageId = resolveContextMessageId(source);
-  if (!sourceMessageId) {
-    throw new TypeError("Harness auxiliary Context message requires canonical message identity");
-  }
   return declareAuxiliarySequenceIdentity(message, {
     kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
-    key: sourceMessageId,
+    key: resolveContextMessageKey(source),
   });
 }
 

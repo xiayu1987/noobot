@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  appendCommandReceipt,
   createTurnLifecycleEnvelope,
   createTurnTerminalStatus,
   deriveAuthoritativeTurnCapabilities,
   isSettlingTurnEvent,
   TURN_LIFECYCLE_WIRE_EVENT,
 } from "@noobot/session-protocol";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { transitionTurnLifecycle } from "../domain/turn-lifecycle-entity.js";
 import { text as clean } from "@noobot/shared/value";
 
@@ -53,6 +54,7 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
   });
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: payload.eventId,
       eventType: TURN_LIFECYCLE_WIRE_EVENT,
@@ -134,16 +136,16 @@ export function commitTurnLifecycle({
 
   const transition = transitionTurnLifecycle(lifecycle, lifecycleEvent, now);
   if (!transition.applied) {
-    const receiptEnvelope = transition.deduplicated
-      ? transition.lifecycle.commandReceipts.find(
-          (receipt) =>
-            receipt.commandId === clean(event.commandId) && receipt.type === clean(event.eventType),
-        )?.envelope || null
-      : null;
-    return { ...transition, envelope: receiptEnvelope, committedEvent: null };
+    const { receipt, ...rejection } = transition;
+    return {
+      ...rejection,
+      ...(transition.deduplicated ? { envelope: receipt.envelope } : {}),
+      committedEvent: null,
+    };
   }
 
-  const turn = transition.turn;
+  const { receiptDraft, ...applied } = transition;
+  const turn = applied.turn;
   const eventId =
     clean(event.eventId) || clean(typeof createEventId === "function" ? createEventId() : "");
   if (!eventId) return { applied: false, reason: "event_id_unavailable", lifecycle };
@@ -151,14 +153,13 @@ export function commitTurnLifecycle({
     return { applied: false, reason: "event_id_conflict", lifecycle };
   }
   const envelope = createCommittedTurnLifecycleEnvelope({ event: lifecycleEvent, turn, eventId });
-  const receipt = transition.lifecycle.commandReceipts.find(
-    (item) => item.commandId === clean(event.commandId) && item.type === clean(event.eventType),
-  );
-  if (!receipt) return { applied: false, reason: "command_receipt_unavailable", lifecycle };
-  receipt.eventId = eventId;
-  receipt.envelope = envelope;
+  applied.lifecycle.commandReceipts = appendCommandReceipt(applied.lifecycle.commandReceipts, {
+    ...receiptDraft,
+    eventId,
+    envelope,
+  });
   return {
-    ...transition,
+    ...applied,
     envelope,
     committedEvent: { eventId, envelope, committedAt: turn.updatedAt },
     terminalMaterialization,

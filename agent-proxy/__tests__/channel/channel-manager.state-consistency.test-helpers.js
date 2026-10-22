@@ -8,6 +8,7 @@ import {
   EVENT_FAMILY,
   INTERACTION_EVENT_TYPE,
   INTERACTION_SEQUENCE_DOMAIN,
+  getEventFamily,
 } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
@@ -41,6 +42,7 @@ export function canonicalMessageEvent({
 } = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: `message-event:${presentationMessageId}:${sequence}`,
       eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -70,6 +72,7 @@ export function canonicalInteractionRequest({
 } = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.INTERACTION_REQUEST,
+    schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
     identity: {
       eventId: `interaction-event:${requestId}:${sequence}`,
       eventType: INTERACTION_EVENT_TYPE.REQUEST,

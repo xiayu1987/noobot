@@ -12,6 +12,7 @@ import {
 } from "../../../runtime/lifecycle/state-machine.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { AGENT_CONTEXT_MODE } from "@noobot/context-protocol";
 
 const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
   "presentationMessageId",
@@ -110,10 +111,11 @@ export async function initializeSessionRun({
     dialogProcessId,
   };
   const scenarioResolvedRunConfig = resolveScenarioRunConfig(requestRunConfig, userConfig);
-  const resolvedRunConfig =
-    typeof prepareRunConfig === "function"
-      ? prepareRunConfig({ userId, runConfig: scenarioResolvedRunConfig, userConfig })
-      : scenarioResolvedRunConfig;
+  const resolvedRunConfig = prepareRunConfig({
+    userId,
+    runConfig: scenarioResolvedRunConfig,
+    userConfig,
+  });
   const { turnScopeId, presentationMessageId } = requireAcceptedRunIdentity(resolvedRunConfig);
   const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
   const lifecycle = createAgentLifecycleMachine({
@@ -143,10 +145,7 @@ export async function initializeSessionRun({
   const botHookRuntime = {
     eventListener: runtimeEventListener,
     abortSignal,
-    botHookManager:
-      resolvedRunConfig?.botHookManager && typeof resolvedRunConfig.botHookManager === "object"
-        ? resolvedRunConfig.botHookManager
-        : null,
+    botHookManager: resolvedRunConfig.botHookManager,
   };
   const botHookBase = withBotHookRuntimeMeta(
     {
@@ -199,7 +198,10 @@ export async function initializeSessionRun({
     turnScopeId,
     presentationMessageId,
     resumeFromStoppedSnapshot,
-    contextMode: sessionLoadState === "loaded" ? "existing_session" : "new_session",
+    contextMode:
+      sessionLoadState === "loaded"
+        ? AGENT_CONTEXT_MODE.EXISTING_SESSION
+        : AGENT_CONTEXT_MODE.NEW_SESSION,
     lifecycle,
     botHookRuntime,
     botHookBase,

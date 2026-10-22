@@ -3,13 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  resolveMessageViewKey,
+} from "@noobot/event-protocol/message-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { text } from "@noobot/shared/value";
 
 export function summarizeSubSessionMessage(message = {}) {
   return {
-    messageId: text(message?.messageId),
+    messageUid: text(message?.messageUid),
     presentationMessageId: text(message?.presentationMessageId),
     role: text(message?.role),
     type: text(message?.type),
@@ -19,12 +22,7 @@ export function summarizeSubSessionMessage(message = {}) {
 }
 
 export function subSessionMessageIdentity(message = {}) {
-  const stableId = text(
-    message?.presentationMessageId ||
-      message?.messageId ||
-      message?.additional_kwargs?.noobotMessageId,
-  );
-  return stableId ? `id:${stableId}` : "";
+  return resolveMessageViewKey(message);
 }
 
 function subSessionMessageIdentityCandidates(message = {}) {
@@ -73,8 +71,7 @@ function pickRealtimeFinalContentFacet(realtime = {}) {
   };
 }
 
-function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
-  const canonicalMessageId = text(messageId || realtime.messageId);
+function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}) {
   const merged = {
     ...realtime,
     ...snapshot,
@@ -83,7 +80,7 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
   logWorkflowDiagnostics("frontend.workflowSubSession.messageMergeEvaluated", () => ({
     sessionId: text(snapshot?.sessionId || realtime?.sessionId),
     turnScopeId: text(snapshot?.turnScopeId || realtime?.turnScopeId),
-    messageId: canonicalMessageId,
+    viewKey: subSessionMessageIdentity(merged),
     snapshotPending: snapshot?.pending,
     realtimePending: realtime?.pending,
     mergedPending: merged?.pending,
@@ -94,10 +91,7 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
     snapshotPresentationMessageId: text(snapshot?.presentationMessageId),
     realtimePresentationMessageId: text(realtime?.presentationMessageId),
   }));
-  return {
-    ...merged,
-    ...(canonicalMessageId ? { id: canonicalMessageId, messageId: canonicalMessageId } : {}),
-  };
+  return merged;
 }
 
 function buildRealtimeIndexByIdentity(realtimeMessages = []) {
@@ -115,18 +109,13 @@ export function mergeSnapshotWithRealtimeMessages(snapshotMessages = [], realtim
   const claimedRealtimeIndexes = new Set();
   const messages = snapshotMessages.map((rawSnapshot = {}) => {
     const snapshot = normalizeSubSessionSnapshotMessage(rawSnapshot);
-    const messageId = text(snapshot.messageId || snapshot?.additional_kwargs?.noobotMessageId);
     const realtimeIndex = subSessionMessageIdentityCandidates(snapshot)
       .map((identity) => realtimeIndexByIdentity.get(identity))
       .find((index) => Number.isInteger(index));
     const realtime = Number.isInteger(realtimeIndex) ? realtimeMessages[realtimeIndex] : null;
     if (Number.isInteger(realtimeIndex)) claimedRealtimeIndexes.add(realtimeIndex);
     if (!realtime) return snapshot;
-    return mergePersistedSubSessionMessage(
-      realtime,
-      snapshot,
-      messageId || text(realtime.messageId),
-    );
+    return mergePersistedSubSessionMessage(realtime, snapshot);
   });
   realtimeMessages.forEach((realtime, index) => {
     if (!claimedRealtimeIndexes.has(index)) messages.push(realtime);
@@ -146,11 +135,7 @@ export function dedupeSubSessionMessagesByIdentity(messages = []) {
     }
     const index = deduplicatedIndexByIdentity.get(identity);
     const previous = deduplicatedMessages[index];
-    deduplicatedMessages[index] = mergePersistedSubSessionMessage(
-      previous,
-      message,
-      text(message?.messageId || previous?.messageId),
-    );
+    deduplicatedMessages[index] = mergePersistedSubSessionMessage(previous, message);
   }
   return deduplicatedMessages;
 }

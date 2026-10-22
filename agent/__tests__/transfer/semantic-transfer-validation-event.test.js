@@ -18,6 +18,7 @@ function createRecordingRuntime() {
     runtime: {
       eventListener: { onEvent: (envelope) => events.push(envelope) },
       hookManager: {
+        on: () => () => {},
         emit: async (point, context) => {
           hooks.push({ point, context });
           return { failures: [] };

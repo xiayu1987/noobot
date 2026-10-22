@@ -69,7 +69,7 @@ function projectWorkflowMessage(doc, message, index, payload, facts) {
   return {
     sessionDocId: toText(doc?.sessionId),
     index,
-    id: toText(message?.messageId),
+    messageUid: toText(message?.messageUid),
     role: toText(message?.role),
     type: toText(message?.type),
     pluginSource: toText(message?.pluginMeta?.source),
@@ -193,10 +193,9 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
           messages: sessionDocs.flatMap((doc = {}) =>
             (Array.isArray(doc.messages) ? doc.messages : []).map((message = {}) => ({
               messageUid: text(message.messageUid),
-              messageId: text(message.messageId),
+              userMessageId: text(message.userMessageId),
+              modelMessageId: text(message.modelMessageId),
               presentationMessageId: text(message.presentationMessageId),
-              sourceMessageId: text(message.sourceMessageId),
-              sourceMessageUid: text(message.sourceMessageUid),
               role: text(message.role),
               type: text(message.type),
               chatPresentation: message.chatPresentation,
@@ -416,7 +415,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
         deduplicated: result.deduplicated === true,
         remainingMessages: result.session.messages.map((message = {}, index) => ({
           index,
-          id: text(message?.messageId),
+          messageUid: text(message?.messageUid),
           role: text(message?.role),
           type: text(message?.type),
           dialogProcessId: text(message?.dialogProcessId),

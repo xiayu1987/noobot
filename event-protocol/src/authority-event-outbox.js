@@ -287,3 +287,104 @@ export function compactAuthorityEventOutbox(source = [], { retainDeliveredAfter 
     outbox: retained,
   };
 }
+
+export const AUTHORITY_OUTBOX_CHECKPOINT_SCHEMA_VERSION = 1;
+
+export function authorityOutboxSequenceKey(orderingDomain, orderingScopeId) {
+  const domain = text(orderingDomain);
+  const scopeId = text(orderingScopeId);
+  if (!domain || !scopeId) {
+    throw new TypeError("authority outbox sequence key requires ordering domain and scope");
+  }
+  return `${domain}\u0000${scopeId}`;
+}
+
+function freezeSequenceFloors(sequenceFloors) {
+  if (!isPlainObject(sequenceFloors)) {
+    throw new TypeError("authority outbox checkpoint requires sequenceFloors object");
+  }
+  for (const [key, floor] of Object.entries(sequenceFloors)) {
+    if (!text(key) || !Number.isInteger(floor) || floor < 1) {
+      throw new TypeError(`authority outbox sequence floor must be an integer >= 1: ${key}`);
+    }
+  }
+  return Object.freeze({ ...sequenceFloors });
+}
+
+export function createEmptyAuthorityOutboxCheckpoint() {
+  return Object.freeze({ sequenceFloors: Object.freeze({}) });
+}
+
+export function parseAuthorityOutboxCheckpoint(payload) {
+  if (!isPlainObject(payload)) {
+    throw new TypeError("authority outbox checkpoint must be an object");
+  }
+  if (payload.schemaVersion !== AUTHORITY_OUTBOX_CHECKPOINT_SCHEMA_VERSION) {
+    throw new TypeError(
+      `unsupported authority outbox checkpoint schemaVersion: ${payload.schemaVersion}`,
+    );
+  }
+  return Object.freeze({ sequenceFloors: freezeSequenceFloors(payload.sequenceFloors) });
+}
+
+export function serializeAuthorityOutboxCheckpoint(checkpoint) {
+  return {
+    schemaVersion: AUTHORITY_OUTBOX_CHECKPOINT_SCHEMA_VERSION,
+    sequenceFloors: { ...freezeSequenceFloors(checkpoint.sequenceFloors) },
+  };
+}
+
+export function readAuthorityOutboxSequenceFloor(checkpoint, key) {
+  return Object.hasOwn(checkpoint.sequenceFloors, key) ? checkpoint.sequenceFloors[key] : 0;
+}
+
+function requireEnvelopeList(envelopes) {
+  if (!Array.isArray(envelopes)) {
+    throw new TypeError("authority sequence allocation requires an envelope list");
+  }
+  return envelopes;
+}
+
+export function allocateAuthorityEventSequence({
+  checkpoint,
+  envelopes,
+  orderingDomain,
+  orderingScopeId,
+}) {
+  const key = authorityOutboxSequenceKey(orderingDomain, orderingScopeId);
+  let maximum = readAuthorityOutboxSequenceFloor(checkpoint, key);
+  for (const envelope of requireEnvelopeList(envelopes)) {
+    const { ordering } = envelope;
+    if (ordering.domain !== orderingDomain || ordering.scopeId !== orderingScopeId) continue;
+    maximum = Math.max(maximum, ordering.sequence);
+  }
+  return maximum + 1;
+}
+
+export function advanceAuthorityOutboxCheckpoint(checkpoint, envelopes) {
+  const sequenceFloors = { ...checkpoint.sequenceFloors };
+  for (const envelope of requireEnvelopeList(envelopes)) {
+    const { ordering } = envelope;
+    const key = authorityOutboxSequenceKey(ordering.domain, ordering.scopeId);
+    sequenceFloors[key] = Math.max(
+      readAuthorityOutboxSequenceFloor({ sequenceFloors }, key),
+      ordering.sequence,
+    );
+  }
+  return Object.freeze({ sequenceFloors: freezeSequenceFloors(sequenceFloors) });
+}
+
+export function requireCommittedAuthorityEvent(result) {
+  if (!isPlainObject(result)) {
+    throw new TypeError("authority event commit returned no result");
+  }
+  if (result.committed !== true) {
+    const error = new Error(`authority event commit rejected: ${text(result.code)}`);
+    error.code = result.code;
+    throw error;
+  }
+  if (!validateAuthorityEnvelope(result.envelope)) {
+    throw new TypeError("authority event commit returned an invalid envelope");
+  }
+  return result.envelope;
+}

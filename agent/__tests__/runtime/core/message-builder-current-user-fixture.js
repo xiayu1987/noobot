@@ -17,7 +17,6 @@ export function createPersistedCurrentUserMessage(content, overrides = {}) {
     parentDialogProcessId: "",
     turnScopeId: "turn-current",
     messageOrigin: "natural",
-    userMetaMaterialized: true,
     attachments: [],
     ...overrides,
   };

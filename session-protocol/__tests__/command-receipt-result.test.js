@@ -20,7 +20,7 @@ function replacement() {
     replacedTurnScopeIds: ["turn-old"],
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
-    replacementUserMessageId: "user-new",
+    replacementUserMessageUid: "user-new",
     requestHash: "hash-1",
     committedAt: "2026-07-31T00:00:00.000Z",
   });
@@ -79,7 +79,7 @@ test("appendCommandReceipt rejects undeclared delete-from result shapes", () => 
   };
   assert.throws(
     () => appendCommandReceipt([], { ...receipt, result: { deletedCount: 1 } }),
-    /invalid command receipt result/,
+    /invalid command receipt/,
   );
   const receipts = appendCommandReceipt([], {
     ...receipt,

@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { prepareChatSend } from "../../../../../../src/modules/chat/runtime/engine/sendPrepare.js";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 
 function createPrepareHarness({ existingMessages = [] } = {}) {
@@ -23,16 +24,16 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
     appended.push(message);
     return message;
   });
-  const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
+  const upsertCanonicalAssistantMessage = vi.fn((presentationMessageId, identity = {}) => {
     const existing = activeSession.value.messages.find(
-      (message) => message.role === RoleEnum.ASSISTANT && message.messageId === messageId,
+      (message) => resolveMessageViewKey(message) === presentationMessageId,
     );
     if (existing) return existing;
     const message = {
       role: RoleEnum.ASSISTANT,
       content: "",
-      messageId,
       ...identity,
+      presentationMessageId,
     };
     activeSession.value.messages.push(message);
     return message;

@@ -13,7 +13,7 @@ import {
   reduceCanonicalActivityTimeline,
 } from "../src/activity-timeline.js";
 import { createEventEnvelope } from "../src/envelope.js";
-import { EVENT_FAMILY } from "../src/event-registry.js";
+import { EVENT_FAMILY, getEventFamily } from "../src/event-registry.js";
 import {
   MESSAGE_EVENT_TYPE,
   MESSAGE_EVENT_WIRE_EVENT,
@@ -23,6 +23,7 @@ import {
 function activityEnvelope(overrides = {}, envelopeOverrides = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: "activity-1",
       eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -256,6 +257,7 @@ test("only standalone activity events are durable; activity deltas are transport
   const envelope = (eventId, eventType, payload = {}) =>
     createEventEnvelope({
       family: EVENT_FAMILY.MESSAGE_TIMELINE,
+      schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
       identity: {
         eventId,
         eventType: MESSAGE_EVENT_WIRE_EVENT,

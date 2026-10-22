@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createMessageUid, createModelMessageId } from "@noobot/session-protocol/message-identity";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
@@ -12,7 +13,7 @@ import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
@@ -25,6 +26,7 @@ import {
   TEST_ACCEPTED_DIALOG_PROCESS_ID,
   createTestSessionRunPayload,
 } from "../../helpers/session-run-payload.js";
+import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 
 const DEFAULT_ACCEPTED_RECEIPT = Object.freeze({
   dialogProcessId: TEST_ACCEPTED_DIALOG_PROCESS_ID,
@@ -49,12 +51,12 @@ export function createTestBotHookManager() {
 }
 
 function withModelMessageIdForTest(message = {}, modelMessageId = "") {
-  return message?.role === "assistant" ? { ...message, messageId: modelMessageId } : message;
+  return message?.role === "assistant" ? { ...message, modelMessageId } : message;
 }
 
 export function createCanonicalHandledResult(output = "") {
   const messageId = createModelMessageId();
-  return {
+  return createAgentTurnResult({
     output,
     traces: [],
     modelMessageId: messageId,
@@ -63,12 +65,14 @@ export function createCanonicalHandledResult(output = "") {
         role: "assistant",
         type: "message",
         messageUid: createMessageUid(),
-        messageId,
+        modelMessageId: messageId,
         content: output,
       },
     ],
     turnTasks: [],
-  };
+    modelMessages: [],
+    modelLoopRound: 0,
+  });
 }
 
 export function persistedUserMessage({
@@ -81,7 +85,7 @@ export function persistedUserMessage({
   const turnIdentity = text(turnScopeId).replace(/[^a-zA-Z0-9_-]/g, "_");
   return {
     messageUid: `sm_test_${turnIdentity}`,
-    messageId: `msg_user_test_${turnIdentity}`,
+    userMessageId: `um_test_${turnIdentity}`,
     role: "user",
     type: "message",
     content: "persisted",
@@ -91,7 +95,6 @@ export function persistedUserMessage({
     dialogProcessId,
     turnScopeId,
     messageOrigin: "natural",
-    userMetaMaterialized: true,
     attachments,
   };
 }
@@ -139,7 +142,7 @@ export function createRunner({
     const turnIdentity = turnScopeId.replace(/[^a-zA-Z0-9_-]/g, "_");
     const userMessage = {
       messageUid: `sm_test_${turnIdentity}`,
-      messageId: runConfig.userMessageId,
+      userMessageId: runConfig.userMessageId,
       role: "user",
       type: "message",
       content: request.message,
@@ -149,7 +152,6 @@ export function createRunner({
       dialogProcessId,
       turnScopeId,
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       attachments: [],
     };
     acceptedUserMessages.set(turnScopeId, userMessage);
@@ -176,6 +178,7 @@ export function createRunner({
         committed: true,
         envelope: createEventEnvelope({
           family: EVENT_FAMILY.MESSAGE_TIMELINE,
+          schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
           identity: {
             eventId: `test-authority-event-${authorityEventSequence}`,
             eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -234,7 +237,7 @@ export function createRunner({
     const messageId = text(result.modelMessageId);
     if (!messageId) throw new Error("agent result with output requires modelMessageId");
     const store = runtime.currentTurnMessages;
-    store.updateWhere({ messageId }, (current) => current?.role === "assistant");
+    store.updateWhere({ modelMessageId: messageId }, (current) => current?.role === "assistant");
     for (const message of Array.isArray(result.turnMessages) ? result.turnMessages : []) {
       const messageUid = text(message?.messageUid);
       if (!messageUid) throw new Error("test Turn message requires messageUid");
@@ -255,11 +258,14 @@ export function createRunner({
         role: "assistant",
         type: "message",
         messageUid: createMessageUid(),
-        messageId,
+        modelMessageId: messageId,
         content: String(result.output),
       });
     } else {
-      store.updateWhere({ messageId }, (_message, index) => index === assistantIndex);
+      store.updateWhere(
+        { modelMessageId: messageId },
+        (_message, index) => index === assistantIndex,
+      );
     }
     return {
       ...result,
@@ -301,7 +307,8 @@ export function createRunner({
     prepareAgentTurnExecution: prepareCanonicalAgentTurnExecution,
     appendAgentMessages,
     getSessionTurns,
-    getTurnSummaryCheckpointState: async () => null,
+    getTurnSummaryCheckpointState: async ({ dialogProcessId, turnScopeId }) =>
+      createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }),
     bindSessionTurnAttachments: bindCanonicalUserMessageAttachments,
     assertReusedUserTurnIdentity: assertCanonicalReusedUserMessage,
     finalizeRunSession,

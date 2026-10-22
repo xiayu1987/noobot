@@ -163,6 +163,7 @@ function buildStateWithRunConfig(runConfig) {
 
 test("state builder reads selectedModel and scenario only from canonical runConfig fields", () => {
   const received = buildStateWithRunConfig({
+    hookManager: null,
     selectedModel: "top_level_alias",
     scenario: "top_level_scenario",
   });
@@ -173,6 +174,7 @@ test("state builder reads selectedModel and scenario only from canonical runConf
 
 test("state builder accepts canonical selectedModel and scenario", () => {
   const received = buildStateWithRunConfig({
+    hookManager: null,
     selectedModel: "selected_alias",
     scenario: "programming",
   });

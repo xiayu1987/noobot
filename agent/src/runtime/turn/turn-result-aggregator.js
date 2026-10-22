@@ -3,49 +3,37 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text, isFunction } from "@noobot/shared/value";
+import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
+import { isFunction } from "@noobot/shared/value";
 
-function requireCanonicalTurnMessageStore(turnMessageStore = null) {
-  if (
-    !turnMessageStore ||
-    !isFunction(turnMessageStore.toArray) ||
-    !isFunction(turnMessageStore.updateWhere)
-  ) {
-    throw new Error("turn result requires the canonical currentTurnMessages store");
+function requireStore(store, name, methods) {
+  if (!store || !methods.every((method) => isFunction(store[method]))) {
+    throw new Error(`turn result requires the canonical ${name} store`);
   }
-  return turnMessageStore;
-}
-
-export function finalizeTurnMessagesBeforeReturn({ turnMessageStore = null } = {}) {
-  const canonicalStore = requireCanonicalTurnMessageStore(turnMessageStore);
-  return canonicalStore.toArray();
+  return store;
 }
 
 export function buildLoopResult({
   output,
-  modelMessageId = "",
+  modelMessageId,
   traces,
   loopState,
-  turnTaskStore = null,
-  turnMessageStore = null,
-  modelMessages = [],
-} = {}) {
-  const finalTurnMessages = finalizeTurnMessagesBeforeReturn({
-    modelMessages,
-    turnMessageStore,
-  });
-  const modelLoopRound = Number(loopState?.systemRuntime?.modelLoopRound || 0);
-  return {
+  turnTaskStore,
+  turnMessageStore,
+  modelMessages,
+}) {
+  const messages = requireStore(turnMessageStore, "currentTurnMessages", [
+    "toArray",
+    "updateWhere",
+  ]);
+  const tasks = requireStore(turnTaskStore, "currentTurnTasks", ["toArray"]);
+  return createAgentTurnResult({
     output,
-    modelMessageId: text(modelMessageId),
+    modelMessageId,
     traces,
-    turnMessages: finalTurnMessages,
-    modelMessages: Array.isArray(modelMessages) ? modelMessages : [],
-    modelLoopRound: Number.isFinite(modelLoopRound) && modelLoopRound > 0 ? modelLoopRound : 0,
-    turnTasks: turnTaskStore
-      ? turnTaskStore.toArray()
-      : Array.isArray(loopState?.turnTasks)
-        ? loopState.turnTasks
-        : [],
-  };
+    turnMessages: messages.toArray(),
+    modelMessages,
+    modelLoopRound: loopState.systemRuntime.modelLoopRound,
+    turnTasks: tasks.toArray(),
+  });
 }

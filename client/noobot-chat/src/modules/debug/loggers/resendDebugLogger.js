@@ -20,8 +20,7 @@ export function summarizeDebugMessage(message = {}) {
   if (!isObjectLike(message)) return null;
   const channelState = getMessageRuntimeChannelState(message);
   return {
-    id: message.messageId || "",
-    sourceMessageId: message.sourceMessageId || "",
+    messageUid: message.messageUid || "",
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.type || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",

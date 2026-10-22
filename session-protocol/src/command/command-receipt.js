@@ -4,9 +4,38 @@
  * SPDX-License-Identifier: MIT
  */
 import { validateTurnReplacementCommit } from "../lifecycle/turn-replacement.js";
+import { TURN_EVENT_VALUES } from "../lifecycle/turn-event.js";
 import { SESSION_COMMAND, isSessionAggregateVersion } from "./session-command.js";
+import { SESSION_ERROR_CODE } from "../errors.js";
 
 const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
+const TURN_EVENT_TYPES = new Set(TURN_EVENT_VALUES);
+
+function invalidCommandReceipt() {
+  return Object.assign(new TypeError("invalid command receipt"), {
+    code: SESSION_ERROR_CODE.COMMAND_RECEIPT_INVALID,
+  });
+}
+const SESSION_RECEIPT_KEYS = new Set([
+  "commandId",
+  "type",
+  "requestHash",
+  "aggregateVersion",
+  "committedAt",
+  "turnScopeId",
+  "result",
+]);
+const TURN_RECEIPT_KEYS = new Set([
+  "commandId",
+  "type",
+  "requestHash",
+  "committedAt",
+  "turnScopeId",
+  "revision",
+  "sequence",
+  "eventId",
+  "envelope",
+]);
 import { isPlainObject, text as clean } from "@noobot/shared/value";
 
 function isCanonicalText(value) {
@@ -57,15 +86,6 @@ const COMMAND_RESULT_VALIDATORS = Object.freeze({
   [SESSION_COMMAND.TURN_REPLACE]: validateTurnReplaceResult,
 });
 
-function normalizeCommandResult(type, result) {
-  if (!isPlainObject(result)) return null;
-  if (type === SESSION_COMMAND.TURN_COMMIT || type === SESSION_COMMAND.TURN_ATTACHMENTS_BIND) {
-    const messageUid = clean(result.messageUid);
-    return messageUid ? { messageUid } : {};
-  }
-  return structuredClone(result);
-}
-
 export function validateCommandReceiptResult(type, result) {
   const validate = COMMAND_RESULT_VALIDATORS[type];
   if (!validate) return Object.freeze({ valid: true, errors: Object.freeze([]) });
@@ -75,47 +95,55 @@ export function validateCommandReceiptResult(type, result) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-export function normalizeCommandReceipt(receipt = {}) {
+function hasOnlyKeys(receipt, allowedKeys) {
+  return Object.keys(receipt).every((key) => allowedKeys.has(key));
+}
+
+function isOptionalCanonicalText(receipt, field) {
+  return !Object.hasOwn(receipt, field) || isCanonicalText(receipt[field]);
+}
+
+function isCanonicalSessionReceipt(receipt) {
+  return (
+    hasOnlyKeys(receipt, SESSION_RECEIPT_KEYS) &&
+    isSessionAggregateVersion(receipt.aggregateVersion) &&
+    validateCommandReceiptResult(receipt.type, receipt.result).valid
+  );
+}
+
+function isCanonicalTurnReceipt(receipt) {
+  return (
+    hasOnlyKeys(receipt, TURN_RECEIPT_KEYS) &&
+    isNonNegativeInteger(receipt.revision) &&
+    isNonNegativeInteger(receipt.sequence) &&
+    isCanonicalText(receipt.eventId) &&
+    isPlainObject(receipt.envelope) &&
+    receipt.envelope.identity?.eventId === receipt.eventId
+  );
+}
+
+export function normalizeCommandReceipt(receipt) {
   if (!isPlainObject(receipt)) return null;
-  const commandId = clean(receipt.commandId);
-  const type = clean(receipt.type);
-  const requestHash = clean(receipt.requestHash);
-  if (!commandId || !type || !requestHash) return null;
-  const isSessionCommand = SESSION_COMMAND_TYPES.has(type);
   if (
-    isSessionCommand
-      ? !isSessionAggregateVersion(receipt.aggregateVersion)
-      : Object.hasOwn(receipt, "aggregateVersion")
+    !isCanonicalText(receipt.commandId) ||
+    !isCanonicalText(receipt.requestHash) ||
+    !isCanonicalText(receipt.committedAt) ||
+    !isOptionalCanonicalText(receipt, "turnScopeId")
   ) {
     return null;
   }
-  for (const field of ["revision", "sequence"]) {
-    if (
-      receipt[field] !== undefined &&
-      (!Number.isSafeInteger(Number(receipt[field])) || Number(receipt[field]) < 0)
-    ) {
-      return null;
-    }
+  if (SESSION_COMMAND_TYPES.has(receipt.type)) {
+    return isCanonicalSessionReceipt(receipt) ? structuredClone(receipt) : null;
   }
-  const result = normalizeCommandResult(type, receipt.result);
-  return {
-    commandId,
-    type,
-    requestHash,
-    ...(isSessionCommand ? { aggregateVersion: receipt.aggregateVersion } : {}),
-    committedAt: clean(receipt.committedAt),
-    ...(clean(receipt.turnScopeId) ? { turnScopeId: clean(receipt.turnScopeId) } : {}),
-    ...(result ? { result } : {}),
-    ...(Number.isInteger(Number(receipt.revision)) ? { revision: Number(receipt.revision) } : {}),
-    ...(Number.isInteger(Number(receipt.sequence)) ? { sequence: Number(receipt.sequence) } : {}),
-    ...(clean(receipt.eventId) ? { eventId: clean(receipt.eventId) } : {}),
-    ...(isPlainObject(receipt.envelope) ? { envelope: structuredClone(receipt.envelope) } : {}),
-  };
+  if (TURN_EVENT_TYPES.has(receipt.type)) {
+    return isCanonicalTurnReceipt(receipt) ? structuredClone(receipt) : null;
+  }
+  return null;
 }
 export function normalizeCommandReceipts(receipts = []) {
   if (!Array.isArray(receipts)) throw new TypeError("command receipts must be an array");
   const normalized = receipts.map(normalizeCommandReceipt);
-  if (normalized.some((receipt) => !receipt)) throw new TypeError("invalid command receipt");
+  if (normalized.some((receipt) => !receipt)) throw invalidCommandReceipt();
   return normalized.slice(-200);
 }
 export function decideCommandIdempotency({ commandId, type, requestHash, receipts = [] } = {}) {
@@ -130,12 +158,9 @@ export function decideCommandIdempotency({ commandId, type, requestHash, receipt
     return Object.freeze({ allowed: false, reason: "command_id_reuse_conflict" });
   return Object.freeze({ allowed: true, deduplicated: true, receipt });
 }
-export function appendCommandReceipt(receipts = [], receipt = {}) {
-  if (!validateCommandReceiptResult(clean(receipt?.type), receipt?.result).valid) {
-    throw new TypeError("invalid command receipt result");
-  }
+export function appendCommandReceipt(receipts, receipt) {
   const normalized = normalizeCommandReceipt(receipt);
-  if (!normalized) throw new TypeError("invalid command receipt");
+  if (!normalized) throw invalidCommandReceipt();
   const decision = decideCommandIdempotency({ ...normalized, receipts });
   if (!decision.allowed) throw new TypeError(decision.reason);
   return decision.deduplicated

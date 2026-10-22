@@ -18,12 +18,12 @@ useProvisionedRuntimeEventsWorkspace(["u1"]);
 
 function createReplaceTurnResult(
   payload,
-  { version, replacedTurnScopeIds, replacementUserMessageId } = {},
+  { version, replacedTurnScopeIds, replacementUserMessageUid } = {},
 ) {
   const replacementDialogProcessId = "dialog-replacement";
   const replacementUser = {
     role: "user",
-    messageId: replacementUserMessageId,
+    messageUid: replacementUserMessageUid,
     dialogProcessId: replacementDialogProcessId,
     turnScopeId: payload.turnScopeId,
   };
@@ -40,7 +40,7 @@ function createReplaceTurnResult(
       replacedTurnScopeIds,
       replacementDialogProcessId,
       replacementTurnScopeId: payload.turnScopeId,
-      replacementUserMessageId,
+      replacementUserMessageUid,
       committedAt: "2026-07-31T00:00:00.000Z",
     }),
   };
@@ -272,7 +272,7 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
         return createReplaceTurnResult(payload, {
           version: 4,
           replacedTurnScopeIds: ["scope-old"],
-          replacementUserMessageId: "replacement-user-1",
+          replacementUserMessageUid: "replacement-user-1",
         });
       },
       getAttachmentById: async () => null,
@@ -301,7 +301,7 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     assert.equal(payload.ok, true);
     assert.equal(payload.turnReplacement.replacementTurnScopeId, "turn-scope-replace");
     assert.equal(payload.turnReplacement.replacementDialogProcessId, "dialog-replacement");
-    assert.equal(payload.turnReplacement.replacementUserMessageId, "replacement-user-1");
+    assert.equal(payload.turnReplacement.replacementUserMessageUid, "replacement-user-1");
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",
@@ -331,7 +331,7 @@ test("session-routes: replace-turn rejects duplicate /api/internal service route
         return createReplaceTurnResult(payload, {
           version: 5,
           replacedTurnScopeIds: ["client-turn:api"],
-          replacementUserMessageId: "replacement-user-2",
+          replacementUserMessageUid: "replacement-user-2",
         });
       },
       getAttachmentById: async () => null,

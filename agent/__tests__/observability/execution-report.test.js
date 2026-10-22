@@ -23,7 +23,6 @@ function createFinalizer(session) {
       ...session,
     },
     turnPersister: {
-      buildDefaultAssistantTurn: () => ({ role: "assistant", type: "message", content: "done" }),
       async appendAgentMessages() {},
     },
     memoryPostProcessService: createNoopMemoryPostProcessService(),
@@ -37,7 +36,15 @@ const finalizePayload = {
   dialogProcessId: "dp1",
   turnScopeId: "turn-1",
   thinkingStartedAt: "2026-01-01T00:00:00.000Z",
-  agentResult: { output: "done", turnTasks: [] },
+  agentResult: {
+    output: "done",
+    turnMessages: [{ messageUid: "sm_done", role: "assistant", type: "message", content: "done" }],
+    turnTasks: [],
+  },
+  persistedTurnMessageUids: [],
+  persistedTurnMessages: [],
+  durableTurnMessages: [],
+  summaryCheckpointPromotionSources: [],
 };
 
 test("SessionExecutionFinalizer writes a completed execution report", async () => {
@@ -79,6 +86,7 @@ function failureContext(overrides = {}) {
       persistStoppedSnapshotFromRuntime: async () => ({ status: "skipped" }),
       resolvedRuntimeEventListener: null,
       resolvedRunConfig: { thinkingStartedAt: "2026-01-01T00:00:00.000Z" },
+      preparedBotHookManager: null,
       resolvedUsedSessionId: "s1",
       resolvedDialogProcessId: "dp1",
       errorLogger: { async log() {} },

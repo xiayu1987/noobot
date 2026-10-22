@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
+import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 export async function readRepairJson(file) {
   try {
@@ -12,8 +13,8 @@ export async function readRepairJson(file) {
     throw Object.assign(new Error(`Session repair artifact is unreadable: ${file}`), {
       code:
         error instanceof SyntaxError
-          ? "ARTIFACT_JSON_CORRUPTED"
-          : "SESSION_REPAIR_ARTIFACT_READ_FAILED",
+          ? SESSION_REPAIR_ERROR_CODE.ARTIFACT_JSON_CORRUPTED
+          : SESSION_REPAIR_ERROR_CODE.ARTIFACT_READ_FAILED,
       cause: error,
     });
   }
@@ -24,7 +25,7 @@ export async function readRepairJournal(file, committedBytes) {
   const committed = Number(committedBytes || 0);
   if (!Number.isSafeInteger(committed) || committed < 0 || raw.length < committed) {
     throw Object.assign(new Error(`Session repair journal has an invalid boundary: ${file}`), {
-      code: "TURN_JOURNAL_TRUNCATED",
+      code: SESSION_REPAIR_ERROR_CODE.TURN_JOURNAL_TRUNCATED,
     });
   }
   return raw
@@ -37,7 +38,7 @@ export async function readRepairJournal(file, committedBytes) {
         return JSON.parse(line);
       } catch (error) {
         throw Object.assign(new Error(`Session repair journal is corrupted: ${file}`), {
-          code: "ARTIFACT_JSON_CORRUPTED",
+          code: SESSION_REPAIR_ERROR_CODE.ARTIFACT_JSON_CORRUPTED,
           cause: error,
         });
       }

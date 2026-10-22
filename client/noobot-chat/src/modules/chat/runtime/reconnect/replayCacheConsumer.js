@@ -40,8 +40,7 @@ export async function consumeReconnectReplayCacheForSession({
 
 export async function applyReconnectMessagesToActiveSessionReplay({
   activeSession,
-  findCanonicalMessageById,
-  findCanonicalMessagesById,
+  findMessagesByPresentationId,
   materializeTurnPresentation,
   messages,
   dialogProcessId,
@@ -49,8 +48,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
 } = {}) {
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
-    findCanonicalMessageById,
-    findCanonicalMessagesById,
+    findMessagesByPresentationId,
     materializeTurnPresentation,
     messages,
     dialogProcessId,

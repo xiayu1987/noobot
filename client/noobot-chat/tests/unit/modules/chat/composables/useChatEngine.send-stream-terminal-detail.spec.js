@@ -61,8 +61,8 @@ describe("useChatEngine.send-stream terminal detail", () => {
     harness.deps.applySessionDetail = applySessionDetail;
     harness.activeSession.value.messages = [
       {
-        id: "msg-user-fresh",
-        messageId: "msg-user-fresh",
+        messageUid: "msg-user-fresh",
+        userMessageId: "msg-user-fresh",
         role: RoleEnum.USER,
         content: "edited question",
         turnScopeId: "client-turn:fresh",

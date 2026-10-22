@@ -26,6 +26,7 @@ const baseMessages = [
   {
     messageUid: "sm_a_a",
     role: "assistant",
+    presentationMessageId: "pm_fx1",
     content: "a1",
     turnScopeId: "a",
     dialogProcessId: "dp1",
@@ -37,6 +38,7 @@ const baseMessages = [
 const appended = {
   messageUid: "sm_a_tool",
   role: "tool",
+  presentationMessageId: "pm_fx2",
   content: "late",
   turnScopeId: "a",
   dialogProcessId: "dp1",

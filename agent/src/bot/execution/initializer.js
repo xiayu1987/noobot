@@ -7,6 +7,7 @@
 import { createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { assertSessionScopeIdentity } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
+import { AGENT_CONTEXT_MODE } from "@noobot/context-protocol";
 
 export class SessionExecutionInitializer {
   constructor({ session = null, configService = null, workspaceService = null } = {}) {
@@ -85,7 +86,10 @@ export class SessionExecutionInitializer {
     });
 
     emitEvent(runtimeEventListener, "session_starting", {
-      mode: sessionLoadState === "loaded" ? "existing_session" : "new_session",
+      mode:
+        sessionLoadState === "loaded"
+          ? AGENT_CONTEXT_MODE.EXISTING_SESSION
+          : AGENT_CONTEXT_MODE.NEW_SESSION,
       ...(sessionLoadState === "loaded" ? { sessionId: usedSessionId } : {}),
     });
     emitEvent(runtimeEventListener, "workspace_ready", { userId });

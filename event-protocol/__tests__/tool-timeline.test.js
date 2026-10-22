@@ -15,7 +15,7 @@ import {
 } from "../src/tool-timeline.js";
 import { projectCanonicalActivityTimelineEvent } from "../src/activity-timeline.js";
 import { createEventEnvelope } from "../src/envelope.js";
-import { EVENT_FAMILY } from "../src/event-registry.js";
+import { EVENT_FAMILY, getEventFamily } from "../src/event-registry.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "../src/message-event.js";
 import {
   SECURITY_EVIDENCE_SOURCE,
@@ -35,6 +35,7 @@ const raisedAssessment = raiseSecurityAssessment(initialAssessment, {
 function event(eventType, sequence, extra = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: `event-${sequence}`,
       eventType: MESSAGE_EVENT_WIRE_EVENT,

@@ -22,8 +22,8 @@ describe("useChatEngine.resend replacement turn state", () => {
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, commandId, anchor }) => {
       const replacementUser = {
-        id: "msg-user-fresh-stopped-assistant",
-        messageId: "msg-user-fresh-stopped-assistant",
+        messageUid: "msg-user-fresh-stopped-assistant",
+        userMessageId: "msg-user-fresh-stopped-assistant",
         turnScopeId,
         role: RoleEnum.USER,
         content: newContent,

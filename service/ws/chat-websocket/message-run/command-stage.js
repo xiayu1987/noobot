@@ -132,10 +132,9 @@ function createActionEvent(command, run, executionIntent, startedAt) {
       ? {
           userMessage: {
             content: run.message,
-            messageId: run.normalizedRunConfig.userMessageId,
+            userMessageId: run.normalizedRunConfig.userMessageId,
             parentDialogProcessId: run.parentDialogProcessId,
             messageOrigin: "natural",
-            userMetaMaterialized: true,
           },
         }
       : {}),

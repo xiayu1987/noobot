@@ -54,10 +54,6 @@ export async function prepareUserWorkspaces({ userIds, bot }) {
   }
   return {
     userCount: userIds.length,
-    migratedSessionCount: results.reduce(
-      (count, result) => count + (result.migratedSessionIds?.length || 0),
-      0,
-    ),
     rebuiltSessionCount: results.reduce(
       (count, result) => count + (result.rebuiltSessionIds?.length || 0),
       0,

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import {
   executeToolCall as executeToolCallWithoutTurn,
@@ -27,7 +28,10 @@ export function executeToolCall({
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,
+    workflowRunId: "",
+    nodeExecutionId: "",
   });
+  initializeCurrentTurnMessageEventProjection(runtime);
   if (runtime.eventListener && !runtime.sessionManager) {
     runtime.sessionManager = createCanonicalMessageEventSessionManager();
   }

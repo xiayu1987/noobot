@@ -12,6 +12,8 @@ import {
   NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
 } from "@noobot/execution-isolation-protocol/native-script";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
+import { createMainFlowControlPort } from "../../src/runtime/main-flow-control.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import {
   TEST_AGENT_EXECUTION,
   createTestAgentEnvironment,
@@ -68,8 +70,23 @@ function createScope({
   toolNames = FIXTURE_TOOL_NAMES,
   globalConfig = {},
   identity = IDENTITY,
-  runConfig = {},
+  runConfig = { hookManager: null },
 } = {}) {
+  const runtime = createTestRuntimeContext({
+    basePath: "/tmp/help-scope",
+    globalConfig,
+    runConfig,
+    attachmentService,
+    systemRuntime: {
+      userId: identity.userId,
+      sessionId: identity.sessionId,
+      dialogProcessId: identity.dialogProcessId,
+      turnScopeId: identity.turnScopeId,
+      caller: SESSION_CALLER.USER,
+      now: "2026-01-01T00:00:00.000Z",
+      isSuperUser: true,
+    },
+  });
   return createAgentExecutionScope({
     context: createAgentContextEnvelope({
       identity,
@@ -78,23 +95,10 @@ function createScope({
       messageBlocks: { system: [], history: [], incremental: [] },
     }),
     bindings: {
+      runtime,
+      mainFlowControl: createMainFlowControlPort(runtime),
       tools: toolNames.map((name) => ({ name, func: async () => "" })),
       extensions: {},
-      runtime: {
-        basePath: "/tmp/help-scope",
-        globalConfig,
-        runConfig,
-        ...(attachmentService ? { attachmentService } : {}),
-        systemRuntime: {
-          userId: identity.userId,
-          sessionId: identity.sessionId,
-          dialogProcessId: identity.dialogProcessId,
-          turnScopeId: identity.turnScopeId,
-          caller: SESSION_CALLER.USER,
-          now: "2026-01-01T00:00:00.000Z",
-          isSuperUser: true,
-        },
-      },
     },
   });
 }
@@ -444,7 +448,7 @@ test("tools listing comes from runtime bindings rather than the static registry"
 test("tools listing applies the same runtime tool policy that narrows the model bindings", async () => {
   const scopeOptions = {
     toolNames: [...FIXTURE_TOOL_NAMES, TOOL_NAME.TASK_SUMMARY],
-    runConfig: { toolPolicy: { denyToolNames: [TOOL_NAME.TASK_SUMMARY] } },
+    runConfig: { hookManager: null, toolPolicy: { denyToolNames: [TOOL_NAME.TASK_SUMMARY] } },
   };
   const available = resolveAvailableTools(createScope(scopeOptions));
   assert.equal(available.source, TOOL_SOURCE.RUNTIME_BINDINGS);

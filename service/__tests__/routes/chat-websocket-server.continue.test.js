@@ -268,11 +268,9 @@ test("chat-websocket-server: continue action does not fallback to current dialog
 });
 
 test("chat-websocket-server: stop during continue request ends with authoritative stop completion", async () => {
-  let capturedStopPayload = null;
   const server = await startServerWithWs({
     initialTurnLifecycle: stoppedLifecycle({ sessionId: "s-continue-stop" }),
-    materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
-      capturedStopPayload = { event, terminalStatus };
+    materializeTerminalMessages: ({ terminalStatus, previousSummaryVersion }) => {
       return {
         materialized: true,
         terminalStatus,
@@ -311,10 +309,6 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
         sessionId: "s-continue-stop",
         turnScopeId: "turn-new",
         dialogProcessId: "dp-stopped",
-        partialAssistant: {
-          content: "partial",
-          turnScopeId: "turn-new",
-        },
       },
     });
 
@@ -342,14 +336,6 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
     assert.equal(stoppedEvent?.data?.payload?.phase, "stop");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
-    assert.equal(
-      capturedStopPayload?.event?.terminalStatus?.assistantMessage?.turnScopeId,
-      "turn-new",
-    );
-    assert.equal(
-      capturedStopPayload?.event?.terminalStatus?.assistantMessage?.dialogProcessId,
-      "dialog:turn-new",
-    );
   } finally {
     await closeServer(server);
   }

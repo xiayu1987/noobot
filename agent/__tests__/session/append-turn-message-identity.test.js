@@ -45,13 +45,16 @@ test("appendTurns upserts an ordered message batch with one Session save", async
       {
         messageUid: "sm_assistant",
         role: "assistant",
+        presentationMessageId: "pm_fx1",
         content: "tools",
+        modelMessageId: "mm_assistant",
         dialogProcessId: "dp",
         turnScopeId: "t",
       },
       {
         messageUid: "sm_tool_1",
         role: "tool",
+        presentationMessageId: "pm_fx2",
         content: "one",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -59,6 +62,7 @@ test("appendTurns upserts an ordered message batch with one Session save", async
       {
         messageUid: "sm_tool_2",
         role: "tool",
+        presentationMessageId: "pm_fx3",
         content: "two",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -91,7 +95,7 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
   };
   const canonical = (messageUid, content) => ({
     messageUid,
-    messageId: `message-${messageUid}`,
+    modelMessageId: `message-${messageUid}`,
     role: "assistant",
     content,
     dialogProcessId: "dialog-1",
@@ -116,7 +120,7 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
         },
       ],
     }),
-    /invalid canonical assistant presentation/,
+    /session_message_presentationMessageId_missing/,
   );
   assert.equal(session.messages[0].chatPresentation, true);
   await appendTurns.call(service, {
@@ -153,6 +157,7 @@ test("appendTurns persists the canonical tool policy", async () => {
       {
         messageUid: "sm_boundary_result",
         role: "tool",
+        presentationMessageId: "pm_fx4",
         content: "summary persisted",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -254,7 +259,6 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
         dialogProcessId: "dp",
         turnScopeId: "t",
         messageOrigin: "natural",
-        userMetaMaterialized: true,
       },
     ],
   });
@@ -270,9 +274,10 @@ test("appendTurns updates an existing message with the same messageUid", async (
       {
         messageUid: "sm_existing",
         role: "assistant",
+        presentationMessageId: "pm_fx5",
         content: "partial",
         type: "message",
-        messageId: "message-1",
+        modelMessageId: "message-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
         ts: "2026-07-25T00:00:00.000Z",
@@ -298,9 +303,10 @@ test("appendTurns updates an existing message with the same messageUid", async (
       {
         messageUid: "sm_existing",
         role: "assistant",
+        presentationMessageId: "pm_fx6",
         content: "completed",
         type: "message",
-        messageId: "message-1",
+        modelMessageId: "message-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
       },
@@ -309,11 +315,11 @@ test("appendTurns updates an existing message with the same messageUid", async (
 
   assert.equal(session.messages.length, 1);
   assert.equal(session.messages[0].content, "completed");
-  assert.equal(session.messages[0].messageId, "message-1");
+  assert.equal(session.messages[0].modelMessageId, "message-1");
   assert.equal(session.messages[0].messageUid, "sm_existing");
   assert.equal(session.messages[0].ts, "2026-07-25T00:00:00.000Z");
   assert.equal(result.appended, true);
-  assert.equal(result.turns[0].messageId, "message-1");
+  assert.equal(result.turns[0].modelMessageId, "message-1");
   assert.equal(result.turns[0].messageUid, "sm_existing");
   assert.equal(saveCount, 1);
 });
@@ -327,7 +333,7 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
         messageUid: "sm_old_guidance",
         role: "user",
         content: "old guidance",
-        messageId: "am_1g",
+        userMessageId: "am_1g",
         dialogProcessId: "dialog-old",
         turnScopeId: "turn-old",
         ts: "2026-07-25T00:00:00.000Z",
@@ -352,7 +358,7 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
         messageUid: "sm_new_guidance",
         role: "user",
         content: "new guidance",
-        messageId: "am_1g",
+        userMessageId: "am_1g",
         dialogProcessId: "dialog-new",
         turnScopeId: "turn-new",
         injectedMessage: true,
@@ -388,7 +394,9 @@ test("appendTurns rejects a turn without messageUid", async () => {
       sessionId: "s1",
       turns: [{ role: "user", content: "hello" }],
     }),
-    (error) => error.code === "SESSION_MESSAGE_UID_REQUIRED",
+    (error) =>
+      error.code === "SESSION_MESSAGE_IDENTITY_INVALID" &&
+      error.validationErrors.includes("session_message_uid_missing"),
   );
   assert.equal(session.messages.length, 0);
 });
@@ -401,8 +409,9 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
       {
         messageUid: "sm_fixed",
         role: "assistant",
+        presentationMessageId: "pm_fx7",
         content: "partial",
-        messageId: "am_1",
+        modelMessageId: "am_1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
         ts: "2026-07-25T00:00:00.000Z",
@@ -425,8 +434,9 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
       {
         messageUid: "sm_fixed",
         role: "assistant",
+        presentationMessageId: "pm_fx8",
         content: "done",
-        messageId: "a-different-runtime-id",
+        modelMessageId: "a-different-runtime-id",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
       },
@@ -445,8 +455,9 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
         {
           messageUid: "sm_fixed",
           role: "assistant",
+          presentationMessageId: "pm_fx9",
           content: "wrong dialog",
-          messageId: "am_1",
+          modelMessageId: "am_1",
           dialogProcessId: "dialog-2",
           turnScopeId: "turn-2",
         },
@@ -474,7 +485,7 @@ test("appendTurns preserves assistant presentation identity in the authoritative
       {
         role: "assistant",
         messageUid: "sm_analysis",
-        messageId: "msg_model_turn_1",
+        modelMessageId: "msg_model_turn_1",
         presentationMessageId: "msg_chat_1",
         chatPresentation: false,
         content: "working through the model analysis",

@@ -32,13 +32,13 @@ describe("useChatEngine.resend failure rollback", () => {
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       turnScopeId: "client-turn:replace-fallback",
       role: RoleEnum.USER,
       content: "first",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       turnScopeId: "client-turn:replace-fallback",
       role: RoleEnum.ASSISTANT,
       content: "target",
@@ -82,13 +82,13 @@ describe("useChatEngine.resend failure rollback", () => {
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       turnScopeId: "client-turn:replace-throw-404",
       role: RoleEnum.USER,
       content: "first",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       turnScopeId: "client-turn:replace-throw-404",
       role: RoleEnum.ASSISTANT,
       content: "target",
@@ -115,13 +115,13 @@ describe("useChatEngine.resend failure rollback", () => {
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi },
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       turnScopeId: "client-turn:conflict",
       role: RoleEnum.USER,
       content: "first",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       turnScopeId: "client-turn:conflict",
       role: RoleEnum.ASSISTANT,
       content: "target",
@@ -147,7 +147,7 @@ describe("useChatEngine.resend failure rollback", () => {
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, anchor }) => {
       const replacementUser = {
-        messageId: "replacement-user-wrong-command",
+        userMessageId: "replacement-user-wrong-command",
         turnScopeId,
         role: RoleEnum.USER,
         content: "edited",
@@ -194,7 +194,7 @@ describe("useChatEngine.resend failure rollback", () => {
     const deleteSessionMessagesFromApi = vi.fn();
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
-        messageId: "replacement-user",
+        userMessageId: "replacement-user",
         turnScopeId,
         role: RoleEnum.USER,
         content: "repeat",
@@ -243,8 +243,8 @@ describe("useChatEngine.resend failure rollback", () => {
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
-        id: "m-new",
-        messageId: "m-new",
+        messageUid: "m-new",
+        userMessageId: "m-new",
         turnScopeId,
         role: RoleEnum.USER,
         content: "edited retry text",
@@ -268,13 +268,13 @@ describe("useChatEngine.resend failure rollback", () => {
       deps: { replaceSessionTurnApi, applySessionDetail },
     });
     const first = {
-      id: "m1",
+      messageUid: "m1",
       turnScopeId: "turn-send-fail",
       role: RoleEnum.USER,
       content: "first",
     };
     const target = {
-      id: "m2",
+      presentationMessageId: "m2",
       turnScopeId: "turn-send-fail",
       role: RoleEnum.ASSISTANT,
       content: "target",
@@ -291,7 +291,7 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(stream).toHaveBeenCalledTimes(1);
     expect(activeSession.value.messages[0]).toEqual(
       expect.objectContaining({
-        messageId: "m-new",
+        userMessageId: "m-new",
         role: RoleEnum.USER,
         content: "edited retry text",
       }),

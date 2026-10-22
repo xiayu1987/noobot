@@ -49,8 +49,8 @@ function commitPresentation(store, identity = {}) {
       sequence: 1,
       presentation: {
         userMessage: {
-          id: `${turnScopeId}:user`,
-          messageId: `${turnScopeId}:user`,
+          messageUid: `${turnScopeId}:user`,
+          userMessageId: `${turnScopeId}:user`,
           role: "user",
           sessionId,
           turnScopeId,
@@ -58,7 +58,6 @@ function commitPresentation(store, identity = {}) {
           attachments: [],
         },
         assistantMessage: {
-          id: presentationMessageId,
           presentationMessageId,
           role: "assistant",
           sessionId,
@@ -335,7 +334,7 @@ describe("sub-session realtime message projection", () => {
       messages: [
         {
           ...identity,
-          id: identity.presentationMessageId,
+          presentationMessageId: identity.presentationMessageId,
           role: "assistant",
           content: "answer",
           pending: true,

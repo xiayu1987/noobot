@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { readTestMainFlowControl } from "../helpers/public-runtime-fixtures.js";
 
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 
@@ -115,16 +116,12 @@ test("overflow after harness summary schedules the harness summary flow again wi
     agentContext.bindings.extensions.harness.state.flags.overflowForceAcceptancePending,
     false,
   );
-  assert.equal(
-    agentContext.bindings.extensions.harness.state.flags.mainFlowFinalNoToolsPending,
-    false,
-  );
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(
     agentContext.bindings.extensions.harness.state.flags.guidanceSummaryMarkPending,
     true,
   );
-  assert.equal(agentContext.bindings.runtime.systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(readTestMainFlowControl(agentContext).finalNoToolsTurnEngaged, false);
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
 });

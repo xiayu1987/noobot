@@ -328,7 +328,6 @@ test("resolveMainModelHistoryMessages selects recent user dialogs when artifact 
       content: "u1",
       dialogProcessId: "d1",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       ts: "2026-07-27T01:00:00Z",
     }),
     sessionRecord({
@@ -336,7 +335,6 @@ test("resolveMainModelHistoryMessages selects recent user dialogs when artifact 
       content: "u2",
       dialogProcessId: "d2",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       ts: "2026-07-27T02:00:00Z",
     }),
     sessionRecord({
@@ -350,7 +348,6 @@ test("resolveMainModelHistoryMessages selects recent user dialogs when artifact 
       content: "u3",
       dialogProcessId: "d3",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       ts: "2026-07-27T03:00:00Z",
     }),
     sessionRecord({
@@ -358,7 +355,6 @@ test("resolveMainModelHistoryMessages selects recent user dialogs when artifact 
       content: "u4",
       dialogProcessId: "d4",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       ts: "2026-07-27T04:00:00Z",
     }),
     sessionRecord({
@@ -366,7 +362,6 @@ test("resolveMainModelHistoryMessages selects recent user dialogs when artifact 
       content: "u5",
       dialogProcessId: "d5",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       ts: "2026-07-27T05:00:00Z",
     }),
     sessionRecord({
@@ -374,7 +369,6 @@ test("resolveMainModelHistoryMessages selects recent user dialogs when artifact 
       content: "u6",
       dialogProcessId: "d6",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       ts: "2026-07-27T06:00:00Z",
     }),
     sessionRecord({

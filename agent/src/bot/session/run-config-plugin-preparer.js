@@ -239,6 +239,8 @@ export class RunConfigPluginPreparer {
         selectedPlugins: plan.selectedPlugins,
         disabledPlugins: plan.disabledPlugins,
         plugins: {},
+        hookManager: null,
+        botHookManager: null,
       };
     }
     const agentHooks = selectHookManager({

@@ -60,6 +60,8 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
         traces: [],
         turnMessages: [],
         turnTasks: [],
+        modelLoopRound: 0,
+        modelMessages: [],
       };
     },
   });
@@ -86,7 +88,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     events.find((event) => event?.event === "timeline_checkpoint_persisted")?.data?.messages?.[0],
     {
       messageUid: "sm_checkpoint",
-      messageId: "",
+      modelMessageId: "",
       presentationMessageId: "msg_chat_checkpoint",
       role: "assistant",
       type: "message",
@@ -164,6 +166,8 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
         traces: [],
         turnMessages: [],
         turnTasks: [],
+        modelLoopRound: 0,
+        modelMessages: [],
       };
     },
   });
@@ -233,6 +237,8 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
         traces: [],
         turnMessages: [],
         turnTasks: [],
+        modelLoopRound: 0,
+        modelMessages: [],
       };
     },
   });
@@ -278,6 +284,8 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
         traces: [],
         turnMessages: [],
         turnTasks: [],
+        modelLoopRound: 0,
+        modelMessages: [],
       };
     },
   });

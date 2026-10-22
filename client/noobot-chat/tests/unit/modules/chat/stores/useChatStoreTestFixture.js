@@ -73,8 +73,8 @@ export function commitPresentation(store, identity = {}) {
       eventType: "turn_presentation_committed",
       presentation: {
         userMessage: {
-          id: identity.userMessageId || `${turnScopeId}:user`,
-          messageId: identity.userMessageId || `${turnScopeId}:user`,
+          messageUid: identity.userMessageId || `${turnScopeId}:user`,
+          userMessageId: identity.userMessageId || `${turnScopeId}:user`,
           role: "user",
           sessionId,
           turnScopeId,
@@ -82,7 +82,6 @@ export function commitPresentation(store, identity = {}) {
           attachments: [],
         },
         assistantMessage: {
-          id: presentationMessageId,
           presentationMessageId,
           role: "assistant",
           sessionId,

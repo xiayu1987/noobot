@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { routeWorkflowDiagnosticsPayload } from "../runtime/workflowDiagnosticsRoute.js";
 import { activate } from "../index.js";
 import workflowManifest from "../../manifest.json";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { validatePluginContributionReceipt } from "@noobot/plugin-protocol";
 import {
   WORKFLOW_RUNTIME_EVENT,
@@ -124,6 +124,7 @@ describe("Workflow frontend registration", () => {
     const logRuntimeProjectionDiagnostics = vi.fn();
     const envelope = createEventEnvelope({
       family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+      schemaVersion: getEventFamily(EVENT_FAMILY.WORKFLOW_RUNTIME).schemaVersion,
       identity: {
         eventId: "workflow-node-state-46",
         eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,

@@ -30,8 +30,8 @@ import {
 import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
 import {
   CONTEXT_MESSAGE_PROJECTION_TYPE,
-  deriveContextMessageProjectionId,
-  resolveContextMessageId,
+  composeContextProjectionKey,
+  resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import { initializeAgentModelHost } from "./model-port-host.js";
 import { text } from "@noobot/shared/value";
@@ -92,10 +92,17 @@ function applySelectedModel(modelState, agentContext, selectedModelSpec) {
   modelState.activeModelSpec = selectedModelSpec;
 }
 
-function createAgentModelContext({ runtime, eventListener, messageBlocks, activeTurnIdentity }) {
+function createAgentModelContext({
+  runtime,
+  eventListener,
+  messageBlocks,
+  userMetaBackwrites,
+  activeTurnIdentity,
+}) {
   const modelContext = createModelContext({
     activeTurnIdentity,
     checkpointRevision: runtime.summaryCheckpointRevision,
+    userMetaBackwrites,
     onCanonicalMessageAdded(message, meta) {
       emitContextIdentityDebug(
         eventListener,
@@ -131,23 +138,12 @@ function createAgentModelContext({ runtime, eventListener, messageBlocks, active
   return modelContext;
 }
 
-function buildLoopState({
-  tools,
-  modelContext,
-  runtime,
-  sys,
-  activeTurnIdentity,
-  loopConfig,
-  errorLogger,
-}) {
+function buildLoopState({ tools, runtime, sys, activeTurnIdentity, loopConfig, errorLogger }) {
   return {
     tools,
-    modelContext,
     traces: [],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: runtime.currentTurnMessages || null,
-    currentTurnTasks: runtime.currentTurnTasks || null,
+    currentTurnMessages: runtime.currentTurnMessages,
+    currentTurnTasks: runtime.currentTurnTasks,
     dialogProcessId: activeTurnIdentity.dialogProcessId,
     maxTurns: loopConfig.maxToolLoopTurns,
     phaseSummaryLoopTurns: loopConfig.phaseSummaryLoopTurns,
@@ -156,7 +152,6 @@ function buildLoopState({
     helpPromptLoopTurns: loopConfig.helpPromptLoopTurns,
     toolFailureHelpCount: loopConfig.toolFailureHelpCount,
     taskSummaryTriggered: false,
-    toolConsecutiveFailureCount: Number(sys?.toolConsecutiveFailureCount || 0),
     systemRuntime: sys,
     errorLogger,
   };
@@ -169,9 +164,6 @@ function recordModelContextOnRuntime(runtime, context, sys, activeTurnIdentity, 
     sessionId: context.identity.sessionId,
     parentSessionId: context.identity.parentSessionId,
     ...activeTurnIdentity,
-    messages: modelContext.messages,
-    messageBlocks: modelContext.messageBlocks,
-    userMetaBackwrites: modelContext.userMetaBackwrites,
     systemRuntime: sys,
   };
   return runtime.stoppedModelMessageSnapshotCandidate;
@@ -185,17 +177,14 @@ function emitAgentStateDiagnostics({
   modelContext,
 }) {
   const sourceMessageUid = text(currentUserMessage.messageUid);
-  const userMetaId = deriveContextMessageProjectionId(
-    sourceMessageUid,
-    CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
-  );
-  const modelMessageIds = modelContext.messages.map(resolveContextMessageId).filter(Boolean);
+  const userMetaId = sourceMessageUid
+    ? composeContextProjectionKey(CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META, sourceMessageUid)
+    : "";
+  const modelMessageIds = modelContext.messages.map(resolveContextMessageKey);
   emitContextIdentityDebug(eventListener, "modelContextCreated", {
     sourceMessageUid,
     contentProjectionFound: modelMessageIds.includes(sourceMessageUid),
     userMetaProjectionFound: modelMessageIds.includes(userMetaId),
-    contentProjectionId: modelMessageIds.find((id) => id === sourceMessageUid) || "",
-    userMetaProjectionId: modelMessageIds.find((id) => id === userMetaId) || "",
     messageCount: modelContext.messages.length,
     systemCount: modelContext.messageBlocks.system.length,
     historyCount: modelContext.messageBlocks.history.length,
@@ -257,11 +246,11 @@ export function createStateBuilder({
       runtime,
       eventListener,
       messageBlocks,
+      userMetaBackwrites: context.modelContext.userMetaBackwrites,
       activeTurnIdentity,
     });
     const loopState = buildLoopState({
       tools,
-      modelContext,
       runtime,
       sys,
       activeTurnIdentity,

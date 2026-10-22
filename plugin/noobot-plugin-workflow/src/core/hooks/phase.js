@@ -7,13 +7,11 @@
 import { WORKFLOW_PHASE_STATUS, WORKFLOW_TRACE } from "../constants.js";
 import { text } from "@noobot/shared/value";
 
-export function appendWorkflowTrace(agentResult = {}, payload = {}) {
-  const traces = Array.isArray(agentResult?.traces) ? agentResult.traces : [];
-  traces.push({
+export function appendWorkflowTrace(agentResult, payload) {
+  agentResult.traces.push({
     type: WORKFLOW_TRACE.TYPE,
     ...payload,
   });
-  agentResult.traces = traces;
 }
 
 export function createPhaseTracker() {

@@ -17,17 +17,17 @@ import {
 } from "@noobot/event-protocol";
 import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
-  normalizeAuthorityEventOutbox,
+  advanceAuthorityOutboxCheckpoint,
+  allocateAuthorityEventSequence,
 } from "@noobot/event-protocol/outbox";
 import {
-  PLUGIN_ARTIFACT_ERROR_CODE,
+  createPluginArtifactCommitRejection,
+  decidePluginArtifactCommit,
   PLUGIN_ARTIFACT_FAMILY,
 } from "@noobot/event-protocol/plugin-artifact-event";
 import {
   appendAuthorityOutboxRecords,
   authorityOutboxCommitRecord,
-  authorityOutboxSequenceKey,
-  mergeAuthorityOutboxSequenceFloors,
   readAuthorityOutbox,
   readAuthorityOutboxCheckpoint,
   authorityOutboxRecordsFromOutbox,
@@ -36,81 +36,40 @@ import {
   writeAuthorityOutboxCheckpoint,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { locateOutboxSessionDir } from "./outbox-scope.js";
-import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
-import { SESSION_NOT_FOUND_REASON, decideAggregateConcurrency } from "@noobot/session-protocol";
-
-function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "", floor = 0) {
-  const envelopes = [
-    ...normalizeAuthorityEventOutbox(outbox).map((item) => item.envelope),
-    ...(Array.isArray(artifactEvents) ? artifactEvents : []),
-  ];
-  return (
-    envelopes.reduce(
-      (maximum, envelope) => {
-        const ordering = envelope?.ordering;
-        if (ordering?.domain !== domain || ordering?.scopeId !== scopeId) return maximum;
-        return Math.max(maximum, Number(ordering.sequence) || 0);
-      },
-      Math.max(0, Number(floor) || 0),
-    ) + 1
-  );
-}
+import {
+  SESSION_NOT_FOUND_REASON,
+  createSessionNotFoundError,
+  decideAggregateConcurrency,
+} from "@noobot/session-protocol";
 
 function decidePluginArtifactRevision(session, payload) {
-  const artifactKey = pluginArtifactKey(payload);
   const currentArtifact =
-    projectPluginArtifacts(session.sessionArtifactEvents || [])[artifactKey] || null;
-  const currentRevision = currentArtifact ? Number(currentArtifact.revision) : 0;
-  const expectedRevision = payload?.baseRevision == null ? null : Number(payload.baseRevision);
-  if (payload?.operation === "replaced" && !currentArtifact) {
-    return {
-      committed: false,
-      reason: "artifact_not_found",
-      code: PLUGIN_ARTIFACT_ERROR_CODE.NOT_FOUND,
-      currentRevision: 0,
-    };
-  }
-  if (payload?.operation === "replaced" && expectedRevision !== currentRevision) {
-    return {
-      committed: false,
-      reason: "revision_conflict",
-      code: PLUGIN_ARTIFACT_ERROR_CODE.REVISION_CONFLICT,
-      currentRevision,
-    };
-  }
-  if (payload?.operation === "created" && currentArtifact) {
-    return {
-      committed: false,
-      reason: "artifact_exists",
-      code: PLUGIN_ARTIFACT_ERROR_CODE.ALREADY_EXISTS,
-      currentRevision,
-    };
-  }
-  return { revision: payload?.operation === "replaced" ? currentRevision + 1 : 1 };
+    projectPluginArtifacts(session.sessionArtifactEvents)[pluginArtifactKey(payload)] || null;
+  return decidePluginArtifactCommit(currentArtifact, payload);
 }
 
 export async function commitAuthorityEvent({
   userId,
   sessionId,
   family,
-  schemaVersion = 1,
-  identity = {},
-  causality = {},
-  ordering = {},
-  producer = {},
-  payload = {},
+  identity,
+  causality,
+  ordering,
+  producer,
+  payload,
   persistenceContext,
-} = {}) {
+}) {
   const owner = {
     userId: text(userId),
     sessionId: text(sessionId),
   };
-  const orderingDomain = text(ordering?.domain);
-  const orderingScopeId = text(ordering?.scopeId);
-  if (!owner.userId || !owner.sessionId || !text(family)) {
+  const descriptor = getEventFamily(family);
+  if (!owner.userId || !owner.sessionId || !descriptor) {
     throw new TypeError("authority event commit requires user, session and family");
   }
+  const orderingDomain = text(ordering.domain);
+  const orderingScopeId = text(ordering.scopeId);
   if (!orderingDomain || !orderingScopeId) {
     throw new TypeError("authority event commit requires ordering domain and scope");
   }
@@ -121,16 +80,15 @@ export async function commitAuthorityEvent({
       const session = await this.sessionRepo.findById(owner.userId, owner.sessionId, {
         persistenceContext,
       });
-      if (!session) return { committed: false, reason: SESSION_NOT_FOUND_REASON };
+      if (!session) throw createSessionNotFoundError(owner);
       const eventPayload = { ...payload };
-      const descriptor = getEventFamily(family);
-      const isArtifact = descriptor?.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
+      const isArtifact = descriptor.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
       if (isArtifact) {
         const artifactDecision = decidePluginArtifactRevision(session, payload);
-        if (artifactDecision.committed === false) return artifactDecision;
+        if (!artifactDecision.allowed) return createPluginArtifactCommitRejection(artifactDecision);
         eventPayload.revision = artifactDecision.revision;
       }
-      const isSessionArtifactEvent = descriptor?.sessionArtifact === true;
+      const isSessionArtifactEvent = descriptor.sessionArtifact === true;
       const concurrency = isSessionArtifactEvent
         ? decideAggregateConcurrency({
             expectedAggregateVersion: null,
@@ -145,18 +103,18 @@ export async function commitAuthorityEvent({
       const outboxSessionDir = scope.sessionDir;
       const persistedOutbox = await readAuthorityOutbox(outboxSessionDir);
       const outboxCheckpoint = await readAuthorityOutboxCheckpoint(outboxSessionDir);
-      const sequence = nextSequence(
-        persistedOutbox,
-        session.sessionArtifactEvents,
+      const sequence = allocateAuthorityEventSequence({
+        checkpoint: outboxCheckpoint,
+        envelopes: [
+          ...persistedOutbox.map((item) => item.envelope),
+          ...session.sessionArtifactEvents,
+        ],
         orderingDomain,
         orderingScopeId,
-        outboxCheckpoint.sequenceFloors[
-          authorityOutboxSequenceKey(orderingDomain, orderingScopeId)
-        ],
-      );
+      });
       const envelope = createEventEnvelope({
         family,
-        schemaVersion,
+        schemaVersion: descriptor.schemaVersion,
         identity: {
           ...identity,
           eventId: createEventId(),
@@ -181,7 +139,7 @@ export async function commitAuthorityEvent({
       }
       if (isSessionArtifactEvent) {
         session.aggregateVersion = concurrency.nextAggregateVersion;
-        session.sessionArtifactEvents = [...(session.sessionArtifactEvents || []), envelope];
+        session.sessionArtifactEvents = [...session.sessionArtifactEvents, envelope];
         session.updatedAt = occurredAt;
       }
       await withAuthorityOutboxMutation(outboxSessionDir, () =>
@@ -208,7 +166,7 @@ export async function commitAuthorityEvent({
     },
     { persistenceContext },
   );
-  return resolveDeletedSessionAs(mutation, { committed: false });
+  return mutation;
 }
 
 export async function getPendingAuthorityEvents({
@@ -347,9 +305,13 @@ export async function compactAuthorityEvents({
     const result = compactAuthorityEventOutbox(outbox, { retainDeliveredAfter });
     if (result.reason || !result.compacted) return result;
     const checkpoint = await readAuthorityOutboxCheckpoint(sessionDir);
-    await writeAuthorityOutboxCheckpoint(sessionDir, {
-      sequenceFloors: mergeAuthorityOutboxSequenceFloors(checkpoint.sequenceFloors, outbox),
-    });
+    await writeAuthorityOutboxCheckpoint(
+      sessionDir,
+      advanceAuthorityOutboxCheckpoint(
+        checkpoint,
+        outbox.map((item) => item.envelope),
+      ),
+    );
     await replaceAuthorityOutboxRecords(
       sessionDir,
       authorityOutboxRecordsFromOutbox(result.outbox),

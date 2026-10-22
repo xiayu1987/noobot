@@ -14,6 +14,7 @@ import {
   createEventEnvelope,
   EVENT_FAMILY,
   INTERACTION_SEQUENCE_DOMAIN,
+  getEventFamily,
 } from "@noobot/event-protocol";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 
@@ -59,6 +60,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       const interaction = createEventEnvelope({
         family: EVENT_FAMILY.INTERACTION_REQUEST,
+        schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
         identity: {
           eventId: "child-interaction-event",
           eventType: StreamEventEnum.INTERACTION_REQUEST,

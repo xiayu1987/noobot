@@ -10,7 +10,7 @@ import {
   createSecurityAssessment,
   raiseSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
-import { createEventEnvelope } from "@noobot/event-protocol";
+import { createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
 import {
   ACTIVITY_KIND,
   MESSAGE_EVENT_TYPE,
@@ -22,7 +22,7 @@ import {
   projectMessageEventToolFacets,
   projectTurnPresentation,
   resolveMessageEventPresentationId,
-  resolveTurnPresentationMessageId,
+  resolveMessageViewKey,
   validateMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "../src/event-registry.js";
@@ -41,6 +41,7 @@ function payload(overrides = {}) {
 function envelope(payloadOverrides = {}, envelopeOverrides = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: "event-1",
       eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -187,8 +188,8 @@ test("message payload owns presentation identity and content semantics", () => {
 test("turn presentation atomically declares canonical user and assistant entities", () => {
   const presentation = {
     userMessage: {
-      id: "user-1",
-      messageId: "user-1",
+      messageUid: "sm_user-1",
+      userMessageId: "user-1",
       role: "user",
       sessionId: "child-1",
       turnScopeId: "turn-1",
@@ -196,7 +197,6 @@ test("turn presentation atomically declares canonical user and assistant entitie
       attachments: [],
     },
     assistantMessage: {
-      id: "presentation-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
       sessionId: "child-1",
@@ -236,6 +236,24 @@ test("turn presentation atomically declares canonical user and assistant entitie
       },
     }).errors,
     ["noncanonical_assistant_message_id"],
+  );
+  const { messageUid: _omitted, ...userWithoutUid } = presentation.userMessage;
+  assert.deepEqual(
+    validateMessageEventPayload({
+      ...committed,
+      presentation: { ...presentation, userMessage: userWithoutUid },
+    }).errors,
+    ["missing_user_message_uid"],
+  );
+  assert.deepEqual(
+    validateMessageEventPayload({
+      ...committed,
+      presentation: {
+        userMessage: { ...presentation.userMessage, id: "user-1" },
+        assistantMessage: { ...presentation.assistantMessage, id: "presentation-1" },
+      },
+    }).errors,
+    ["noncanonical_user_id", "noncanonical_assistant_id"],
   );
 });
 
@@ -343,18 +361,22 @@ test("isHostActivity accepts empty and host kinds and rejects plugin kinds", () 
   assert.equal(isHostActivity({ activityKind: "guidance_analysis" }), false);
 });
 
-test("turn presentation messages resolve identity by role without fallback", () => {
+test("message view key resolves by role without fallback", () => {
   assert.equal(
-    resolveTurnPresentationMessageId({
+    resolveMessageViewKey({
       role: "assistant",
+      messageUid: "sm_a",
       presentationMessageId: "presentation-1",
     }),
     "presentation-1",
   );
-  assert.equal(resolveTurnPresentationMessageId({ role: "assistant", messageId: "stream-1" }), "");
-  assert.equal(resolveTurnPresentationMessageId({ role: "user", messageId: "user-1" }), "user-1");
-  assert.equal(
-    resolveTurnPresentationMessageId({ role: "user", presentationMessageId: "presentation-1" }),
-    "",
-  );
+  assert.equal(resolveMessageViewKey({ role: "assistant", messageUid: "sm_a" }), "");
+  assert.equal(resolveMessageViewKey({ role: "assistant", messageId: "stream-1" }), "");
+  for (const role of ["user", "tool", "system"]) {
+    assert.equal(
+      resolveMessageViewKey({ role, messageUid: "sm_x", presentationMessageId: "pm_x" }),
+      "sm_x",
+    );
+    assert.equal(resolveMessageViewKey({ role, userMessageId: "um_x", messageId: "sm_x" }), "");
+  }
 });

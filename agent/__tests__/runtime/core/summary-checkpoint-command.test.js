@@ -3,62 +3,61 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import {
+  peekMainFlowSummaryCheckpoint,
+  requestMainFlowSummaryCheckpoint,
+} from "../../../src/runtime/main-flow-control.js";
 import { consumeSummaryCheckpointCommand } from "../../../src/runtime/summary-checkpoint-command.js";
 
 test("summary command is acknowledged once only after the unified checkpoint commits", async () => {
-  const markedMessage = {
-    role: "assistant",
-    content: "old tool call",
-    summarized: true,
-    messageUid: "m1",
-  };
   const calls = [];
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     systemRuntime: {},
-    currentTurnMessages: {
-      toArray() {
-        return [{ role: "user", content: "keep" }];
-      },
-    },
     async commitSummaryCheckpoint(payload) {
       calls.push(payload);
       return { committed: true };
     },
-  };
-  const loopState = { turnMessages: [markedMessage] };
+  });
+  runtime.currentTurnMessages.push({ role: "user", content: "keep", messageUid: "m-keep" });
   requestMainFlowSummaryCheckpoint(runtime, {
     source: "plugin.summary",
-    summarizedMessageIds: ["m1", "runtime-prompt"],
+    summarizedMessageUids: ["m1", "runtime-prompt"],
   });
 
-  await consumeSummaryCheckpointCommand({ runtime, loopState, turn: 3 });
-  await consumeSummaryCheckpointCommand({ runtime, loopState, turn: 3 });
+  await consumeSummaryCheckpointCommand({ runtime, eventListener: null, turn: 3 });
+  await consumeSummaryCheckpointCommand({ runtime, eventListener: null, turn: 3 });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].summaryCompletion.source, "plugin.summary");
-  assert.deepEqual(loopState.turnMessages, [{ role: "user", content: "keep" }]);
-  assert.equal(runtime.systemRuntime.mainFlowControlInstructions, undefined);
+  assert.deepEqual(runtime.currentTurnMessages.toArray(), [
+    { role: "user", content: "keep", messageUid: "m-keep" },
+  ]);
+  assert.equal(peekMainFlowSummaryCheckpoint(runtime), null);
 });
 
 test("summary checkpoint failures expose exact unresolved identities without message content", async () => {
   const events = [];
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     systemRuntime: {},
     async commitSummaryCheckpoint() {
       const error = new Error("unresolved canonical identity");
-      error.requestedMessageIds = ["sm_found", "sm_missing"];
-      error.resolvedMessageIds = ["sm_found"];
-      error.unresolvedMessageIds = ["sm_missing"];
+      error.code = SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING;
+      error.messageUidResolution = {
+        requestedMessageUids: ["sm_found", "sm_missing"],
+        resolvedMessageUids: ["sm_found"],
+        unresolvedMessageUids: ["sm_missing"],
+      };
       throw error;
     },
-  };
+  });
   requestMainFlowSummaryCheckpoint(runtime, {
     source: "plugin.summary",
-    summarizedMessageIds: ["sm_found", "sm_missing"],
+    summarizedMessageUids: ["sm_found", "sm_missing"],
   });
 
   await assert.rejects(
@@ -71,9 +70,12 @@ test("summary checkpoint failures expose exact unresolved identities without mes
   );
 
   const failure = events.find((item) => item.event === "summary_checkpoint_failed");
-  assert.deepEqual(failure?.data?.requestedMessageIds, ["sm_found", "sm_missing"]);
-  assert.deepEqual(failure?.data?.resolvedMessageIds, ["sm_found"]);
-  assert.deepEqual(failure?.data?.unresolvedMessageIds, ["sm_missing"]);
+  assert.deepEqual(failure?.data?.summarizedMessageUids, ["sm_found", "sm_missing"]);
+  assert.deepEqual(failure?.data?.messageUidResolution, {
+    requestedMessageUids: ["sm_found", "sm_missing"],
+    resolvedMessageUids: ["sm_found"],
+    unresolvedMessageUids: ["sm_missing"],
+  });
   assert.equal("content" in failure.data, false);
-  assert.equal(runtime.systemRuntime.mainFlowControlInstructions.length, 1);
+  assert.notEqual(peekMainFlowSummaryCheckpoint(runtime), null);
 });

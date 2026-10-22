@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -23,7 +24,7 @@ import {
 
 test("agent context accessors separate the runtime execution root from the logical display root", () => {
   const systemRuntime = { sessionId: "runtime-session" };
-  const runtime = { id: "runtime", basePath: "/host/workspaces/u1", systemRuntime };
+  const runtime = createTestRuntimeContext({ basePath: "/host/workspaces/u1", systemRuntime });
   const tools = [{ name: "read_file" }];
   const scope = createTestAgentExecutionScope(runtime, {
     identity: {
@@ -63,5 +64,8 @@ test("agent context accessors reject removed runtime paths", () => {
 test("getSystemRuntimeFromRuntime reads the canonical runtime field", () => {
   const systemRuntime = { sessionId: "s1" };
   assert.equal(getSystemRuntimeFromRuntime({ systemRuntime }), systemRuntime);
-  assert.deepEqual(getSystemRuntimeFromRuntime({ systemRuntime: null }), {});
+  assert.throws(
+    () => getSystemRuntimeFromRuntime({ systemRuntime: null }),
+    /runtime\.systemRuntime is required/,
+  );
 });

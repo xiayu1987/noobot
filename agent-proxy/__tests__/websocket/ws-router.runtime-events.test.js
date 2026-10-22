@@ -48,7 +48,7 @@ function stopCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
   return createTurnStopCommand({
     identity: { sessionId, dialogProcessId: "dialog-1", turnScopeId },
     concurrency: { expectedTurnRevision: 1 },
-    stop: { partialAssistant: { content: "" } },
+    stop: {},
   });
 }
 

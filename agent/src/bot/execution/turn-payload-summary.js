@@ -89,11 +89,9 @@ export function summarizeSessionTurnPayload(fullTurnPayload = {}) {
     injectedBy: fullTurnPayload.injectedBy || "",
     injectedMessageType: fullTurnPayload.injectedMessageType || "",
     messageOrigin: fullTurnPayload.messageOrigin || "",
-    userMetaMaterialized: fullTurnPayload.userMetaMaterialized === true,
     pluginMessage: fullTurnPayload.pluginMessage === true,
     pluginMeta: summarizeObject(fullTurnPayload.pluginMeta),
     isMonotonic: fullTurnPayload.isMonotonic === true,
-    monotonic: fullTurnPayload.monotonic === true,
     artifactRef: {
       kind: "session_turn",
       source: "session.messages",

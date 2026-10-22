@@ -11,6 +11,7 @@ import {
   buildContextMessages,
   buildHumanMessagesForUser,
 } from "../../../src/context/assembly/message-builder.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -31,11 +32,16 @@ function userAttachment(attachmentId, sessionId, metadata = {}) {
 
 const contextMessage = projectSessionRecordToContextMessage;
 
+function createRuntimeWithToolAttachments({ toolAttachments, ...options }) {
+  const runtime = createTestRuntimeContext(options);
+  runtime.attachments.push(...toolAttachments);
+  return runtime;
+}
+
 test("buildContextMessages uses current runtime userMessageAttachments in user meta", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         userMessageAttachments: [
           userAttachment("att-a", "session-a", {
             name: "AI 体系现状概览.docx",
@@ -43,13 +49,12 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
             size: 1407731,
           }),
         ],
-        attachments: [],
         systemRuntime: {
           sessionId: "session-a",
           dialogProcessId: "dialog-a",
           turnScopeId: "turn-a",
         },
-      },
+      }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
@@ -76,15 +81,14 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
 test("buildContextMessages preserves explicit empty current userMessageAttachments", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         userMessageAttachments: [],
         systemRuntime: {
           sessionId: "session-a",
           dialogProcessId: "dialog-a",
           turnScopeId: "turn-a",
         },
-      },
+      }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
@@ -99,16 +103,17 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
 test("buildContextMessages does not treat runtime attachments bucket as current user attachments", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createRuntimeWithToolAttachments({
         userMessageAttachments: [],
-        attachments: [{ attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" }],
+        toolAttachments: [
+          { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
+        ],
         systemRuntime: {
           sessionId: "session-a",
           dialogProcessId: "dialog-a",
           turnScopeId: "turn-a",
         },
-      },
+      }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
@@ -123,21 +128,22 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
 test("buildContextMessages uses only userMessageAttachments as current user attachment input", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createRuntimeWithToolAttachments({
         userMessageAttachments: [
           userAttachment("current-user-input", "session-a", {
             name: "current.docx",
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           }),
         ],
-        attachments: [{ attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" }],
+        toolAttachments: [
+          { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
+        ],
         systemRuntime: {
           sessionId: "session-a",
           dialogProcessId: "dialog-a",
           turnScopeId: "turn-a",
         },
-      },
+      }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
@@ -165,16 +171,17 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
 test("buildContextMessages does not use fallback meta attachments as current user attachments", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createRuntimeWithToolAttachments({
         userMessageAttachments: [],
-        attachments: [{ attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" }],
+        toolAttachments: [
+          { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
+        ],
         systemRuntime: {
           sessionId: "session-a",
           dialogProcessId: "dialog-a",
           turnScopeId: "turn-a",
         },
-      },
+      }),
       {
         messageBlocks: {
           system: [],
@@ -225,14 +232,13 @@ test("buildContextMessages projects only model attachment metadata", () => {
   };
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         userMessageAttachments: [richAttachment],
         systemRuntime: {
           sessionId: "session-rich",
           dialogProcessId: "dialog-rich",
         },
-      },
+      }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
@@ -298,8 +304,7 @@ test("buildHumanMessagesForUser projects user metadata attachments only from the
 test("buildContextMessages keeps complete metadata per historical user turn without current-turn fallback", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "current-admin",
+      createTestRuntimeContext({
         userMessageAttachments: [
           userAttachment("latest-only", "current-session", {
             name: "latest.docx",
@@ -311,7 +316,7 @@ test("buildContextMessages keeps complete metadata per historical user turn with
           dialogProcessId: "current-dialog",
           turnScopeId: "current-turn",
         },
-      },
+      }),
       {
         messageBlocks: {
           system: [],
@@ -321,7 +326,6 @@ test("buildContextMessages keeps complete metadata per historical user turn with
               role: "user",
               content: "first historical turn",
               messageOrigin: "natural",
-              userMetaMaterialized: true,
               userName: "historical-admin",
               sessionId: "historical-session",
               parentSessionId: "historical-parent-session",
@@ -342,7 +346,6 @@ test("buildContextMessages keeps complete metadata per historical user turn with
               role: "user",
               content: "history turn with partial session facts",
               messageOrigin: "natural",
-              userMetaMaterialized: true,
               dialogProcessId: "legacy-dialog",
               turnScopeId: "legacy-turn",
               attachments: [],
@@ -415,7 +418,6 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
       content: "你好",
       messageUid: "stopped-user-1",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       attachments: [],
@@ -432,7 +434,6 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
       content: "你好",
       messageUid: "stopped-user-2",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       dialogProcessId: "dialog-2",
       turnScopeId: "turn-2",
       attachments: [],
@@ -449,7 +450,6 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
       content: "你好",
       messageUid: "stopped-user-3",
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       dialogProcessId: "dialog-3",
       turnScopeId: "turn-3",
       attachments: [
@@ -462,15 +462,14 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
   ].map(contextMessage);
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "current-admin",
+      createTestRuntimeContext({
         userMessageAttachments: [],
         systemRuntime: {
           sessionId: "current-session",
           dialogProcessId: "dialog-current",
           turnScopeId: "turn-current",
         },
-      },
+      }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("current") },
@@ -507,16 +506,15 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
 test("buildContextMessages discards classified user_meta without inferring from user text", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
+      createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
-        userId: "admin",
         userMessageAttachments: [],
         systemRuntime: {
           sessionId: "s1",
           dialogProcessId: "dialog-current",
           turnScopeId: "turn-current",
         },
-      },
+      }),
       {
         messageBlocks: {
           system: [],
@@ -526,7 +524,6 @@ test("buildContextMessages discards classified user_meta without inferring from 
               role: "user",
               content: "hello",
               messageOrigin: "natural",
-              userMetaMaterialized: true,
               dialogProcessId: "dialog-current",
               turnScopeId: "turn-current",
             }),
@@ -567,16 +564,15 @@ test("buildContextMessages discards classified user_meta without inferring from 
 test("buildContextMessages ignores derived metadata and uses stopped source facts", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
+      createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
-        userId: "admin",
         userMessageAttachments: [userAttachment("attachment-b", "s1", { name: "continue.docx" })],
         systemRuntime: {
           sessionId: "s1",
           dialogProcessId: "dialog-continue",
           turnScopeId: "turn-continue",
         },
-      },
+      }),
       {
         messageBlocks: {
           system: [],
@@ -592,7 +588,6 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
               dialogProcessId: "dialog-stopped",
               turnScopeId: "turn-stopped",
               messageOrigin: "natural",
-              userMetaMaterialized: true,
               attachments: [userAttachment("attachment-a", "s1", { name: "stopped.docx" })],
             }),
             contextMessage({
@@ -675,11 +670,10 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
 test("buildContextMessages does not project frontend user metadata for internal prompts", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         userMessageAttachments: [],
         systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child" },
-      },
+      }),
       {
         messageBlocks: {
           system: [],
@@ -709,15 +703,14 @@ test("buildContextMessages does not project frontend user metadata for internal 
 
   const currentMessages = buildContextMessages(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         userMessageAttachments: [],
         systemRuntime: {
           sessionId: "child",
           dialogProcessId: "dialog-child",
           caller: SESSION_CALLER.BOT,
         },
-      },
+      }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     {
@@ -727,7 +720,6 @@ test("buildContextMessages does not project frontend user metadata for internal 
         dialogProcessId: "dialog-child",
         turnScopeId: "internal-turn:current",
         messageOrigin: "internal",
-        userMetaMaterialized: false,
       }),
     },
   );

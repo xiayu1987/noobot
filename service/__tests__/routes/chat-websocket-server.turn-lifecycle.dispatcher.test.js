@@ -34,6 +34,11 @@ import { createAcceptedAgentExecutionIdentity } from "./chat-websocket-server.te
 
 test("plugin artifact outbox commit is sent through the active WebSocket before acknowledgement", async () => {
   const envelope = createPluginArtifactEnvelope({
+    sequence: 1,
+    revision: 1,
+    occurredAt: "2026-10-22T00:00:00.000Z",
+    operation: "created",
+    baseRevision: null,
     pluginId: "character",
     artifactType: "character.animation",
     artifactId: "animation.live",

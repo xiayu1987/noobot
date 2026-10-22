@@ -99,7 +99,8 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
               ? projectedSession.messages
               : []
             ).map((message = {}) => ({
-              messageId: normalizeTrimmedString(message?.messageId),
+              messageUid: normalizeTrimmedString(message?.messageUid),
+              presentationMessageId: normalizeTrimmedString(message?.presentationMessageId),
               role: normalizeTrimmedString(message?.role),
               turnScopeId: normalizeTrimmedString(message?.turnScopeId),
               pending: message?.pending,
@@ -129,7 +130,7 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   const {
     activeSession,
     applyTurnLifecycleEnvelope,
-    findCanonicalMessageById,
+    findUserMessageForCommit,
     logSessionEvent,
     makeViewMessage,
     sessionId,
@@ -182,7 +183,6 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   const eventSessionId = normalizeTrimmedString(data?.sessionId);
   const targetSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
   const committedUserMessage = data?.userMessage;
-  const committedMessageId = normalizeTrimmedString(committedUserMessage?.messageId);
   const validation = userMessageEvent.validate(data);
   let applied = false;
   let reason = "";
@@ -194,7 +194,7 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     applyLatestSessionAggregateVersion(activeSession.value, {
       aggregateVersion: data.aggregateVersion,
     });
-    const targetMessage = findCanonicalMessageById?.(targetSessionId, committedMessageId);
+    const targetMessage = findUserMessageForCommit(targetSessionId, committedUserMessage);
     if (!targetMessage) {
       reason = "committed_user_target_missing";
     } else {
@@ -222,8 +222,8 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     data: {
       applied,
       reason,
-      messageId: committedMessageId,
       messageUid: normalizeTrimmedString(committedUserMessage?.messageUid),
+      userMessageId: normalizeTrimmedString(committedUserMessage?.userMessageId),
       attachmentCount: Array.isArray(committedUserMessage?.attachments)
         ? committedUserMessage.attachments.length
         : 0,

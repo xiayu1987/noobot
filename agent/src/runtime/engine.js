@@ -14,127 +14,104 @@ import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent, hasEventListener } from "../events/index.js";
 import { emitMessageEvent } from "../events/message-event-stream.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistant-artifact-projection.js";
+import { requireCurrentTurnMessagesStore } from "./turn/current-turn-ledger.js";
+import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
-import { text, isFunction } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
-function messageIdentity(message = {}) {
-  return text(message?.messageId);
+function modelMessageIdOf(message) {
+  return text(message.modelMessageId);
 }
 
-function canonicalTurnMessages(runtime = {}) {
-  const store = runtime?.currentTurnMessages;
-  if (!store || !isFunction(store.toArray)) {
-    throw new Error("authoritative final result requires the canonical currentTurnMessages store");
-  }
-  return store.toArray();
+function resultModelMessageId(result) {
+  return text(result.modelMessageId);
 }
 
-function authoritativeFinalMessages(result = {}, runtime = {}) {
-  const messageId = text(result?.modelMessageId);
+function canonicalTurnMessages(runtime) {
+  return requireCurrentTurnMessagesStore(runtime.currentTurnMessages).toArray();
+}
+
+function authoritativeFinalMessages(result, runtime) {
+  const messageId = resultModelMessageId(result);
   if (!messageId) return [];
   return canonicalTurnMessages(runtime).filter(
-    (message) => message && typeof message === "object" && messageIdentity(message) === messageId,
+    (message) => modelMessageIdOf(message) === messageId,
   );
 }
 
-function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
-  const messages = canonicalTurnMessages(runtime);
-  const modelMessageId = text(result?.modelMessageId);
-  const matches = messages.filter(
-    (message) =>
-      message && typeof message === "object" && messageIdentity(message) === modelMessageId,
-  );
+function finalMessageArtifacts(finalMessage) {
+  const { attachments, transferEnvelopes } = finalMessage;
   return {
-    modelMessageId,
-    outputChars: String(result?.output || "").length,
-    storeMessageCount: messages.length,
-    storeMessageIds: messages.map((message) => messageIdentity(message)),
-    matchCount: matches.length,
-    matchedPresentationMessageIds: matches.map((message) => text(message?.presentationMessageId)),
-    attachmentCount:
-      matches.length === 1 && Array.isArray(matches[0]?.attachments)
-        ? matches[0].attachments.length
-        : 0,
-    transferEnvelopeCount:
-      matches.length === 1 && Array.isArray(matches[0]?.transferEnvelopes)
-        ? matches[0].transferEnvelopes.length
-        : 0,
+    ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
+    ...(Array.isArray(transferEnvelopes) && transferEnvelopes.length ? { transferEnvelopes } : {}),
   };
 }
 
-export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {}) {
-  const finalOutput = String(result?.output || "");
-  const messageId = text(result?.modelMessageId);
-  if (!finalOutput || !messageId) return false;
-  const store = runtime?.currentTurnMessages;
+function authoritativeFinalDiagnostics(result, runtime) {
+  const messages = canonicalTurnMessages(runtime);
+  const matches = authoritativeFinalMessages(result, runtime);
+  const artifacts = matches.length === 1 ? finalMessageArtifacts(matches[0]) : {};
+  return {
+    modelMessageId: resultModelMessageId(result),
+    outputChars: result.output.length,
+    storeMessageCount: messages.length,
+    storeModelMessageIds: messages.map(modelMessageIdOf),
+    matchCount: matches.length,
+    matchedPresentationMessageIds: matches.map((message) => text(message.presentationMessageId)),
+    attachmentCount: artifacts.attachments ? artifacts.attachments.length : 0,
+    transferEnvelopeCount: artifacts.transferEnvelopes ? artifacts.transferEnvelopes.length : 0,
+  };
+}
+
+export function commitAuthoritativeFinalOutput({ result, runtime }) {
+  const messageId = resultModelMessageId(result);
+  if (!result.output || !messageId) return false;
+  const store = requireCurrentTurnMessagesStore(runtime.currentTurnMessages);
   const matches = authoritativeFinalMessages(result, runtime);
   if (matches.length !== 1) return false;
-  const finalMessage = matches[0];
   const updatedCount = store.updateWhere(
-    {
-      content: finalOutput,
-      ...(Array.isArray(finalMessage?.attachments)
-        ? { attachments: finalMessage.attachments }
-        : {}),
-      ...(Array.isArray(finalMessage?.transferEnvelopes)
-        ? { transferEnvelopes: finalMessage.transferEnvelopes }
-        : {}),
-    },
-    (message) => messageIdentity(message) === messageId,
+    { content: result.output, ...finalMessageArtifacts(matches[0]) },
+    (message) => modelMessageIdOf(message) === messageId,
   );
   if (updatedCount !== 1) return false;
   result.turnMessages = store.toArray();
   return true;
 }
 
-export async function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
-  const eventListener = runtime?.eventListener || null;
-  const finalOutput = String(result?.output || "");
-  const messageId = text(result?.modelMessageId);
-  if (!hasEventListener(eventListener) || !finalOutput || !messageId) return false;
+export async function emitAuthoritativeFinalMessageContent({ result, runtime }) {
+  const { eventListener } = runtime;
+  if (!hasEventListener(eventListener) || !result.output || !resultModelMessageId(result)) {
+    return false;
+  }
   const messages = authoritativeFinalMessages(result, runtime);
   if (messages.length === 0) return false;
-  const finalMessage = messages[0];
-  const transferEnvelopes = Array.isArray(finalMessage?.transferEnvelopes)
-    ? finalMessage.transferEnvelopes
-    : Array.isArray(result?.transferEnvelopes)
-      ? result.transferEnvelopes
-      : [];
-  const attachments = Array.isArray(finalMessage?.attachments)
-    ? finalMessage.attachments
-    : Array.isArray(result?.attachments)
-      ? result.attachments
-      : [];
-  const event = await emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
-    text: finalOutput,
-    dialogProcessId: text(runtime?.systemRuntime?.dialogProcessId),
+  return emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
+    text: result.output,
+    dialogProcessId: text(runtime.systemRuntime.dialogProcessId),
     source: "before_final_output_committed",
-    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
-    ...(attachments.length ? { attachments } : {}),
+    ...finalMessageArtifacts(messages[0]),
   });
-  return event;
 }
 
-export async function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {}) {
-  const store = runtime?.currentTurnMessages;
-  const promotionSources = Array.isArray(runtime?.summaryCheckpointPromotionSources)
-    ? runtime.summaryCheckpointPromotionSources
-    : [];
+export async function commitAuthoritativeFinalResult({ result, runtime }) {
+  assertAgentTurnResult(result);
+  const store = requireCurrentTurnMessagesStore(runtime.currentTurnMessages);
+  const { summaryCheckpointPromotionSources: promotionSources, eventListener } = runtime;
   const projectedMessages = projectGeneratedArtifactsToFinalAssistant([
     ...promotionSources,
-    ...canonicalTurnMessages(runtime),
+    ...store.toArray(),
   ]).slice(promotionSources.length);
   store.replaceAll(projectedMessages);
   applyTurnCompletionPolicy({
-    modelMessages: Array.isArray(result?.modelMessages) ? result.modelMessages : [],
+    modelMessages: result.modelMessages,
     turnMessageStore: store,
   });
   result.turnMessages = store.toArray();
   const diagnostics = authoritativeFinalDiagnostics(result, runtime);
-  emitEvent(runtime?.eventListener || null, "authoritative_final_commit_started", diagnostics);
+  emitEvent(eventListener, "authoritative_final_commit_started", diagnostics);
   const messages = authoritativeFinalMessages(result, runtime);
-  if (String(result?.output || "") && messages.length !== 1) {
-    emitEvent(runtime?.eventListener || null, "authoritative_final_commit_rejected", {
+  if (result.output && messages.length !== 1) {
+    emitEvent(eventListener, "authoritative_final_commit_rejected", {
       ...diagnostics,
       reason: messages.length === 0 ? "canonical_message_not_found" : "duplicate_canonical_message",
     });
@@ -144,10 +121,10 @@ export async function commitAuthoritativeFinalResult({ result = {}, runtime = {}
         : "authoritative final result matches multiple canonical messages",
     );
   }
-  if (!messages.length || !String(result?.output || "")) {
-    emitEvent(runtime?.eventListener || null, "authoritative_final_commit_skipped", {
+  if (!result.output) {
+    emitEvent(eventListener, "authoritative_final_commit_skipped", {
       ...diagnostics,
-      reason: !String(result?.output || "") ? "empty_output" : "canonical_message_not_found",
+      reason: "empty_output",
     });
     return false;
   }
@@ -156,10 +133,10 @@ export async function commitAuthoritativeFinalResult({ result = {}, runtime = {}
   }
   const event = await emitAuthoritativeFinalMessageContent({ result, runtime });
   if (!event) throw new Error("authoritative final result failed to emit its message event");
-  emitEvent(runtime?.eventListener || null, "authoritative_final_commit_completed", {
+  emitEvent(eventListener, "authoritative_final_commit_completed", {
     ...authoritativeFinalDiagnostics(result, runtime),
-    eventId: text(event?.identity?.eventId),
-    presentationMessageId: text(event?.payload?.presentationMessageId),
+    eventId: text(event.identity.eventId),
+    presentationMessageId: text(event.payload.presentationMessageId),
   });
   return true;
 }
@@ -185,7 +162,6 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
     currentUserMessage,
     errorLogger,
   });
-  const modelContext = loopState.modelContext;
   try {
     const result = await runFunctionCallLoop({ modelState, loopState, turn: 1 });
     const beforeFinalAtMs = Date.now();
@@ -201,7 +177,6 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
         agentContext,
         userMessage,
         result,
-        modelContext,
       }),
     });
     const endedAtMs = Date.now();
@@ -217,7 +192,6 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
         agentContext,
         userMessage,
         result,
-        modelContext,
       }),
     });
     return result;
@@ -237,7 +211,6 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
         agentContext,
         userMessage,
         error,
-        modelContext,
       }),
     });
     throw error;

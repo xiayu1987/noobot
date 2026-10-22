@@ -24,6 +24,7 @@ import {
   EVENT_FAMILY,
   INTERACTION_EVENT_TYPE,
   INTERACTION_SEQUENCE_DOMAIN,
+  getEventFamily,
 } from "@noobot/event-protocol";
 import {
   isTransientMessageEventType,
@@ -32,7 +33,7 @@ import {
   TRANSIENT_MESSAGE_EVENT_SEQUENCE,
 } from "@noobot/event-protocol/message-event";
 import { workflowSequenceDomainForEvent } from "@noobot/event-protocol/workflow-runtime-event";
-import { text } from "@noobot/shared/value";
+import { createSessionMessageView } from "../../../../../src/modules/chat/runtime/session/messageView.js";
 
 function createSession(id) {
   return {
@@ -52,7 +53,6 @@ function createSession(id) {
 const normalizeIdentityPart = (value, fallback) => String(value || fallback).trim();
 
 export function createCanonicalAssistant({
-  messageId,
   presentationMessageId,
   sessionId = "s-1",
   dialogProcessId,
@@ -61,14 +61,11 @@ export function createCanonicalAssistant({
   ...extra
 } = {}) {
   const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
-  const normalizedMessageId = normalizeIdentityPart(
-    messageId,
-    `message-${normalizedDialogProcessId}`,
-  );
   return {
-    id: normalizedMessageId,
-    messageId: normalizedMessageId,
-    presentationMessageId: normalizeIdentityPart(presentationMessageId, normalizedMessageId),
+    presentationMessageId: normalizeIdentityPart(
+      presentationMessageId,
+      `message-${normalizedDialogProcessId}`,
+    ),
     role: RoleEnum.ASSISTANT,
     sessionId,
     dialogProcessId: normalizedDialogProcessId,
@@ -112,6 +109,7 @@ export function createAuthoritativeMessageEnvelope(
     : sequence;
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: normalizeIdentityPart(
         eventId,
@@ -149,6 +147,7 @@ export function createInteractionEnvelope(
   const requestId = normalizeIdentityPart(payload.requestId, "request-1");
   return createEventEnvelope({
     family: EVENT_FAMILY.INTERACTION_REQUEST,
+    schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
     identity: {
       eventId: normalizeIdentityPart(eventId, `${requestId}-event-${sequence}`),
       eventType: INTERACTION_EVENT_TYPE.REQUEST,
@@ -171,6 +170,7 @@ export function createWorkflowEnvelope(
   const workflowRunId = normalizeIdentityPart(payload.workflowRunId, "workflow-1");
   return createEventEnvelope({
     family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+    schemaVersion: getEventFamily(EVENT_FAMILY.WORKFLOW_RUNTIME).schemaVersion,
     identity: {
       eventId: normalizeIdentityPart(eventId, `${workflowRunId}-${eventType}-${sequence}`),
       eventType,
@@ -252,22 +252,14 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
     }),
   };
 
-  const findCanonicalMessageById = vi.fn((sessionId, messageId) => {
-    const normalizedSessionId = text(sessionId);
-    const normalizedMessageId = text(messageId);
-    if (!normalizedSessionId || !normalizedMessageId) return null;
-    const targetSession = sessions.value.find((sessionItem) =>
-      [sessionItem?.id, sessionItem?.sessionId, sessionItem?.sessionId].some(
-        (candidate) => text(candidate) === normalizedSessionId,
-      ),
-    );
-    if (!targetSession) return null;
-    return (
-      targetSession.messages.find(
-        (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
-      ) || null
-    );
+  const messageView = createSessionMessageView({
+    sessions,
+    activeSession,
+    activeSessionId,
+    userId: ref("u-1"),
+    isImageMime: () => false,
   });
+  const findMessageByViewKey = vi.fn(messageView.findMessageByViewKey);
 
   const api = useReconnectReplay({
     sessions,
@@ -275,7 +267,9 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
     activeSessionId,
     interactionSubmitting,
     chatList,
-    findCanonicalMessageById,
+    findMessageByViewKey,
+    findMessagesByPresentationId: messageView.findMessagesByPresentationId,
+    materializeTurnPresentation: messageView.materializeTurnPresentation,
     makeViewMessage: (message) => ({ ...message }),
     clearPendingInteraction,
     setPendingInteractionRequest,
@@ -307,7 +301,7 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
       pendingInteractionRequest,
     },
     mocks: {
-      findCanonicalMessageById,
+      findMessageByViewKey,
       clearPendingInteraction,
       setPendingInteractionRequest,
       chatList,

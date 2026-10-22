@@ -78,7 +78,6 @@ test("createRegisterHarnessHooks keeps message block order and lets incremental 
     content: "全仓回归测试",
     additional_kwargs: {
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       turnScopeId: "client-turn:current",
     },
   };
@@ -173,7 +172,6 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     content: "全仓回归测试",
     additional_kwargs: {
       messageOrigin: "natural",
-      userMetaMaterialized: true,
       turnScopeId: "client-turn:current",
     },
   };
@@ -321,7 +319,7 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
           {
             role: "user",
             content: "current user",
-            additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+            additional_kwargs: { messageOrigin: "natural" },
           },
         ],
       },

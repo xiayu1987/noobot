@@ -16,13 +16,14 @@ import {
   TURN_PHASE,
   TURN_STATE,
 } from "@noobot/session-protocol";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
 import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
 
 function canonicalTurnLifecycle(domainEnvelope) {
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: domainEnvelope.eventId,
       eventType: "turn_lifecycle",

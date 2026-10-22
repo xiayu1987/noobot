@@ -15,6 +15,7 @@ import {
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { buildAttachmentRefIndex } from "../../composables/message/attachmentInlineRefPlugin.js";
 import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import {
   getMessageDialogProcessId,
   getMessageRole,
@@ -289,7 +290,7 @@ const workflowChildRenderDiagnosticsSignature = computed(() => {
     parentSessionId,
     dialogProcessId: getMessageDialogProcessId(props.messageItem),
     turnScopeId,
-    messageId: String(props.messageItem?.messageId || ""),
+    messageViewKey: resolveMessageViewKey(props.messageItem),
     pending: props.messageItem?.pending === true,
     statusStepState: String(statusStepState.value || ""),
     statusStepRunning: statusStepRunning.value,
@@ -400,7 +401,6 @@ function resolveRendererContext() {
     subTaskStatusText: subTaskStatusText.value,
     statusStepState: statusStepState.value,
     displayedAttachments: displayedAttachments.value,
-    displayedAttachmentMetas: displayedAttachments.value,
     canPreviewAttachment,
     canPreviewParsedResult,
     onOpenFilePreview: openFilePreview,
@@ -439,7 +439,7 @@ watch(
           sessionId: String(session?.sessionId || ""),
           messages: (Array.isArray(session?.messages) ? session.messages : []).map(
             (message = {}) => ({
-              id: String(message?.messageId || ""),
+              messageViewKey: resolveMessageViewKey(message),
               role: String(message?.role || ""),
               contentLength: String(message?.content || "").length,
             }),

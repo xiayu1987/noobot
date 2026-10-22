@@ -149,6 +149,11 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
     const artifact = createPluginArtifactEnvelope({
+      sequence: 1,
+      revision: 1,
+      occurredAt: "2026-10-22T00:00:00.000Z",
+      operation: "created",
+      baseRevision: null,
       pluginId: "character",
       artifactType: "character.animation",
       artifactId: "animation.bind-race",

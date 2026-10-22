@@ -39,6 +39,7 @@ function createEnvelope(overrides = {}) {
       selectedConnectorIds: [],
     },
     messageBlocks: { system: [], history: [], incremental: [] },
+    userMetaBackwrites: [],
     ...overrides,
   });
 }

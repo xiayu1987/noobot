@@ -111,8 +111,8 @@ export const SOURCE_POLICY_RULES = Object.freeze({
     hint: "route summary marking through summary-checkpoint-committer or turn completion",
   },
   messageIdFallback: {
-    description: "messageId/messageUid identity fallback is owned by the session message entity",
-    hint: "resolve identity with codec resolveContextMessageId or the session message entity",
+    description: "No messageId/messageUid identity fallback exists anywhere",
+    hint: "read the role identity field declared by session-protocol message-identity-schema; context identity goes through codec resolveContextMessageKey / resolveContextSourceMessageUid",
   },
   legacyWindowMarker: {
     description: "No fixed-size recent-message context window remains",

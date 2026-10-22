@@ -6,6 +6,10 @@
 
 import { canonicalizeTestContextMessage } from "./context-message.js";
 import { createModelContext, resolveModelFinalMessages } from "@noobot/context-protocol";
+import {
+  assertMainFlowControlPort,
+  createSummaryCheckpointInstruction,
+} from "@noobot/context-protocol/policy/main-flow-control";
 import { createHookManager, HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import {
   attachmentTransfer,
@@ -152,6 +156,28 @@ function initializeTestSemanticTransfer(agentContext = {}) {
   };
 }
 
+const testMainFlowControlRecords = new WeakMap();
+
+export function createTestMainFlowControlPort() {
+  const record = { summaryCheckpoints: [], finalNoToolsTurnEngaged: false };
+  const port = assertMainFlowControlPort({
+    requestSummaryCheckpoint(input) {
+      const instruction = createSummaryCheckpointInstruction(input);
+      record.summaryCheckpoints.push(instruction);
+      return instruction;
+    },
+    isFinalNoToolsTurnEngaged: () => record.finalNoToolsTurnEngaged,
+  });
+  testMainFlowControlRecords.set(port, record);
+  return port;
+}
+
+export function readTestMainFlowControl(agentContext) {
+  const record = testMainFlowControlRecords.get(agentContext.bindings.mainFlowControl);
+  if (!record) throw new TypeError("agentContext has no test main flow control port");
+  return record;
+}
+
 export function ensureTestAgentExecutionScope(ctx = {}) {
   if (!isObjectLike(ctx)) return null;
   const agentContext =
@@ -192,6 +218,9 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
     systemRuntime,
   });
   bindings.tools = Array.isArray(bindings.tools) ? bindings.tools : [];
+  bindings.mainFlowControl = testMainFlowControlRecords.has(bindings.mainFlowControl)
+    ? bindings.mainFlowControl
+    : createTestMainFlowControlPort();
   bindings.extensions = isObjectLike(bindings.extensions) ? bindings.extensions : {};
   bindings.extensions.harness = isObjectLike(bindings.extensions.harness)
     ? bindings.extensions.harness

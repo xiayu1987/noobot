@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createReplayBatch, validateReplayBatch, replayEventTail } from "../src/replay-batch.js";
 import { createEventEnvelope } from "../src/envelope.js";
-import { EVENT_FAMILY, validateProtocolEvent } from "../src/event-registry.js";
+import { EVENT_FAMILY, getEventFamily, validateProtocolEvent } from "../src/event-registry.js";
 import { createTurnSnapshotEnvelope } from "../src/turn-snapshot.js";
 import {
   createTurnLifecycleEnvelope,
@@ -36,6 +36,7 @@ const event = (sequence, eventId = `event-${sequence}`, overrides = {}) => {
   });
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId,
       eventType: TURN_LIFECYCLE_WIRE_EVENT,

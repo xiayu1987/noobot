@@ -37,10 +37,9 @@ export function registerWorkflowAgentHooks({
           options: runtimeOptions,
           ctx,
           signal: invocation.signal,
-          hookPoint,
         }),
       {
-        id: WORKFLOW_HOOKS.AFTER_AGENT_DISPATCH_LISTENER_ID,
+        id: WORKFLOW_HOOKS.BEFORE_AGENT_DISPATCH_LISTENER_ID,
         priority: runtimeOptions.priority,
         timeoutMs: runtimeOptions.timeoutMs,
       },

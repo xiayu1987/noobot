@@ -18,7 +18,7 @@ import {
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
 import { createUserInterjectionAuthorityBridge } from "../../ws/chat-websocket/user-interjection-authority-bridge.js";
-import { createEventEnvelope } from "@noobot/event-protocol";
+import { createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
 import { MESSAGE_IDENTITY_FIELD } from "@noobot/session-protocol/message-identity";
 import { MESSAGE_FIELD_SCHEMA } from "@noobot/session-protocol/message-identity-schema";
 
@@ -46,6 +46,7 @@ function createFixture() {
         authoritySequence += 1;
         const envelope = createEventEnvelope({
           ...input,
+          schemaVersion: getEventFamily(input.family).schemaVersion,
           identity: {
             ...input.identity,
             eventId: `interjection-event-${authoritySequence}`,
@@ -164,12 +165,12 @@ test("message handler enqueues user interjections and acknowledges the command",
 
     assert.deepEqual(
       fixture.committed.map((envelope) => ({
-        hasMessageId: Object.hasOwn(envelope.identity, "messageId"),
+        carriesLegacyIdentityKey: Object.hasOwn(envelope.identity, "messageId"),
         scopeId: envelope.ordering.scopeId,
       })),
       [
-        { hasMessageId: false, scopeId: "interjection-assistant" },
-        { hasMessageId: false, scopeId: "interjection-assistant" },
+        { carriesLegacyIdentityKey: false, scopeId: "interjection-assistant" },
+        { carriesLegacyIdentityKey: false, scopeId: "interjection-assistant" },
       ],
     );
     assert.deepEqual(fixture.closed, []);

@@ -12,6 +12,7 @@ export {
   isCanonicalTurnScopeId,
   isWorkflowNodeDialogProcessId,
   isWorkflowNodeTurnScopeId,
+  requireCanonicalTurnScopeId,
   readWorkflowNodeExecutionId,
   turnScopeIdentityKey,
   WORKFLOW_NODE_DIALOG_PROCESS_PREFIX,

@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { assertOptionalHookManager } from "@noobot/hook-protocol/runtime";
 import { text } from "@noobot/shared/value";
 
 export function normalizeTrimmedStringList(input = []) {
   return (Array.isArray(input) ? input : []).map((item) => text(item)).filter(Boolean);
 }
 
-export function selectHookManager({ runConfig = {}, managerKey = "", createManager = null } = {}) {
-  if (runConfig?.[managerKey] && typeof runConfig[managerKey] === "object") {
-    return runConfig[managerKey];
-  }
-  return typeof createManager === "function" ? createManager() : null;
+export function selectHookManager({ runConfig, managerKey, createManager }) {
+  const existing = runConfig[managerKey];
+  if (existing == null) return createManager();
+  return assertOptionalHookManager(existing, managerKey);
 }

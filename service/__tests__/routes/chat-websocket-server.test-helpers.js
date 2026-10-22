@@ -18,6 +18,7 @@ import {
   normalizeAuthorityEventOutbox,
   recordAuthorityEventDeliveryAttempt,
   validateProtocolEvent,
+  getEventFamily,
 } from "@noobot/event-protocol";
 import {
   AGENT_COMMAND,
@@ -76,7 +77,7 @@ export function createProtocolTestCommand(payload = {}) {
     return createTurnStopCommand({
       identity,
       concurrency: { expectedTurnRevision: payload?.expectedRevision ?? 1 },
-      stop: { executionId: payload?.executionId, partialAssistant: payload?.partialAssistant },
+      stop: { executionId: payload?.executionId },
     });
   }
   if (action === "interaction_response") {
@@ -247,7 +248,7 @@ export async function startServerWithWs({
               aggregateVersion: 1,
               userMessage: {
                 messageUid: `session-message:${event.turnScopeId}`,
-                messageId: event.userMessage.messageId,
+                userMessageId: event.userMessage.userMessageId,
                 role: "user",
                 type: "message",
                 content: text(event.userMessage?.content),
@@ -255,7 +256,6 @@ export async function startServerWithWs({
                 dialogProcessId: event.dialogProcessId,
                 turnScopeId: event.turnScopeId,
                 messageOrigin: "natural",
-                userMetaMaterialized: true,
                 attachments: [],
               },
             }
@@ -333,7 +333,7 @@ export async function startServerWithWs({
       const sequence = Math.max(1, Number(ordering?.sequence) || ++authorityEventSequence);
       const envelope = createEventEnvelope({
         family,
-        schemaVersion: 1,
+        schemaVersion: getEventFamily(family).schemaVersion,
         identity: {
           ...identity,
           eventId: String(identity?.eventId || `test-authority-event-${authorityEventSequence}`),

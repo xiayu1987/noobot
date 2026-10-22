@@ -13,12 +13,13 @@ import {
   markContextMessageSummarized,
   readContextMessageField,
   resolveContextMessageDialogProcessId,
-  resolveContextMessageId,
+  resolveContextMessageKey,
   resolveContextMessageRole,
   resolveContextToolCallDeclarationId,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
   resolveContextMessageSummarized,
+  resolveContextSessionMessageUid,
 } from "../message/codec.js";
 import { SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES } from "../message/injected-types.js";
 import { projectSessionRecordToContextMessage } from "../message/session-projection.js";
@@ -28,8 +29,13 @@ import {
   hasContextMessageFlowControlRole,
   hasToolCallFlowControlRole,
 } from "../tool/context-policy.js";
-import { text, isObjectLike } from "@noobot/shared/value";
-import { resolveSessionMessageRecordDialogProcessId } from "@noobot/session-protocol";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
+import {
+  SESSION_ERROR_CODE,
+  requireDialogProcessKey,
+  resolveSessionMessageRecordDialogProcessId,
+} from "@noobot/session-protocol";
+import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
 const summaryAlwaysRetainedInjectedTypes = new Set(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES);
 
@@ -235,8 +241,7 @@ function collectPreservedMessages(messages = [], indexes = new Set()) {
     const message = source[index];
     if (!isObjectLike(message)) continue;
     objects.add(message);
-    const id = resolveContextMessageId(message);
-    if (id) ids.add(id);
+    ids.add(resolveContextMessageKey(message));
   }
   return { objects, ids };
 }
@@ -244,8 +249,7 @@ function collectPreservedMessages(messages = [], indexes = new Set()) {
 function isPreservedMessage(message = {}, preserved = null) {
   if (!preserved) return false;
   if (preserved.objects instanceof Set && preserved.objects.has(message)) return true;
-  const id = resolveContextMessageId(message);
-  return Boolean(id && preserved.ids instanceof Set && preserved.ids.has(id));
+  return preserved.ids instanceof Set && preserved.ids.has(resolveContextMessageKey(message));
 }
 
 function enforceToolCallBatchClosure(
@@ -258,23 +262,17 @@ function enforceToolCallBatchClosure(
   const sourceMessages = Array.isArray(source) ? source : [];
   const retainedMessages = Array.isArray(retentionSource) ? retentionSource : sourceMessages;
   const selectedObjects = new Set(selected);
-  const selectedIds = new Set(
-    selected.map((message) => resolveContextMessageId(message)).filter(Boolean),
-  );
+  const selectedIds = new Set(selected.map(resolveContextMessageKey));
   const sourceObjects = new Set(sourceMessages);
-  const sourceIds = new Set(
-    sourceMessages.map((message) => resolveContextMessageId(message)).filter(Boolean),
-  );
+  const sourceIds = new Set(sourceMessages.map(resolveContextMessageKey));
   const blockedObjects = new Set();
   const blockedIds = new Set();
   const has = (objects, ids, message) =>
-    objects.has(message) ||
-    Boolean(resolveContextMessageId(message) && ids.has(resolveContextMessageId(message)));
+    objects.has(message) || ids.has(resolveContextMessageKey(message));
   const block = (message) => {
     if (!has(sourceObjects, sourceIds, message)) return;
     blockedObjects.add(message);
-    const id = resolveContextMessageId(message);
-    if (id) blockedIds.add(id);
+    blockedIds.add(resolveContextMessageKey(message));
   };
 
   const claimedToolResultIds = new Set();
@@ -302,9 +300,7 @@ function enforceToolCallBatchClosure(
     if (toolCallId && !claimedToolResultIds.has(toolCallId)) block(message);
   }
   return selected.filter(
-    (message) =>
-      !blockedObjects.has(message) &&
-      !(resolveContextMessageId(message) && blockedIds.has(resolveContextMessageId(message))),
+    (message) => !blockedObjects.has(message) && !blockedIds.has(resolveContextMessageKey(message)),
   );
 }
 
@@ -321,7 +317,7 @@ function collectClosedToolCallBatchMessages(messages = [], { retentionMessages =
 
 export function resolveSummaryScope(
   messageBlocks = {},
-  { messageIds = null, policyOptions = {} } = {},
+  { messageKeys = null, policyOptions = {} } = {},
 ) {
   const blocks = messageBlocks && typeof messageBlocks === "object" ? messageBlocks : {};
   const history = Array.isArray(blocks.history) ? blocks.history : [];
@@ -330,11 +326,9 @@ export function resolveSummaryScope(
   const checkpointMessages = collectClosedToolCallBatchMessages(sourceMessages, {
     retentionMessages: sourceMessages,
   });
-  const wantedIds = Array.isArray(messageIds)
-    ? new Set(messageIds.map((id) => text(id)).filter(Boolean))
-    : null;
-  const selectedCheckpointMessages = wantedIds
-    ? checkpointMessages.filter((message) => wantedIds.has(resolveContextMessageId(message)))
+  const wantedKeys = messageKeys === null ? null : new Set(messageKeys);
+  const selectedCheckpointMessages = wantedKeys
+    ? checkpointMessages.filter((message) => wantedKeys.has(resolveContextMessageKey(message)))
     : checkpointMessages;
   const summaryMessages = collectDialogScopedMessagesToSummarize(selectedCheckpointMessages, {
     maxMessages: selectedCheckpointMessages.length,
@@ -381,13 +375,13 @@ function collectRecordSummarizedIndexes(records = [], policyOptions = {}) {
 
 export function markCurrentTurnStoreSummarized(turnMessageStore, { policyOptions = {} } = {}) {
   const indexes = collectRecordSummarizedIndexes(turnMessageStore.toArray(), policyOptions);
-  const markedMessageIds = new Set();
+  const markedMessageUids = new Set();
   const markedCount = turnMessageStore.updateWhere({ summarized: true }, (record, index) => {
     if (!indexes.has(index)) return false;
-    markedMessageIds.add(text(record.messageUid));
+    markedMessageUids.add(text(record.messageUid));
     return true;
   });
-  return { markedCount, markedMessageIds };
+  return { markedCount, markedMessageUids };
 }
 
 export function markCurrentTurnArraySummarized(records = [], { policyOptions = {} } = {}) {
@@ -397,10 +391,9 @@ export function markCurrentTurnArraySummarized(records = [], { policyOptions = {
   );
 }
 
-export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set()) {
-  const ids = messageIds instanceof Set ? messageIds : new Set(messageIds);
-  for (const message of Array.isArray(messages) ? messages : []) {
-    if (!ids.has(resolveContextMessageId(message))) continue;
+export function mirrorSummarizedMessagesByUid(messages, messageUids) {
+  for (const message of messages) {
+    if (!messageUids.has(resolveContextSessionMessageUid(message))) continue;
     markContextMessageSummarized(message);
   }
 }
@@ -521,13 +514,140 @@ export function collectDialogScopedMessagesToSummarize(
   );
 }
 
-function collectTurnMessageOwnership(messages = []) {
+export const TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT = 50;
+export const TURN_SUMMARY_CHECKPOINT_STATE_ERROR_CODE = "INVALID_TURN_SUMMARY_CHECKPOINT_STATE";
+
+function invalidCheckpointState(detail) {
+  const error = new TypeError(`invalid turn summary checkpoint state: ${detail}`);
+  error.code = TURN_SUMMARY_CHECKPOINT_STATE_ERROR_CODE;
+  return error;
+}
+
+function requireCheckpointText(value, field) {
+  if (typeof value !== "string" || !value || value !== value.trim()) {
+    throw invalidCheckpointState(`${field} must be a non-empty trimmed string`);
+  }
+  return value;
+}
+
+function requireCheckpointInteger(value, field, minimum) {
+  if (!Number.isInteger(value) || value < minimum) {
+    throw invalidCheckpointState(`${field} must be an integer >= ${minimum}`);
+  }
+  return value;
+}
+
+function requireCheckpointUidList(values, field) {
+  if (!Array.isArray(values)) throw invalidCheckpointState(`${field} must be an array`);
+  values.forEach((uid) => requireCheckpointText(uid, `${field}[]`));
+  if (new Set(values).size !== values.length) {
+    throw invalidCheckpointState(`${field} must not contain duplicates`);
+  }
+  return values;
+}
+
+function assertSummaryReceipt(receipt) {
+  if (!isPlainObject(receipt)) throw invalidCheckpointState("receipt must be a plain object");
+  requireCheckpointText(receipt.checkpointId, "receipt.checkpointId");
+  requireCheckpointText(receipt.requestHash, "receipt.requestHash");
+  requireCheckpointText(receipt.committedAt, "receipt.committedAt");
+  requireCheckpointInteger(receipt.checkpointRevision, "receipt.checkpointRevision", 1);
+  requireCheckpointInteger(receipt.markedCount, "receipt.markedCount", 0);
+  requireCheckpointUidList(receipt.persistedMessageUids, "receipt.persistedMessageUids");
+  requireCheckpointUidList(receipt.summarizedMessageUids, "receipt.summarizedMessageUids");
+  requireCheckpointUidList(receipt.retainedMessageUids, "receipt.retainedMessageUids");
+}
+
+export function assertTurnSummaryCheckpointState(state, turnScopeId) {
+  if (!isPlainObject(state)) throw invalidCheckpointState("state must be a plain object");
+  requireDialogProcessKey(state.dialogProcessId);
+  if (requireCanonicalTurnScopeId(state.turnScopeId) !== turnScopeId) {
+    throw invalidCheckpointState(`turnScopeId must equal its key: ${turnScopeId}`);
+  }
+  requireCheckpointInteger(state.checkpointRevision, "checkpointRevision", 0);
+  if (!Array.isArray(state.receipts)) throw invalidCheckpointState("receipts must be an array");
+  if (state.receipts.length > TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT) {
+    throw invalidCheckpointState(
+      `receipts must not exceed ${TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT}`,
+    );
+  }
+  state.receipts.forEach(assertSummaryReceipt);
+  state.receipts.forEach((receipt, index) => {
+    if (receipt.checkpointRevision > state.checkpointRevision) {
+      throw invalidCheckpointState("receipt.checkpointRevision must not exceed checkpointRevision");
+    }
+    if (index > 0 && receipt.checkpointRevision <= state.receipts[index - 1].checkpointRevision) {
+      throw invalidCheckpointState("receipt.checkpointRevision must strictly increase");
+    }
+  });
+  return state;
+}
+
+export function assertTurnSummaryCheckpoints(checkpoints) {
+  if (!isPlainObject(checkpoints)) {
+    throw invalidCheckpointState("turnSummaryCheckpoints must be a plain object");
+  }
+  if (Object.keys(checkpoints).length === 0) {
+    throw invalidCheckpointState("empty turnSummaryCheckpoints must be omitted");
+  }
+  for (const [turnScopeId, state] of Object.entries(checkpoints)) {
+    assertTurnSummaryCheckpointState(state, turnScopeId);
+  }
+  return checkpoints;
+}
+
+export function writeTurnSummaryCheckpoints(session, checkpoints) {
+  if (Object.keys(checkpoints).length === 0) {
+    delete session.turnSummaryCheckpoints;
+    return session;
+  }
+  session.turnSummaryCheckpoints = assertTurnSummaryCheckpoints(checkpoints);
+  return session;
+}
+
+export function createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
+  return {
+    dialogProcessId: requireDialogProcessKey(dialogProcessId),
+    turnScopeId: requireCanonicalTurnScopeId(turnScopeId),
+    checkpointRevision: 0,
+    receipts: [],
+  };
+}
+
+export function readTurnSummaryCheckpointState(session, { dialogProcessId, turnScopeId }) {
+  const empty = createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId });
+  if (!("turnSummaryCheckpoints" in session)) return empty;
+  const state = session.turnSummaryCheckpoints[turnScopeId];
+  if (state === undefined) return empty;
+  assertTurnSummaryCheckpointState(state, turnScopeId);
+  if (state.dialogProcessId !== dialogProcessId) {
+    const error = new Error("turn summary checkpoint belongs to another dialog process");
+    error.code = SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT;
+    error.statusCode = 409;
+    throw error;
+  }
+  return state;
+}
+
+export function appendTurnSummaryCheckpointReceipt(state, receipt) {
+  assertSummaryReceipt(receipt);
+  if (receipt.checkpointRevision !== state.checkpointRevision + 1) {
+    throw invalidCheckpointState("receipt.checkpointRevision must advance checkpointRevision by 1");
+  }
+  return {
+    ...state,
+    checkpointRevision: receipt.checkpointRevision,
+    receipts: [...state.receipts, receipt].slice(-TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT),
+  };
+}
+
+function collectTurnMessageOwnership(messages) {
   const allMessageUids = new Set();
   const ownedByTurn = new Map();
-  for (const message of Array.isArray(messages) ? messages : []) {
-    const messageUid = text(message?.messageUid);
+  for (const message of messages) {
+    const messageUid = message.messageUid;
     allMessageUids.add(messageUid);
-    const key = `${resolveSessionMessageRecordDialogProcessId(message)}\u0000${text(message?.turnScopeId)}`;
+    const key = `${resolveSessionMessageRecordDialogProcessId(message)}\u0000${message.turnScopeId}`;
     const owned = ownedByTurn.get(key) || new Set();
     owned.add(messageUid);
     ownedByTurn.set(key, owned);
@@ -536,65 +656,17 @@ function collectTurnMessageOwnership(messages = []) {
 }
 
 function isSummaryReceiptLive(receipt, owned, allMessageUids) {
-  if (!isObjectLike(receipt)) return false;
-  const persisted = Array.isArray(receipt.persistedMessageUids) ? receipt.persistedMessageUids : [];
-  const summarized = Array.isArray(receipt.summarizedMessageUids)
-    ? receipt.summarizedMessageUids
-    : [];
   return (
-    persisted.every((uid) => owned.has(text(uid))) &&
-    summarized.every((uid) => allMessageUids.has(text(uid)))
+    receipt.persistedMessageUids.every((uid) => owned.has(uid)) &&
+    receipt.summarizedMessageUids.every((uid) => allMessageUids.has(uid))
   );
 }
 
-function normalizeCheckpointUidList(values) {
-  return [
-    ...new Set((Array.isArray(values) ? values : []).map((uid) => text(uid)).filter(Boolean)),
-  ];
-}
-
-function normalizeSummaryReceipt(receipt) {
-  if (!isObjectLike(receipt) || Array.isArray(receipt)) return null;
-  const checkpointId = text(receipt.checkpointId);
-  const requestHash = text(receipt.requestHash);
-  if (!checkpointId || !requestHash) return null;
-  return {
-    checkpointId,
-    checkpointRevision: Math.max(0, Number(receipt.checkpointRevision) || 0),
-    requestHash,
-    persistedMessageUids: normalizeCheckpointUidList(receipt.persistedMessageUids),
-    summarizedMessageUids: normalizeCheckpointUidList(receipt.summarizedMessageUids),
-    retainedMessageUids: normalizeCheckpointUidList(receipt.retainedMessageUids),
-    markedCount: Math.max(0, Number(receipt.markedCount) || 0),
-    committedAt: text(receipt.committedAt),
-  };
-}
-
-export function normalizeTurnSummaryCheckpoints(checkpoints = {}) {
-  if (!isObjectLike(checkpoints) || Array.isArray(checkpoints)) return {};
-  const normalized = {};
-  for (const value of Object.values(checkpoints)) {
-    if (!isObjectLike(value) || Array.isArray(value)) continue;
-    const turnScopeId = text(value.turnScopeId);
-    const dialogProcessId = text(value.dialogProcessId);
-    if (!turnScopeId || !dialogProcessId) continue;
-    normalized[turnScopeId] = {
-      dialogProcessId,
-      turnScopeId,
-      checkpointRevision: Math.max(0, Number(value.checkpointRevision) || 0),
-      receipts: (Array.isArray(value.receipts) ? value.receipts : [])
-        .map(normalizeSummaryReceipt)
-        .filter(Boolean)
-        .slice(-50),
-    };
-  }
-  return normalized;
-}
-
-export function pruneTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
+export function pruneTurnSummaryCheckpoints(checkpoints, messages) {
+  assertTurnSummaryCheckpoints(checkpoints);
   const { allMessageUids, ownedByTurn } = collectTurnMessageOwnership(messages);
   const pruned = {};
-  for (const [turnScopeId, state] of Object.entries(normalizeTurnSummaryCheckpoints(checkpoints))) {
+  for (const [turnScopeId, state] of Object.entries(checkpoints)) {
     const owned = ownedByTurn.get(`${state.dialogProcessId}\u0000${turnScopeId}`);
     if (!owned) continue;
     pruned[turnScopeId] = {

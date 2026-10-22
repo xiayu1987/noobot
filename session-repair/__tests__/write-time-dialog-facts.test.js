@@ -9,6 +9,19 @@ import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { migrateSessionDocument } from "../src/index.js";
 import { deriveWriteTimeDialogOrder } from "../src/write-time-dialog-facts.js";
 
+function checkpointReceipt({ checkpointId, checkpointRevision, uid }) {
+  return {
+    checkpointId,
+    checkpointRevision,
+    requestHash: `sha256:${checkpointId}`,
+    persistedMessageUids: [uid],
+    summarizedMessageUids: [uid],
+    retainedMessageUids: [],
+    markedCount: 1,
+    committedAt: "2026-01-01T00:02:00.000Z",
+  };
+}
+
 test("invalid persisted ordinals are dropped and re-registered after the current maximum", () => {
   const messages = [
     { messageUid: "u1", role: "user", dialogProcessId: "d1", turnScopeId: "t1", ts: "a" },
@@ -58,12 +71,13 @@ test("migrates v11 dialog order and summary receipts into write-time facts", () 
       t1: {
         dialogProcessId: "d1",
         turnScopeId: "t1",
+        checkpointRevision: 2,
         receipts: [
-          { checkpointId: "live", requestHash: "h1", persistedMessageUids: ["u1"] },
-          { checkpointId: "dangling", requestHash: "h2", persistedMessageUids: ["gone"] },
+          checkpointReceipt({ checkpointId: "live", checkpointRevision: 1, uid: "u1" }),
+          checkpointReceipt({ checkpointId: "dangling", checkpointRevision: 2, uid: "gone" }),
         ],
       },
-      gone: { dialogProcessId: "d9", turnScopeId: "gone", receipts: [] },
+      gone: { dialogProcessId: "d9", turnScopeId: "gone", checkpointRevision: 0, receipts: [] },
     },
   };
 
@@ -94,4 +108,32 @@ test("migrates v11 dialog order and summary receipts into write-time facts", () 
   assert.equal(repeated.migrations.includes("session-write-time-dialog-facts-v12"), false);
   assert.deepEqual(repeated.document.dialogOrder, result.document.dialogOrder);
   assert.equal(repeated.document.autoTitle, "first question");
+});
+
+test("v12 migration rejects checkpoint state missing checkpointRevision", () => {
+  const source = {
+    schemaVersion: 11,
+    sessionId: "session-1",
+    messages: [
+      {
+        messageUid: "u1",
+        role: "user",
+        content: "q",
+        dialogProcessId: "d1",
+        turnScopeId: "t1",
+        ts: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    turnSummaryCheckpoints: {
+      t1: {
+        dialogProcessId: "d1",
+        turnScopeId: "t1",
+        receipts: [checkpointReceipt({ checkpointId: "live", checkpointRevision: 1, uid: "u1" })],
+      },
+    },
+  };
+  assert.throws(
+    () => migrateSessionDocument(source),
+    (error) => error.code === "INVALID_TURN_SUMMARY_CHECKPOINT_STATE",
+  );
 });

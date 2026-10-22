@@ -121,6 +121,7 @@ test("protocol payload reader validates wire identity and returns the canonical 
   });
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: payload.eventId,
       eventType: TURN_LIFECYCLE_WIRE_EVENT,
@@ -161,6 +162,7 @@ test("event family declares the exact reducer input projection", () => {
   });
   const turnEnvelope = createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: turnPayload.eventId,
       eventType: TURN_LIFECYCLE_WIRE_EVENT,
@@ -184,6 +186,7 @@ test("event family declares the exact reducer input projection", () => {
 test("interaction reducer input combines the canonical envelope identity with its payload", () => {
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.INTERACTION_REQUEST,
+    schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
     identity: {
       eventId: "interaction-event-1",
       eventType: "interaction_request",
@@ -304,6 +307,7 @@ test("turn lifecycle envelope causality must equal the payload causality", () =>
   const envelopeWith = (causality) =>
     createEventEnvelope({
       family: EVENT_FAMILY.TURN_LIFECYCLE,
+      schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
       identity: {
         eventId: payload.eventId,
         eventType: TURN_LIFECYCLE_WIRE_EVENT,

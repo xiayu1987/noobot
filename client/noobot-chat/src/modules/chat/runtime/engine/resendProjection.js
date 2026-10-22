@@ -23,13 +23,14 @@ export const RESEND_PROJECTION_OUTCOME = {
   ABORTED: "aborted",
 };
 
-function findReplacementUserMessageById({ session, messageId }) {
+function findReplacementUserMessageByUid({ session, messageUid }) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const expectedMessageId = normalizeTrimmedString(messageId);
-  if (!expectedMessageId) return null;
+  const expectedMessageUid = normalizeTrimmedString(messageUid);
+  if (!expectedMessageUid) return null;
   return (
-    messages.find((message) => normalizeTrimmedString(message?.messageId) === expectedMessageId) ||
-    null
+    messages.find(
+      (message) => normalizeTrimmedString(message?.messageUid) === expectedMessageUid,
+    ) || null
   );
 }
 
@@ -110,9 +111,9 @@ export async function projectResendReplacement(context) {
     applySessionDetail,
     activeSession,
   });
-  const replacementUserMessage = findReplacementUserMessageById({
+  const replacementUserMessage = findReplacementUserMessageByUid({
     session: activeSession?.value,
-    messageId: turnReplacement.replacementUserMessageId,
+    messageUid: turnReplacement.replacementUserMessageUid,
   });
   if (!replacementUserMessage) {
     throw new TypeError("invalid turn replacement projection: replacement_user_missing");
@@ -150,7 +151,7 @@ export async function projectResendReplacement(context) {
   const sent = await send?.({
     messageText: text,
     reuseExistingUserTurn: true,
-    userMessageId: normalizeTrimmedString(replacementUserMessage?.messageId),
+    userMessageId: normalizeTrimmedString(replacementUserMessage?.userMessageId),
     dialogProcessId: turnReplacement.replacementDialogProcessId,
     turnScopeId: resendTurnScopeId,
     allowDuringResend: true,

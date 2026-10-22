@@ -48,7 +48,7 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
     userConfig: {},
     sharedTools: {},
     ...runtimeOverrides,
-    runConfig: { turnScopeId, executionId, presentationMessageId },
+    runConfig: { hookManager: null, turnScopeId, executionId, presentationMessageId },
     systemRuntime: {
       userId,
       config: {},

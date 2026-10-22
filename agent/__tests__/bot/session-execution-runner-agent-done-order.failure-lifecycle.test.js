@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { createModelContext } from "@noobot/context-protocol";
 import {
   assert,
   createRunner,
@@ -25,13 +26,14 @@ test("runSession does not persist stopped snapshot for non-abort errors", async 
     callOrder,
     eventListener,
     runtime: Object.assign(createTestRuntimeContext(), {
+      activeMessageContext: createModelContext({
+        messageBlocks: { system: [], history: [], incremental: [] },
+      }),
       stoppedModelMessageSnapshotCandidate: {
         userId: "u1",
         sessionId: "session-used",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
-        messages: [],
-        messageBlocks: { system: [], history: [], incremental: [] },
       },
     }),
     agentRunner: async () => {

@@ -10,6 +10,7 @@ import {
   AGENT_CONTEXT_EXECUTION_SHAPE,
   AGENT_CONTEXT_IDENTITY_SHAPE,
   AGENT_CONTEXT_KIND,
+  AGENT_CONTEXT_MODE,
   AGENT_CONTEXT_MODEL_CONTEXT_SHAPE,
   AGENT_CONTEXT_PROTOCOL_VERSION,
   MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -68,6 +69,16 @@ function findSerializationError(value, path = "context", seen = new Set()) {
   }
   seen.delete(value);
   return "";
+}
+
+const AGENT_CONTEXT_MODES = new Set(Object.values(AGENT_CONTEXT_MODE));
+
+export function assertAgentContextMode(mode) {
+  if (AGENT_CONTEXT_MODES.has(mode)) return mode;
+  const error = new TypeError(`unsupported agent context mode: ${String(mode)}`);
+  error.statusCode = 400;
+  error.code = "INVALID_CONTEXT_MODE";
+  throw error;
 }
 
 export function validateAgentContextEnvelope(context) {

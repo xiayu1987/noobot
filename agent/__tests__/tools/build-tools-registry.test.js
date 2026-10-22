@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 
 import { buildTools } from "../../src/tools/index.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function createContext({
@@ -26,18 +27,20 @@ function createContext({
   runtimePatch = {},
 } = {}) {
   return {
-    agentContext: createTestAgentExecutionScope({
-      basePath: "/tmp/noobot-test-workspace",
-      globalConfig,
-      userConfig,
-      systemRuntime: {
-        sessionId: "s-1",
-        rootSessionId: "s-1",
-        persistenceScope: null,
-        config: { allowUserInteraction: true },
-      },
-      ...runtimePatch,
-    }),
+    agentContext: createTestAgentExecutionScope(
+      createTestRuntimeContext({
+        basePath: "/tmp/noobot-test-workspace",
+        globalConfig,
+        userConfig,
+        systemRuntime: {
+          sessionId: "s-1",
+          rootSessionId: "s-1",
+          persistenceScope: null,
+          config: { allowUserInteraction: true },
+        },
+        ...runtimePatch,
+      }),
+    ),
   };
 }
 
@@ -227,6 +230,7 @@ test("buildTools: coding 场景不能绕过 enabled=false 的工具配置", asyn
       runtimePatch: {
         basePath: "/tmp",
         runConfig: {
+          hookManager: null,
           scenario: "coding",
         },
       },

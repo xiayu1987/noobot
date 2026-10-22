@@ -8,9 +8,12 @@ import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
 } from "./turn/current-turn-ledger.js";
+import { assertOptionalHookManager } from "@noobot/hook-protocol/runtime";
 import { isPlainObject } from "@noobot/shared/value";
+import { createMainFlowControlState } from "./main-flow-control.js";
+import { createMessageEventStreamState } from "../events/message-event-stream.js";
 
-const RUNTIME_CONTEXT_INPUT_FIELDS = Object.freeze([
+export const RUNTIME_CONTEXT_INPUT_FIELDS = Object.freeze([
   "basePath",
   "globalConfig",
   "userConfig",
@@ -54,11 +57,15 @@ function assertRuntimeContextInput(input) {
   if (!Array.isArray(input.userMessageAttachments)) {
     throw new TypeError("createRuntimeContext userMessageAttachments must be an array");
   }
+  if (Object.hasOwn(input.systemRuntime, "messageEventStream")) {
+    throw new TypeError("createRuntimeContext owns systemRuntime.messageEventStream");
+  }
 }
 
 export function createRuntimeContext(input) {
   assertRuntimeContextInput(input);
   const { abortSignal, runConfig } = input;
+  input.systemRuntime.messageEventStream = createMessageEventStreamState();
   return {
     basePath: input.basePath,
     globalConfig: input.globalConfig,
@@ -74,13 +81,17 @@ export function createRuntimeContext(input) {
     runConfig,
     allEnabledProviders: input.allEnabledProviders,
     sharedTools: input.sharedTools,
-    hookManager: runConfig.hookManager,
+    hookManager: assertOptionalHookManager(runConfig.hookManager, "runConfig.hookManager"),
     systemRuntime: input.systemRuntime,
+    mainFlowControlState: createMainFlowControlState(),
+    activeMessageContext: null,
     currentTurnMessages: createCurrentTurnMessagesStore(),
     currentTurnTasks: createCurrentTurnTasksStore(),
     userMessageAttachments: input.userMessageAttachments,
-    userMetaBackwrites: [],
     summaryCheckpointRevision: 0,
+    summaryCheckpointPersistedMessageUids: [],
+    summaryCheckpointPromotionSources: [],
+    timelineCheckpointPersistedMessageUids: [],
     attachments: [],
   };
 }

@@ -59,6 +59,5 @@ export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
 
   systemRuntime.needsPhaseSummary = systemRuntime.needsPhaseSummary === true;
   systemRuntime.phaseSummaryByCharsPrompted = systemRuntime.phaseSummaryByCharsPrompted === true;
-  systemRuntime.mainFlowFinalNoToolsTurnActive = false;
   systemRuntime.currentTurnUserMessage = text(userMessage);
 }

@@ -187,7 +187,7 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       throw error;
     }
     const { session, sessionSummary, task, executionLogs, meta, childSessionId } = snapshot;
-    const aggregateVersion = Number(sessionSummary?.aggregateVersion || 0);
+    const aggregateVersion = sessionSummary.aggregateVersion;
     if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
       throw new Error("workflow session snapshot is missing an authoritative aggregateVersion");
     }

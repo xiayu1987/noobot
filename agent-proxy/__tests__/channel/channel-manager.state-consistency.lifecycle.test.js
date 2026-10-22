@@ -32,7 +32,7 @@ import {
   createAgentTransportError,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
-import { EVENT_FAMILY, createEventEnvelope } from "@noobot/event-protocol";
+import { EVENT_FAMILY, createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
 import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
 import {
   EXECUTION_CHILDREN_WIRE_EVENT,
@@ -98,6 +98,7 @@ test("channel transport preserves strict event payloads during broadcast and rep
   manager.attachSubscriber(channel, live);
   const attachmentEnvelope = createEventEnvelope({
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.ATTACHMENT_LIFECYCLE).schemaVersion,
     identity: {
       eventId: lifecycle.attachmentEventId,
       eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
@@ -151,7 +152,7 @@ test("upstream accepts the canonical Session attachment-binding receipt", () => 
     userMessage: {
       role: "user",
       messageUid: "message-uid-attachment-binding",
-      messageId: "message-attachment-binding",
+      userMessageId: "message-attachment-binding",
       sessionId,
       dialogProcessId,
       turnScopeId,
@@ -631,7 +632,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
         turnScopeId: "turn-stop",
       },
       concurrency: { expectedTurnRevision: 1 },
-      stop: { partialAssistant: { content: "" } },
+      stop: {},
     }),
   );
   assert.equal(forwarded, true);
@@ -688,7 +689,7 @@ test("forwardToUpstream reports a closed upstream without throwing", () => {
             turnScopeId: "turn-closed-upstream",
           },
           concurrency: { expectedTurnRevision: 1 },
-          stop: { partialAssistant: { content: "" } },
+          stop: {},
         }),
       ),
       false,
@@ -784,6 +785,11 @@ test("upstream plugin artifact is forwarded to the connected browser socket", ()
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   const artifact = createPluginArtifactEnvelope({
+    sequence: 1,
+    revision: 1,
+    occurredAt: "2026-10-22T00:00:00.000Z",
+    operation: "created",
+    baseRevision: null,
     pluginId: "character",
     artifactType: "character.animation",
     artifactId: "animation-live",

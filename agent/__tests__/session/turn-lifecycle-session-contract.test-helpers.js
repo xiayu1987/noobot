@@ -160,9 +160,8 @@ const event = (eventType, commandId, expectedRevision, extra = {}) => {
       ? {
           userMessage: {
             content: "authoritative user message",
-            messageId: "user-message-t1",
+            userMessageId: "um_t1",
             messageOrigin: "natural",
-            userMetaMaterialized: true,
           },
         }
       : {}),

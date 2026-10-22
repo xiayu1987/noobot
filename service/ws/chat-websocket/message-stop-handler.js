@@ -67,7 +67,7 @@ export function createMessageStopHandler({
       expectedRevision: command.concurrency.expectedTurnRevision,
     });
 
-  const createStopPayload = (command, target) => {
+  const createStopPayload = (target) => {
     rejectTurnInteractions(
       { sessionId: target.sessionId, turnScopeId: target.turnScopeId },
       new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)),
@@ -77,7 +77,6 @@ export function createMessageStopHandler({
       sessionId: target.sessionId,
       dialogProcessId: target.dialogProcessId,
       turnScopeId: target.turnScopeId,
-      partialAssistant: command.stop.partialAssistant,
       commandId: target.stopCommandId,
     };
   };
@@ -100,12 +99,6 @@ export function createMessageStopHandler({
   };
 
   const completeIdleStop = async (command, target, stopPayload) => {
-    const stoppedPartialAssistant = {
-      ...stopPayload.partialAssistant,
-      sessionId: stopPayload.sessionId,
-      dialogProcessId: stopPayload.dialogProcessId,
-      turnScopeId: stopPayload.turnScopeId,
-    };
     const lifecycleContext = {
       userId: target.userId,
       sessionId: stopPayload.sessionId,
@@ -123,7 +116,6 @@ export function createMessageStopHandler({
       causationId: target.stopCommandId,
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
       completionCommitId,
-      finalizePayload: { assistantMessage: stoppedPartialAssistant },
     });
     if (rejectedCommit(command, processed, "stop_processing_completed_failed")) return;
     const completed = await commitTurnLifecycle({
@@ -131,10 +123,7 @@ export function createMessageStopHandler({
       commandId: completionCommitId,
       causationId: target.stopCommandId,
       eventType: TURN_EVENT.STOP_COMPLETED,
-      terminalStatus: {
-        command: "user_stopped",
-        assistantMessage: stoppedPartialAssistant,
-      },
+      terminalStatus: { command: "user_stopped" },
     });
     recordStopLifecycle(
       "service.authorityOutbox.stopCompletedCommit",
@@ -156,7 +145,7 @@ export function createMessageStopHandler({
     const accepted = await commitStopAccepted(command, target);
     if (rejectedCommit(command, accepted, "stop_not_allowed")) return;
     target.dialogProcessId = accepted.turn.dialogProcessId;
-    const stopPayload = createStopPayload(command, target);
+    const stopPayload = createStopPayload(target);
     const activeRun = findActiveRun(stopPayload);
     recordStopLifecycle("service.websocket.run.cancel.requested", target.userId, stopPayload, {
       activeRunPresent: Boolean(activeRun),

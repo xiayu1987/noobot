@@ -78,45 +78,32 @@ class SessionCrudMethods {
   }
 
   async findById(userId, sessionId, { persistenceContext } = {}) {
-    return this._findWithProtocolRepair(userId, sessionId, {
+    return this._findCanonicalSession(userId, sessionId, {
       persistenceContext,
       read: (scope) => this._readNormalizedSession(scope, sessionId),
     });
   }
 
   async findTurnView(userId, sessionId, { turnScopeIds = [], persistenceContext } = {}) {
-    return this._findWithProtocolRepair(userId, sessionId, {
+    return this._findCanonicalSession(userId, sessionId, {
       persistenceContext,
       read: (scope) => this._readNormalizedTurnView(scope, sessionId, turnScopeIds),
     });
   }
 
-  async _findWithProtocolRepair(userId, sessionId, { persistenceContext, read }) {
+  async _findCanonicalSession(userId, sessionId, { persistenceContext, read }) {
     if (await this.isSessionDeleted(userId, sessionId)) return null;
     const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
     if (!scope || !(await this.storageService.exists(scope.sessionFile))) return null;
-    const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
-    const repairPreviouslyFailed = lifecycle?.repair?.status === "failed";
     try {
-      const result = await read(scope);
-      if (repairPreviouslyFailed) await this._clearSessionRepairFailure(userId, sessionId);
-      return result;
+      return await read(scope);
     } catch (error) {
-      if (repairPreviouslyFailed) throw this._createPreviousRepairFailureError(lifecycle, error);
       try {
-        await this._repairSessionToCurrentProtocol(userId, sessionId, persistenceContext);
-        return read(scope);
-      } catch (repairError) {
-        try {
-          await this.markSessionSummaryUnavailable(userId, sessionId, {
-            error: repairError,
-            scope,
-          });
-        } catch (projectionError) {
-          repairError.unavailableProjectionCause = projectionError;
-        }
-        throw repairError;
+        await this.markSessionSummaryUnavailable(userId, sessionId, { error, scope });
+      } catch (projectionError) {
+        error.unavailableProjectionCause = projectionError;
       }
+      throw error;
     }
   }
 

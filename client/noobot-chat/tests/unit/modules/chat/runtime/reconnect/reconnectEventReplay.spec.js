@@ -15,7 +15,7 @@ import { activate as activateWorkflowFrontend } from "../../../../../../../../pl
 import { createTurnKey } from "../../../../../../src/modules/chat/runtime/engine/turnIdentity.js";
 import { canonicalWorkflowRuntimeEvent } from "../../helpers/workflowRuntimeEventFixture.js";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
@@ -91,6 +91,7 @@ describe("applyReconnectEventReplay", () => {
     };
     const envelope = createEventEnvelope({
       family: EVENT_FAMILY.TURN_LIFECYCLE,
+      schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
       identity: {
         eventId: lifecycle.eventId,
         eventType: TURN_LIFECYCLE_WIRE_EVENT,
@@ -127,6 +128,11 @@ describe("applyReconnectEventReplay", () => {
 
   it("routes plugin artifact envelopes to the runtime projector after reconnect", async () => {
     const envelope = createPluginArtifactEnvelope({
+      sequence: 1,
+      revision: 1,
+      occurredAt: "2026-10-22T00:00:00.000Z",
+      operation: "created",
+      baseRevision: null,
       pluginId: "character",
       artifactType: "character.animation",
       artifactId: "animation-1",

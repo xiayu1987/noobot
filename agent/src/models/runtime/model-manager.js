@@ -5,7 +5,10 @@
  */
 import { randomUUID } from "node:crypto";
 import { emitEvent, hasEventListener } from "../../events/index.js";
-import { emitMessageEvent } from "../../events/message-event-stream.js";
+import {
+  appendAssistantDraftContent,
+  emitMessageEvent,
+} from "../../events/message-event-stream.js";
 import { createLlmDeltaVisibilityFilter } from "../../events/llm-filter.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { resolveModelSpecByName } from "../index.js";
@@ -66,6 +69,7 @@ export function createStreamingCallbacks(eventListener = null, runtime = {}) {
   const emitVisibleDelta = (value = "") => {
     const inputText = String(value || "");
     if (!inputText) return null;
+    appendAssistantDraftContent(runtime, inputText);
     return emitMessageEvent(eventListener, runtime, "llm_delta", { text: inputText });
   };
   return [

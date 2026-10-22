@@ -26,7 +26,7 @@ describe("useReconnectReplay", () => {
   it("transport channel_state has no Authority or message side effects", async () => {
     const { api, refs } = createFixture();
     const assistant = createCanonicalAssistant({
-      messageId: "message-order",
+      presentationMessageId: "message-order",
       dialogProcessId: "dp-order",
       turnScopeId: "turn-order",
     });

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeRunIdentityPart } from "./run-registry.js";
 import {
   EXECUTION_ABORT_TYPE,
   isExecutionAbortError,
@@ -11,18 +10,6 @@ import {
   resolveExecutionAbortMessage,
   resolveExecutionAbortType,
 } from "@noobot/session-protocol/execution-abort";
-import { text } from "@noobot/shared/value";
-
-export function buildStoppedPartialAssistant({ stopPayload, runMeta, fallbackMessage }) {
-  const sourcePartial = stopPayload.partialAssistant;
-  return {
-    ...sourcePartial,
-    content: text(sourcePartial.content ?? fallbackMessage),
-    sessionId: normalizeRunIdentityPart(runMeta.sessionId),
-    dialogProcessId: normalizeRunIdentityPart(runMeta.dialogProcessId),
-    turnScopeId: normalizeRunIdentityPart(runMeta.turnScopeId),
-  };
-}
 
 export function isAbortLikeError(error) {
   return isExecutionAbortError({ error });

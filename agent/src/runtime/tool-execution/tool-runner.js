@@ -245,7 +245,7 @@ function toolHookContext(state, point, fields = {}) {
     turn: state.turn,
     startedAt: state.toolStartedAt,
     call: state.call,
-    toolName: state.call?.name || "",
+    toolName: text(state.call.name),
     agentContext: state.agentContext,
     ...fields,
   });
@@ -413,7 +413,7 @@ function logRecoverableToolError(state, error) {
     event: "tool_invoke_error",
     error,
     extra: {
-      toolName: state.call?.name || "",
+      toolName: text(state.call.name),
       dialogProcessId: state.identity.dialogProcessId,
       turnScopeId: state.identity.turnScopeId,
       executionId: state.identity.runId,

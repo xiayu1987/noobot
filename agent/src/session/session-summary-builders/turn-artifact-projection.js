@@ -17,7 +17,6 @@ function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
     throw new TypeError("Turn presentation invariant failed: presentation_message_id_missing");
   }
   return {
-    messageId: presentationMessageId,
     presentationMessageId,
     role: "assistant",
     type: "message",

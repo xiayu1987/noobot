@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
 import { commitPluginArtifact } from "../../src/bot/session/plugin-artifact-committer.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 test("plugin artifact port owns persistence and publication behind one generic contract", async () => {
@@ -19,6 +20,11 @@ test("plugin artifact port owns persistence and publication behind one generic c
     allowedRoot: "runtime/agent/session",
   });
   const envelope = createPluginArtifactEnvelope({
+    sequence: 1,
+    revision: 1,
+    occurredAt: "2026-10-22T00:00:00.000Z",
+    operation: "created",
+    baseRevision: null,
     pluginId: "example",
     artifactType: "example.document",
     artifactId: "document-1",
@@ -26,22 +32,24 @@ test("plugin artifact port owns persistence and publication behind one generic c
     turnScopeId: "turn-1",
     data: { title: "document" },
   });
-  const agentContext = createTestAgentExecutionScope({
-    systemRuntime: {
-      userId: "user-1",
-      sessionId: "session-1",
-      parentSessionId: "",
-      turnScopeId: "turn-1",
-      persistenceScope,
-    },
-    sessionManager: {
-      async commitAuthorityEvent(input) {
-        commits.push(input);
-        return { committed: true, envelope };
+  const agentContext = createTestAgentExecutionScope(
+    createTestRuntimeContext({
+      systemRuntime: {
+        userId: "user-1",
+        sessionId: "session-1",
+        parentSessionId: "",
+        turnScopeId: "turn-1",
+        persistenceScope,
       },
-    },
-    eventListener: { onEvent: async (event) => publications.push(event) },
-  });
+      sessionManager: {
+        async commitAuthorityEvent(input) {
+          commits.push(input);
+          return { committed: true, envelope };
+        },
+      },
+      eventListener: { onEvent: async (event) => publications.push(event) },
+    }),
+  );
 
   const result = await commitPluginArtifact({
     pluginId: "example",
@@ -49,6 +57,7 @@ test("plugin artifact port owns persistence and publication behind one generic c
       artifactType: "example.document",
       artifactId: "document-1",
       operation: "created",
+      baseRevision: null,
       data: { title: "document" },
     },
     toolContext: { agentContext },

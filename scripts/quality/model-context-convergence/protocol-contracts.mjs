@@ -16,8 +16,8 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
         /messages:\s*\[\s*\.\.\.system\s*,\s*\.\.\.history\s*,\s*\.\.\.incremental\s*\]/,
       ],
       [
-        "cross-block identity requires canonical message id",
-        /const explicitId = resolveContextMessageId\(message\);[\s\S]*?return explicitId \? `id:\$\{explicitId\}` : ""/,
+        "cross-block identity uses the codec message key",
+        /function\s+messageIdentity\(message = \{\}\) \{\s*return `id:\$\{resolveContextMessageKey\(message\)\}`;\s*\}/,
       ],
       [
         "block resolver applies only the summarized-message filter",
@@ -97,8 +97,12 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
     file: "context-protocol/src/message/codec.js",
     required: [
       [
-        "persisted message uid owns canonical entity identity",
-        /export\s+function\s+resolveContextMessageId\(message = \{\}\) \{\s*return readContextMessageField\(message, "messageUid"\);\s*\}/,
+        "codec owns the mutually exclusive context identity shapes",
+        /export\s+function\s+resolveContextMessageIdentity\(message = \{\}\) \{[\s\S]*?const shape = identityShapeOf\(present\);/,
+      ],
+      [
+        "codec owns the context message key",
+        /export\s+function\s+resolveContextMessageKey\(message = \{\}\) \{\s*return keyOfIdentity\(resolveContextMessageIdentity\(message\)\);/,
       ],
       [
         "owns tool-call declaration identity",
@@ -111,7 +115,7 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
     ],
     scoped: [
       {
-        scope: { fn: "resolveContextMessageId" },
+        scope: { fn: "resolveContextMessageIdentity" },
         forbidden: [
           [
             "codec accepts a provider or presentation id as canonical identity",
@@ -130,8 +134,8 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
         /terminal history status requires dialogProcessId and turnScopeId/,
       ],
       [
-        "terminal projection derives a stable explanation identity",
-        /deriveContextMessageProjectionId\(\s*status\.turnScopeId,\s*CONTEXT_MESSAGE_PROJECTION_TYPE\.TERMINAL_STATUS,?\s*\)/,
+        "terminal projection uses the turn projection identity shape",
+        /projectionType:\s*CONTEXT_MESSAGE_PROJECTION_TYPE\.TERMINAL_STATUS,\s*sourceTurnScopeId:\s*status\.turnScopeId/,
       ],
     ],
   },

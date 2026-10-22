@@ -13,7 +13,7 @@ import { ModelProtocolError, MODEL_ERROR_CODE } from "@noobot/model-protocol";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { NO_FINAL_RESPONSE_RETRY_POLICY } from "@noobot/context-protocol/policy/no-final-response-retry";
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
-import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 function sessionContextMessage(record) {
@@ -37,7 +37,6 @@ function reasoningOnlyError() {
 }
 
 function createHarness({ emptyResponses = 0, failWith = null, script = null } = {}) {
-  const currentTurnMessages = createCurrentTurnMessagesStore([]);
   const modelContext = createModelContext({
     messageBlocks: {
       system: [],
@@ -49,9 +48,8 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
   const systemRuntime = { sessionId: "session-1", turnScopeId: "scope-1" };
   const events = [];
   const promptedListeners = [];
-  const runtime = {
+  const runtime = createTestRuntimeContext({
     systemRuntime,
-    currentTurnMessages,
     sealUserInterjectionQueueIfEmpty: () => true,
     consumeUserInterjections: async () => [],
     eventListener: {
@@ -61,8 +59,9 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
           promptedListeners.forEach((fn) => fn(event));
       },
     },
-    abortSignal: null,
-  };
+  });
+  runtime.activeMessageContext = modelContext;
+  const { currentTurnMessages } = runtime;
   const observedInputs = [];
   let invocation = 0;
   const run = createTurnOrchestrator({
@@ -116,7 +115,6 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
         tools: [{}],
         traces: [],
         maxTurns: 10,
-        modelContext,
         dialogProcessId: "dialog-1",
         turnMessages: [],
         turnTasks: [],

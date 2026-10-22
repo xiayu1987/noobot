@@ -8,16 +8,17 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
 
 import { createStateBuilder } from "../../../src/runtime/state-builder.js";
+import { createMessageEventStreamState } from "../../../src/events/message-event-stream.js";
 
 function createRuntime({ eventListener }) {
   return createTestRuntimeContext({
     eventListener,
     globalConfig: {},
     userConfig: {},
-    runConfig: { turnScopeId: "turn-1" },
+    runConfig: { hookManager: null, turnScopeId: "turn-1" },
     systemRuntime: {
       userId: "admin",
       sessionId: "s1",
@@ -92,7 +93,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     },
   });
 
-  const { loopState } = buildAgentState({
+  buildAgentState({
     agentContext,
     currentUserMessage: {
       messageUid: "sm_current_task",
@@ -104,16 +105,19 @@ test("state-builder canonicalizes model messages and block views through one sto
   });
 
   assert.deepEqual(
-    loopState.modelContext.messages.map((message) => message.content),
+    runtime.activeMessageContext.messages.map((message) => message.content),
     ["system context", "history answer", "current task"],
   );
   assert.equal(
-    loopState.modelContext.messages[2],
-    loopState.modelContext.messageBlocks.incremental[0],
+    runtime.activeMessageContext.messages[2],
+    runtime.activeMessageContext.messageBlocks.incremental[0],
   );
-  assert.equal(resolveContextMessageId(loopState.modelContext.messages[2]), "sm_current_task");
-  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
-  assert.deepEqual(loopState.modelContext.activeTurnIdentity, {
+  assert.equal(
+    resolveContextMessageKey(runtime.activeMessageContext.messages[2]),
+    "sm_current_task",
+  );
+  assert.equal(runtime.activeMessageContext.messageBlocks.incrementalIds, undefined);
+  assert.deepEqual(runtime.activeMessageContext.activeTurnIdentity, {
     dialogProcessId: "dlg-1",
     turnScopeId: "turn-1",
   });
@@ -123,9 +127,6 @@ test("state-builder canonicalizes model messages and block views through one sto
     parentSessionId: "parent-s1",
     dialogProcessId: "dlg-1",
     turnScopeId: "turn-1",
-    messages: loopState.modelContext.messages,
-    messageBlocks: loopState.modelContext.messageBlocks,
-    userMetaBackwrites: [],
     systemRuntime: {
       userId: "admin",
       sessionId: "s1",
@@ -133,6 +134,7 @@ test("state-builder canonicalizes model messages and block views through one sto
       dialogProcessId: "dlg-1",
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
+      messageEventStream: createMessageEventStreamState(),
     },
   });
   assert.equal(
@@ -148,7 +150,7 @@ test("state-builder canonicalizes model messages and block views through one sto
   );
   assert.equal(Object.hasOwn(contextIdentityEvents[0].data, "debugType"), false);
   assert.equal(contextIdentityEvents[0].data.sourceMessageUid, "sm_current_task");
-  assert.equal(contextIdentityEvents[0].data.contentProjectionId, "sm_current_task");
-  assert.equal(contextIdentityEvents[0].data.userMetaProjectionId, "");
+  assert.equal(contextIdentityEvents[0].data.contentProjectionFound, true);
+  assert.equal(contextIdentityEvents[0].data.userMetaProjectionFound, false);
   assert.equal(contextIdentityEvents[1].data.messageIds.includes("sm_current_task"), true);
 });

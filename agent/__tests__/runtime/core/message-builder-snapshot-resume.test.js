@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { withContextMessageMetadata } from "@noobot/context-protocol/message/codec";
@@ -58,7 +59,6 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
           dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
           turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         },
       }),
       human({
@@ -67,7 +67,6 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
           dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
           turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
           messageOrigin: "natural",
-          userMetaMaterialized: true,
           noobotInternalMessageType: "user_meta",
         },
       }),
@@ -98,8 +97,7 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [],
         systemRuntime: {
@@ -108,7 +106,7 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
           parentDialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
           turnScopeId: "client-turn:current:71ad4373-replay",
         },
-      },
+      }),
       {
         messageBlocks: {
           system: Array.from({ length: 7 }, (_, index) => `snapshot system ${index + 1}`),
@@ -176,7 +174,6 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
           dialogProcessId: realDialogProcessId,
           turnScopeId: realTurnScopeId,
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         },
       }),
       assistant({
@@ -199,8 +196,7 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [],
         systemRuntime: {
@@ -208,7 +204,7 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
           dialogProcessId: "dlg-current",
           turnScopeId: "client-turn:current",
         },
-      },
+      }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
   );
@@ -261,7 +257,6 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
           turnScopeId: stoppedTurnScopeId,
           attachments: [snapshotAttachment],
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         },
       }),
       human({
@@ -294,8 +289,7 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [currentAttachment],
         systemRuntime: {
@@ -304,7 +298,7 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
           parentDialogProcessId: stoppedDialogProcessId,
           turnScopeId: currentTurnScopeId,
         },
-      },
+      }),
       {
         messageBlocks: {
           system: ["snapshot system"],
@@ -405,7 +399,6 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
           turnScopeId: firstResendTurnScopeId,
           attachments: [attachmentB],
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         },
       }),
       human({
@@ -434,7 +427,6 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
           dialogProcessId: "dlg-1ec8e12c-first-stop",
           turnScopeId: "client-turn:mriksgyb:first-stop",
           messageOrigin: "natural",
-          userMetaMaterialized: true,
           attachments: [attachmentA],
         },
       }),
@@ -443,8 +435,7 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [attachmentC],
         systemRuntime: {
@@ -453,7 +444,7 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
           parentDialogProcessId: firstResendDialogProcessId,
           turnScopeId: currentTurnScopeId,
         },
-      },
+      }),
       {
         messageBlocks: {
           system: ["snapshot system"],
@@ -538,7 +529,6 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
           dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
           turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
           messageOrigin: "natural",
-          userMetaMaterialized: true,
         },
       }),
       human({
@@ -559,7 +549,6 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
           dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
           turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
           messageOrigin: "natural",
-          userMetaMaterialized: true,
           noobotInternalMessageType: "user_meta",
         },
       }),
@@ -573,8 +562,7 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
 
   const blocks = buildContextMessageBlocks(
     createTestAgentExecutionScope(
-      {
-        userId: "admin",
+      createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [
           {
@@ -589,7 +577,7 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
           dialogProcessId: "dlg-current-first-continue",
           turnScopeId: "client-turn:current:first-continue",
         },
-      },
+      }),
       { messageBlocks: { system: ["snapshot system"], history, incremental: [] } },
     ),
     {

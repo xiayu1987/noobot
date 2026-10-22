@@ -3,74 +3,58 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createPluginArtifactCommitRequest } from "@noobot/event-protocol/plugin-artifact-event";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  createPluginArtifactCommitReceipt,
+  createPluginArtifactCommitRequest,
+} from "@noobot/event-protocol/plugin-artifact-event";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
 import { emitEvent } from "../../events/emitter.js";
-import { text, isFunction } from "@noobot/shared/value";
 
-export async function commitPluginArtifact({
-  pluginId = "",
-  artifact = {},
-  toolContext = {},
-} = {}) {
-  const runtime = getRuntimeFromAgentContext(toolContext?.agentContext);
-  const system = runtime?.systemRuntime || {};
-  const userId = text(system.userId);
-  const sessionId = text(system.sessionId);
-  if (!userId) {
-    throw new TypeError("plugin artifact commit requires execution identity");
-  }
-  const request = createPluginArtifactCommitRequest({
-    pluginId,
-    artifactType: artifact?.artifactType,
-    artifactId: artifact?.artifactId,
-    sessionId,
-    turnScopeId: text(system.turnScopeId),
-    data: artifact?.data,
-    operation: text(artifact?.operation) || "created",
-    baseRevision: artifact?.baseRevision == null ? null : Number(artifact.baseRevision),
-  });
-  if (!isFunction(runtime?.sessionManager?.commitAuthorityEvent)) {
-    throw new Error("plugin artifact commit port is unavailable");
-  }
-  const committed = await runtime.sessionManager.commitAuthorityEvent({
-    ...request,
-    userId,
-    sessionId,
-    persistenceScope: system.persistenceScope,
-  });
-  if (!committed?.committed || !committed.envelope) {
-    return Object.freeze({
-      committed: false,
-      reason: text(committed?.reason) || "commit_failed",
-      code: text(committed?.code) || "ARTIFACT_COMMIT_FAILED",
-      currentRevision: Math.max(0, Number(committed?.currentRevision) || 0),
-    });
-  }
-  await emitEvent(runtime.eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
-    envelope: committed.envelope,
-    persistenceScope: system.persistenceScope,
-  });
-  return Object.freeze({
-    committed: true,
-    eventId: committed.envelope.identity.eventId,
-    operation: committed.envelope.payload.operation,
-    revision: committed.envelope.payload.revision,
-  });
+function resolveArtifactScope(toolContext) {
+  const runtime = getRuntimeFromAgentContext(toolContext.agentContext);
+  const system = getSystemRuntimeFromRuntime(runtime);
+  return { runtime, system };
 }
 
-export async function getPluginArtifact({ pluginId = "", artifact = {}, toolContext = {} } = {}) {
-  const runtime = getRuntimeFromAgentContext(toolContext?.agentContext);
-  const system = runtime?.systemRuntime || {};
-  if (!isFunction(runtime?.sessionManager?.getPluginArtifact))
-    throw new Error("plugin artifact query port is unavailable");
+export async function commitPluginArtifact({ pluginId, artifact, toolContext }) {
+  const { runtime, system } = resolveArtifactScope(toolContext);
+  const request = createPluginArtifactCommitRequest({
+    pluginId,
+    artifactType: artifact.artifactType,
+    artifactId: artifact.artifactId,
+    sessionId: system.sessionId,
+    turnScopeId: system.turnScopeId,
+    data: artifact.data,
+    operation: artifact.operation,
+    baseRevision: artifact.baseRevision,
+  });
+  const result = await runtime.sessionManager.commitAuthorityEvent({
+    ...request,
+    userId: system.userId,
+    sessionId: system.sessionId,
+    persistenceScope: system.persistenceScope,
+  });
+  if (result.committed === false) return result;
+  const receipt = createPluginArtifactCommitReceipt(result.envelope);
+  await emitEvent(runtime.eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
+    envelope: result.envelope,
+    persistenceScope: system.persistenceScope,
+  });
+  return receipt;
+}
+
+export async function getPluginArtifact({ pluginId, artifact, toolContext }) {
+  const { runtime, system } = resolveArtifactScope(toolContext);
   return runtime.sessionManager.getPluginArtifact({
-    userId: text(system.userId),
-    sessionId: text(system.sessionId),
+    userId: system.userId,
+    sessionId: system.sessionId,
     persistenceScope: system.persistenceScope,
     pluginId,
-    artifactType: text(artifact?.artifactType),
-    artifactId: text(artifact?.artifactId),
+    artifactType: artifact.artifactType,
+    artifactId: artifact.artifactId,
   });
 }

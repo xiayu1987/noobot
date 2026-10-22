@@ -18,6 +18,14 @@ export function normalizeParentSessionId(value = "") {
   return normalizeSessionId(value);
 }
 
+export function isCanonicalSessionId(value) {
+  return typeof value === "string" && Boolean(value) && value === normalizeSessionId(value);
+}
+
+export function isCanonicalParentSessionId(value) {
+  return typeof value === "string" && value === normalizeParentSessionId(value);
+}
+
 export function normalizeDialogProcessId(value = "") {
   return clean(value);
 }

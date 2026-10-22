@@ -22,7 +22,7 @@ export function resolveWorkflowDataRelativePath(...segments) {
 }
 
 export const WORKFLOW_HOOKS = Object.freeze({
-  AFTER_AGENT_DISPATCH_LISTENER_ID: "workflow_after_agent_dispatch",
+  BEFORE_AGENT_DISPATCH_LISTENER_ID: "workflow_before_agent_dispatch",
   AFTER_SESSION_DELETE_LISTENER_ID: "workflow_after_session_delete",
 });
 

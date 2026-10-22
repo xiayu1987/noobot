@@ -149,7 +149,7 @@ export function createSubSessionEventOperations({
       workflowRunId: text(payload.workflowRunId),
       nodeExecutionId: text(payload.nodeExecutionId),
       eventId,
-      messageId: messageKey,
+      presentationMessageId: messageKey,
       eventType: projectionEventName,
       contentLength: String(nextMessage?.content || "").length,
       messageCount: messages.length,

@@ -15,14 +15,13 @@ export async function commitMessageEvent({
   userId,
   sessionId,
   turnScopeId,
-  executionId = "",
-  commandId = "",
-  causationId = "",
-  correlationId = "",
-  producer = { type: "agent", id: "message-runtime" },
-  payload = {},
+  executionId,
+  commandId,
+  correlationId,
+  producer,
+  payload,
   persistenceContext,
-} = {}) {
+}) {
   const identity = {
     userId: text(userId),
     sessionId: text(sessionId),
@@ -40,18 +39,17 @@ export async function commitMessageEvent({
     identity: {
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       turnScopeId: identity.turnScopeId,
-      executionId: text(executionId),
+      executionId,
     },
     causality: {
-      commandId: text(commandId),
-      causationId: text(causationId),
-      correlationId: text(correlationId),
+      commandId,
+      correlationId,
     },
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: domainPayload.presentationMessageId,
     },
-    producer: { type: text(producer?.type), id: text(producer?.id) },
+    producer,
     payload: domainPayload,
     persistenceContext,
   });

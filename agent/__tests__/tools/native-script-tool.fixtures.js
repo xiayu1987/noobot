@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import {
@@ -20,7 +21,7 @@ export const IDENTITY = Object.freeze({
 });
 
 export function createRuntime(basePath, patch = {}) {
-  return {
+  return createTestRuntimeContext({
     basePath,
     globalConfig: { tools: { execute_native_script: { enabled: true } } },
     userConfig: {},
@@ -32,7 +33,7 @@ export function createRuntime(basePath, patch = {}) {
       config: { safeConfirm: false },
     },
     ...patch,
-  };
+  });
 }
 
 async function canRun(executable, args) {

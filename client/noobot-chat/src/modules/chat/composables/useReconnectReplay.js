@@ -39,8 +39,8 @@ export function useReconnectReplay({
   activeSessionId,
   interactionSubmitting,
   chatList,
-  findCanonicalMessageById,
-  findCanonicalMessagesById,
+  findMessageByViewKey,
+  findMessagesByPresentationId,
   materializeTurnPresentation,
   makeViewMessage,
   clearPendingInteraction,
@@ -202,7 +202,7 @@ export function useReconnectReplay({
     });
     if (!isCurrentActiveSession(requestedSessionId)) return false;
     const presentationMessage = presentationMessageId
-      ? findCanonicalMessageById?.(requestedSessionId, presentationMessageId)
+      ? findMessageByViewKey?.(requestedSessionId, presentationMessageId)
       : null;
     const protocolViolation =
       presentationMessageId && !presentationMessage ? "presentation_missing" : "";
@@ -281,8 +281,7 @@ export function useReconnectReplay({
     }
     return applyReconnectMessagesToActiveSessionReplay({
       activeSession,
-      findCanonicalMessageById,
-      findCanonicalMessagesById,
+      findMessagesByPresentationId,
       materializeTurnPresentation,
       messages,
       dialogProcessId,

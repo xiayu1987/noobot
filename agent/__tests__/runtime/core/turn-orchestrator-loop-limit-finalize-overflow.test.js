@@ -10,17 +10,23 @@ import assert from "node:assert/strict";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { createHookManager } from "@noobot/hook-protocol";
 import {
-  resolveContextMessageId,
+  resolveContextMessageKey,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import {
-  createTestTurnMessagesStore,
   createTestModelPort,
   createLoopTurnIdentity,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
+import { MAIN_FLOW_CONTROL_REASON } from "@noobot/context-protocol/policy/main-flow-control";
+import {
+  isMainFlowFinalNoToolsTurnEngaged,
+  peekMainFlowFinalNoToolsTurnInstruction,
+  requestMainFlowFinalNoToolsTurn,
+} from "../../../src/runtime/main-flow-control.js";
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(
@@ -68,17 +74,12 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     tools: tool ? [tool] : [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: createTestTurnMessagesStore(),
-    currentTurnTasks: null,
     dialogProcessId: "dialog-1",
     maxTurns,
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,
     toolFailureHelpCount: 0,
     taskSummaryTriggered: false,
-    toolConsecutiveFailureCount: 0,
     errorLogger: null,
   };
 }
@@ -100,7 +101,10 @@ function createModelState(llm, defaultModelSpec = null) {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
-    runtime: createTestRuntimeContext({ systemRuntime: { config: { safeConfirm: true } } }),
+    runtime: createTestRuntimeContext({
+      sessionManager: createCanonicalMessageEventSessionManager(),
+      systemRuntime: { config: { safeConfirm: true } },
+    }),
     defaultModelSpec: resolvedModelSpec,
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,
@@ -163,8 +167,9 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
   ]);
 
   const loopState = createLoopState({ maxTurns: 1, tool });
+  const modelState = createModelState(llm);
   const result = await runFunctionCallLoop({
-    modelState: createModelState(llm),
+    modelState,
     loopState,
     turn: 1,
   });
@@ -187,12 +192,12 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
     String(finalizePromptMessage.content || ""),
     /停止继续调用工具|Stop calling tools|toolLoopLimitFinalizePrompt/i,
   );
-  const promptInBlocks = loopState.modelContext.messageBlocks.incremental.find(
+  const promptInBlocks = modelState.runtime.activeMessageContext.messageBlocks.incremental.find(
     (message) => message === finalizePromptMessage,
   );
   assert.equal(promptInBlocks, finalizePromptMessage);
-  assert.ok(resolveContextMessageId(finalizePromptMessage));
-  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
+  assert.ok(resolveContextMessageKey(finalizePromptMessage));
+  assert.equal(modelState.runtime.activeMessageContext.messageBlocks.incrementalIds, undefined);
 });
 
 test("canonical main-flow instruction enforces one no-tools round even when tools are available", async () => {
@@ -214,13 +219,10 @@ test("canonical main-flow instruction enforces one no-tools round even when tool
   ]);
 
   const modelState = createModelState(llm);
-  modelState.runtime.systemRuntime.mainFlowControlInstruction = {
-    action: "final_no_tools_turn",
-    reason: "task_summary_complete",
+  requestMainFlowFinalNoToolsTurn(modelState.runtime, {
+    reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_COMPLETE,
     source: "task_summary",
-    requestedAt: new Date().toISOString(),
-    detail: {},
-  };
+  });
   const result = await runFunctionCallLoop({
     modelState,
     loopState: createLoopState({ maxTurns: 3, tool }),
@@ -230,7 +232,7 @@ test("canonical main-flow instruction enforces one no-tools round even when tool
   assert.equal(result.output, "overflow fallback answer");
   assert.equal(toolInvokeCount, 0);
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
-  assert.equal(modelState.runtime.systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime), null);
 });
 
 test("main flow final-no-tools instruction from before_llm hook skips with-tools model call", async () => {
@@ -257,11 +259,10 @@ test("main flow final-no-tools instruction from before_llm hook skips with-tools
     "agent.before_llm_call",
     (ctx = {}) => {
       if (ctx.mode !== "with_tools") return;
-      modelState.runtime.systemRuntime.mainFlowControlInstruction = {
-        action: "final_no_tools_turn",
-        reason: "context_overflow_after_summary",
+      requestMainFlowFinalNoToolsTurn(modelState.runtime, {
+        reason: MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
         source: "harness_summary_overflow",
-      };
+      });
     },
     { id: "test-main-flow-final-instruction" },
   );
@@ -277,8 +278,8 @@ test("main flow final-no-tools instruction from before_llm hook skips with-tools
   assert.equal(toolInvokeCount, 0);
   assert.equal(capturedInvocations.length, 1, "with-tools LLM call should be skipped");
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
-  assert.equal(modelState.runtime.systemRuntime.mainFlowControlInstruction, undefined);
-  assert.equal(modelState.runtime.systemRuntime.mainFlowFinalNoToolsTurnActive, false);
+  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime), null);
+  assert.equal(isMainFlowFinalNoToolsTurnEngaged(modelState.runtime), false);
 });
 
 test("post-summary char overflow enters final no-tools before the next with-tools model call", async () => {
@@ -312,8 +313,8 @@ test("post-summary char overflow enters final no-tools before the next with-tool
     "presentation-orchestrator-overflow",
   );
   loopState.phaseSummaryMessageCharsThreshold = 10;
-  loopState.modelContext.messages.push(longUserMessage);
-  loopState.modelContext.messageBlocks.incremental.push(longUserMessage);
+  modelState.runtime.activeMessageContext.messages.push(longUserMessage);
+  modelState.runtime.activeMessageContext.messageBlocks.incremental.push(longUserMessage);
 
   modelState.runtime.systemRuntime.needsPhaseSummary = false;
   modelState.runtime.systemRuntime.phaseSummaryByCharsPrompted = true;
@@ -329,7 +330,7 @@ test("post-summary char overflow enters final no-tools before the next with-tool
   assert.equal(toolInvokeCount, 0);
   assert.equal(capturedInvocations.length, 1, "with-tools LLM call should be skipped");
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
-  assert.equal(modelState.runtime.systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime), null);
   assert.equal(modelState.runtime.systemRuntime.phaseSummaryByCharsPrompted, true);
 });
 

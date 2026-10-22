@@ -382,6 +382,10 @@ test("layout upgrade quarantines a corrupted session manifest without blocking t
       reason: "invalid_json",
       filePath: fixture.at("runtime/session/root/broken/session.json"),
     });
+    const rootReason = await fixture.readJson(
+      `${WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR}/session-message-identity/runtime/session/root.reason.json`,
+    );
+    assert.equal(rootReason.error.details.reason, "session_id_missing");
     assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), {
       version: WORKSPACE_LAYOUT_VERSION,
     });

@@ -7,7 +7,7 @@
 import {
   isContextSystemMessage,
   resolveContextMessageDialogProcessId,
-  resolveContextMessageId,
+  resolveContextMessageKey,
   resolveContextMessageSummarized,
 } from "../message/codec.js";
 import { filterForModelContext } from "./message.js";
@@ -21,8 +21,7 @@ function recentSlice(values = [], limit = Number.POSITIVE_INFINITY) {
 }
 
 function messageIdentity(message = {}) {
-  const explicitId = resolveContextMessageId(message);
-  return explicitId ? `id:${explicitId}` : "";
+  return `id:${resolveContextMessageKey(message)}`;
 }
 
 function removeBlocked(messages, blocked) {

@@ -86,11 +86,6 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
         sessionId: "s-stop-authoritative",
         turnScopeId: "turn-stop-authoritative",
         expectedRevision: 2,
-        partialAssistant: {
-          turnScopeId: "turn-stop-authoritative",
-          dialogProcessId: "dp-stop-authoritative",
-          content: "partial",
-        },
       },
     });
     assert.deepEqual(authoritative.committed(), [
@@ -157,7 +152,6 @@ test("rejected stop has no abort or interaction side effects", async () => {
           action: "stop",
           sessionId: "session-locked",
           turnScopeId: "turn-locked",
-          partialAssistant: { content: "" },
         }),
       ),
     );

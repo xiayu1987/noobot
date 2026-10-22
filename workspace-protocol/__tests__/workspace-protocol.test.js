@@ -183,6 +183,8 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-tree-caller-v5",
       "session-transfer-envelope-v6",
       "model-context-snapshot-v7",
+      "model-context-snapshot-v8",
+      "session-message-identity-v9",
     ],
   );
   assert.deepEqual(
@@ -192,6 +194,8 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-tree-caller-v5",
       "session-transfer-envelope-v6",
       "model-context-snapshot-v7",
+      "model-context-snapshot-v8",
+      "session-message-identity-v9",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

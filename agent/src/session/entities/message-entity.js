@@ -8,7 +8,9 @@ import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
+  assertSessionMessageRecordIdentity,
   normalizeTurnCommitMetadata,
+  projectSessionMessageRecordIdentity,
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { copyPresentFields } from "./entity-primitives.js";
@@ -17,7 +19,7 @@ import {
   parseAttachmentRelations,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { firstText, isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   return normalizeTransferEnvelopes(compactTransferEnvelopes(message?.transferEnvelopes || []));
@@ -53,10 +55,6 @@ function normalizeAttachmentOwner(owner = null) {
   const id = text(owner.id);
   if (!type && !id) return null;
   return { ...(type ? { type } : {}), ...(id ? { id } : {}) };
-}
-
-function resolveRuntimeMessageId(message = {}, messageUid = "") {
-  return firstText(message?.messageId, messageUid);
 }
 
 function createBaseMessageEntity(message, now) {
@@ -106,8 +104,11 @@ function applyMessageOrigin(target, message) {
   if (origin === "natural" || origin === "internal") target.messageOrigin = origin;
 }
 
-function applyUserMetaMaterialized(target, message) {
-  if (target.role === "user") target.userMetaMaterialized = message?.userMetaMaterialized === true;
+function applyUserMetaParsedResults(target, message) {
+  if (target.role !== "user") return;
+  if (Array.isArray(message?.userMetaParsedResults) && message.userMetaParsedResults.length) {
+    target.userMetaParsedResults = message.userMetaParsedResults;
+  }
 }
 
 function applyPresentationIdentity(target, message) {
@@ -127,15 +128,12 @@ function applyMessageTimelines(target, message) {
 }
 
 function applyMessageMonotonicity(target, message) {
-  if (message?.isMonotonic === true || message?.monotonic === true) {
-    target.isMonotonic = true;
-    target.monotonic = true;
-  }
+  if (message?.isMonotonic === true) target.isMonotonic = true;
 }
 
 function applyMessagePresentation(target, message) {
   applyMessageOrigin(target, message);
-  applyUserMetaMaterialized(target, message);
+  applyUserMetaParsedResults(target, message);
   applyPresentationIdentity(target, message);
   applyChatPresentation(target, message);
   applyMessageTimelines(target, message);
@@ -219,11 +217,12 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
       )
     : [];
 
-  const messageUid = text(message?.messageUid);
-  const runtimeMessageId = resolveRuntimeMessageId(message, messageUid);
   const normalizedMessage = createBaseMessageEntity(message, now);
-  if (messageUid) normalizedMessage.messageUid = messageUid;
-  if (runtimeMessageId) normalizedMessage.messageId = runtimeMessageId;
+
+  Object.assign(
+    normalizedMessage,
+    projectSessionMessageRecordIdentity(assertSessionMessageRecordIdentity(message)),
+  );
   const turnCommit = normalizeTurnCommitMetadata(message?.turnCommit);
   if (turnCommit) normalizedMessage.turnCommit = turnCommit;
   applyMessageArtifacts(normalizedMessage, message, normalizedAttachments);

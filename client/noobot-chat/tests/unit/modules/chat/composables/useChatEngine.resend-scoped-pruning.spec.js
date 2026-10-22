@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, makeTurnReplacementResponse } from "../helpers/useChatEngineHarness.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -18,8 +19,8 @@ describe("useChatEngine.resend scoped pruning", () => {
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, commandId, anchor }) => {
       const staleReplacementUser = {
-        id: "msg-user-replace-stale",
-        messageId: "msg-user-replace-stale",
+        messageUid: "msg-user-replace-stale",
+        userMessageId: "msg-user-replace-stale",
         turnScopeId,
         role: RoleEnum.USER,
         content: newContent,
@@ -77,21 +78,21 @@ describe("useChatEngine.resend scoped pruning", () => {
     });
     const deleteSessionMessagesFromApi = vi.fn();
     const oldUser = {
-      id: "old-user",
+      messageUid: "old-user",
       turnScopeId: "client-turn:old",
       role: RoleEnum.USER,
       content: "old question",
     };
     const oldAssistant = {
-      id: "old-assistant",
+      presentationMessageId: "old-assistant",
       turnScopeId: "client-turn:old",
       role: RoleEnum.ASSISTANT,
       content: "old answer",
     };
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
-        id: "new-user",
-        messageId: "new-user",
+        messageUid: "new-user",
+        userMessageId: "new-user",
         turnScopeId,
         role: RoleEnum.USER,
         content: "edited question",
@@ -137,7 +138,9 @@ describe("useChatEngine.resend scoped pruning", () => {
         }),
       ]),
     );
-    expect(activeSession.value.messages.find((message) => message.id === "new-user")).toEqual(
+    expect(
+      activeSession.value.messages.find((message) => resolveMessageViewKey(message) === "new-user"),
+    ).toEqual(
       expect.objectContaining({
         role: RoleEnum.USER,
         content: "edited question",
@@ -167,21 +170,21 @@ describe("useChatEngine.resend scoped pruning", () => {
     });
     const deleteSessionMessagesFromApi = vi.fn();
     const previousUser = {
-      id: "u-old",
+      messageUid: "u-old",
       role: RoleEnum.USER,
       content: "same question",
       turnScopeId: "client-turn:old",
     };
     const previousAssistant = {
-      id: "a-old",
+      presentationMessageId: "a-old",
       role: RoleEnum.ASSISTANT,
       content: "old answer",
       turnScopeId: "client-turn:old",
     };
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
-        id: "u-new",
-        messageId: "u-new",
+        messageUid: "u-new",
+        userMessageId: "u-new",
         role: RoleEnum.USER,
         content: "same question",
         turnScopeId,
@@ -209,7 +212,7 @@ describe("useChatEngine.resend scoped pruning", () => {
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
     });
     const latestUser = {
-      id: "u-latest",
+      messageUid: "u-latest",
       role: RoleEnum.USER,
       content: "same question",
       turnScopeId: "client-turn:latest",
@@ -226,7 +229,7 @@ describe("useChatEngine.resend scoped pruning", () => {
       }),
       expect.any(Object),
     );
-    expect(observedMessagesAtStream.map((message) => message.id)).toEqual([
+    expect(observedMessagesAtStream.map(resolveMessageViewKey)).toEqual([
       "u-old",
       "a-old",
       "u-new",
@@ -254,8 +257,8 @@ describe("useChatEngine.resend scoped pruning", () => {
     const deleteSessionMessagesFromApi = vi.fn();
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
-        id: "msg-user-replace-completed",
-        messageId: "msg-user-replace-completed",
+        messageUid: "msg-user-replace-completed",
+        userMessageId: "msg-user-replace-completed",
         turnScopeId,
         role: RoleEnum.USER,
         content: "edited question",

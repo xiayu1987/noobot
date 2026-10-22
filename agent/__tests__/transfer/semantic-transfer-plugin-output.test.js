@@ -14,6 +14,7 @@ import {
 function attachmentRuntime() {
   return {
     systemRuntime: { userId: "u1", sessionId: "session-test-1" },
+    hookManager: null,
     attachmentService: {
       async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
         return artifacts.map((artifact) => ({

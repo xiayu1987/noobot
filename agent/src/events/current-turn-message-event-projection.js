@@ -27,10 +27,11 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
   }
 
   const pendingMessageEvents = [];
-  runtime.projectCurrentTurnMessageEvent = async (envelope = {}) => {
-    if (!isObjectLike(envelope)) return null;
-    const eventId = text(envelope?.identity?.eventId);
-    if (!eventId) return null;
+  runtime.projectCurrentTurnMessageEvent = async (envelope) => {
+    const eventId = envelope.identity.eventId;
+    if (!eventId) {
+      throw new TypeError("current Turn message event projection requires envelope identity");
+    }
     if (!isCanonicalToolMessageEvent(envelope) && !isCanonicalActivityMessageEvent(envelope)) {
       return envelope;
     }
@@ -39,7 +40,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     const messages = store.toArray();
     const ownerIndex = modelMessageId
       ? messages.findIndex(
-          (item) => item?.role === "assistant" && text(item?.messageId) === modelMessageId,
+          (item) => item?.role === "assistant" && text(item?.modelMessageId) === modelMessageId,
         )
       : -1;
     if (ownerIndex < 0) {

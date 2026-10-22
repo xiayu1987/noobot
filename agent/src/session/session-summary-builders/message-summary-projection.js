@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
+import {
+  isInjectedSessionMessageRecord,
+  projectSessionMessageRecordIdentity,
+} from "@noobot/session-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import {
@@ -84,17 +87,16 @@ export function buildMessageSummary(message = {}) {
     modelName: text(message?.modelName),
     summarized: message?.summarized === true,
     ts: text(message?.ts),
+
+    ...projectSessionMessageRecordIdentity(message),
   };
   for (const key of [
     "injectedMessage",
     "injectedBy",
     "injectedMessageType",
     "messageOrigin",
-    "userMetaMaterialized",
     "chatPresentation",
-    "presentationMessageId",
     "isMonotonic",
-    "monotonic",
     "pluginMessage",
     "tool_call_id",
     "toolName",
@@ -158,40 +160,20 @@ function readDisplayRole(message) {
   return DISPLAY_ROLES.has(role) ? role : "";
 }
 
-function isSuppressedDisplayMessage({ message, role, type, presentationMessageId, hasActivity }) {
+function isSuppressedDisplayMessage({ message, role, type, hasActivity }) {
   const isAssistant = role === "assistant";
   if (isAssistant && message.chatPresentation === false && !hasActivity) return true;
   if (TOOL_MESSAGE_TYPES.has(type) && !hasActivity) return true;
-  const needsPresentationId = message.chatPresentation === true || hasActivity;
-  return isAssistant && needsPresentationId && !presentationMessageId;
+  return false;
 }
 
 function resolveDisplayPresentation(message) {
   const role = readDisplayRole(message);
   if (!role) return null;
   const type = text(message.type);
-  const presentationMessageId = text(message.presentationMessageId);
-  const hasActivity =
-    role === "assistant" &&
-    Boolean(presentationMessageId) &&
-    selectCanonicalActivityTimeline(message).length > 0;
-  const presentation = { message, role, type, presentationMessageId, hasActivity };
+  const hasActivity = role === "assistant" && selectCanonicalActivityTimeline(message).length > 0;
+  const presentation = { message, role, type, hasActivity };
   return isSuppressedDisplayMessage(presentation) ? null : presentation;
-}
-
-function applyDisplayIdentity(summary, message, presentationMessageId) {
-  const messageUid = text(message.messageUid);
-  const sourceMessageId = text(message.messageId);
-  const messageId = presentationMessageId || sourceMessageId;
-  if (messageId) summary.messageId = messageId;
-  if (!presentationMessageId) {
-    if (messageUid) summary.messageUid = messageUid;
-    return;
-  }
-  if (sourceMessageId && presentationMessageId !== sourceMessageId) {
-    summary.sourceMessageId = sourceMessageId;
-  }
-  if (messageUid) summary.sourceMessageUid = messageUid;
 }
 
 function projectDisplayToolCalls(toolCalls) {
@@ -221,7 +203,7 @@ function applyDisplayMetadata(summary, message) {
 export function buildDisplayMessageSummary(message = {}) {
   const presentation = resolveDisplayPresentation(message);
   if (!presentation) return null;
-  const { type, presentationMessageId, hasActivity } = presentation;
+  const { type, hasActivity } = presentation;
   const summary = buildMessageSummary(message) || {};
   summary.content =
     typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "");
@@ -230,7 +212,6 @@ export function buildDisplayMessageSummary(message = {}) {
     summary.chatPresentation = true;
     summary.sourceMessageType = type;
   }
-  applyDisplayIdentity(summary, message, presentationMessageId);
   applyDisplayMetadata(summary, message);
   return compactMessageSummary(summary);
 }

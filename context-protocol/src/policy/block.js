@@ -7,7 +7,7 @@
 import {
   readContextMessageField,
   resolveContextMessageDialogProcessId,
-  resolveContextMessageId,
+  resolveContextMessageKey,
   resolveContextMessageRole,
   resolveContextToolCallDeclarationId,
   resolveContextToolResultCallId,
@@ -102,7 +102,7 @@ export function buildCanonicalMessageBlocks({
     ? projectSessionRecordToContextMessage(currentUserMessage)
     : null;
   const content = text(current?.content);
-  const currentMessageId = current ? resolveContextMessageId(current) : "";
+  const currentMessageId = current ? resolveContextMessageKey(current) : "";
   if (current && !content) {
     throw new Error("currentUserMessage requires persisted content");
   }
@@ -133,7 +133,7 @@ export function buildCanonicalMessageBlocks({
   const currentExists = incremental.some(
     (message) =>
       resolveContextMessageRole(message) === "user" &&
-      resolveContextMessageId(message) === currentMessageId,
+      resolveContextMessageKey(message) === currentMessageId,
   );
   if (content && !currentExists) {
     incremental.push(current);

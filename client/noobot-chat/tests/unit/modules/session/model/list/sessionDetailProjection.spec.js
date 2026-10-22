@@ -76,13 +76,12 @@ describe("buildSessionDetailProjection", () => {
         sessionId: "session-resend",
         messages: [
           {
-            messageId: "user-resend",
+            userMessageId: "user-resend",
             role: "user",
             content: "edited question",
             turnScopeId: "client-turn:resend",
           },
           {
-            messageId: "model-tool-call-1",
             presentationMessageId: "assistant-resend",
             role: "assistant",
             type: "tool_call",
@@ -102,7 +101,6 @@ describe("buildSessionDetailProjection", () => {
             ],
           },
           {
-            messageId: "model-tool-call-2",
             presentationMessageId: "assistant-resend",
             role: "assistant",
             type: "tool_call",
@@ -112,7 +110,6 @@ describe("buildSessionDetailProjection", () => {
             tool_calls: [{ id: "call-2", name: "execute_script" }],
           },
           {
-            messageId: "model-final",
             presentationMessageId: "assistant-resend",
             role: "assistant",
             type: "message",
@@ -135,8 +132,6 @@ describe("buildSessionDetailProjection", () => {
 
     expect(projection.messages).toHaveLength(2);
     expect(projection.messages[1]).toMatchObject({
-      id: "assistant-resend",
-      messageId: "assistant-resend",
       presentationMessageId: "assistant-resend",
       content: "final answer",
       type: "message",
@@ -156,7 +151,7 @@ describe("buildSessionDetailProjection", () => {
         sessionId: "session-artifacts",
         messages: [
           {
-            id: "assistant-artifacts",
+            presentationMessageId: "assistant-artifacts",
             role: "assistant",
             content: "done",
             turnScopeId: "turn-artifacts",

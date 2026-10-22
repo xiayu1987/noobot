@@ -9,12 +9,13 @@ import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext } from "@noobot/context-protocol";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import {
   readContextMessageValue,
-  resolveContextMessageId,
+  resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import {
   FLOW_CONTROL_ROLE,
@@ -211,7 +212,7 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(turnMessageStore.items[0].content, "tool_result_overridden_by_hook");
   assert.deepEqual(turnMessageStore.items[0].contextPolicy, contextPolicy);
   assert.match(turnMessageStore.items[0].messageUid, /^sm_/);
-  assert.equal(turnMessageStore.items[0].messageId, turnMessageStore.items[0].messageUid);
+  assert.equal(Object.hasOwn(turnMessageStore.items[0], "messageId"), false);
   assert.equal(traces.length, 1);
   assert.equal(traces[0].tool, "demo_tool");
   assert.equal(traces[0].result, "tool_result_overridden_by_hook");
@@ -270,14 +271,17 @@ test("state-committer checkpoints assistant and tool records with presentation i
   let checkpointCount = 0;
   const runtime = installEmptyMessageEventMaterializer(
     createTestRuntime({
-      systemRuntime: {
-        messageEventStream: { activePresentationMessageId: "msg_chat_checkpoint" },
-      },
       persistCurrentTurnMessages: async () => {
         checkpointCount += 1;
       },
     }),
   );
+  bindAssistantMessageEventStream(runtime, {
+    presentationMessageId: "msg_chat_checkpoint",
+    parentSessionId: "",
+    workflowRunId: "",
+    nodeExecutionId: "",
+  });
   const committer = createStateCommitter({
     modelContext: createTestModelContext("dp_checkpoint", "turn-checkpoint"),
     traces: [],
@@ -303,7 +307,7 @@ test("state-committer checkpoints assistant and tool records with presentation i
   assert.equal(turnMessageStore.items[0].chatPresentation, false);
   assert.equal(turnMessageStore.items[0].activityTimeline, undefined);
   assert.equal(turnMessageStore.items[1].presentationMessageId, "msg_chat_checkpoint");
-  assert.equal(turnMessageStore.items[1].messageId, turnMessageStore.items[1].messageUid);
+  assert.equal(Object.hasOwn(turnMessageStore.items[1], "messageId"), false);
 });
 
 test("state-committer writes tool result through message store when holder is provided", async () => {
@@ -332,7 +336,7 @@ test("state-committer writes tool result through message store when holder is pr
   assert.equal(modelContext.messages[0]?.content, "store_tool_result");
   assert.equal(modelContext.messageBlocks.incremental[0], modelContext.messages[0]);
   assert.equal(
-    resolveContextMessageId(modelContext.messages[0]),
+    resolveContextMessageKey(modelContext.messages[0]),
     turnMessageStore.items[0].messageUid,
   );
   assert.equal(modelContext.messageBlocks.incrementalIds, undefined);

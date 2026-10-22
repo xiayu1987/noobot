@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { initializeCurrentTurnMessageEventProjection } from "../../../../src/events/current-turn-message-event-projection.js";
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import { tool as structuredTool } from "@langchain/core/tools";
@@ -103,6 +104,7 @@ function createContext({
     eventListener,
     sessionManager,
     runConfig: {
+      hookManager: null,
       streaming,
       presentationMessageId: "presentation-test",
       turnScopeId: "turn-test",
@@ -336,7 +338,10 @@ function bindPresentation(runtime) {
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-test",
     parentSessionId: "",
+    workflowRunId: "",
+    nodeExecutionId: "",
   });
+  initializeCurrentTurnMessageEventProjection(runtime);
 }
 
 for (const streaming of [false, true]) {

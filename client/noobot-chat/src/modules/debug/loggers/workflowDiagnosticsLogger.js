@@ -31,7 +31,7 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
   const runMeta = payload.runMeta || {};
   return {
     ...(index >= 0 ? { index } : {}),
-    id: firstText(source.id, source.messageId),
+    messageUid: firstText(source.messageUid),
     role: firstText(source.role),
     type: firstText(source.type),
     pluginMessage: source.pluginMessage === true,
@@ -41,7 +41,7 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
     turnScopeId: firstText(source.turnScopeId),
     workflowRunId: firstText(payload.workflowRunId),
     contentLength: firstText(source.content).length,
-    presentationMessageId: firstText(source.presentationMessageId, source.messageId, source.id),
+    presentationMessageId: firstText(source.presentationMessageId),
     tagKeys: summarizeTagKeys(source.tags),
   };
 }

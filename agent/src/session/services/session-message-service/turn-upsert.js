@@ -55,7 +55,8 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
     {
       role: input.role,
       messageUid: input.messageUid || "",
-      messageId: input.messageId || "",
+      ...optionalStringField("modelMessageId", input.modelMessageId),
+      ...optionalStringField("userMessageId", input.userMessageId),
       ...optionalStringField("presentationMessageId", input.presentationMessageId),
       ...(chatPresentation === undefined ? {} : { chatPresentation }),
       content: input.content,
@@ -83,7 +84,6 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       relayCorrelationId: normalizedString(input.relayCorrelationId),
       interjectionSequence: Number(input.interjectionSequence || 0),
       messageOrigin: text(input.messageOrigin).toLowerCase(),
-      userMetaMaterialized: input.userMetaMaterialized === true,
       pluginMessage: input.pluginMessage === true,
       pluginMeta: resolvePluginMeta(input.pluginMeta),
       transferEnvelopes: Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : [],
@@ -127,9 +127,6 @@ function createIdentityError(message, code) {
 
 function findPersistedTurnByMessageUid(messages, turn) {
   const messageUid = normalizedString(turn.messageUid);
-  if (!messageUid) {
-    throw createIdentityError("session turn requires messageUid", "SESSION_MESSAGE_UID_REQUIRED");
-  }
   return {
     dialogProcessId: normalizeDialogProcessId(turn?.dialogProcessId),
     turnScopeId: normalizedString(turn?.turnScopeId),
@@ -159,7 +156,6 @@ function mergeExistingTurn(service, existing, turn) {
       ...existing,
       ...turn,
       messageUid: existing.messageUid,
-      messageId: turn.messageId,
       ts: existing.ts || turn.ts,
     },
     service.now,

@@ -29,10 +29,18 @@ export async function exists(filePath) {
 export function canonicalMessages(messages = [], namespace = "summary") {
   return messages.map((message, index) => {
     const turnScopeId = String(message?.turnScopeId || `turn-${namespace}-${index + 1}`);
+
+    const roleIdentity = {
+      ...(message?.role === "assistant" ? { modelMessageId: `mm_${namespace}_${index + 1}` } : {}),
+      ...(["assistant", "tool"].includes(message?.role)
+        ? { presentationMessageId: `pm_${turnScopeId}` }
+        : {}),
+    };
     return {
       messageUid: String(message?.messageUid || `sm_${namespace}_${index + 1}`),
       dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
       turnScopeId,
+      ...roleIdentity,
       ...message,
     };
   });

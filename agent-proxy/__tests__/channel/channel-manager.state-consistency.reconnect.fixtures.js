@@ -12,6 +12,7 @@ import {
   createEventEnvelope,
   createTurnSnapshotEnvelope,
   EVENT_FAMILY,
+  getEventFamily,
 } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -72,6 +73,7 @@ export function authoritativeLifecycle(fields = {}) {
   });
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: payload.eventId,
       eventType: "turn_lifecycle",

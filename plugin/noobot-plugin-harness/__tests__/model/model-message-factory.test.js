@@ -108,7 +108,6 @@ test("buildCapabilityModelMessages projects only provider fields for Context mes
         role: "user",
         content: "u1",
         messageOrigin: "natural",
-        userMetaMaterialized: true,
       }),
       source({
         role: "assistant",

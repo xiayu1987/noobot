@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol/turn-lifecycle";
 import { deriveAgentExecutionId, EXECUTION_KIND } from "@noobot/session-protocol";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
+import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 
 const turnScopeId = "turn-finalize";
 const executionId = deriveAgentExecutionId({ turnScopeId });
@@ -118,10 +119,47 @@ test("non-retryable failure does not write completionCommitId", () => {
 });
 
 test("finalize request replay with a different completionCommitId is an idempotency conflict", () => {
-  const requested = apply(processing(), finalizeRequest({ completionCommitId: "commit-1" }));
-  const replay = apply(requested.lifecycle, finalizeRequest({ completionCommitId: "commit-1" }));
+  const commit = (lifecycle, extra) =>
+    commitTurnLifecycle({
+      lifecycle,
+      event: { turnScopeId, userId: "user-1", sessionId: "session-1", ...finalizeRequest(extra) },
+      createEventId: () => "finalize-event-1",
+      now: () => "2026-07-18T00:00:01.000Z",
+    });
+  const requested = commit(processing(), { completionCommitId: "commit-1" });
+  assert.equal(requested.applied, true, requested.reason);
+  const replay = commit(requested.lifecycle, { completionCommitId: "commit-1" });
   assert.equal(replay.deduplicated, true);
-  const reused = apply(requested.lifecycle, finalizeRequest({ completionCommitId: "commit-2" }));
+  assert.deepEqual(replay.envelope, requested.envelope);
+  const reused = commit(requested.lifecycle, { completionCommitId: "commit-2" });
   assert.equal(reused.applied, false);
   assert.equal(reused.reason, "idempotency_key_reused");
+});
+
+test("domain transition returns a receipt draft and never writes a placeholder receipt", () => {
+  const requested = apply(processing(), finalizeRequest({ completionCommitId: "commit-1" }));
+  assert.equal(requested.applied, true, requested.reason);
+  assert.deepEqual(requested.lifecycle.commandReceipts, []);
+  assert.equal(Object.hasOwn(requested.receiptDraft, "eventId"), false);
+  assert.equal(Object.hasOwn(requested.receiptDraft, "envelope"), false);
+});
+
+test("an early-returning commit leaves no receipt behind", () => {
+  const lifecycle = processing();
+  const unavailable = commitTurnLifecycle({
+    lifecycle,
+    event: { turnScopeId, sessionId: "session-1", ...finalizeRequest({ completionCommitId: "c" }) },
+    createEventId: () => "",
+  });
+  assert.equal(unavailable.applied, false);
+  assert.equal(unavailable.reason, "event_id_unavailable");
+  assert.deepEqual(unavailable.lifecycle.commandReceipts, []);
+  const conflict = commitTurnLifecycle({
+    lifecycle,
+    event: { turnScopeId, sessionId: "session-1", ...finalizeRequest({ completionCommitId: "c" }) },
+    createEventId: () => "used-event",
+    isCommittedEventId: () => true,
+  });
+  assert.equal(conflict.reason, "event_id_conflict");
+  assert.deepEqual(conflict.lifecycle.commandReceipts, []);
 });

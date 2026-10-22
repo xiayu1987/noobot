@@ -10,8 +10,18 @@ import { useWorkflowNodeMessages } from "../composables/useWorkflowNodeMessages.
 
 describe("workflow node message projection", () => {
   it("renders the canonical live messages instead of stale summary messages", async () => {
-    const stale = { messageId: "final", role: "assistant", content: "final resultfinal result" };
-    const final = { messageId: "final", role: "assistant", content: "final result" };
+    const stale = {
+      messageUid: "sm-final",
+      presentationMessageId: "final",
+      role: "assistant",
+      content: "final resultfinal result",
+    };
+    const final = {
+      messageUid: "sm-final",
+      presentationMessageId: "final",
+      role: "assistant",
+      content: "final result",
+    };
     const selectedNodeMessages = ref([]);
     const selectedNodeSessionSummary = ref({
       sessionId: "child-session",
@@ -46,7 +56,7 @@ describe("workflow node message projection", () => {
     expect(messages.displayNodeMessages.value).toHaveLength(1);
     expect(messages.displayNodeMessages.value[0]).toEqual(
       expect.objectContaining({
-        messageId: "final",
+        presentationMessageId: "final",
         content: "final result",
       }),
     );
@@ -56,14 +66,13 @@ describe("workflow node message projection", () => {
   it("projects one assistant conversation and keeps tool results out of message bubbles", async () => {
     const selectedNodeMessages = ref([
       {
-        messageId: "user-1",
+        userMessageId: "user-1",
         role: "user",
         content: "inspect",
         sessionId: "child-session",
         turnScopeId: "turn-1",
       },
       {
-        messageId: "assistant-1",
         presentationMessageId: "assistant-presentation-1",
         role: "assistant",
         type: "tool_call",
@@ -73,7 +82,8 @@ describe("workflow node message projection", () => {
         turnScopeId: "turn-1",
       },
       {
-        messageId: "tool-1",
+        messageUid: "sm-tool-1",
+        presentationMessageId: "assistant-presentation-1",
         role: "tool",
         type: "tool_result",
         content: "result 1",
@@ -81,7 +91,6 @@ describe("workflow node message projection", () => {
         turnScopeId: "turn-1",
       },
       {
-        messageId: "assistant-2",
         presentationMessageId: "assistant-presentation-1",
         role: "assistant",
         type: "tool_call",
@@ -126,14 +135,14 @@ describe("workflow node message projection", () => {
   it("uses the shared chat presentation projection for child-session control messages", async () => {
     const selectedNodeMessages = ref([
       {
-        messageId: "child-task",
+        userMessageId: "child-task",
         role: "user",
         content: "完成工作流节点任务",
         sessionId: "child-session",
         turnScopeId: "turn-1",
       },
       {
-        messageId: "task-check-control",
+        userMessageId: "task-check-control",
         role: "user",
         content: "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片",
         chatPresentation: false,
@@ -141,7 +150,7 @@ describe("workflow node message projection", () => {
         turnScopeId: "turn-1",
       },
       {
-        messageId: "help-failure-control",
+        userMessageId: "help-failure-control",
         role: "user",
         content:
           "工具调用已连续失败 3 次。若需要补充外部信息或排查方向，可调用 help 工具查询工具说明或经验记忆路径。",
@@ -177,7 +186,7 @@ describe("workflow node message projection", () => {
     await nextTick();
     expect(messages.displayNodeMessages.value).toHaveLength(1);
     expect(messages.displayNodeMessages.value[0]).toEqual(
-      expect.objectContaining({ messageId: "child-task", content: "完成工作流节点任务" }),
+      expect.objectContaining({ userMessageId: "child-task", content: "完成工作流节点任务" }),
     );
     wrapper.unmount();
   });

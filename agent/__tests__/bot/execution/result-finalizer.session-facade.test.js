@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createSessionFacade } from "../../../src/session/index.js";
+import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { finalizeAgentTurn } from "../../../src/bot/execution/runner/result-finalizer.js";
 
 function createRealFacade(calls) {
@@ -20,7 +22,7 @@ function createRealFacade(calls) {
       },
       async getTurnSummaryCheckpointState(payload) {
         calls.push(["getTurnSummaryCheckpointState", payload]);
-        return null;
+        return createEmptyTurnSummaryCheckpointState(payload);
       },
     },
     sessionContextService: {},
@@ -42,7 +44,7 @@ test("finalizeAgentTurn locates existing child sessions through the real facade"
     usedSessionId: "child-1",
     dialogProcessId: "dp-1",
     resolvedTurnScopeId: "turn-1",
-    dispatchRuntime: {},
+    dispatchRuntime: createTestRuntimeContext({}),
     getSessionTurns: (payload) => session.getSessionTurns(payload),
     getTurnSummaryCheckpointState: (payload) => session.getTurnSummaryCheckpointState(payload),
     finalizeRunSession: async (payload) => {
@@ -53,7 +55,9 @@ test("finalizeAgentTurn locates existing child sessions through the real facade"
     parentSessionId: "parent-1",
     parentDialogProcessId: "",
     caller: "user",
-    agentResult: { turnMessages: [] },
+    agentResult: {
+      turnMessages: [{ messageUid: "sm_final", role: "assistant", content: "done" }],
+    },
     userConfig: {},
     lifecycle: null,
     persistenceScope: null,

@@ -5,6 +5,7 @@
  */
 
 import { assertValidAgentContextEnvelope } from "@noobot/context-protocol/agent-context/validation";
+import { assertMainFlowControlPort } from "@noobot/context-protocol/policy/main-flow-control";
 import { isPlainObject } from "@noobot/shared/value";
 
 export function createAgentExecutionScope({ context, bindings }) {
@@ -12,6 +13,7 @@ export function createAgentExecutionScope({ context, bindings }) {
   if (!isPlainObject(bindings.runtime)) {
     throw new TypeError("agent execution scope bindings.runtime is required");
   }
+  assertMainFlowControlPort(bindings.mainFlowControl);
   if (!Array.isArray(bindings.tools)) {
     throw new TypeError("agent execution scope bindings.tools must be an array");
   }

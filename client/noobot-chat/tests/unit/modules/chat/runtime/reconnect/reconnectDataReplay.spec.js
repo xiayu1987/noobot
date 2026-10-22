@@ -12,6 +12,7 @@ import {
   EVENT_FAMILY,
   INTERACTION_EVENT_TYPE,
   INTERACTION_SEQUENCE_DOMAIN,
+  getEventFamily,
 } from "@noobot/event-protocol";
 import {
   createTurnLifecycleEnvelope,
@@ -110,6 +111,7 @@ function lifecycleEvent(sequence) {
   });
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
     identity: {
       eventId: payload.eventId,
       eventType: TURN_LIFECYCLE_WIRE_EVENT,
@@ -139,6 +141,7 @@ function pendingInteraction(requestId) {
   };
   return createEventEnvelope({
     family: EVENT_FAMILY.INTERACTION_REQUEST,
+    schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
     identity: {
       eventId: `${requestId}-event`,
       eventType: INTERACTION_EVENT_TYPE.REQUEST,

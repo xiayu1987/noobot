@@ -26,6 +26,7 @@ import {
 } from "./event-registry-validators.js";
 import {
   EXECUTION_QUERY_FAMILY,
+  EXECUTION_QUERY_SCHEMA_VERSION,
   EXECUTION_QUERY_WIRE_EVENT_BY_FAMILY,
   validateExecutionQueryEnvelope,
 } from "./execution-query.js";
@@ -33,11 +34,17 @@ import {
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_RUNTIME_FAMILY,
+  WORKFLOW_RUNTIME_SCHEMA_VERSION,
 } from "./workflow-runtime-event.js";
-import { TURN_SNAPSHOT_EVENT_FAMILY, validateTurnSnapshotEnvelope } from "./turn-snapshot.js";
+import {
+  TURN_SNAPSHOT_EVENT_FAMILY,
+  TURN_SNAPSHOT_SCHEMA_VERSION,
+  validateTurnSnapshotEnvelope,
+} from "./turn-snapshot.js";
 import {
   PLUGIN_ARTIFACT_EVENT,
   PLUGIN_ARTIFACT_FAMILY,
+  PLUGIN_ARTIFACT_SCHEMA_VERSION,
   validatePluginArtifactEnvelope,
 } from "./plugin-artifact-event.js";
 
@@ -78,6 +85,7 @@ const descriptors = Object.freeze(
       reducerTarget: EVENT_REDUCER_TARGET.TURN,
       validateEnvelope: validateTurnLifecycleEventEnvelope,
       validatePayload: (payload) => domainResult(validateSessionEvent(payload)),
+      schemaVersion: 1,
     },
     {
       family: EVENT_FAMILY.TURN_SNAPSHOT,
@@ -86,6 +94,7 @@ const descriptors = Object.freeze(
       minimumSequence: 0,
       validateEnvelope: validateTurnSnapshotEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
+      schemaVersion: TURN_SNAPSHOT_SCHEMA_VERSION,
     },
     ...Object.entries(EXECUTION_QUERY_WIRE_EVENT_BY_FAMILY).map(([family, wireEvent]) => ({
       family,
@@ -93,12 +102,14 @@ const descriptors = Object.freeze(
       reducerTarget: EVENT_REDUCER_TARGET.EXECUTION,
       validateEnvelope: validateExecutionQueryEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
+      schemaVersion: EXECUTION_QUERY_SCHEMA_VERSION,
     })),
     {
       family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
       wireEvents: [ATTACHMENT_LIFECYCLE_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.ATTACHMENT,
       validatePayload: validateAttachment,
+      schemaVersion: 1,
     },
     {
       family: EVENT_FAMILY.INTERACTION_REQUEST,
@@ -107,6 +118,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
       validateEnvelope: validateInteractionEnvelope,
       validatePayload: (payload) => domainResult(validateInteractionRequestPayload(payload)),
+      schemaVersion: 1,
     },
     {
       family: EVENT_FAMILY.INTERACTION_RESPONSE,
@@ -115,6 +127,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
       validateEnvelope: validateInteractionEnvelope,
       validatePayload: (payload) => domainResult(validateInteractionResponsePayload(payload)),
+      schemaVersion: 1,
     },
     {
       family: EVENT_FAMILY.MESSAGE_TIMELINE,
@@ -125,6 +138,7 @@ const descriptors = Object.freeze(
       minimumSequence: 0,
       validateEnvelope: validateMessageEnvelope,
       validatePayload: (payload) => domainResult(validateMessageEventPayload(payload)),
+      schemaVersion: 1,
     },
     {
       family: EVENT_FAMILY.WORKFLOW_RUNTIME,
@@ -133,6 +147,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
       validateEnvelope: validateWorkflowRuntimeEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
+      schemaVersion: WORKFLOW_RUNTIME_SCHEMA_VERSION,
     },
     {
       family: EVENT_FAMILY.PLUGIN_ARTIFACT,
@@ -141,10 +156,14 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
       validateEnvelope: validatePluginArtifactEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
+      schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
       sessionArtifact: true,
     },
-  ].map((descriptor) =>
-    Object.freeze({
+  ].map((descriptor) => {
+    if (!Number.isInteger(descriptor.schemaVersion) || descriptor.schemaVersion < 1) {
+      throw new TypeError(`event family ${descriptor.family} must declare schemaVersion`);
+    }
+    return Object.freeze({
       ...descriptor,
       authority: EVENT_AUTHORITY.AUTHORITATIVE,
       reducerInput: descriptor.reducerInput || EVENT_REDUCER_INPUT.PAYLOAD,
@@ -152,8 +171,8 @@ const descriptors = Object.freeze(
       wireEvents: Object.freeze(descriptor.wireEvents),
       replayable: true,
       persisted: true,
-    }),
-  ),
+    });
+  }),
 );
 const byFamily = new Map(descriptors.map((descriptor) => [descriptor.family, descriptor]));
 export function getEventFamily(family = "") {

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -35,6 +36,7 @@ function createRuntime(abortSignal = new AbortController().signal) {
     attachmentService: new AttachmentService({ workspaceRoot }),
     sessionManager: createCanonicalMessageEventSessionManager(),
     runConfig: {
+      hookManager: null,
       executionId: "run-tool-batch",
       turnScopeId: "turn-tool-batch",
       presentationMessageId: "presentation-tool-batch",
@@ -44,13 +46,15 @@ function createRuntime(abortSignal = new AbortController().signal) {
       sessionId: "session-tool-batch",
       rootSessionId: "session-tool-batch",
       dialogProcessId: "dialog-tool-batch",
-      messageEventStream: { sequence: 0 },
     },
   });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-tool-batch",
     parentSessionId: "",
+    workflowRunId: "",
+    nodeExecutionId: "",
   });
+  initializeCurrentTurnMessageEventProjection(runtime);
   return bindTestDispatchLifecycle(runtime);
 }
 
@@ -110,7 +114,7 @@ test("processToolResults commits every settled parallel result before propagatin
   await assert.rejects(
     processToolResults({
       modelState,
-      loopState: { errorLogger: null, toolConsecutiveFailureCount: 0 },
+      loopState: { errorLogger: null },
       turn: 1,
       calls,
       toolMap,
@@ -151,7 +155,7 @@ test("processToolResults commits result policy from its authoritative batch call
   };
   await processToolResults({
     modelState,
-    loopState: { errorLogger: null, toolConsecutiveFailureCount: 0 },
+    loopState: { errorLogger: null },
     turn: 1,
     calls: [{ id: "check-1", name: "task_check", args: {}, contextPolicy: policy }],
     toolMap: new Map([
@@ -177,7 +181,7 @@ test("processToolResults commits result policy from its authoritative batch call
 test("processToolResults accepts only a successful task_summary result", async () => {
   const runtime = createRuntime();
   const committed = [];
-  const loopState = { errorLogger: null, toolConsecutiveFailureCount: 0 };
+  const loopState = { errorLogger: null };
   const modelState = {
     runtime,
     agentContext: createTestAgentExecutionScope(runtime),
@@ -259,7 +263,7 @@ test("processToolResults consumes queued user interjections only after the tool 
       eventListener: null,
       agentContext: createTestAgentExecutionScope(runtime),
     },
-    loopState: { errorLogger: null, toolConsecutiveFailureCount: 0 },
+    loopState: { errorLogger: null },
     turn: 1,
     calls: [{ id: "call-1", name: "read_file", args: {} }],
     toolMap: new Map([

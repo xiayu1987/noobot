@@ -50,6 +50,7 @@
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "@noobot/context-protocol": "file:../context-protocol",
+    "@noobot/agent-transport-protocol": "file:../agent-transport-protocol",
     "@noobot/memory-protocol": "file:../memory-protocol",
     "@noobot/memory-repair": "file:../memory-repair",
     "@noobot/connector-protocol": "file:../connector-protocol",

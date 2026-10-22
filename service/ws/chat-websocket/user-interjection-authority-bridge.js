@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { requireCommittedAuthorityEvent } from "@noobot/event-protocol/outbox";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
@@ -65,11 +66,7 @@ export function createUserInterjectionAuthorityBridge({ resolveBot, persistenceS
       producer: { type: "service", id: "websocket.user-interjection" },
       payload,
     });
-    if (!committed?.committed || !committed?.envelope) {
-      throw new Error(
-        `user interjection authority event commit failed: ${committed?.reason || "unknown"}`,
-      );
-    }
-    return committed.envelope;
+    const committedEnvelope = requireCommittedAuthorityEvent(committed);
+    return committedEnvelope;
   };
 }

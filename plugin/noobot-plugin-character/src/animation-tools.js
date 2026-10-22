@@ -214,6 +214,7 @@ export function createAnimationTools({ commitArtifact, getArtifact, resolveSelec
       artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
       artifactId: protocol.animationId,
       operation: "created",
+      baseRevision: null,
       data: { protocol, assets },
     });
   };

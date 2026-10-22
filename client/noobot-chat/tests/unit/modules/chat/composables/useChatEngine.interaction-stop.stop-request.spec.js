@@ -89,15 +89,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         parentDialogProcessId: "parent-dp",
       },
       concurrency: { expectedTurnRevision: 2 },
-      stop: {
-        partialAssistant: {
-          content: "partial answer",
-          dialogProcessId: "dp-stop-payload",
-          turnScopeId: "turn-stop-payload",
-          modelAlias: "alias-a",
-          modelName: "model-a",
-        },
-      },
+      stop: {},
     });
     expect(
       resolveSessionTurnRuntime(
@@ -143,13 +135,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           dialogProcessId: "dp-refreshed",
           turnScopeId: "turn-refreshed",
         }),
-        stop: expect.objectContaining({
-          partialAssistant: expect.objectContaining({
-            content: "partial after refresh",
-            dialogProcessId: "dp-refreshed",
-            turnScopeId: "turn-refreshed",
-          }),
-        }),
+        stop: {},
       }),
     );
   });
@@ -188,13 +174,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           dialogProcessId: "dp-channel-identity",
           turnScopeId: "turn-channel-identity",
         }),
-        stop: expect.objectContaining({
-          partialAssistant: expect.objectContaining({
-            content: "",
-            dialogProcessId: "dp-channel-identity",
-            turnScopeId: "turn-channel-identity",
-          }),
-        }),
+        stop: {},
       }),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
@@ -239,12 +219,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           dialogProcessId: "dp-user-turn-fallback",
           turnScopeId: "turn-user-fallback",
         }),
-        stop: expect.objectContaining({
-          partialAssistant: expect.objectContaining({
-            dialogProcessId: "dp-user-turn-fallback",
-            turnScopeId: "turn-user-fallback",
-          }),
-        }),
+        stop: {},
       }),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({

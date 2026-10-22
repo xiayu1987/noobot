@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { requireCommittedAuthorityEvent } from "@noobot/event-protocol/outbox";
 import { filePath as path } from "@noobot/path-resolver";
 import {
   ATTACHMENT_EVENT_TYPE,
@@ -103,11 +104,9 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
     payload: event,
     persistenceScope,
   });
-  if (!committed?.committed || !committed.envelope) {
-    throw new Error(`attachment authority event commit failed: ${committed?.reason || "unknown"}`);
-  }
+  const committedEnvelope = requireCommittedAuthorityEvent(committed);
   await emitEvent(runtime.eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
-    envelope: committed.envelope,
+    envelope: committedEnvelope,
     persistenceScope,
   });
 }

@@ -46,9 +46,7 @@ function logCardRender(stage) {
     contentLength: content.length,
     assistantBodyPresent: Boolean(content.trim()),
     nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
-    presentationMessageId: String(
-      props.messageItem?.presentationMessageId || props.messageItem?.messageId || "",
-    ),
+    presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
     registryWorkflowCount: Object.keys(props.workflowNodeStateRegistry?.workflows || {}).length,
   });
 }
@@ -72,7 +70,8 @@ watch(
         sessionId: String(session?.sessionId || ""),
         messages: (Array.isArray(session?.messages) ? session.messages : []).map(
           (message = {}) => ({
-            id: String(message?.messageId || ""),
+            messageUid: String(message?.messageUid || ""),
+            presentationMessageId: String(message?.presentationMessageId || ""),
             role: String(message?.role || ""),
             contentLength: String(message?.content || "").length,
           }),

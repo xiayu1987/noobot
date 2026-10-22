@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_TYPE,
@@ -38,6 +38,7 @@ function createListener(overrides = {}) {
 function messageEnvelope(payload = null) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
       eventId: "event-1",
       eventType: MESSAGE_EVENT_WIRE_EVENT,
@@ -73,7 +74,7 @@ test("run-event-listener forwards the committed Turn receipt only through its ex
       aggregateVersion: 7,
       userMessage: {
         messageUid: "sm_1",
-        messageId: "frontend-user-1",
+        userMessageId: "frontend-user-1",
         role: "user",
         sessionId: "root-session",
         dialogProcessId: "dialog-1",
@@ -98,7 +99,7 @@ test("run-event-listener forwards the attachment binding receipt through its exp
       aggregateVersion: 8,
       userMessage: {
         messageUid: "sm_1",
-        messageId: "frontend-user-1",
+        userMessageId: "frontend-user-1",
         role: "user",
         sessionId: "root-session",
         dialogProcessId: "dialog-1",

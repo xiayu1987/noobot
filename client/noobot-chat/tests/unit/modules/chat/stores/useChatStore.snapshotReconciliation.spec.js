@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import {
@@ -24,8 +25,8 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       parentSessionId: "main-session-1",
       messages: [
         {
-          id: "msg-user-1",
-          messageId: "msg-user-1",
+          messageUid: "msg-user-1",
+          userMessageId: "msg-user-1",
           role: "user",
           content: "run child task",
           sessionId: "sub-session-1",
@@ -51,7 +52,7 @@ describe("useChatStore sub session snapshot reconciliation", () => {
     const messages = store.selectSubSessionMessages("sub-session-1")?.messages || [];
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant"]);
     expect(messages[1]).toMatchObject({
-      id: "msg-assistant-1",
+      presentationMessageId: "msg-assistant-1",
       sessionId: "sub-session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
@@ -70,8 +71,8 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       sessionId: "sub-session-1",
       messages: [
         {
-          id: "persisted-shell-id",
-          messageId: "persisted-shell-id",
+          messageUid: "sm-persisted-shell-id",
+          presentationMessageId: "persisted-shell-id",
           role: "assistant",
           content: "",
           turnScopeId: "turn-1",
@@ -93,10 +94,9 @@ describe("useChatStore sub session snapshot reconciliation", () => {
 
     expect(result.applied).toBe(true);
     expect(assistantMessages(store)).toEqual([
-      expect.objectContaining({ id: "persisted-shell-id", content: "" }),
+      expect.objectContaining({ presentationMessageId: "persisted-shell-id", content: "" }),
       expect.objectContaining({
-        id: "canonical-message-1",
-        messageId: "canonical-message-1",
+        presentationMessageId: "canonical-message-1",
         role: "assistant",
         content: "answer",
       }),
@@ -120,8 +120,8 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       sessionId: "sub-session-1",
       messages: [
         {
-          id: "persisted-shell-id",
-          messageId: "persisted-shell-id",
+          messageUid: "sm-persisted-shell-id",
+          presentationMessageId: "persisted-shell-id",
           role: "assistant",
           content: "",
           turnScopeId: "turn-1",
@@ -131,10 +131,9 @@ describe("useChatStore sub session snapshot reconciliation", () => {
     });
 
     expect(assistantMessages(store)).toEqual([
-      expect.objectContaining({ id: "persisted-shell-id", content: "" }),
+      expect.objectContaining({ presentationMessageId: "persisted-shell-id", content: "" }),
       expect.objectContaining({
-        id: "canonical-message-1",
-        messageId: "canonical-message-1",
+        presentationMessageId: "canonical-message-1",
         content: "answer",
       }),
     ]);
@@ -162,13 +161,19 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       status: "processing",
       messages: [
         {
-          id: "msg-assistant-1",
-          messageId: "msg-assistant-1",
+          messageUid: "sm-msg-assistant-1",
+          presentationMessageId: "msg-assistant-1",
           role: "assistant",
           content: "hello",
           sequence: 1,
         },
-        { id: "msg-2", messageId: "msg-2", role: "assistant", content: "world", sequence: 2 },
+        {
+          messageUid: "sm-msg-2",
+          presentationMessageId: "msg-2",
+          role: "assistant",
+          content: "world",
+          sequence: 2,
+        },
       ],
     });
 
@@ -243,8 +248,8 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       status: "completed",
       messages: [
         {
-          id: "msg-assistant-1",
-          messageId: "msg-assistant-1",
+          messageUid: "sm-msg-assistant-1",
+          presentationMessageId: "msg-assistant-1",
           role: "assistant",
           content: "answer",
           status: "completed",
@@ -257,8 +262,7 @@ describe("useChatStore sub session snapshot reconciliation", () => {
 
     const message = assistantMessages(store)[0];
     expect(message).toMatchObject({
-      id: "msg-assistant-1",
-      messageId: "msg-assistant-1",
+      presentationMessageId: "msg-assistant-1",
       status: "completed",
       pending: false,
       pluginMeta: { interaction: null },
@@ -306,16 +310,16 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       sessionId: "sub-session-1",
       messages: [
         {
-          id: "msg-assistant-1",
-          messageId: "msg-assistant-1",
+          messageUid: "sm-msg-assistant-1",
+          presentationMessageId: "msg-assistant-1",
           role: "assistant",
           content: "hello",
           turnScopeId: "turn-1",
           sequence: 1,
         },
         {
-          id: "msg-tool-1",
-          messageId: "msg-tool-1",
+          messageUid: "msg-tool-1",
+          presentationMessageId: "msg-assistant-1",
           role: "tool",
           content: "ok",
           toolCallId: "call-1",
@@ -327,9 +331,6 @@ describe("useChatStore sub session snapshot reconciliation", () => {
     const messages = (store.selectSubSessionMessages("sub-session-1")?.messages || []).filter(
       (message) => message.role !== "user",
     );
-    expect(messages.map((message) => message.id)).toEqual(["msg-assistant-1", "msg-tool-1"]);
-    expect(messages).toHaveLength(2);
-    expect(messages.some((message) => String(message.id).includes("turn-1:assistant"))).toBe(false);
-    expect(messages.some((message) => String(message.id).includes("tool:call-1"))).toBe(false);
+    expect(messages.map(resolveMessageViewKey)).toEqual(["msg-assistant-1", "msg-tool-1"]);
   });
 });

@@ -61,6 +61,7 @@ function baseSession(overrides = {}) {
       { role: "user", content: "old", dialogProcessId: "dp-old", turnScopeId: "scope-old" },
       {
         role: "assistant",
+        modelMessageId: "mm_session_message_service__1",
         content: "old answer",
         dialogProcessId: "dp-old",
         turnScopeId: "scope-old",
@@ -113,12 +114,22 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
             type: "turn.completed",
             turnScopeId: "scope-keep",
             requestHash: "keep",
+            committedAt: "2026-07-18T00:00:00.000Z",
+            revision: 1,
+            sequence: 1,
+            eventId: "event-keep-receipt",
+            envelope: { identity: { eventId: "event-keep-receipt" } },
           },
           {
             commandId: "old-receipt",
             type: "turn.stop_completed",
             turnScopeId: "scope-old",
             requestHash: "old",
+            committedAt: "2026-07-18T00:00:00.000Z",
+            revision: 4,
+            sequence: 8,
+            eventId: "event-old-receipt",
+            envelope: { identity: { eventId: "event-old-receipt" } },
           },
         ],
       },
@@ -156,7 +167,7 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
     replacedTurnScopeIds: ["scope-old", "scope-tail"],
     replacementDialogProcessId: saved[0].messages[1].dialogProcessId,
     replacementTurnScopeId: "turn-scope-new",
-    replacementUserMessageId: saved[0].messages[1].messageId,
+    replacementUserMessageUid: saved[0].messages[1].messageUid,
     requestHash: result.turnReplacement.requestHash,
     committedAt: "2026-06-22T00:00:00.000Z",
   });
@@ -168,7 +179,8 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].messages[1].role, "user");
   assert.equal(saved[0].messages[1].turnId, undefined);
   assert.match(saved[0].messages[1].messageUid, /^sm_/);
-  assert.equal(saved[0].messages[1].messageId, saved[0].messages[1].messageUid);
+  assert.equal(Object.hasOwn(saved[0].messages[1], "messageId"), false);
+  assert.match(saved[0].messages[1].userMessageId, /^um_/);
   assert.equal("id" in saved[0].messages[1], false);
   assert.equal(saved[0].messages[1].turnScopeId, "turn-scope-new");
   assert.equal(saved[0].messages[1].dialogProcessId, "dialog-replacement");
@@ -279,6 +291,7 @@ test("SessionMessageService.replaceTurn persists only the incoming canonical att
         },
         {
           role: "assistant",
+          modelMessageId: "mm_session_message_service__2",
           content: "old answer",
           dialogProcessId: "dp-old",
           turnScopeId: "scope-old",
@@ -344,6 +357,7 @@ test("SessionMessageService.replaceTurn rejects attachments without stable ident
         },
         {
           role: "assistant",
+          modelMessageId: "mm_session_message_service__3",
           content: "old answer",
           dialogProcessId: "dp-old",
           turnScopeId: "scope-old",
@@ -409,7 +423,12 @@ test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
     initialSession: baseSession({
       messages: [
         { role: "user", content: "old", ts: "ts-user" },
-        { role: "assistant", content: "old answer", ts: "ts-assistant" },
+        {
+          role: "assistant",
+          modelMessageId: "mm_session_message_service__4",
+          content: "old answer",
+          ts: "ts-assistant",
+        },
       ],
     }),
   });
@@ -432,7 +451,12 @@ test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors",
     initialSession: baseSession({
       messages: [
         { role: "user", content: "first", dialogId: "dp-compat" },
-        { role: "assistant", content: "answer", dialogId: "dp-compat" },
+        {
+          role: "assistant",
+          modelMessageId: "mm_session_message_service__5",
+          content: "answer",
+          dialogId: "dp-compat",
+        },
         { role: "user", content: "tail", dialogId: "dp-tail" },
       ],
     }),
@@ -548,7 +572,6 @@ test("SessionMessageService.assertReusedUserTurnIdentity accepts the exact commi
           dialogProcessId: "dp-new",
           turnScopeId: "scope-edited",
           messageOrigin: "natural",
-          userMetaMaterialized: true,
           attachments,
         },
       ],

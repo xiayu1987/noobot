@@ -29,6 +29,13 @@ import { text } from "@noobot/shared/value";
 
 const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
+const MESSAGE_IDENTITY_FIELDS = Object.freeze([
+  "messageUid",
+  "presentationMessageId",
+  "userMessageId",
+  "modelMessageId",
+]);
+
 function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
   const attachmentAccess = resolveAttachmentAccessMeta(attachmentItem, { userId });
   const attachmentId = attachmentAccess.attachmentId;
@@ -47,19 +54,16 @@ function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
 }
 
 function buildMessageIdentityFacet(canonicalMessage = {}) {
-  const sessionId = text(canonicalMessage?.sessionId);
-  const messageRole = getMessageRole(canonicalMessage) || "assistant";
-  const sourceMessageId = text(canonicalMessage?.messageId);
-  const presentationMessageId = text(canonicalMessage?.presentationMessageId);
-  const messageId =
-    messageRole === "assistant" && presentationMessageId ? presentationMessageId : sourceMessageId;
+  const identity = Object.fromEntries(
+    MESSAGE_IDENTITY_FIELDS.map((field) => [field, text(canonicalMessage?.[field])]).filter(
+      ([, value]) => value,
+    ),
+  );
   return {
-    messageId,
-    ...(presentationMessageId ? { presentationMessageId } : {}),
-    ...(sourceMessageId && sourceMessageId !== messageId ? { sourceMessageId } : {}),
+    ...identity,
     turnScopeId: getMessageTurnScopeId(canonicalMessage),
-    sessionId,
-    role: messageRole,
+    sessionId: text(canonicalMessage?.sessionId),
+    role: getMessageRole(canonicalMessage) || "assistant",
     dialogProcessId: getMessageDialogProcessId(canonicalMessage),
     parentDialogProcessId: getMessageParentDialogProcessId(canonicalMessage),
   };

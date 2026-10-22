@@ -124,8 +124,6 @@ describe("useChatSession send/continue actions", () => {
   it("sends a user interjection to the active turn and clears the accepted draft", async () => {
     const store = useChatStore();
     const assistant = {
-      id: "msg-turn-interject",
-      messageId: "msg-turn-interject",
       presentationMessageId: "msg-turn-interject",
       role: "assistant",
       sessionId: "s-interject",
@@ -201,8 +199,6 @@ describe("useChatSession send/continue actions", () => {
     const store = useChatStore();
     const notify = vi.fn();
     const assistant = {
-      id: "msg-turn-interject-failed",
-      messageId: "msg-turn-interject-failed",
       presentationMessageId: "msg-turn-interject-failed",
       role: "assistant",
       sessionId: "s-interject-failed",

@@ -5,6 +5,7 @@
  */
 import { expect } from "@playwright/test";
 import {
+  SNAPSHOT_VERSION,
   composeMessagesFromBlocks,
   hydrateModelContextSnapshot,
   projectSnapshotIncrementalToContinuation,
@@ -20,7 +21,7 @@ function isPlainObject(value) {
 }
 
 export function assertModelMessageSnapshot(snapshot) {
-  expect(snapshot.version).toBe(3);
+  expect(snapshot.version).toBe(SNAPSHOT_VERSION);
   expect(snapshot.sessionId).toBeTruthy();
   expect(snapshot.dialogProcessId).toBeTruthy();
   expect(snapshot.turnScopeId).toBeTruthy();
@@ -29,16 +30,12 @@ export function assertModelMessageSnapshot(snapshot) {
     for (const block of snapshot.messageBlocks[name]) expect(isPlainObject(block)).toBe(true);
   }
   expect(Array.isArray(snapshot.userMetaBackwrites)).toBe(true);
-  const backwriteIds = new Set();
   const backwriteRelations = new Set();
   for (const backwrite of snapshot.userMetaBackwrites) {
     expect(isPlainObject(backwrite)).toBe(true);
-    expect(text(backwrite.backwriteId)).toBeTruthy();
-    expect(text(backwrite.userMetaMessageUid)).toBeTruthy();
+    expect(text(backwrite.userMetaSourceMessageUid)).toBeTruthy();
     expect(text(backwrite.attachmentRef)).toBeTruthy();
-    expect(backwriteIds.has(backwrite.backwriteId)).toBe(false);
-    backwriteIds.add(backwrite.backwriteId);
-    const relation = `${backwrite.userMetaMessageUid}::${backwrite.attachmentRef}`;
+    const relation = JSON.stringify([backwrite.userMetaSourceMessageUid, backwrite.attachmentRef]);
     expect(backwriteRelations.has(relation)).toBe(false);
     backwriteRelations.add(relation);
   }

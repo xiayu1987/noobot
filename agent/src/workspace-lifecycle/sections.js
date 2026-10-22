@@ -27,6 +27,7 @@ import { upgradeSessionStorage } from "./session-storage-upgrade.js";
 import { upgradeSessionLifecycle } from "./session-lifecycle-upgrade.js";
 import { upgradeSessionTransferEnvelopes } from "./session-transfer-envelope-upgrade.js";
 import { upgradeModelContextSnapshots } from "./model-context-snapshot-upgrade.js";
+import { upgradeSessionMessageIdentity } from "./session-message-identity-upgrade.js";
 import { releaseQuarantinedUnits } from "./migration-quarantine.js";
 
 const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
@@ -34,12 +35,14 @@ const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE]: upgradeSessionLifecycle,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE]: upgradeSessionTransferEnvelopes,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT]: upgradeModelContextSnapshots,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY]: upgradeSessionMessageIdentity,
 });
 
 const QUARANTINE_RETRY_OWNERS = Object.freeze([
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
 ]);
 
 const retriedQuarantines = new Set();

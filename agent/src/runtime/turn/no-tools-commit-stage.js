@@ -19,7 +19,7 @@ export async function commitNoToolsTurnState({
   modelResponse = null,
   responseContentText = "",
   turn,
-  messageId = "",
+  modelMessageId = "",
   messageUid = "",
   presentationMessageId = "",
 } = {}) {
@@ -53,7 +53,7 @@ export async function commitNoToolsTurnState({
     toolCalls: [],
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
-    messageId,
+    modelMessageId,
     messageUid,
     presentationMessageId,
     chatPresentation: true,
@@ -62,7 +62,7 @@ export async function commitNoToolsTurnState({
       runtime,
       eventListener,
       dialogProcessId,
-      messageId,
+      modelMessageId,
       turnMessageStore,
     }),
   });

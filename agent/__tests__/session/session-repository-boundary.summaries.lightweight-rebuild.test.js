@@ -93,7 +93,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     sessionB.messages = canonicalMessages(
       [
         {
-          messageId: "u1",
+          userMessageId: "u1",
           messageUid: "sm-u1",
           role: "user",
           turnScopeId: "turn-scope-u1",
@@ -111,13 +111,13 @@ test("session display summary should keep chat view lightweight and rebuild stal
           ],
         },
         {
-          messageId: "i1",
           role: "system",
           injectedMessage: true,
           content: "injected secret should not be in summary",
         },
         {
-          messageId: "a1",
+          modelMessageId: "a1",
+          presentationMessageId: "a1",
           role: "assistant",
           turnScopeId: "turn-scope-u1",
           dialogProcessId: "dp-u1",
@@ -145,11 +145,19 @@ test("session display summary should keep chat view lightweight and rebuild stal
           tool_calls: [
             { id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } },
           ],
-          rawMessages: [{ role: "assistant", content: "raw" }],
+          rawMessages: [
+            {
+              role: "assistant",
+              presentationMessageId: "pm_fx1",
+              modelMessageId: "mm_session_repository_bound_1",
+              content: "raw",
+            },
+          ],
         },
         {
-          messageId: "plugin-attachment-assistant",
+          modelMessageId: "plugin-attachment-assistant",
           role: "assistant",
+          presentationMessageId: "pm_fx2",
           turnScopeId: "turn-scope-plugin",
           content: "plugin attachment result",
           attachments: [
@@ -167,6 +175,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         },
         {
           role: "tool",
+          presentationMessageId: "pm_fx3",
           type: "tool_result",
           turnScopeId: "turn-scope-u1",
           dialogProcessId: "dp-u1",
@@ -180,12 +189,13 @@ test("session display summary should keep chat view lightweight and rebuild stal
         },
         {
           role: "tool",
+          presentationMessageId: "pm_fx4",
           type: "tool_result",
           tool_call_id: "call-2",
           content: "ordinary tool result should not be in summary".repeat(20),
         },
         {
-          messageId: "w1",
+          modelMessageId: "w1",
           role: "assistant",
           type: "workflow",
           turnScopeId: "turn-scope-workflow",
@@ -252,14 +262,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
           transferEnvelopes: [workflowTransferEnvelope],
         },
         {
-          messageId: "u2",
+          userMessageId: "u2",
           role: "user",
           type: "message",
           dialogProcessId: "dp-tool-only",
           content: "run tool only thinking details",
         },
         {
-          messageId: "tool-display-assistant",
+          modelMessageId: "tool-display-assistant",
+          presentationMessageId: "tool-display-assistant",
           role: "assistant",
           type: "message",
           dialogProcessId: "dp-tool-only",
@@ -282,6 +293,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
         },
         {
           role: "assistant",
+          presentationMessageId: "pm_fx5",
+          modelMessageId: "mm_session_repository_bound_2",
           type: "tool_call",
           dialogProcessId: "dp-tool-only",
           tool_calls: [
@@ -290,6 +303,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         },
         {
           role: "tool",
+          presentationMessageId: "pm_fx6",
           type: "tool_result",
           dialogProcessId: "dp-tool-only",
           tool_call_id: "call-tool-only",
@@ -331,8 +345,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
       true,
     );
     assert.deepEqual(
-      (({ messageId, messageUid }) => ({ messageId, messageUid }))(summary.messages[0]),
-      { messageId: "u1", messageUid: "sm-u1" },
+      (({ userMessageId, messageUid }) => ({ userMessageId, messageUid }))(summary.messages[0]),
+      { userMessageId: "u1", messageUid: "sm-u1" },
     );
     assert.equal(summary.stats.messageCount, 11);
     assert.equal(summary.stats.displayMessageCount, 6);
@@ -343,9 +357,13 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.displayToolLogCount, 0);
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal("toolLogSummaries" in summary, false);
-    assert.equal(summary.messages.find((item) => item.messageId === "a1").toolTimeline, undefined);
     assert.equal(
-      typeof summary.messages.find((item) => item.messageId === "a1").thinkingDetailRef?.file,
+      summary.messages.find((item) => item.presentationMessageId === "a1").toolTimeline,
+      undefined,
+    );
+    assert.equal(
+      typeof summary.messages.find((item) => item.presentationMessageId === "a1").thinkingDetailRef
+        ?.file,
       "string",
     );
     const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
@@ -358,7 +376,9 @@ test("session display summary should keep chat view lightweight and rebuild stal
         ),
       },
     );
-    const assistantMessage = hydratedSummary.messages.find((item) => item.messageId === "a1");
+    const assistantMessage = hydratedSummary.messages.find(
+      (item) => item.presentationMessageId === "a1",
+    );
     assert.equal(assistantMessage.toolTimeline.length, 1);
     assert.equal(assistantMessage.toolTimeline[0].status, "completed");
     assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);
@@ -369,7 +389,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
       false,
     );
 
-    const userMessage = summary.messages.find((item) => item.messageId === "u1");
+    const userMessage = summary.messages.find((item) => item.userMessageId === "u1");
     assert.equal(userMessage.turnScopeId, "turn-scope-u1");
     assert.equal(userMessage.content, longUserContent);
     assert.equal(userMessage.content.endsWith(userContentTail), true);
@@ -396,7 +416,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
     const pluginAttachmentAssistant = summary.messages.find(
-      (item) => item.messageId === "plugin-attachment-assistant",
+      (item) => item.modelMessageId === "plugin-attachment-assistant",
     );
     assert.deepEqual(pluginAttachmentAssistant.attachments, [
       {
@@ -414,7 +434,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("type" in pluginAttachmentAssistant.attachments[0], false);
     assert.equal("source" in pluginAttachmentAssistant.attachments[0], false);
     const toolOnlyAssistantMessage = summary.messages.find(
-      (item) => item.messageId === "tool-display-assistant",
+      (item) => item.presentationMessageId === "tool-display-assistant",
     );
     assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
     assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
@@ -422,7 +442,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("realtimeLogs" in toolOnlyAssistantMessage, false);
     assert.equal("completedToolLogs" in toolOnlyAssistantMessage, false);
     assert.equal(JSON.stringify(summary.messages).includes("tool only result detail"), false);
-    const workflowMessage = summary.messages.find((item) => item.messageId === "w1");
+    const workflowMessage = summary.messages.find((item) => item.presentationMessageId === "w1");
     assert.equal(workflowMessage.type, "workflow");
     assert.equal(workflowMessage.pluginMeta.payload.workflowRunId, "workflow-run-1");
     assert.equal(workflowMessage.content, longWorkflowContent);

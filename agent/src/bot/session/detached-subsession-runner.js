@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createPresentationMessageId } from "@noobot/session-protocol/message-identity";
+import {
+  createPresentationMessageId,
+  createUserMessageId,
+} from "@noobot/session-protocol/message-identity";
 import { AGENT_RUN_EVENT, createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
@@ -79,7 +82,6 @@ async function runDetachedSubSession(dependencies, request) {
     prepared.effectiveRunConfig.thinkingStartedAt,
     prepared.message,
     identity,
-    prepared.effectiveRunConfig,
   );
   await dependencies.session.writeSessionMetadata({
     userId: identity.userId,
@@ -106,7 +108,10 @@ async function runDetachedSubSession(dependencies, request) {
   return projectDetachedResult(result, identity, terminalLifecycle);
 }
 
-function assertDetachedRunnerDependencies({ sessionRunner, session }) {
+function assertDetachedRunnerDependencies({ sessionRunner, session, prepareRunConfig }) {
+  if (!isFunction(prepareRunConfig)) {
+    throw new Error("detached sub-session runner requires prepareRunConfig");
+  }
   if (!isFunction(sessionRunner?.runSession)) {
     throw new Error("detached sub-session runner requires the main SessionExecutionRunner");
   }
@@ -357,7 +362,7 @@ function lifecycleCommandId(lifecycle, eventType, phase = "") {
   return createTurnLifecycleCommandId({ commandId: lifecycle.commandId, eventType, phase });
 }
 
-async function commitDetachedStart(lifecycle, startedAt, message, identity, runConfig) {
+async function commitDetachedStart(lifecycle, startedAt, message, identity) {
   const accepted = await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.ACTION_ACCEPTED),
     causationId: lifecycle.commandId,
@@ -371,10 +376,9 @@ async function commitDetachedStart(lifecycle, startedAt, message, identity, runC
     expectedRevision: 0,
     userMessage: {
       content: message,
-      messageId: text(runConfig?.userMessageId),
+      userMessageId: createUserMessageId(),
       parentDialogProcessId: identity.parentDialogProcessId,
       messageOrigin: "internal",
-      userMetaMaterialized: false,
     },
   });
   await lifecycle.commit({

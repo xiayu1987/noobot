@@ -7,17 +7,12 @@
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { emitEvent } from "../../events/index.js";
 import {
+  assertOptionalHookManager,
   createEmptyHookResult,
   HOOK_CANCELLATION_MODE,
   requireHookPointDescriptor,
 } from "@noobot/hook-protocol";
 import { text } from "@noobot/shared/value";
-
-function resolveBotRuntimeHookManager(runtime = {}) {
-  return runtime?.botHookManager && typeof runtime.botHookManager.emit === "function"
-    ? runtime.botHookManager
-    : null;
-}
 
 function resolveBotHookRuntimeMeta({
   userId = "",
@@ -35,19 +30,18 @@ function resolveBotHookRuntimeMeta({
   };
 }
 
-export function withBotHookRuntimeMeta(meta = {}, context = {}) {
-  const safeContext = context && typeof context === "object" ? context : {};
+export function withBotHookRuntimeMeta(meta, context) {
   return {
     ...resolveBotHookRuntimeMeta(meta),
-    ...safeContext,
+    ...context,
   };
 }
 
 export async function runBotRuntimeHook({ runtime, point, context = {} }) {
   const descriptor = requireHookPointDescriptor(point);
   const normalizedPoint = descriptor.point;
-  const manager = resolveBotRuntimeHookManager(runtime);
-  if (!manager) {
+  const manager = assertOptionalHookManager(runtime.botHookManager, "botHookManager");
+  if (manager === null) {
     return createEmptyHookResult(normalizedPoint, context);
   }
   const listener = runtime.eventListener;

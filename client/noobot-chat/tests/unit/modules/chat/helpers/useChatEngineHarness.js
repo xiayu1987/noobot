@@ -28,6 +28,7 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { text } from "@noobot/shared/value";
+import { createSessionMessageView } from "../../../../../src/modules/chat/runtime/session/messageView.js";
 import { terminalStatusFixture } from "./terminalStatusFixture.js";
 
 const terminalResolutionFromUrl = (
@@ -123,7 +124,7 @@ export function makeTurnReplacementResponse({
       replacedTurnScopeIds,
       replacementDialogProcessId,
       replacementTurnScopeId: replacementUser.turnScopeId,
-      replacementUserMessageId: replacementUser.messageId,
+      replacementUserMessageUid: replacementUser.messageUid,
       requestHash: `test-request:${commandId}`,
       committedAt: "2026-07-31T00:00:00.000Z",
     }),
@@ -228,39 +229,24 @@ export const createHarness = ({
     return message;
   });
 
-  const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
-    const normalizedMessageId = text(messageId);
-    if (!normalizedMessageId) return null;
-    const existing = activeSession.value.messages.find(
-      (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
-    );
-    if (existing) return existing;
-    const message = appendMessage(RoleEnum.ASSISTANT, "", [], {
-      ...identity,
-      id: normalizedMessageId,
-      messageId: normalizedMessageId,
-    });
-    Object.assign(message, identity, {
-      id: normalizedMessageId,
-      messageId: normalizedMessageId,
-    });
-    return message;
+  const messageView = createSessionMessageView({
+    sessions,
+    activeSession,
+    activeSessionId,
+    userId: ref("u-1"),
+    isImageMime: () => false,
   });
-
-  const findCanonicalMessageById = vi.fn((targetSessionId, messageId) => {
-    const normalizedSessionId = text(targetSessionId);
-    const normalizedMessageId = text(messageId);
-    if (!normalizedSessionId || !normalizedMessageId) return null;
-    const targetSession = sessions.value.find((sessionItem) =>
-      [sessionItem?.id, sessionItem?.sessionId, sessionItem?.sessionId].some(
-        (candidate) => text(candidate) === normalizedSessionId,
-      ),
-    );
-    return (
-      targetSession?.messages?.find(
-        (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
-      ) || null
-    );
+  const findMessageByViewKey = vi.fn(messageView.findMessageByViewKey);
+  const upsertCanonicalAssistantMessage = vi.fn((presentationMessageId, identity = {}) => {
+    const normalizedPresentationId = text(presentationMessageId);
+    if (!normalizedPresentationId) return null;
+    const sessionId = text(identity?.sessionId || activeSession.value?.sessionId);
+    const existing = messageView.findMessageByViewKey(sessionId, normalizedPresentationId);
+    if (existing) return existing;
+    return appendMessage(RoleEnum.ASSISTANT, "", [], {
+      ...identity,
+      presentationMessageId: normalizedPresentationId,
+    });
   });
 
   const defaultDeps = {
@@ -281,7 +267,10 @@ export const createHarness = ({
     clearUploads: vi.fn(),
     serializeAttachments: vi.fn(async () => []),
     appendMessage,
-    findCanonicalMessageById,
+    findMessageByViewKey,
+    findMessagesByPresentationId: messageView.findMessagesByPresentationId,
+    findUserMessageForCommit: messageView.findUserMessageForCommit,
+    materializeTurnPresentation: messageView.materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage: (message) => ({ ...message }),
     fetchSessionDetail: vi.fn(async () => ({})),

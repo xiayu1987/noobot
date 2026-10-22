@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { requireCommittedAuthorityEvent } from "@noobot/event-protocol/outbox";
 import {
   EVENT_FAMILY,
   INTERACTION_EVENT_TYPE,
@@ -43,11 +44,7 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
       payload: domainPayload,
       persistenceScope,
     });
-    if (!committed?.committed || !committed?.envelope) {
-      throw new Error(
-        `interaction authority event commit failed: ${committed?.reason || "unknown"}`,
-      );
-    }
+    const committedEnvelope = requireCommittedAuthorityEvent(committed);
     const dispatch = await dispatchAuthorityEvents({
       userId: clean(userId),
       sessionId,
@@ -56,6 +53,6 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
     if (dispatch?.dispatched !== true) {
       throw new Error(dispatch?.reason || "interaction_authority_dispatch_failed");
     }
-    return committed.envelope;
+    return committedEnvelope;
   };
 }

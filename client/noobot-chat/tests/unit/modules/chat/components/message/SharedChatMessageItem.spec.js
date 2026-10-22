@@ -21,6 +21,7 @@ import {
   canonicalWorkflowSessionSnapshot,
 } from "../../helpers/workflowRuntimeEventFixture.js";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
@@ -121,14 +122,12 @@ const TestRenderer = defineComponent({
   name: "SharedMessageContextProbe",
   props: {
     attachmentCount: { type: Number, default: 0 },
-    legacyAttachmentCount: { type: Number, default: 0 },
   },
   setup(props) {
     return () =>
       h("div", {
         class: "context-probe",
         "data-attachment-count": String(props.attachmentCount),
-        "data-legacy-attachment-count": String(props.legacyAttachmentCount),
       });
   },
 });
@@ -173,7 +172,7 @@ function mountItem(props = {}) {
   return mount(SharedChatMessageItem, {
     props: {
       messageItem: {
-        id: "msg-1",
+        presentationMessageId: "msg-1",
         role: "assistant",
         content: "hello",
         attachments: [
@@ -235,7 +234,7 @@ describe("SharedChatMessageItem", () => {
   it("applies one outer breathing state only while both runtime panels are visible and running", async () => {
     const wrapper = mountItem({
       messageItem: {
-        id: "runtime-panels-running",
+        presentationMessageId: "runtime-panels-running",
         thinkingProbeVisible: true,
         role: "assistant",
         content: "",
@@ -266,7 +265,7 @@ describe("SharedChatMessageItem", () => {
   it("does not breathe when the host thinking panel has no visible content", async () => {
     const wrapper = mountItem({
       messageItem: {
-        id: "runtime-panel-hidden",
+        presentationMessageId: "runtime-panel-hidden",
         role: "assistant",
         content: "",
         sessionId: "runtime-panels-session",
@@ -297,7 +296,7 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem({
       currentTurn: true,
       messageItem: {
-        id: "assistant-current",
+        presentationMessageId: "assistant-current",
         role: "assistant",
         content: "current body",
         sessionId: "session-content",
@@ -315,7 +314,7 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem({
       currentTurn: false,
       messageItem: {
-        id: "assistant-history",
+        presentationMessageId: "assistant-history",
         role: "assistant",
         content: "historical body",
         sessionId: "session-content",
@@ -333,7 +332,7 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem({
       currentTurn: true,
       messageItem: {
-        id: "assistant-explicit-history",
+        presentationMessageId: "assistant-explicit-history",
         role: "assistant",
         content: "explicit historical body",
         sessionId: "session-content",
@@ -352,7 +351,7 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem({
       currentTurn: false,
       messageItem: {
-        id: "assistant-assets-history",
+        presentationMessageId: "assistant-assets-history",
         role: "assistant",
         content: "collapsed body",
         sessionId: "session-content",
@@ -377,7 +376,7 @@ describe("SharedChatMessageItem", () => {
   it("hides the message type tag for an empty assistant thinking host", () => {
     const wrapper = mountItem({
       messageItem: {
-        id: "thinking-placeholder",
+        presentationMessageId: "thinking-placeholder",
         role: "assistant",
         type: "message",
         content: "",
@@ -393,7 +392,7 @@ describe("SharedChatMessageItem", () => {
   it("keeps the type tag for persisted workflow messages", () => {
     const wrapper = mountItem({
       messageItem: {
-        id: "workflow-1",
+        presentationMessageId: "workflow-1",
         role: "assistant",
         type: "workflow",
         content: "WORKFLOW_DSL/1",
@@ -420,7 +419,7 @@ describe("SharedChatMessageItem", () => {
           }),
         ),
       messageItem: {
-        id: "workflow-thinking-host",
+        presentationMessageId: "workflow-thinking-host",
         role: "assistant",
         type: "message",
         content: "",
@@ -437,7 +436,7 @@ describe("SharedChatMessageItem", () => {
   it("keeps the assistant header when workflow ownership arrives after mount", async () => {
     const wrapper = mountItem({
       messageItem: {
-        id: "workflow-thinking-host-late",
+        presentationMessageId: "workflow-thinking-host-late",
         role: "assistant",
         type: "message",
         content: "",
@@ -464,19 +463,16 @@ describe("SharedChatMessageItem", () => {
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
   });
 
-  it("passes displayed attachments to message card renderers with the legacy alias", () => {
+  it("passes displayed attachments to message card renderers", () => {
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
       pluginId: "shared-message-context-probe",
       id: "shared-message-context-probe:card",
       slot: "pre",
       component: TestRenderer,
-      when: (context = {}) => context?.messageItem?.id === "msg-1",
+      when: (context = {}) => resolveMessageViewKey(context?.messageItem) === "msg-1",
       resolveProps: (context = {}) => ({
         attachmentCount: Array.isArray(context.displayedAttachments)
           ? context.displayedAttachments.length
-          : -1,
-        legacyAttachmentCount: Array.isArray(context.displayedAttachmentMetas)
-          ? context.displayedAttachmentMetas.length
           : -1,
       }),
     });
@@ -486,7 +482,6 @@ describe("SharedChatMessageItem", () => {
 
     expect(probe.exists()).toBe(true);
     expect(probe.attributes("data-attachment-count")).toBe("1");
-    expect(probe.attributes("data-legacy-attachment-count")).toBe("1");
   });
 
   it("passes refreshed transfer envelope attachments through displayed attachments", () => {
@@ -495,20 +490,17 @@ describe("SharedChatMessageItem", () => {
       id: "shared-message-transfer-context-probe:card",
       slot: "pre",
       component: TestRenderer,
-      when: (context = {}) => context?.messageItem?.id === "msg-transfer",
+      when: (context = {}) => resolveMessageViewKey(context?.messageItem) === "msg-transfer",
       resolveProps: (context = {}) => ({
         attachmentCount: Array.isArray(context.displayedAttachments)
           ? context.displayedAttachments.length
-          : -1,
-        legacyAttachmentCount: Array.isArray(context.displayedAttachmentMetas)
-          ? context.displayedAttachmentMetas.length
           : -1,
       }),
     });
 
     const wrapper = mountItem({
       messageItem: {
-        id: "msg-transfer",
+        presentationMessageId: "msg-transfer",
         role: "assistant",
         content: "done",
         sessionId: "session-1",
@@ -557,7 +549,6 @@ describe("SharedChatMessageItem", () => {
 
     expect(probe.exists()).toBe(true);
     expect(probe.attributes("data-attachment-count")).toBe("1");
-    expect(probe.attributes("data-legacy-attachment-count")).toBe("1");
   });
 
   it("projects child-session persisted turn timing into the canonical renderer context", () => {
@@ -566,7 +557,7 @@ describe("SharedChatMessageItem", () => {
       id: "shared-message-runtime-probe:card",
       slot: "pre",
       component: RuntimeRenderer,
-      when: (context = {}) => context?.messageItem?.id === "msg-child-timing",
+      when: (context = {}) => resolveMessageViewKey(context?.messageItem) === "msg-child-timing",
       resolveProps: (context = {}) => ({
         startedAt: context?.messageRuntime?.startedAt || "",
         finishedAt: context?.messageRuntime?.finishedAt || "",
@@ -595,7 +586,7 @@ describe("SharedChatMessageItem", () => {
           { source: "test_snapshot" },
         ),
       messageItem: {
-        id: "msg-child-timing",
+        presentationMessageId: "msg-child-timing",
         role: "assistant",
         content: "child result",
         sessionId: "child-session",
@@ -629,7 +620,7 @@ describe("SharedChatMessageItem", () => {
       id: "shared-message-terminal-runtime-probe:card",
       slot: "pre",
       component: RuntimeRenderer,
-      when: (context = {}) => context?.messageItem?.id === "msg-child-terminal",
+      when: (context = {}) => resolveMessageViewKey(context?.messageItem) === "msg-child-terminal",
       resolveProps: (context = {}) => ({
         startedAt: context?.messageRuntime?.startedAt || "",
         finishedAt: context?.messageRuntime?.finishedAt || "",
@@ -667,7 +658,7 @@ describe("SharedChatMessageItem", () => {
         );
       },
       messageItem: {
-        id: "msg-child-terminal",
+        presentationMessageId: "msg-child-terminal",
         role: "assistant",
         content: "child result",
         sessionId: "child-session-terminal",
@@ -701,7 +692,7 @@ describe("SharedChatMessageItem", () => {
       slot: "post",
       suppressDefaultAssets: true,
       component: AssetRenderer,
-      when: (context = {}) => context?.messageItem?.id === "msg-assets-suppress",
+      when: (context = {}) => resolveMessageViewKey(context?.messageItem) === "msg-assets-suppress",
       resolveProps: (context = {}) => ({
         attachmentCount: Array.isArray(context.displayedAttachments)
           ? context.displayedAttachments.length
@@ -711,7 +702,7 @@ describe("SharedChatMessageItem", () => {
 
     const wrapper = mountItem({
       messageItem: {
-        id: "msg-assets-suppress",
+        presentationMessageId: "msg-assets-suppress",
         role: "assistant",
         content: "done",
         attachments: [

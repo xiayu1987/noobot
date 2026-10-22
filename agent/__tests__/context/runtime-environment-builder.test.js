@@ -25,7 +25,7 @@ function buildStaticInfoFor({ runtimeBasePath, userId, globalConfig }) {
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 test("createRuntimeContext passes inputs through and creates turn stores", () => {
-  const hookManager = { emit() {} };
+  const hookManager = { on() {}, emit() {} };
   const runtime = createTestRuntimeContext({
     basePath: "/workspace/u1",
     sharedTools: {
@@ -117,7 +117,7 @@ test("initializeRuntimeEnvironment wires shared tools without connector implemen
         },
       },
     },
-    runConfig: {},
+    runConfig: { hookManager: null },
     systemRuntime: {
       sessionId: "s1",
       rootSessionId: "r1",
@@ -166,7 +166,7 @@ test("initializeRuntimeEnvironment provides fetch independently of the Node glob
     globalThis.fetch = undefined;
     const runtime = createTestRuntimeContext({
       basePath: "/host/users/u1",
-      runConfig: {},
+      runConfig: { hookManager: null },
       systemRuntime: { sessionId: "s1", rootSessionId: "s1" },
     });
 
@@ -181,7 +181,6 @@ test("initializeRuntimeEnvironment provides fetch independently of the Node glob
 test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runtime identity", async () => {
   const overflowContent = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1);
   const runtime = createTestRuntimeContext({
-    userId: "primary-user",
     basePath: "/home/xiayu/projects/noobot/workspace/primary-user",
     globalConfig: {
       security: {
@@ -212,6 +211,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
       },
     },
     runConfig: {
+      hookManager: null,
       presentationMessageId: "message-runtime-context-basepath",
       turnScopeId: "turn-runtime-context-basepath",
       executionId: "run-runtime-context-basepath",

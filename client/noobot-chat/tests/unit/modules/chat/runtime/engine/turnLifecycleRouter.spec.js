@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { createSessionMessageView } from "../../../../../../src/modules/chat/runtime/session/messageView.js";
 import {
   routeCurrentTurnLifecycleEvent,
   routeForeignTurnLifecycleEvent,
@@ -97,11 +98,20 @@ describe("foreign Turn lifecycle routing", () => {
   });
 });
 
+function viewFor(activeSession) {
+  return createSessionMessageView({
+    sessions: { value: [activeSession.value] },
+    activeSession,
+    activeSessionId: { value: activeSession.value.sessionId },
+    userId: { value: "u-1" },
+    isImageMime: () => false,
+  });
+}
+
 describe("committed user Turn routing", () => {
   it("applies commit and attachment binding as consecutive authoritative mutations", () => {
     const draftMessage = {
-      id: "frontend-user-1",
-      messageId: "frontend-user-1",
+      userMessageId: "frontend-user-1",
       role: "user",
       turnScopeId: "client-turn:1",
       attachments: [{ clientAttachmentId: "draft-1", name: "old.docx" }],
@@ -132,8 +142,7 @@ describe("committed user Turn routing", () => {
           turnScopeId: "client-turn:1",
           userMessage: {
             messageUid: "sm_1",
-            id: "frontend-user-1",
-            messageId: "frontend-user-1",
+            userMessageId: "frontend-user-1",
             role: "user",
             sessionId: "session-1",
             dialogProcessId: "dialog-1",
@@ -144,8 +153,7 @@ describe("committed user Turn routing", () => {
         },
         {
           activeSession,
-          findCanonicalMessageById: (_sessionId, messageId) =>
-            messageId === draftMessage.messageId ? draftMessage : null,
+          findUserMessageForCommit: viewFor(activeSession).findUserMessageForCommit,
           makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
           logSessionEvent,
           sessionId: "session-1",
@@ -156,7 +164,7 @@ describe("committed user Turn routing", () => {
     expect(activeSession.value.aggregateVersion).toBe(1);
     expect(draftMessage).toMatchObject({
       messageUid: "sm_1",
-      messageId: "frontend-user-1",
+      userMessageId: "frontend-user-1",
       dialogProcessId: "dialog-1",
       attachments: [],
     });
@@ -182,7 +190,7 @@ describe("committed user Turn routing", () => {
         },
         {
           activeSession,
-          findCanonicalMessageById: () => draftMessage,
+          findUserMessageForCommit: viewFor(activeSession).findUserMessageForCommit,
           makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
           logSessionEvent,
           sessionId: "session-1",
@@ -216,7 +224,7 @@ describe("committed user Turn routing", () => {
           turnScopeId: "client-turn:1",
           userMessage: {
             messageUid: "sm_1",
-            messageId: "missing-user",
+            userMessageId: "missing-user",
             role: "user",
             sessionId: "session-1",
             dialogProcessId: "dialog-1",
@@ -226,7 +234,7 @@ describe("committed user Turn routing", () => {
         },
         {
           activeSession,
-          findCanonicalMessageById: () => null,
+          findUserMessageForCommit: viewFor(activeSession).findUserMessageForCommit,
           logSessionEvent,
           sessionId: "session-1",
         },

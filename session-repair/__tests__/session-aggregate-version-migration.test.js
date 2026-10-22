@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { migrateSessionDocument } from "../src/index.js";
+import { eventEnvelope } from "./helpers/event-envelope.js";
 
 function aggregateVersionMigrationError(source) {
   try {
@@ -65,12 +66,22 @@ test("aggregate version contract removes versions fabricated on lifecycle receip
       turns: {},
       commandReceipts: [
         {
-          commandId: "turn-1:turn.accepted",
-          type: "turn.accepted",
+          commandId: "turn-1:turn.action_accepted",
+          type: "turn.action_accepted",
           requestHash: "hash-1",
           aggregateVersion: 0,
+          committedAt: "2026-10-01T00:00:00.000Z",
+          turnScopeId: "turn-1",
           revision: 1,
           sequence: 1,
+          eventId: "ev_1",
+          envelope: eventEnvelope({
+            eventId: "ev_1",
+            eventType: "turn.action_accepted",
+            sessionId: "session-1",
+            turnScopeId: "turn-1",
+            sequence: 1,
+          }),
         },
       ],
     },

@@ -154,8 +154,16 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
   assert.equal(errorPayloads[0].durationMs >= 0, true);
 });
 
-test("buildAgentContextFromBuilder rejects unknown context modes", async () => {
+test("buildAgentContextFromBuilder rejects unknown context modes before any hook", async () => {
   const factory = createFactory();
+  const hookManager = createHookManager();
+  const hookPoints = [];
+  for (const point of [
+    HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
+    HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
+  ]) {
+    hookManager.on(point, async () => hookPoints.push(point), { id: `test.mode.${point}` });
+  }
   await assert.rejects(
     () =>
       factory.buildAgentContextFromBuilder({
@@ -166,9 +174,10 @@ test("buildAgentContextFromBuilder rejects unknown context modes", async () => {
         parentSessionId: "",
         eventListener: null,
         dialogProcessId: "dp1",
-        runConfig: {},
+        runConfig: { hookManager },
         contextBuilder: {},
       }),
     (error) => error?.code === "INVALID_CONTEXT_MODE",
   );
+  assert.deepEqual(hookPoints, []);
 });

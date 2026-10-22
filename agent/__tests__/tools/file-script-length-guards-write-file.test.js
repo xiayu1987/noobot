@@ -109,7 +109,7 @@ test("write_file: host 模式返回宿主正常路径并在 host 执行", async 
   const tool = tools.find((item) => item?.name === "write_file");
   assert.ok(tool);
 
-  const runtime = buildAgentContext(basePath, "primary-user", {
+  const agentContext = buildAgentContext(basePath, "primary-user", {
     runtime: {
       attachmentService,
       globalConfig: {
@@ -120,7 +120,8 @@ test("write_file: host 模式返回宿主正常路径并在 host 执行", async 
         },
       },
     },
-  }).bindings.runtime;
+  });
+  const { runtime } = agentContext.bindings;
   const runnerResult = await executeToolCall({
     call: {
       id: "call_write_non_sandbox",
@@ -129,7 +130,7 @@ test("write_file: host 模式返回宿主正常路径并在 host 执行", async 
     },
     tool,
     runtime,
-    agentContext: buildAgentContext(basePath, "primary-user", { runtime }),
+    agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
 
@@ -226,7 +227,7 @@ test("write_file: sandbox 模式使用宿主受控 I/O 并返回 sandbox 展示�
   const tool = tools.find((item) => item?.name === "write_file");
   assert.ok(tool);
 
-  const runtime = buildAgentContext(basePath, "primary-user", {
+  const agentContext = buildAgentContext(basePath, "primary-user", {
     runtime: {
       attachmentService,
       globalConfig: {
@@ -239,7 +240,8 @@ test("write_file: sandbox 模式使用宿主受控 I/O 并返回 sandbox 展示�
         },
       },
     },
-  }).bindings.runtime;
+  });
+  const { runtime } = agentContext.bindings;
   const runnerResult = await executeToolCall({
     call: {
       id: "call_write_sandbox",
@@ -248,7 +250,7 @@ test("write_file: sandbox 模式使用宿主受控 I/O 并返回 sandbox 展示�
     },
     tool,
     runtime,
-    agentContext: buildAgentContext(basePath, "primary-user", { runtime }),
+    agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
 
