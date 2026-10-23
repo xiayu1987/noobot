@@ -188,7 +188,7 @@ test("session-routes: session detail does not project workflow state from observ
             flowtos: [],
           },
         },
-        nodeSessions: [{ nodeExecutionId: "node-1", stepStatus: "ready" }],
+        nodeSessions: [{ nodeExecutionId: "node-1", status: "ready" }],
       },
     },
     {

@@ -142,9 +142,20 @@ test("protocol payload reader validates wire identity and returns the canonical 
     }).payload,
     payload,
   );
-  assert.deepEqual(readProtocolEventPayload(envelope, { wireEvent: "message_event" }).errors, [
-    "transport_event_identity_mismatch",
-  ]);
+  assert.deepEqual(
+    readProtocolEventPayload(envelope, {
+      wireEvent: "message_event",
+      family: EVENT_FAMILY.TURN_LIFECYCLE,
+    }).errors,
+    ["transport_event_identity_mismatch"],
+  );
+  assert.deepEqual(
+    readProtocolEventPayload(envelope, {
+      wireEvent: TURN_LIFECYCLE_WIRE_EVENT,
+      family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    }).errors,
+    ["event_family_mismatch"],
+  );
 });
 
 test("event family declares the exact reducer input projection", () => {
@@ -213,6 +224,39 @@ test("interaction reducer input combines the canonical envelope identity with it
     sessionId: "session-authority",
     turnScopeId: "turn-authority",
   });
+});
+
+test("interaction envelope requires canonical turn scope and request-scoped ordering", () => {
+  const build = (identity, ordering) =>
+    createEventEnvelope({
+      family: EVENT_FAMILY.INTERACTION_REQUEST,
+      schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
+      identity: {
+        eventId: "interaction-event-1",
+        eventType: "interaction_request",
+        sessionId: "session-authority",
+        turnScopeId: "turn-authority",
+        ...identity,
+      },
+      causality: {},
+      ordering: { domain: "interaction", scopeId: "request-1", sequence: 1, ...ordering },
+      producer: { type: "test", id: "interaction-envelope" },
+      occurredAt: "2026-08-18T00:00:00.000Z",
+      payload: {
+        requestId: "request-1",
+        dialogProcessId: "dialog-1",
+        content: "confirm",
+        lifecycle: "pending",
+      },
+    });
+
+  assert.equal(validateProtocolEvent(build({}, {})).valid, true);
+  assert.deepEqual(validateProtocolEvent(build({ turnScopeId: " turn-authority " }, {})).errors, [
+    "missing_turn_scope_id",
+  ]);
+  assert.deepEqual(validateProtocolEvent(build({}, { scopeId: "request-2" })).errors, [
+    "sequence_scope_mismatch",
+  ]);
 });
 
 test("interaction lifecycle is canonical and terminal states require resolvedBy", () => {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, text } from "@noobot/shared/value";
 
 export const SESSION_ERROR_CODE = Object.freeze({
   AGGREGATE_VERSION_CONFLICT: "SESSION_AGGREGATE_VERSION_CONFLICT",
@@ -14,6 +14,8 @@ export const SESSION_ERROR_CODE = Object.freeze({
   TURN_ATTACHMENTS_ALREADY_BOUND: "SESSION_TURN_ATTACHMENTS_ALREADY_BOUND",
   SESSION_DELETED: "SESSION_DELETED",
   SESSION_NOT_FOUND: "SESSION_NOT_FOUND",
+  ARTIFACT_NOT_FOUND: "SESSION_ARTIFACT_NOT_FOUND",
+  COMPLETION_SUMMARY_REPAIR_REQUIRED: "SESSION_COMPLETION_SUMMARY_REPAIR_REQUIRED",
   SCOPE_IDENTITY_CONFLICT: "SESSION_SCOPE_IDENTITY_CONFLICT",
   COMMAND_RECEIPT_INVALID: "SESSION_COMMAND_RECEIPT_INVALID",
   SESSION_TREE_NODE_CONFLICT: "SESSION_TREE_NODE_CONFLICT",
@@ -30,6 +32,20 @@ export const SESSION_ERROR_CODE = Object.freeze({
   TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT: "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT",
   TURN_SUMMARY_CHECKPOINT_REQUEST_INVALID: "TURN_SUMMARY_CHECKPOINT_REQUEST_INVALID",
 });
+
+export const TURN_LIFECYCLE_REJECTION_ERROR = "TurnLifecycleRejectedError";
+
+export function createTurnLifecycleRejectedError(reason) {
+  if (!isCanonicalText(reason)) throw new TypeError("turn lifecycle rejection reason is required");
+  const error = new Error(reason);
+  error.name = TURN_LIFECYCLE_REJECTION_ERROR;
+  error.code = reason;
+  return error;
+}
+
+export function isTurnLifecycleRejectedError(error) {
+  return error instanceof Error && error.name === TURN_LIFECYCLE_REJECTION_ERROR;
+}
 
 export const SESSION_DELETED_REASON = "session_deleted";
 export const SESSION_NOT_FOUND_REASON = "session_not_found";

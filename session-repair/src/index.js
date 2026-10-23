@@ -9,6 +9,7 @@ export { SESSION_REPAIR_DATA_REJECTION_CODES, SESSION_REPAIR_ERROR_CODE } from "
 export { resegmentMigratedCheckpointBaselines } from "./checkpoint-resegment.js";
 export {
   migrateSessionDocument,
+  reconcileCompletedTurnOrphanToolCalls,
   reconcileCompletedTurnSummaryMarks,
   reconcileDuplicateCanonicalAssistantPresentations,
   reconcileUncommittedAggregateConflictContinuations,

@@ -22,13 +22,14 @@ import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { createTurnLifecycleSnapshot, deriveAgentExecutionId } from "@noobot/session-protocol";
 
 function snapshotEnvelope(sessionId, turnScopeId, messages = []) {
   return createWorkflowRuntimeEnvelope({
     eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
     authoritySessionId: "root-session-a",
     turnScopeId,
+    executionId: deriveAgentExecutionId({ turnScopeId }),
     eventId: `snapshot:${sessionId}:1`,
     workflowRunId: "workflow-run-a",
     sequence: 1,

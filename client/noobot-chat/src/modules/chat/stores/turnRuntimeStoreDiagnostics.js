@@ -31,19 +31,12 @@ export function buildTurnEvaluatedDiagnostics({ reducer, input, result, applied 
   };
 }
 
-export function buildCommitProjectionDiagnostics({
-  turn,
-  result,
-  existingSubSession,
-  projectionEligible,
-}) {
+export function buildCommitProjectionDiagnostics({ turn, result }) {
   return {
     ...turnIdentity(turn),
     state: text(turn?.state),
     terminal: text(turn?.terminal),
-    applied: result?.applied === true,
-    existingSubSession,
-    projectionEligible,
+    applied: result.applied,
   };
 }
 

@@ -20,6 +20,10 @@ export function text(value) {
   return String(value ?? "").trim();
 }
 
+export function isCanonicalText(value) {
+  return typeof value === "string" && Boolean(value) && value === value.trim();
+}
+
 export function firstText(...values) {
   for (const value of values) {
     const candidate = text(value);

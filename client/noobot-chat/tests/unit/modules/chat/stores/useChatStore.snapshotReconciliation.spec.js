@@ -10,6 +10,7 @@ import {
   applyMessageEvent,
   applySessionSnapshot,
   assistantMessages,
+  buildSessionSnapshot,
   commitPresentation,
   createSubSessionEvent,
   resetChatStore,
@@ -21,8 +22,8 @@ describe("useChatStore sub session snapshot reconciliation", () => {
   it("continues a REST-hydrated child session with realtime assistant tool events", () => {
     const store = useChatStore();
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
-      parentSessionId: "main-session-1",
+      nodeSessionId: "sub-session-1",
+      authoritySessionId: "main-session-1",
       messages: [
         {
           messageUid: "msg-user-1",
@@ -68,7 +69,7 @@ describe("useChatStore sub session snapshot reconciliation", () => {
   it("does not guess that a differently identified REST assistant is the canonical message", () => {
     const store = useChatStore();
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
+      nodeSessionId: "sub-session-1",
       messages: [
         {
           messageUid: "sm-persisted-shell-id",
@@ -117,7 +118,7 @@ describe("useChatStore sub session snapshot reconciliation", () => {
     );
 
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
+      nodeSessionId: "sub-session-1",
       messages: [
         {
           messageUid: "sm-persisted-shell-id",
@@ -152,8 +153,8 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       }),
     );
     const snapshot = applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
-      parentSessionId: "main-session-1",
+      nodeSessionId: "sub-session-1",
+      authoritySessionId: "main-session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       workflowRunId: "workflow-1",
@@ -186,29 +187,23 @@ describe("useChatStore sub session snapshot reconciliation", () => {
 
   it("rejects id-less REST messages instead of guessing identity by child turn and role", () => {
     const store = useChatStore();
-    applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
-      messages: [
-        {
-          role: "user",
-          content: "same request",
-          turnScopeId: "turn-1",
-          dialogProcessId: "dialog-1",
-        },
-      ],
-    });
+    const idLessSnapshot = structuredClone(
+      buildSessionSnapshot({
+        nodeSessionId: "sub-session-1",
+        messages: [
+          {
+            messageUid: "sm-user-1",
+            role: "user",
+            content: "same request",
+            turnScopeId: "turn-1",
+            dialogProcessId: "dialog-1",
+          },
+        ],
+      }),
+    );
+    delete idLessSnapshot.payload.messages[0].messageUid;
 
-    const result = applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
-      messages: [
-        {
-          role: "user",
-          content: "same request",
-          turnScopeId: "turn-1",
-          dialogProcessId: "dialog-1",
-        },
-      ],
-    });
+    const result = store.applyWorkflowRuntimeEvent(idLessSnapshot, { source: "test_snapshot" });
 
     expect(result).toMatchObject({ applied: false, reason: "missing_snapshot_message_identity" });
     expect(store.selectSubSessionMessages("sub-session-1")).toBeNull();
@@ -222,7 +217,7 @@ describe("useChatStore sub session snapshot reconciliation", () => {
       createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }),
     );
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
+      nodeSessionId: "sub-session-1",
       messages: [],
       status: "processing",
     });
@@ -244,7 +239,7 @@ describe("useChatStore sub session snapshot reconciliation", () => {
     );
 
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
+      nodeSessionId: "sub-session-1",
       status: "completed",
       messages: [
         {
@@ -307,7 +302,7 @@ describe("useChatStore sub session snapshot reconciliation", () => {
     );
 
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
+      nodeSessionId: "sub-session-1",
       messages: [
         {
           messageUid: "sm-msg-assistant-1",

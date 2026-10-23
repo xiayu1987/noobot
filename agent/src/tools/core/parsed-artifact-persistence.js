@@ -8,7 +8,9 @@ import { filePath as path } from "@noobot/path-resolver";
 import {
   ATTACHMENT_EVENT_TYPE,
   ATTACHMENT_LIFECYCLE,
+  ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
   ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+  attachmentLifecycleSequenceScopeId,
   ATTACHMENT_RELATION_TYPE,
   ATTACHMENT_SOURCE,
   createAttachmentEventId,
@@ -97,8 +99,8 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
     },
     causality: { correlationId: event.runId },
     ordering: {
-      domain: "attachment-lifecycle",
-      scopeId: [identity.attachmentId, identity.sessionId, identity.attachmentSource].join(":"),
+      domain: ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
+      scopeId: attachmentLifecycleSequenceScopeId(event.identity),
     },
     producer: { type: "tool", id: TOOL_NAME.MULTIMODAL_PARSE },
     payload: event,

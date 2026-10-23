@@ -258,7 +258,8 @@ describe("AppShell chat message navigator", () => {
       path.resolve(__dirname, "../../../src/modules/chat/runtime/reconnect/batchReplay.js"),
       "utf8",
     );
-    expect(messageProjectionRouterSource).toContain("context.navigateOnFirstResponseOnce?.();");
+    expect(messageProjectionRouterSource).toContain("context.navigateOnFirstResponseOnce();");
+    expect(messageProjectionRouterSource).not.toContain("navigateOnFirstResponseOnce?.");
     expect(messageProjectionRouterSource).not.toContain("locateSendingStartedMessageOnce");
     expect(useChatEngineSource).toContain(
       "navigateToLastMessageOnTurnTerminalOnce(sessionId, turnScopeId);",

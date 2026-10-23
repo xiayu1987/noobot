@@ -36,11 +36,7 @@ const TURN_RECEIPT_KEYS = new Set([
   "eventId",
   "envelope",
 ]);
-import { isPlainObject, text as clean } from "@noobot/shared/value";
-
-function isCanonicalText(value) {
-  return typeof value === "string" && Boolean(value) && value === clean(value);
-}
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 function isNonNegativeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
@@ -53,11 +49,8 @@ function collectUnknownFieldErrors(result, allowedKeys, errors) {
 }
 
 function validateMessageUidResult(result, errors) {
-  if (!clean(result.messageUid)) errors.push("missing_result_message_uid");
+  if (!isCanonicalText(result.messageUid)) errors.push("invalid_result_message_uid");
   collectUnknownFieldErrors(result, ["messageUid"], errors);
-  if (result.messageUid !== clean(result.messageUid)) {
-    errors.push("non_canonical_result_message_uid");
-  }
 }
 
 function validateMessageDeleteResult(result, errors) {
@@ -147,14 +140,11 @@ export function normalizeCommandReceipts(receipts = []) {
   return normalized.slice(-200);
 }
 export function decideCommandIdempotency({ commandId, type, requestHash, receipts = [] } = {}) {
-  const id = clean(commandId);
-  const commandType = clean(type);
-  const hash = clean(requestHash);
-  if (!id || !commandType || !hash)
+  if (!isCanonicalText(commandId) || !isCanonicalText(type) || !isCanonicalText(requestHash))
     return Object.freeze({ allowed: false, reason: "invalid_command_identity" });
-  const receipt = normalizeCommandReceipts(receipts).find((item) => item.commandId === id);
+  const receipt = normalizeCommandReceipts(receipts).find((item) => item.commandId === commandId);
   if (!receipt) return Object.freeze({ allowed: true, deduplicated: false });
-  if (receipt.type !== commandType || receipt.requestHash !== hash)
+  if (receipt.type !== type || receipt.requestHash !== requestHash)
     return Object.freeze({ allowed: false, reason: "command_id_reuse_conflict" });
   return Object.freeze({ allowed: true, deduplicated: true, receipt });
 }

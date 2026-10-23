@@ -24,7 +24,6 @@ describe("workflow runtime identity projection", () => {
           stepId: "persisted-step",
         },
       ]),
-      executionMeta: ref({ nodeAgentRuns: [] }),
       workflowNodeStateRegistry: {
         workflows: {
           "client-turn:main": {
@@ -67,7 +66,6 @@ describe("workflow runtime identity projection", () => {
           status: "running",
         },
       ]),
-      executionMeta: ref({ nodeAgentRuns: [] }),
       workflowNodeStateRegistry: { workflows: {} },
     });
 
@@ -78,9 +76,7 @@ describe("workflow runtime identity projection", () => {
   });
 
   it("resolves the authoritative status for nodes with a stable execution identity", () => {
-    const resolveStepStatus = createStepStatusResolver({
-      nodeRunByDialogProcessId: ref(new Map()),
-    });
+    const resolveStepStatus = createStepStatusResolver();
 
     expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "running" })).toBe(
       "running",

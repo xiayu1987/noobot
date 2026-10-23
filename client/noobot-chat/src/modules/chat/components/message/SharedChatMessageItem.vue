@@ -357,20 +357,7 @@ const defaultMonotonicMessageActionProps = computed(() =>
 );
 
 function resolveRendererContext() {
-  const selectSessionMessages = (sessionId = "") => {
-    const id = text(sessionId);
-    if (!id) return null;
-
-    const subSession = chatStore.selectSubSessionMessages?.(id);
-    if (subSession) {
-      return {
-        ...subSession,
-        sessionId: String(subSession?.sessionId || id).trim(),
-        messages: Array.isArray(subSession?.messages) ? subSession.messages : [],
-      };
-    }
-    return null;
-  };
+  const selectSessionMessages = (sessionId) => chatStore.selectSubSessionMessages(sessionId);
   return {
     messageItem: props.messageItem,
     allMessages: props.allMessages,

@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 import path from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import {
   buildSessionArtifactFileMap,
   readSessionArtifact,
@@ -16,138 +15,10 @@ import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
-import {
-  buildHarness,
-  readJson,
-  readJournalLines,
-} from "./scoped-session-repositories.fixtures.js";
+import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
 
 const treeContext = (sessionRepo, sessionId) => ({
   persistenceContext: sessionRepo.treePersistenceContext("alice", sessionId),
-});
-
-test("protocol repair moves v10 journal snapshot indexes into the manifest", async () => {
-  const harness = buildHarness();
-  const { sessionRepo } = await harness.setup();
-  try {
-    const sessionId = "v10-journal-snapshot-index";
-    const message = (messageUid, ts) => ({
-      messageUid,
-      role: messageUid === "m1" ? "user" : "assistant",
-      ...(messageUid === "m1"
-        ? {}
-        : { modelMessageId: `mm_${messageUid}`, presentationMessageId: "pm_active" }),
-      content: messageUid,
-      dialogProcessId: "dialog-active",
-      turnScopeId: "active",
-      ts,
-    });
-    const receipt = {
-      checkpointId: "checkpoint-1",
-      checkpointRevision: 1,
-      requestHash: "sha256:fixture",
-      persistedMessageUids: ["m1", "m2"],
-      summarizedMessageUids: ["m1"],
-      retainedMessageUids: [],
-      markedCount: 1,
-      committedAt: "2026-01-01T00:01:00.000Z",
-    };
-    await sessionRepo.save(
-      "alice",
-      applySessionMessageFacts({
-        ...createTestSessionRequiredFields(),
-        parentSessionId: "",
-        sessionId,
-        aggregateVersion: 0,
-        messages: [
-          message("m1", "2026-01-01T00:00:00.000Z"),
-          message("m2", "2026-01-01T00:00:30.000Z"),
-        ],
-        turnSummaryCheckpoints: {
-          active: {
-            dialogProcessId: "dialog-active",
-            turnScopeId: "active",
-            checkpointRevision: 1,
-            receipts: [receipt],
-          },
-        },
-      }),
-      { createOnly: true, ...treeContext(sessionRepo, sessionId) },
-    );
-    const scope = await sessionRepo.requireSessionScope(
-      "alice",
-      sessionId,
-      treeContext(sessionRepo, sessionId).persistenceContext,
-    );
-    const files = buildSessionArtifactFileMap(scope.sessionDir);
-    const current = await readJson(files.session);
-    const [turn] = current.turnOrder;
-    const journalFile = path.join(scope.sessionDir, turn.file);
-
-    const tail = message("m3", "2026-01-01T00:02:00.000Z");
-    const v10Journal = [
-      ...turn.summarySnapshots.map((index) => ({
-        op: "summary_snapshot",
-        ...index,
-        turnScopeId: turn.turnScopeId,
-        dialogProcessId: turn.dialogProcessId,
-      })),
-      {
-        op: "upsert",
-        messageUid: tail.messageUid,
-        message: tail,
-        hash: `sha256:${createHash("sha256").update(JSON.stringify(tail)).digest("hex")}`,
-      },
-    ];
-    const journalText = v10Journal.map((record) => `${JSON.stringify(record)}\n`).join("");
-    const { summarySnapshots, ...v10Turn } = turn;
-    await writeFile(journalFile, journalText, "utf8");
-    await writeFile(
-      files.session,
-      JSON.stringify({
-        ...current,
-        schemaVersion: 10,
-        messageOrder: [...current.messageOrder, { messageUid: "m3" }],
-        turnOrder: [
-          {
-            ...v10Turn,
-            committedBytes: Buffer.byteLength(journalText),
-            recordCount: v10Journal.length,
-            messageCount: 3,
-            messageOrder: ["m1", "m2", "m3"],
-          },
-        ],
-      }),
-      "utf8",
-    );
-
-    await sessionRepo.repairSessionProtocol(
-      "alice",
-      sessionId,
-      treeContext(sessionRepo, sessionId),
-    );
-
-    const migrated = await readJson(files.session);
-    assert.equal(migrated.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
-    const withoutContentHash = ({ contentHash, ...index }) => index;
-    assert.deepEqual(
-      migrated.turnOrder[0].summarySnapshots.map(withoutContentHash),
-      summarySnapshots.map(withoutContentHash),
-    );
-    const migratedJournal = readJournalLines(await readFile(journalFile, "utf8"));
-    assert.equal(
-      migratedJournal.some((record) => record.op === "summary_snapshot"),
-      false,
-    );
-    const restored = await readSessionArtifact({ sessionDir: scope.sessionDir });
-    assert.deepEqual(
-      restored.messages.map((entry) => entry.messageUid),
-      ["m1", "m2", "m3"],
-    );
-  } finally {
-    await harness.cleanup();
-  }
 });
 
 test("concurrent repository saves allocate monotonic Turn journals without cross-Turn records", async () => {
@@ -295,28 +166,6 @@ test("session save rejects entity parentSessionId that conflicts with the locate
     );
     assert.equal(childScope.resolvedParentSessionId, "p1");
     assert.equal((await readJson(childScope.sessionFile)).parentSessionId, "p1");
-  } finally {
-    await harness.cleanup();
-  }
-});
-
-test("protocol repair of an unregistered Session reports not found without recording a repair failure", async () => {
-  const harness = buildHarness();
-  const { sessionRepo } = await harness.setup();
-  try {
-    await assert.rejects(
-      sessionRepo.repairSessionProtocol(
-        "alice",
-        "missing-session",
-        treeContext(sessionRepo, "missing-session"),
-      ),
-      {
-        code: "SESSION_NOT_FOUND",
-        statusCode: 404,
-      },
-    );
-    const lifecycle = await sessionRepo._readSessionLifecycleRecord("alice", "missing-session");
-    assert.notEqual(lifecycle?.repair?.status, "failed");
   } finally {
     await harness.cleanup();
   }

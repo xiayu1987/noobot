@@ -14,17 +14,14 @@ import { projectCanonicalActivityTimelineEvent } from "@noobot/event-protocol/ac
 
 const IDENTITY_FIELDS = new Set(["eventId", "sessionId", "turnScopeId"]);
 const CAUSALITY_FIELDS = new Set(["commandId", "causationId", "correlationId"]);
-const ORDERING_FIELDS = new Set([
-  "sequence",
-  "sequenceDomain",
-  "sequenceScopeId",
-  "revision",
-  "aggregateVersion",
-]);
+const ORDERING_FIELDS = new Set(["sequence", "sequenceDomain", "sequenceScopeId"]);
+const FORBIDDEN_FIELDS = ["messageId", "revision", "aggregateVersion"];
 
 export function canonicalMessageEvent(overrides = {}) {
-  if (Object.hasOwn(overrides, "messageId")) {
-    throw new Error("canonicalMessageEvent: messageId is not a message event field");
+  for (const field of FORBIDDEN_FIELDS) {
+    if (Object.hasOwn(overrides, field)) {
+      throw new Error(`canonicalMessageEvent: ${field} is not a message event field`);
+    }
   }
   const eventType = overrides.eventType || "tool_call_start";
 
@@ -80,10 +77,6 @@ export function canonicalMessageEvent(overrides = {}) {
       domain: values.sequenceDomain || MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: values.sequenceScopeId || values.presentationMessageId,
       sequence: transient ? TRANSIENT_MESSAGE_EVENT_SEQUENCE : values.sequence,
-      ...(!transient && values.revision !== undefined ? { revision: values.revision } : {}),
-      ...(!transient && values.aggregateVersion !== undefined
-        ? { aggregateVersion: values.aggregateVersion }
-        : {}),
     },
     producer: { type: "test", id: "client-message-event-fixture" },
     occurredAt: values.occurredAt,

@@ -55,8 +55,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
             revision: 4,
             sequence: 4,
           },
-          sessionId: "wf-node-session-1",
-          dialogProcessId: "wf_node_dialog_1",
+          sessionId: payload.strategy.sessionId,
+          dialogProcessId: payload.strategy.dialogProcessId,
           persisted: { outputDir: "/tmp/noobot/workflow/s1/node1" },
           result: {
             answer: 'answer-node-done\n\n[Harness-Review]\n{"status":"pass"}',
@@ -168,23 +168,17 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     /^wf_node_/,
   );
   assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.dialogId, undefined);
-  assert.match(
-    String(
-      workflowTurn(agentResult).pluginMeta.payload?.execution?.nodeAgentRuns?.[0]
-        ?.nodeDialogProcessId || "",
-    ),
-    /^wf_node_/,
-  );
   assert.equal(
-    workflowTurn(agentResult).pluginMeta.payload?.execution?.nodeAgentRuns?.[0]?.nodeDialogId,
-    undefined,
+    "nodeDialogProcessId" in
+      workflowTurn(agentResult).pluginMeta.payload.execution.nodeAgentRuns[0],
+    false,
   );
   assert.equal(Array.isArray(workflowTurn(agentResult).pluginMeta.payload?.nodeSessions), true);
   assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions.length, 1);
   assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(
     workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.sessionId,
-    "wf-node-session-1",
+    subSessionCalls[0].strategy.sessionId,
   );
   assert.equal(
     workflowTurn(agentResult).pluginMeta.payload?.execution?.nodeAgentRuns?.[0]?.status,

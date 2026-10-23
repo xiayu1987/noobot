@@ -26,7 +26,7 @@ const SESSION_RECEIPT_VALIDATORS = new Map([
 
 export function validateDataPlaneEvent(eventName, data) {
   const normalizedEventName = text(eventName);
-  if (normalizedEventName === AGENT_TRANSPORT_EVENT.ERROR) {
+  if (normalizedEventName === AGENT_TRANSPORT_EVENT.CHANNEL_ERROR) {
     return validateAgentTransportError(data);
   }
   if (normalizedEventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {

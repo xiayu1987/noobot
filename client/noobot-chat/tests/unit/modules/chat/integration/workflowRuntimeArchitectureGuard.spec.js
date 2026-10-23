@@ -63,7 +63,7 @@ describe("workflow runtime architecture guard", () => {
       /(?:turnScopeId|dialogProcessId|role)\s*[+:].*(?:turnScopeId|dialogProcessId|role)/,
     );
     expect(subSessions).not.toMatch(/findIndex\([^)]*(?:turnScopeId|dialogProcessId|role)/s);
-    expect(subSessions).toMatch(/message\?\.(?:messageId|id)/);
+    expect(subSessions).not.toMatch(/message\??\.(?:messageId|id)\b/);
     expect(reconnectModel).not.toMatch(/byTurnScopeId/);
     expect(reconnectModel).toMatch(/presentationMessageId/);
     expect(reconnectReplay).not.toMatch(/messageItem\?\.(?:messageId|id)\).*nextMessageId/s);
@@ -109,12 +109,13 @@ describe("workflow runtime architecture guard", () => {
     );
   });
 
-  it("keeps canonical workflow nodes on status without persisting stepStatus", () => {
+  it("keeps canonical workflow nodes on status without any stepStatus channel", () => {
     const workflowStore = source("src/modules/chat/stores/chatStoreWorkflows.js");
     const nodeProjection = source("src/modules/chat/stores/workflowNodeStateProjection.js");
-    expect(nodeProjection).toMatch(/stepStatus:\s*_incomingStepStatus/);
-    expect(nodeProjection).toMatch(/stepStatus:\s*_currentStepStatus/);
-    expect(workflowStore).not.toMatch(/next\s*=\s*\{[\s\S]*?stepStatus\s*:/);
+    const eventOperations = source("src/modules/chat/stores/workflowEventOperations.js");
+    expect(nodeProjection).not.toMatch(/stepStatus/);
+    expect(eventOperations).not.toMatch(/stepStatus/);
+    expect(workflowStore).not.toMatch(/stepStatus/);
   });
 
   it("keeps legacy reconnect metadata out of canonical assistant ownership", () => {
@@ -185,17 +186,23 @@ describe("workflow runtime architecture guard", () => {
   it("keeps live message events read-only after send preparation", () => {
     const projectionRouter = source("src/modules/chat/runtime/engine/messageProjectionRouter.js");
     expect(projectionRouter).toMatch(
-      /findMessagesByPresentationId\(\s*targetSessionId,\s*presentationMessageId,?\s*\)/,
+      /findMessagesByPresentationId\(\s*messageEvent\.identity\.sessionId,\s*presentationMessageId,?\s*\)/,
     );
     expect(projectionRouter).not.toMatch(/upsertCanonicalAssistantMessage/);
   });
 
-  it("routes child authoritative Turn events before the generic sub-session ignore boundary", () => {
+  it("terminates workflow node message events inside the single message projection router", () => {
     const sendRouter = source("src/modules/chat/runtime/engine/sendStreamEventRouter.js");
+    const projectionRouter = source("src/modules/chat/runtime/engine/messageProjectionRouter.js");
     const authorityRouteIndex = sendRouter.indexOf("routeForeignTurnLifecycleEvent(event, data");
-    const ignoreIndex = sendRouter.indexOf("isIgnoredSubSessionEvent(event, data)");
+    const projectionIndex = sendRouter.indexOf(
+      "routeMessageProjectionEvent(protocolEnvelope, family",
+    );
     expect(authorityRouteIndex).toBeGreaterThan(-1);
-    expect(ignoreIndex).toBeGreaterThan(authorityRouteIndex);
+    expect(projectionIndex).toBeGreaterThan(authorityRouteIndex);
+    expect(sendRouter).not.toMatch(/isIgnoredSubSessionEvent|shouldProject(Main|Sub)SessionEvent/);
+    expect(projectionRouter).toContain("isWorkflowNodeMessageEvent(protocolEnvelope)");
+    expect(projectionRouter).not.toMatch(/validateProtocolEvent|\?\.\(/);
   });
 
   it("commits every Turn mutation through the store projection gateway", () => {

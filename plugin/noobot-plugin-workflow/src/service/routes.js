@@ -13,19 +13,14 @@ import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { text, isFunction } from "@noobot/shared/value";
-const normalizeRouteText = (value) => text(value);
+import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 
 function mergeSessionSnapshotBody(session, sessionSummary) {
   const {
     sessionId: _sessionId,
     parentSessionId: _parentSessionId,
     ...snapshot
-  } = {
-    ...(session && typeof session === "object" ? session : {}),
-    ...(sessionSummary && typeof sessionSummary === "object" ? sessionSummary : {}),
-    messages: Array.isArray(session?.messages) ? session.messages : sessionSummary?.messages || [],
-  };
+  } = { ...session, ...sessionSummary, messages: session.messages };
   return snapshot;
 }
 
@@ -38,24 +33,21 @@ function createSessionSnapshotEnvelope({
   meta,
   childSessionId,
 }) {
-  const workflowRunId = normalizeRouteText(meta?.workflowRunId);
-  const nodeExecutionId = normalizeRouteText(meta?.nodeExecutionId);
-  const turnScopeId = normalizeRouteText(meta?.turnScopeId);
-  const occurredAt = normalizeRouteText(sessionSummary?.updatedAt || session?.updatedAt);
-  if (!workflowRunId || !nodeExecutionId || !turnScopeId || !childSessionId || !occurredAt) {
-    throw new Error("workflow session snapshot is missing canonical runtime identity");
+  if (!isPlainObject(meta)) {
+    throw new Error("workflow session snapshot is missing session metadata");
   }
+  const { workflowRunId, nodeExecutionId, turnScopeId, executionId } = meta;
   const snapshot = mergeSessionSnapshotBody(session, sessionSummary);
   return createWorkflowRuntimeEnvelope({
     eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
     authoritySessionId,
     turnScopeId,
-    executionId: normalizeRouteText(meta?.executionId),
+    executionId,
     eventId: `workflow-session-snapshot:${childSessionId}:${aggregateVersion}`,
     workflowRunId,
     sequence: aggregateVersion,
     aggregateVersion,
-    occurredAt,
+    occurredAt: session.updatedAt,
     producer: { type: "service", id: "workflow-session-read-model" },
     causality: { correlationId: workflowRunId },
     payload: {
@@ -63,7 +55,7 @@ function createSessionSnapshotEnvelope({
       workflowRunId,
       nodeExecutionId,
       nodeSessionId: childSessionId,
-      dialogProcessId: normalizeRouteText(dialogProcessId),
+      dialogProcessId,
       turnScopeId,
     },
   });
@@ -99,8 +91,8 @@ function logDetail({
 function createThinkingDetailHandler(sessions, httpStatus) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
-    const turnScopeId = normalizeRouteText(req.query?.turnScopeId);
+    const dialogProcessId = text(req.query?.dialogProcessId);
+    const turnScopeId = text(req.query?.turnScopeId);
     if (!dialogProcessId && !turnScopeId) {
       throw routeError("dialogProcessId or turnScopeId is required", httpStatus.BAD_REQUEST);
     }
@@ -130,7 +122,7 @@ function routeError(message, statusCode) {
 function createExecutionReportHandler(sessions, httpStatus) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
+    const dialogProcessId = text(req.query?.dialogProcessId);
     if (!dialogProcessId) {
       throw routeError("dialogProcessId is required", httpStatus.BAD_REQUEST);
     }
@@ -162,7 +154,7 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
 
   const sessionDetailHandler = async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;
-    const traceId = normalizeRouteText(req.query?.traceId);
+    const traceId = text(req.query?.traceId);
     let snapshot;
     try {
       snapshot = await sessions.readSnapshot({
@@ -208,13 +200,9 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       event: "service.workflowNodeDetail.snapshotLoaded",
       data: {
         childSessionId,
-        snapshotSessionId: String(session?.sessionId || ""),
-        summarySessionId: String(sessionSummary?.sessionId || ""),
-        messageCount: Array.isArray(sessionSummary?.messages)
-          ? sessionSummary.messages.length
-          : Array.isArray(session?.messages)
-            ? session.messages.length
-            : 0,
+        snapshotSessionId: session.sessionId,
+        summarySessionId: sessionSummary.sessionId,
+        messageCount: sessionSummary.messages.length,
         executionLogCount: executionLogs.length,
       },
     });

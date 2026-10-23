@@ -7,11 +7,8 @@
 import { compileWorkflowSemantic } from "./lib/compiler.js";
 import {
   startWorkflowInstance,
-  advanceWorkflowInstance,
-  executeWorkflowSemantic,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
-  resolveWorkflowUpstreamActionNodes,
   resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
@@ -20,11 +17,8 @@ import {
 export {
   compileWorkflowSemantic,
   startWorkflowInstance,
-  advanceWorkflowInstance,
-  executeWorkflowSemantic,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
-  resolveWorkflowUpstreamActionNodes,
   resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
@@ -33,11 +27,8 @@ export {
 export default {
   compileWorkflowSemantic,
   startWorkflowInstance,
-  advanceWorkflowInstance,
-  executeWorkflowSemantic,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
-  resolveWorkflowUpstreamActionNodes,
   resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,

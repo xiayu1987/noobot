@@ -17,17 +17,22 @@ export function applyMessageEvent(store, envelope) {
   return store.reduceSubSessionMessageEvent(envelope, { source: "test" });
 }
 
+export function buildSessionSnapshot(sessionDoc) {
+  return canonicalWorkflowSessionSnapshot({
+    eventId: "workflow-session-snapshot-1",
+    executionId: "agent-execution-sub-session-1",
+    aggregateVersion: 1,
+    authoritySessionId: "main-session-1",
+    workflowRunId: "workflow-1",
+    nodeExecutionId: "node-1",
+    ...sessionDoc,
+  });
+}
+
 export function applySessionSnapshot(store, sessionDoc) {
-  return store.applyWorkflowRuntimeEvent(
-    canonicalWorkflowSessionSnapshot({
-      aggregateVersion: 1,
-      parentSessionId: "main-session-1",
-      workflowRunId: "workflow-1",
-      nodeExecutionId: "node-1",
-      ...sessionDoc,
-    }),
-    { source: "test_snapshot" },
-  );
+  return store.applyWorkflowRuntimeEvent(buildSessionSnapshot(sessionDoc), {
+    source: "test_snapshot",
+  });
 }
 
 export function createSubSessionEvent(overrides = {}) {
@@ -41,7 +46,6 @@ export function createSubSessionEvent(overrides = {}) {
     workflowRunId: "workflow-1",
     nodeExecutionId: "node-1",
     sequence: sequence + 1,
-    revision: 1,
     eventId: "event-1",
     presentationMessageId: "msg-assistant-1",
     eventType,
@@ -67,7 +71,6 @@ export function commitPresentation(store, identity = {}) {
       workflowRunId: identity.workflowRunId || "workflow-1",
       nodeExecutionId: identity.nodeExecutionId || "node-1",
       sequence: 1,
-      revision: 1,
       eventId: `${turnScopeId}:${presentationMessageId}:presentation`,
       presentationMessageId,
       eventType: "turn_presentation_committed",

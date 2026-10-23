@@ -284,10 +284,6 @@ export function createSessionFacade(runtime) {
       return sessionCrudService.createSession(bindPlacementScope(payload));
     },
 
-    async repairSession(payload = {}) {
-      return sessionCrudService.repairSession(bindPersistenceScope(payload));
-    },
-
     async getSessionBundle(payload = {}) {
       return sessionCrudService.getSessionBundle(bindPersistenceScope(payload));
     },

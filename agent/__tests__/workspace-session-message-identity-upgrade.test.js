@@ -11,7 +11,9 @@ import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import {
   MESSAGE_REMOVED_FIELD_NAME,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
+import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import { SESSION_REPAIR_DATA_REJECTION_CODES } from "@noobot/session-repair";
 import { EVENT_FAMILY, createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
 import {
@@ -20,6 +22,8 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
 import { messageHash } from "../src/session/session-artifact-session/turn-journal-store.js";
+import { readSessionArtifact } from "../src/session/session-artifact-store.js";
+import { readSessionArtifactSnapshot } from "../src/session/session-artifact-snapshot.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import {
   applySessionMessageFacts,
@@ -320,6 +324,229 @@ test("v9 upgrade quarantines outbox commits whose v3 envelope fails validation",
     );
     assert.match(JSON.stringify(result.quarantined[0].error), /outbox_envelope_invalid/);
     assert.equal((await readJson(path.join(sessionDir, "session.json"))).schemaVersion, 12);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+async function saveCheckpointedSession(sessionRepo, sessionId) {
+  const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
+  const message = (messageUid, ts) => ({
+    messageUid,
+    role: messageUid === "m1" ? "user" : "assistant",
+    ...(messageUid === "m1"
+      ? {}
+      : { modelMessageId: `mm_${messageUid}`, presentationMessageId: "pm_active" }),
+    content: messageUid,
+    dialogProcessId: "dialog-active",
+    turnScopeId: "active",
+    ts,
+  });
+  await sessionRepo.save(
+    "alice",
+    applySessionMessageFacts({
+      ...createTestSessionRequiredFields(),
+      parentSessionId: "",
+      sessionId,
+      aggregateVersion: 0,
+      messages: [
+        message("m1", "2026-01-01T00:00:00.000Z"),
+        message("m2", "2026-01-01T00:00:30.000Z"),
+      ],
+      turnSummaryCheckpoints: {
+        active: {
+          dialogProcessId: "dialog-active",
+          turnScopeId: "active",
+          checkpointRevision: 1,
+          receipts: [
+            {
+              checkpointId: "checkpoint-1",
+              checkpointRevision: 1,
+              requestHash: "sha256:fixture",
+              persistedMessageUids: ["m1", "m2"],
+              summarizedMessageUids: ["m1"],
+              retainedMessageUids: [],
+              markedCount: 1,
+              committedAt: "2026-01-01T00:01:00.000Z",
+            },
+          ],
+        },
+      },
+    }),
+    { createOnly: true, persistenceContext },
+  );
+  const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
+  return { sessionDir: scope.sessionDir, tail: message("m3", "2026-01-01T00:02:00.000Z") };
+}
+
+async function downgradeToSchema10JournalSnapshots(sessionDir, tail) {
+  const manifestFile = path.join(sessionDir, "session.json");
+  const manifest = await readJson(manifestFile);
+  const [turn] = manifest.turnOrder;
+  const records = [
+    ...turn.summarySnapshots.map((index) => ({
+      op: "summary_snapshot",
+      ...index,
+      turnScopeId: turn.turnScopeId,
+      dialogProcessId: turn.dialogProcessId,
+    })),
+    { op: "upsert", messageUid: tail.messageUid, message: tail, hash: messageHash(tail) },
+  ];
+  const journalText = jsonl(records);
+  await writeFile(path.join(sessionDir, turn.file), journalText, "utf8");
+  const { summarySnapshots, ...v10Turn } = turn;
+  manifest.schemaVersion = 10;
+  manifest.messageOrder = [...manifest.messageOrder, { messageUid: tail.messageUid }];
+  manifest.turnOrder = [
+    {
+      ...v10Turn,
+      committedBytes: Buffer.byteLength(journalText),
+      recordCount: records.length,
+      messageCount: 3,
+      messageOrder: ["m1", "m2", "m3"],
+    },
+  ];
+  await writeFile(manifestFile, JSON.stringify(manifest), "utf8");
+  return { file: turn.file, summarySnapshots };
+}
+
+test("v9 upgrade moves schema 10 journal snapshot indexes into the manifest", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const sessionId = "v10-journal-snapshot-index";
+    const { sessionDir, tail } = await saveCheckpointedSession(sessionRepo, sessionId);
+    const { file, summarySnapshots } = await downgradeToSchema10JournalSnapshots(sessionDir, tail);
+
+    const result = await upgradeSessionMessageIdentity({
+      base: path.join(root, "alice"),
+      backupBase: path.join(root, "layout-backup"),
+      scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+    });
+
+    assert.deepEqual(
+      result.sessions.map((item) => [item.sessionId, item.fromSchemaVersion]),
+      [[sessionId, 10]],
+    );
+    const migrated = await readJson(path.join(sessionDir, "session.json"));
+    assert.equal(migrated.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
+    const withoutContentHash = ({ contentHash, ...index }) => index;
+    assert.deepEqual(
+      migrated.turnOrder[0].summarySnapshots.map(withoutContentHash),
+      summarySnapshots.map(withoutContentHash),
+    );
+    const journal = readJournalLines(await readFile(path.join(sessionDir, file), "utf8"));
+    assert.equal(
+      journal.some((record) => record.op === "summary_snapshot"),
+      false,
+    );
+    const restored = await readSessionArtifact({ sessionDir });
+    assert.deepEqual(
+      restored.messages.map((entry) => entry.messageUid),
+      ["m1", "m2", "m3"],
+    );
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
+  const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
+  const turn = { dialogProcessId: "dialog-done", turnScopeId: "done" };
+  const assistant = (messageUid, extra) => ({
+    messageUid,
+    role: "assistant",
+    modelMessageId: `mm_${messageUid}`,
+    presentationMessageId: "pm_done",
+    content: "",
+    ...turn,
+    ...extra,
+  });
+  const toolCall = (messageUid, id, name) =>
+    assistant(messageUid, {
+      type: "tool_call",
+      chatPresentation: false,
+      tool_calls: [{ id, type: "function", function: { name, arguments: "{}" } }],
+    });
+
+  const canonical = projectTurnCompletionMessages([
+    { messageUid: "m1", role: "user", userMessageId: "um_done", content: "go", ...turn },
+    toolCall("m2", "call-ok", "read_file"),
+    {
+      messageUid: "m3",
+      role: "tool",
+      type: "tool_result",
+      presentationMessageId: "pm_done",
+      content: "file",
+      tool_call_id: "call-ok",
+      toolName: "read_file",
+      ...turn,
+    },
+    assistant("m5", { content: "done" }),
+  ]);
+
+  const rejected = {
+    ...toolCall("m4", "call-rejected", "task_check"),
+    summarized: false,
+  };
+  await sessionRepo.save(
+    "alice",
+    applySessionMessageFacts({
+      ...createTestSessionRequiredFields(),
+      sessionId,
+      aggregateVersion: 0,
+      turnLifecycle: {
+        ...createTestSessionRequiredFields().turnLifecycle,
+        turns: {
+          done: {
+            ...turn,
+            terminalStatus: { ...turn, status: "completed", reason: "run_completed" },
+          },
+        },
+      },
+      messages: [...canonical.slice(0, 3), rejected, canonical[3]],
+    }),
+    { createOnly: true, persistenceContext },
+  );
+  const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
+  return scope.sessionDir;
+}
+
+test("v11 upgrade removes rejected-batch tool_calls of completed turns, backs up and is idempotent", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const sessionId = "v11-rejected-batch";
+    const base = path.join(root, "alice");
+    const backupBase = path.join(root, "layout-backup");
+    const sessionDir = await saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId);
+    const openSession = () =>
+      readSessionArtifactSnapshot({ outputDir: sessionDir, includeExecutionLogs: false });
+    await assert.rejects(openSession(), {
+      code: SESSION_ERROR_CODE.COMPLETION_SUMMARY_REPAIR_REQUIRED,
+    });
+    const options = { base, backupBase, scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS };
+
+    const first = await upgradeSessionMessageIdentity(options);
+
+    assert.deepEqual(first.quarantined, []);
+    assert.deepEqual(
+      first.sessions.map((item) => item.sessionId),
+      [sessionId],
+    );
+    assert.ok(first.sessions[0].migrations.includes("completed-turn-orphan-tool-calls"));
+    const { session: restored } = await openSession();
+    assert.deepEqual(
+      restored.messages.map((entry) => entry.messageUid),
+      ["m1", "m2", "m3", "m5"],
+    );
+    const relativeDir = path.relative(base, sessionDir);
+    const backedUp = await readJson(path.join(backupBase, relativeDir, "session.json"));
+    assert.ok(backedUp.messageOrder.some((entry) => entry.messageUid === "m4"));
+
+    const second = await upgradeSessionMessageIdentity(options);
+    assert.deepEqual(second.sessions, []);
+    assert.deepEqual(second.quarantined, []);
   } finally {
     await harness.cleanup();
   }

@@ -24,11 +24,8 @@ test("context diagnostics records compact role and dialog dimensions", () => {
   );
 
   assert.deepEqual(summary.roles, { user: 2, assistant: 1, system: 1 });
-  assert.deepEqual(summary.dialogGroups, [
-    { dialogProcessId: "d1", count: 2 },
-    { dialogProcessId: "d2", count: 1 },
-  ]);
-  assert.equal(summary.missingDialogIdCount, 1);
+  assert.deepEqual(summary.dialogGroups, [{ dialogProcessId: "d1", count: 2 }]);
+  assert.equal(summary.missingDialogIdCount, 2);
   assert.equal(summary.summarizedCount, 1);
   assert.equal(summary.preview.length, 1);
   assert.equal(summary.preview[0].contentLength, 2);

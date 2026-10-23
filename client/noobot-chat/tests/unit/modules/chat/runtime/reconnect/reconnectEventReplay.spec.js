@@ -35,31 +35,45 @@ describe("applyReconnectEventReplay", () => {
     "routes %s directly to workflow runtime projection after reconnect",
     async (event) => {
       const data = {
-        sessionId: "s-1",
-        dialogProcessId: "dp-1",
+        authoritySessionId: "s-1",
         turnScopeId: "turn-1",
         workflowRunId: "workflow-1",
-        nodeSessions: [{ nodeExecutionId: "node-1" }],
         ...(event === WORKFLOW_RUNTIME_EVENT.PLANNING
           ? {
+              eventId: "workflow-planning-1",
+              executionId: "workflow-1",
+              sessionId: "s-1",
+              dialogProcessId: "dp-1",
               presentationMessageId: "workflow-message-1",
-              workflowPayload: { nodes: [{ nodeExecutionId: "node-1" }] },
+              workflowPayload: {
+                nodes: [{ nodeExecutionId: "node-1" }],
+                nodeSessions: [
+                  {
+                    nodeExecutionId: "node-1",
+                    eventId: "workflow_node_state:workflow-1:node-1:1",
+                    status: "pending",
+                    revision: 1,
+                    sequence: 1,
+                  },
+                ],
+              },
             }
-          : { status: "running" }),
+          : {
+              eventId: "workflow-node-state-1",
+              executionId: "node-1",
+              nodeSessionId: "node-session-1",
+              status: "running",
+            }),
       };
       const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
       const applyReconnectMessagesToActiveSession = vi.fn();
 
-      const envelope = canonicalWorkflowRuntimeEvent(event, {
-        ...data,
-        authoritySessionId: data.sessionId,
-        nodeExecutionId: "node-1",
-        nodeSessionId: "node-session-1",
-      });
+      const envelope = canonicalWorkflowRuntimeEvent(event, data);
       const result = await applyReconnectEventReplay({
         event: envelope.identity.eventType,
         data: envelope,
         replayCache: {},
+        isDeletedTurn: vi.fn(() => false),
         isCurrentActiveSession: vi.fn(() => true),
         consumeReplayCacheForSession: vi.fn(),
         applyReconnectMessagesToActiveSession,
@@ -114,6 +128,7 @@ describe("applyReconnectEventReplay", () => {
       event: StreamEventEnum.TURN_LIFECYCLE,
       data: envelope,
       replayCache,
+      isDeletedTurn: vi.fn(() => false),
       isCurrentActiveSession: vi.fn(() => false),
       consumeReplayCacheForSession: vi.fn(),
       applyReconnectMessagesToActiveSession: vi.fn(),
@@ -234,6 +249,7 @@ describe("applyReconnectEventReplay", () => {
       event: envelope.identity.eventType,
       data: envelope,
       replayCache: {},
+      isDeletedTurn: vi.fn(() => false),
       isCurrentActiveSession: vi.fn(() => true),
       consumeReplayCacheForSession: vi.fn(),
       applyReconnectMessagesToActiveSession: vi.fn(),
@@ -253,6 +269,7 @@ describe("applyReconnectEventReplay", () => {
       event: StreamEventEnum.CHANNEL_STATE,
       data: { state: "connected" },
       replayCache,
+      isDeletedTurn: vi.fn(() => false),
       isCurrentActiveSession: vi.fn(() => true),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
@@ -281,6 +298,7 @@ describe("applyReconnectEventReplay", () => {
       event: envelope.identity.eventType,
       data: envelope,
       replayCache,
+      isDeletedTurn: vi.fn(() => false),
       isCurrentActiveSession: vi.fn((sessionId) => sessionId === "s-1"),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
@@ -308,6 +326,7 @@ describe("applyReconnectEventReplay", () => {
       event: envelope.identity.eventType,
       data: envelope,
       replayCache,
+      isDeletedTurn: vi.fn(() => false),
       isCurrentActiveSession: vi.fn(() => false),
       consumeReplayCacheForSession: vi.fn(),
       applyReconnectMessagesToActiveSession: vi.fn(),
@@ -329,6 +348,7 @@ describe("applyReconnectEventReplay", () => {
       event: "message",
       data: { dialogProcessId: "dp-1", text: "tool running" },
       replayCache,
+      isDeletedTurn: vi.fn(() => false),
       isCurrentActiveSession: vi.fn(() => false),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,

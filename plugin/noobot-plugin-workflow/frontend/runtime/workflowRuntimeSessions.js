@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import {
-  NODE_RESULT_FIRST_FIELDS,
-  pickTransferEnvelopeList,
-} from "@noobot/semantic-transfer-protocol";
 import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessId.js";
 import { firstText, text } from "@noobot/shared/value";
 
@@ -18,47 +14,6 @@ function normalizeRuntimeStatusInput(item = {}) {
 
 function objectOr(value, fallback) {
   return value && typeof value === "object" ? value : fallback;
-}
-
-function finiteNumberOrUndefined(primary, fallback) {
-  const value = Number(primary ?? fallback);
-  return Number.isFinite(value) ? value : undefined;
-}
-
-function resolveNodeRootSessionId(source, workflowPayload) {
-  if (source.rootSessionId) return firstText(source.rootSessionId);
-  const payload = workflowPayload.value;
-  return firstText(payload?.runMeta?.sessionId);
-}
-
-function makeNodeSessionFromRun(item = {}, workflowPayload) {
-  const source = objectOr(item, {});
-  const step = objectOr(source.step, {});
-  return {
-    transition: Number(source.transition || 0),
-    workflowRunId: firstText(source.workflowRunId),
-    nodeExecutionId: firstText(source.nodeExecutionId),
-    commandId: firstText(source.commandId),
-    parentSessionId: firstText(source.parentSessionId),
-    nodeName: firstText(step.nodeName, source.nodeName),
-    nodeId: firstText(step.nodeId, source.nodeId),
-    nodeType: finiteNumberOrUndefined(step.nodeType, source.nodeType),
-    actionNodeStateId: firstText(source.actionNodeStateId, step.actionNodeStateId),
-    stepId: firstText(source.stepId, step.stepId),
-    stepIndex: finiteNumberOrUndefined(source.stepIndex, step.stepIndex),
-    type: firstText(step.type, source.type),
-    stateType: finiteNumberOrUndefined(step.stateType, source.stateType),
-    rootSessionId: resolveNodeRootSessionId(source, workflowPayload),
-    dialogProcessId: firstText(source.nodeDialogProcessId),
-    sessionId: firstText(source.nodeSessionId, source.sessionId),
-    transferEnvelopes: pickTransferEnvelopeList(item, NODE_RESULT_FIRST_FIELDS, {
-      skipEmpty: false,
-    }),
-    status: firstText(source.status),
-    stepFailure: objectOr(source.stepFailure, null),
-    parallelWave: Number(source.parallelWave || 0),
-    waveOrder: Number(source.waveOrder || 0),
-  };
 }
 
 function finiteNumberFrom(value) {
@@ -157,7 +112,6 @@ function findRuntimeEntryIndex(entryIndexByKey, item = {}) {
 export function createRuntimeNodeSessions({
   workflowPayload,
   nodeSessions,
-  executionMeta,
   workflowNodeStateRegistry = null,
 }) {
   return computed(() => {
@@ -193,21 +147,6 @@ export function createRuntimeNodeSessions({
       }
       entries.push(committed);
       rememberRuntimeEntryKeys(entryIndexByKey, committed, entries.length - 1);
-    }
-
-    const runs = Array.isArray(executionMeta.value?.nodeAgentRuns)
-      ? executionMeta.value.nodeAgentRuns
-      : [];
-    for (const runItem of runs) {
-      const fallback = makeNodeSessionFromRun(runItem, workflowPayload);
-      if (!fallback.nodeExecutionId || !workflowRunId || fallback.workflowRunId !== workflowRunId) {
-        continue;
-      }
-      const nodeKey = `node:${fallback.nodeExecutionId}`;
-      if (entryIndexByKey.has(nodeKey)) continue;
-
-      entries.push(fallback);
-      rememberRuntimeEntryKeys(entryIndexByKey, fallback, entries.length - 1);
     }
 
     return entries;

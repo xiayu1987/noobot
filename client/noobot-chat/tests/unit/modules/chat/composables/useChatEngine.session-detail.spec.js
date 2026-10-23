@@ -34,7 +34,10 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
   const activeSessionId = ref(sessionId);
   const sessions = ref([activeSession]);
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
-  const chatStore = createTurnRuntimeStoreActions(turnRuntimeRegistry);
+  const chatStore = createTurnRuntimeStoreActions(turnRuntimeRegistry, {
+    onTurnCommitted: vi.fn(() => null),
+    onTurnEvaluated: vi.fn(),
+  });
   const { applySessionDetail } = createSessionDetailApplicator({
     sessions,
     activeSessionId,

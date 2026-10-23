@@ -17,23 +17,13 @@ export function makeActionStateKey(item = {}, index = 0) {
   ).trim();
 }
 
-export function makeRuntimeStep({
-  item = {},
-  index = 0,
-  workflowPayload,
-  nodeRunByDialogProcessId,
-  resolveStepStatus,
-}) {
+export function makeRuntimeStep({ item = {}, index = 0, workflowPayload, resolveStepStatus }) {
   const dialogProcessId = resolveWorkflowDialogProcessId(item);
-  const runItem = dialogProcessId ? nodeRunByDialogProcessId.value.get(dialogProcessId) : null;
   const stepId = String(
-    item?.stepId || runItem?.stepId || dialogProcessId || item?.sessionId || `step_${index + 1}`,
+    item?.stepId || dialogProcessId || item?.sessionId || `step_${index + 1}`,
   ).trim();
-  const stepIndex = Number.isFinite(Number(item?.stepIndex ?? runItem?.stepIndex))
-    ? Number(item?.stepIndex ?? runItem?.stepIndex)
-    : index;
+  const stepIndex = Number.isFinite(Number(item?.stepIndex)) ? Number(item.stepIndex) : index;
   const merged = {
-    ...runItem,
     ...item,
     dialogProcessId,
     stepId,

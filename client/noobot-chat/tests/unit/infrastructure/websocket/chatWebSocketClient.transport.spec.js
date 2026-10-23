@@ -18,6 +18,7 @@ import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
   createAgentCommandReceipt,
+  createAgentCommandRejection,
 } from "@noobot/agent-transport-protocol";
 import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
@@ -100,10 +101,11 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       transferEnvelopes: [{ id: "transfer-1" }],
     });
 
-    socket.emit(MESSAGE_EVENT_WIRE_EVENT, authoritativeEvent);
+    socket.emitChannel("session-transport-log", MESSAGE_EVENT_WIRE_EVENT, authoritativeEvent);
 
     expect(onEvent).toHaveBeenCalledWith({
       event: MESSAGE_EVENT_WIRE_EVENT,
+      channelSessionId: "session-transport-log",
       data: authoritativeEvent,
     });
     const received = debug.mock.results
@@ -162,13 +164,14 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       data: { protocol: { animationId: "animation.bind-race" } },
     });
 
-    socket.emit("plugin.artifact.committed", artifact);
+    socket.emitChannel("session-bind-race", "plugin.artifact.committed", artifact);
     expect(onEvent).not.toHaveBeenCalled();
 
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
     expect(onEvent).toHaveBeenCalledWith({
       event: "plugin.artifact.committed",
+      channelSessionId: "session-bind-race",
       data: artifact,
     });
 
@@ -202,7 +205,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
         .map((raw) => JSON.parse(raw))
         .filter((item) => item.action === "turn.lifecycle.received");
 
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
+    socket.emitChannel("session-early", "turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
     expect(onEvent).not.toHaveBeenCalled();
     expect(receipts().map((item) => item.eventId)).toEqual(["event-early"]);
 
@@ -210,6 +213,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     socket.onopen?.();
     expect(onEvent).toHaveBeenCalledWith({
       event: "turn_lifecycle",
+      channelSessionId: "session-early",
       data: turnLifecycleProtocolEvent(lifecycle),
     });
     expect(receipts()).toHaveLength(1);
@@ -252,10 +256,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       text: "routed",
     });
 
-    socket.emit(MESSAGE_EVENT_WIRE_EVENT, data, "another-session");
+    socket.emitChannel("another-session", MESSAGE_EVENT_WIRE_EVENT, data);
     expect(onEvent).not.toHaveBeenCalled();
 
-    socket.emit(MESSAGE_EVENT_WIRE_EVENT, data, "session-route");
+    socket.emitChannel("session-route", MESSAGE_EVENT_WIRE_EVENT, data);
     expect(onEvent).toHaveBeenCalledWith({
       event: MESSAGE_EVENT_WIRE_EVENT,
       data,
@@ -292,10 +296,15 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
+    socket.emitChannel(
+      "session-receipt-1",
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(lifecycle),
+    );
 
     expect(onEvent).toHaveBeenCalledWith({
       event: "turn_lifecycle",
+      channelSessionId: "session-receipt-1",
       data: turnLifecycleProtocolEvent(lifecycle),
     });
     expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
@@ -340,7 +349,11 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
+    socket.emitChannel(
+      "session-receipt-before-reducer",
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(lifecycle),
+    );
 
     expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
       expect.objectContaining({
@@ -355,7 +368,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const socket = client.connect();
 
-    socket.emit("turn_lifecycle", { eventId: "event-invalid" });
+    socket.emitChannel("session-invalid", "turn_lifecycle", { eventId: "event-invalid" });
 
     expect(socket.sent).toEqual([]);
   });
@@ -387,10 +400,15 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
+    socket.emitChannel(
+      "session-receipt-failure",
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(lifecycle),
+    );
 
     expect(onEvent).toHaveBeenCalledWith({
       event: "turn_lifecycle",
+      channelSessionId: "session-receipt-failure",
       data: turnLifecycleProtocolEvent(lifecycle),
     });
     emitCommandReceipt(socket, payload);
@@ -448,23 +466,46 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const socket = MockWebSocket.instances[0];
 
     const receipt = createAgentCommandReceipt({
-      commandId: payload.commandId,
-      commandType: payload.commandType,
+      command: {
+        commandId: payload.commandId,
+        commandType: payload.commandType,
+        identity: payload.identity,
+      },
       outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
-      identity: payload.identity,
       error: {
         code: "SESSION_AGGREGATE_VERSION_CONFLICT",
         message: "session version conflict",
       },
       occurredAt: "2026-01-01T00:00:00.000Z",
     });
-    socket.emit(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, receipt);
+    socket.emitChannel(payload.identity.sessionId, AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, receipt);
 
     await expect(streamPromise).rejects.toMatchObject({
       message: "session version conflict",
       data: expect.objectContaining({
         error: expect.objectContaining({ code: "SESSION_AGGREGATE_VERSION_CONFLICT" }),
       }),
+    });
+  });
+
+  it("rejects the stream when the proxy rejects the command directly", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const payload = streamCommand({ sessionId: "s-rejected", turnScopeId: "turn-rejected" });
+    const streamPromise = client.stream(payload, vi.fn());
+    const socket = MockWebSocket.instances[0];
+
+    socket.emit(
+      AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
+      createAgentCommandRejection({
+        command: payload,
+        error: { code: "PERMISSION_DENIED", message: "permission denied" },
+        occurredAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await expect(streamPromise).rejects.toMatchObject({
+      message: "permission denied",
+      event: AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
     });
   });
 

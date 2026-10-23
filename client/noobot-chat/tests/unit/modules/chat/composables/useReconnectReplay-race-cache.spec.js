@@ -30,7 +30,8 @@ describe("useReconnectReplay", () => {
     delete invalidEnvelope.identity.turnScopeId;
     await expect(api.applyReconnectEvent(record.event, invalidEnvelope)).resolves.toMatchObject({
       applied: false,
-      reason: "message_event_missing_turn_identity",
+      reason: "unsupported_replay_event",
+      errors: ["missing_turn_scope_id"],
     });
 
     expect(api.__test.replayCache["s-2"]).toBeUndefined();

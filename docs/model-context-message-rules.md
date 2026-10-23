@@ -30,7 +30,7 @@ finalMessages = systemMessages + historyMessages + incrementalMessages
 
 规则：
 
-- 筛选：只读取带 `dialogProcessId/dialogId` 的历史消息，按该 id 分组；没有 dialog id 的消息不进入 history。
+- 筛选：只读取带 `dialogProcessId` 的历史消息，按该 id 分组；没有 `dialogProcessId` 的消息不进入 history。
 - 每个入选 dialog 组保留组内所有未小结非 system 消息；中间的插件规划、跟进、工具结果等只要 `summarized !== true`，都属于该 history 组的一部分，不得被二次裁剪丢弃。
 - 最终模型发送前的通用过滤只处理 `summarized` 与非法 tool/tool_call 配对，不得对 history 中的未小结注入消息执行“同类型只保留最新一条”去重；该 latest-only 策略只属于小结/压缩标记路径。
 - 裁剪：按 dialog 组首次出现顺序，只保留最近 5 个 dialog 组。

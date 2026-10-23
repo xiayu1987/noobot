@@ -14,9 +14,9 @@ import {
 } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_EVENT,
+  createAgentChannelFrame,
+  createAgentDirectFrame,
   createAgentTransportError,
-  createAgentTransportEvent,
-  getAgentTransportEventSessionId,
 } from "@noobot/agent-transport-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
@@ -258,7 +258,7 @@ class SubscriberBroadcastMethods {
     if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
     const deliveryEnvelope = this.projectChannelEventForDelivery(channel, envelope);
     if (envelope?.event !== TURN_LIFECYCLE_WIRE_EVENT) {
-      return this.sendSocketEvent(targetSocket, deliveryEnvelope);
+      return this._writeSocketFrame(targetSocket, deliveryEnvelope);
     }
     const eventEnvelope = envelope?.data || {};
     const eventData = eventEnvelope?.payload || {};
@@ -317,8 +317,7 @@ class SubscriberBroadcastMethods {
   }
 
   projectChannelEventForDelivery(channel, envelope) {
-    if (!channel || !envelope) return envelope;
-    return createAgentTransportEvent({
+    return createAgentChannelFrame({
       event: envelope.event,
       data: envelope.data,
       channelSessionId: channel.identity.sessionId,
@@ -327,7 +326,7 @@ class SubscriberBroadcastMethods {
 
   _deliverPendingLifecycle(targetSocket, delivery) {
     delivery.attempts += 1;
-    const sendResult = this.sendSocketEvent(targetSocket, delivery.envelope);
+    const sendResult = this._writeSocketFrame(targetSocket, delivery.envelope);
     if (sendResult.result !== "sent") {
       this._removePendingLifecycleDelivery(targetSocket, delivery);
       return sendResult;
@@ -462,7 +461,7 @@ class SubscriberBroadcastMethods {
   sendChannelStateSnapshot(channel, targetSocket) {
     if (!channel || !targetSocket) return;
     for (const envelope of this.buildChannelStateSnapshot(channel)) {
-      this.sendSocketEvent(targetSocket, envelope);
+      this.sendChannelEvent(channel, targetSocket, envelope);
     }
   }
 
@@ -478,8 +477,11 @@ class SubscriberBroadcastMethods {
   }
 
   sendSocketEvent(targetSocket, envelope) {
+    return this._writeSocketFrame(targetSocket, createAgentDirectFrame(envelope));
+  }
+
+  _writeSocketFrame(targetSocket, frame) {
     if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
-    if (!envelope) return { result: "skipped", reason: "envelope_missing" };
     if (targetSocket.readyState !== this.WebSocket.OPEN) {
       return { result: "skipped", reason: "socket_not_open" };
     }
@@ -492,14 +494,7 @@ class SubscriberBroadcastMethods {
       return { result: "skipped", reason: "backpressure_limit" };
     }
     try {
-      const envelopeSessionId = getAgentTransportEventSessionId(envelope);
-      targetSocket.send(
-        JSON.stringify({
-          event: envelope.event,
-          data: envelope.data,
-          ...(envelopeSessionId ? { channelSessionId: envelopeSessionId } : {}),
-        }),
-      );
+      targetSocket.send(JSON.stringify(frame));
       return { result: "sent", reason: "" };
     } catch (error) {
       return {
@@ -518,11 +513,8 @@ class SubscriberBroadcastMethods {
       event: AGENT_TRANSPORT_EVENT.ERROR,
       data: createAgentTransportError({
         code: text(options.code) || "AGENT_PROXY_ERROR",
-        message: text(localizedError) || AGENT_PROXY_ERROR.DEFAULT || AGENT_PROXY_ERROR.DEFAULT,
-        identity: options.identity || {
-          sessionId: targetSocket?.__agentProxySessionId,
-          turnScopeId: targetSocket?.__agentProxyTurnScopeId,
-        },
+        message: text(localizedError) || AGENT_PROXY_ERROR.DEFAULT,
+        identity: options.identity || {},
       }),
     });
   }

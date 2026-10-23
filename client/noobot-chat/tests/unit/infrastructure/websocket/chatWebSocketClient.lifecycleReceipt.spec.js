@@ -69,7 +69,11 @@ describe("chatWebSocketClient lifecycle receipt diagnostics", () => {
   it("records a transport-diagnostics debug entry with socket state when the receipt is sent", async () => {
     const { socket, receiptLogs, finish } = setup();
     socket.bufferedAmount = 12;
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle()));
+    socket.emitChannel(
+      "session-receipt",
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(lifecycle()),
+    );
 
     expect(receiptLogs()).toHaveLength(1);
     const [entry] = receiptLogs();
@@ -91,7 +95,11 @@ describe("chatWebSocketClient lifecycle receipt diagnostics", () => {
   it("exposes a non-OPEN socket even though send does not throw", async () => {
     const { socket, receiptLogs, finish } = setup();
     socket.readyState = MockWebSocket.CLOSING;
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle()));
+    socket.emitChannel(
+      "session-receipt",
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(lifecycle()),
+    );
 
     expect(receiptLogs()[0].data).toMatchObject({
       readyState: MockWebSocket.CLOSING,
@@ -112,7 +120,11 @@ describe("chatWebSocketClient lifecycle receipt diagnostics", () => {
       }
       return originalSend(raw);
     };
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle()));
+    socket.emitChannel(
+      "session-receipt",
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(lifecycle()),
+    );
 
     expect(receiptLogs()[0].data).toMatchObject({
       result: "send_failed",
@@ -125,7 +137,7 @@ describe("chatWebSocketClient lifecycle receipt diagnostics", () => {
   it("records rejected with validation reasons for an invalid lifecycle envelope", async () => {
     const { socket, receiptLogs, finish } = setup();
     const invalid = { ...lifecycle(), eventType: "turn.unknown" };
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(invalid));
+    socket.emitChannel("session-receipt", "turn_lifecycle", turnLifecycleProtocolEvent(invalid));
 
     const rejected = receiptLogs().filter((entry) => entry.data.result === "rejected");
     expect(rejected).toHaveLength(1);
@@ -145,7 +157,11 @@ describe("chatWebSocketClient lifecycle receipt diagnostics", () => {
       configurable: true,
       get: bufferedAmountRead,
     });
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle()));
+    socket.emitChannel(
+      "session-receipt",
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(lifecycle()),
+    );
 
     expect(debug).not.toHaveBeenCalled();
     expect(bufferedAmountRead).not.toHaveBeenCalled();

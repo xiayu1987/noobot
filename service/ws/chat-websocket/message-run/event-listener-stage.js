@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  TURN_PHASE,
+  createTurnLifecycleCommandId,
+  createTurnLifecycleRejectedError,
+} from "@noobot/session-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { publishRunEvent } from "../run-registry.js";
@@ -139,9 +144,8 @@ function startProcessing(context, run, accepted, lifecycleData) {
       stage: lifecycleData?.stage,
     })
     .then((started) => {
-      if (!started?.applied && !started?.deduplicated) {
-        const code = text(started?.reason || "processing_start_failed");
-        throw Object.assign(new Error(code), { code });
+      if (!started.applied && !started.deduplicated) {
+        throw createTurnLifecycleRejectedError(started.reason);
       }
       context.lifecycle.latestTurn = started.turn;
       return started;

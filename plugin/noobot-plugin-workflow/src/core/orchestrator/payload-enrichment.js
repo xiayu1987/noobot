@@ -10,61 +10,40 @@ import {
   pickTransferEnvelopeList,
 } from "@noobot/semantic-transfer-protocol";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
-import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 import { text } from "@noobot/shared/value";
 
 function finiteNumber(value) {
   return Number.isFinite(Number(value)) ? Number(value) : undefined;
 }
 
-function nodeExecutionId(item = {}) {
-  return text(item?.nodeIdentity?.nodeExecutionId || item?.nodeExecutionId);
-}
-
 function resolveNodeState(nodeStates, item) {
-  return nodeStates.get(nodeExecutionId(item)) || {};
-}
-
-function resolveNodeSemantic(semantic, item) {
-  return resolveSemanticNodeForPendingStep({ semantic, pendingStep: item?.step || {} });
-}
-
-function resolveAttemptExecutionIds(nodeState) {
-  return Array.isArray(nodeState?.attemptExecutionIds)
-    ? nodeState.attemptExecutionIds.map(text).filter(Boolean)
-    : [];
-}
-
-function resolveFailure(value) {
-  return value && typeof value === "object" ? value : null;
+  const nodeState = nodeStates.get(item.nodeExecutionId);
+  if (!nodeState) throw new Error(`workflow node state not found: ${item.nodeExecutionId}`);
+  return nodeState;
 }
 
 function count(value) {
   return Number(value || 0);
 }
 
-function preferText(primary, fallback, key) {
-  return text(primary[key] || fallback[key]);
-}
-
 function buildRunIdentityFields(state, run) {
   return {
     transition: count(run.transition),
-    workflowRunId: preferText(state, run, "workflowRunId"),
-    nodeExecutionId: preferText(state, run, "nodeExecutionId"),
-    commandId: preferText(state, run, "commandId"),
-    turnScopeId: preferText(state, run, "turnScopeId"),
+    workflowRunId: state.workflowRunId,
+    nodeExecutionId: state.nodeExecutionId,
+    commandId: state.commandId,
+    turnScopeId: state.turnScopeId,
   };
 }
 
-function buildStepIdentityFields(run, step, node) {
+function buildStepIdentityFields(run, state, node) {
   return {
-    nodeName: text(step.nodeName || node.name),
-    nodeId: text(step.nodeId || node.id),
-    nodeType: finiteNumber(step.nodeType),
-    actionNodeStateId: preferText(run, step, "actionNodeStateId"),
-    stepId: preferText(run, step, "stepId"),
-    stepIndex: finiteNumber(run.stepIndex ?? step.stepIndex),
+    nodeName: state.nodeName,
+    nodeId: state.nodeId,
+    nodeType: finiteNumber(run.step.nodeType),
+    actionNodeStateId: run.actionNodeStateId,
+    stepId: run.stepId,
+    stepIndex: run.stepIndex,
     type: text(node.type),
     stateType: finiteNumber(node.stateType),
   };
@@ -72,83 +51,58 @@ function buildStepIdentityFields(run, step, node) {
 
 function buildNodeStateFields(state) {
   return {
-    activeChildExecutionId: text(state.activeChildExecutionId),
-    attemptExecutionIds: resolveAttemptExecutionIds(state),
-    status: text(state.status),
-    failure: resolveFailure(state.failure),
-    revision: count(state.revision),
-    sequence: count(state.sequence),
-    eventId: text(state.eventId),
-    startedAt: text(state.startedAt),
-    completedAt: text(state.completedAt),
-    updatedAt: text(state.updatedAt),
+    activeChildExecutionId: state.activeChildExecutionId,
+    attemptExecutionIds: state.attemptExecutionIds,
+    status: state.status,
+    failure: state.failure,
+    revision: state.revision,
+    sequence: state.sequence,
+    eventId: state.eventId,
+    startedAt: state.startedAt,
+    completedAt: state.completedAt,
+    updatedAt: state.updatedAt,
   };
 }
 
-function buildNodeSessionRecord({ ctx, item, nodeState, semanticNode }) {
-  const run = item || {};
-  const state = nodeState || {};
+function buildNodeSessionRecord({ ctx, item: run, nodeState: state, semanticNode }) {
   const rootSessionId = text(ctx?.sessionId);
   return {
     ...buildRunIdentityFields(state, run),
     parentSessionId: rootSessionId,
-    ...buildStepIdentityFields(run, run.step || {}, semanticNode || {}),
+    ...buildStepIdentityFields(run, state, semanticNode),
     rootSessionId,
-    dialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-    agentDialogProcessId: preferText(state, run, "agentDialogProcessId"),
-    sessionId: preferText(state, run, "nodeSessionId"),
+    dialogProcessId: state.dialogProcessId,
+    sessionId: state.nodeSessionId,
     ...buildNodeStateFields(state),
-    transferEnvelopes: pickTransferEnvelopeList(item, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
+    transferEnvelopes: pickTransferEnvelopeList(run, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
     parallelWave: count(run.parallelWave),
     waveOrder: count(run.waveOrder),
   };
 }
 
-function hasNodeSessionIdentity(item) {
-  return Boolean(
-    item.dialogProcessId ||
-    item.sessionId ||
-    item.stepId ||
-    item.actionNodeStateId ||
-    item.nodeId ||
-    item.nodeName,
+function buildWorkflowNodeSessions({ ctx, semantic, nodeAgentRuns, nodeStateSnapshot }) {
+  const nodeStates = new Map(nodeStateSnapshot.nodes.map((node) => [node.nodeExecutionId, node]));
+  return nodeAgentRuns.map((item) =>
+    buildNodeSessionRecord({
+      ctx,
+      item,
+      nodeState: resolveNodeState(nodeStates, item),
+      semanticNode: resolveSemanticNodeForPendingStep({ semantic, pendingStep: item.step }),
+    }),
   );
 }
 
-function buildWorkflowNodeSessions({
-  ctx = {},
-  semantic = {},
-  nodeAgentRuns = [],
-  nodeStateSnapshot = null,
-} = {}) {
-  const nodeStates = new Map(
-    (Array.isArray(nodeStateSnapshot?.nodes) ? nodeStateSnapshot.nodes : [])
-      .map((item = {}) => [text(item?.nodeExecutionId), item])
-      .filter(([nodeExecutionId]) => nodeExecutionId),
-  );
-  return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : [])
-    .map((item = {}) => {
-      return buildNodeSessionRecord({
-        ctx,
-        item,
-        nodeState: resolveNodeState(nodeStates, item),
-        semanticNode: resolveNodeSemantic(semantic, item),
-      });
-    })
-    .filter(hasNodeSessionIdentity);
-}
-
-function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = []) {
+function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns) {
   return collectTransferEnvelopeLists(nodeAgentRuns, TRANSFER_ENVELOPE_FIELD.NODE_RESULT);
 }
 
 export function enrichWorkflowPayload({
-  workflowPayload = {},
-  ctx = {},
-  semantic = {},
-  nodeAgentRuns = [],
-  nodeStateSnapshot = null,
-} = {}) {
+  workflowPayload,
+  ctx,
+  semantic,
+  nodeAgentRuns,
+  nodeStateSnapshot,
+}) {
   workflowPayload.nodeSessions = buildWorkflowNodeSessions({
     ctx,
     semantic,

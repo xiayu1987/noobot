@@ -7,7 +7,6 @@ import { filePath as path } from "@noobot/path-resolver";
 import { fatalSystemError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
-import { fsRm } from "../../../shared/storage/fs-adapter.js";
 import { createSessionDeletedError, createSessionNotFoundError } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
@@ -28,69 +27,6 @@ class SessionLifecycleMethods {
       this.pathResolver.sessionLifecycleLocksDir(this._basePath(userId)),
       `${sessionKey}.lock`,
     );
-  }
-
-  _sessionLifecycleRecordFile(userId, sessionId) {
-    const sessionKey = requireLifecycleSessionKey(sessionId);
-    return path.join(
-      this.pathResolver.sessionLifecycleRecordsDir(this._basePath(userId)),
-      `${sessionKey}.json`,
-    );
-  }
-
-  async _readSessionLifecycleRecord(userId, sessionId) {
-    const recordFile = this._sessionLifecycleRecordFile(userId, sessionId);
-    const record = await this.storageService.readJson(recordFile, null);
-    if (record === null) return null;
-    if (typeof record !== "object" || Array.isArray(record) || record.repair?.status !== "failed") {
-      const error = new Error(`invalid session lifecycle record: ${recordFile}`);
-      error.code = "SESSION_LIFECYCLE_RECORD_INVALID";
-      error.persistencePath = recordFile;
-      throw error;
-    }
-    return record;
-  }
-
-  async _recordSessionRepairFailure(userId, sessionId, { error, trigger }) {
-    const record = {
-      schemaVersion: 1,
-      sessionId: String(sessionId).trim(),
-      repair: {
-        status: "failed",
-        errorCode: String(error?.code || "SESSION_REPAIR_FAILED"),
-        message: String(error?.message || "Session repair failed"),
-        failedAt: this.now(),
-        trigger: {
-          code: String(trigger?.code || ""),
-          message: String(trigger?.message || ""),
-        },
-      },
-      updatedAt: this.now(),
-    };
-    await this.storageService.writeJsonAtomic(
-      this._sessionLifecycleRecordFile(userId, sessionId),
-      record,
-    );
-    return record;
-  }
-
-  _createPreviousRepairFailureError(lifecycle = null, currentError = null) {
-    const repair = lifecycle?.repair || {};
-    const error = new Error(String(repair.message || "Session repair previously failed"));
-    error.code = String(repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
-    error.repairSkipped = true;
-    if (repair.trigger) error.repairTrigger = repair.trigger;
-    if (currentError) error.cause = currentError;
-    return error;
-  }
-
-  async _clearSessionRepairFailure(userId = "", sessionId = "") {
-    return this.withSessionLifecycleMutation(userId, sessionId, async () => {
-      const current = await this._readSessionLifecycleRecord(userId, sessionId);
-      if (!current) return false;
-      await fsRm(this._sessionLifecycleRecordFile(userId, sessionId), { force: true });
-      return true;
-    });
   }
 
   async withSessionLifecycleMutation(userId, sessionId, operation) {

@@ -8,6 +8,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   getAgentCommandIdentity,
   validateAgentCommandReceipt,
+  validateAgentCommandRejection,
 } from "@noobot/agent-transport-protocol";
 import { text, isObjectLike } from "@noobot/shared/value";
 
@@ -25,41 +26,35 @@ export function normalizeErrorMessage(value, fallback = "") {
   return fallback;
 }
 
-export function isEventForStreamScope(data = {}, payload = {}, channelSessionId = "") {
+export function isEventForStreamScope(data, payload, channelSessionId) {
   const identity = getAgentCommandIdentity(payload);
-  const payloadSessionId = normalizeTrimmedString(identity.sessionId);
-  const eventSessionId =
-    normalizeTrimmedString(data?.sessionId) || normalizeTrimmedString(channelSessionId);
-  if (payloadSessionId && eventSessionId && payloadSessionId !== eventSessionId) return false;
-  const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
-  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
-  if (payloadTurnScopeId && eventTurnScopeId && payloadTurnScopeId !== eventTurnScopeId)
-    return false;
-  const payloadDialogProcessId = normalizeTrimmedString(identity.dialogProcessId);
-  const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
-  return !(
-    payloadDialogProcessId &&
-    eventDialogProcessId &&
-    payloadDialogProcessId !== eventDialogProcessId
+  if (channelSessionId !== undefined && channelSessionId !== identity.sessionId) return false;
+  return ["turnScopeId", "dialogProcessId"].every(
+    (key) => !identity[key] || !data[key] || data[key] === identity[key],
   );
 }
 
-export function isCommandReceiptForPayload(event = "", data = {}, payload = {}) {
-  if (normalizeTrimmedString(event) !== AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) return false;
-  const validation = validateAgentCommandReceipt(data);
+const COMMAND_RESULT_VALIDATORS = new Map([
+  [AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, validateAgentCommandReceipt],
+  [AGENT_TRANSPORT_EVENT.COMMAND_REJECTED, validateAgentCommandRejection],
+]);
+
+export function isCommandResultForPayload(event, data, payload) {
+  const validator = COMMAND_RESULT_VALIDATORS.get(event);
+  if (!validator) return false;
+  const validation = validator(data);
   if (!validation.valid) throw new TypeError(validation.errors.join(","));
-  return normalizeTrimmedString(data.commandId) === normalizeTrimmedString(payload?.commandId);
+  return data.commandId === payload.commandId;
 }
 
-export function createCommandReceiptError(data = {}, translateText = (key = "") => key) {
-  const fallback =
-    normalizeTrimmedString(data?.error?.code) || translateText("infra.websocketStreamError");
-  const error = new Error(normalizeErrorMessage(data?.error?.message, fallback));
-  error.event = AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT;
-  error.data = data || {};
+export function isCommandFailureResult(event, data) {
+  if (event === AGENT_TRANSPORT_EVENT.COMMAND_REJECTED) return true;
+  return data.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED;
+}
+
+export function createCommandResultError(event, data) {
+  const error = new Error(data.error.message);
+  error.event = event;
+  error.data = data;
   return error;
-}
-
-export function isFailedCommandReceipt(data = {}) {
-  return normalizeTrimmedString(data?.outcome) === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED;
 }

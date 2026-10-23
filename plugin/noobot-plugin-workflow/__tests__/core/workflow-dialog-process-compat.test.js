@@ -7,7 +7,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
@@ -22,9 +21,4 @@ test("workflow dialog process helpers read only canonical identity fields", () =
     ),
     ["dialog-a", "dialog-b"],
   );
-  assert.equal(
-    resolveWorkflowNodeDialogProcessId({ nodeDialogProcessId: "node-dialog" }),
-    "node-dialog",
-  );
-  assert.equal(resolveWorkflowNodeDialogProcessId({}), "");
 });

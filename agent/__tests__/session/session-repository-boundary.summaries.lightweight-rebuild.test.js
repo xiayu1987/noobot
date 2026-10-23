@@ -236,9 +236,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
                 nodeAgentRuns: [
                   {
                     stepId: "step-act",
-                    nodeDialogId: "dialog-act",
                     nodeSessionId: "session-act",
-                    stepStatus: "success",
                     step: { nodeId: "act", nodeName: "Action", type: "action" },
                     nodeResultTransferEnvelopes: [workflowTransferEnvelope],
                     nodeResultText: "large node result should be dropped".repeat(80),
@@ -249,9 +247,9 @@ test("session display summary should keep chat view lightweight and rebuild stal
                 {
                   nodeId: "act",
                   nodeName: "Action",
-                  dialogId: "dialog-act",
+                  dialogProcessId: "dialog-act",
                   sessionId: "session-act",
-                  stepStatus: "success",
+                  status: "succeeded",
                   transferEnvelopes: [workflowTransferEnvelope],
                   nodeResultText: "large node session result should be dropped".repeat(80),
                 },
@@ -454,11 +452,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(workflowMessage.pluginMeta.payload.execution.completed, true);
     assert.equal(workflowMessage.pluginMeta.payload.execution.status, "success");
     assert.equal(
-      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].stepStatus,
-      "success",
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeSessionId,
+      "session-act",
     );
     assert.equal(workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].step.nodeId, "act");
-    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].stepStatus, "success");
+    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].status, "succeeded");
+    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].dialogProcessId, "dialog-act");
     assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].nodeId, "act");
     assert.equal(workflowMessage.pluginMeta.payload.semantic.nodes.length, 2);
     assert.equal(

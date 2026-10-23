@@ -31,9 +31,20 @@ function publishBufferedEvents(manager, socket, transaction) {
   const bufferedEvents = transaction.eventBuffer;
   socket.__agentProxyReconnectTransaction = null;
   for (const bufferedEvent of bufferedEvents) {
-    const envelope = bufferedEvent?.envelope;
-    if (!envelope) continue;
+    const { envelope } = bufferedEvent;
     const channel = manager.channelStore.get(bufferedEvent.channelKey);
+    if (!channel) {
+      void writeAgentProxyRouteLifecycleEvent({
+        event: "agentProxy.route.reconnect.bufferedEventDropped",
+        socket,
+        data: {
+          channelKey: bufferedEvent.channelKey,
+          event: envelope.event,
+          reason: "channel_released",
+        },
+      });
+      continue;
+    }
     const sendResult = manager.sendChannelEvent(channel, socket, envelope);
     if (!["sent", "queued"].includes(sendResult.result)) continue;
     if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) continue;
@@ -49,8 +60,8 @@ export function publishReconnectTransaction({ manager, socket, transaction, cont
     event: AGENT_TRANSPORT_EVENT.RECONNECT_DATA,
     data: createReconnectData(control, sessions),
   });
-  for (const envelope of transaction.channelStateBaseline) {
-    manager.sendSocketEvent(socket, envelope);
+  for (const { channel, envelope } of transaction.channelStateBaseline) {
+    manager.sendChannelEvent(channel, socket, envelope);
   }
   publishBufferedEvents(manager, socket, transaction);
   manager.sendSocketEvent(socket, {

@@ -8,8 +8,10 @@ import { defineStore } from "pinia";
 import { createTurnRuntimeRegistryState } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnRuntimeStoreActions } from "./chatStoreTurnRuntime.js";
 import { createChatExecutionSelectors } from "./chatStoreExecutionSelectors.js";
-import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatStoreSubSessions.js";
+import { createSubSessionStore } from "./chatStoreSubSessions.js";
+import { createSubSessionMessageRegistry } from "./subSessionRegistry.js";
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
+import { createWorkflowNodeStateRegistry } from "./workflowEventOperations.js";
 import { createTurnRuntimeStoreCallbacks } from "./turnRuntimeStoreCallbacks.js";
 import { isFinalTurnState } from "../runtime/run-state-machine/turnReducer.js";
 import { text } from "@noobot/shared/value";
@@ -19,7 +21,7 @@ export const useChatStore = defineStore("chat", () => {
   const uploadFiles = ref([]);
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
 
-  const workflowNodeStateRegistry = ref(null);
+  const workflowNodeStateRegistry = ref(createWorkflowNodeStateRegistry());
   const subSessionMessageRegistry = ref(createSubSessionMessageRegistry());
   const subSessionMessageRegistryVersion = ref(0);
   const sessions = ref([]);
@@ -79,7 +81,6 @@ export const useChatStore = defineStore("chat", () => {
     ensureSubSessionMessageContainer: subSessions.ensureSubSessionMessageContainer,
     reduceSubSessionSnapshot: subSessions.reduceSubSessionSnapshot,
     removeSubSessionsByWorkflowRunIds: subSessions.removeSubSessionsByWorkflowRunIds,
-    selectSubSessionMessages: subSessions.selectSubSessionMessages,
   });
   const executionSelectors = createChatExecutionSelectors({
     turnRuntimeRegistry,
@@ -90,7 +91,7 @@ export const useChatStore = defineStore("chat", () => {
     input.value = "";
     uploadFiles.value = [];
     turnRuntimeRegistry.value = createTurnRuntimeRegistryState();
-    workflowNodeStateRegistry.value = null;
+    workflowNodeStateRegistry.value = createWorkflowNodeStateRegistry();
     subSessionMessageRegistry.value = createSubSessionMessageRegistry();
     subSessionMessageRegistryVersion.value += 1;
     sessions.value = [];
@@ -120,7 +121,6 @@ export const useChatStore = defineStore("chat", () => {
     ...workflows,
     reduceSubSessionMessageEvent: subSessions.reduceSubSessionMessageEvent,
     selectSubSessionMessages: subSessions.selectSubSessionMessages,
-    selectSubSessionTurnRuntime: subSessions.selectSubSessionTurnRuntime,
     ...executionSelectors,
     resetChatStore,
   };

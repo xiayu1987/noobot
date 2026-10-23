@@ -218,7 +218,6 @@ export function createRunner({
       const isCanonicalStore =
         isFunction(currentStore?.push) &&
         isFunction(currentStore?.updateLast) &&
-        isFunction(currentStore?.removeLast) &&
         isFunction(currentStore?.updateWhere) &&
         isFunction(currentStore?.toArray);
       if (!isCanonicalStore) {

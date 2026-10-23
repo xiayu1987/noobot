@@ -4,51 +4,45 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  EVENT_FAMILY,
+  isEventProtocolEnvelope,
   readProtocolEventReducerInput,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
 
-export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
+const TRANSPORT_EVENT_TYPE_MISMATCH = "transport_event_type_mismatch";
 
-export function normalizeTurnTransportEnvelope({
-  event = "",
-  data = {},
-  channelSessionId = "",
-  source = "unknown",
-} = {}) {
-  const payload = isPlainObject(data) ? data : {};
-  const validation = validateProtocolEvent(payload);
-  const protocolEnvelope = validation.valid ? payload : null;
-  const reducerInput = validation.valid ? readProtocolEventReducerInput(payload).input : null;
-  const messageEvent =
-    validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
-      ? payload
-      : null;
+function validateTransportProtocolEnvelope(event, envelope) {
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid) return validation;
+  if (envelope.identity.eventType === event) return validation;
   return {
-    event: text(event),
-    data: reducerInput || payload,
-    protocolEnvelope,
-    channelSessionId: text(channelSessionId),
-    source: text(source) || "unknown",
-    identity: {
-      sessionId: text(messageEvent?.identity?.sessionId),
-      dialogProcessId: text(messageEvent?.payload?.dialogProcessId),
-      turnScopeId: text(messageEvent?.identity?.turnScopeId),
-    },
-    transportCursor: {
-      sequenceDomain: TURN_TRANSPORT_SEQUENCE_DOMAIN,
-      sequence: Number(payload?.seq || payload?.transportSequence || 0),
-      event: text(event),
-    },
-    messageEventCursor: messageEvent
-      ? {
-          sequenceDomain: text(messageEvent.ordering.domain),
-          sequenceScopeId: text(messageEvent.ordering.scopeId),
-          sequence: Number(messageEvent.ordering.sequence),
-          eventId: text(messageEvent.identity.eventId),
-        }
-      : null,
+    valid: false,
+    errors: [TRANSPORT_EVENT_TYPE_MISMATCH],
+    descriptor: validation.descriptor,
+  };
+}
+
+export function normalizeTurnTransportEnvelope({ event, data, channelSessionId }) {
+  if (!isEventProtocolEnvelope(data)) {
+    return { event, data, protocolEnvelope: null, family: "", rejected: null, channelSessionId };
+  }
+  const validation = validateTransportProtocolEnvelope(event, data);
+  if (!validation.valid) {
+    return {
+      event,
+      data: null,
+      protocolEnvelope: null,
+      family: "",
+      rejected: { errors: validation.errors },
+      channelSessionId,
+    };
+  }
+  return {
+    event,
+    data: readProtocolEventReducerInput(data).input,
+    protocolEnvelope: data,
+    family: validation.descriptor.family,
+    rejected: null,
+    channelSessionId,
   };
 }

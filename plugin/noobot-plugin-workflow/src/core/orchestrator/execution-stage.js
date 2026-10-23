@@ -16,7 +16,7 @@ export async function runWorkflowExecutionStage({
   signal,
   semantic = {},
   workflowRunId = "",
-  planningNodeSessions = [],
+  initialNodeStateSnapshot,
   phaseTracker,
 } = {}) {
   phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
@@ -28,7 +28,7 @@ export async function runWorkflowExecutionStage({
     signal,
     semantic,
     workflowRunId,
-    planningNodeSessions,
+    nodeStateSnapshot: initialNodeStateSnapshot,
   });
   const executionMeta = {
     completed: execution.completed,

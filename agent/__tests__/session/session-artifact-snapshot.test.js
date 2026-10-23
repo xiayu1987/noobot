@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -16,7 +17,7 @@ import {
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
 
-test("snapshot reads legacy transfer reasons only after canonical Session migration", async () =>
+test("snapshot reads the canonical Session artifact without read-time migration", async () =>
   withTemp(async (root) => {
     await writeSessionArtifact({
       sessionDir: root,
@@ -75,5 +76,53 @@ test("snapshot reads legacy transfer reasons only after canonical Session migrat
     assert.equal(
       snapshot.sessionSummary.messages[0].transferEnvelopes[0].intent.reason,
       "multimodal_parse_artifact",
+    );
+  }));
+
+test("snapshot rejects a completed turn whose summary marks need canonical repair", async () =>
+  withTemp(async (root) => {
+    const required = createTestSessionRequiredFields();
+    const turn = { dialogProcessId: "dialog-1", turnScopeId: "turn-1" };
+    const messages = canonicalMessages([
+      { role: "user", content: "read it", ...turn },
+      {
+        role: "assistant",
+        content: "",
+        chatPresentation: false,
+        tool_calls: [{ id: "call-1", type: "function", function: { name: "read_file" } }],
+        ...turn,
+      },
+      { role: "tool", content: "file", tool_call_id: "call-1", toolName: "read_file", ...turn },
+      { role: "assistant", content: "done", ...turn },
+    ]).map((message) => ({ ...message, summarized: false }));
+    await writeSessionArtifact({
+      sessionDir: root,
+      sessionPayload: applySessionMessageFacts({
+        ...required,
+        sessionId: "summary-marks-session",
+        aggregateVersion: 1,
+        turnLifecycle: {
+          ...required.turnLifecycle,
+          turns: {
+            "turn-1": {
+              ...turn,
+              terminalStatus: { ...turn, status: "completed", reason: "run_completed" },
+            },
+          },
+        },
+        messages,
+      }),
+    });
+    await assert.rejects(
+      readSessionArtifactSnapshot({ outputDir: root, includeExecutionLogs: false }),
+      { code: SESSION_ERROR_CODE.COMPLETION_SUMMARY_REPAIR_REQUIRED },
+    );
+  }));
+
+test("snapshot rejects a missing Session artifact instead of returning null", async () =>
+  withTemp(async (root) => {
+    await assert.rejects(
+      readSessionArtifactSnapshot({ outputDir: root, includeExecutionLogs: false }),
+      { code: SESSION_ERROR_CODE.ARTIFACT_NOT_FOUND, statusCode: 404 },
     );
   }));

@@ -18,7 +18,6 @@ import {
 
 import { registerWorkflowAgentHooks } from "../../src/core/orchestrator.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
-import { resolveWorkflowNodeDialogProcessId } from "../../src/core/node-dialog-process-id.js";
 import {
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
@@ -42,7 +41,7 @@ export function createMockBotHookManager() {
           outcomes: [
             {
               status: "ok",
-              value: { action: { type: "submit", stepIndex: 0 } },
+              value: { action: { type: "submit" } },
             },
           ],
         };
@@ -313,6 +312,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   }
   runtime.sharedTools = runtimeSharedTools;
   if (!isObjectLike(runtime.runConfig)) runtime.runConfig = runConfig;
+  if (!isObjectLike(runtime.systemRuntime)) runtime.systemRuntime = { persistenceScope: null };
   if (!runtime.sessionManager) {
     const sequences = new Map();
     runtime.sessionManager = {
@@ -414,7 +414,6 @@ export function workflowTurn(agentResult) {
 export {
   registerWorkflowAgentHooks,
   WORKFLOW_PLUGIN_DEFAULTS,
-  resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
 };

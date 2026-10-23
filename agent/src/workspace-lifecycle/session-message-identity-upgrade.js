@@ -28,6 +28,7 @@ import {
 } from "@noobot/event-protocol/outbox";
 import {
   SESSION_REPAIR_DATA_REJECTION_CODES,
+  reconcileCompletedTurnOrphanToolCalls,
   reconcileCompletedTurnSummaryMarks,
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
@@ -251,6 +252,9 @@ async function validateStagedSession(stagingDir, scope) {
   assertSessionScopeIdentity({ session: normalized, ...scope });
   if (normalized.schemaVersion !== SESSION_ARTIFACT_SCHEMA_VERSION) {
     throw upgradeError("schema_version_not_current", { schemaVersion: normalized.schemaVersion });
+  }
+  if (reconcileCompletedTurnOrphanToolCalls(normalized).changed) {
+    throw upgradeError("orphan_tool_calls_not_canonical", {});
   }
   if (reconcileCompletedTurnSummaryMarks(normalized).changed) {
     throw upgradeError("summary_marks_not_canonical", {});

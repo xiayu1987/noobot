@@ -14,41 +14,31 @@ import {
   mergeSnapshotWithRealtimeMessages,
   summarizeSubSessionMessage,
 } from "./subSessionSnapshotMerge.js";
-import { text } from "@noobot/shared/value";
+import { createEmptySubSession } from "./subSessionRegistry.js";
 
 export function createSubSessionSnapshotReducer({
   subSessionMessageRegistry,
   subSessionMessageRegistryVersion,
-  createEmptyRegistry,
-  applyTurnLifecycleSnapshot = null,
-  applyTurnTimingSnapshot = null,
+  applyTurnLifecycleSnapshot,
+  applyTurnTimingSnapshot,
 }) {
-  return function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
-    const sessionId = text(sessionDoc?.sessionId);
-    if (!sessionId) return { applied: false, reason: "missing_session" };
-    const registry = subSessionMessageRegistry.value || createEmptyRegistry();
-    const current = registry.sessions?.[sessionId] || {
-      sessionId,
-      messages: [],
-      eventsById: {},
-      sequence: 0,
-    };
+  return function reduceSubSessionSnapshot(snapshot) {
+    const { sessionId } = snapshot;
+    const registry = subSessionMessageRegistry.value;
+    const current = registry.sessions[sessionId] || createEmptySubSession(sessionId);
     const admission = evaluateSubSessionSnapshotAdmission({
-      sessionId,
-      sessionDoc,
-      snapshotContext,
+      snapshot,
       current,
       applyTurnLifecycleSnapshot,
       applyTurnTimingSnapshot,
     });
     if (!admission.admitted) return admission.result;
-    const { lifecycleResult, timingResult, aggregateVersion, appliedAggregateVersion } = admission;
-    const contextFacet = buildSnapshotContextFacet(snapshotContext);
-    const snapshotMessages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
-    const realtimeMessages = Array.isArray(current.messages) ? current.messages : [];
+    const { lifecycleResult, timingResult, appliedAggregateVersion } = admission;
+    const contextFacet = buildSnapshotContextFacet(snapshot);
+    const snapshotMessages = snapshot.messages;
+    const realtimeMessages = current.messages;
     logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeStarted", () => ({
       sessionId,
-      aggregateVersion,
       appliedAggregateVersion,
       ...contextFacet,
       snapshotMessageCount: snapshotMessages.length,
@@ -61,27 +51,21 @@ export function createSubSessionSnapshotReducer({
     );
     logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeCommitted", () => ({
       sessionId,
-      aggregateVersion,
       previousAggregateVersion: appliedAggregateVersion,
       ...contextFacet,
       messageCount: deduplicatedMessages.length,
       messages: deduplicatedMessages.map(summarizeSubSessionMessage),
     }));
-    registry.sessions = registry.sessions || {};
-    registry.sessions[sessionId] = buildSubSessionSnapshotRegistryEntry({
+    const session = buildSubSessionSnapshotRegistryEntry({
       current,
-      sessionDoc,
-      sessionId,
+      snapshot,
       messages: deduplicatedMessages,
-      aggregateVersion,
     });
-    subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
-    if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
-    return {
-      applied: true,
-      session: registry.sessions[sessionId],
-      lifecycleResult,
-      timingResult,
+    subSessionMessageRegistry.value = {
+      ...registry,
+      sessions: { ...registry.sessions, [sessionId]: session },
     };
+    subSessionMessageRegistryVersion.value += 1;
+    return { applied: true, session, lifecycleResult, timingResult };
   };
 }

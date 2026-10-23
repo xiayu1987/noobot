@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isFunction } from "@noobot/shared/value";
 import {
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_SNAPSHOT_WIRE_EVENT,
@@ -20,6 +20,7 @@ import { MESSAGE_EVENT_WIRE_EVENT, validateMessageEventPayload } from "./message
 import {
   domainResult,
   validateAttachment,
+  validateAttachmentEnvelope,
   validateInteractionEnvelope,
   validateMessageEnvelope,
   validateTurnLifecycleEventEnvelope,
@@ -77,12 +78,33 @@ export const EVENT_FAMILY = Object.freeze({
   PLUGIN_ARTIFACT: PLUGIN_ARTIFACT_FAMILY,
 });
 
+const REDUCER_INPUTS = new Set(Object.values(EVENT_REDUCER_INPUT));
+
+function assertDescriptorContract(descriptor) {
+  const violations = [
+    [!Number.isInteger(descriptor.schemaVersion) || descriptor.schemaVersion < 1, "schemaVersion"],
+    [!REDUCER_INPUTS.has(descriptor.reducerInput), "reducerInput"],
+    [
+      !Number.isInteger(descriptor.minimumSequence) || descriptor.minimumSequence < 0,
+      "minimumSequence",
+    ],
+    [!isFunction(descriptor.validateEnvelope), "validateEnvelope"],
+    [!isFunction(descriptor.validatePayload), "validatePayload"],
+  ];
+  const missing = violations.filter(([violated]) => violated).map(([, field]) => field);
+  if (missing.length) {
+    throw new TypeError(`event family ${descriptor.family} must declare ${missing.join(", ")}`);
+  }
+}
+
 const descriptors = Object.freeze(
   [
     {
       family: EVENT_FAMILY.TURN_LIFECYCLE,
       wireEvents: [TURN_LIFECYCLE_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.TURN,
+      reducerInput: EVENT_REDUCER_INPUT.PAYLOAD,
+      minimumSequence: 1,
       validateEnvelope: validateTurnLifecycleEventEnvelope,
       validatePayload: (payload) => domainResult(validateSessionEvent(payload)),
       schemaVersion: 1,
@@ -91,6 +113,7 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.TURN_SNAPSHOT,
       wireEvents: [TURN_SNAPSHOT_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.TURN,
+      reducerInput: EVENT_REDUCER_INPUT.PAYLOAD,
       minimumSequence: 0,
       validateEnvelope: validateTurnSnapshotEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
@@ -100,6 +123,8 @@ const descriptors = Object.freeze(
       family,
       wireEvents: [wireEvent],
       reducerTarget: EVENT_REDUCER_TARGET.EXECUTION,
+      reducerInput: EVENT_REDUCER_INPUT.PAYLOAD,
+      minimumSequence: 1,
       validateEnvelope: validateExecutionQueryEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
       schemaVersion: EXECUTION_QUERY_SCHEMA_VERSION,
@@ -108,6 +133,9 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
       wireEvents: [ATTACHMENT_LIFECYCLE_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.ATTACHMENT,
+      reducerInput: EVENT_REDUCER_INPUT.PAYLOAD,
+      minimumSequence: 1,
+      validateEnvelope: validateAttachmentEnvelope,
       validatePayload: validateAttachment,
       schemaVersion: 1,
     },
@@ -116,6 +144,7 @@ const descriptors = Object.freeze(
       wireEvents: [INTERACTION_EVENT_TYPE.REQUEST],
       reducerTarget: EVENT_REDUCER_TARGET.INTERACTION,
       reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
+      minimumSequence: 1,
       validateEnvelope: validateInteractionEnvelope,
       validatePayload: (payload) => domainResult(validateInteractionRequestPayload(payload)),
       schemaVersion: 1,
@@ -125,6 +154,7 @@ const descriptors = Object.freeze(
       wireEvents: [INTERACTION_EVENT_TYPE.RESPONSE],
       reducerTarget: EVENT_REDUCER_TARGET.INTERACTION,
       reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
+      minimumSequence: 1,
       validateEnvelope: validateInteractionEnvelope,
       validatePayload: (payload) => domainResult(validateInteractionResponsePayload(payload)),
       schemaVersion: 1,
@@ -134,7 +164,6 @@ const descriptors = Object.freeze(
       wireEvents: [MESSAGE_EVENT_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.MESSAGE,
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
-
       minimumSequence: 0,
       validateEnvelope: validateMessageEnvelope,
       validatePayload: (payload) => domainResult(validateMessageEventPayload(payload)),
@@ -145,6 +174,7 @@ const descriptors = Object.freeze(
       wireEvents: Object.values(WORKFLOW_RUNTIME_EVENT),
       reducerTarget: EVENT_REDUCER_TARGET.WORKFLOW,
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
+      minimumSequence: 1,
       validateEnvelope: validateWorkflowRuntimeEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
       schemaVersion: WORKFLOW_RUNTIME_SCHEMA_VERSION,
@@ -154,20 +184,17 @@ const descriptors = Object.freeze(
       wireEvents: [PLUGIN_ARTIFACT_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.PLUGIN_ARTIFACT,
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
+      minimumSequence: 1,
       validateEnvelope: validatePluginArtifactEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
       schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
       sessionArtifact: true,
     },
   ].map((descriptor) => {
-    if (!Number.isInteger(descriptor.schemaVersion) || descriptor.schemaVersion < 1) {
-      throw new TypeError(`event family ${descriptor.family} must declare schemaVersion`);
-    }
+    assertDescriptorContract(descriptor);
     return Object.freeze({
       ...descriptor,
       authority: EVENT_AUTHORITY.AUTHORITATIVE,
-      reducerInput: descriptor.reducerInput || EVENT_REDUCER_INPUT.PAYLOAD,
-      minimumSequence: descriptor.minimumSequence ?? 1,
       wireEvents: Object.freeze(descriptor.wireEvents),
       replayable: true,
       persisted: true,
@@ -175,15 +202,14 @@ const descriptors = Object.freeze(
   }),
 );
 const byFamily = new Map(descriptors.map((descriptor) => [descriptor.family, descriptor]));
-export function getEventFamily(family = "") {
-  return byFamily.get(text(family)) || null;
+export function getEventFamily(family) {
+  return byFamily.get(family) || null;
 }
 
-export function readProtocolEventPayload(envelope = {}, { wireEvent = "", family = "" } = {}) {
+export function readProtocolEventPayload(envelope, { wireEvent, family }) {
   const validation = validateProtocolEvent(envelope);
   if (!validation.valid) return { ...validation, payload: null };
-  const expectedWireEvent = text(wireEvent);
-  if (expectedWireEvent && text(envelope.identity.eventType) !== expectedWireEvent) {
+  if (envelope.identity.eventType !== wireEvent) {
     return {
       valid: false,
       errors: ["transport_event_identity_mismatch"],
@@ -191,8 +217,7 @@ export function readProtocolEventPayload(envelope = {}, { wireEvent = "", family
       payload: null,
     };
   }
-  const expectedFamily = text(family);
-  if (expectedFamily && validation.descriptor.family !== expectedFamily) {
+  if (validation.descriptor.family !== family) {
     return {
       valid: false,
       errors: ["event_family_mismatch"],
@@ -208,7 +233,7 @@ export function readProtocolEventPayload(envelope = {}, { wireEvent = "", family
   };
 }
 
-export function readProtocolEventReducerInput(envelope = {}) {
+export function readProtocolEventReducerInput(envelope) {
   const validation = validateProtocolEvent(envelope);
   if (!validation.valid) return { ...validation, input: null };
   let input = envelope.payload;
@@ -228,26 +253,22 @@ export function readProtocolEventReducerInput(envelope = {}) {
     input,
   };
 }
-export function validateProtocolEvent(envelope = {}) {
+export function validateProtocolEvent(envelope) {
   const envelopeValidation = validateEventEnvelope(envelope);
   if (!envelopeValidation.valid) return { ...envelopeValidation, descriptor: null };
   const descriptor = getEventFamily(envelope.protocol.family);
   if (!descriptor) return { valid: false, errors: ["unsupported_event_family"], descriptor: null };
   if (!descriptor.wireEvents.includes(envelope.identity.eventType))
     return { valid: false, errors: ["event_type_family_mismatch"], descriptor };
-  const orderingValidation =
-    Number(envelope.ordering.sequence) < descriptor.minimumSequence
-      ? { valid: false, errors: ["sequence_below_family_minimum"] }
-      : { valid: true, errors: [] };
-  const familyEnvelopeValidation = descriptor.validateEnvelope?.(envelope) || {
-    valid: true,
-    errors: [],
-  };
+  if (envelope.ordering.sequence < descriptor.minimumSequence)
+    return { valid: false, errors: ["sequence_below_family_minimum"], descriptor };
   const payloadValidation = descriptor.validatePayload(envelope.payload);
-  const errors = [
-    ...orderingValidation.errors,
-    ...familyEnvelopeValidation.errors,
-    ...payloadValidation.errors,
-  ];
-  return { valid: errors.length === 0, errors, descriptor };
+  if (!payloadValidation.valid)
+    return { valid: false, errors: payloadValidation.errors, descriptor };
+  const familyEnvelopeValidation = descriptor.validateEnvelope(envelope);
+  return {
+    valid: familyEnvelopeValidation.valid,
+    errors: familyEnvelopeValidation.errors,
+    descriptor,
+  };
 }

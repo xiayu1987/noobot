@@ -165,7 +165,7 @@ export function createInteractionEnvelope(
 export function createWorkflowEnvelope(
   eventType,
   payload = {},
-  { sessionId = "s-1", turnScopeId = "turn-workflow", sequence = 1, eventId } = {},
+  { sessionId = "s-1", turnScopeId = "turn-workflow", sequence = 1, eventId, executionId },
 ) {
   const workflowRunId = normalizeIdentityPart(payload.workflowRunId, "workflow-1");
   return createEventEnvelope({
@@ -176,6 +176,7 @@ export function createWorkflowEnvelope(
       eventType,
       sessionId,
       turnScopeId,
+      executionId,
     },
     causality: {},
     ordering: {

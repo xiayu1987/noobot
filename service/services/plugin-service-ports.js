@@ -224,17 +224,8 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
   return Object.freeze({
     async readSnapshot({ userId, segments, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
-      let entries = [];
-      try {
-        entries = await fs.readdir(outputDir);
-      } catch (error) {
-        if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
-      }
       const snapshot = await readSessionArtifactSnapshot({ outputDir });
-      const childSessionId = text(
-        snapshot.sessionSummary?.sessionId || snapshot.session?.sessionId,
-      );
-      return { ...snapshot, childSessionId, artifactNames: entries };
+      return { ...snapshot, childSessionId: snapshot.session.sessionId };
     },
     async readThinkingDetail({ userId, segments, dialogProcessId, turnScopeId, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
@@ -251,13 +242,12 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
       );
       return buildThinkingDetailPayload(
         {
-          exists: Boolean(session?.sessionId),
-          sessionId: text(session?.sessionId),
+          sessionId: session.sessionId,
           revision: text(summaryMessage?.thinkingDetailRef?.contentHash),
           sessions: [
             {
-              sessionId: text(session?.sessionId),
-              rawMessages: Array.isArray(session?.messages) ? session.messages : [],
+              sessionId: session.sessionId,
+              rawMessages: session.messages,
             },
           ],
         },

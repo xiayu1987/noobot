@@ -39,7 +39,6 @@ export function clearReplacementUserRuntimeState(message = {}) {
   const nextMessage = { ...message };
   for (const key of [
     "channelState",
-    "dialogId",
     "status",
     "terminalOutcome",
     "state",

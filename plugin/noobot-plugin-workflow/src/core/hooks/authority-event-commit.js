@@ -7,44 +7,7 @@
 import { requireCommittedAuthorityEvent } from "@noobot/event-protocol/outbox";
 import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
 import { PLUGIN_ID } from "../constants.js";
-import { text, isFunction } from "@noobot/shared/value";
-
-function resolveWorkflowCommitScope({ ctx, payload }) {
-  return {
-    userId: text(ctx?.userId),
-    sessionId: text(ctx?.sessionId),
-    turnScopeId: text(payload?.turnScopeId),
-  };
-}
-
-function resolveWorkflowPersistenceScope(runtime) {
-  return runtime?.systemRuntime?.persistenceScope || null;
-}
-
-function projectWorkflowEventIdentity({ eventType, executionId, turnScopeId }) {
-  return {
-    eventType: text(eventType),
-    turnScopeId,
-    executionId: text(executionId),
-  };
-}
-
-function projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision }) {
-  return {
-    domain: text(orderingDomain),
-    scopeId: text(orderingScopeId),
-    revision: Number(revision),
-  };
-}
-
-function projectWorkflowEventCausality({ commandId, payload }) {
-  const normalizedCommandId = text(commandId);
-  if (!normalizedCommandId) throw new TypeError("workflow authority event commandId is required");
-  return {
-    commandId: normalizedCommandId,
-    correlationId: text(payload?.workflowRunId),
-  };
-}
+import { isCanonicalText, isFunction } from "@noobot/shared/value";
 
 function resolveWorkflowCommitRuntime(ctx) {
   return ctx?.agentContext?.bindings?.runtime;
@@ -80,15 +43,17 @@ export async function commitWorkflowRuntimeEvent({
 } = {}) {
   const runtime = resolveWorkflowCommitRuntime(ctx);
   const sessionManager = requireWorkflowCommitCapability(runtime);
-  const { userId, sessionId, turnScopeId } = resolveWorkflowCommitScope({ ctx, payload });
-  const persistenceScope = resolveWorkflowPersistenceScope(runtime);
+  if (!isCanonicalText(commandId)) {
+    throw new TypeError("workflow authority event commandId is required");
+  }
+  const persistenceScope = runtime.systemRuntime.persistenceScope;
   const committed = await sessionManager.commitAuthorityEvent({
-    userId,
-    sessionId,
+    userId: ctx.userId,
+    sessionId: ctx.sessionId,
     family: WORKFLOW_RUNTIME_FAMILY,
-    identity: projectWorkflowEventIdentity({ eventType, executionId, turnScopeId }),
-    causality: projectWorkflowEventCausality({ commandId, payload }),
-    ordering: projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision }),
+    identity: { eventType, turnScopeId: payload.turnScopeId, executionId },
+    causality: { commandId, correlationId: payload.workflowRunId },
+    ordering: { domain: orderingDomain, scopeId: orderingScopeId, revision },
     producer: { type: "plugin", id: PLUGIN_ID },
     payload,
     persistenceScope,

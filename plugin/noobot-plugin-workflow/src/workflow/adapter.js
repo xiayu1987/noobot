@@ -42,14 +42,11 @@ export function createWorkflowInstance({
   });
 }
 
-export function resolveWorkflowUpstreamActionSteps(params = {}) {
-  return resolveWorkflowUpstreamActionStepsByRuntime(params);
+export function resolveWorkflowUpstreamActionSteps({ instanceId, stepId }) {
+  return resolveWorkflowUpstreamActionStepsByRuntime({ instanceId, stepId });
 }
 
-export function advanceWorkflowInstance({
-  instanceId = "",
-  action = { type: "submit", stepIndex: 0 },
-} = {}) {
+export function advanceWorkflowInstance({ instanceId, action }) {
   return advanceWorkflowInstanceById({ instanceId, action });
 }
 

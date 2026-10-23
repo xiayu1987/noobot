@@ -350,13 +350,6 @@ test("unreadable Session is rejected with its read error and projected unavailab
       return Boolean(firstErrorCode) && error.repairSkipped === undefined;
     });
     await assert.rejects(read(), (error) => error.code === firstErrorCode);
-    const lifecycleFile = path.join(
-      workspaceRoot,
-      userId,
-      WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR,
-      `${encodeURIComponent(sessionId)}.json`,
-    );
-    await assert.rejects(readFile(lifecycleFile, "utf8"), { code: "ENOENT" });
     const summary = await repository.readSessionsSummary(userId);
     const projected = summary.sessions.find((item) => item.sessionId === sessionId);
     assert.equal(projected.availability, "unavailable");

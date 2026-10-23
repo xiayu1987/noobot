@@ -25,6 +25,7 @@ function workflowNodeEvent() {
       eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
       sessionId: "s-1",
       turnScopeId: "turn-1",
+      executionId: "node-1",
     },
     causality: {},
     ordering: {
@@ -37,7 +38,6 @@ function workflowNodeEvent() {
     occurredAt: "2026-01-01T00:00:07.000Z",
     payload: {
       workflowRunId: "workflow-1",
-      nodeExecutionId: "node-1",
       status: "running",
       turnScopeId: "turn-1",
     },

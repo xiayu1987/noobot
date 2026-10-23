@@ -94,24 +94,23 @@ test("snapshot messages carry the record key and the role view key, never an ali
   }
 });
 
-function workflowEnvelope(eventType, payload, ordering = {}) {
+function workflowEnvelope(eventType, payload, envelope) {
   return createEventEnvelope({
     family: "workflow.runtime",
     schemaVersion: getEventFamily("workflow.runtime").schemaVersion,
     identity: {
       eventId: `event-${eventType}`,
       eventType,
-      sessionId: ordering.authoritySessionId || payload.sessionId,
-      turnScopeId: payload.turnScopeId,
-      executionId: payload.nodeExecutionId,
+      sessionId: envelope.sessionId,
+      turnScopeId: envelope.turnScopeId,
+      executionId: envelope.executionId,
     },
     causality: { correlationId: payload.workflowRunId },
     ordering: {
-      domain: ordering.domain,
+      domain: envelope.domain,
       scopeId: payload.workflowRunId,
-      sequence: ordering.sequence || 1,
-      revision: ordering.revision,
-      aggregateVersion: ordering.aggregateVersion,
+      sequence: 1,
+      revision: envelope.revision,
     },
     producer: { type: "plugin", id: "workflow" },
     occurredAt: "2026-01-01T00:00:00.000Z",
@@ -127,26 +126,132 @@ test("validates canonical planning envelope with explicit ownership", () => {
       turnScopeId: "turn-1",
       presentationMessageId: "assistant-1",
       workflowRunId: "run-1",
-      workflowPayload: { semantic: { nodes: [{ id: "node-1" }], flowtos: [] } },
-      nodeSessions: [{ nodeExecutionId: "node-1" }],
+      workflowPayload: {
+        semantic: { nodes: [{ id: "node-1" }], flowtos: [] },
+        nodeSessions: [
+          {
+            nodeExecutionId: "node-1",
+            eventId: "workflow_node_state:run-1:node-1:1",
+            status: "ready",
+            revision: 1,
+            sequence: 1,
+          },
+        ],
+      },
     },
-    { domain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING },
+    {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      executionId: "run-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
+    },
   );
   assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope), { valid: true, errors: [] });
+});
+
+test("requires canonical workflow execution and turn scope identity", () => {
+  const envelope = workflowEnvelope(
+    WORKFLOW_RUNTIME_EVENT.PLANNING,
+    {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      presentationMessageId: "assistant-1",
+      workflowRunId: "run-1",
+      workflowPayload: {
+        semantic: { nodes: [{ id: "node-1" }], flowtos: [] },
+        nodeSessions: [
+          {
+            nodeExecutionId: "node-1",
+            eventId: "workflow_node_state:run-1:node-1:1",
+            status: "ready",
+            revision: 1,
+            sequence: 1,
+          },
+        ],
+      },
+    },
+    {
+      sessionId: "session-1",
+      turnScopeId: "workflow-node_node-1",
+      executionId: " run-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
+    },
+  );
+  assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope).errors, [
+    "missing_execution_id",
+    "invalid_turn_scope_id",
+    "turn_scope_identity_mismatch",
+  ]);
 });
 
 test("rejects cross-domain workflow declarations", () => {
   const envelope = workflowEnvelope(
     WORKFLOW_RUNTIME_EVENT.NODE_STATE,
     {
-      sessionId: "session-1",
       workflowRunId: "run-1",
-      nodeExecutionId: "node-1",
+      turnScopeId: "workflow-node:node-1",
       status: "running",
     },
-    { domain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT, revision: 1 },
+    {
+      sessionId: "session-1",
+      turnScopeId: "workflow-node:node-1",
+      executionId: "node-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT,
+      revision: 1,
+    },
   );
   assert.ok(validateWorkflowRuntimeEnvelope(envelope).errors.includes("sequence_domain_mismatch"));
+});
+
+test("node state execution identity lives only on the envelope", () => {
+  const envelope = workflowEnvelope(
+    WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+    {
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
+      turnScopeId: "workflow-node:node-1",
+      status: "running",
+    },
+    {
+      sessionId: "session-1",
+      turnScopeId: "workflow-node:node-1",
+      executionId: "node-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+      revision: 1,
+    },
+  );
+  assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope).errors, ["unknown_node_state_field"]);
+});
+
+test("planning nodes live only in workflowPayload and carry only node fact fields", () => {
+  const node = {
+    nodeExecutionId: "node-1",
+    eventId: "workflow_node_state:run-1:node-1:1",
+    status: "ready",
+    revision: 1,
+    sequence: 1,
+  };
+  const envelope = workflowEnvelope(
+    WORKFLOW_RUNTIME_EVENT.PLANNING,
+    {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      presentationMessageId: "assistant-1",
+      workflowRunId: "run-1",
+      workflowPayload: { nodeSessions: [{ ...node, stepStatus: "ready" }] },
+      nodeSessions: [node],
+    },
+    {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      executionId: "run-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
+    },
+  );
+  assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope).errors, [
+    "unknown_planning_field",
+    "invalid_planning_node",
+  ]);
 });
 
 test("requires authoritative snapshot identity and aggregate version", () => {
@@ -154,14 +259,20 @@ test("requires authoritative snapshot identity and aggregate version", () => {
     WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
     {
       workflowRunId: "run-1",
-      messages: [],
+      turnScopeId: "workflow-node:node-1",
     },
-    { domain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT, authoritySessionId: "session-1" },
+    {
+      sessionId: "session-1",
+      turnScopeId: "workflow-node:node-1",
+      executionId: "agent:node-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT,
+    },
   );
   assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope).errors, [
     "missing_snapshot_node_execution",
     "missing_snapshot_node_session",
     "invalid_aggregate_version",
+    "invalid_snapshot_messages",
     "invalid_turn_lifecycle_snapshot",
     "invalid_turn_timings",
   ]);
@@ -196,7 +307,12 @@ test("reports a null turn lifecycle snapshot as a validation error", () => {
       turnLifecycleSnapshot: null,
       turnTimings: [],
     },
-    { domain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT, authoritySessionId: "root-session" },
+    {
+      sessionId: "root-session",
+      turnScopeId: "workflow-node:node-1",
+      executionId: "agent:node-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT,
+    },
   );
 
   const result = validateWorkflowRuntimeEnvelope(envelope);

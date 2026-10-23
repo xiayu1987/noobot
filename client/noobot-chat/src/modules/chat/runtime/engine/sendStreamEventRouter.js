@@ -14,10 +14,7 @@ import {
   routeCurrentTurnLifecycleEvent,
   routeForeignTurnLifecycleEvent,
 } from "./turnLifecycleRouter.js";
-import {
-  isIgnoredSubSessionEvent,
-  routeMessageProjectionEvent,
-} from "./messageProjectionRouter.js";
+import { routeMessageProjectionEvent } from "./messageProjectionRouter.js";
 import { buildStreamEventLogEntry } from "./streamEventLogEntry.js";
 import { logPluginRuntimeDiagnostics } from "../../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
 import { logStreamDeltaDebug } from "../../../debug/loggers/streamDeltaDebugLogger.js";
@@ -53,12 +50,10 @@ function routePostProjectionEvent(event, data, context) {
     tryAutoResolveInteraction,
     setPendingInteractionRequest,
     logSessionEvent,
-    ignoredSubSessionEvent,
     channelSessionId,
     protocolEnvelope,
     sessionId,
   } = context;
-  if (ignoredSubSessionEvent) return true;
   const isInteractionForCurrentChannel =
     protocolEnvelope?.protocol?.family === EVENT_FAMILY.INTERACTION_REQUEST &&
     normalizeTrimmedString(channelSessionId) === normalizeTrimmedString(sessionId);
@@ -113,19 +108,17 @@ export function logRuntimeRouteCompleted({ routed, authoritativeEvent, logSessio
     logStreamDeltaEntry(entry);
     return;
   }
-  logSessionEvent?.(entry);
+  logSessionEvent(entry);
 }
 
 function routeAuthoritativeRuntimeEvent({
-  event,
   protocolEnvelope,
   applyWorkflowRuntimeEvent,
   logSessionEvent,
   sessionId,
   turnScopeId,
-  reduceSubSessionMessageEvent,
 }) {
-  if (protocolEnvelope?.identity?.eventType !== event) return false;
+  if (!protocolEnvelope) return false;
   const routed = routeRuntimeStreamEvent(protocolEnvelope, {
     source: "live",
     logRuntimeProjectionDiagnostics: logPluginRuntimeDiagnostics,
@@ -133,7 +126,6 @@ function routeAuthoritativeRuntimeEvent({
     logSessionEvent,
     sessionId,
     turnScopeId,
-    reduceSubSessionMessageEvent,
   });
   logRuntimeRouteCompleted({
     routed,
@@ -167,10 +159,20 @@ export function createSendStreamEventHandler(context) {
   } = context;
 
   return (incomingEnvelope) => {
-    const { event, data, protocolEnvelope, channelSessionId } = normalizeTurnTransportEnvelope({
-      ...(incomingEnvelope || {}),
-      source: "realtime",
-    });
+    const { event, data, protocolEnvelope, family, rejected, channelSessionId } =
+      normalizeTurnTransportEnvelope(incomingEnvelope);
+    if (rejected) {
+      logSessionEvent({
+        category: "transport",
+        level: "warn",
+        event: "frontend.transport.protocolEnvelopeRejected",
+        sessionId,
+        dialogProcessId: "",
+        turnScopeId,
+        data: { channelEvent: event, errors: rejected.errors },
+      });
+      return;
+    }
     const authoritativeEvent = protocolEnvelope;
     logStreamEvent(
       buildStreamEventLogEntry({
@@ -218,18 +220,16 @@ export function createSendStreamEventHandler(context) {
       return;
     if (
       routeAuthoritativeRuntimeEvent({
-        event,
         protocolEnvelope,
         applyWorkflowRuntimeEvent,
         logSessionEvent,
         sessionId,
         turnScopeId,
-        reduceSubSessionMessageEvent,
       })
     )
       return;
     if (
-      routeMessageProjectionEvent(event, data, {
+      routeMessageProjectionEvent(protocolEnvelope, family, {
         botMessage: botMsg,
         channelSessionId,
         findMessagesByPresentationId,
@@ -242,7 +242,6 @@ export function createSendStreamEventHandler(context) {
       })
     )
       return;
-    const ignoredSubSessionEvent = isIgnoredSubSessionEvent(event, data);
     routePostProjectionEvent(event, data, {
       activeSession,
       botMessage: botMsg,
@@ -254,7 +253,6 @@ export function createSendStreamEventHandler(context) {
       tryAutoResolveInteraction,
       setPendingInteractionRequest,
       logSessionEvent,
-      ignoredSubSessionEvent,
       channelSessionId,
       protocolEnvelope,
       sessionId,

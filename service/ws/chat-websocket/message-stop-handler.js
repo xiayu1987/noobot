@@ -46,11 +46,11 @@ export function createMessageStopHandler({
   rejectTurnInteractions,
   commitTurnLifecycle,
 }) {
-  const rejectedCommit = (command, result, fallbackCode) => {
-    if (result?.applied || result?.deduplicated) return false;
+  const rejectedCommit = (command, result) => {
+    if (result.applied || result.deduplicated) return false;
     sendFailedCommandReceipt(sendEvent, command, {
-      code: result?.reason || fallbackCode,
-      message: result?.reason || fallbackCode,
+      code: result.reason,
+      message: translateText("ws.commandRejected", state.currentLocale),
     });
     return true;
   };
@@ -117,7 +117,7 @@ export function createMessageStopHandler({
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
       completionCommitId,
     });
-    if (rejectedCommit(command, processed, "stop_processing_completed_failed")) return;
+    if (rejectedCommit(command, processed)) return;
     const completed = await commitTurnLifecycle({
       ...lifecycleContext,
       commandId: completionCommitId,
@@ -131,7 +131,7 @@ export function createMessageStopHandler({
       stopPayload,
       stopCompletedLogData(completed),
     );
-    rejectedCommit(command, completed, "stop_completed_failed");
+    rejectedCommit(command, completed);
   };
 
   const handleStop = async (command) => {
@@ -143,7 +143,7 @@ export function createMessageStopHandler({
       stopCommandId: String(command.commandId).trim(),
     };
     const accepted = await commitStopAccepted(command, target);
-    if (rejectedCommit(command, accepted, "stop_not_allowed")) return;
+    if (rejectedCommit(command, accepted)) return;
     target.dialogProcessId = accepted.turn.dialogProcessId;
     const stopPayload = createStopPayload(target);
     const activeRun = findActiveRun(stopPayload);

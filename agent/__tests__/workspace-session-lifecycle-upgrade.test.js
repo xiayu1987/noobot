@@ -11,8 +11,9 @@ import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { upgradeSessionLifecycle } from "../src/workspace-lifecycle/session-lifecycle-upgrade.js";
 import { releaseQuarantinedUnits } from "../src/workspace-lifecycle/migration-quarantine.js";
+import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
 
-const RECORDS = WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR;
+const RECORDS = WORKSPACE_LAYOUT.RETIRED_SESSION_LIFECYCLE_RECORDS_DIR;
 const TOMBSTONE = WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE;
 const DELETED_AT = "2026-05-14T00:00:00.000Z";
 
@@ -64,7 +65,7 @@ const failedRepairRecord = {
   updatedAt: "2026-05-14T00:00:02.000Z",
 };
 
-test("v4 moves deletion into the tombstone, retires plain records and keeps repair records", async () => {
+test("v4 moves deletion into the tombstone, retires every record and removes the records directory", async () => {
   const fixture = await createFixture();
   try {
     await fixture.write(`${RECORDS}/s-active.json`, activeRecord);
@@ -74,22 +75,10 @@ test("v4 moves deletion into the tombstone, retires plain records and keeps repa
 
     assert.deepEqual(
       result.retired.map((item) => item.path),
-      [`${RECORDS}/s-active.json`, `${RECORDS}/s-deleted.json`],
+      [`${RECORDS}/s-active.json`, `${RECORDS}/s-broken.json`, `${RECORDS}/s-deleted.json`],
     );
-    assert.deepEqual(
-      result.rewritten.map((item) => item.path),
-      [`${RECORDS}/s-broken.json`],
-    );
-    assert.equal(await fixture.exists(`${RECORDS}/s-active.json`), false);
-    assert.equal(await fixture.exists(`${RECORDS}/s-deleted.json`), false);
-    const broken = await fixture.readJson(`${RECORDS}/s-broken.json`);
-    assert.deepEqual(Object.keys(broken).sort(), [
-      "repair",
-      "schemaVersion",
-      "sessionId",
-      "updatedAt",
-    ]);
-    assert.deepEqual(broken.repair, repair);
+    assert.equal("rewritten" in result, false);
+    assert.equal(await fixture.exists(RECORDS), false);
     assert.deepEqual(await fixture.readBackup(`${RECORDS}/s-active.json`), activeRecord);
     assert.deepEqual(await fixture.readBackup(`${RECORDS}/s-broken.json`), failedRepairRecord);
     assert.deepEqual((await fixture.readJson(TOMBSTONE)).sessions, {
@@ -113,7 +102,6 @@ test("v4 keeps an existing tombstone entry and is a no-op on re-run", async () =
     });
     const rerun = await upgradeSessionLifecycle(fixture);
     assert.deepEqual(rerun, {
-      rewritten: [],
       retired: [],
       quarantined: [],
       tombstoneSessionsAdded: false,
@@ -162,6 +150,37 @@ test("v4 retries a released quarantined record once its data can be mapped", asy
     assert.equal(retried.tombstoneSessionsAdded, true);
     assert.equal(await fixture.exists(`${RECORDS}/s-deleted.json`), false);
     assert.deepEqual(Object.keys((await fixture.readJson(TOMBSTONE)).sessions), ["s-deleted"]);
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("v10 retires repair records left by v4 in a workspace already at layout v9", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write(`${RECORDS}/s-broken.json`, {
+      schemaVersion: 1,
+      sessionId: "s-broken",
+      repair,
+      updatedAt: "2026-05-14T00:00:02.000Z",
+    });
+    await fixture.write(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE, { version: 9 });
+    const applied = await upgradeWorkspaceLayout({
+      base: fixture.base,
+      backupBase: fixture.backupBase,
+      created: false,
+      scopedSessionRoots: [],
+    });
+    assert.deepEqual(
+      applied.map((item) => [item.id, item.result?.retired.map((retired) => retired.path)]),
+      [
+        ["session-lifecycle-records-retired-v10", [`${RECORDS}/s-broken.json`]],
+        ["session-orphan-tool-calls-v11", undefined],
+      ],
+    );
+    assert.equal(await fixture.exists(RECORDS), false);
+    assert.equal((await fixture.readBackup(`${RECORDS}/s-broken.json`)).repair.status, "failed");
+    assert.equal((await fixture.readJson(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE)).version, 10);
   } finally {
     await fixture.restore();
   }

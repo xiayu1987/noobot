@@ -10,13 +10,11 @@ import {
   TURN_PHASE,
   createTurnLifecycleCommandId,
   deriveTurnCommandId,
+  isTurnLifecycleRejectedError,
   resolveUserStopPayload,
 } from "@noobot/session-protocol";
-import {
-  AGENT_COMMAND_RECEIPT_OUTCOME,
-  AGENT_TRANSPORT_EVENT,
-  createAgentCommandReceipt,
-} from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND_RECEIPT_OUTCOME } from "@noobot/agent-transport-protocol";
+import { sendCommandReceipt as writeCommandReceipt } from "./command-receipt.js";
 import { text } from "@noobot/shared/value";
 
 export function snapshotRunState({ runMeta, abortSignal = null, locale = "" }) {
@@ -38,20 +36,16 @@ export function createTurnFinalizer({
   webSocket,
   commitTurnLifecycle,
 } = {}) {
-  const sendCommandReceipt = (state, outcome, error = null) =>
-    sendEvent(
-      AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-      createAgentCommandReceipt({
-        commandId: state.runMeta?.commandId,
-        commandType: state.runMeta?.commandType,
-        outcome,
-        identity: {
-          sessionId: state.identity.sessionId,
-          turnScopeId: state.identity.turnScopeId,
-          dialogProcessId: state.identity.dialogProcessId,
-        },
-        error,
-      }),
+  const sendCommandReceipt = (state, outcome, error) =>
+    writeCommandReceipt(
+      sendEvent,
+      {
+        commandId: state.runMeta.commandId,
+        commandType: state.runMeta.commandType,
+        identity: state.identity,
+      },
+      outcome,
+      error,
     );
   const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
     const commandId = createTurnLifecycleCommandId({
@@ -217,7 +211,7 @@ export function createTurnFinalizer({
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
-      code: String(error?.code || "run_aborted"),
+      code: isTurnLifecycleRejectedError(error) ? error.code : "run_aborted",
       message: errorMessage,
     });
     webSocket.close(1011, "aborted");
@@ -239,7 +233,7 @@ export function createTurnFinalizer({
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
-      code: String(error?.code || "run_failed"),
+      code: isTurnLifecycleRejectedError(error) ? error.code : "run_failed",
       message: errorMessage,
     });
     webSocket.close(1011, "error");

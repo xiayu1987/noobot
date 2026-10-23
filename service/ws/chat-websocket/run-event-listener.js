@@ -18,11 +18,12 @@ import {
   TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
   assertTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import {
+  WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_RUNTIME_FAMILY,
+} from "@noobot/event-protocol/workflow-runtime-event";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { text, isFunction } from "@noobot/shared/value";
-
-const AUDIT_LIST_LIMIT = QUANTITY_THRESHOLDS.diagnostics.eventAuditListLimit;
 
 function committedDispatchContext(eventName, eventData) {
   const validation = validateSessionPersistenceScope(eventData.persistenceScope);
@@ -38,32 +39,6 @@ function trimmedText(value) {
 
 function countOf(value) {
   return Number(value || 0);
-}
-
-function boundedList(value, mapItem) {
-  return Array.isArray(value) ? value.slice(0, AUDIT_LIST_LIMIT).map(mapItem) : [];
-}
-
-function auditActivity(activity = {}) {
-  return {
-    eventId: trimmedText(activity?.eventId),
-    activityKind: trimmedText(activity?.activityKind),
-    sequence: countOf(activity?.sequence),
-    sequenceDomain: trimmedText(activity?.sequenceDomain),
-    sequenceScopeId: trimmedText(activity?.sequenceScopeId),
-    authority: trimmedText(activity?.authority),
-  };
-}
-
-function auditMessage(message = {}) {
-  return {
-    messageUid: trimmedText(message?.messageUid),
-    presentationMessageId: trimmedText(message?.presentationMessageId),
-    role: trimmedText(message?.role),
-    type: trimmedText(message?.type),
-    activityTimelineCount: countOf(message?.activityTimelineCount),
-    activityTimeline: boundedList(message?.activityTimeline, auditActivity),
-  };
 }
 
 function auditEnvelopeIdentity(canonicalEnvelope, eventData) {
@@ -85,38 +60,30 @@ function auditEnvelopeIdentity(canonicalEnvelope, eventData) {
   };
 }
 
-function auditMessageCounts(eventData) {
-  return {
-    messageCount: countOf(eventData?.messageCount),
-    assistantCount: countOf(eventData?.assistantCount),
-    toolCount: countOf(eventData?.toolCount),
-    activityTimelineCount: countOf(eventData?.activityTimelineCount),
-    messages: boundedList(eventData?.messages, auditMessage),
-  };
+function auditWorkflowRuntime(canonicalEnvelope) {
+  if (canonicalEnvelope?.protocol.family !== WORKFLOW_RUNTIME_FAMILY) return {};
+  const { identity, ordering, payload } = canonicalEnvelope;
+  const audit = { workflowRunId: payload.workflowRunId, workflowRevision: ordering.revision };
+  if (identity.eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
+    return {
+      ...audit,
+      nodeSessionCount: payload.workflowPayload.nodeSessions.length,
+      sourceMessage: payload.sourceMessage,
+    };
+  }
+  if (identity.eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
+    return { ...audit, nodeExecutionId: payload.nodeExecutionId, workflowStatus: payload.status };
+  }
+  return audit;
 }
 
-function auditWorkflow(eventData) {
-  const sourceMessage = eventData?.sourceMessage;
+function auditOrdering(canonicalEnvelope) {
+  if (!canonicalEnvelope) return {};
+  const { ordering } = canonicalEnvelope;
   return {
-    workflowRunId: trimmedText(eventData?.workflowRunId),
-    nodeExecutionId: trimmedText(eventData?.nodeExecutionId),
-    workflowStatus: trimmedText(eventData?.status),
-    workflowRevision: countOf(eventData?.revision),
-    workflowSequence: countOf(eventData?.sequence),
-    nodeSessionCount: Array.isArray(eventData?.nodeSessions) ? eventData.nodeSessions.length : 0,
-    semanticTextLength: String(eventData?.semanticText || "").length,
-    sourceMessage: sourceMessage && typeof sourceMessage === "object" ? sourceMessage : null,
-  };
-}
-
-function auditOrderingAndFlags(canonicalEnvelope, eventData) {
-  const ordering = canonicalEnvelope?.ordering || {};
-  return {
-    sequence: countOf(ordering.sequence),
-    sequenceDomain: trimmedText(ordering.domain),
-    sequenceScopeId: trimmedText(ordering.scopeId),
-    hasTool: Boolean(eventData?.tool),
-    hasResult: eventData?.result !== undefined,
+    sequence: ordering.sequence,
+    sequenceDomain: ordering.domain,
+    sequenceScopeId: ordering.scopeId,
   };
 }
 
@@ -125,9 +92,8 @@ function buildEventAudit(eventName, eventData) {
   return {
     eventName,
     ...auditEnvelopeIdentity(canonicalEnvelope, eventData),
-    ...auditMessageCounts(eventData),
-    ...auditWorkflow(eventData),
-    ...auditOrderingAndFlags(canonicalEnvelope, eventData),
+    ...auditWorkflowRuntime(canonicalEnvelope),
+    ...auditOrdering(canonicalEnvelope),
     dataKeys: Object.keys(eventData).sort(),
   };
 }
@@ -180,6 +146,18 @@ export function createRunEventListener({
         throw new Error(`unsupported agent run event: ${eventName || "missing"}`);
       }
       const eventData = eventPayload?.data || {};
+      if (eventName === AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) {
+        const envelope = eventData.envelope;
+        const validation = validateProtocolEvent(envelope);
+        if (!validation.valid) {
+          throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
+        }
+        onEventReceived?.(buildEventAudit(eventName, eventData));
+        if (!isFunction(onAuthorityEventCommitted)) {
+          throw new Error("authority event dispatcher is required");
+        }
+        return onAuthorityEventCommitted(envelope, committedDispatchContext(eventName, eventData));
+      }
       onEventReceived?.(buildEventAudit(eventName, eventData));
       if (eventName === AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED) {
         if (!isFunction(onCommittedTurnLifecycle)) {
@@ -189,17 +167,6 @@ export function createRunEventListener({
           eventData.envelope,
           committedDispatchContext(eventName, eventData),
         );
-      }
-      if (eventName === AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) {
-        const envelope = eventData.envelope;
-        const validation = validateProtocolEvent(envelope);
-        if (!validation.valid) {
-          throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
-        }
-        if (!isFunction(onAuthorityEventCommitted)) {
-          throw new Error("authority event dispatcher is required");
-        }
-        return onAuthorityEventCommitted(envelope, committedDispatchContext(eventName, eventData));
       }
       if (eventName === AGENT_RUN_EVENT.TURN_COMMITTED) {
         const committedTurn = assertTurnCommittedEventData(eventData);

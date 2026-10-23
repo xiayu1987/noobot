@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { selectFields } from "./normalize.js";
 
 const ENVELOPE_SECTION_FIELDS = Object.freeze({
@@ -66,7 +66,12 @@ const ENVELOPE_RULES = Object.freeze([
     predicate: (value) => value === EVENT_PROTOCOL_VERSION,
     error: "unsupported_protocol_version",
   },
-  { section: "protocol", field: "family", predicate: text, error: "missing_event_family" },
+  {
+    section: "protocol",
+    field: "family",
+    predicate: isCanonicalText,
+    error: "missing_event_family",
+  },
   {
     section: "protocol",
     field: "schemaVersion",
@@ -74,13 +79,33 @@ const ENVELOPE_RULES = Object.freeze([
     error: "invalid_schema_version",
   },
   { field: "identity", predicate: isPlainObject, error: "invalid_identity" },
-  { section: "identity", field: "eventId", predicate: text, error: "missing_event_id" },
-  { section: "identity", field: "eventType", predicate: text, error: "missing_event_type" },
-  { section: "identity", field: "sessionId", predicate: text, error: "missing_session_id" },
+  { section: "identity", field: "eventId", predicate: isCanonicalText, error: "missing_event_id" },
+  {
+    section: "identity",
+    field: "eventType",
+    predicate: isCanonicalText,
+    error: "missing_event_type",
+  },
+  {
+    section: "identity",
+    field: "sessionId",
+    predicate: isCanonicalText,
+    error: "missing_session_id",
+  },
   { field: "causality", predicate: isPlainObject, error: "invalid_causality" },
   { field: "ordering", predicate: isPlainObject, error: "invalid_ordering" },
-  { section: "ordering", field: "domain", predicate: text, error: "missing_ordering_domain" },
-  { section: "ordering", field: "scopeId", predicate: text, error: "missing_ordering_scope" },
+  {
+    section: "ordering",
+    field: "domain",
+    predicate: isCanonicalText,
+    error: "missing_ordering_domain",
+  },
+  {
+    section: "ordering",
+    field: "scopeId",
+    predicate: isCanonicalText,
+    error: "missing_ordering_scope",
+  },
   {
     section: "ordering",
     field: "sequence",
@@ -88,9 +113,14 @@ const ENVELOPE_RULES = Object.freeze([
     error: "invalid_sequence",
   },
   { field: "producer", predicate: isPlainObject, error: "invalid_producer" },
-  { section: "producer", field: "type", predicate: text, error: "missing_producer_type" },
-  { section: "producer", field: "id", predicate: text, error: "missing_producer_id" },
-  { field: "occurredAt", predicate: text, error: "missing_occurred_at" },
+  {
+    section: "producer",
+    field: "type",
+    predicate: isCanonicalText,
+    error: "missing_producer_type",
+  },
+  { section: "producer", field: "id", predicate: isCanonicalText, error: "missing_producer_id" },
+  { field: "occurredAt", predicate: isCanonicalText, error: "missing_occurred_at" },
   { field: "payload", predicate: isPlainObject, error: "invalid_payload" },
 ]);
 
@@ -126,14 +156,14 @@ export function createEventEnvelope({
       protocol: Object.freeze({
         name: EVENT_PROTOCOL_NAME,
         version: EVENT_PROTOCOL_VERSION,
-        family: text(family),
+        family,
         schemaVersion,
       }),
       identity: selectSectionFields("identity", identity),
       causality: selectSectionFields("causality", causality),
       ordering: selectSectionFields("ordering", ordering),
       producer: selectSectionFields("producer", producer),
-      occurredAt: text(occurredAt),
+      occurredAt,
       payload,
     }),
   );

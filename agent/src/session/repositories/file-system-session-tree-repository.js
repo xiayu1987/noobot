@@ -76,7 +76,6 @@ export class FileSystemSessionTreeRepository {
     const basePath = this._basePath(userId);
     const requiredDirectories = [
       this.pathResolver.sessionRoot(basePath),
-      this.pathResolver.sessionLifecycleRecordsDir(basePath),
       this.pathResolver.sessionLifecycleLocksDir(basePath),
     ];
     for (const directory of requiredDirectories) {

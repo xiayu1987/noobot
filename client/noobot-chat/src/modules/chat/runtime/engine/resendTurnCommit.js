@@ -42,14 +42,14 @@ function tombstoneReplacedTurns({
   removeWorkflowOwnersForReplacedTurns,
 }) {
   const replacementDeletion = confirmTurnRuntimeDeletion(
-    turnRuntimeRegistry?.value || turnRuntimeRegistry,
+    turnRuntimeRegistry.value,
     replacedTurnScopeIds,
     { sessionId },
   );
-  const workflowOwnerDeletion = removeWorkflowOwnersForReplacedTurns?.({
+  const workflowOwnerDeletion = removeWorkflowOwnersForReplacedTurns({
     parentSessionId: sessionId,
     replacedTurnScopeIds,
-  }) || { removedWorkflowRunIds: [], removedSessionIds: [] };
+  });
   logResendDebug("resend.replacedTurns.tombstoned", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,

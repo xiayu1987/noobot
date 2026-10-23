@@ -8,19 +8,22 @@ import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
-import { canonicalWorkflowRuntimeEvent } from "../helpers/workflowRuntimeEventFixture.js";
+import {
+  canonicalWorkflowRuntimeEvent,
+  canonicalWorkflowNodeStateEvent,
+} from "../helpers/workflowRuntimeEventFixture.js";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 
 function applyNodeEvent(store, data) {
-  return store.applyWorkflowRuntimeEvent(
-    canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, data),
-    { source: "test" },
-  );
+  return store.applyWorkflowRuntimeEvent(canonicalWorkflowNodeStateEvent(data), { source: "test" });
 }
 
-function applyPlanningEvent(store, data) {
+function applyPlanningEvent(store, { nodeSessions, ...data }) {
   return store.applyWorkflowRuntimeEvent(
     canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
+      eventId: `planning:${data.workflowRunId}`,
+      executionId: data.workflowRunId,
+      authoritySessionId: "parent-session",
       sessionId: "parent-session",
       turnScopeId: "parent-turn-a",
       presentationMessageId: "assistant-presentation-a",
@@ -31,6 +34,7 @@ function applyPlanningEvent(store, data) {
           flowtos: [{ from: "start", to: "node-a" }],
         },
         interaction: { semanticTextPreview: "WORKFLOW_DSL/1" },
+        nodeSessions,
       },
       ...data,
     }),
@@ -38,27 +42,28 @@ function applyPlanningEvent(store, data) {
   );
 }
 
-function nodeEvent(overrides = {}) {
-  const event = {
+function planningNode(overrides = {}) {
+  return {
     workflowRunId: "workflow-run-a",
     nodeExecutionId: "node-exec-a",
     commandId: "cmd-a",
     nodeSessionId: "child-session-a",
-    parentSessionId: "parent-session",
     dialogProcessId: "wf_node_node-exec-a",
     turnScopeId: "workflow-node:node-exec-a",
     status: "running",
     eventId: "evt-1",
     revision: 1,
     sequence: 1,
-    occurredAt: "2026-07-19T00:00:00.000Z",
     ...overrides,
   };
-  if (Object.hasOwn(overrides, "sessionId")) {
-    event.nodeSessionId = overrides.sessionId;
-    delete event.sessionId;
-  }
-  return event;
+}
+
+function nodeEvent(overrides = {}) {
+  return planningNode({
+    authoritySessionId: "parent-session",
+    occurredAt: "2026-07-19T00:00:00.000Z",
+    ...overrides,
+  });
 }
 
 function storedNode(store, workflowRunId = "workflow-run-a", nodeExecutionId = "node-exec-a") {
@@ -75,20 +80,25 @@ describe("useChatStore workflow node state registry", () => {
   it("rejects events missing workflow or node identity", () => {
     const store = useChatStore();
 
-    const missingWorkflow = canonicalWorkflowRuntimeEvent(
-      WORKFLOW_RUNTIME_EVENT.NODE_STATE,
-      nodeEvent(),
-    );
+    const missingWorkflow = canonicalWorkflowNodeStateEvent(nodeEvent());
     missingWorkflow.payload.workflowRunId = "";
     expect(store.applyWorkflowRuntimeEvent(missingWorkflow, { source: "test" })).toMatchObject({
       applied: false,
       reason: "missing_workflow_run",
     });
-    expect(applyNodeEvent(store, nodeEvent({ nodeExecutionId: "" }))).toMatchObject({
+    const missingExecution = structuredClone(canonicalWorkflowNodeStateEvent(nodeEvent()));
+    missingExecution.identity.executionId = "";
+    expect(store.applyWorkflowRuntimeEvent(missingExecution, { source: "test" })).toMatchObject({
       applied: false,
-      reason: "missing_node_execution",
+      reason: "missing_execution_id",
     });
-    expect(store.workflowNodeStateRegistry).toBeNull();
+    const duplicatedIdentity = canonicalWorkflowNodeStateEvent(nodeEvent());
+    duplicatedIdentity.payload.nodeExecutionId = "node-exec-a";
+    expect(store.applyWorkflowRuntimeEvent(duplicatedIdentity, { source: "test" })).toMatchObject({
+      applied: false,
+      reason: "unknown_node_state_field",
+    });
+    expect(store.workflowNodeStateRegistry.workflows).toEqual({});
   });
 
   it("applies newer revisions and rejects revision rollback", () => {
@@ -252,7 +262,7 @@ describe("useChatStore workflow node state registry", () => {
         workflowRunId: "workflow-run-a",
         nodeExecutionId: "node-a",
         eventId: "evt-a",
-        sessionId: "child-a",
+        nodeSessionId: "child-a",
       }),
     );
     applyNodeEvent(
@@ -261,7 +271,7 @@ describe("useChatStore workflow node state registry", () => {
         workflowRunId: "workflow-run-a",
         nodeExecutionId: "node-b",
         eventId: "evt-b",
-        sessionId: "child-b",
+        nodeSessionId: "child-b",
       }),
     );
     applyNodeEvent(
@@ -270,7 +280,7 @@ describe("useChatStore workflow node state registry", () => {
         workflowRunId: "workflow-run-b",
         nodeExecutionId: "node-a",
         eventId: "evt-c",
-        sessionId: "child-c",
+        nodeSessionId: "child-c",
       }),
     );
 
@@ -286,7 +296,7 @@ describe("useChatStore workflow node state registry", () => {
       revision: 7,
       sequence: 7,
       status: "succeeded",
-      sessionId: "child-final",
+      nodeSessionId: "child-final",
     });
 
     expect(applyNodeEvent(store, committed).applied).toBe(true);
@@ -306,7 +316,7 @@ describe("useChatStore workflow node state registry", () => {
     expect(storedNode(store)).toBeTruthy();
     store.resetChatStore();
 
-    expect(store.workflowNodeStateRegistry).toBeNull();
+    expect(store.workflowNodeStateRegistry.workflows).toEqual({});
   });
 
   it("applies workflow planning nodes with initial monotonic revisions", () => {
@@ -317,23 +327,20 @@ describe("useChatStore workflow node state registry", () => {
       sessionId: "parent-session",
       dialogProcessId: "planning-dialog",
       turnScopeId: "planning-turn",
-      createdAt: "2026-07-19T00:00:00.000Z",
       nodeSessions: [
-        nodeEvent({
+        planningNode({
           nodeExecutionId: "node-a",
           status: "ready",
-          stepStatus: "ready",
-          eventId: "",
-          revision: undefined,
-          sequence: undefined,
+          eventId: "workflow_node_state:workflow-run-a:node-a:1",
+          revision: 1,
+          sequence: 1,
         }),
-        nodeEvent({
+        planningNode({
           nodeExecutionId: "node-b",
           status: "pending",
-          stepStatus: "pending",
-          eventId: "",
-          revision: undefined,
-          sequence: undefined,
+          eventId: "workflow_node_state:workflow-run-a:node-b:1",
+          revision: 1,
+          sequence: 2,
         }),
       ],
     });
@@ -344,14 +351,18 @@ describe("useChatStore workflow node state registry", () => {
       sessionId: "parent-session",
       dialogProcessId: "planning-dialog",
       turnScopeId: "planning-turn",
-      plannedAt: "2026-07-19T00:00:00.000Z",
     });
     expect(storedNode(store, "workflow-run-a", "node-a").status).toBe("ready");
     expect(storedNode(store, "workflow-run-a", "node-a").nodeSessionId).toBe("child-session-a");
     expect(storedNode(store, "workflow-run-a", "node-a").authoritySessionId).toBe("parent-session");
     expect(storedNode(store, "workflow-run-a", "node-a").revision).toBe(1);
     expect(storedNode(store, "workflow-run-a", "node-a").sequence).toBe(1);
-    expect(storedNode(store, "workflow-run-a", "node-a").eventId).toBe("workflow-plan:node-a");
+    expect(storedNode(store, "workflow-run-a", "node-a").eventId).toBe(
+      "workflow_node_state:workflow-run-a:node-a:1",
+    );
+    expect(storedNode(store, "workflow-run-a", "node-a").sequenceDomain).toBe(
+      "workflow-node-state",
+    );
     expect(storedNode(store, "workflow-run-a", "node-b").status).toBe("pending");
     expect(storedNode(store, "workflow-run-a", "node-b").sequence).toBe(2);
   });
@@ -361,17 +372,21 @@ describe("useChatStore workflow node state registry", () => {
 
     applyPlanningEvent(store, {
       workflowRunId: "workflow-run-a",
-      nodeSessions: [nodeEvent({ nodeExecutionId: "node-exec-a", status: "ready", sessionId: "" })],
+      nodeSessions: [
+        planningNode({ nodeExecutionId: "node-exec-a", status: "ready", nodeSessionId: "" }),
+      ],
     });
     expect(
       applyNodeEvent(
         store,
-        nodeEvent({ revision: 2, sequence: 3, status: "running", sessionId: "child-live" }),
+        nodeEvent({ revision: 2, sequence: 3, status: "running", nodeSessionId: "child-live" }),
       ).applied,
     ).toBe(true);
     const stalePlan = applyPlanningEvent(store, {
       workflowRunId: "workflow-run-a",
-      nodeSessions: [nodeEvent({ nodeExecutionId: "node-exec-a", status: "ready", sessionId: "" })],
+      nodeSessions: [
+        planningNode({ nodeExecutionId: "node-exec-a", status: "ready", nodeSessionId: "" }),
+      ],
     });
 
     expect(stalePlan.applied).toBe(false);
@@ -387,9 +402,8 @@ describe("useChatStore workflow node state registry", () => {
     applyPlanningEvent(store, {
       workflowRunId: "workflow-run-a",
       nodeSessions: [
-        nodeEvent({
+        planningNode({
           status: "ready",
-          stepStatus: "ready",
           revision: 1,
           sequence: 1,
           eventId: "plan-ready",
@@ -404,7 +418,6 @@ describe("useChatStore workflow node state registry", () => {
         store,
         nodeEvent({
           status: "running",
-          stepStatus: undefined,
           revision: 2,
           sequence: 2,
           eventId: "node-running",
@@ -419,7 +432,6 @@ describe("useChatStore workflow node state registry", () => {
         store,
         nodeEvent({
           status: "succeeded",
-          stepStatus: undefined,
           revision: 3,
           sequence: 3,
           eventId: "node-succeeded",
@@ -435,13 +447,12 @@ describe("useChatStore workflow node state registry", () => {
 
     applyPlanningEvent(store, {
       workflowRunId: "workflow-run-a",
-      nodeSessions: [nodeEvent({ status: "ready", stepStatus: "ready", revision: 1, sequence: 1 })],
+      nodeSessions: [planningNode({ status: "ready", revision: 1, sequence: 1 })],
     });
     applyNodeEvent(
       store,
       nodeEvent({
         status: "succeeded",
-        stepStatus: undefined,
         revision: 3,
         sequence: 3,
         eventId: "node-succeeded",
@@ -451,7 +462,6 @@ describe("useChatStore workflow node state registry", () => {
       store,
       nodeEvent({
         status: "running",
-        stepStatus: "ready",
         revision: 2,
         sequence: 2,
         eventId: "delayed-running",
@@ -499,24 +509,27 @@ describe("useChatStore workflow node state registry", () => {
     const store = useChatStore();
 
     const missingWorkflow = canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
+      eventId: "planning-missing-workflow",
+      executionId: "workflow-run-a",
+      authoritySessionId: "parent-session",
       workflowRunId: "workflow-run-a",
       sessionId: "parent-session",
       turnScopeId: "parent-turn-a",
       presentationMessageId: "assistant-presentation-a",
-      workflowPayload: {},
-      nodeSessions: [nodeEvent()],
+      workflowPayload: { nodeSessions: [planningNode()] },
     });
     missingWorkflow.payload.workflowRunId = "";
     expect(store.applyWorkflowRuntimeEvent(missingWorkflow, { source: "test" })).toMatchObject({
       applied: false,
       reason: "missing_workflow_run",
     });
-    expect(
-      applyPlanningEvent(store, { workflowRunId: "workflow-run-a", nodeSessions: [] }),
-    ).toMatchObject({
+    const missingNodes = structuredClone(missingWorkflow);
+    missingNodes.payload.workflowRunId = "workflow-run-a";
+    missingNodes.payload.workflowPayload.nodeSessions = [];
+    expect(store.applyWorkflowRuntimeEvent(missingNodes, { source: "test" })).toMatchObject({
       applied: false,
       reason: "missing_planning_nodes",
     });
-    expect(store.workflowNodeStateRegistry).toBeNull();
+    expect(store.workflowNodeStateRegistry.workflows).toEqual({});
   });
 });

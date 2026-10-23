@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyExecutionTree } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { canonicalWorkflowRuntimeEvent } from "../helpers/workflowRuntimeEventFixture.js";
+import { canonicalWorkflowNodeStateEvent } from "../helpers/workflowRuntimeEventFixture.js";
 import {
   applyMessageEvent,
   applySessionSnapshot,
@@ -57,7 +56,7 @@ describe("useChatStore execution projection", () => {
       messages: [{ role: "assistant", presentationMessageId: "main-message", content: "main" }],
     });
     applySessionSnapshot(store, {
-      sessionId: "child-session",
+      nodeSessionId: "child-session",
       messages: [
         {
           role: "assistant",
@@ -151,14 +150,13 @@ describe("useChatStore execution projection", () => {
   it("does not create an empty placeholder for lifecycle-only updates", () => {
     const store = useChatStore();
     const result = store.applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
+      canonicalWorkflowNodeStateEvent({
         eventId: "event-lifecycle",
         sequence: 1,
         revision: 1,
-        sequenceDomain: "workflow-node-state",
-        status: "processing",
-        sessionId: "sub-session-1",
-        parentSessionId: "main-session-1",
+        status: "running",
+        nodeSessionId: "sub-session-1",
+        authoritySessionId: "main-session-1",
         workflowRunId: "workflow-1",
         nodeExecutionId: "node-1",
         dialogProcessId: "dialog-1",
@@ -181,14 +179,13 @@ describe("useChatStore execution projection", () => {
       createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }),
     );
     store.applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
+      canonicalWorkflowNodeStateEvent({
         eventId: "event-lifecycle",
         sequence: 2,
         revision: 2,
-        sequenceDomain: "workflow-node-state",
-        status: "completed",
-        sessionId: "sub-session-1",
-        parentSessionId: "main-session-1",
+        status: "succeeded",
+        nodeSessionId: "sub-session-1",
+        authoritySessionId: "main-session-1",
         workflowRunId: "workflow-1",
         nodeExecutionId: "node-1",
         dialogProcessId: "dialog-1",
@@ -200,7 +197,7 @@ describe("useChatStore execution projection", () => {
     expect(assistantMessages(store)).toHaveLength(1);
     expect(assistantMessages(store)[0]).toMatchObject({ content: "hello" });
     expect(store.selectSubSessionMessages("sub-session-1")?.workflowNodeState).toMatchObject({
-      status: "completed",
+      status: "succeeded",
     });
   });
 });

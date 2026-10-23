@@ -16,19 +16,18 @@ import {
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
 import { resolveExecutionAbortMessage } from "@noobot/session-protocol/execution-abort";
+import { isTurnLifecycleRejectedError } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
   AGENT_COMMAND_RECEIPT_OUTCOME,
-  AGENT_TRANSPORT_EVENT,
   EXECUTION_QUERY_COMMAND_TYPES,
-  RUN_COMMAND_TYPES,
-  createAgentCommandReceipt,
+  isAgentTransportProtocolError,
   parseAgentCommand,
 } from "@noobot/agent-transport-protocol";
 import { createMessageQueryHandlers } from "./message-query-handlers.js";
 import { createMessageStopHandler } from "./message-stop-handler.js";
 import { createMessageRunHandler } from "./message-run-handler.js";
-import { sendFailedCommandReceipt } from "./command-receipt.js";
+import { sendCommandReceipt, sendFailedCommandReceipt } from "./command-receipt.js";
 import { text } from "@noobot/shared/value";
 
 export function createMessageHandler({
@@ -59,7 +58,6 @@ export function createMessageHandler({
   const { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize } =
     createMessageQueryHandlers({
       state,
-      authInfo,
       sendEvent,
       translateText,
       resolveBot,
@@ -130,9 +128,6 @@ export function createMessageHandler({
         data: { accepted: true, transport: "websocket" },
       });
       if (await routeNonRunCommand(context, command)) return;
-      if (!RUN_COMMAND_TYPES.includes(command.commandType)) {
-        throw new Error("unsupported_agent_command");
-      }
       if (state.isRunning) {
         sendFailedCommandReceipt(sendEvent, command, {
           code: "session_already_running",
@@ -148,10 +143,9 @@ export function createMessageHandler({
       });
       if (runResult?.rebound === true) {
         runMessageStarted = false;
-        sendCommandReceipt(context, command, AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND);
+        sendCommandReceipt(sendEvent, command, AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND);
       }
     } catch (error) {
-      if (!parsedCommand && error?.command) parsedCommand = error.command;
       if (!runMessageStarted || !state.currentRunMeta) {
         rejectCommand(context, error, parsedCommand, rawMessage);
         return;
@@ -164,18 +158,6 @@ export function createMessageHandler({
 }
 
 const INTERJECT_IDENTITY_FIELDS = ["sessionId", "dialogProcessId", "turnScopeId"];
-
-function sendCommandReceipt({ sendEvent }, command, outcome) {
-  sendEvent(
-    AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-    createAgentCommandReceipt({
-      commandId: command.commandId,
-      commandType: command.commandType,
-      outcome,
-      identity: command.identity,
-    }),
-  );
-}
 
 async function routeNonRunCommand(context, command) {
   const { routes } = context;
@@ -266,7 +248,7 @@ async function handleInterject(context, command) {
       data: { reason: dispatch?.reason || "authority_dispatch_unavailable" },
     });
   }
-  sendCommandReceipt(context, command, AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED);
+  sendCommandReceipt(context.sendEvent, command, AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED);
 }
 
 function buildRejectionDebugData(error, parsedCommand) {
@@ -280,20 +262,40 @@ function buildRejectionDebugData(error, parsedCommand) {
   };
 }
 
-function buildRejectionReceiptError({ state, translateText }, error) {
-  return {
-    code: String(error?.errors?.[0] || error?.code || "invalid_command").trim(),
-    message: error?.message || translateText("ws.unknownError", state.currentLocale),
-  };
+const COMMAND_DISPATCH_FAILED = "command_dispatch_failed";
+
+function resolveRejectedCommand({ state, translateText }, error, parsedCommand) {
+  if (parsedCommand && isTurnLifecycleRejectedError(error)) {
+    return {
+      command: parsedCommand,
+      error: {
+        code: error.code,
+        message: translateText("ws.commandRejected", state.currentLocale),
+      },
+    };
+  }
+  if (parsedCommand) {
+    return {
+      command: parsedCommand,
+      error: {
+        code: COMMAND_DISPATCH_FAILED,
+        message: translateText("ws.commandDispatchFailed", state.currentLocale),
+      },
+    };
+  }
+  if (isAgentTransportProtocolError(error) && error.command) {
+    return { command: error.command, error: { code: error.errors[0], message: error.message } };
+  }
+  return null;
 }
 
 function rejectCommand(context, error, parsedCommand, rawMessage) {
-  const { sendEvent } = context;
+  const rejected = resolveRejectedCommand(context, error, parsedCommand);
   void recordServiceAgentTransportDebug({
     event: parsedCommand
       ? "service.agentTransport.commandDispatchFailed"
       : "service.agentTransport.commandRejected",
-    command: parsedCommand || rawMessage,
+    command: rejected ? rejected.command : rawMessage,
     userId: context.canonicalRunOwnerId,
     data: buildRejectionDebugData(error, parsedCommand),
   });
@@ -304,10 +306,10 @@ function rejectCommand(context, error, parsedCommand, rawMessage) {
       errorCode: String(error?.code || ""),
     },
   });
-  const receiptSent =
-    parsedCommand &&
-    sendFailedCommandReceipt(sendEvent, parsedCommand, buildRejectionReceiptError(context, error));
-  if (receiptSent) return;
+  if (rejected) {
+    sendFailedCommandReceipt(context.sendEvent, rejected.command, rejected.error);
+    return;
+  }
   context.webSocket.close(1008, "invalid request");
 }
 

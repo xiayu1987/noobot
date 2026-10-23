@@ -21,7 +21,7 @@ import {
   deriveTurnCommandId,
 } from "@noobot/session-protocol/turn-command-id";
 import { createRunPreferences, validateRunPreferences } from "./run-preferences.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
 const COMMAND_TYPE_SET = new Set(AGENT_COMMAND_TYPES);
 const RUN_COMMAND_SET = new Set(RUN_COMMAND_TYPES);
@@ -88,7 +88,7 @@ const DERIVED_COMMAND_ID_SOURCES = Object.freeze({
 });
 
 export function deriveAgentCommandId(command) {
-  const derive = DERIVED_COMMAND_ID_SOURCES[clean(command?.commandType).toLowerCase()];
+  const derive = DERIVED_COMMAND_ID_SOURCES[command.commandType];
   if (!derive) throw new TypeError("command_id_not_derivable");
   return derive(command);
 }
@@ -116,7 +116,7 @@ function withDerivedCommandId(input, command) {
 }
 
 export function createTurnRunCommand(input = {}) {
-  const commandType = clean(input.commandType).toLowerCase();
+  const { commandType } = input;
   if (!RUN_COMMAND_SET.has(commandType)) throw new TypeError("invalid_run_command_type");
   return withDerivedCommandId(input, {
     ...createEnvelope(commandType, input),
@@ -222,7 +222,7 @@ function validateIdentity(command, errors) {
       errors.push(`invalid_identity_field:${key}`);
     }
   }
-  if (!clean(command.identity.sessionId)) errors.push("missing_session_id");
+  if (!isCanonicalText(command.identity.sessionId)) errors.push("missing_session_id");
 }
 
 function rejectUnknownFields(value, allowedKeys, path, errors) {
@@ -267,11 +267,11 @@ function validateTopLevelFields(command, commandType, errors) {
 }
 
 function validateCommandHeader(command, errors) {
-  if (Number(command.protocolVersion) !== AGENT_TRANSPORT_PROTOCOL_VERSION)
+  if (command.protocolVersion !== AGENT_TRANSPORT_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
-  const commandType = clean(command.commandType).toLowerCase();
+  const { commandType } = command;
   if (!COMMAND_TYPE_SET.has(commandType)) errors.push("unsupported_command_type");
-  if (!clean(command.commandId)) errors.push("missing_command_id");
+  if (!isCanonicalText(command.commandId)) errors.push("missing_command_id");
   return commandType;
 }
 
@@ -436,7 +436,7 @@ export function validateAgentCommand(command) {
 
 function validateDerivedCommandId(command, commandType, errors) {
   if (errors.length > 0 || !DERIVED_COMMAND_ID_SOURCES[commandType]) return;
-  if (clean(command.commandId) !== deriveAgentCommandId(command)) {
+  if (command.commandId !== deriveAgentCommandId(command)) {
     errors.push("command_id_not_derived");
   }
 }
@@ -458,6 +458,10 @@ class AgentTransportProtocolError extends Error {
     this.command = command;
     this.statusCode = 400;
   }
+}
+
+export function isAgentTransportProtocolError(error) {
+  return error instanceof AgentTransportProtocolError;
 }
 
 export function parseAgentCommand(rawCommand) {

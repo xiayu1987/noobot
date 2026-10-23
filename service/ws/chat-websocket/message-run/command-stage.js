@@ -10,7 +10,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
-  SESSION_ERROR_CODE,
+  createTurnLifecycleRejectedError,
   TURN_ACTION,
   TURN_EVENT,
   TURN_PHASE,
@@ -149,14 +149,6 @@ function createActionEvent(command, run, executionIntent, startedAt) {
   };
 }
 
-function rejectedActionError(accepted) {
-  const error = new Error(accepted?.reason || "action_rejected");
-  error.code = accepted?.reason || "action_rejected";
-  error.currentVersion = accepted?.currentVersion;
-  if (accepted?.reason === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT) error.statusCode = 409;
-  return error;
-}
-
 async function commitAction(context, actionEvent, run) {
   let accepted = await context.commitTurnLifecycle(actionEvent);
   if (
@@ -170,7 +162,9 @@ async function commitAction(context, actionEvent, run) {
   ) {
     accepted = await context.commitTurnLifecycle(actionEvent);
   }
-  if (!accepted?.applied && !accepted?.deduplicated) throw rejectedActionError(accepted);
+  if (!accepted.applied && !accepted.deduplicated) {
+    throw createTurnLifecycleRejectedError(accepted.reason);
+  }
   return accepted;
 }
 

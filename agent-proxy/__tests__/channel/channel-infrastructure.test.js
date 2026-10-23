@@ -18,6 +18,7 @@ import {
 } from "@noobot/session-protocol";
 import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import { normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
+import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
 
 function canonicalTurnLifecycle(domainEnvelope) {
@@ -196,7 +197,10 @@ test("subscriber delivery closes a slow consumer at the backpressure boundary", 
       closeReason = reason;
     },
   };
-  const result = manager.sendSocketEvent(socket, { event: "delta", data: {} });
+  const result = manager.sendSocketEvent(socket, {
+    event: AGENT_TRANSPORT_EVENT.READY,
+    data: {},
+  });
   assert.equal(result.reason, "backpressure_limit");
   assert.equal(closeReason, "slow_consumer");
 });

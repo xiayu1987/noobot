@@ -13,8 +13,6 @@ import { createSendFlowDebugLogger } from "./sendFlowDebugLogger.js";
 import { resolveSendRequest } from "./sendRequestResolver.js";
 import { executeSendStream } from "./sendStreamExecutor.js";
 
-export { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport.js";
-
 export function createChatEngineSender({
   activeSession,
   activeSessionId,

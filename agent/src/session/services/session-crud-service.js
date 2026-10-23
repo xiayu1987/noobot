@@ -53,10 +53,6 @@ export class SessionCrudService {
     return this.getSessionBundle({ userId, sessionId, persistenceContext });
   }
 
-  async repairSession({ userId, sessionId, persistenceContext }) {
-    return this.sessionRepo.repairSessionProtocol(userId, sessionId, { persistenceContext });
-  }
-
   async getSessionBundle({ userId, sessionId, persistenceContext }) {
     const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
     if (!session) return { exists: false, session: null, task: null };

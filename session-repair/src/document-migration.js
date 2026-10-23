@@ -210,17 +210,56 @@ export function reconcileDuplicateCanonicalAssistantPresentations(document = {})
   return { document: next, changed: repaired.length > 0, repaired };
 }
 
-export function reconcileCompletedTurnSummaryMarks(document = {}) {
-  const messages = Array.isArray(document.messages) ? [...document.messages] : [];
-  const completedTurns = new Set(
+function completedTurnKeys(document) {
+  return new Set(
     Object.values(document.turnLifecycle?.turns || {})
       .filter((turn) => text(turn?.terminalStatus?.status) === TURN_TERMINAL_STATUS.COMPLETED)
       .map((turn) => `${text(turn?.dialogProcessId)}\u0000${text(turn?.turnScopeId)}`)
       .filter((key) => !key.startsWith("\u0000") && !key.endsWith("\u0000")),
   );
+}
+
+function messageTurnKey(message) {
+  return `${text(message?.dialogProcessId)}\u0000${text(message?.turnScopeId)}`;
+}
+
+export function reconcileCompletedTurnOrphanToolCalls(document = {}) {
+  const messages = Array.isArray(document.messages) ? document.messages : [];
+  const completedTurns = completedTurnKeys(document);
+  const resultIds = new Set(
+    messages
+      .filter((message) => message?.type === "tool_result")
+      .map((message) => `${messageTurnKey(message)}\u0000${text(message.tool_call_id)}`),
+  );
+  const removed = [];
+  const kept = messages.filter((message) => {
+    if (message?.type !== "tool_call" || !completedTurns.has(messageTurnKey(message))) return true;
+    const ids = (Array.isArray(message.tool_calls) ? message.tool_calls : []).map((call) =>
+      text(call?.id),
+    );
+    const answered = ids.filter((id) =>
+      resultIds.has(`${messageTurnKey(message)}\u0000${id}`),
+    ).length;
+    if (ids.length > 0 && answered === ids.length) return true;
+    if (answered > 0) {
+      throw Object.assign(
+        new Error(`completed Turn tool_call has partial tool results: ${text(message.messageUid)}`),
+        { code: SESSION_REPAIR_ERROR_CODE.ORPHAN_TOOL_CALL_REPAIR_AMBIGUOUS },
+      );
+    }
+    removed.push(text(message.messageUid));
+    return false;
+  });
+  const changed = removed.length > 0;
+  return { document: changed ? { ...document, messages: kept } : document, changed, removed };
+}
+
+export function reconcileCompletedTurnSummaryMarks(document = {}) {
+  const messages = Array.isArray(document.messages) ? [...document.messages] : [];
+  const completedTurns = completedTurnKeys(document);
   const turnIndexes = new Map();
   messages.forEach((message, index) => {
-    const key = `${text(message?.dialogProcessId)}\u0000${text(message?.turnScopeId)}`;
+    const key = messageTurnKey(message);
     if (!completedTurns.has(key)) return;
     if (!turnIndexes.has(key)) turnIndexes.set(key, []);
     turnIndexes.get(key).push(index);
@@ -659,6 +698,11 @@ function migrateDocumentMessages(context) {
     context,
     reconcileDuplicateCanonicalAssistantPresentations(next),
     "duplicate-canonical-assistant-presentation",
+  );
+  applyMessageRepair(
+    context,
+    reconcileCompletedTurnOrphanToolCalls(next),
+    "completed-turn-orphan-tool-calls",
   );
   applyMessageRepair(
     context,

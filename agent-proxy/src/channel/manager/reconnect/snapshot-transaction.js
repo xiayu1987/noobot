@@ -18,9 +18,9 @@ export function createReconnectTransaction(snapshotRequests) {
       for (const request of snapshotRequests) {
         request.cancelled = true;
         for (const commandId of request.commandIds) {
-          const pendingRequest = request.channel?.pendingSnapshotRequests?.get(commandId);
-          request.channel?.pendingSnapshotRequests?.delete(commandId);
-          pendingRequest?.resolve?.({ ok: false, reason });
+          const pendingRequest = request.channel.pendingSnapshotRequests.get(commandId);
+          request.channel.pendingSnapshotRequests.delete(commandId);
+          pendingRequest?.resolve({ ok: false, reason });
         }
         request.channel?.transport?.closeOwnedConnection(request.queryConnection, 1000, reason, {
           purpose: "snapshot_query",

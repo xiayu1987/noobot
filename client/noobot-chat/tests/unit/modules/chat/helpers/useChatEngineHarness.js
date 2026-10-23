@@ -303,6 +303,10 @@ export const createHarness = ({
       dispose: vi.fn(),
     },
     sessionLogWebSocketClient: { log: vi.fn() },
+    removeWorkflowOwnersForReplacedTurns: vi.fn(() => ({
+      removedWorkflowRunIds: [],
+      removedSessionIds: [],
+    })),
     ensureConnected: vi.fn(() => true),
     notify: vi.fn(),
     terminalResolutionFetcher: vi.fn(async (url) => ({

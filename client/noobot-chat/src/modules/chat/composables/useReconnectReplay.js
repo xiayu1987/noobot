@@ -52,7 +52,7 @@ export function useReconnectReplay({
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
-  applyWorkflowRuntimeEvent: reduceWorkflowRuntimeEvent,
+  applyWorkflowRuntimeEvent,
   reduceSubSessionMessageEvent,
   applyTurnLifecycleSnapshot,
 } = {}) {
@@ -65,33 +65,6 @@ export function useReconnectReplay({
       sessionId,
       turnScopeId,
     });
-
-  const applyWorkflowRuntimeEvent = (record = {}, { source = "reconnect" } = {}) => {
-    const identity = record?.identity || {};
-    const data = record?.payload || {};
-    sessionLogWebSocketClient?.log?.({
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      debugType: "workflow-diagnostics",
-      event: "frontend.workflowTransport.reconnectRuntimeReceived",
-      sessionId: String(identity.sessionId || ""),
-      dialogProcessId: "",
-      turnScopeId: String(identity.turnScopeId || ""),
-      data: {
-        workflowEvent: String(identity.eventType || ""),
-        workflowRunId: String(data?.workflowRunId || ""),
-        nodeExecutionId: String(data?.nodeExecutionId || ""),
-        eventDialogProcessId: String(data?.dialogProcessId || ""),
-        eventTurnScopeId: String(data?.turnScopeId || ""),
-        nodeSessionCount: Array.isArray(data?.nodeSessions) ? data.nodeSessions.length : 0,
-      },
-    });
-    if (typeof reduceWorkflowRuntimeEvent === "function") {
-      return reduceWorkflowRuntimeEvent(record, { source });
-    }
-    return { applied: false, reason: "workflow_runtime_projection_unavailable" };
-  };
 
   function tryAutoResolveInteraction(rawRequest = {}) {
     return tryAutoResolveReconnectInteraction({
@@ -302,14 +275,10 @@ export function useReconnectReplay({
       applyExecutionChildren,
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
-      applyRuntimeStreamEvent: (envelope, context = {}) =>
+      applyRuntimeStreamEvent: (envelope, context) =>
         routeRuntimeStreamEvent(envelope, {
           ...context,
-          source: context.source || "reconnect",
-          sessionId: String(envelope?.identity?.sessionId || ""),
-          turnScopeId: String(envelope?.identity?.turnScopeId || ""),
-          logRuntimeProjectionDiagnostics: (event, details) =>
-            logWorkflowDiagnostics(event, details),
+          logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
         }),
       applyPendingInteraction: (interaction) =>
         applyReconnectInteractionRequest({

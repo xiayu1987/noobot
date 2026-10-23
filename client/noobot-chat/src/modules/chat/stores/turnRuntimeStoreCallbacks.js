@@ -10,7 +10,6 @@ import {
   buildMessageProjectionDiagnostics,
   buildTurnEvaluatedDiagnostics,
 } from "./turnRuntimeStoreDiagnostics.js";
-import { text } from "@noobot/shared/value";
 
 export function createTurnRuntimeStoreCallbacks({
   sessions,
@@ -26,24 +25,10 @@ export function createTurnRuntimeStoreCallbacks({
   }
 
   function onTurnCommitted(result) {
-    const turn = result?.turn;
+    const { turn } = result;
     closePendingInteractionsForTerminalTurn(turn);
-    const subSessions = getSubSessions();
-    const sessionId = text(turn?.sessionId);
-    const parentSessionId = text(turn?.parentSessionId);
-    const existingSubSession = Boolean(
-      sessionId && subSessions?.selectSubSessionMessages(sessionId),
-    );
-    const projectionEligible = Boolean(
-      sessionId && subSessions && (existingSubSession || parentSessionId),
-    );
     logTurnRuntimeDiagnostics("frontend.turnRuntime.commitProjectionEvaluated", () =>
-      buildCommitProjectionDiagnostics({
-        turn,
-        result,
-        existingSubSession,
-        projectionEligible,
-      }),
+      buildCommitProjectionDiagnostics({ turn, result }),
     );
     const mainSessionProjection = projectTurnRuntimeToMessages({
       sessions,
@@ -51,16 +36,7 @@ export function createTurnRuntimeStoreCallbacks({
       turnRuntimeRegistry,
       turn,
     });
-    let container = { applied: false, reason: "not_sub_session" };
-    let subSessionProjection = {
-      applied: false,
-      patchedMessageCount: 0,
-      reason: "not_sub_session",
-    };
-    if (projectionEligible) {
-      container = subSessions.ensureSubSessionMessageContainer(turn);
-      subSessionProjection = subSessions.applyTurnRuntimeMessageProjection(turn);
-    }
+    const subSessionProjection = getSubSessions().applyTurnRuntimeMessageProjection(turn);
     logTurnRuntimeDiagnostics("frontend.turnRuntime.messageProjectionCommitted", () =>
       buildMessageProjectionDiagnostics({
         turn,
@@ -68,7 +44,7 @@ export function createTurnRuntimeStoreCallbacks({
         subSessionProjection,
       }),
     );
-    return { container, mainSessionProjection, subSessionProjection };
+    return { mainSessionProjection, subSessionProjection };
   }
 
   return { onTurnEvaluated, onTurnCommitted };

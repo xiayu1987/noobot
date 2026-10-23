@@ -20,6 +20,8 @@ const nodes = [
     turnScopeId: "workflow-node:node-a-exec",
     nodeId: "a",
     nodeName: "A",
+    attempt: 1,
+    activeChildExecutionId: "agent:node-a-child",
     status: "ready",
     dependencies: [],
   },
@@ -31,6 +33,8 @@ const nodes = [
     turnScopeId: "workflow-node:node-b-exec",
     nodeId: "b",
     nodeName: "B",
+    attempt: 1,
+    activeChildExecutionId: "agent:node-b-child",
     status: "pending",
     dependencies: ["a"],
   },
@@ -53,20 +57,26 @@ test("workflow node state repository initializes planning snapshot with stable i
   assert.equal(snapshot.nodes[0].commandId, nodes[0].commandId);
 });
 
+function startNode(repo, nodeExecutionId, nodeSessionId) {
+  return repo.commit({
+    workflowRunId: "wf-run-1",
+    nodeExecutionId,
+    status: WORKFLOW_NODE_STATUS.RUNNING,
+    expectedRevision: 1,
+    nodeSessionId,
+  });
+}
+
 test("workflow node state repository commits running and terminal with monotonic revision and sequence", async () => {
   const repo = createInMemoryWorkflowNodeStateRepository();
   await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
 
-  const running = await repo.commit({
-    workflowRunId: "wf-run-1",
-    nodeExecutionId: "node-a-exec",
-    status: WORKFLOW_NODE_STATUS.RUNNING,
-    expectedRevision: 1,
-  });
-  assert.equal(running.applied, true);
+  const running = await startNode(repo, "node-a-exec", "child-a");
   assert.equal(running.node.status, WORKFLOW_NODE_STATUS.RUNNING);
   assert.equal(running.node.revision, 2);
   assert.equal(running.node.sequence, 3);
+  assert.equal(running.node.nodeSessionId, "child-a");
+  assert.deepEqual(running.node.attemptExecutionIds, ["agent:node-a-child"]);
   assert.ok(running.node.startedAt);
   assert.equal(running.node.eventId, "workflow_node_state:wf-run-1:node-a-exec:2");
 
@@ -75,44 +85,80 @@ test("workflow node state repository commits running and terminal with monotonic
     nodeExecutionId: "node-a-exec",
     status: WORKFLOW_NODE_STATUS.SUCCEEDED,
     expectedRevision: 2,
-    nodeSessionId: "child-a",
-    agentDialogProcessId: "actual-dialog-a",
   });
   assert.equal(succeeded.node.status, WORKFLOW_NODE_STATUS.SUCCEEDED);
   assert.equal(succeeded.node.revision, 3);
   assert.equal(succeeded.node.sequence, 4);
   assert.equal(succeeded.node.nodeSessionId, "child-a");
   assert.equal(succeeded.node.dialogProcessId, nodes[0].dialogProcessId);
-  assert.equal(succeeded.node.agentDialogProcessId, "actual-dialog-a");
+  assert.equal(succeeded.node.failure, null);
+  assert.equal("agentDialogProcessId" in succeeded.node, false);
   assert.ok(succeeded.node.completedAt);
 });
 
-test("workflow node state repository deduplicates same target and rejects revision conflicts", async () => {
+test("workflow node state repository binds nodeSessionId only to the running transition", async () => {
   const repo = createInMemoryWorkflowNodeStateRepository();
   await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
-  const running = await repo.commit({
-    workflowRunId: "wf-run-1",
-    nodeExecutionId: "node-a-exec",
-    status: WORKFLOW_NODE_STATUS.RUNNING,
-    expectedRevision: 1,
-  });
-  const duplicate = await repo.commit({
-    workflowRunId: "wf-run-1",
-    nodeExecutionId: "node-a-exec",
-    status: WORKFLOW_NODE_STATUS.RUNNING,
-    expectedRevision: 1,
-  });
-  assert.equal(duplicate.applied, false);
-  assert.equal(duplicate.deduplicated, true);
-  assert.equal(duplicate.node.eventId, running.node.eventId);
+  await assert.rejects(
+    repo.commit({
+      workflowRunId: "wf-run-1",
+      nodeExecutionId: "node-a-exec",
+      status: WORKFLOW_NODE_STATUS.RUNNING,
+      expectedRevision: 1,
+    }),
+    /requires nodeSessionId/,
+  );
+  await startNode(repo, "node-a-exec", "child-a");
+  await assert.rejects(
+    repo.commit({
+      workflowRunId: "wf-run-1",
+      nodeExecutionId: "node-a-exec",
+      status: WORKFLOW_NODE_STATUS.SUCCEEDED,
+      expectedRevision: 2,
+      nodeSessionId: "child-b",
+    }),
+    /bound only by the running transition/,
+  );
+});
 
+test("workflow node state repository binds failure only to failed and stopped", async () => {
+  const repo = createInMemoryWorkflowNodeStateRepository();
+  await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
+  await startNode(repo, "node-a-exec", "child-a");
+  await assert.rejects(
+    repo.commit({
+      workflowRunId: "wf-run-1",
+      nodeExecutionId: "node-a-exec",
+      status: WORKFLOW_NODE_STATUS.FAILED,
+      expectedRevision: 2,
+      failure: { message: "boom" },
+    }),
+    /requires source, code and message/,
+  );
+  await assert.rejects(
+    repo.commit({
+      workflowRunId: "wf-run-1",
+      nodeExecutionId: "node-a-exec",
+      status: WORKFLOW_NODE_STATUS.SUCCEEDED,
+      expectedRevision: 2,
+      failure: { source: "workflow", code: "X", message: "x" },
+    }),
+    /carried only by failed\/stopped/,
+  );
+});
+
+test("workflow node state repository rejects repeated and stale commits as revision conflicts", async () => {
+  const repo = createInMemoryWorkflowNodeStateRepository();
+  await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
+  await startNode(repo, "node-a-exec", "child-a");
+  await assert.rejects(startNode(repo, "node-a-exec", "child-a"), /revision conflict/);
   await assert.rejects(
     repo.commit({
       workflowRunId: "wf-run-1",
       nodeExecutionId: "node-a-exec",
       status: WORKFLOW_NODE_STATUS.FAILED,
       expectedRevision: 1,
-      failure: { message: "boom" },
+      failure: { source: "workflow_node_agent", code: "BOOM", message: "boom" },
     }),
     /revision conflict/,
   );
@@ -121,16 +167,11 @@ test("workflow node state repository deduplicates same target and rejects revisi
 test("workflow node state repository protects terminal nodes from rollback", async () => {
   const repo = createInMemoryWorkflowNodeStateRepository();
   await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
+  await startNode(repo, "node-a-exec", "child-a");
   await repo.commit({
     workflowRunId: "wf-run-1",
     nodeExecutionId: "node-a-exec",
-    status: "running",
-    expectedRevision: 1,
-  });
-  await repo.commit({
-    workflowRunId: "wf-run-1",
-    nodeExecutionId: "node-a-exec",
-    status: "failed",
+    status: WORKFLOW_NODE_STATUS.FAILED,
     expectedRevision: 2,
     failure: { source: "workflow_node_agent", code: "BOOM", message: "boom" },
   });
@@ -139,35 +180,27 @@ test("workflow node state repository protects terminal nodes from rollback", asy
     repo.commit({
       workflowRunId: "wf-run-1",
       nodeExecutionId: "node-a-exec",
-      status: "running",
+      status: WORKFLOW_NODE_STATUS.RUNNING,
       expectedRevision: 3,
+      nodeSessionId: "child-a",
     }),
     /terminal/,
   );
 });
 
-test("workflow node state repository isolates parallel nodes and supports reload", async () => {
+test("workflow node state repository isolates parallel nodes in one run snapshot", async () => {
   const repo = createInMemoryWorkflowNodeStateRepository();
   await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
-  await repo.commit({
-    workflowRunId: "wf-run-1",
-    nodeExecutionId: "node-a-exec",
-    status: "running",
-    expectedRevision: 1,
-  });
-  await repo.commit({
-    workflowRunId: "wf-run-1",
-    nodeExecutionId: "node-b-exec",
-    status: "running",
-    expectedRevision: 1,
-  });
+  await startNode(repo, "node-a-exec", "child-a");
+  await startNode(repo, "node-b-exec", "child-b");
 
-  const state = repo.exportState();
-  const reloaded = createInMemoryWorkflowNodeStateRepository({ initialState: state });
-  const snapshot = await reloaded.getSnapshot({ workflowRunId: "wf-run-1" });
+  const snapshot = await repo.getSnapshot({ workflowRunId: "wf-run-1" });
   const a = snapshot.nodes.find((item) => item.nodeExecutionId === "node-a-exec");
   const b = snapshot.nodes.find((item) => item.nodeExecutionId === "node-b-exec");
   assert.equal(a.status, WORKFLOW_NODE_STATUS.RUNNING);
   assert.equal(b.status, WORKFLOW_NODE_STATUS.RUNNING);
+  assert.equal(a.nodeSessionId, "child-a");
+  assert.equal(b.nodeSessionId, "child-b");
   assert.notEqual(a.sequence, b.sequence);
+  await assert.rejects(repo.getSnapshot({ workflowRunId: "wf-run-missing" }), /not initialized/);
 });

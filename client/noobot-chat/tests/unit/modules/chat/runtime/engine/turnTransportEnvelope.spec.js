@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import {
-  normalizeTurnTransportEnvelope,
-  TURN_TRANSPORT_SEQUENCE_DOMAIN,
-} from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
-import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
+import { normalizeTurnTransportEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
@@ -20,75 +16,49 @@ import {
 } from "@noobot/session-protocol";
 
 describe("turnTransportEnvelope", () => {
-  it("keeps transport and message-event sequence domains isolated", () => {
-    const normalized = normalizeTurnTransportEnvelope({
-      event: "message_event",
-      source: "reconnect",
-      data: {
-        ...canonicalMessageEvent({
-          eventId: "event-1",
-          eventType: "model_analysis_delta",
-          presentationMessageId: "message-1",
-          sessionId: "session-1",
-          dialogProcessId: "dialog-1",
-          turnScopeId: "turn-1",
-          sequence: 7,
-          occurredAt: "2026-07-26T00:00:00.000Z",
-          text: "result",
-        }),
-        seq: 85,
-      },
-    });
-
-    expect(normalized.transportCursor).toEqual({
-      sequenceDomain: TURN_TRANSPORT_SEQUENCE_DOMAIN,
-      sequence: 85,
-      event: "message_event",
-    });
-    expect(normalized.messageEventCursor).toMatchObject({
-      sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-      sequenceScopeId: "message-1",
-      sequence: 7,
+  it("rejects invalid protocol envelopes at the transport entry", () => {
+    const envelope = canonicalMessageEvent({
       eventId: "event-1",
-    });
-    expect(normalized.identity).toEqual({
+      eventType: "model_analysis_delta",
+      presentationMessageId: "message-1",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
+      sequence: 7,
+      occurredAt: "2026-07-26T00:00:00.000Z",
+      text: "result",
     });
+    delete envelope.identity.turnScopeId;
+
+    const normalized = normalizeTurnTransportEnvelope({ event: "message_event", data: envelope });
+
+    expect(normalized.protocolEnvelope).toBeNull();
+    expect(normalized.data).toBeNull();
+    expect(normalized.family).toBe("");
+    expect(normalized.rejected.errors).toEqual(["missing_turn_scope_id"]);
   });
 
-  it("does not treat an inner message sequence as a transport cursor", () => {
+  it("rejects a valid envelope delivered under a different wire event", () => {
+    const envelope = canonicalMessageEvent({
+      eventId: "event-2",
+      eventType: "model_analysis_delta",
+      presentationMessageId: "message-1",
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      sequence: 7,
+      occurredAt: "2026-07-26T00:00:00.000Z",
+      text: "result",
+    });
+
     const normalized = normalizeTurnTransportEnvelope({
-      event: "message_event",
-      data: canonicalMessageEvent({
-        eventId: "event-2",
-        eventType: "thinking",
-        presentationMessageId: "message-2",
-        sessionId: "session-2",
-        sequence: 99,
-        occurredAt: "2026-07-26T00:00:00.000Z",
-        text: "thinking",
-      }),
+      event: TURN_LIFECYCLE_WIRE_EVENT,
+      data: envelope,
     });
 
-    expect(normalized.transportCursor.sequence).toBe(0);
-    expect(normalized.messageEventCursor.sequence).toBe(99);
-  });
-
-  it("keeps different protocol events distinct at the same transport sequence", () => {
-    const channelState = normalizeTurnTransportEnvelope({
-      event: "channel_state",
-      data: { seq: 85, sessionId: "session-1", turnScopeId: "turn-1" },
-    });
-    const done = normalizeTurnTransportEnvelope({
-      event: "done",
-      data: { seq: 85, sessionId: "session-1", turnScopeId: "turn-1" },
-    });
-
-    expect(channelState.transportCursor.sequence).toBe(done.transportCursor.sequence);
-    expect(channelState.transportCursor.event).toBe("channel_state");
-    expect(done.transportCursor.event).toBe("done");
+    expect(normalized.protocolEnvelope).toBeNull();
+    expect(normalized.data).toBeNull();
+    expect(normalized.rejected.errors).toEqual(["transport_event_type_mismatch"]);
   });
 
   it("projects one canonical lifecycle payload while retaining its protocol envelope for audit", () => {

@@ -11,6 +11,10 @@ import {
   MESSAGE_EVENT_TYPE,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
+import {
+  createWorkflowRuntimeEnvelope,
+  WORKFLOW_RUNTIME_EVENT,
+} from "@noobot/event-protocol/workflow-runtime-event";
 import { createRunEventListener } from "../ws/chat-websocket/run-event-listener.js";
 
 const CHILD_SCOPE = Object.freeze({
@@ -50,7 +54,6 @@ function messageEnvelope(payload = null) {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: "presentation-1",
       sequence: 1,
-      aggregateVersion: 2,
     },
     producer: { type: "agent", id: "agent-1" },
     occurredAt: "2026-08-17T00:00:00.000Z",
@@ -210,6 +213,58 @@ test("run-event-listener audits authority commits from the committed envelope id
   assert.equal(audits[0].turnScopeId, "turn-1");
   assert.equal(audits[0].dialogProcessId, "dialog-1");
   assert.equal(audits[0].eventId, "event-1");
+});
+
+test("run-event-listener audits workflow planning from the committed envelope payload", () => {
+  const audits = [];
+  const { listener } = createListener({
+    onAuthorityEventCommitted: () => true,
+    onEventReceived: (audit) => audits.push(audit),
+  });
+  const sourceMessage = { role: "assistant", presentationMessageId: "presentation-1" };
+  const envelope = createWorkflowRuntimeEnvelope({
+    eventType: WORKFLOW_RUNTIME_EVENT.PLANNING,
+    authoritySessionId: "root-session",
+    turnScopeId: "turn-1",
+    executionId: "run-1",
+    eventId: "workflow_planning:run-1:1",
+    workflowRunId: "run-1",
+    sequence: 1,
+    revision: 1,
+    occurredAt: "2026-08-17T00:00:00.000Z",
+    producer: { type: "plugin", id: "workflow" },
+    causality: { correlationId: "run-1" },
+    payload: {
+      sessionId: "root-session",
+      turnScopeId: "turn-1",
+      presentationMessageId: "presentation-1",
+      workflowRunId: "run-1",
+      workflowPayload: {
+        semantic: { nodes: [{ id: "node-1" }], flowtos: [] },
+        nodeSessions: [
+          {
+            nodeExecutionId: "node-1",
+            eventId: "workflow_node_state:run-1:node-1:1",
+            status: "ready",
+            revision: 1,
+            sequence: 1,
+          },
+        ],
+      },
+      sourceMessage,
+    },
+  });
+  listener.onEvent({
+    event: "authority_event_committed",
+    data: { envelope, persistenceScope: null },
+  });
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0].eventType, WORKFLOW_RUNTIME_EVENT.PLANNING);
+  assert.equal(audits[0].workflowRunId, "run-1");
+  assert.equal(audits[0].workflowRevision, 1);
+  assert.equal(audits[0].nodeSessionCount, 1);
+  assert.deepEqual(audits[0].sourceMessage, sourceMessage);
+  assert.equal(audits[0].sequenceScopeId, "run-1");
 });
 
 test("run-event-listener audits envelope-free run events from their route-projected data", () => {

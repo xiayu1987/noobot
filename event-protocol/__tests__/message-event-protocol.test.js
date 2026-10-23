@@ -75,6 +75,17 @@ test("message family validates canonical v3 identity, ordering, and domain paylo
     validateProtocolEvent(envelope({}, { ordering: { scopeId: "message-2" } })).errors,
     ["sequence_scope_mismatch"],
   );
+  assert.deepEqual(validateProtocolEvent(envelope({}, { ordering: { revision: 1 } })).errors, [
+    "message_ordering_revision_forbidden",
+  ]);
+  assert.deepEqual(
+    validateProtocolEvent(envelope({}, { ordering: { aggregateVersion: 1 } })).errors,
+    ["message_ordering_aggregateVersion_forbidden"],
+  );
+  assert.deepEqual(
+    validateProtocolEvent(envelope({}, { identity: { turnScopeId: " turn-1 " } })).errors,
+    ["missing_turn_scope_id"],
+  );
 });
 
 test("message payload requires complete workflow ownership", () => {

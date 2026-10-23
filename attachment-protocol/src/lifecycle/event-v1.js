@@ -15,6 +15,12 @@ import {
 } from "../protocol-utils.js";
 import { ATTACHMENT_EVENT_STATUS, ATTACHMENT_EVENT_TYPE } from "./transition-table.js";
 export const ATTACHMENT_LIFECYCLE_WIRE_EVENT = "attachment_lifecycle";
+export const ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN = "attachment-lifecycle";
+
+export function attachmentLifecycleSequenceScopeId(identityValue) {
+  const identity = parseAttachmentIdentity(identityValue);
+  return [identity.attachmentId, identity.sessionId, identity.attachmentSource].join(":");
+}
 const FIELDS = new Set([
   "eventType",
   "eventVersion",
@@ -34,7 +40,7 @@ export function createAttachmentLifecycleEvent(value) {
     expected = ATTACHMENT_EVENT_STATUS[eventType];
   if (!expected) throw new AttachmentProtocolError("unsupported_attachment_event_type");
   if (s.status !== expected) throw new AttachmentProtocolError("attachment_event_status_mismatch");
-  if ((s.eventVersion ?? 1) !== 1)
+  if (s.eventVersion !== 1)
     throw new AttachmentProtocolError("unsupported_attachment_event_version");
   const identity = parseAttachmentIdentity(s.identity);
   let relation;

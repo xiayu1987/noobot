@@ -23,10 +23,9 @@ import {
   AGENT_TRANSPORT_DEBUG_TYPE,
   AGENT_TRANSPORT_ERROR_CODE,
   AGENT_TRANSPORT_EVENT,
-  createAgentTransportEvent,
   createReconnectControl,
-  getAgentTransportEventSessionId,
   getAgentCommandIdentity,
+  parseAgentTransportFrame,
   parseReconnectComplete,
   parseReconnectData,
   summarizeAgentTransportCommand,
@@ -36,10 +35,10 @@ import { EVENT_FAMILY, readProtocolEventPayload } from "@noobot/event-protocol";
 import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.js";
 import { createSocketHandlerRegistry } from "./chatWebSocketSocketHandlers.js";
 import {
-  createCommandReceiptError,
-  isCommandReceiptForPayload,
+  createCommandResultError,
+  isCommandFailureResult,
+  isCommandResultForPayload,
   isEventForStreamScope,
-  isFailedCommandReceipt,
   normalizeErrorMessage,
   normalizeTrimmedString,
 } from "./chatWebSocketProtocol.js";
@@ -211,7 +210,7 @@ export function createChatWebSocketClient({
         let parsedData = {};
         try {
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
-          const receivedTransportEvent = createAgentTransportEvent(parsed);
+          const receivedTransportEvent = parseAgentTransportFrame(parsed);
           const lifecyclePayload =
             receivedTransportEvent.event === TURN_LIFECYCLE_WIRE_EVENT
               ? readProtocolEventPayload(receivedTransportEvent.data, {
@@ -222,7 +221,7 @@ export function createChatWebSocketClient({
           const transportEvent = receivedTransportEvent;
           const { event, data } = transportEvent;
           const lifecycleData = lifecyclePayload?.valid ? lifecyclePayload.payload : data;
-          const channelSessionId = getAgentTransportEventSessionId(transportEvent);
+          const { channelSessionId } = transportEvent;
           parsedEvent = event;
           parsedData = data;
           const hasLiveSubscriber = isFunction(liveEventSubscriber);
@@ -542,7 +541,7 @@ export function createChatWebSocketClient({
           if (settled) return;
           try {
             const { event, data } = transportEvent;
-            const channelSessionId = getAgentTransportEventSessionId(transportEvent);
+            const { channelSessionId } = transportEvent;
             if (event === AGENT_TRANSPORT_EVENT.READY) return;
             const eventMatchesCurrentStream = isEventForStreamScope(
               data,
@@ -551,10 +550,10 @@ export function createChatWebSocketClient({
             );
             if (!eventMatchesCurrentStream) return;
             onEvent(transportEvent);
-            if (isCommandReceiptForPayload(event, data, payload)) {
+            if (isCommandResultForPayload(event, data, payload)) {
               doneReceived = true;
-              if (isFailedCommandReceipt(data)) {
-                finalize(() => reject(createCommandReceiptError(data, translateText)));
+              if (isCommandFailureResult(event, data)) {
+                finalize(() => reject(createCommandResultError(event, data)));
               } else {
                 finalize(() => resolve());
               }
@@ -591,9 +590,7 @@ export function createChatWebSocketClient({
           };
           const pending = pendingStreamEvents.splice(0, pendingStreamEvents.length);
           for (const packet of pending) {
-            if (
-              isEventForStreamScope(packet.data, payload, getAgentTransportEventSessionId(packet))
-            ) {
+            if (isEventForStreamScope(packet.data, payload, packet.channelSessionId)) {
               handleProtocolEvent(packet);
             } else pendingStreamEvents.push(packet);
           }
@@ -672,8 +669,9 @@ export function createChatWebSocketClient({
           failReconnect(error, { closeSocket: true });
         }
       };
-      const handleReconnectProtocolEvent = ({ event, data }) => {
+      const handleReconnectProtocolEvent = (transportEvent) => {
         try {
+          const { event, data } = transportEvent;
           if (event === AGENT_TRANSPORT_EVENT.READY) return;
 
           if (
@@ -726,7 +724,7 @@ export function createChatWebSocketClient({
           }
 
           if (!activeStreamContext) {
-            onReconnectData({ event, data });
+            onReconnectData(transportEvent);
           }
         } catch (error) {
           failReconnect(error, { closeSocket: true });

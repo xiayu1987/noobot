@@ -10,7 +10,6 @@ import { text } from "@noobot/shared/value";
 export function createActionRuntimeBySemanticKey({
   runtimeNodeSessions,
   workflowPayload,
-  nodeRunByDialogProcessId,
   resolveStepStatus,
 }) {
   return computed(() => {
@@ -52,7 +51,6 @@ export function createActionRuntimeBySemanticKey({
           item,
           index,
           workflowPayload,
-          nodeRunByDialogProcessId,
           resolveStepStatus,
         }),
       );

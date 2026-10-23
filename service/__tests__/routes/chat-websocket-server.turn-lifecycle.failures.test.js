@@ -101,7 +101,7 @@ test("message listener boundary contains failures raised by terminal error persi
       (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
     )?.data;
     assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
-    assert.equal(receipt?.error?.code, "agent_init_failed");
+    assert.equal(receipt?.error?.code, "run_failed");
     const committedUserMessage = events.find((item) => item?.event === "turn_committed")?.data;
     assert.equal(committedUserMessage?.userMessage?.content, payload.message);
     assert.equal(committedUserMessage?.turnScopeId, "turn-terminal-boundary");

@@ -43,14 +43,12 @@ export class MockWebSocket {
     this.onclose?.({ code, reason });
   }
 
-  emit(event, data = {}, channelSessionId = "") {
-    this.onmessage?.({
-      data: JSON.stringify({
-        event,
-        data,
-        ...(channelSessionId ? { channelSessionId } : {}),
-      }),
-    });
+  emit(event, data) {
+    this.onmessage?.({ data: JSON.stringify({ event, data }) });
+  }
+
+  emitChannel(channelSessionId, event, data) {
+    this.onmessage?.({ data: JSON.stringify({ event, data, channelSessionId }) });
   }
 }
 
@@ -91,14 +89,16 @@ export function emitCommandReceipt(
   { outcome = AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED, error } = {},
 ) {
   const receipt = createAgentCommandReceipt({
-    commandId: payload.commandId,
-    commandType: payload.commandType,
+    command: {
+      commandId: payload.commandId,
+      commandType: payload.commandType,
+      identity: payload.identity,
+    },
     outcome,
-    identity: payload.identity,
     error,
     occurredAt: "2026-01-01T00:00:00.000Z",
   });
-  socket.emit(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, receipt);
+  socket.emitChannel(payload.identity.sessionId, AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, receipt);
   return receipt;
 }
 

@@ -154,13 +154,27 @@ describe("useReconnectReplay", () => {
 
   it("projects workflow planning events replayed after a page refresh", async () => {
     const { api, mocks } = createFixture();
-    const data = createWorkflowEnvelope(WORKFLOW_RUNTIME_EVENT.PLANNING, {
-      dialogProcessId: "dp-workflow",
-      workflowRunId: "workflow-1",
-      presentationMessageId: "workflow-message-1",
-      workflowPayload: { title: "workflow" },
-      nodeSessions: [{ nodeExecutionId: "node-1" }],
-    });
+    const data = createWorkflowEnvelope(
+      WORKFLOW_RUNTIME_EVENT.PLANNING,
+      {
+        dialogProcessId: "dp-workflow",
+        workflowRunId: "workflow-1",
+        presentationMessageId: "workflow-message-1",
+        workflowPayload: {
+          title: "workflow",
+          nodeSessions: [
+            {
+              nodeExecutionId: "node-1",
+              eventId: "workflow_node_state:workflow-1:node-1:1",
+              status: "pending",
+              revision: 1,
+              sequence: 1,
+            },
+          ],
+        },
+      },
+      { executionId: "workflow-1" },
+    );
 
     await api.applyReconnectEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, data);
 

@@ -32,7 +32,7 @@ import {
   withTimeout,
 } from "./runtime.js";
 import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
-import { firstText, text, isObjectLike } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function buildWorkflowNodeInstruction(step = {}) {
   const locale = text(step?.locale);
@@ -43,11 +43,12 @@ function buildWorkflowNodeInstruction(step = {}) {
   });
 }
 
-export function resolveSemanticNodeForPendingStep({ semantic = {}, pendingStep = {} } = {}) {
-  const pendingNodeId = text(pendingStep?.nodeId);
-  const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
-  if (!pendingNodeId) return null;
-  return nodes.find((node = {}) => text(node?.id) === pendingNodeId) || null;
+export function resolveSemanticNodeForPendingStep({ semantic, pendingStep }) {
+  const matches = semantic.nodes.filter((node) => node.id === pendingStep.nodeId);
+  if (matches.length !== 1) {
+    throw new Error(`workflow semantic node not found: ${pendingStep.nodeId}`);
+  }
+  return matches[0];
 }
 
 export async function runNodeAgent({
@@ -58,13 +59,13 @@ export async function runNodeAgent({
   instanceId = "",
   pendingStep = {},
   semantic = {},
-  nodeIdentity = null,
+  nodeIdentity,
   transition = 0,
   upstreamNodeResults = [],
 } = {}) {
   throwIfWorkflowAborted(signal);
-  const resolvedNodeIdentity = resolveNodeAgentIdentity({ nodeIdentity, ctx });
-  const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
+  const runIdentity = resolveWorkflowRunIdentity(ctx);
+  const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep });
   const nodeInputAttachments = resolveNodeInputAttachments({
     ctx,
     semanticNode,
@@ -82,7 +83,7 @@ export async function runNodeAgent({
     transition,
     semantic,
     semanticNode,
-    resolvedNodeIdentity,
+    nodeIdentity,
     upstreamNodeResults,
     nodeInputAttachments,
     upstreamAttachmentSystemMessage,
@@ -95,7 +96,8 @@ export async function runNodeAgent({
     pendingStep,
     transition,
     semanticNode,
-    resolvedNodeIdentity,
+    nodeIdentity,
+    runIdentity,
     upstreamNodeResults,
     nodeInputAttachments,
     upstreamAttachmentSystemMessage,
@@ -105,40 +107,10 @@ export async function runNodeAgent({
   return resolveNodeAgentResult({
     hookManager,
     signal,
-    pendingStep,
     hookPayload,
     subSession,
     childFailed,
-    resolvedNodeIdentity,
   });
-}
-
-function resolveNodeAgentIdentity({ nodeIdentity, ctx }) {
-  if (!isObjectLike(nodeIdentity)) {
-    throw new TypeError("workflow node identity is required");
-  }
-  const dialogProcessId = text(nodeIdentity.dialogProcessId);
-  const turnScopeId = text(nodeIdentity.turnScopeId);
-  const activeChildExecutionId = text(nodeIdentity.activeChildExecutionId);
-  if (!dialogProcessId || !turnScopeId || !activeChildExecutionId) {
-    throw new TypeError(
-      "workflow node identity requires dialogProcessId, turnScopeId and activeChildExecutionId",
-    );
-  }
-  const workflowRunId = text(nodeIdentity.workflowRunId);
-  const { executionId: workflowExecutionId, rootExecutionId } = resolveWorkflowRunIdentity(ctx);
-  return {
-    ...nodeIdentity,
-    workflowRunId,
-    workflowExecutionId,
-    rootExecutionId,
-    nodeExecutionId: firstText(nodeIdentity.nodeExecutionId),
-    commandId: firstText(nodeIdentity.commandId),
-    dialogProcessId,
-    turnScopeId,
-    activeChildExecutionId,
-    sessionId: firstText(nodeIdentity.sessionId),
-  };
 }
 
 function buildNodeAgentHookPayload({
@@ -148,7 +120,7 @@ function buildNodeAgentHookPayload({
   transition,
   semantic,
   semanticNode,
-  resolvedNodeIdentity,
+  nodeIdentity,
   upstreamNodeResults,
   nodeInputAttachments,
   upstreamAttachmentSystemMessage,
@@ -157,8 +129,8 @@ function buildNodeAgentHookPayload({
     ...ctx,
     workflow: {
       instanceId,
-      workflowRunId: resolvedNodeIdentity.workflowRunId,
-      nodeIdentity: resolvedNodeIdentity,
+      workflowRunId: nodeIdentity.workflowRunId,
+      nodeIdentity,
       pendingStep,
       transition,
       semantic,
@@ -173,7 +145,6 @@ function buildNodeAgentHookPayload({
       locale: resolveWorkflowLocaleFromContext(ctx),
       nodeTask: text(semanticNode?.task),
     }),
-    proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
   };
 }
 
@@ -222,7 +193,7 @@ async function executeWorkflowNodeSubSession(params) {
 }
 
 function createWorkflowNodeSubSessionRequest(params) {
-  const { ctx, resolvedNodeIdentity: identity } = params;
+  const { ctx, nodeIdentity: identity, runIdentity } = params;
   const relativeDir = buildWorkflowDialogRelativeDir({
     ctx,
     dialogProcessId: identity.dialogProcessId,
@@ -244,7 +215,7 @@ function createWorkflowNodeSubSessionRequest(params) {
         params.upstreamAttachmentSystemMessage,
       ].filter(Boolean),
     eventListener: ctx.eventListener,
-    strategy: buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir),
+    strategy: buildWorkflowNodeSubSessionStrategy({ ctx, identity, runIdentity, relativeDir }),
     metadata: buildWorkflowNodeSubSessionMetadata(params),
   };
 }
@@ -278,7 +249,7 @@ function buildWorkflowNodeRunConfigPatch(ctx, identity) {
   };
 }
 
-function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
+function buildWorkflowNodeSubSessionStrategy({ ctx, identity, runIdentity, relativeDir }) {
   return {
     userId: text(ctx?.userId),
     sessionId: identity.sessionId,
@@ -287,8 +258,8 @@ function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
     dialogProcessId: identity.dialogProcessId,
     turnScopeId: identity.turnScopeId,
     executionId: identity.activeChildExecutionId,
-    parentExecutionId: identity.workflowExecutionId,
-    rootExecutionId: identity.rootExecutionId,
+    parentExecutionId: runIdentity.executionId,
+    rootExecutionId: runIdentity.rootExecutionId,
     disabledPlugins: [PLUGIN_ID],
     relativeDir,
     allowedRoot: resolveWorkflowDataRelativePath(WORKFLOW_DATA_SCOPE.SESSION),
@@ -296,14 +267,14 @@ function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
 }
 
 function buildWorkflowNodeSubSessionMetadata(params) {
-  const { ctx, resolvedNodeIdentity: identity } = params;
+  const { ctx, nodeIdentity: identity, runIdentity } = params;
   return {
     scope: "workflow_node",
     instanceId: text(params.instanceId),
     workflowRunId: identity.workflowRunId,
     executionId: identity.activeChildExecutionId,
-    parentExecutionId: identity.workflowExecutionId,
-    rootExecutionId: identity.rootExecutionId,
+    parentExecutionId: runIdentity.executionId,
+    rootExecutionId: runIdentity.rootExecutionId,
     origin: {
       type: "workflow_node",
       workflowRunId: identity.workflowRunId,
@@ -317,7 +288,6 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     transition: Number(params.transition || 0),
     turnScopeId: identity.turnScopeId,
     workflowSessionId: text(ctx?.sessionId),
-    workflowDialogProcessId: identity.dialogProcessId,
     upstreamWorkflowNodeResults: params.upstreamNodeResults,
   };
 }
@@ -335,23 +305,18 @@ async function persistWorkflowNodeSubSession(params, subSession) {
     ctx: params.ctx,
     subSession,
     transition: params.transition,
-    nodeIdentity: {
-      ...params.resolvedNodeIdentity,
-      sessionId: text(subSession.sessionId),
-    },
+    nodeIdentity: params.nodeIdentity,
   });
 }
 
 async function resolveNodeAgentResult({
   hookManager,
   signal,
-  pendingStep,
   hookPayload,
   subSession,
   childFailed,
-  resolvedNodeIdentity,
 }) {
-  if (childFailed) return createNodeAgentResult(null, subSession, resolvedNodeIdentity);
+  if (childFailed) return { action: null, subSession };
   const emitted = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload, {
     signal,
   });
@@ -359,38 +324,8 @@ async function resolveNodeAgentResult({
   const action = emitted.outcomes
     .map((outcome) => outcome?.value?.action)
     .find((value) => value && typeof value === "object");
-  return createNodeAgentResult(
-    action || { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
-    subSession,
-    resolvedNodeIdentity,
-  );
-}
-
-function createNodeAgentResult(action, subSession, identity) {
   return {
-    action,
+    action: action || { type: WORKFLOW_ACTION.SUBMIT },
     subSession,
-    nodeDialogProcessId: identity.dialogProcessId,
-    nodeIdentity: { ...identity, sessionId: text(subSession?.sessionId) },
   };
-}
-
-function buildPendingStepKey(step = {}) {
-  return `${text(step?.nodeName)}::${Number(step?.nodeType || 0)}`;
-}
-
-export function resolveStepIndexForAction({
-  snapshot = {},
-  preferredIndex = 0,
-  pendingStep = {},
-} = {}) {
-  const pendingSteps = Array.isArray(snapshot?.pendingSteps) ? snapshot.pendingSteps : [];
-  if (!pendingSteps.length) return 0;
-  const key = buildPendingStepKey(pendingStep);
-  const matchedIndex = pendingSteps.findIndex((item) => buildPendingStepKey(item) === key);
-  if (matchedIndex >= 0) return matchedIndex;
-  const index = Number.isFinite(Number(preferredIndex))
-    ? Math.max(0, Math.floor(Number(preferredIndex)))
-    : 0;
-  return Math.min(index, Math.max(0, pendingSteps.length - 1));
 }

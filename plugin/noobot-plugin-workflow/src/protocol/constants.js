@@ -8,7 +8,6 @@ export const DSL_PROTOCOL = Object.freeze({
   HEADER: "WORKFLOW_DSL/1",
   CMD_NODE: "NODE",
   CMD_EDGE: "EDGE",
-  CMD_AUTO: "AUTO",
   CMD_END: "END",
 });
 
@@ -23,8 +22,4 @@ export const DSL_TYPES = Object.freeze({
   NODE_STATE: "state",
   NODE_ACTION: "action",
   NODE_COMPOSITE: "composite",
-  AUTO_SUBMIT: "submit",
-  AUTO_AUDIT: "audit",
-  AUTO_BACK: "back",
-  AUTO_STOP: "stop",
 });

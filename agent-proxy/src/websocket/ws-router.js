@@ -20,13 +20,13 @@ import { ensureConnectionId } from "../shared/utils.js";
 import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
-  AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_ERROR_CODE,
   AGENT_TRANSPORT_EVENT,
   EXECUTION_QUERY_COMMAND_TYPES,
   RECONNECT_CONTROL_ACTION,
   RUN_COMMAND_TYPES,
-  createAgentCommandReceipt,
+  createAgentCommandRejection,
+  isAgentTransportProtocolError,
   parseAgentCommand,
   parseReconnectControl,
 } from "@noobot/agent-transport-protocol";
@@ -172,20 +172,14 @@ export class WsRouter {
             },
           });
         }
-        if (!parsedCommand && String(error?.code || "") === "INVALID_AGENT_COMMAND") {
-          const commandId = text(payload?.commandId);
-          const commandType = text(payload?.commandType);
-          const sessionId = text(payload?.identity?.sessionId);
-          if (commandId && commandType && sessionId) {
-            this._sendCommandFailure(socket, payload, error);
+        if (!parsedCommand && isAgentTransportProtocolError(error)) {
+          if (error.command) {
+            this._sendCommandFailure(socket, error.command, error);
           } else {
-            this.channelManager.sendSocketError(
-              socket,
-              String(error?.message || "invalid_agent_command"),
-            );
+            this.channelManager.sendSocketError(socket, error.message);
           }
           try {
-            socket.close?.(1008, "invalid_agent_command");
+            socket.close(1008, "invalid_agent_command");
           } catch (closeError) {
             console.warn("[agent-proxy] invalid command socket close failed", closeError);
           }
@@ -274,10 +268,6 @@ export class WsRouter {
       this._forwardExecutionQuery(socket, command, commandType);
       return;
     }
-    if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET || commandType === AGENT_COMMAND.FINALIZE) {
-      this._forwardSnapshotCommand(socket, command);
-      return;
-    }
     if (
       commandType === AGENT_COMMAND.STOP ||
       commandType === AGENT_COMMAND.INTERJECT ||
@@ -299,19 +289,13 @@ export class WsRouter {
   }
 
   _sendCommandFailure(socket, command, error) {
-    const receipt = createAgentCommandReceipt({
-      commandId: command.commandId,
-      commandType: command.commandType,
-      outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
-      identity: command.identity,
-      error: {
-        code: String(error?.code || "COMMAND_FAILED"),
-        message: String(error?.message || AGENT_PROXY_ERROR.DEFAULT),
-      },
-    });
     this.channelManager.sendSocketEvent(socket, {
-      event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-      data: receipt,
+      event: AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
+      data: createAgentCommandRejection({
+        command,
+        error,
+        occurredAt: new Date().toISOString(),
+      }),
     });
   }
 
@@ -338,30 +322,10 @@ export class WsRouter {
     this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
   }
 
-  _forwardSnapshotCommand(socket, command) {
-    const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, command);
-    if (
-      !targetChannel ||
-      !this.channelManager.hasChannelPermission(
-        targetChannel,
-        socket.__agentProxyApiKey,
-        text(socket?.__agentProxyUserId),
-      )
-    ) {
-      this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
-      return;
-    }
-    targetChannel.pendingSnapshotRequests ||= new Map();
-    targetChannel.pendingSnapshotRequests.set(command.commandId, socket);
-    if (this.channelManager.forwardToUpstream(targetChannel, command)) return;
-    targetChannel.pendingSnapshotRequests.delete(command.commandId);
-    this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
-  }
-
   _forwardExecutionQuery(socket, payload, commandType) {
     const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
-    const commandId = text(payload?.commandId);
-    if (!targetChannel || !commandId) {
+    const { commandId } = payload;
+    if (!targetChannel) {
       this._sendCommandFailure(socket, payload, {
         code: "UPSTREAM_UNAVAILABLE",
         message: AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,
@@ -381,7 +345,6 @@ export class WsRouter {
       });
       return;
     }
-    targetChannel.pendingExecutionRequests ||= new Map();
     targetChannel.pendingExecutionRequests.set(commandId, socket);
     if (this.channelManager.forwardToUpstream(targetChannel, payload)) return;
     targetChannel.pendingExecutionRequests.delete(commandId, "forward_failed");

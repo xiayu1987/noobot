@@ -79,7 +79,7 @@ async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
   if (!forwarded) {
     const pendingRequest = channel.pendingSnapshotRequests.get(commandId);
     channel.pendingSnapshotRequests.delete(commandId);
-    pendingRequest?.resolve?.({ ok: false, reason: "finalize_forward_failed" });
+    pendingRequest.resolve({ ok: false, reason: "finalize_forward_failed" });
   }
   const finalized = await promise;
   if (finalized?.ok === true && finalized.snapshot) return finalized;
@@ -97,7 +97,6 @@ async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
 function startSnapshotRequest(manager, socket, sessionId, channels, knownSequence) {
   const channel = selectSnapshotChannel(channels);
   const commandId = `proxy-snapshot:${sessionId}:${randomUUID()}`;
-  channel.pendingSnapshotRequests ||= new Map();
   const request = { sessionId, channel, commandId, commandIds: [commandId], cancelled: false };
   const snapshotPromise = createSnapshotPromise(channel, commandId, socket);
   const command = createTurnSnapshotCommand({
@@ -117,7 +116,7 @@ function startSnapshotRequest(manager, socket, sessionId, channels, knownSequenc
   if (!forwarded && !queryConnection) {
     const pendingRequest = channel.pendingSnapshotRequests.get(commandId);
     channel.pendingSnapshotRequests.delete(commandId);
-    pendingRequest?.resolve?.({ ok: false, reason: "snapshot_forward_failed" });
+    pendingRequest.resolve({ ok: false, reason: "snapshot_forward_failed" });
   }
   request.queryConnection = queryConnection;
   request.promise = snapshotPromise.then((result) =>

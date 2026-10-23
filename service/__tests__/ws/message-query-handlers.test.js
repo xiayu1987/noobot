@@ -83,9 +83,11 @@ test("handleSnapshotGet is a single pure read and never finalizes", async () => 
 });
 
 test("handleSnapshotGet reports missing snapshots and rejects invalid annotations", async () => {
-  const missing = createHarness({ readSnapshot: () => ({ found: false }) });
+  const missing = createHarness({
+    readSnapshot: () => ({ found: false, reason: "session_not_found" }),
+  });
   await missing.handlers.handleSnapshotGet(command());
-  assert.deepEqual(errorCodes(missing.events), ["snapshot_not_found"]);
+  assert.deepEqual(errorCodes(missing.events), ["session_not_found"]);
 
   const invalid = createHarness({
     readSnapshot: () => ({ found: true, snapshot: { ...snapshot(), recovery: "orphan" } }),
@@ -103,10 +105,12 @@ test("handleFinalize passes protocol identity and reports recovery failure", asy
   assert.deepEqual(errorCodes(events), ["turn_revision_conflict"]);
 });
 
-test("handleFinalize falls back to generic failure code and sends the settled snapshot", async () => {
-  const failed = createHarness({ finalize: () => undefined });
+test("handleFinalize forwards the recovery reason and sends the settled snapshot", async () => {
+  const failed = createHarness({
+    finalize: () => ({ recovered: false, reason: "session_not_found" }),
+  });
   await failed.handlers.handleFinalize(command());
-  assert.deepEqual(errorCodes(failed.events), ["finalize_recovery_failed"]);
+  assert.deepEqual(errorCodes(failed.events), ["session_not_found"]);
 
   const settled = createHarness({
     finalize: () => ({ recovered: true, snapshot: snapshot() }),

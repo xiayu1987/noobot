@@ -119,15 +119,7 @@ function pickPayloadNodeRun(item = {}) {
         "stepId",
         "stepIndex",
         "actionNodeStateId",
-        "nodeDialogProcessId",
-        "dialogProcessId",
-        "nodeDialogId",
-        "dialogId",
         "nodeSessionId",
-        "sessionId",
-        "rootSessionId",
-        "stepStatus",
-        "status",
         "parallelWave",
         "waveOrder",
       ],
@@ -174,9 +166,7 @@ function pickPayloadNodeSession(item = {}) {
         "stateType",
         "rootSessionId",
         "dialogProcessId",
-        "dialogId",
         "sessionId",
-        "stepStatus",
         "status",
         "parallelWave",
         "waveOrder",
@@ -221,7 +211,7 @@ function pickPluginPayloadSnapshot(payload = {}) {
   if (nodeSessions.length) picked.nodeSessions = nodeSessions;
   const runMeta = pickPlainFields(
     payload?.runMeta,
-    ["sessionId", "dialogProcessId", "dialogId", "parentSessionId", "runId"],
+    ["sessionId", "dialogProcessId", "parentSessionId"],
     { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
   );
   if (runMeta) picked.runMeta = runMeta;

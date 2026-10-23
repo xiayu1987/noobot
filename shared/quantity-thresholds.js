@@ -38,7 +38,6 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
   diagnostics: {
     modelContextPreviewLimit: 40,
     modelAccessBodyMaxBytes: 4 * 1024 * 1024,
-    eventAuditListLimit: 64,
     executionReportSlowestToolCalls: 5,
   },
 

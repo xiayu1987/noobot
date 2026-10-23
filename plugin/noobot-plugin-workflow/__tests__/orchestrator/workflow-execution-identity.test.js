@@ -15,6 +15,14 @@ import {
   installTurnMessageEventRuntimeFixture,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
+async function runWithPlanning({ options, workflowRunId, planningNodeSessions, ...rest }) {
+  const nodeStateSnapshot = await options.workflowNodeStateRepository.initialize({
+    workflowRunId,
+    planningNodeSessions,
+  });
+  return runWorkflowExecution({ ...rest, options, workflowRunId, nodeStateSnapshot });
+}
+
 function buildSemantic() {
   return parseWorkflowDslText(
     [
@@ -64,7 +72,7 @@ function buildOptions({ subSessionRunner } = {}) {
     subSessionRunner:
       subSessionRunner ||
       (async ({ strategy, runConfigPatch, metadata }) => ({
-        sessionId: "child-a",
+        sessionId: strategy.sessionId,
         dialogProcessId: strategy.dialogProcessId,
         strategy,
         runConfigPatch,
@@ -92,14 +100,14 @@ test("runWorkflowExecution carries planning identity through events, strategy an
           revision: 4,
           sequence: 4,
         },
-        sessionId: "child-a",
-        dialogProcessId: "actual-child-dialog-a",
+        sessionId: call.strategy.sessionId,
+        dialogProcessId: call.strategy.dialogProcessId,
         persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child-a" },
         result: { messages: [{ role: "assistant", content: "done" }] },
       };
     },
   });
-  const result = await runWorkflowExecution({
+  const result = await runWithPlanning({
     signal: new AbortController().signal,
     hookManager: { emit: async () => ({ outcomes: [] }) },
     options,
@@ -125,9 +133,9 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(run.nodeExecutionId, identity.nodeExecutionId);
   assert.equal(run.commandId, identity.commandId);
   assert.equal(run.turnScopeId, identity.turnScopeId);
-  assert.equal(run.nodeDialogProcessId, identity.dialogProcessId);
-  assert.equal(run.agentDialogProcessId, "actual-child-dialog-a");
-  assert.equal(run.nodeSessionId, "child-a");
+  assert.equal("nodeDialogProcessId" in run, false);
+  assert.equal("agentDialogProcessId" in run, false);
+  assert.equal(run.nodeSessionId, subSessionCalls[0].strategy.sessionId);
 
   assert.equal(Array.isArray(realtimeEvents), true);
   const nodeEnvelopes = realtimeEvents
@@ -138,9 +146,9 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(nodeEnvelopes[0].identity.sessionId, "s1");
   assert.equal(nodeEnvelopes[0].payload.nodeSessionId, subSessionCalls[0].strategy.sessionId);
   assert.equal(nodeEnvelopes[1].identity.sessionId, "s1");
-  assert.equal(nodeEnvelopes[1].payload.nodeSessionId, "child-a");
+  assert.equal(nodeEnvelopes[1].payload.nodeSessionId, subSessionCalls[0].strategy.sessionId);
   assert.equal(nodeEnvelopes[1].payload.dialogProcessId, identity.dialogProcessId);
-  assert.equal(nodeEnvelopes[1].payload.agentDialogProcessId, "actual-child-dialog-a");
+  assert.equal("agentDialogProcessId" in nodeEnvelopes[1].payload, false);
   assert.equal(nodeEnvelopes[1].identity.executionId, identity.nodeExecutionId);
 });
 
@@ -173,14 +181,14 @@ test("runWorkflowExecution resolves each node task by nodeId even when node name
           revision: 4,
           sequence: 4,
         },
-        sessionId: `child-${call.strategy.dialogProcessId}`,
+        sessionId: call.strategy.sessionId,
         dialogProcessId: call.strategy.dialogProcessId,
         persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child" },
         result: { messages: [{ role: "assistant", content: "done" }] },
       };
     },
   });
-  await runWorkflowExecution({
+  await runWithPlanning({
     signal: new AbortController().signal,
     hookManager: { emit: async () => ({ outcomes: [] }) },
     options,
@@ -218,7 +226,7 @@ test("runWorkflowExecution commits a failed child lifecycle to node state and re
   });
   options.workflowNodeStateRepository = repository;
   await assert.rejects(
-    runWorkflowExecution({
+    runWithPlanning({
       signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options,
@@ -227,7 +235,7 @@ test("runWorkflowExecution commits a failed child lifecycle to node state and re
       workflowRunId,
       planningNodeSessions,
     }),
-    (error) => error.code === "CHILD_CRASHED" && error.nodeTerminalCommitted === true,
+    (error) => error.code === "CHILD_CRASHED",
   );
   const snapshot = await repository.getSnapshot({ workflowRunId });
   const node = snapshot.nodes.find((item) => item.nodeId === "a");
@@ -246,7 +254,7 @@ test("runWorkflowExecution rejects duplicate planning identities for the same no
   const duplicate = planningNodeSessions.find((item) => item.nodeId === "a");
   const { ctx } = buildCtx();
   await assert.rejects(
-    runWorkflowExecution({
+    runWithPlanning({
       signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
@@ -268,7 +276,7 @@ test("runWorkflowExecution rejects missing planning identity in new protocol pat
   }).filter((item) => item.nodeId !== "a");
   const { ctx } = buildCtx();
   await assert.rejects(
-    runWorkflowExecution({
+    runWithPlanning({
       signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
@@ -290,7 +298,7 @@ test("runWorkflowExecution rejects incomplete planning identity", async () => {
   );
   const { ctx } = buildCtx();
   await assert.rejects(
-    runWorkflowExecution({
+    runWithPlanning({
       signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
@@ -314,7 +322,6 @@ test("runWorkflowExecution rejects missing workflow and planning identities", as
       ctx,
       semantic,
       workflowRunId: "",
-      planningNodeSessions: [],
     }),
     /workflowRunId is required/,
   );
@@ -329,7 +336,7 @@ test("runWorkflowExecution rejects planning identity without nodeName", async ()
   );
   const { ctx } = buildCtx();
   await assert.rejects(
-    runWorkflowExecution({
+    runWithPlanning({
       signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
@@ -338,7 +345,7 @@ test("runWorkflowExecution rejects planning identity without nodeName", async ()
       workflowRunId,
       planningNodeSessions: broken,
     }),
-    /incomplete workflow node identity for a: nodeName/,
+    /incomplete workflow node identity\/state: nodeName/,
   );
 });
 
@@ -355,7 +362,7 @@ test("runWorkflowExecution commits FAILED with a boundary code when a child thro
   });
   options.workflowNodeStateRepository = repository;
   await assert.rejects(
-    runWorkflowExecution({
+    runWithPlanning({
       signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options,
@@ -398,7 +405,7 @@ test("runWorkflowExecution commits FAILED when the child terminal receipt is rej
   });
   options.workflowNodeStateRepository = repository;
   await assert.rejects(
-    runWorkflowExecution({
+    runWithPlanning({
       signal: new AbortController().signal,
       hookManager: { emit: async () => ({ outcomes: [] }) },
       options,
@@ -417,4 +424,49 @@ test("runWorkflowExecution commits FAILED when the child terminal receipt is rej
     code: "WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID",
     message: "invalid child execution terminal receipt: execution_identity_mismatch",
   });
+});
+
+test("runWorkflowExecution propagates a terminal commit failure without a second failure commit", async () => {
+  const semantic = buildSemantic();
+  const workflowRunId = "wf_run_terminal_commit_failure";
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+  const { ctx } = buildCtx();
+  const options = buildOptions({
+    subSessionRunner: async (call) => ({
+      lifecycle: {
+        executionId: call.strategy.executionId,
+        executionKind: "agent",
+        state: "completed",
+        revision: 4,
+        sequence: 4,
+      },
+      sessionId: call.strategy.sessionId,
+      dialogProcessId: call.strategy.dialogProcessId,
+      result: { messages: [{ role: "assistant", content: "done" }] },
+    }),
+  });
+  const repository = options.workflowNodeStateRepository;
+  const commits = [];
+  const commit = repository.commit.bind(repository);
+  repository.commit = async (transition) => {
+    commits.push(transition.status);
+    if (transition.status === "succeeded") throw new Error("terminal commit conflict");
+    return commit(transition);
+  };
+  await assert.rejects(
+    runWithPlanning({
+      signal: new AbortController().signal,
+      hookManager: { emit: async () => ({ outcomes: [] }) },
+      options,
+      ctx,
+      semantic,
+      workflowRunId,
+      planningNodeSessions,
+    }),
+    /terminal commit conflict/,
+  );
+  assert.deepEqual(commits.slice(0, 2), ["running", "succeeded"]);
+  assert.equal(commits.includes("failed"), false);
+  const snapshot = await repository.getSnapshot({ workflowRunId });
+  assert.equal(snapshot.nodes.find((item) => item.nodeId === "a").status, "running");
 });

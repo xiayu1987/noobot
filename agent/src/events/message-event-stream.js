@@ -138,6 +138,15 @@ export function markAssistantDraftCommitted(runtime, modelMessageId) {
   if (draft && draft.modelMessageId === modelMessageId) draft.committed = true;
 }
 
+export function discardAssistantDraft(runtime, modelMessageId) {
+  const stream = runtimeState(runtime).messageEventStream;
+  const draft = stream.activeAssistantDraft;
+  if (!draft || draft.modelMessageId !== modelMessageId) {
+    throw new Error("assistant draft discard requires the active model message stream");
+  }
+  stream.activeAssistantDraft = null;
+}
+
 export function currentAssistantPresentationMessageId(runtime) {
   return runtimeState(runtime).messageEventStream.activePresentationMessageId;
 }

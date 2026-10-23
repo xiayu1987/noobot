@@ -39,7 +39,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
       resolved = true;
     });
 
-    socket.emit(StreamEventEnum.CHANNEL_STATE, {
+    socket.emitChannel("s-1", StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "main-dp",
       turnScopeId: "main-turn",
@@ -63,7 +63,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
       settled = true;
     });
 
-    socket.emit(StreamEventEnum.CHANNEL_STATE, {
+    socket.emitChannel("s-1", StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "main-dp",
       turnScopeId: "main-turn",
@@ -87,7 +87,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
       resolved = true;
     });
 
-    socket.emit(StreamEventEnum.CHANNEL_STATE, {
+    socket.emitChannel("s-1", StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       state: "no_conversation",
       seq: 0,
@@ -116,6 +116,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     await expect(promise).rejects.toThrow("boom");
     expect(onEvent).toHaveBeenCalledWith({
       event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+      channelSessionId: payload.identity.sessionId,
       data: receipt,
     });
   });
@@ -132,10 +133,12 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     socket.emit(
       AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
       createAgentCommandReceipt({
-        commandId: "test-stream:unrelated-turn",
-        commandType: payload.commandType,
+        command: {
+          commandId: "test-stream:unrelated-turn",
+          commandType: payload.commandType,
+          identity: { sessionId: "s-1", turnScopeId: "unrelated-turn", dialogProcessId: "doc-dp" },
+        },
         outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
-        identity: { sessionId: "s-1", turnScopeId: "unrelated-turn", dialogProcessId: "doc-dp" },
         occurredAt: "2026-01-01T00:00:00.000Z",
       }),
     );

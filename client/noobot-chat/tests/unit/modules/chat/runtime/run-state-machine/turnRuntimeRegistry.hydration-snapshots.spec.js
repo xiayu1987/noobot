@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { nextTick, ref } from "vue";
 import {
   createTurnRuntimeRegistryState,
@@ -554,7 +554,10 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       sequence: 3,
     });
     const turnRuntimeRegistry = ref(registry);
-    const store = createTurnRuntimeStoreActions(turnRuntimeRegistry);
+    const store = createTurnRuntimeStoreActions(turnRuntimeRegistry, {
+      onTurnCommitted: vi.fn(() => null),
+      onTurnEvaluated: vi.fn(),
+    });
     const resolveActiveTurnScopeIdentity = () =>
       turnRuntimeRegistry.value.sessions.s1?.activeTurnScopeId || "";
     const { composerActionState } = createComposerRuntimeState({

@@ -58,7 +58,9 @@ import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-
 import {
   beginAssistantMessageEventStream,
   currentAssistantPresentationMessageId,
+  discardAssistantDraft,
 } from "../../events/message-event-stream.js";
+import { CONTROL_TOOL_NAMES } from "../../tools/constants/index.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -435,6 +437,26 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const calls = normalizedCalls.map((call) =>
     projectToolContextPolicy(call, toolMap.get(call.name)),
   );
+
+  const controlToolCall =
+    calls.length > 1 ? calls.find((call) => CONTROL_TOOL_NAMES.includes(call.name)) : null;
+  if (controlToolCall) {
+    discardAssistantDraft(runtime, modelMessageId);
+    emitEvent(eventListener, "llm_call_end", {
+      turn,
+      modelLoopRound,
+      mode: "with_tools",
+      toolCallCount: calls.length,
+    });
+    return {
+      rejectedControlToolBatch: {
+        controlToolName: controlToolCall.name,
+        toolCallCount: calls.length,
+      },
+      traces,
+      toolMap,
+    };
+  }
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.AFTER_LLM_CALL,

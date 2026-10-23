@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTrimmedString } from "./chatWebSocketProtocol.js";
+import { createCommandResultError, isCommandFailureResult } from "./chatWebSocketProtocol.js";
 import {
-  AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
   validateAgentCommandReceipt,
+  validateAgentCommandRejection,
 } from "@noobot/agent-transport-protocol";
 import { validateProtocolEvent } from "@noobot/event-protocol";
 
@@ -29,25 +29,29 @@ export function createWebSocketCommandRequests({
     pendingRequests.clear();
   }
 
-  function readSettlementCommandId(isReceipt, data) {
-    return isReceipt ? data?.commandId : data?.causality?.commandId;
-  }
+  const COMMAND_RESULT_VALIDATORS = new Map([
+    [AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, validateAgentCommandReceipt],
+    [AGENT_TRANSPORT_EVENT.COMMAND_REJECTED, validateAgentCommandRejection],
+  ]);
 
   function settle(event, data) {
-    const isReceipt = event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT;
-    const commandId = readSettlementCommandId(isReceipt, data);
+    const commandResultValidator = COMMAND_RESULT_VALIDATORS.get(event);
+    const commandId = commandResultValidator ? data.commandId : data.causality?.commandId;
     const pending = pendingRequests.get(commandId);
     if (!pending) return;
-    if (!isReceipt && pending.expectedEvents.size && !pending.expectedEvents.has(event)) return;
-    const validation = isReceipt ? validateAgentCommandReceipt(data) : validateProtocolEvent(data);
+    if (
+      !commandResultValidator &&
+      pending.expectedEvents.size &&
+      !pending.expectedEvents.has(event)
+    ) {
+      return;
+    }
+    const validation = (commandResultValidator || validateProtocolEvent)(data);
     if (!validation.valid) throw new TypeError(validation.errors.join(","));
     pendingRequests.delete(commandId);
     clearTimeout(pending.timeout);
-    if (isReceipt && data.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
-      const error = new Error(data.error.message);
-      error.event = event;
-      error.data = data;
-      pending.reject(error);
+    if (commandResultValidator && isCommandFailureResult(event, data)) {
+      pending.reject(createCommandResultError(event, data));
       return;
     }
     pending.resolve({ event, data });
@@ -74,7 +78,7 @@ export function createWebSocketCommandRequests({
     payload = {},
     { expectedEvents = [], timeoutMs: requestTimeoutMs = timeoutMs } = {},
   ) {
-    const commandId = normalizeTrimmedString(payload?.commandId);
+    const { commandId } = payload;
     if (!commandId) return Promise.reject(new Error("commandId is required"));
     if (pendingRequests.has(commandId)) {
       return Promise.reject(new Error("commandId request already pending"));

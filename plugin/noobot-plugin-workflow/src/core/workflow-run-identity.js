@@ -60,8 +60,7 @@ export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic
   const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
   const flowtos = Array.isArray(semantic?.flowtos) ? semantic.flowtos : [];
   const nodeById = new Map(nodes.map((node = {}) => [text(node?.id), node]));
-  const now = new Date().toISOString();
-  return nodes.map((node = {}, index) => {
+  return nodes.map((node = {}) => {
     const identity = createWorkflowNodeIdentity({ workflowRunId, node });
     const nodeType = text(node?.type).toLowerCase();
     const executable = nodeType === "action";
@@ -72,14 +71,8 @@ export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic
     return {
       ...identity,
       nodeName: text(node?.name),
-      nodeType: node?.type ?? "",
       dependencies,
       status: executable ? (dependencies.length ? "pending" : "ready") : "pending",
-      revision: 1,
-      sequence: index + 1,
-      eventId: `workflow-plan:${identity.nodeExecutionId}`,
-      updatedAt: now,
-      nodeSessionId: "",
     };
   });
 }

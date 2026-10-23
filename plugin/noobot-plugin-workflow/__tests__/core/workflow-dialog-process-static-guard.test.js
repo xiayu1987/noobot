@@ -20,18 +20,7 @@ const LEGACY_FIELD_PATTERN = /\b(?:dialogId|nodeDialogId)\b/;
 const OLD_ENTRYPOINT_PATTERN =
   /\b(?:workflowDialogId|selectedDialogId|selectedGraphDialogId|stepDialogIds|_stepDialogIds|nodeRunByDialogId)\b|selected-dialog-id|selected-graph-dialog-id/;
 
-const AGENT_COMPAT_FILES = [
-  path.join(projectRoot, "agent/src/session/session-summary-builders.js"),
-  path.join(projectRoot, "agent/src/session/services/session-message-service.js"),
-];
-
-const AGENT_COMPAT_ALLOWED_LINES = [
-  /legacy plugin payloads|historical plugin payloads|historical payload snapshots|historical callers|New anchors must pass/,
-  /\[.*"(?:nodeDialogId|dialogId)"/,
-  /"(?:nodeDialogId|dialogId)"/,
-  /dialogProcessId:\s*anchor\?\.dialogProcessId\s*\|\|\s*anchor\?\.dialogId/,
-  /delete\s+targetMessage\.dialogId;/,
-];
+const AGENT_SCAN_ROOT = path.join(projectRoot, "agent/src");
 
 async function listSourceFiles(root) {
   const entries = await readdir(root, { withFileTypes: true });
@@ -87,20 +76,17 @@ test("workflow dialog process identity uses only canonical fields", async () => 
   );
 });
 
-test("agent dialog process legacy fields remain documented read-only compatibility", async () => {
+test("agent source does not read or write legacy dialog process fields", async () => {
   const violations = [];
-  for (const filePath of AGENT_COMPAT_FILES) {
+  for (const filePath of await listSourceFiles(AGENT_SCAN_ROOT)) {
     const content = await readFile(filePath, "utf8");
-    const hits = matchingLines(content, LEGACY_FIELD_PATTERN);
-    for (const hit of hits) {
-      if (!AGENT_COMPAT_ALLOWED_LINES.some((pattern) => pattern.test(hit.line))) {
-        violations.push(formatHit(filePath, hit));
-      }
-    }
+    violations.push(
+      ...matchingLines(content, LEGACY_FIELD_PATTERN).map((hit) => formatHit(filePath, hit)),
+    );
   }
   assert.deepEqual(
     violations,
     [],
-    "agent dialogId/nodeDialogId mentions must stay in documented read-only history compatibility code",
+    "agent source must use canonical dialog process identity fields",
   );
 });

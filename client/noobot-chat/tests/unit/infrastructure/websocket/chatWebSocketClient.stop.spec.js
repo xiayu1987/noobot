@@ -55,7 +55,8 @@ describe("chatWebSocketClient stop transport", () => {
     await vi.advanceTimersByTimeAsync(10000);
     expect(resolved).toBe(false);
 
-    socket.emit(
+    socket.emitChannel(
+      "s-1",
       "turn_lifecycle",
       turnLifecycleProtocolEvent(
         createTurnLifecycleEnvelope({
@@ -119,7 +120,8 @@ describe("chatWebSocketClient stop transport", () => {
     const stopMessages = socket.sent.map((item) => JSON.parse(item));
     expect(stopMessages).toHaveLength(1);
     expect(stopMessages[0]).toEqual(firstCommand);
-    socket.emit(
+    socket.emitChannel(
+      "s-1",
       "turn_lifecycle",
       turnLifecycleProtocolEvent(
         createTurnLifecycleEnvelope({

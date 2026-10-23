@@ -31,7 +31,6 @@ function messageEnvelope({ eventId, sequence, payload }) {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: "presentation-1",
       sequence,
-      aggregateVersion: 2,
     },
     producer: { type: "agent", id: "agent-1" },
     occurredAt: "2026-08-17T00:00:00.000Z",

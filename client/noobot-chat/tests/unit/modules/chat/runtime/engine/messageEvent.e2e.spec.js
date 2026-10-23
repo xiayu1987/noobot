@@ -13,7 +13,7 @@ import {
 import { initializeCurrentTurnMessageEventProjection } from "../../../../../../../../agent/src/events/current-turn-message-event-projection.js";
 import { createRuntimeContext } from "../../../../../../../../agent/src/runtime/runtime-context-factory.js";
 import { createRunEventListener } from "../../../../../../../../service/ws/chat-websocket/run-event-listener.js";
-import { shouldProjectSubSessionEvent } from "../../../../../../src/modules/chat/runtime/engine/sendFlow.js";
+import { isWorkflowNodeMessageEvent } from "@noobot/event-protocol/message-event";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeEventFixture.js";
@@ -21,6 +21,8 @@ import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeE
 function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent(
     canonicalWorkflowSessionSnapshot({
+      eventId: "workflow-session-snapshot-1",
+      executionId: "agent-execution-child-session",
       aggregateVersion: 1,
       authoritySessionId: "parent-session",
       workflowRunId: "workflow-run-1",
@@ -33,7 +35,7 @@ function applySessionSnapshot(store, sessionDoc) {
 
 function deliverPacketToStore(store, envelope) {
   const wireEnvelope = JSON.parse(JSON.stringify(envelope));
-  expect(shouldProjectSubSessionEvent(wireEnvelope.identity.eventType, wireEnvelope)).toBe(true);
+  expect(isWorkflowNodeMessageEvent(wireEnvelope)).toBe(true);
   return store.reduceSubSessionMessageEvent(wireEnvelope, { source: "test" });
 }
 
@@ -185,7 +187,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     );
 
     applySessionSnapshot(store, {
-      sessionId: "child-session",
+      nodeSessionId: "child-session",
       messages: [
         {
           messageUid: presentationMessageId,

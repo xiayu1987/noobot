@@ -95,9 +95,6 @@ test("session-routes: HTTP 调用经真实 facade 绑定根会话 persistence sc
     assert.equal(report.status, 200, JSON.stringify(reportBody));
     assert.equal(reportBody.report.dialogProcessId, "dp-1");
 
-    const repair = await fetch(`${sessionUrl}/repair`, { method: "POST" });
-    assert.equal(repair.status, 200, await repair.text());
-
     await assertScopeAccepted(await fetch(`${sessionUrl}/turns/turn-a/terminal?commandId=c-1`));
 
     const rename = await fetch(`${sessionUrl}/rename`, {

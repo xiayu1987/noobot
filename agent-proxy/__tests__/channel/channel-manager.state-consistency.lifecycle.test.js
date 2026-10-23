@@ -29,7 +29,6 @@ import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
   createAgentCommandReceipt,
-  createAgentTransportError,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
 import { EVENT_FAMILY, createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
@@ -72,7 +71,11 @@ import {
   PLUGIN_ARTIFACT_EVENT,
 } from "@noobot/event-protocol/plugin-artifact-event";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
-import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
+import {
+  ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
+  ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+  attachmentLifecycleSequenceScopeId,
+} from "@noobot/attachment-protocol";
 
 test("channel transport preserves strict event payloads during broadcast and replay", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -106,8 +109,8 @@ test("channel transport preserves strict event payloads during broadcast and rep
     },
     causality: {},
     ordering: {
-      domain: "attachment-lifecycle",
-      scopeId: "attachment-1:session-strict-payload:user",
+      domain: ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
+      scopeId: attachmentLifecycleSequenceScopeId(lifecycle.identity),
       sequence: 1,
     },
     producer: { type: "test", id: "agent-proxy-test" },
@@ -276,40 +279,6 @@ test("upstream snapshot responses resolve and release the reconnect command", as
   assert.equal(channel.pendingSnapshotRequests.size, 0);
 });
 
-test("upstream snapshot errors resolve and release the reconnect command", () => {
-  FakeUpstreamWebSocket.instances = [];
-  const manager = new ChannelManager(FakeUpstreamWebSocket);
-  const channel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId: "session-snapshot-error" }),
-    { userId: "user-1", sessionId: "session-snapshot-error" },
-  );
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
-  const upstream = FakeUpstreamWebSocket.instances.at(-1);
-  upstream.emit("open");
-  let resolution = null;
-  channel.pendingSnapshotRequests.set("snapshot-command-error", {
-    resolve: (result) => {
-      resolution = result;
-    },
-  });
-
-  upstream.emit(
-    "message",
-    JSON.stringify({
-      event: AGENT_TRANSPORT_EVENT.ERROR,
-      data: createAgentTransportError({
-        code: "snapshot_not_found",
-        message: "snapshot not found",
-        commandId: "snapshot-command-error",
-        identity: { sessionId: "session-snapshot-error" },
-      }),
-    }),
-  );
-
-  assert.deepEqual(resolution, { ok: false, reason: "snapshot_not_found" });
-  assert.equal(channel.pendingSnapshotRequests.size, 0);
-});
-
 test("upstream snapshot failure receipts resolve and release the reconnect command", () => {
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);
@@ -334,11 +303,14 @@ test("upstream snapshot failure receipts resolve and release the reconnect comma
     JSON.stringify({
       event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
       data: createAgentCommandReceipt({
-        commandId,
-        commandType: AGENT_COMMAND.TURN_SNAPSHOT_GET,
+        command: {
+          commandId,
+          commandType: AGENT_COMMAND.TURN_SNAPSHOT_GET,
+          identity: { sessionId },
+        },
         outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
-        identity: { sessionId },
         error: { code: "snapshot_not_found", message: "snapshot not found" },
+        occurredAt: "2026-01-01T00:00:00.000Z",
       }),
     }),
   );
@@ -409,7 +381,7 @@ test("orphan execution query responses are dropped without closing upstream", ()
   }
 
   assert.equal(channel.upstreamClosed, false);
-  assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR), null);
+  assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.CHANNEL_ERROR), null);
   assert.equal(getEvent(observer, "execution_tree"), null);
   assert.equal(
     logged.filter((event) => event === "agentProxy.upstream.executionQuery.orphanDropped").length,
@@ -434,7 +406,7 @@ test("execution query wire events without commandId remain invalid upstream even
   upstream.emit("message", JSON.stringify({ event: "execution_tree", data: { found: true } }));
 
   assert.equal(channel.upstreamClosed, true);
-  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR));
+  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.CHANNEL_ERROR));
 });
 
 function connectInvalidFrameChannel(sessionId) {
@@ -470,7 +442,7 @@ test("locatable invalid upstream frames are dropped without closing upstream", (
   }
 
   assert.equal(channel.upstreamClosed, false);
-  assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR), null);
+  assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.CHANNEL_ERROR), null);
   assert.equal(getEvent(observer, "message_event"), null);
 });
 
@@ -484,7 +456,7 @@ test("invalid upstream frames beyond the window limit close upstream", () => {
   }
 
   assert.equal(channel.upstreamClosed, true);
-  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR));
+  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.CHANNEL_ERROR));
 });
 
 test("unparseable upstream frames close upstream immediately", () => {
@@ -493,7 +465,7 @@ test("unparseable upstream frames close upstream immediately", () => {
   upstream.emit("message", "{not-json");
 
   assert.equal(channel.upstreamClosed, true);
-  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR));
+  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.CHANNEL_ERROR));
 });
 
 test("stop action should broadcast stopping state before terminal", () => {

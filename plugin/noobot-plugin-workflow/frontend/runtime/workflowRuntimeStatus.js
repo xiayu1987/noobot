@@ -11,10 +11,9 @@ function normalizeStatus(value = "") {
   return status;
 }
 
-import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
-export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
+export function createStepStatusResolver() {
   return function resolveStepStatus(stepItem = {}) {
     const failure = stepItem?.stepFailure;
     if (isObjectLike(failure)) {
@@ -25,13 +24,6 @@ export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
 
     const explicit = normalizeStatus(stepItem?.status || stepItem?._status || "");
     if (explicit) return explicit;
-
-    const dialogProcessId = resolveWorkflowDialogProcessId(stepItem);
-    const runItem = dialogProcessId ? nodeRunByDialogProcessId.value.get(dialogProcessId) : null;
-    if (runItem?.stepFailure) return "failed";
-
-    const runStatus = normalizeStatus(runItem?.status || "");
-    if (runStatus) return runStatus;
     return "pending";
   };
 }

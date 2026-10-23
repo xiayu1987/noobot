@@ -51,20 +51,16 @@ export function resolveCommittedChildTerminal(subSession = {}, expectedExecution
   return { lifecycle, nodeStatus };
 }
 
-async function publishWorkflowNodeStateCommitted({ ctx = {}, fact = null } = {}) {
-  const node = fact?.node && typeof fact.node === "object" ? fact.node : null;
-  if (!node) return null;
+async function publishWorkflowNodeStateCommitted({ ctx, node }) {
   return commitWorkflowRuntimeEvent({
     ctx,
     eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
     commandId: node.commandId,
     payload: {
       workflowRunId: node.workflowRunId,
-      nodeExecutionId: node.nodeExecutionId,
       commandId: node.commandId,
       nodeSessionId: node.nodeSessionId,
       dialogProcessId: node.dialogProcessId,
-      agentDialogProcessId: node.agentDialogProcessId,
       turnScopeId: node.turnScopeId,
       nodeId: node.nodeId,
       nodeName: node.nodeName,
@@ -76,8 +72,6 @@ async function publishWorkflowNodeStateCommitted({ ctx = {}, fact = null } = {})
       completedAt: node.completedAt,
       createdAt: node.createdAt,
       updatedAt: node.updatedAt,
-      applied: fact.applied === true,
-      deduplicated: fact.deduplicated === true,
     },
     orderingDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
     orderingScopeId: node.workflowRunId,
@@ -86,69 +80,40 @@ async function publishWorkflowNodeStateCommitted({ ctx = {}, fact = null } = {})
   });
 }
 
-export async function commitAndPublishWorkflowNodeState({
-  repository,
-  ctx = {},
-  workflowRunId = "",
-  nodeExecutionId = "",
-  status = "",
-  expectedRevision = null,
-  nodeSessionId = "",
-  agentDialogProcessId = "",
-  activeChildExecutionId = "",
-  failure = null,
-} = {}) {
-  const fact = await repository.commit({
-    workflowRunId,
-    nodeExecutionId,
-    status,
-    expectedRevision,
-    nodeSessionId,
-    agentDialogProcessId,
-    activeChildExecutionId,
-    failure,
-  });
-  if (fact?.applied === true) {
-    await publishWorkflowNodeStateCommitted({ ctx, fact });
-  }
+export async function commitAndPublishWorkflowNodeState({ repository, ctx, transition }) {
+  const fact = await repository.commit(transition);
+  await publishWorkflowNodeStateCommitted({ ctx, node: fact.node });
   return fact;
 }
 
-export async function settleUnstartedWorkflowNodes({
-  repository,
-  snapshot,
-  ctx = {},
-  status,
-} = {}) {
-  if (
-    !repository ||
-    !snapshot ||
-    ![WORKFLOW_NODE_STATUS.STOPPED, WORKFLOW_NODE_STATUS.SKIPPED].includes(status)
-  ) {
-    return snapshot;
+const UNSTARTED_SETTLE_FAILURE = Object.freeze({
+  [WORKFLOW_NODE_STATUS.STOPPED]: {
+    source: "workflow",
+    code: "WORKFLOW_STOPPED",
+    message: "workflow stopped before node execution",
+  },
+  [WORKFLOW_NODE_STATUS.SKIPPED]: undefined,
+});
+
+export async function settleUnstartedWorkflowNodes({ repository, workflowRunId, ctx, status }) {
+  if (!Object.hasOwn(UNSTARTED_SETTLE_FAILURE, status)) {
+    throw new Error(`unsupported unstarted workflow node settle status: ${status}`);
   }
-  let latest =
-    (await repository.getSnapshot({ workflowRunId: snapshot.workflowRunId })) || snapshot;
-  for (const node of latest.nodes || []) {
-    if (![WORKFLOW_NODE_STATUS.PENDING, WORKFLOW_NODE_STATUS.READY].includes(node?.status))
-      continue;
+  let latest = await repository.getSnapshot({ workflowRunId });
+  for (const node of latest.nodes) {
+    if (![WORKFLOW_NODE_STATUS.PENDING, WORKFLOW_NODE_STATUS.READY].includes(node.status)) continue;
     const fact = await commitAndPublishWorkflowNodeState({
       repository,
       ctx,
-      workflowRunId: node.workflowRunId,
-      nodeExecutionId: node.nodeExecutionId,
-      status,
-      expectedRevision: node.revision,
-      failure:
-        status === WORKFLOW_NODE_STATUS.STOPPED
-          ? {
-              source: "workflow",
-              code: "WORKFLOW_STOPPED",
-              message: "workflow stopped before node execution",
-            }
-          : null,
+      transition: {
+        workflowRunId,
+        nodeExecutionId: node.nodeExecutionId,
+        status,
+        expectedRevision: node.revision,
+        failure: UNSTARTED_SETTLE_FAILURE[status],
+      },
     });
-    latest = fact?.snapshot || latest;
+    latest = fact.snapshot;
   }
   return latest;
 }

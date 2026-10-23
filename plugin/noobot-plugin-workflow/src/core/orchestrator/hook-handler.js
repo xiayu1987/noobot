@@ -61,7 +61,10 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       semanticText,
       options,
     });
-    const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+    const initialNodeStateSnapshot = await options.workflowNodeStateRepository.initialize({
+      workflowRunId,
+      planningNodeSessions: buildWorkflowPlanningNodeSessions({ workflowRunId, semantic }),
+    });
     await prepareWorkflowPlanningMessage({
       options,
       ctx,
@@ -73,7 +76,7 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       phaseTracker,
       retryMeta,
       workflowRunId,
-      planningNodeSessions,
+      planningNodeSessions: initialNodeStateSnapshot.nodes,
     });
 
     const { execution, nodeAgentRuns, nodeStateSnapshot } = await runWorkflowExecutionStage({
@@ -83,7 +86,7 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       signal,
       semantic,
       workflowRunId,
-      planningNodeSessions,
+      initialNodeStateSnapshot,
       phaseTracker,
     });
     markWorkflowRetrySucceeded(retryMeta);

@@ -120,7 +120,7 @@ function summarizeMessageDimensions(messages = []) {
   let summarizedCount = 0;
   for (const message of Array.isArray(messages) ? messages : []) {
     incrementCount(roles, resolveDiagnosticRole(message));
-    const dialogProcessId = readField(message, "dialogProcessId") || readField(message, "dialogId");
+    const dialogProcessId = readField(message, "dialogProcessId");
     if (!dialogProcessId) {
       missingDialogIdCount += 1;
     } else {

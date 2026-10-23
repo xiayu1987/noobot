@@ -410,13 +410,28 @@ describe("SharedChatMessageItem", () => {
       storeSetup: (store) =>
         store.applyWorkflowRuntimeEvent(
           canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
+            eventId: "turn-workflow:planning",
+            executionId: "turn-workflow",
             workflowRunId: "turn-workflow",
             authoritySessionId: "session-1",
             dialogProcessId: "dialog-workflow",
             turnScopeId: "turn-workflow",
+            presentationMessageId: "workflow-thinking-host",
             semanticText: "WORKFLOW_DSL/1",
-            nodeSessions: [{ nodeExecutionId: "node-1", status: "running" }],
+            workflowPayload: {
+              nodes: [{ nodeExecutionId: "node-1" }],
+              nodeSessions: [
+                {
+                  nodeExecutionId: "node-1",
+                  eventId: "workflow_node_state:turn-workflow:node-1:1",
+                  status: "running",
+                  revision: 1,
+                  sequence: 1,
+                },
+              ],
+            },
           }),
+          { source: "test" },
         ),
       messageItem: {
         presentationMessageId: "workflow-thinking-host",
@@ -450,13 +465,28 @@ describe("SharedChatMessageItem", () => {
 
     useChatStore().applyWorkflowRuntimeEvent(
       canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
+        eventId: "workflow-late:planning",
+        executionId: "workflow-late",
         workflowRunId: "workflow-late",
         authoritySessionId: "session-late",
         dialogProcessId: "dialog-workflow-late",
         turnScopeId: "turn-workflow-late",
+        presentationMessageId: "workflow-thinking-host-late",
         semanticText: "WORKFLOW_DSL/1",
-        nodeSessions: [{ nodeExecutionId: "node-late", status: "running" }],
+        workflowPayload: {
+          nodes: [{ nodeExecutionId: "node-late" }],
+          nodeSessions: [
+            {
+              nodeExecutionId: "node-late",
+              eventId: "workflow_node_state:late-workflow:node-late:1",
+              status: "running",
+              revision: 1,
+              sequence: 1,
+            },
+          ],
+        },
       }),
+      { source: "test" },
     );
     await nextTick();
 
@@ -569,11 +599,14 @@ describe("SharedChatMessageItem", () => {
       storeSetup: (store) =>
         store.applyWorkflowRuntimeEvent(
           canonicalWorkflowSessionSnapshot({
+            eventId: "child-session:snapshot-1",
+            executionId: "agent-execution-child-session",
             nodeSessionId: "child-session",
             authoritySessionId: "parent-session",
             workflowRunId: "workflow-run-1",
             nodeExecutionId: "node-execution-1",
             aggregateVersion: 1,
+            messages: [],
             turnTimings: [
               {
                 dialogProcessId: "child-dialog",
@@ -640,11 +673,14 @@ describe("SharedChatMessageItem", () => {
         });
         store.applyWorkflowRuntimeEvent(
           canonicalWorkflowSessionSnapshot({
+            eventId: "child-session-terminal:snapshot-1",
+            executionId: "agent-execution-child-session-terminal",
             nodeSessionId: "child-session-terminal",
             authoritySessionId: "parent-session",
             workflowRunId: "workflow-run-1",
             nodeExecutionId: "node-execution-1",
             aggregateVersion: 1,
+            messages: [],
             turnTimings: [
               {
                 dialogProcessId: "child-dialog-terminal",

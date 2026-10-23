@@ -3,8 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
-import { createAttachmentLifecycleEvent } from "@noobot/attachment-protocol";
+import { isCanonicalText, text } from "@noobot/shared/value";
+import {
+  ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
+  attachmentLifecycleSequenceScopeId,
+  createAttachmentLifecycleEvent,
+} from "@noobot/attachment-protocol";
 import { INTERACTION_SEQUENCE_DOMAIN } from "./interaction.js";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
@@ -33,13 +37,23 @@ export const validateAttachment = (payload) => {
   }
 };
 
+export const validateAttachmentEnvelope = (envelope) => {
+  const { identity, ordering, payload } = envelope;
+  const errors = [];
+  if (ordering.domain !== ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN)
+    errors.push("sequence_domain_mismatch");
+  if (ordering.scopeId !== attachmentLifecycleSequenceScopeId(payload.identity))
+    errors.push("sequence_scope_mismatch");
+  if (identity.turnScopeId !== payload.turnScopeId) errors.push("turn_scope_id_mismatch");
+  return { valid: errors.length === 0, errors };
+};
+
 export const validateInteractionEnvelope = (envelope) => {
   const errors = [];
-  const requestId = text(envelope?.payload?.requestId);
-  if (!text(envelope?.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
-  if (envelope?.ordering?.domain !== INTERACTION_SEQUENCE_DOMAIN)
+  if (!isCanonicalText(envelope.identity.turnScopeId)) errors.push("missing_turn_scope_id");
+  if (envelope.ordering.domain !== INTERACTION_SEQUENCE_DOMAIN)
     errors.push("sequence_domain_mismatch");
-  if (requestId && envelope?.ordering?.scopeId !== requestId)
+  if (envelope.ordering.scopeId !== envelope.payload.requestId)
     errors.push("sequence_scope_mismatch");
   return { valid: errors.length === 0, errors };
 };
@@ -57,10 +71,15 @@ export const validateTurnLifecycleEventEnvelope = (envelope) => {
   return { valid: errors.length === 0, errors };
 };
 
-const collectMessageOrderingErrors = (envelope, presentationMessageId, errors) => {
-  const ordering = envelope?.ordering;
-  if (ordering?.domain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) errors.push("sequence_domain_mismatch");
-  if (text(ordering?.scopeId) !== presentationMessageId) errors.push("sequence_scope_mismatch");
+const MESSAGE_FORBIDDEN_ORDERING_FIELDS = Object.freeze(["revision", "aggregateVersion"]);
+
+const collectMessageOrderingErrors = (envelope, errors) => {
+  const { ordering, payload } = envelope;
+  if (ordering.domain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) errors.push("sequence_domain_mismatch");
+  if (ordering.scopeId !== payload.presentationMessageId) errors.push("sequence_scope_mismatch");
+  for (const field of MESSAGE_FORBIDDEN_ORDERING_FIELDS) {
+    if (Object.hasOwn(ordering, field)) errors.push(`message_ordering_${field}_forbidden`);
+  }
   const sequence = ordering?.sequence;
   if (isTransientMessageEventType(envelope?.payload?.eventType)) {
     if (sequence !== TRANSIENT_MESSAGE_EVENT_SEQUENCE) errors.push("transient_event_sequenced");
@@ -108,7 +127,8 @@ const collectInterjectionIdentityErrors = (envelope, errors) => {
 
 export const validateMessageEnvelope = (envelope) => {
   const errors = [];
-  collectMessageOrderingErrors(envelope, text(envelope?.payload?.presentationMessageId), errors);
+  if (!isCanonicalText(envelope.identity.turnScopeId)) errors.push("missing_turn_scope_id");
+  collectMessageOrderingErrors(envelope, errors);
   const eventType = envelope?.payload?.eventType;
   if (eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     collectPresentationIdentityErrors(envelope, errors);

@@ -12,16 +12,10 @@ function ref(value) {
   return { value };
 }
 
-function buildSessions({
-  workflowPayload,
-  nodeSessions = [],
-  executionMeta = {},
-  registry = null,
-}) {
+function buildSessions({ workflowPayload, nodeSessions = [], registry = null }) {
   return createRuntimeNodeSessions({
     workflowPayload: ref(workflowPayload),
     nodeSessions: ref(nodeSessions),
-    executionMeta: ref(executionMeta),
     workflowNodeStateRegistry: registry,
   }).value;
 }
@@ -170,80 +164,4 @@ test("createRuntimeNodeSessions preserves enough identity to render a running re
   assert.equal(sessions[0].nodeId, "node-live");
   assert.equal(sessions[0].stepId, "node-exec-live");
   assert.equal(sessions[0].activeChildExecutionId, "agent-exec-live");
-});
-
-test("createRuntimeNodeSessions prevents nodeAgentRuns from overwriting committed node facts", () => {
-  const sessions = buildSessions({
-    workflowPayload: { workflowRunId: "run-1" },
-    nodeSessions: [
-      {
-        workflowRunId: "run-1",
-        nodeExecutionId: "node-exec-1",
-        commandId: "planned-command",
-        sessionId: "planned-session",
-        dialogProcessId: "planned-dialog",
-        status: "pending",
-      },
-    ],
-    executionMeta: {
-      nodeAgentRuns: [
-        {
-          workflowRunId: "run-1",
-          nodeExecutionId: "node-exec-1",
-          commandId: "legacy-command",
-          nodeSessionId: "legacy-session",
-          dialogProcessId: "legacy-dialog",
-          status: "succeeded",
-          step: { nodeId: "node-a" },
-        },
-      ],
-    },
-    registry: registryWith("run-1", {
-      "node-exec-1": {
-        workflowRunId: "run-1",
-        nodeExecutionId: "node-exec-1",
-        commandId: "committed-command",
-        nodeSessionId: "committed-session",
-        dialogProcessId: "committed-dialog",
-        status: "running",
-      },
-    }),
-  });
-
-  assert.equal(sessions.length, 1);
-  assert.equal(sessions[0].commandId, "committed-command");
-  assert.equal(sessions[0].sessionId, "committed-session");
-  assert.equal(sessions[0].dialogProcessId, "committed-dialog");
-  assert.equal(sessions[0].status, "running");
-});
-
-test("createRuntimeNodeSessions does not infer identity for runs without nodeExecutionId", () => {
-  const sessions = buildSessions({
-    workflowPayload: { workflowRunId: "legacy-run" },
-    nodeSessions: [
-      {
-        dialogProcessId: "legacy-dialog",
-        sessionId: "legacy-session",
-        stepId: "step-1",
-        status: "pending",
-      },
-    ],
-    executionMeta: {
-      nodeAgentRuns: [
-        {
-          dialogProcessId: "legacy-dialog",
-          nodeSessionId: "legacy-session-2",
-          status: "succeeded",
-          step: { nodeId: "legacy-node", nodeName: "Legacy Node" },
-        },
-      ],
-    },
-  });
-
-  assert.equal(sessions.length, 1);
-  assert.equal(sessions[0].dialogProcessId, "legacy-dialog");
-  assert.equal(sessions[0].sessionId, "legacy-session");
-  assert.equal(sessions[0].nodeId, undefined);
-  assert.equal(sessions[0].nodeName, undefined);
-  assert.equal(sessions[0].status, "pending");
 });

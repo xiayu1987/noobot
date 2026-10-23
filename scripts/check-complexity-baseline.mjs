@@ -100,10 +100,10 @@ export const CHECK = defineCheck({
   },
   exemptions: [],
   baseline: {
-    complexityCount: 234,
+    complexityCount: 226,
     longFunctionCount: 64,
     maxComplexity: 48,
-    nestedTernaryCount: 109,
+    nestedTernaryCount: 106,
     deepNestingCount: 20,
     longParameterListCount: 53,
     exemptions: 0,

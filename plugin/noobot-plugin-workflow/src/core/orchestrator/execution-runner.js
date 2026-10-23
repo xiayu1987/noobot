@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { WORKFLOW_ACTION, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
+import { WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
 import {
   advanceWorkflowInstance,
   createWorkflowInstance,
@@ -14,18 +14,13 @@ import {
 } from "../../workflow/adapter.js";
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { getWorkflowTransferPayloadFromResult } from "../hooks/attachments.js";
-import {
-  resolveSemanticNodeForPendingStep,
-  resolveStepIndexForAction,
-  runNodeAgent,
-} from "../hooks/node-agent.js";
+import { resolveSemanticNodeForPendingStep, runNodeAgent } from "../hooks/node-agent.js";
 import { buildWorkflowUpstreamAttachmentResults } from "../hooks/node-upstream-messages.js";
 import {
   resolveSubSessionFinalOutput,
   stripHarnessReviewAppendix,
   truncateWorkflowResultText,
 } from "../hooks/persistence.js";
-import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 import { WORKFLOW_NODE_STATUS } from "./node-state-repository.js";
 import {
   commitAndPublishWorkflowNodeState,
@@ -33,12 +28,11 @@ import {
   CHILD_TERMINAL_RECEIPT_INVALID_CODE,
   settleUnstartedWorkflowNodes,
 } from "./node-state-commit.js";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, text } from "@noobot/shared/value";
 
-function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = {} } = {}) {
-  const nodeId = text(pendingStep?.nodeId);
-  if (!nodeId || !Array.isArray(planningNodeSessions) || !planningNodeSessions.length) return null;
-  const matches = planningNodeSessions.filter((item = {}) => text(item?.nodeId) === nodeId);
+function resolvePlanningNodeIdentity({ planningNodeSessions, pendingStep }) {
+  const { nodeId } = pendingStep;
+  const matches = planningNodeSessions.filter((item) => item.nodeId === nodeId);
   if (matches.length !== 1) {
     throw new Error(
       matches.length > 1
@@ -46,21 +40,7 @@ function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = 
         : `missing workflow node identity for ${nodeId}`,
     );
   }
-  const identity = matches[0] || {};
-  const requiredFields = [
-    "workflowRunId",
-    "nodeExecutionId",
-    "nodeId",
-    "nodeName",
-    "commandId",
-    "dialogProcessId",
-    "turnScopeId",
-  ];
-  const missingFields = requiredFields.filter((field) => !text(identity?.[field]));
-  if (missingFields.length) {
-    throw new Error(`incomplete workflow node identity for ${nodeId}: ${missingFields.join(",")}`);
-  }
-  return identity;
+  return matches[0];
 }
 
 function resolveWorkflowExecutionLimits(options = {}) {
@@ -77,54 +57,40 @@ function resolveWorkflowExecutionLimits(options = {}) {
   };
 }
 
-function resolveStepItemRefs(item = {}) {
-  const step = item?.step || {};
-  const subSession = item?.subSession || {};
-  const nodeIdentity = item?.nodeIdentity || {};
+function resolveStepItemRefs(item) {
+  const { step, subSession, nodeIdentity } = item;
   return {
     step,
     subSession,
-    workflowRunId: text(nodeIdentity.workflowRunId),
-    nodeExecutionId: text(nodeIdentity.nodeExecutionId),
-    commandId: text(nodeIdentity.commandId),
-    turnScopeId: text(nodeIdentity.turnScopeId),
-    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-    agentDialogProcessId: text(subSession.dialogProcessId),
-    nodeSessionId: text(subSession.sessionId),
-    actionNodeStateId: text(step.actionNodeStateId),
-    stepId: text(step.stepId),
-    stepIndex: Number.isFinite(Number(step.stepIndex)) ? Number(step.stepIndex) : -1,
-    transferEnvelopes: getWorkflowTransferPayloadFromResult(subSession.result || {})
-      .transferEnvelopes,
+    workflowRunId: nodeIdentity.workflowRunId,
+    nodeExecutionId: nodeIdentity.nodeExecutionId,
+    commandId: nodeIdentity.commandId,
+    turnScopeId: nodeIdentity.turnScopeId,
+    nodeSessionId: nodeIdentity.sessionId,
+    actionNodeStateId: step.actionNodeStateId,
+    stepId: step.stepId,
+    stepIndex: step.stepIndex,
+    transferEnvelopes: getWorkflowTransferPayloadFromResult(subSession.result).transferEnvelopes,
   };
 }
 
 function resolveWaveFields({ item, snapshot, transitions, parallelEnabled, waveSize }) {
   return {
     parallelWave: parallelEnabled ? Math.floor((transitions - 1) / Math.max(1, waveSize)) + 1 : 0,
-    waveOrder: Number(item?.order ?? 0),
-    pendingStepCount: Number(snapshot?.pendingStepCount || 0),
+    waveOrder: item.order,
+    pendingStepCount: snapshot.pendingStepCount,
   };
 }
 
-function buildNodeAgentRunRecord({
-  item = {},
-  snapshot = {},
-  transitions = 0,
-  parallelEnabled = false,
-  waveSize = 1,
-} = {}) {
+function buildNodeAgentRunRecord({ item, snapshot, transitions, parallelEnabled, waveSize }) {
   const refs = resolveStepItemRefs(item);
   return {
     transition: transitions,
-    step: item?.step || null,
-    action: item.effectiveAction,
+    step: item.step,
     workflowRunId: refs.workflowRunId,
     nodeExecutionId: refs.nodeExecutionId,
     commandId: refs.commandId,
     turnScopeId: refs.turnScopeId,
-    nodeDialogProcessId: refs.nodeDialogProcessId,
-    agentDialogProcessId: refs.agentDialogProcessId,
     nodeSessionId: refs.nodeSessionId,
     actionNodeStateId: refs.actionNodeStateId,
     stepId: refs.stepId,
@@ -134,31 +100,22 @@ function buildNodeAgentRunRecord({
       4000,
     ),
     nodeResultTransferEnvelopes: refs.transferEnvelopes,
-    upstreamNodeResults: Array.isArray(item?.upstreamNodeResults) ? item.upstreamNodeResults : [],
+    upstreamNodeResults: item.upstreamNodeResults,
     ...resolveWaveFields({ item, snapshot, transitions, parallelEnabled, waveSize }),
   };
 }
 
-function rememberCompletedStepResult({
-  completedStepResults,
-  item = {},
-  semantic = {},
-  transitions = 0,
-} = {}) {
+function rememberCompletedStepResult({ completedStepResults, item, semantic, transitions }) {
   const refs = resolveStepItemRefs(item);
-  if (!refs.stepId) return;
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep: refs.step });
-  const nodeId = text(refs.step.nodeId);
   completedStepResults.set(refs.stepId, {
     transition: transitions,
-    nodeId,
-    nodeName: text(refs.step.nodeName),
-    nodeTask: text(semanticNode?.task),
+    nodeId: refs.step.nodeId,
+    nodeName: refs.step.nodeName,
+    nodeTask: semanticNode.task,
     actionNodeStateId: refs.actionNodeStateId,
     stepId: refs.stepId,
     stepIndex: refs.stepIndex,
-    nodeDialogProcessId: refs.nodeDialogProcessId,
-    agentDialogProcessId: refs.agentDialogProcessId,
     workflowRunId: refs.workflowRunId,
     nodeExecutionId: refs.nodeExecutionId,
     commandId: refs.commandId,
@@ -168,31 +125,31 @@ function rememberCompletedStepResult({
   });
 }
 
-function resolveWaveNodeIdentity({ planningNodeSessions = [], step = {} } = {}) {
+function resolveWaveNodeIdentity({ planningNodeSessions, step }) {
   const planningNodeIdentity = resolvePlanningNodeIdentity({
     planningNodeSessions,
     pendingStep: step,
   });
-  const nodeIdentity = planningNodeIdentity
-    ? { ...planningNodeIdentity, sessionId: randomUUID() }
-    : null;
-  return { nodeIdentity, activeChildExecutionId: nodeIdentity?.activeChildExecutionId || "" };
+  return { ...planningNodeIdentity, sessionId: randomUUID() };
 }
 
-function findNodeStateByExecutionId(snapshot = null, nodeExecutionId = "") {
-  const target = text(nodeExecutionId);
-  return snapshot?.nodes?.find?.((node) => text(node?.nodeExecutionId) === target) || null;
+function findNodeStateByExecutionId(snapshot, nodeExecutionId) {
+  const matches = snapshot.nodes.filter((node) => node.nodeExecutionId === nodeExecutionId);
+  if (matches.length !== 1) throw new Error(`workflow node state not found: ${nodeExecutionId}`);
+  return matches[0];
 }
 
-async function commitWaveNodeState({ nodeState, nodeIdentity, ctx, ...fields } = {}) {
+async function commitWaveNodeState({ nodeState, nodeIdentity, ctx, ...fields }) {
   const fact = await commitAndPublishWorkflowNodeState({
     repository: nodeState.repository,
     ctx,
-    workflowRunId: nodeIdentity.workflowRunId,
-    nodeExecutionId: nodeIdentity.nodeExecutionId,
-    ...fields,
+    transition: {
+      workflowRunId: nodeIdentity.workflowRunId,
+      nodeExecutionId: nodeIdentity.nodeExecutionId,
+      ...fields,
+    },
   });
-  nodeState.snapshot = fact?.snapshot || nodeState.snapshot;
+  nodeState.snapshot = fact.snapshot;
   return fact;
 }
 
@@ -202,77 +159,65 @@ function buildChildTerminalError(childTerminal = {}) {
     const error = new Error(failure.message);
     error.code = failure.code;
     error.failure = failure;
-    error.nodeTerminalCommitted = true;
     return error;
   }
   if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.STOPPED) {
     const error = new Error(`child execution reached ${childTerminal.lifecycle.state}`);
     error.name = "AbortError";
     error.code = "WORKFLOW_CHILD_TERMINAL_FAILURE";
-    error.nodeTerminalCommitted = true;
     return error;
   }
   return null;
+}
+
+function toChildTerminalFailure({ nodeStatus, lifecycle }) {
+  if (nodeStatus === WORKFLOW_NODE_STATUS.FAILED) {
+    return {
+      source: "child_execution",
+      code: lifecycle.failure.code,
+      message: lifecycle.failure.message,
+    };
+  }
+  if (nodeStatus === WORKFLOW_NODE_STATUS.STOPPED) {
+    return {
+      source: "child_execution",
+      code: "WORKFLOW_CHILD_STOPPED",
+      message: `child execution reached ${lifecycle.state}`,
+    };
+  }
+  return undefined;
 }
 
 async function commitWaveChildTerminal({
   nodeState,
   nodeIdentity,
   ctx,
-  action,
+  childTerminal,
   runningFact,
-  activeChildExecutionId,
-} = {}) {
-  const childTerminal = resolveCommittedChildTerminal(action?.subSession, activeChildExecutionId);
+}) {
   await commitWaveNodeState({
     nodeState,
     nodeIdentity,
     ctx,
     status: childTerminal.nodeStatus,
-    expectedRevision: runningFact?.node?.revision ?? null,
-    nodeSessionId: action?.subSession?.sessionId || "",
-    agentDialogProcessId: action?.subSession?.dialogProcessId || "",
-    activeChildExecutionId,
-    failure:
-      childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
-        ? {
-            source: "child_execution",
-            code: text(childTerminal.lifecycle.failure?.code),
-            message: text(childTerminal.lifecycle.failure?.message),
-          }
-        : null,
+    expectedRevision: runningFact.node.revision,
+    failure: toChildTerminalFailure(childTerminal),
   });
   const terminalError = buildChildTerminalError(childTerminal);
   if (terminalError) throw terminalError;
 }
 
-function shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFact } = {}) {
-  if (!nodeState.repository || !nodeIdentity || !runningFact?.node) return false;
-  return error?.nodeTerminalCommitted !== true;
-}
+const UNCODED_NODE_FAILURE_CODE = "WORKFLOW_NODE_EXECUTION_FAILED";
 
 function toWaveNodeFailure(error) {
-  if (error?.code === CHILD_TERMINAL_RECEIPT_INVALID_CODE) {
-    return { source: "workflow", code: error.code, message: text(error.message) };
-  }
   return {
-    source: "workflow_node_agent",
-    code: text(error?.code) || "WORKFLOW_NODE_EXECUTION_FAILED",
-    message: text(error?.message) || text(error),
+    source: error.code === CHILD_TERMINAL_RECEIPT_INVALID_CODE ? "workflow" : "workflow_node_agent",
+    code: isCanonicalText(error.code) ? error.code : UNCODED_NODE_FAILURE_CODE,
+    message: error.message,
   };
 }
 
-async function commitWaveNodeFailure({
-  error,
-  nodeState,
-  nodeIdentity,
-  ctx,
-  signal,
-  action,
-  runningFact,
-  activeChildExecutionId,
-} = {}) {
-  if (!shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFact })) return;
+async function commitWaveNodeFailure({ error, nodeState, nodeIdentity, ctx, signal, runningFact }) {
   const stopped = isWorkflowAbortError(error, signal);
   await commitWaveNodeState({
     nodeState,
@@ -280,9 +225,6 @@ async function commitWaveNodeFailure({
     ctx,
     status: stopped ? WORKFLOW_NODE_STATUS.STOPPED : WORKFLOW_NODE_STATUS.FAILED,
     expectedRevision: runningFact.node.revision,
-    nodeSessionId: action?.subSession?.sessionId || "",
-    agentDialogProcessId: action?.subSession?.dialogProcessId || "",
-    activeChildExecutionId,
     failure: toWaveNodeFailure(error),
   });
 }
@@ -304,34 +246,24 @@ async function runWaveStep({
   throwIfWorkflowAborted(signal);
   const upstreamActionSteps = resolveWorkflowUpstreamActionSteps({
     instanceId,
-    pendingStep: step,
+    stepId: step.stepId,
   });
   const upstreamNodeResults = buildWorkflowUpstreamAttachmentResults({
     upstreamActionSteps,
     completedStepResults,
   });
-  const { nodeIdentity, activeChildExecutionId } = resolveWaveNodeIdentity({
-    planningNodeSessions,
-    step,
+  const nodeIdentity = resolveWaveNodeIdentity({ planningNodeSessions, step });
+  const runningFact = await commitWaveNodeState({
+    nodeState,
+    nodeIdentity,
+    ctx,
+    status: WORKFLOW_NODE_STATUS.RUNNING,
+    expectedRevision: findNodeStateByExecutionId(nodeState.snapshot, nodeIdentity.nodeExecutionId)
+      .revision,
+    nodeSessionId: nodeIdentity.sessionId,
   });
-  const trackState = Boolean(nodeState.repository && nodeIdentity);
-  let runningFact = null;
-  if (trackState) {
-    const currentNodeState = findNodeStateByExecutionId(
-      nodeState.snapshot,
-      nodeIdentity?.nodeExecutionId,
-    );
-    runningFact = await commitWaveNodeState({
-      nodeState,
-      nodeIdentity,
-      ctx,
-      status: WORKFLOW_NODE_STATUS.RUNNING,
-      expectedRevision: currentNodeState?.revision ?? null,
-      nodeSessionId: nodeIdentity.sessionId,
-      activeChildExecutionId,
-    });
-  }
-  let action = null;
+  let action;
+  let childTerminal;
   try {
     action = await runNodeAgent({
       hookManager,
@@ -346,35 +278,20 @@ async function runWaveStep({
       upstreamNodeResults,
     });
     throwIfWorkflowAborted(signal);
-    if (trackState) {
-      await commitWaveChildTerminal({
-        nodeState,
-        nodeIdentity,
-        ctx,
-        action,
-        runningFact,
-        activeChildExecutionId,
-      });
-    }
+    childTerminal = resolveCommittedChildTerminal(
+      action.subSession,
+      nodeIdentity.activeChildExecutionId,
+    );
   } catch (error) {
-    await commitWaveNodeFailure({
-      error,
-      nodeState,
-      nodeIdentity,
-      ctx,
-      signal,
-      action,
-      runningFact,
-      activeChildExecutionId,
-    });
+    await commitWaveNodeFailure({ error, nodeState, nodeIdentity, ctx, signal, runningFact });
     throw error;
   }
+  await commitWaveChildTerminal({ nodeState, nodeIdentity, ctx, childTerminal, runningFact });
   return {
     step,
-    action: action?.action || null,
-    subSession: action?.subSession || null,
-    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(action),
-    nodeIdentity: action.nodeIdentity,
+    action: action.action,
+    subSession: action.subSession,
+    nodeIdentity,
     upstreamNodeResults,
     order: idx,
   };
@@ -387,10 +304,14 @@ export async function runWorkflowExecution({
   signal,
   semantic = {},
   workflowRunId = "",
-  planningNodeSessions = [],
+  nodeStateSnapshot,
 } = {}) {
   const instanceId = text(workflowRunId);
   if (!instanceId) throw new Error("workflowRunId is required");
+  if (nodeStateSnapshot?.workflowRunId !== instanceId) {
+    throw new Error("workflow node state snapshot must belong to workflowRunId");
+  }
+  const planningNodeSessions = nodeStateSnapshot.nodes;
   if (!Array.isArray(planningNodeSessions) || !planningNodeSessions.length) {
     throw new Error("workflow planning node identities are required");
   }
@@ -408,13 +329,9 @@ export async function runWorkflowExecution({
     resolveWorkflowExecutionLimits(options);
   const nodeAgentRuns = [];
   const completedStepResults = new Map();
-  const nodeStateRepository = options.workflowNodeStateRepository;
   const nodeState = {
-    repository: nodeStateRepository,
-    snapshot: await nodeStateRepository.initialize({
-      workflowRunId: instanceId,
-      planningNodeSessions,
-    }),
+    repository: options.workflowNodeStateRepository,
+    snapshot: nodeStateSnapshot,
   };
   let transitions = 0;
 
@@ -447,30 +364,18 @@ export async function runWorkflowExecution({
       if (rejectedWaveResult) throw rejectedWaveResult.reason;
       const waveResults = settledWaveResults.map((item) => item.value);
       throwIfWorkflowAborted(signal);
-      const actionQueue = waveResults
-        .slice()
-        .sort((a, b) => Number(b?.step?.index || 0) - Number(a?.step?.index || 0));
+      const actionQueue = waveResults.slice().sort((a, b) => b.step.index - a.step.index);
       for (const item of actionQueue) {
         throwIfWorkflowAborted(signal);
         if (!snapshot || snapshot.completed === true || transitions >= maxTransitions) break;
-        const resolvedStepIndex = resolveStepIndexForAction({
-          snapshot,
-          preferredIndex: item?.action?.stepIndex ?? item?.step?.index ?? 0,
-          pendingStep: item?.step || {},
-        });
-        const effectiveAction = {
-          type: (text(item?.action?.type) || WORKFLOW_ACTION.SUBMIT).toLowerCase(),
-          stepIndex: resolvedStepIndex,
-        };
         snapshot = advanceWorkflowInstance({
           instanceId,
-          action: effectiveAction,
+          action: { type: item.action.type, stepId: item.step.stepId },
         });
         transitions += 1;
-        const recordItem = { ...item, effectiveAction };
         nodeAgentRuns.push(
           buildNodeAgentRunRecord({
-            item: recordItem,
+            item,
             snapshot,
             transitions,
             parallelEnabled,
@@ -479,7 +384,7 @@ export async function runWorkflowExecution({
         );
         rememberCompletedStepResult({
           completedStepResults,
-          item: recordItem,
+          item,
           semantic,
           transitions,
         });
@@ -489,9 +394,9 @@ export async function runWorkflowExecution({
     const execution = {
       started: true,
       autoTransitions: transitions,
-      completed: snapshot?.completed === true,
-      pendingStepCount: Number(snapshot?.pendingStepCount || 0),
-      actionRecords: Array.isArray(snapshot?.actionRecords) ? snapshot.actionRecords : [],
+      completed: snapshot.completed,
+      pendingStepCount: snapshot.pendingStepCount,
+      actionRecords: snapshot.actionRecords,
       nodeAgentRuns,
     };
     if (execution.completed) {
@@ -504,15 +409,14 @@ export async function runWorkflowExecution({
       instanceId,
     };
   } catch (error) {
-    if (nodeStateRepository && nodeState.snapshot) {
-      const stopped = isWorkflowAbortError(error, signal);
-      nodeState.snapshot = await settleUnstartedWorkflowNodes({
-        repository: nodeStateRepository,
-        snapshot: nodeState.snapshot,
-        ctx,
-        status: stopped ? WORKFLOW_NODE_STATUS.STOPPED : WORKFLOW_NODE_STATUS.SKIPPED,
-      });
-    }
+    nodeState.snapshot = await settleUnstartedWorkflowNodes({
+      repository: nodeState.repository,
+      workflowRunId: instanceId,
+      ctx,
+      status: isWorkflowAbortError(error, signal)
+        ? WORKFLOW_NODE_STATUS.STOPPED
+        : WORKFLOW_NODE_STATUS.SKIPPED,
+    });
     throw error;
   }
 }

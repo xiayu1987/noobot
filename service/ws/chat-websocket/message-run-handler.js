@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_EVENT, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  createTurnLifecycleCommandId,
+  isTurnLifecycleRejectedError,
+} from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   consumeUserInterjections,
@@ -65,6 +69,8 @@ function resolveFailureContext(context) {
   };
 }
 
+const TURN_FAILED = "turn_failed";
+
 function createFailureCommitter(context) {
   return async function commitCurrentFailure(error, terminalCommand = "error") {
     await settlePendingLifecycle(context);
@@ -84,7 +90,7 @@ function createFailureCommitter(context) {
       eventType: TURN_EVENT.FAILED,
       phase: failureContext.phase,
       failure: {
-        code: text(error?.code || "turn_failed"),
+        code: isTurnLifecycleRejectedError(error) ? error.code : TURN_FAILED,
         message: String(error?.message || "turn failed"),
         retryable: false,
       },

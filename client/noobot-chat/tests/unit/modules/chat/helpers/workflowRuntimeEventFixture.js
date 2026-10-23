@@ -3,102 +3,76 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
+  createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
-  workflowSequenceDomainForEvent,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
 
-const ENVELOPE_FIELDS = new Set([
-  "aggregateVersion",
-  "authoritySessionId",
-  "eventId",
-  "messageId",
-  "parentSessionId",
-  "revision",
-  "sequence",
-  "sequenceDomain",
-  "sessionId",
-]);
+const FIXTURE_OCCURRED_AT = "2026-01-01T00:00:00.000Z";
+const FIXTURE_PRODUCER = Object.freeze({ type: "test", id: "client-workflow-runtime-fixture" });
+const FIXTURE_ENVELOPE_DEFAULTS = Object.freeze({
+  authoritySessionId: "main-session-1",
+  workflowRunId: "workflow-1",
+  turnScopeId: "workflow-node:node-1",
+  sequence: 1,
+  occurredAt: FIXTURE_OCCURRED_AT,
+});
+const ORDERING_DEFAULTS = Object.freeze({
+  [WORKFLOW_RUNTIME_EVENT.PLANNING]: Object.freeze({ revision: 1 }),
+  [WORKFLOW_RUNTIME_EVENT.NODE_STATE]: Object.freeze({ revision: 1 }),
+  [WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT]: Object.freeze({ aggregateVersion: 1 }),
+});
 
-export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
-  const workflowRunId = String(
-    Object.hasOwn(data, "workflowRunId") ? data.workflowRunId : "workflow-1",
-  ).trim();
-  const nodeSessionId = String(
-    Object.hasOwn(data, "nodeSessionId")
-      ? data.nodeSessionId
-      : Object.hasOwn(data, "sessionId")
-        ? data.sessionId
-        : "sub-session-1",
-  ).trim();
-  const authoritySessionId = String(
-    data.authoritySessionId ||
-      data.parentSessionId ||
-      (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING ? data.sessionId : "") ||
-      "main-session-1",
-  ).trim();
-  const sequence = Number(data.sequence || 1);
-  const payload = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (!ENVELOPE_FIELDS.has(key)) payload[key] = value;
-  }
-  payload.workflowRunId = workflowRunId;
-  if (eventType === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
-    payload.nodeSessionId = nodeSessionId;
-  }
-  if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE && !payload.nodeSessionId) {
-    payload.nodeSessionId = nodeSessionId;
-  }
-
-  return createEventEnvelope({
-    family: EVENT_FAMILY.WORKFLOW_RUNTIME,
-    schemaVersion: getEventFamily(EVENT_FAMILY.WORKFLOW_RUNTIME).schemaVersion,
-    identity: {
-      eventId: text(data.eventId) || `${workflowRunId}:${eventType}:${sequence}`,
-      eventType,
-      sessionId: authoritySessionId,
-      turnScopeId: String(
-        Object.hasOwn(data, "turnScopeId")
-          ? data.turnScopeId
-          : `workflow-node:${data.nodeExecutionId || "node-1"}`,
-      ).trim(),
-    },
+export function canonicalWorkflowRuntimeEvent(eventType, data) {
+  const {
+    eventId,
+    executionId,
+    authoritySessionId,
+    workflowRunId,
+    turnScopeId,
+    sequence,
+    revision,
+    aggregateVersion,
+    occurredAt,
+    ...payloadFields
+  } = { ...FIXTURE_ENVELOPE_DEFAULTS, ...ORDERING_DEFAULTS[eventType], ...data };
+  return createWorkflowRuntimeEnvelope({
+    eventType,
+    authoritySessionId,
+    turnScopeId,
+    executionId,
+    eventId,
+    workflowRunId,
+    sequence,
+    revision,
+    aggregateVersion,
+    occurredAt,
+    producer: FIXTURE_PRODUCER,
     causality: {},
-    ordering: {
-      domain: workflowSequenceDomainForEvent(eventType),
-      scopeId: workflowRunId,
-      sequence,
-      ...(eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE
-        ? { revision: Number(data.revision || 1) }
-        : {}),
-      ...(eventType === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
-        ? { aggregateVersion: Number(data.aggregateVersion || 1) }
-        : {}),
-    },
-    producer: { type: "test", id: "client-workflow-runtime-fixture" },
-    occurredAt: String(data.occurredAt || "2026-01-01T00:00:00.000Z"),
-    payload,
+    payload: { ...payloadFields, workflowRunId, turnScopeId },
   });
 }
 
-export function canonicalWorkflowSessionSnapshot(sessionDoc = {}) {
-  const sessionId = String(
-    sessionDoc.sessionId || sessionDoc.nodeSessionId || "sub-session-1",
-  ).trim();
-  const aggregateVersion = Number(sessionDoc.aggregateVersion || 1);
+export function canonicalWorkflowNodeStateEvent({ nodeExecutionId, ...nodeRecord }) {
+  return canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
+    nodeSessionId: "sub-session-1",
+    ...nodeRecord,
+    executionId: nodeExecutionId,
+  });
+}
+
+export function canonicalWorkflowSessionSnapshot({ nodeSessionId, ...snapshotFields }) {
+  const aggregateVersion = snapshotFields.aggregateVersion ?? 1;
   return canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT, {
-    ...sessionDoc,
-    turnTimings: Array.isArray(sessionDoc.turnTimings) ? sessionDoc.turnTimings : [],
-    turnLifecycleSnapshot:
-      sessionDoc.turnLifecycleSnapshot ||
-      createTurnLifecycleSnapshot({
-        commandId: `test-snapshot:${sessionId}:${aggregateVersion}`,
-        sessionId,
-        sequence: aggregateVersion,
-        generatedAt: String(sessionDoc.occurredAt || "2026-01-01T00:00:00.000Z"),
-      }),
+    turnTimings: [],
+    turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+      commandId: "test-snapshot-command",
+      sessionId: nodeSessionId,
+      sequence: aggregateVersion,
+      generatedAt: FIXTURE_OCCURRED_AT,
+    }),
+    ...snapshotFields,
+    nodeSessionId,
   });
 }

@@ -41,29 +41,37 @@ function sendAuthoritativeTurnSnapshot(sendEvent, command, snapshot) {
   sendEvent(TURN_SNAPSHOT_WIRE_EVENT, createTurnSnapshotEnvelope(snapshot));
 }
 
-function resolveTurnCommandIdentity(authInfo, command) {
-  const identity = {
-    userId: text(authInfo?.userId),
-    sessionId: command.identity.sessionId,
-    parentSessionId: command.identity.parentSessionId,
-  };
+function resolveTurnCommandIdentity(userId, command) {
   return {
-    identity,
+    identity: {
+      userId,
+      sessionId: command.identity.sessionId,
+      parentSessionId: command.identity.parentSessionId,
+    },
     commandId: command.commandId,
     terminalLimit: command.options.terminalLimit,
-    valid: Boolean(identity.userId),
   };
 }
 
 export function createMessageQueryHandlers({
   state,
-  authInfo,
   sendEvent,
   translateText,
   resolveBot,
   canonicalRunOwnerId,
   turnRecovery,
 }) {
+  const sendMissingOwnerReceipt = (command, code) =>
+    sendFailedCommandReceipt(sendEvent, command, {
+      code,
+      message: translateText("ws.unauthorized", state.currentLocale),
+    });
+  const sendReadFailureReceipt = (command, reason) =>
+    sendFailedCommandReceipt(sendEvent, command, {
+      code: reason,
+      message: translateText("ws.commandReadFailed", state.currentLocale),
+    });
+
   const handleInteractionResponse = (command) => {
     const requestId = text(command.interaction?.requestId);
     const requestItem = findPendingInteraction({ requestId, ownerUserId: canonicalRunOwnerId });
@@ -78,45 +86,41 @@ export function createMessageQueryHandlers({
   };
 
   const handleSnapshotGet = async (command) => {
-    const { identity, commandId, terminalLimit, valid } = resolveTurnCommandIdentity(
-      authInfo,
-      command,
-    );
-    if (!valid) {
-      sendFailedCommandReceipt(sendEvent, command, { code: "invalid_snapshot_request" });
+    if (!canonicalRunOwnerId) {
+      sendMissingOwnerReceipt(command, "invalid_snapshot_request");
       return;
     }
+    const { identity, commandId, terminalLimit } = resolveTurnCommandIdentity(
+      canonicalRunOwnerId,
+      command,
+    );
     const result = await turnRecovery.readSnapshot({
       ...identity,
       commandId,
       knownSequence: command.options.knownSequence,
       terminalLimit,
     });
-    if (!result?.found) {
-      sendFailedCommandReceipt(sendEvent, command, {
-        code: result?.reason || "snapshot_not_found",
-      });
+    if (!result.found) {
+      sendReadFailureReceipt(command, result.reason);
       return;
     }
     sendAuthoritativeTurnSnapshot(sendEvent, command, result.snapshot);
   };
 
   const handleExecutionQuery = async (command, commandType) => {
-    const userId = text(authInfo?.userId);
+    const userId = canonicalRunOwnerId;
     const { executionId, rootExecutionId } = command.query;
     const { commandId } = command;
     const contract = EXECUTION_QUERY_CONTRACT[commandType];
     const readerSpec = EXECUTION_QUERY_READERS[commandType];
     if (!userId) {
-      sendFailedCommandReceipt(sendEvent, command, { code: "invalid_execution_query" });
+      sendMissingOwnerReceipt(command, "invalid_execution_query");
       return;
     }
     const { session } = resolveBot();
     const result = await session[readerSpec.method]({ userId, executionId, rootExecutionId });
-    if (!result?.found) {
-      sendFailedCommandReceipt(sendEvent, command, {
-        code: result?.reason || "execution_not_found",
-      });
+    if (!result.found) {
+      sendReadFailureReceipt(command, result.reason);
       return;
     }
     let envelope;
@@ -139,19 +143,17 @@ export function createMessageQueryHandlers({
   };
 
   const handleFinalize = async (command) => {
-    const { identity, commandId, terminalLimit, valid } = resolveTurnCommandIdentity(
-      authInfo,
-      command,
-    );
-    if (!valid) {
-      sendFailedCommandReceipt(sendEvent, command, { code: "invalid_finalize_request" });
+    if (!canonicalRunOwnerId) {
+      sendMissingOwnerReceipt(command, "invalid_finalize_request");
       return;
     }
+    const { identity, commandId, terminalLimit } = resolveTurnCommandIdentity(
+      canonicalRunOwnerId,
+      command,
+    );
     const result = await turnRecovery.finalize({ ...identity, commandId, terminalLimit });
-    if (!result?.snapshot) {
-      sendFailedCommandReceipt(sendEvent, command, {
-        code: result?.reason || "finalize_recovery_failed",
-      });
+    if (!result.snapshot) {
+      sendReadFailureReceipt(command, result.reason);
       return;
     }
     sendAuthoritativeTurnSnapshot(sendEvent, command, result.snapshot);

@@ -4,12 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text, isPlainObject } from "@noobot/shared/value";
+import { text, isPlainObject, isCanonicalText } from "@noobot/shared/value";
+import { TURN_SNAPSHOT_WIRE_EVENT } from "@noobot/session-protocol";
+import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 
 export const AGENT_TRANSPORT_EVENT = Object.freeze({
   READY: "transport_ready",
   ERROR: "transport_error",
+  CHANNEL_ERROR: "channel_error",
   COMMAND_RECEIPT: "transport_command_receipt",
+  COMMAND_REJECTED: "transport_command_rejected",
   CHANNEL_STATE: "channel_state",
   RECONNECT_DATA: "reconnect_data",
   RECONNECT_COMPLETE: "reconnect_complete",
@@ -21,7 +25,9 @@ export const AGENT_TRANSPORT_ERROR_CODE = Object.freeze({
 
 const EXACT_PAYLOAD_EVENTS = new Set([
   AGENT_TRANSPORT_EVENT.ERROR,
+  AGENT_TRANSPORT_EVENT.CHANNEL_ERROR,
   AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+  AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
   AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
 ]);
 
@@ -198,99 +204,195 @@ export function validateAgentTransportError(errorEvent = {}) {
   return { valid: errors.length === 0, errors };
 }
 
-export function createAgentCommandReceipt({
-  commandId = "",
-  commandType = "",
-  outcome = "",
-  identity = {},
-  error = null,
-  occurredAt = new Date().toISOString(),
-} = {}) {
-  const receipt = {
-    protocolVersion: 1,
-    commandId: text(commandId),
-    commandType: text(commandType),
-    outcome: text(outcome).toLowerCase(),
-    identity: {
-      sessionId: text(identity.sessionId),
-      turnScopeId: text(identity.turnScopeId),
-      dialogProcessId: text(identity.dialogProcessId),
-    },
-    occurredAt: text(occurredAt),
-    ...(error
-      ? {
-          error: {
-            code: text(error.code),
-            message: String(error.message || ""),
-          },
-        }
-      : {}),
-  };
-  const validation = validateAgentCommandReceipt(receipt);
-  if (!validation.valid) throw new TypeError(validation.errors.join(","));
-  return Object.freeze(receipt);
+const COMMAND_RESULT_IDENTITY_FIELDS = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);
+const COMMAND_RESULT_ERROR_FIELDS = new Set(["code", "message"]);
+const RECEIPT_FIELDS = new Set([
+  "protocolVersion",
+  "commandId",
+  "commandType",
+  "outcome",
+  "identity",
+  "occurredAt",
+  "error",
+]);
+const REJECTION_FIELDS = new Set([
+  "protocolVersion",
+  "commandId",
+  "commandType",
+  "identity",
+  "occurredAt",
+  "error",
+]);
+
+function collectUnknownFields(value, allowed, prefix, errors) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) errors.push(`${prefix}:${key}`);
+  }
 }
 
-export function validateAgentCommandReceipt(receipt = {}) {
-  const errors = [];
-  if (!isPlainObject(receipt)) {
-    return { valid: false, errors: ["receipt_not_object"] };
-  }
-  const allowed = new Set([
-    "protocolVersion",
-    "commandId",
-    "commandType",
-    "outcome",
-    "identity",
-    "occurredAt",
-    "error",
-  ]);
-  for (const key of Object.keys(receipt)) {
-    if (!allowed.has(key)) errors.push(`unknown_receipt_field:${key}`);
-  }
-  if (Number(receipt.protocolVersion) !== 1) errors.push("unsupported_receipt_version");
-  if (!text(receipt.commandId)) errors.push("missing_command_id");
-  if (!text(receipt.commandType)) errors.push("missing_command_type");
-  if (!COMMAND_RECEIPT_OUTCOMES.has(text(receipt.outcome).toLowerCase()))
-    errors.push("invalid_outcome");
-  if (!isPlainObject(receipt.identity)) {
-    errors.push("identity_not_object");
+function projectCommandResultIdentity(identity) {
+  return Object.fromEntries(
+    [...COMMAND_RESULT_IDENTITY_FIELDS]
+      .filter((key) => isCanonicalText(identity[key]))
+      .map((key) => [key, identity[key]]),
+  );
+}
+
+function validateCommandResultCommon(result, prefix, errors) {
+  if (result.protocolVersion !== 1) errors.push(`unsupported_${prefix}_version`);
+  if (!isCanonicalText(result.commandId)) errors.push("missing_command_id");
+  if (!isCanonicalText(result.commandType)) errors.push("missing_command_type");
+  if (!isPlainObject(result.identity)) {
+    errors.push(`${prefix}_identity_not_object`);
   } else {
-    const identityAllowed = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);
-    for (const key of Object.keys(receipt.identity)) {
-      if (!identityAllowed.has(key)) errors.push(`unknown_identity_field:${key}`);
+    collectUnknownFields(
+      result.identity,
+      COMMAND_RESULT_IDENTITY_FIELDS,
+      `unknown_${prefix}_identity_field`,
+      errors,
+    );
+    for (const key of Object.keys(result.identity)) {
+      if (!isCanonicalText(result.identity[key])) {
+        errors.push(`invalid_${prefix}_identity_field:${key}`);
+      }
     }
-    if (!text(receipt.identity.sessionId)) errors.push("missing_session_id");
+    if (!isCanonicalText(result.identity.sessionId)) errors.push("missing_session_id");
   }
-  if (!text(receipt.occurredAt) || Number.isNaN(Date.parse(receipt.occurredAt))) {
+  if (!isCanonicalText(result.occurredAt) || Number.isNaN(Date.parse(result.occurredAt))) {
     errors.push("invalid_occurred_at");
   }
-  if (text(receipt.outcome).toLowerCase() === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
-    if (!isPlainObject(receipt.error)) {
-      errors.push("missing_failure_error");
-    } else if (!text(receipt.error.message)) {
-      errors.push("missing_failure_message");
-    }
+}
+
+function validateCommandResultError(error, prefix, errors) {
+  if (!isPlainObject(error)) {
+    errors.push(`missing_${prefix}_error`);
+    return;
+  }
+  collectUnknownFields(error, COMMAND_RESULT_ERROR_FIELDS, `unknown_${prefix}_error_field`, errors);
+  if (!isCanonicalText(error.code)) errors.push(`missing_${prefix}_code`);
+  if (!isCanonicalText(error.message)) errors.push(`missing_${prefix}_message`);
+}
+
+function freezeValid(result, validate) {
+  const validation = validate(result);
+  if (!validation.valid) throw new TypeError(validation.errors.join(","));
+  return Object.freeze(result);
+}
+
+export function createAgentCommandReceipt({ command, outcome, error, occurredAt }) {
+  return freezeValid(
+    {
+      protocolVersion: 1,
+      commandId: command.commandId,
+      commandType: command.commandType,
+      outcome,
+      identity: projectCommandResultIdentity(command.identity),
+      occurredAt,
+      ...(outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED
+        ? { error: { code: error.code, message: error.message } }
+        : {}),
+    },
+    validateAgentCommandReceipt,
+  );
+}
+
+export function validateAgentCommandReceipt(receipt) {
+  if (!isPlainObject(receipt)) return { valid: false, errors: ["receipt_not_object"] };
+  const errors = [];
+  collectUnknownFields(receipt, RECEIPT_FIELDS, "unknown_receipt_field", errors);
+  validateCommandResultCommon(receipt, "receipt", errors);
+  if (!COMMAND_RECEIPT_OUTCOMES.has(receipt.outcome)) errors.push("invalid_outcome");
+  if (receipt.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
+    validateCommandResultError(receipt.error, "receipt", errors);
   } else if (receipt.error !== undefined) {
-    errors.push("unexpected_error");
+    errors.push("unexpected_receipt_error");
   }
   return { valid: errors.length === 0, errors };
 }
 
-export function createAgentTransportEvent({ event, data, channelSessionId = "" } = {}) {
-  const normalizedEvent = text(event);
-  if (!normalizedEvent) throw new TypeError("missing_transport_event");
-  if (!isPlainObject(data)) {
-    throw new TypeError("invalid_transport_event_data");
-  }
-  const normalizedChannelSessionId = text(channelSessionId);
-  return Object.freeze({
-    event: normalizedEvent,
-    data,
-    ...(normalizedChannelSessionId ? { channelSessionId: normalizedChannelSessionId } : {}),
-  });
+export function createAgentCommandRejection({ command, error, occurredAt }) {
+  return freezeValid(
+    {
+      protocolVersion: 1,
+      commandId: command.commandId,
+      commandType: command.commandType,
+      identity: projectCommandResultIdentity(command.identity),
+      occurredAt,
+      error: { code: error.code, message: error.message },
+    },
+    validateAgentCommandRejection,
+  );
 }
 
-export function getAgentTransportEventSessionId(envelope = {}) {
-  return text(envelope?.channelSessionId);
+export function validateAgentCommandRejection(rejection) {
+  if (!isPlainObject(rejection)) return { valid: false, errors: ["rejection_not_object"] };
+  const errors = [];
+  collectUnknownFields(rejection, REJECTION_FIELDS, "unknown_rejection_field", errors);
+  validateCommandResultCommon(rejection, "rejection", errors);
+  validateCommandResultError(rejection.error, "rejection", errors);
+  return { valid: errors.length === 0, errors };
+}
+
+const DIRECT_TRANSPORT_EVENTS = new Set([
+  AGENT_TRANSPORT_EVENT.READY,
+  AGENT_TRANSPORT_EVENT.ERROR,
+  AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
+  AGENT_TRANSPORT_EVENT.RECONNECT_DATA,
+  AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
+  TURN_SNAPSHOT_WIRE_EVENT,
+  ...Object.values(EXECUTION_QUERY_CONTRACT).map((contract) => contract.wireEvent),
+]);
+const DIRECT_FRAME_FIELDS = new Set(["event", "data"]);
+const CHANNEL_FRAME_FIELDS = new Set(["event", "data", "channelSessionId"]);
+
+function collectFrameErrors(frame, allowedFields) {
+  if (!isPlainObject(frame)) return ["transport_frame_not_object"];
+  const errors = [];
+  for (const key of Object.keys(frame)) {
+    if (!allowedFields.has(key)) errors.push(`unknown_transport_frame_field:${key}`);
+  }
+  if (!isCanonicalText(frame.event)) errors.push("missing_transport_event");
+  if (!isPlainObject(frame.data)) errors.push("invalid_transport_event_data");
+  return errors;
+}
+
+export function validateAgentDirectFrame(frame) {
+  const errors = collectFrameErrors(frame, DIRECT_FRAME_FIELDS);
+  if (!errors.length && !DIRECT_TRANSPORT_EVENTS.has(frame.event)) {
+    errors.push(`channel_event_sent_direct:${frame.event}`);
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export function validateAgentChannelFrame(frame) {
+  const errors = collectFrameErrors(frame, CHANNEL_FRAME_FIELDS);
+  if (errors.length) return { valid: false, errors };
+  if (!isCanonicalText(frame.channelSessionId)) errors.push("missing_channel_session_id");
+  if (DIRECT_TRANSPORT_EVENTS.has(frame.event)) {
+    errors.push(`direct_event_sent_on_channel:${frame.event}`);
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+function freezeValidFrame(frame, validation) {
+  if (!validation.valid) throw new TypeError(validation.errors.join(","));
+  return Object.freeze(frame);
+}
+
+export function createAgentDirectFrame({ event, data }) {
+  const frame = { event, data };
+  return freezeValidFrame(frame, validateAgentDirectFrame(frame));
+}
+
+export function createAgentChannelFrame({ event, data, channelSessionId }) {
+  const frame = { event, data, channelSessionId };
+  return freezeValidFrame(frame, validateAgentChannelFrame(frame));
+}
+
+export function parseAgentTransportFrame(frame) {
+  const validation =
+    isPlainObject(frame) && Object.hasOwn(frame, "channelSessionId")
+      ? validateAgentChannelFrame(frame)
+      : validateAgentDirectFrame(frame);
+  return freezeValidFrame({ ...frame }, validation);
 }

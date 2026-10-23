@@ -8,6 +8,7 @@ import {
   TURN_EVENT,
   TURN_PHASE,
   createTurnLifecycleCommandId,
+  createTurnLifecycleRejectedError,
   resolveExecutionAbortMessage,
 } from "@noobot/session-protocol";
 import { isUserStopRunAbort } from "../stop-lifecycle.js";
@@ -47,8 +48,8 @@ export async function finalizeRunResult(context, run, accepted, active) {
       phase: TURN_PHASE.COMPLETION,
     }),
   });
-  if (!processed?.applied && !processed?.deduplicated) {
-    throw new Error(processed?.reason || "processing_completion_failed");
+  if (!processed.applied && !processed.deduplicated) {
+    throw createTurnLifecycleRejectedError(processed.reason);
   }
   context.lifecycle.latestTurn = processed.turn;
   await context.finalizeCompleted(context.buildRunStateSnapshot(), {

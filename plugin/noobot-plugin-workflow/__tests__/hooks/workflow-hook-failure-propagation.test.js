@@ -430,9 +430,9 @@ test("workflow hook commits FAILED for a node whose sub-session throws without a
   await getBeforeDispatch(hookManager).handler(ctx, createTestHookInvocation());
 
   assert.equal(subSessionCalls.length, 1);
-  const runs = Array.from(workflowNodeStateRepository.exportState().values());
-  assert.equal(runs.length, 1);
-  const nodes = Array.from(runs[0].nodes.values());
+  const { nodes } = await workflowNodeStateRepository.getSnapshot({
+    workflowRunId: subSessionCalls[0].metadata.workflowRunId,
+  });
   const nodeA = nodes.find((node) => node.nodeName === "节点A");
   const nodeB = nodes.find((node) => node.nodeName === "节点B");
   assert.equal(nodeA.status, "failed");

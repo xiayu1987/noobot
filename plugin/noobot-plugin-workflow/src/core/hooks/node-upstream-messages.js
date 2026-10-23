@@ -9,7 +9,6 @@ import {
   getWorkflowTransferPayloadFromResult,
   resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
-import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 import {
   formatAttachmentIdentityRef,
   projectAttachmentIdentity,
@@ -72,7 +71,6 @@ function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults =
     stepId,
     stepIndex: Number.isFinite(stepIndex) ? stepIndex : -1,
     transition: Number(completed.transition ?? 0),
-    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(completed),
     nodeSessionId: text(completed.nodeSessionId),
     status: firstText(completed.status, upstreamStep.status),
     transferEnvelopes,

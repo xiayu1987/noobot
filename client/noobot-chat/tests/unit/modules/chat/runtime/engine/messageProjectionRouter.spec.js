@@ -8,6 +8,7 @@ import { setTransportDiagnosticsLogSink } from "../../../../../../src/modules/de
 import { routeMessageProjectionEvent } from "../../../../../../src/modules/chat/runtime/engine/messageProjectionRouter.js";
 import { hydrateTurnSnapshot } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { EVENT_FAMILY } from "@noobot/event-protocol";
 
 const finalEvent = (overrides = {}) =>
   canonicalMessageEvent({
@@ -23,10 +24,6 @@ const finalEvent = (overrides = {}) =>
     ...overrides,
   });
 
-function packet(event) {
-  return event;
-}
-
 function contextFor(messages, logSessionEvent = vi.fn()) {
   return {
     channelSessionId: "session-1",
@@ -39,6 +36,9 @@ function contextFor(messages, logSessionEvent = vi.fn()) {
           message.presentationMessageId === presentationMessageId,
       );
     },
+    botMessage: { sessionId: "session-1", turnScopeId: "turn-previous", role: "assistant" },
+    materializeTurnPresentation: vi.fn(),
+    reduceSubSessionMessageEvent: vi.fn(),
     logSessionEvent,
     navigateOnFirstResponseOnce: vi.fn(),
   };
@@ -55,27 +55,13 @@ describe("live canonical message projection", () => {
   });
   afterEach(() => setTransportDiagnosticsLogSink(null));
 
-  it("records ordinary non-message routing decisions as debug diagnostics", () => {
+  it("leaves non message timeline families to later routes without diagnostics", () => {
     const logSessionEvent = vi.fn();
 
-    expect(routeMessageProjectionEvent("agent_done", {}, contextFor([], logSessionEvent))).toBe(
-      false,
-    );
+    expect(routeMessageProjectionEvent(null, "", contextFor([], logSessionEvent))).toBe(false);
 
     expect(logSessionEvent).not.toHaveBeenCalled();
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]).toEqual(
-      expect.objectContaining({
-        category: "debug",
-        level: "debug",
-        debugType: "transport-diagnostics",
-        event: "frontend.messageEvent.routeEvaluated",
-        data: expect.objectContaining({
-          channelEvent: "agent_done",
-          shouldProjectMain: false,
-        }),
-      }),
-    );
+    expect(diagnostics).toHaveLength(0);
   });
 
   it("rejects a split presentation identity without creating a second assistant entity", () => {
@@ -96,8 +82,8 @@ describe("live canonical message projection", () => {
 
     expect(
       routeMessageProjectionEvent(
-        "message_event",
-        packet(mismatched),
+        mismatched,
+        EVENT_FAMILY.MESSAGE_TIMELINE,
         contextFor(messages, logSessionEvent),
       ),
     ).toBe(true);
@@ -138,8 +124,8 @@ describe("live canonical message projection", () => {
 
     expect(
       routeMessageProjectionEvent(
-        "message_event",
-        packet(childEvent),
+        childEvent,
+        EVENT_FAMILY.MESSAGE_TIMELINE,
         contextFor(messages, logSessionEvent),
       ),
     ).toBe(true);
@@ -148,7 +134,7 @@ describe("live canonical message projection", () => {
     expect(diagnostics).toContainEqual(
       expect.objectContaining({
         event: "frontend.messageEvent.routeEvaluated",
-        data: expect.objectContaining({ shouldProjectMain: false }),
+        data: expect.objectContaining({ ownedByChannel: false }),
       }),
     );
     expect(diagnostics.map(({ event }) => event)).not.toContain(
@@ -169,7 +155,9 @@ describe("live canonical message projection", () => {
     ];
     const context = contextFor(messages);
 
-    expect(routeMessageProjectionEvent("message_event", packet(finalEvent()), context)).toBe(true);
+    expect(routeMessageProjectionEvent(finalEvent(), EVENT_FAMILY.MESSAGE_TIMELINE, context)).toBe(
+      true,
+    );
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
       presentationMessageId: "assistant-message-1",

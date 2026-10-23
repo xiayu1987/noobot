@@ -6,24 +6,19 @@
 import { buildSessionDisplaySummary } from "./session-summary-builders.js";
 import { buildSessionArtifactFileMap, readJsonArtifactFile } from "./session-artifact-files.js";
 import { readExecutionLogs } from "./session-artifact-execution-logs.js";
-import { readSessionArtifactForRepair } from "./session-artifact-session.js";
-import { normalizeSessionDocumentForCurrentProtocol } from "./session-document-normalization.js";
+import { readSessionArtifact } from "./session-artifact-session.js";
+import { normalizeStoredSession } from "./session-read-validation.js";
 
-export async function readSessionArtifactSnapshot({
-  outputDir = "",
-  includeExecutionLogs = true,
-} = {}) {
+export async function readSessionArtifactSnapshot({ outputDir, includeExecutionLogs = true }) {
   const files = buildSessionArtifactFileMap(outputDir);
   const [sessionRaw, task, executionLogs, meta] = await Promise.all([
-    readSessionArtifactForRepair({ sessionDir: outputDir, fallback: null }),
+    readSessionArtifact({ sessionDir: outputDir }),
     readJsonArtifactFile(files.task, null),
     includeExecutionLogs ? readExecutionLogs(outputDir) : Promise.resolve([]),
     readJsonArtifactFile(files.meta, null),
   ]);
-  const session = sessionRaw
-    ? normalizeSessionDocumentForCurrentProtocol(sessionRaw).document
-    : null;
-  const sessionSummary = session ? buildSessionDisplaySummary(session) : null;
+  const session = normalizeStoredSession(sessionRaw);
+  const sessionSummary = buildSessionDisplaySummary(session);
   return {
     files,
     session,

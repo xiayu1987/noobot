@@ -17,7 +17,8 @@ import { canonicalMessageEvent } from "../../modules/chat/helpers/messageEventFi
 setupWebSocketTestHooks();
 
 function emitAssistantContent(socket) {
-  socket.emit(
+  socket.emitChannel(
+    "session-timing",
     MESSAGE_EVENT_WIRE_EVENT,
     canonicalMessageEvent({
       eventId: "event-timing",

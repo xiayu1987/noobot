@@ -154,6 +154,35 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     assert.equal("dir" in payload.workflowSession, false);
   });
 });
+
+test("session-routes: workflow session rejects a node snapshot without session metadata", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-session-meta-"));
+  await writeScopedSessionDir({
+    sessionDir: path.join(workspaceRoot, "runtime/plugin-data/workflow/session/root-s/wf_node_1"),
+    sessionPayload: {
+      sessionId: "node-s",
+      parentSessionId: "root-s",
+      caller: SESSION_CALLER.USER,
+      aggregateVersion: 1,
+      updatedAt: "2026-08-19T00:00:00.000Z",
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+      dialogOrder: [],
+      messages: [],
+    },
+    taskPayload: { sessionId: "node-s", tasks: [] },
+  });
+  const app = express();
+  const bot = { getWorkspacePath: () => workspaceRoot };
+  const translateText = (key) => key;
+  await registerWorkflowPluginRoutes(app, { bot, translateText });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1`);
+    assert.equal(response.status, 500);
+    assert.notEqual((await response.json()).ok, true);
+  });
+});
 test("session-routes: workflow thinking-detail reads scoped session artifact by turnScopeId", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-thinking-route-"));
   const workflowDir = path.join(

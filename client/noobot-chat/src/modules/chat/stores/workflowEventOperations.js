@@ -3,81 +3,57 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
-  buildNextWorkflowNodeFact,
   buildPlannedNodeStateEvent,
   buildWorkflowPlanningHeader,
   evaluateWorkflowNodeStateGate,
-  resolvePlanningPayload,
 } from "./workflowNodeStateProjection.js";
-import { text } from "@noobot/shared/value";
 
 export function createWorkflowNodeStateRegistry() {
   return { workflows: {}, viewerStates: {} };
+}
+
+function createWorkflowEntry(workflowRunId) {
+  return { workflowRunId, nodes: {}, sequence: 0 };
 }
 
 export function createWorkflowEventOperations({
   workflowNodeStateRegistry,
   ensureSubSessionMessageContainer,
 }) {
-  function upsertWorkflowNodeStateEvent(eventData = {}) {
-    const workflowRunId = text(eventData?.workflowRunId);
-    const nodeExecutionId = text(eventData?.nodeExecutionId);
-    const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
-    if (!workflowRunId || !nodeExecutionId) {
-      const result = { applied: false, reason: "missing_identity" };
-      logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", () => ({
-        sessionId: text(eventData?.authoritySessionId),
-        nodeSessionId: text(eventData?.nodeSessionId),
-        dialogProcessId: text(eventData?.dialogProcessId),
-        turnScopeId: text(eventData?.turnScopeId),
-        workflowRunId,
-        nodeExecutionId,
-        reason: result.reason,
-        dataKeys: Object.keys(eventData || {}).sort(),
-      }));
-      return result;
+  function upsertWorkflowNodeStateEvent(eventData) {
+    const { workflowRunId, nodeExecutionId } = eventData;
+    const registry = workflowNodeStateRegistry.value;
+    if (!registry.workflows[workflowRunId]) {
+      registry.workflows[workflowRunId] = createWorkflowEntry(workflowRunId);
     }
-    const registry = workflowNodeStateRegistry.value || createWorkflowNodeStateRegistry();
-    if (!registry.workflows) registry.workflows = {};
-    if (!registry.workflows[workflowRunId])
-      registry.workflows[workflowRunId] = { workflowRunId, nodes: {}, sequence: 0 };
     const workflow = registry.workflows[workflowRunId];
-    if (!workflow.nodes) workflow.nodes = {};
     const current = workflow.nodes[nodeExecutionId] || null;
-    const gate = evaluateWorkflowNodeStateGate({ eventData, current, sequenceDomain });
+    const gate = evaluateWorkflowNodeStateGate({ eventData, current });
     if (!gate.admitted) {
       if (gate.logStale) {
         logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", () => ({
-          sessionId: text(eventData?.authoritySessionId),
-          nodeSessionId: text(eventData?.nodeSessionId || current?.nodeSessionId),
-          dialogProcessId: text(eventData?.dialogProcessId),
-          turnScopeId: text(eventData?.turnScopeId),
+          sessionId: eventData.authoritySessionId,
+          nodeSessionId: eventData.nodeSessionId,
+          dialogProcessId: eventData.dialogProcessId,
+          turnScopeId: eventData.turnScopeId,
           workflowRunId,
           nodeExecutionId,
           reason: gate.result.reason,
-          incomingRevision: Number(eventData?.revision || 0),
-          currentRevision: Number(current?.revision || 0),
+          incomingRevision: eventData.revision,
+          currentRevision: current?.revision,
         }));
       }
       return gate.result;
     }
-    const next = buildNextWorkflowNodeFact({
-      eventData,
-      current,
-      workflowRunId,
-      nodeExecutionId,
-      sequenceDomain,
-    });
+    const next = { ...eventData };
     workflow.nodes[nodeExecutionId] = next;
-    workflow.sequence = Math.max(Number(workflow.sequence || 0), Number(next.sequence || 0));
+    workflow.sequence = Math.max(workflow.sequence, next.sequence);
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
-    const childSessionId = text(next.nodeSessionId);
-    if (childSessionId) {
+    if (next.nodeSessionId) {
       ensureSubSessionMessageContainer({
-        sessionId: childSessionId,
+        sessionId: next.nodeSessionId,
         parentSessionId: next.authoritySessionId,
         dialogProcessId: next.dialogProcessId,
         turnScopeId: next.turnScopeId,
@@ -101,64 +77,31 @@ export function createWorkflowEventOperations({
     return { applied: true, node: next };
   }
 
-  function upsertWorkflowPlanningEvent(eventData = {}) {
-    const workflowRunId = text(eventData?.workflowRunId);
-    const nodeSessions = Array.isArray(eventData?.nodeSessions) ? eventData.nodeSessions : [];
-    const workflowPayload = resolvePlanningPayload(eventData);
-    const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.PLANNING;
-    if (sequenceDomain !== WORKFLOW_SEQUENCE_DOMAIN.PLANNING) {
-      return { applied: false, reason: "sequence_domain_mismatch" };
-    }
-    if (!workflowRunId || !nodeSessions.length || !workflowPayload) {
-      const result = { applied: false, reason: "missing_planning_payload" };
-      logWorkflowDiagnostics("frontend.workflowStore.planningRejected", () => ({
-        sessionId: text(eventData?.authoritySessionId),
-        dialogProcessId: text(eventData?.dialogProcessId),
-        turnScopeId: text(eventData?.turnScopeId),
-        workflowRunId,
-        nodeSessionCount: nodeSessions.length,
-        hasWorkflowPayload: Boolean(workflowPayload),
-        reason: result.reason,
-        dataKeys: Object.keys(eventData || {}).sort(),
-      }));
-      return result;
-    }
-    const registry = workflowNodeStateRegistry.value || createWorkflowNodeStateRegistry();
-    registry.workflows = registry.workflows || {};
-    const currentWorkflow = registry.workflows[workflowRunId] || {
-      workflowRunId,
-      nodes: {},
-      sequence: 0,
-    };
+  function upsertWorkflowPlanningEvent(eventData) {
+    const { workflowRunId, workflowPayload } = eventData;
+    const { nodeSessions } = workflowPayload;
+    const registry = workflowNodeStateRegistry.value;
     registry.workflows[workflowRunId] = buildWorkflowPlanningHeader({
-      currentWorkflow,
+      currentWorkflow: registry.workflows[workflowRunId] || createWorkflowEntry(workflowRunId),
       eventData,
-      workflowRunId,
-      workflowPayload,
     });
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
-    const results = nodeSessions.map((nodeSession = {}, index) =>
-      upsertWorkflowNodeStateEvent(
-        buildPlannedNodeStateEvent({ nodeSession, eventData, workflowRunId, index }),
-      ),
+    const results = nodeSessions.map((nodeSession) =>
+      upsertWorkflowNodeStateEvent(buildPlannedNodeStateEvent({ nodeSession, eventData })),
     );
     const result = {
-      applied: results.some((result) => result?.applied === true),
+      applied: results.some((item) => item.applied === true),
       results,
     };
     logWorkflowDiagnostics("frontend.workflowStore.planningApplied", () => ({
-      sessionId: text(eventData?.authoritySessionId),
-      dialogProcessId: text(eventData?.dialogProcessId),
-      turnScopeId: text(eventData?.turnScopeId),
+      sessionId: eventData.authoritySessionId,
+      dialogProcessId: eventData.dialogProcessId,
+      turnScopeId: eventData.turnScopeId,
       workflowRunId,
       nodeSessionCount: nodeSessions.length,
-      appliedNodeCount: results.filter((item) => item?.applied === true).length,
-      semanticNodeCount: Array.isArray(workflowPayload?.semantic?.nodes)
-        ? workflowPayload.semantic.nodes.length
-        : 0,
-      semanticFlowtoCount: Array.isArray(workflowPayload?.semantic?.flowtos)
-        ? workflowPayload.semantic.flowtos.length
-        : 0,
+      appliedNodeCount: results.filter((item) => item.applied === true).length,
+      semanticNodeCount: workflowPayload.semantic?.nodes?.length,
+      semanticFlowtoCount: workflowPayload.semantic?.flowtos?.length,
       applied: result.applied,
       workflowCount: Object.keys(registry.workflows).length,
     }));

@@ -21,7 +21,6 @@ NODE id=audit type=action name="审批" task="审核订单并给出审批结论"
 NODE id=end type=state stateType=end name="结束"
 EDGE from=start to=audit name="开始到审批" when="gte(order.amount,100)"
 EDGE from=audit to=end name="审批到结束" when="always"
-AUTO type=submit stepIndex=0
 END
 ```
 

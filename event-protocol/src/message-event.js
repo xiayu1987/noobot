@@ -11,7 +11,7 @@ import {
   THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
 } from "./thinking-detail-content-fact.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
@@ -187,14 +187,18 @@ function validatePayloadEnvelope(value) {
   );
   if (!text(value?.presentationMessageId)) errors.push("missing_presentation_message_id");
   if (!text(value?.dialogProcessId)) errors.push("missing_dialog_process_id");
-  const workflowRunId = text(value?.workflowRunId);
-  if (Boolean(workflowRunId) !== Boolean(text(value?.nodeExecutionId))) {
+  const workflowOwned = isCanonicalText(value.workflowRunId);
+  if (workflowOwned !== isCanonicalText(value.nodeExecutionId)) {
     errors.push("incomplete_workflow_identity");
   }
-  if (workflowRunId && !text(value?.parentSessionId)) {
+  if (workflowOwned && !isCanonicalText(value.parentSessionId)) {
     errors.push("missing_workflow_parent_session");
   }
   return errors;
+}
+
+export function isWorkflowNodeMessageEvent(envelope) {
+  return isCanonicalText(envelope.payload.workflowRunId);
 }
 
 function requireEventText(value) {

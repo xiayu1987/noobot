@@ -9,11 +9,16 @@ import assert from "node:assert/strict";
 import {
   AGENT_CHANNEL_STATE,
   AGENT_CHANNEL_STATE_SCOPE,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
+  createAgentCommandReceipt,
+  createAgentCommandRejection,
+  validateAgentCommandRejection,
   createAgentChannelState,
-  createAgentTransportEvent,
+  createAgentChannelFrame,
+  createAgentDirectFrame,
+  parseAgentTransportFrame,
   validateAgentChannelState,
-  getAgentTransportEventSessionId,
   usesExactAgentTransportPayload,
 } from "../src/events.js";
 
@@ -24,27 +29,158 @@ test("transport protocol declares events whose payload cannot be enriched", () =
   assert.equal(usesExactAgentTransportPayload("message_event"), false);
 });
 
-test("transport event keeps routing identity separate from authoritative data", () => {
+test("channel frame keeps routing identity separate from authoritative data", () => {
   const data = Object.freeze({ eventType: "attachment.parsed" });
-  const envelope = createAgentTransportEvent({
+  const frame = createAgentChannelFrame({
     event: "attachment_lifecycle",
     data,
     channelSessionId: "session-1",
   });
 
-  assert.equal(envelope.data, data);
-  assert.deepEqual(envelope.data, { eventType: "attachment.parsed" });
-  assert.equal(getAgentTransportEventSessionId(envelope), "session-1");
+  assert.equal(frame.data, data);
+  assert.equal(frame.channelSessionId, "session-1");
+  assert.deepEqual(parseAgentTransportFrame(JSON.parse(JSON.stringify(frame))), frame);
 });
 
-test("transport event rejects missing event identity and non-object data", () => {
+test("channel frame requires a canonical channel session", () => {
+  for (const channelSessionId of [undefined, "", " session-1"]) {
+    assert.throws(
+      () => createAgentChannelFrame({ event: "attachment_lifecycle", data: {}, channelSessionId }),
+      /missing_channel_session_id/,
+    );
+  }
+});
+
+test("direct frame only carries transport-owned events", () => {
+  const frame = createAgentDirectFrame({ event: AGENT_TRANSPORT_EVENT.READY, data: {} });
+  assert.deepEqual(Object.keys(frame), ["event", "data"]);
   assert.throws(
-    () => createAgentTransportEvent({ event: "", data: {} }),
-    /missing_transport_event/,
+    () => createAgentDirectFrame({ event: "attachment_lifecycle", data: {} }),
+    /channel_event_sent_direct:attachment_lifecycle/,
   );
   assert.throws(
-    () => createAgentTransportEvent({ event: "delta", data: [] }),
+    () => parseAgentTransportFrame({ event: "attachment_lifecycle", data: {} }),
+    /channel_event_sent_direct/,
+  );
+});
+
+test("channel frame rejects transport-owned direct events", () => {
+  assert.throws(
+    () =>
+      createAgentChannelFrame({
+        event: AGENT_TRANSPORT_EVENT.READY,
+        data: {},
+        channelSessionId: "session-1",
+      }),
+    /direct_event_sent_on_channel:transport_ready/,
+  );
+  assert.throws(
+    () =>
+      parseAgentTransportFrame({
+        event: AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
+        data: {},
+        channelSessionId: "session-1",
+      }),
+    /direct_event_sent_on_channel/,
+  );
+});
+
+test("command receipts travel only on channel frames and rejections only direct", () => {
+  const receipt = createAgentCommandReceipt({
+    command: { commandId: "command-1", commandType: "send", identity: { sessionId: "session-1" } },
+    outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+    occurredAt: "2026-01-01T00:00:00.000Z",
+  });
+  assert.throws(
+    () => createAgentDirectFrame({ event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, data: receipt }),
+    /channel_event_sent_direct:transport_command_receipt/,
+  );
+  const rejection = createAgentCommandRejection({
+    command: {
+      commandId: "command-1",
+      commandType: "send",
+      identity: { sessionId: "session-1", parentSessionId: "", turnScopeId: "" },
+    },
+    error: { code: "PERMISSION_DENIED", message: "permission denied" },
+    occurredAt: "2026-01-01T00:00:00.000Z",
+  });
+  assert.deepEqual(rejection.identity, { sessionId: "session-1" });
+  assert.equal(Object.hasOwn(rejection, "outcome"), false);
+  assert.throws(
+    () =>
+      createAgentChannelFrame({
+        event: AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
+        data: rejection,
+        channelSessionId: "session-1",
+      }),
+    /direct_event_sent_on_channel:transport_command_rejected/,
+  );
+  assert.equal(
+    createAgentDirectFrame({ event: AGENT_TRANSPORT_EVENT.COMMAND_REJECTED, data: rejection }).data,
+    rejection,
+  );
+});
+
+test("command rejection requires canonical command, session and error facts", () => {
+  const command = { commandId: "command-1", commandType: "send", identity: { sessionId: "s" } };
+  assert.throws(
+    () =>
+      createAgentCommandRejection({
+        command,
+        error: { code: "", message: "m" },
+        occurredAt: "2026-01-01T00:00:00.000Z",
+      }),
+    /missing_rejection_code/,
+  );
+  assert.deepEqual(
+    validateAgentCommandRejection({
+      ...createAgentCommandRejection({
+        command,
+        error: { code: "c", message: "m" },
+        occurredAt: "2026-01-01T00:00:00.000Z",
+      }),
+      outcome: "failed",
+    }).errors,
+    ["unknown_rejection_field:outcome"],
+  );
+  assert.deepEqual(
+    validateAgentCommandRejection({
+      ...createAgentCommandRejection({
+        command,
+        error: { code: "c", message: "m" },
+        occurredAt: "2026-01-01T00:00:00.000Z",
+      }),
+      identity: { sessionId: " s" },
+    }).errors,
+    ["invalid_rejection_identity_field:sessionId", "missing_session_id"],
+  );
+});
+
+test("command receipt outcome is matched exactly without case folding", () => {
+  assert.throws(
+    () =>
+      createAgentCommandReceipt({
+        command: {
+          commandId: "command-1",
+          commandType: "send",
+          identity: { sessionId: "session-1" },
+        },
+        outcome: "Completed",
+        occurredAt: "2026-01-01T00:00:00.000Z",
+      }),
+    /invalid_outcome/,
+  );
+});
+
+test("transport frame rejects missing event, non-object data and unknown fields", () => {
+  assert.throws(() => createAgentDirectFrame({ event: "", data: {} }), /missing_transport_event/);
+  assert.throws(
+    () => createAgentDirectFrame({ event: AGENT_TRANSPORT_EVENT.READY, data: [] }),
     /invalid_transport_event_data/,
+  );
+  assert.throws(
+    () => parseAgentTransportFrame({ event: AGENT_TRANSPORT_EVENT.READY, data: {}, seq: 1 }),
+    /unknown_transport_frame_field:seq/,
   );
 });
 

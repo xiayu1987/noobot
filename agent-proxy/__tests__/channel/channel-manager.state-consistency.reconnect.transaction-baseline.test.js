@@ -15,6 +15,11 @@ import {
   reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import {
+  AGENT_COMMAND,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  createAgentCommandReceipt,
+} from "@noobot/agent-transport-protocol";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 
 test("lifecycle replay gap waits for the authoritative snapshot before reconnect completes", async () => {
@@ -464,7 +469,6 @@ test("an orphan-flagged snapshot is settled once via turn.finalize and the settl
   const snapshotCommandId = forwarded[0].commandId;
   manager.routeUpstreamSnapshot(
     channel,
-    "turn.snapshot",
     snapshotEnvelope({
       commandId: snapshotCommandId,
       sessionId,
@@ -484,7 +488,6 @@ test("an orphan-flagged snapshot is settled once via turn.finalize and the settl
 
   manager.routeUpstreamSnapshot(
     channel,
-    "turn.snapshot",
     snapshotEnvelope({
       commandId: finalizeCommandId,
       sessionId,
@@ -512,7 +515,6 @@ test("a failed recovery finalize keeps the original authoritative snapshot and c
   const snapshotCommandId = forwarded[0].commandId;
   manager.routeUpstreamSnapshot(
     channel,
-    "turn.snapshot",
     snapshotEnvelope({
       commandId: snapshotCommandId,
       sessionId,
@@ -523,7 +525,19 @@ test("a failed recovery finalize keeps the original authoritative snapshot and c
   );
   await flushMicrotasks();
   const finalizeCommandId = forwarded[1].commandId;
-  manager.resolvePendingSnapshotFailure(channel, finalizeCommandId, "turn_finalize_failed");
+  manager.resolvePendingSnapshotFailure(
+    channel,
+    createAgentCommandReceipt({
+      command: {
+        commandId: finalizeCommandId,
+        commandType: AGENT_COMMAND.FINALIZE,
+        identity: { sessionId },
+      },
+      outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+      error: { code: "turn_finalize_failed", message: "turn finalize failed" },
+      occurredAt: "2026-01-01T00:00:00.000Z",
+    }),
+  );
   await reconnectPromise;
 
   const entry = getEvent(client, "reconnect_data").data.sessions.find(
@@ -542,7 +556,6 @@ test("cancelling reconnect during recovery finalize clears both pending command 
   const snapshotCommandId = forwarded[0].commandId;
   manager.routeUpstreamSnapshot(
     channel,
-    "turn.snapshot",
     snapshotEnvelope({
       commandId: snapshotCommandId,
       sessionId,
@@ -570,7 +583,6 @@ test("cancelling reconnect during recovery finalize clears both pending command 
   const currentCommandId = forwarded.at(-1).commandId;
   manager.routeUpstreamSnapshot(
     channel,
-    "turn.snapshot",
     snapshotEnvelope({
       commandId: currentCommandId,
       sessionId,

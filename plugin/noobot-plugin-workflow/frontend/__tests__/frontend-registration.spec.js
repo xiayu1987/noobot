@@ -130,6 +130,7 @@ describe("Workflow frontend registration", () => {
         eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
         sessionId: "root",
         turnScopeId: "workflow-node:node-1",
+        executionId: "node-1",
       },
       causality: {},
       ordering: {
@@ -142,7 +143,6 @@ describe("Workflow frontend registration", () => {
       occurredAt: "2026-01-01T00:00:00.000Z",
       payload: {
         workflowRunId: "workflow-1",
-        nodeExecutionId: "node-1",
         nodeSessionId: "child",
         status: "running",
       },

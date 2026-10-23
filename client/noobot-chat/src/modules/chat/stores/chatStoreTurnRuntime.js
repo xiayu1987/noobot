@@ -13,26 +13,20 @@ import {
   applyTurnTimingUpdate,
   applyTurnTerminalResolution,
   applyTurnRuntimeEvent,
-  createTurnRuntimeRegistryState,
   pruneTerminalTurns,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 
 export function createTurnRuntimeStoreActions(
   turnRuntimeRegistry,
-  { onTurnCommitted = null, onTurnEvaluated = null } = {},
+  { onTurnCommitted, onTurnEvaluated },
 ) {
   function commitTurnRuntime(reducer, ...args) {
-    const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
+    const registry = turnRuntimeRegistry.value;
     const result = reducer(registry, ...args);
-    const applied = result?.applied !== false;
+    const applied = result.applied !== false;
     if (applied) turnRuntimeRegistry.value = { ...registry };
-    if (typeof onTurnEvaluated === "function") {
-      onTurnEvaluated({ reducer: reducer.name, input: args[0], result, applied });
-    }
-    if (applied && result?.turn && typeof onTurnCommitted === "function") {
-      const projection = onTurnCommitted(result);
-      return projection ? { ...result, subSessionEffect: projection } : result;
-    }
+    onTurnEvaluated({ reducer: reducer.name, input: args[0], result, applied });
+    if (applied && result.turn) return { ...result, subSessionEffect: onTurnCommitted(result) };
     return result;
   }
   return {
@@ -45,13 +39,12 @@ export function createTurnRuntimeStoreActions(
     applyExecutionSnapshot: (value) => commitTurnRuntime(applyExecutionSnapshot, value),
     applyExecutionChildren: (value) => commitTurnRuntime(applyExecutionChildren, value),
     applyExecutionTree: (value) => commitTurnRuntime(applyExecutionTree, value),
-    pruneTerminalTurns(options = {}) {
-      const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
+    pruneTerminalTurns(options) {
+      const registry = turnRuntimeRegistry.value;
       const result = pruneTerminalTurns(registry, options);
-      const applied =
-        Array.isArray(result?.removedTurnScopeIds) && result.removedTurnScopeIds.length > 0;
+      const applied = result.removedTurnScopeIds.length > 0;
       if (applied) turnRuntimeRegistry.value = { ...registry };
-      return { ...(result || {}), applied };
+      return { ...result, applied };
     },
   };
 }

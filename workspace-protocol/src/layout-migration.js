@@ -61,6 +61,16 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     toVersion: 9,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
   }),
+  Object.freeze({
+    id: "session-lifecycle-records-retired-v10",
+    toVersion: 10,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE,
+  }),
+  Object.freeze({
+    id: "session-orphan-tool-calls-v11",
+    toVersion: 11,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
 ]);
 
 function layoutStateError(message) {

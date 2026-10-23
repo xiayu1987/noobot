@@ -36,7 +36,6 @@ const h = (char) => char.repeat(64);
 test("layout runtime directories all live under runtime", () => {
   for (const dir of WORKSPACE_RUNTIME_DIRECTORIES) assert.ok(isWorkspaceRuntimeRelativePath(dir));
   assert.ok(WORKSPACE_RUNTIME_DIRECTORIES.includes(WORKSPACE_LAYOUT.PLUGIN_DATA_DIR));
-  assert.ok(WORKSPACE_RUNTIME_DIRECTORIES.includes(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR));
   assert.ok(WORKSPACE_RUNTIME_DIRECTORIES.includes(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_LOCKS_DIR));
   assert.ok(isWorkspaceRuntimeRelativePath(WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE));
 });
@@ -185,6 +184,8 @@ test("layout upgrades run every step above the installed version and end at the 
       "model-context-snapshot-v7",
       "model-context-snapshot-v8",
       "session-message-identity-v9",
+      "session-lifecycle-records-retired-v10",
+      "session-orphan-tool-calls-v11",
     ],
   );
   assert.deepEqual(
@@ -196,6 +197,8 @@ test("layout upgrades run every step above the installed version and end at the 
       "model-context-snapshot-v7",
       "model-context-snapshot-v8",
       "session-message-identity-v9",
+      "session-lifecycle-records-retired-v10",
+      "session-orphan-tool-calls-v11",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

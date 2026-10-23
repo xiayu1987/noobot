@@ -103,7 +103,6 @@ export async function prepareWorkflowPlanningMessage({
     workflowRunId,
     semanticText,
     workflowPayload: planningWorkflowPayload,
-    nodeSessions: planningNodeSessions,
     sourceMessage: buildPlanningSourceMessage(workflowMessage, planningWorkflowPayload, identity),
   };
   await commitWorkflowRuntimeEvent({

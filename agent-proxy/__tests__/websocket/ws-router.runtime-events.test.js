@@ -13,7 +13,6 @@ import { WsRouter } from "../../src/websocket/ws-router.js";
 import { AGENT_PROXY_ERROR } from "../../src/shared/constants.js";
 import {
   AGENT_COMMAND,
-  AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
   AGENT_TRANSPORT_ERROR_CODE,
   createExecutionQueryCommand,
@@ -545,12 +544,20 @@ test("ws router reports strict protocol validation errors without a generic rout
   assert.equal(channelManager.calls.events.length, 1);
   const failure = channelManager.calls.events[0];
   assert.equal(failure.socket, socket);
-  assert.equal(failure.envelope.event, AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT);
+  assert.equal(failure.envelope.event, AGENT_TRANSPORT_EVENT.COMMAND_REJECTED);
+  assert.deepEqual(Object.keys(failure.envelope.data).sort(), [
+    "commandId",
+    "commandType",
+    "error",
+    "identity",
+    "occurredAt",
+    "protocolVersion",
+  ]);
   assert.equal(failure.envelope.data.commandId, command.commandId);
   assert.equal(failure.envelope.data.commandType, command.commandType);
-  assert.equal(failure.envelope.data.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
   assert.equal(failure.envelope.data.identity.sessionId, command.identity.sessionId);
   assert.equal(failure.envelope.data.identity.turnScopeId, command.identity.turnScopeId);
+  assert.equal(Object.hasOwn(failure.envelope.data.identity, "parentSessionId"), false);
   assert.deepEqual(failure.envelope.data.error, {
     code: "INVALID_AGENT_COMMAND",
     message: "invalid_agent_command: unknown_top_level_field:requestId",

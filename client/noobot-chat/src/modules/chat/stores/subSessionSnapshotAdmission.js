@@ -3,78 +3,38 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
-import { text } from "@noobot/shared/value";
 
-function num(value) {
-  return Number(value || 0);
-}
-
-const TURN_RUNTIME_UNAVAILABLE = { applied: false, reason: "turn_runtime_unavailable" };
-
-export function buildSnapshotContextFacet(snapshotContext = {}) {
+export function buildSnapshotContextFacet(snapshot) {
   return {
-    source: text(snapshotContext?.source) || "unknown",
-    eventId: text(snapshotContext?.eventId),
-    sequenceDomain: text(snapshotContext?.sequenceDomain),
-    authoritativeSequence: num(snapshotContext?.authoritativeSequence),
-    transportSequence: num(snapshotContext?.transportSequence),
+    source: snapshot.source,
+    eventId: snapshot.eventId,
+    sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT,
+    aggregateVersion: snapshot.aggregateVersion,
   };
 }
 
-function resolveAppliedAggregateVersion(current = {}) {
-  return num(current?.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT]);
-}
-
-export function buildSubSessionSnapshotRegistryEntry({
-  current = {},
-  sessionDoc = {},
-  sessionId,
-  messages = [],
-  aggregateVersion,
-}) {
-  const {
-    status: _persistedStatus,
-    state: _persistedState,
-    turnTimings: _persistedTurnTimings,
-    ...messageSnapshot
-  } = sessionDoc || {};
+export function buildSubSessionSnapshotRegistryEntry({ current, snapshot, messages }) {
   return {
     ...current,
-    ...messageSnapshot,
-    sessionId,
+    sessionId: snapshot.sessionId,
+    parentSessionId: snapshot.parentSessionId,
+    dialogProcessId: snapshot.dialogProcessId,
+    turnScopeId: snapshot.turnScopeId,
+    workflowRunId: snapshot.workflowRunId,
+    nodeExecutionId: snapshot.nodeExecutionId,
     messages,
-    sequence: num(current.sequence),
-    sequenceDomain: text(current.sequenceDomain) || MESSAGE_EVENT_SEQUENCE_DOMAIN,
     sequenceByDomain: {
-      ...(current.sequenceByDomain || {}),
-      [WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT]: aggregateVersion,
+      ...current.sequenceByDomain,
+      [WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT]: snapshot.aggregateVersion,
     },
-    sequenceByScopeKey: { ...(current.sequenceByScopeKey || {}) },
-    revision: num(current.revision),
-    revisionByDomain: { ...(current.revisionByDomain || {}) },
-    eventsById: current.eventsById || {},
-    updatedAt: new Date().toISOString(),
+    updatedAt: snapshot.occurredAt,
   };
 }
 
-function applyLifecycleSnapshot(sessionDoc, applyTurnLifecycleSnapshot) {
-  if (typeof applyTurnLifecycleSnapshot !== "function") return TURN_RUNTIME_UNAVAILABLE;
-  return applyTurnLifecycleSnapshot(sessionDoc?.turnLifecycleSnapshot);
-}
-
-function applyTimingSnapshot(sessionDoc, sessionId, applyTurnTimingSnapshot) {
-  if (typeof applyTurnTimingSnapshot !== "function") return TURN_RUNTIME_UNAVAILABLE;
-  return applyTurnTimingSnapshot({
-    sessionId,
-    turnTimings: Array.isArray(sessionDoc?.turnTimings) ? sessionDoc.turnTimings : [],
-  });
-}
-
-function lifecycleRejected(lifecycleResult = {}) {
-  return lifecycleResult?.applied === false && lifecycleResult?.deduplicated !== true;
+function lifecycleRejected(lifecycleResult) {
+  return lifecycleResult.applied === false && lifecycleResult.deduplicated !== true;
 }
 
 function resolveStaleReason(aggregateVersion, appliedAggregateVersion) {
@@ -83,73 +43,38 @@ function resolveStaleReason(aggregateVersion, appliedAggregateVersion) {
     : "stale_snapshot";
 }
 
-function logSnapshotRejected({
-  sessionId,
-  sessionDoc,
-  current,
-  aggregateVersion,
-  appliedAggregateVersion,
-  contextFacet,
-  reason,
-}) {
-  logWorkflowDiagnostics("frontend.workflowSubSession.snapshotRejected", () => ({
-    sessionId,
-    parentSessionId: text(sessionDoc?.parentSessionId || current?.parentSessionId),
-    workflowRunId: text(sessionDoc?.workflowRunId || current?.workflowRunId),
-    nodeExecutionId: text(sessionDoc?.nodeExecutionId || current?.nodeExecutionId),
-    aggregateVersion,
-    appliedAggregateVersion,
-    ...contextFacet,
-    reason,
-  }));
-}
-
 export function evaluateSubSessionSnapshotAdmission({
-  sessionId,
-  sessionDoc = {},
-  snapshotContext = {},
-  current = {},
-  applyTurnLifecycleSnapshot = null,
-  applyTurnTimingSnapshot = null,
+  snapshot,
+  current,
+  applyTurnLifecycleSnapshot,
+  applyTurnTimingSnapshot,
 }) {
-  const lifecycleResult = applyLifecycleSnapshot(sessionDoc, applyTurnLifecycleSnapshot);
+  const lifecycleResult = applyTurnLifecycleSnapshot(snapshot.turnLifecycleSnapshot);
   if (lifecycleRejected(lifecycleResult)) {
     return {
       admitted: false,
-      result: {
-        applied: false,
-        reason: lifecycleResult?.reason || "invalid_lifecycle_snapshot",
-        lifecycleResult,
-      },
+      result: { applied: false, reason: lifecycleResult.reason, lifecycleResult },
     };
   }
-  const timingResult = applyTimingSnapshot(sessionDoc, sessionId, applyTurnTimingSnapshot);
-  const aggregateVersion = num(sessionDoc?.aggregateVersion);
-  if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
-    return {
-      admitted: false,
-      result: { applied: false, reason: "invalid_snapshot_version", current },
-    };
-  }
-  const appliedAggregateVersion = resolveAppliedAggregateVersion(current);
-  if (appliedAggregateVersion && aggregateVersion <= appliedAggregateVersion) {
+  const timingResult = applyTurnTimingSnapshot({
+    sessionId: snapshot.sessionId,
+    turnTimings: snapshot.turnTimings,
+  });
+  const { aggregateVersion } = snapshot;
+  const appliedAggregateVersion =
+    current.sequenceByDomain[WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT];
+  if (appliedAggregateVersion !== undefined && aggregateVersion <= appliedAggregateVersion) {
     const reason = resolveStaleReason(aggregateVersion, appliedAggregateVersion);
-    logSnapshotRejected({
-      sessionId,
-      sessionDoc,
-      current,
-      aggregateVersion,
+    logWorkflowDiagnostics("frontend.workflowSubSession.snapshotRejected", () => ({
+      sessionId: snapshot.sessionId,
+      parentSessionId: snapshot.parentSessionId,
+      workflowRunId: snapshot.workflowRunId,
+      nodeExecutionId: snapshot.nodeExecutionId,
       appliedAggregateVersion,
-      contextFacet: buildSnapshotContextFacet(snapshotContext),
+      ...buildSnapshotContextFacet(snapshot),
       reason,
-    });
+    }));
     return { admitted: false, result: { applied: false, reason, current } };
   }
-  return {
-    admitted: true,
-    lifecycleResult,
-    timingResult,
-    aggregateVersion,
-    appliedAggregateVersion,
-  };
+  return { admitted: true, lifecycleResult, timingResult, appliedAggregateVersion };
 }

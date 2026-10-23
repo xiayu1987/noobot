@@ -5,8 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
-import { canonicalWorkflowRuntimeEvent } from "../helpers/workflowRuntimeEventFixture.js";
-import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
+import { canonicalWorkflowNodeStateEvent } from "../helpers/workflowRuntimeEventFixture.js";
 import {
   applyMessageEvent,
   applySessionSnapshot,
@@ -162,18 +161,17 @@ describe("useChatStore sub session projection", () => {
       }),
     );
     store.applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
+      canonicalWorkflowNodeStateEvent({
         eventId: "event-6",
         sequence: 6,
         revision: 1,
-        sequenceDomain: "workflow-node-state",
-        sessionId: "sub-session-1",
-        parentSessionId: "main-session-1",
+        nodeSessionId: "sub-session-1",
+        authoritySessionId: "main-session-1",
         workflowRunId: "workflow-1",
         nodeExecutionId: "node-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
-        status: "completed",
+        status: "succeeded",
       }),
       { source: "test" },
     );
@@ -188,10 +186,10 @@ describe("useChatStore sub session projection", () => {
     expect(assistant.toolTimeline).toEqual([
       expect.objectContaining({ tool: "search", result: "ok", status: "completed" }),
     ]);
-    expect(store.selectSubSessionTurnRuntime("sub-session-1", "turn-1")).toBeNull();
+    expect(session?.turnRuntime).toBeNull();
 
-    expect(session?.sequence).toBe(4);
-    expect(session?.revision).toBe(1);
+    expect(session.sequenceByScopeKey).toEqual({ "msg-assistant-1": 4 });
+    expect(session).not.toHaveProperty("revision");
   });
 
   it("projects canonical backend tool envelopes into the assistant tool timeline", () => {
@@ -303,9 +301,10 @@ describe("useChatStore sub session projection", () => {
   it("does not treat an unscoped snapshot sequence as message-event ordering", () => {
     const store = useChatStore();
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
+      nodeSessionId: "sub-session-1",
       messages: [
         {
+          messageUid: "sm-msg-assistant-1",
           presentationMessageId: "msg-assistant-1",
           role: "assistant",
           content: "persisted",
@@ -323,7 +322,6 @@ describe("useChatStore sub session projection", () => {
         eventId: "event-live-1",
         eventType: "thinking",
         sequence: 1,
-        revision: 1,
         text: " live",
       }),
     );
@@ -338,8 +336,8 @@ describe("useChatStore sub session projection", () => {
   it("keeps an independently identified runtime message separate from final content", () => {
     const store = useChatStore();
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
-      parentSessionId: "main-session-1",
+      nodeSessionId: "sub-session-1",
+      authoritySessionId: "main-session-1",
       status: "running",
       messages: [
         {
@@ -363,7 +361,6 @@ describe("useChatStore sub session projection", () => {
         eventType: "authoritative_final_content",
         presentationMessageId: "authoritative-assistant-1",
         sequence: 1,
-        revision: 1,
         text: "authoritative child result",
       }),
       { source: "live" },
@@ -395,8 +392,13 @@ describe("useChatStore sub session projection", () => {
       turnScopeId: "turn-1",
     };
     store.applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
-        ...identity,
+      canonicalWorkflowNodeStateEvent({
+        workflowRunId: "workflow-1",
+        nodeExecutionId: "node-1",
+        nodeSessionId: "sub-session-1",
+        authoritySessionId: "main-session-1",
+        dialogProcessId: "runtime-node-dialog",
+        turnScopeId: "turn-1",
         status: "running",
         revision: 2,
         sequence: 5,
@@ -415,14 +417,18 @@ describe("useChatStore sub session projection", () => {
         eventType: "authoritative_final_content",
         presentationMessageId: "authoritative-assistant-after-node-state",
         sequence: 1,
-        revision: 1,
         text: "done",
       }),
       { source: "live" },
     );
     const terminal = store.applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
-        ...identity,
+      canonicalWorkflowNodeStateEvent({
+        workflowRunId: "workflow-1",
+        nodeExecutionId: "node-1",
+        nodeSessionId: "sub-session-1",
+        authoritySessionId: "main-session-1",
+        dialogProcessId: "runtime-node-dialog",
+        turnScopeId: "turn-1",
         status: "succeeded",
         revision: 3,
         sequence: 6,
@@ -442,20 +448,18 @@ describe("useChatStore sub session projection", () => {
         content: "done",
       }),
     ]);
-    expect(child.sequenceByDomain).toMatchObject({
-      "workflow-node-state": 6,
-      "message-event": 2,
-    });
+    expect(child.workflowNodeState).toMatchObject({ sequence: 6 });
+    expect(child.sequenceByScopeKey).toEqual({ "authoritative-assistant-after-node-state": 2 });
   });
 
   it("projects terminal workflow node state onto the isolated child session", () => {
     const store = useChatStore();
     store.applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
+      canonicalWorkflowNodeStateEvent({
         workflowRunId: "workflow-1",
         nodeExecutionId: "node-1",
-        sessionId: "sub-session-1",
-        parentSessionId: "main-session-1",
+        nodeSessionId: "sub-session-1",
+        authoritySessionId: "main-session-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
         status: "running",
@@ -463,9 +467,10 @@ describe("useChatStore sub session projection", () => {
         revision: 1,
         sequence: 1,
       }),
+      { source: "test" },
     );
     applySessionSnapshot(store, {
-      sessionId: "sub-session-1",
+      nodeSessionId: "sub-session-1",
       status: "running",
       messages: [
         {
@@ -478,11 +483,11 @@ describe("useChatStore sub session projection", () => {
       ],
     });
     store.applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
+      canonicalWorkflowNodeStateEvent({
         workflowRunId: "workflow-1",
         nodeExecutionId: "node-1",
-        sessionId: "sub-session-1",
-        parentSessionId: "main-session-1",
+        nodeSessionId: "sub-session-1",
+        authoritySessionId: "main-session-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
         status: "succeeded",
@@ -490,12 +495,13 @@ describe("useChatStore sub session projection", () => {
         revision: 2,
         sequence: 2,
       }),
+      { source: "test" },
     );
 
     const session = store.selectSubSessionMessages("sub-session-1");
     expect(session.status).toBe("");
     expect(session.workflowNodeState).toMatchObject({ status: "succeeded" });
-    expect(store.selectSubSessionTurnRuntime("sub-session-1", "turn-1")).toBeNull();
+    expect(session.turnRuntime).toBeNull();
   });
 
   it("keeps multiple assistant turns and distinct tool calls separate during realtime projection", () => {

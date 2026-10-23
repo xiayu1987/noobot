@@ -24,18 +24,22 @@ function createRecorder() {
 }
 
 const validCommand = Object.freeze({
-  commandId: " cmd-1 ",
+  commandId: "cmd-1",
   commandType: AGENT_COMMAND.STOP,
-  identity: { sessionId: "session-1", turnScopeId: "turn-1", dialogProcessId: "dialog-1" },
+  identity: {
+    sessionId: "session-1",
+    parentSessionId: "",
+    turnScopeId: "turn-1",
+    dialogProcessId: "dialog-1",
+  },
 });
 
 test("sendFailedCommandReceipt sends a failed receipt for a complete command", () => {
   const { sent, sendEvent } = createRecorder();
-  const result = sendFailedCommandReceipt(sendEvent, validCommand, {
-    code: " stop_not_allowed ",
+  sendFailedCommandReceipt(sendEvent, validCommand, {
+    code: "stop_not_allowed",
     message: "not allowed",
   });
-  assert.equal(result, true);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].event, AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT);
   const receipt = sent[0].data;
@@ -48,28 +52,29 @@ test("sendFailedCommandReceipt sends a failed receipt for a complete command", (
     dialogProcessId: "dialog-1",
   });
   assert.deepEqual(receipt.error, { code: "stop_not_allowed", message: "not allowed" });
+  assert.equal(typeof receipt.occurredAt, "string");
   assert.ok(Object.isFrozen(receipt));
 });
 
-test("sendFailedCommandReceipt falls back to default error code and message", () => {
+test("sendFailedCommandReceipt rejects an error without code or message", () => {
   const { sent, sendEvent } = createRecorder();
-  assert.equal(sendFailedCommandReceipt(sendEvent, validCommand), true);
-  assert.deepEqual(sent[0].data.error, { code: "command_failed", message: "command failed" });
-  assert.equal(sendFailedCommandReceipt(sendEvent, validCommand, { code: "only_code" }), true);
-  assert.deepEqual(sent[1].data.error, { code: "only_code", message: "only_code" });
-});
-
-test("sendFailedCommandReceipt returns false without throwing when sessionId is missing", () => {
-  const { sent, sendEvent } = createRecorder();
-  const command = { ...validCommand, identity: { sessionId: "  " } };
-  assert.equal(sendFailedCommandReceipt(sendEvent, command, { code: "x" }), false);
+  assert.throws(() => sendFailedCommandReceipt(sendEvent, validCommand, { code: "only_code" }));
+  assert.throws(() => sendFailedCommandReceipt(sendEvent, validCommand, { message: "only" }));
+  assert.throws(() =>
+    sendFailedCommandReceipt(sendEvent, validCommand, { code: " padded ", message: "m" }),
+  );
   assert.equal(sent.length, 0);
 });
 
-test("sendFailedCommandReceipt returns false without throwing when commandId is missing", () => {
+test("sendFailedCommandReceipt rejects a command without canonical ids", () => {
   const { sent, sendEvent } = createRecorder();
-  assert.equal(sendFailedCommandReceipt(sendEvent, { ...validCommand, commandId: "" }), false);
-  assert.equal(sendFailedCommandReceipt(sendEvent, null), false);
+  const error = { code: "x", message: "x" };
+  const blankSession = { ...validCommand, identity: { sessionId: "  " } };
+  assert.throws(() => sendFailedCommandReceipt(sendEvent, blankSession, error));
+  assert.throws(() =>
+    sendFailedCommandReceipt(sendEvent, { ...validCommand, commandId: "" }, error),
+  );
+  assert.throws(() => sendFailedCommandReceipt(sendEvent, null, error));
   assert.equal(sent.length, 0);
 });
 
@@ -108,6 +113,7 @@ test("message handler sends a failed receipt for a rejected command with valid e
   assert.equal(sent[0].event, AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT);
   assert.equal(sent[0].data.commandId, "cmd-envelope-ok");
   assert.equal(sent[0].data.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+  assert.equal(sent[0].data.error.code, "unknown_top_level_field:unexpected");
 });
 
 test("message handler closes the socket when the rejected command lacks ids", async () => {

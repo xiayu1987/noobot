@@ -54,7 +54,6 @@ export function canonicalMessageEvent({
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: presentationMessageId,
       sequence,
-      aggregateVersion: sequence,
     },
     producer: { type: "test", id: "agent-proxy-test" },
     occurredAt: "2026-08-17T00:00:00.000Z",

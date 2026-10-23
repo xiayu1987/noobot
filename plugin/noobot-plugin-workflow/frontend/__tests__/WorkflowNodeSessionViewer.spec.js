@@ -21,6 +21,7 @@ import {
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 
 vi.mock("element-plus", () => ({
   ElMessage: { warning: vi.fn() },
@@ -39,6 +40,7 @@ function snapshotEnvelope(sessionId, messages, turnScopeId = `workflow-node:${se
     eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
     authoritySessionId: "root-session",
     turnScopeId,
+    executionId: deriveAgentExecutionId({ turnScopeId }),
     eventId: `snapshot:${sessionId}:1`,
     workflowRunId: `workflow:${sessionId}`,
     sequence: 1,

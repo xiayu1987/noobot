@@ -67,7 +67,9 @@ function attachReconnectBaselines(manager, socket, channelKeys, transaction) {
     const channel = manager.channelStore.get(channelKey);
     if (!channel) continue;
     manager.attachSubscriber(channel, socket, { sendStateSnapshot: false });
-    transaction.channelStateBaseline.push(...manager.buildChannelStateSnapshot(channel));
+    transaction.channelStateBaseline.push(
+      ...manager.buildChannelStateSnapshot(channel).map((envelope) => ({ channel, envelope })),
+    );
   }
 }
 
@@ -131,7 +133,7 @@ class ReconnectMethods {
         if (deletedSessionIds.size) {
           reconnectTransaction.channelStateBaseline =
             reconnectTransaction.channelStateBaseline.filter(
-              (envelope) => !deletedSessionIds.has(text(envelope?.data?.sessionId)),
+              ({ channel }) => !deletedSessionIds.has(channel.identity.sessionId),
             );
         }
       } catch (error) {

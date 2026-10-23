@@ -26,6 +26,10 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
 
+function channelDelivery(transportEvent) {
+  return { ...transportEvent, channelSessionId: transportEvent.data.identity.sessionId };
+}
+
 describe("useChatEngine.send-stream", () => {
   afterEach(() => setTransportDiagnosticsLogSink(null));
 
@@ -481,20 +485,22 @@ describe("useChatEngine.send-stream", () => {
         data: { dialogProcessId: "dp-new", text: "partial " },
       });
       onEvent(
-        createAuthoritativeMessageEnvelope("authoritative_final_content", {
-          eventId: "evt-final-answer",
-          sessionId: "local-1",
-          presentationMessageId: payload.presentation.presentationMessageId,
-          dialogProcessId: "dp-new",
-          turnScopeId: payload.identity.turnScopeId,
-          seq: 1,
-          text: "final answer",
-          modelAlias: "alias-a",
-          modelName: "model-a",
-          modelRuns: [{ runId: "r1" }],
-          attachments: [{ name: "f1" }],
-          tool_calls: [{ id: "tc1" }],
-        }),
+        channelDelivery(
+          createAuthoritativeMessageEnvelope("authoritative_final_content", {
+            eventId: "evt-final-answer",
+            sessionId: "local-1",
+            presentationMessageId: payload.presentation.presentationMessageId,
+            dialogProcessId: "dp-new",
+            turnScopeId: payload.identity.turnScopeId,
+            seq: 1,
+            text: "final answer",
+            modelAlias: "alias-a",
+            modelName: "model-a",
+            modelRuns: [{ runId: "r1" }],
+            attachments: [{ name: "f1" }],
+            tool_calls: [{ id: "tc1" }],
+          }),
+        ),
       );
       onEvent({
         event: StreamEventEnum.DONE,
@@ -710,15 +716,17 @@ describe("useChatEngine.send-stream", () => {
         turnScopeId: payload.identity.turnScopeId,
       });
       onEvent(
-        createAuthoritativeMessageEnvelope("authoritative_final_content", {
-          eventId: "evt-channel-final-content",
-          sessionId: "local-channel-complete",
-          presentationMessageId: payload.presentation.presentationMessageId,
-          dialogProcessId: "dp-channel-complete",
-          turnScopeId: payload.identity.turnScopeId,
-          seq: 1,
-          text: "overlay answer",
-        }),
+        channelDelivery(
+          createAuthoritativeMessageEnvelope("authoritative_final_content", {
+            eventId: "evt-channel-final-content",
+            sessionId: "local-channel-complete",
+            presentationMessageId: payload.presentation.presentationMessageId,
+            dialogProcessId: "dp-channel-complete",
+            turnScopeId: payload.identity.turnScopeId,
+            seq: 1,
+            text: "overlay answer",
+          }),
+        ),
       );
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed", {
         turnScopeId: payload.identity.turnScopeId,

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, text } from "@noobot/shared/value";
 
 const WORKFLOW_NODE_CANONICAL_PREFIX = "workflow-node:";
 const WORKFLOW_NODE_TRANSPORT_PREFIX = "workflow-node_";
@@ -19,16 +19,13 @@ export function canonicalizeTurnScopeId(value = "") {
   return turnScopeId;
 }
 
-export function isCanonicalTurnScopeId(value = "") {
-  const normalized = text(value);
-  return Boolean(normalized) && normalized === canonicalizeTurnScopeId(normalized);
+export function isCanonicalTurnScopeId(value) {
+  return isCanonicalText(value) && !value.startsWith(WORKFLOW_NODE_TRANSPORT_PREFIX);
 }
 
 export function requireCanonicalTurnScopeId(value) {
-  if (typeof value === "string" && isCanonicalTurnScopeId(value) && value === text(value)) {
-    return value;
-  }
-  const error = new TypeError(`invalid turnScopeId: "${text(value)}"`);
+  if (isCanonicalTurnScopeId(value)) return value;
+  const error = new TypeError(`invalid turnScopeId: "${String(value)}"`);
   error.code = "TURN_SCOPE_ID_INVALID";
   throw error;
 }
