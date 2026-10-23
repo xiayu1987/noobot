@@ -4,45 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 import { findRecoverableReconnectSessionId } from "../../model/reconnectReplayModel.js";
-import { _trimStr } from "./utils.js";
-import { normalizeTurnMeta } from "../../model/messageIdentity.js";
-import {
-  isPendingInteractionReplay,
-  readProtocolEventReducerInput,
-  replayEventTail,
-  validateReplayBatch,
-} from "@noobot/event-protocol";
-import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { projectProtocolEventReducerInput, validateReplayBatch } from "@noobot/event-protocol";
+import { isTerminalTurnState } from "@noobot/session-protocol";
 import {
   logStateMachineDebug,
   summarizeTurnLifecycleSnapshot,
 } from "../../../debug/loggers/stateMachineLogger.js";
-import { isObjectLike } from "@noobot/shared/value";
 
-function hasValidTurnLifecycleSnapshot(sessionEntry = {}) {
-  const snapshot = sessionEntry?.replayBatch?.snapshot?.payload;
-  return Boolean(
-    snapshot && typeof snapshot === "object" && validateTurnLifecycleSnapshot(snapshot).valid,
-  );
+function hasTurnSnapshot(sessionEntry) {
+  return sessionEntry.replayBatch.snapshot !== null;
 }
 
-function resolveAuthoritativeActiveTurn(sessionEntry = {}) {
-  const sessionId = _trimStr(sessionEntry?.sessionId);
-  const authoritativeRun = sessionEntry?.replayBatch?.snapshot?.payload?.activeTurn;
-  const authoritativeRunMeta = normalizeTurnMeta({ ...authoritativeRun, sessionId });
-  const hasConsistentAuthoritativeRun =
-    _trimStr(authoritativeRunMeta.sessionId) === sessionId &&
-    Boolean(_trimStr(authoritativeRunMeta.turnScopeId));
-  if (hasConsistentAuthoritativeRun) {
-    return {
-      ...authoritativeRun,
-      authoritativeSnapshot: true,
-      sessionId: authoritativeRunMeta.sessionId,
-      dialogProcessId: authoritativeRunMeta.dialogProcessId,
-      turnScopeId: authoritativeRunMeta.turnScopeId,
-    };
-  }
-  return null;
+function readSnapshotActiveTurn(sessionEntry) {
+  if (!hasTurnSnapshot(sessionEntry)) return null;
+  return sessionEntry.replayBatch.snapshot.payload.activeTurn;
+}
+
+function readRunningActiveTurn(sessionEntry) {
+  const activeTurn = readSnapshotActiveTurn(sessionEntry);
+  if (activeTurn === null || isTerminalTurnState(activeTurn.state)) return null;
+  return activeTurn;
 }
 
 function isInvalidReplaySession(sessionEntry) {
@@ -58,28 +39,23 @@ function partitionReconnectSessions(reconnectData) {
   return { receivedSessions, invalidSessions, reconnectSessions };
 }
 
-function readReplayEvents(sessionEntry) {
-  const events = sessionEntry?.replayBatch?.events;
-  return Array.isArray(events) ? events : [];
-}
-
 function logReconnectPlan({ receivedSessions, invalidSessions, reconnectSessions }) {
   logStateMachineDebug("stateMachine.reconnect.data.planned", () => ({
     receivedSessionCount: receivedSessions.length,
     validSessionCount: reconnectSessions.length,
     invalidSessionCount: invalidSessions.length,
     lifecycleEventCount: reconnectSessions.reduce(
-      (count, sessionEntry) => count + readReplayEvents(sessionEntry).length,
+      (count, sessionEntry) => count + sessionEntry.replayBatch.events.length,
       0,
     ),
-    lifecycleSnapshotCount: reconnectSessions.filter(hasValidTurnLifecycleSnapshot).length,
+    lifecycleSnapshotCount: reconnectSessions.filter(hasTurnSnapshot).length,
   }));
 }
 
 async function reconcileInvalidSessions(invalidSessions, reconcileSessionState) {
   for (const sessionEntry of invalidSessions) {
-    await reconcileSessionState?.({
-      sessionId: _trimStr(sessionEntry?.sessionId),
+    await reconcileSessionState({
+      sessionId: sessionEntry.sessionId,
       reason: "invalid_replay_batch",
     });
   }
@@ -87,64 +63,46 @@ async function reconcileInvalidSessions(invalidSessions, reconcileSessionState) 
 
 function applyReplaySnapshots(reconnectSessions, applyTurnLifecycleSnapshot) {
   for (const sessionEntry of reconnectSessions) {
-    const snapshot = sessionEntry?.replayBatch?.snapshot?.payload;
-    if (!isObjectLike(snapshot)) continue;
+    if (!hasTurnSnapshot(sessionEntry)) continue;
+    const snapshot = sessionEntry.replayBatch.snapshot.payload;
     logStateMachineDebug("stateMachine.reconnect.snapshot.received", () => ({
       ...summarizeTurnLifecycleSnapshot(snapshot),
     }));
-    const result = applyTurnLifecycleSnapshot?.(snapshot);
+    const result = applyTurnLifecycleSnapshot(snapshot);
     logStateMachineDebug("stateMachine.reconnect.snapshot.applied", () => ({
       ...summarizeTurnLifecycleSnapshot(snapshot),
-      applied: result?.applied === true,
-      reason: result?.reason || "",
-      errorCount: Array.isArray(result?.errors) ? result.errors.length : 0,
+      applied: result.applied,
+      reason: result.reason,
     }));
   }
 }
 
 function summarizeLifecycleReplayResults(results) {
+  const rejected = results.filter((result) => result.applied !== true);
   return {
-    appliedCount: results.filter((result) => result?.applied === true).length,
-    rejectedCount: results.filter((result) => result?.applied === false).length,
-    reasons: [...new Set(results.map((result) => String(result?.reason || "")).filter(Boolean))],
+    appliedCount: results.length - rejected.length,
+    rejectedCount: rejected.length,
+    reasons: [...new Set(rejected.map((result) => result.reason))],
   };
 }
 
 async function applyLifecycleEvents(lifecycleEvents, applyTurnLifecycleEnvelope) {
   const results = [];
   for (const envelope of lifecycleEvents) {
-    const result = await applyTurnLifecycleEnvelope?.(envelope);
-    results.push(Array.isArray(result) ? result[0] : result);
+    results.push(await applyTurnLifecycleEnvelope(projectProtocolEventReducerInput(envelope)));
   }
   return results;
 }
 
-async function replaySessionEventTail(sessionEntry, callbacks) {
-  const { reconcileSessionState, applyTurnLifecycleEnvelope } = callbacks;
-  const snapshotSequence = Number(sessionEntry?.replayBatch?.snapshotSequence || 0);
-  const lifecycleEvents = readReplayEvents(sessionEntry);
-  const replayResult = replayEventTail({
-    snapshotSequence,
-    orderingDomain: sessionEntry.replayBatch.ordering.domain,
-    orderingScopeId: sessionEntry.replayBatch.ordering.scopeId,
-    events: lifecycleEvents,
-    apply: () => {},
-  });
-  if (!replayResult.applied) {
-    await reconcileSessionState?.({
-      sessionId: _trimStr(sessionEntry?.sessionId),
-      reason: replayResult.reason,
-    });
-    return;
-  }
+async function replaySessionEventTail(sessionEntry, applyTurnLifecycleEnvelope) {
+  const { sessionId, snapshotSequence, events: lifecycleEvents } = sessionEntry.replayBatch;
   if (!lifecycleEvents.length) return;
-  const sessionId = _trimStr(sessionEntry?.sessionId);
   logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.before", () => ({
     sessionId,
     snapshotSequence,
     eventCount: lifecycleEvents.length,
-    firstSequence: Number(lifecycleEvents[0]?.ordering?.sequence || 0),
-    lastSequence: Number(lifecycleEvents.at(-1)?.ordering?.sequence || 0),
+    firstSequence: lifecycleEvents[0].ordering.sequence,
+    lastSequence: lifecycleEvents.at(-1).ordering.sequence,
   }));
   const results = await applyLifecycleEvents(lifecycleEvents, applyTurnLifecycleEnvelope);
   logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.after", () => ({
@@ -168,62 +126,48 @@ async function activateRecoverableSession(recoverableSessionId, callbacks) {
   }));
 }
 
-function isActiveAuthoritativeTurn(authoritativeActiveTurn) {
-  return Boolean(
-    authoritativeActiveTurn &&
-    authoritativeActiveTurn.state &&
-    !["completed", "stop_completed"].includes(authoritativeActiveTurn.state),
-  );
-}
-
 async function hydrateActiveSession(sessionEntry, callbacks) {
   const { isCurrentActiveSession, hydrateActiveSessionBeforeReplay } = callbacks;
-  const sessionId = _trimStr(sessionEntry?.sessionId);
-  if (!sessionId) return;
-  const authoritativeActiveTurn = resolveAuthoritativeActiveTurn(sessionEntry);
-  const authoritativeActiveTurnMeta = normalizeTurnMeta(authoritativeActiveTurn || {});
-  const hasAuthoritativeActiveTurn = isActiveAuthoritativeTurn(authoritativeActiveTurn);
-  if (!hasAuthoritativeActiveTurn || !isCurrentActiveSession(sessionId)) return;
+  const { sessionId } = sessionEntry.replayBatch;
+  const activeTurn = readRunningActiveTurn(sessionEntry);
+  if (activeTurn === null || !isCurrentActiveSession(sessionId)) return;
   logStateMachineDebug("stateMachine.reconnect.hydration.before", () => ({
     sessionId,
-    turnScopeId: authoritativeActiveTurnMeta.turnScopeId,
-    hasAuthoritativeActiveTurn,
+    turnScopeId: activeTurn.turnScopeId,
   }));
-  const hydrated = await hydrateActiveSessionBeforeReplay?.(sessionId, authoritativeActiveTurn);
+  const hydrated = await hydrateActiveSessionBeforeReplay(sessionId, activeTurn);
   logStateMachineDebug("stateMachine.reconnect.hydration.after", () => ({
     sessionId,
-    turnScopeId: authoritativeActiveTurnMeta.turnScopeId,
+    turnScopeId: activeTurn.turnScopeId,
     hydrated: hydrated === true,
   }));
 }
 
 async function replayPendingInteractions(sessionEntry, applyPendingInteraction) {
-  const channelSessionId = _trimStr(sessionEntry?.sessionId);
-  for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
-    if (!isPendingInteractionReplay(interaction)) continue;
-    const reducerInput = readProtocolEventReducerInput(interaction);
-    if (reducerInput.valid) {
-      await applyPendingInteraction?.(reducerInput.input, { channelSessionId });
-    }
+  const channelSessionId = sessionEntry.replayBatch.sessionId;
+  for (const interaction of sessionEntry.replayBatch.pendingInteractions) {
+    await applyPendingInteraction(projectProtocolEventReducerInput(interaction), {
+      channelSessionId,
+    });
   }
 }
 
 function logReconnectComplete(partition, recoverableSessionId) {
   const { receivedSessions, invalidSessions, reconnectSessions } = partition;
   const recoverableSessionEntry = reconnectSessions.find(
-    (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
+    (sessionEntry) => sessionEntry.replayBatch.sessionId === recoverableSessionId,
   );
+  const recoverableTurn = recoverableSessionEntry
+    ? readSnapshotActiveTurn(recoverableSessionEntry)
+    : null;
   logStateMachineDebug("stateMachine.reconnect.transaction.complete", () => ({
     sessionId: recoverableSessionId,
     receivedSessionCount: receivedSessions.length,
     validSessionCount: reconnectSessions.length,
     invalidSessionCount: invalidSessions.length,
     recoverableSessionId,
-    recoverableTurnScopeId: normalizeTurnMeta(
-      resolveAuthoritativeActiveTurn(recoverableSessionEntry) || {},
-    ).turnScopeId,
-    authoritativeSnapshotReceivedCount: reconnectSessions.filter(hasValidTurnLifecycleSnapshot)
-      .length,
+    recoverableTurnScopeId: recoverableTurn === null ? null : recoverableTurn.turnScopeId,
+    authoritativeSnapshotReceivedCount: reconnectSessions.filter(hasTurnSnapshot).length,
   }));
 }
 
@@ -236,17 +180,14 @@ export async function applyReconnectDataReplay({
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
   applyPendingInteraction,
-} = {}) {
+}) {
   const partition = partitionReconnectSessions(reconnectData);
   const { invalidSessions, reconnectSessions } = partition;
   logReconnectPlan(partition);
   await reconcileInvalidSessions(invalidSessions, reconcileSessionState);
   applyReplaySnapshots(reconnectSessions, applyTurnLifecycleSnapshot);
   for (const sessionEntry of reconnectSessions) {
-    await replaySessionEventTail(sessionEntry, {
-      reconcileSessionState,
-      applyTurnLifecycleEnvelope,
-    });
+    await replaySessionEventTail(sessionEntry, applyTurnLifecycleEnvelope);
   }
   const recoverableSessionId = findRecoverableReconnectSessionId(
     reconnectSessions,

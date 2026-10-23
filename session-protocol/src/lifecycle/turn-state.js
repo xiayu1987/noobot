@@ -51,8 +51,8 @@ const terminalStates = new Set(TURN_TERMINAL_STATES);
 const failedStates = new Set(TURN_FAILED_STATES);
 const finalizeFailureStates = new Set(TURN_FINALIZE_FAILURE_STATES);
 
-export function isTerminalTurnState(state = "") {
-  return terminalStates.has(text(state));
+export function isTerminalTurnState(state) {
+  return terminalStates.has(state);
 }
 
 export function isFailedTurnState(state = "") {

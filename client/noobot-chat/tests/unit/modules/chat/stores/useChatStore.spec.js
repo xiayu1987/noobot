@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
+import { normalizeTurnTransportEnvelope } from "../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 import { canonicalWorkflowNodeStateEvent } from "../helpers/workflowRuntimeEventFixture.js";
 import {
   applyMessageEvent,
@@ -279,23 +280,19 @@ describe("useChatStore sub session projection", () => {
     ]);
   });
 
-  it("rejects a message-event cursor declared for another message scope", () => {
-    const store = useChatStore();
-    const result = applyMessageEvent(
-      store,
-      createSubSessionEvent({
-        sequenceDomain: "message-event",
-        sequenceScopeId: "different-message",
-        content: "must not apply",
-      }),
-    );
-
-    expect(result).toMatchObject({
-      applied: false,
-      reason: "invalid_authoritative_message_event",
-      errors: ["sequence_scope_mismatch"],
+  it("rejects a message-event cursor declared for another message scope at the transport entry", () => {
+    const invalid = createSubSessionEvent({
+      sequenceDomain: "message-event",
+      sequenceScopeId: "different-message",
+      content: "must not apply",
     });
-    expect(store.selectSubSessionMessages("sub-session-1")).toBeNull();
+    const normalized = normalizeTurnTransportEnvelope({
+      event: invalid.identity.eventType,
+      data: invalid,
+    });
+
+    expect(normalized.protocolEnvelope).toBeNull();
+    expect(normalized.rejected).toEqual({ errors: ["sequence_scope_mismatch"] });
   });
 
   it("does not treat an unscoped snapshot sequence as message-event ordering", () => {

@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { config } from "../../../shared/config.js";
-import { createReplayBatch, isPendingInteractionReplay } from "@noobot/event-protocol";
+import { createReplayBatch } from "@noobot/event-protocol";
 import {
   createTurnFinalizeCommand,
   createTurnSnapshotCommand,
@@ -31,18 +31,11 @@ export function groupReconnectChannels(manager, channelKeys) {
 }
 
 function collectPendingInteractions(channels) {
-  return channels.flatMap((channel) =>
-    Array.from(channel?.pendingInteractionRequests?.values?.() || []).filter((envelope) =>
-      isPendingInteractionReplay(envelope),
-    ),
-  );
+  return channels.flatMap((channel) => Array.from(channel.pendingInteractionRequests.values()));
 }
 
 function selectSnapshotChannel(channels) {
-  return channels
-    .filter(Boolean)
-    .sort((left, right) => Number(right?.updatedAtMs || 0) - Number(left?.updatedAtMs || 0))
-    .at(0);
+  return channels.toSorted((left, right) => right.updatedAtMs - left.updatedAtMs).at(0);
 }
 
 function pendingSnapshot(channel) {
@@ -142,8 +135,7 @@ function createSessionReplay(manager, sessionId, channels, knownSequence) {
   const pendingInteractions = collectPendingInteractions(channels);
   const replayBatch = createReplayBatch({
     sessionId,
-    orderingDomain: "session",
-    orderingScopeId: sessionId,
+    snapshot: null,
     snapshotSequence: knownSequence,
     events: lifecycleReplay.events,
     pendingInteractions,
@@ -199,9 +191,9 @@ export function logPreparedAuthorityBatches(manager, sessions, channelsBySession
       sessionId: sessionEntry.sessionId,
       data: {
         sessionId: sessionEntry.sessionId,
-        snapshotSequence: Number(sessionEntry.replayBatch?.snapshotSequence || 0),
-        lifecycleTailCount: sessionEntry.replayBatch?.events?.length || 0,
-        pendingInteractionCount: sessionEntry.replayBatch?.pendingInteractions?.length || 0,
+        snapshotSequence: sessionEntry.replayBatch.snapshotSequence,
+        lifecycleTailCount: sessionEntry.replayBatch.events.length,
+        pendingInteractionCount: sessionEntry.replayBatch.pendingInteractions.length,
         excludedDataPlaneEventCount: sessionChannels.reduce(
           (count, channel) => count + channel.eventJournal.events.length,
           0,

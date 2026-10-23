@@ -264,7 +264,7 @@ test("ChannelManager channel logs reject caller-supplied session identity", () =
   }
 });
 
-test("ChannelManager logs rejected frames on the channel with the claimed frame identity", () => {
+test("ChannelManager reports an unlocatable invalid upstream frame on the channel log", () => {
   const records = [];
   const manager = new ChannelManager(
     { OPEN: 1 },
@@ -277,19 +277,27 @@ test("ChannelManager logs rejected frames on the channel with the claimed frame 
   );
   records.length = 0;
 
-  const result = manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, {
-    identity: { sessionId: "claimed-session", turnScopeId: "claimed-turn" },
-    payload: { dialogProcessId: "claimed-dialog" },
+  const rawData = JSON.stringify({
+    event: MESSAGE_EVENT_WIRE_EVENT,
+    data: {
+      identity: { sessionId: "claimed-session", turnScopeId: "claimed-turn" },
+      payload: { dialogProcessId: "claimed-dialog" },
+    },
   });
+  let entryError = null;
+  try {
+    manager.handleUpstreamMessage(channel, rawData);
+  } catch (error) {
+    entryError = error;
+  }
+  assert.ok(entryError instanceof TypeError);
+  assert.equal(channel.eventJournal.events.length, 0);
+  assert.equal(records.length, 0);
 
-  assert.equal(result, null);
-  assert.equal(records.length, 1);
-  assert.equal(records[0].event.event, "agentProxy.channelEvent.rejected");
-  assert.equal(records[0].event.sessionId, "session-1");
-  assert.equal(records[0].event.turnScopeId, "");
-  assert.deepEqual(records[0].event.data.frameIdentity, {
-    sessionId: "claimed-session",
-    dialogProcessId: "claimed-dialog",
-    turnScopeId: "claimed-turn",
-  });
+  manager.reportUpstreamMessageError(channel, entryError);
+
+  const reported = records.find((item) => item.event.event === "agentProxy.upstream.message.error");
+  assert.ok(reported);
+  assert.equal(reported.event.sessionId, "session-1");
+  assert.equal(reported.event.data.error, entryError.message);
 });

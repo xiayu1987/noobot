@@ -57,6 +57,23 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(action.match({ channelState: { state: "running" } })).toBe(false);
   });
 
+  it("treats every channel/frontend terminal run state as terminal without an outcome", () => {
+    const action = getMonotonicAction();
+    for (const state of [
+      "completed",
+      "error",
+      "expired",
+      "no_conversation",
+      "cancelled",
+      "frontend_completed",
+      "frontend_user_stop_completed",
+      "frontend_processing_error",
+    ])
+      expect(action.match({ channelState: { state } })).toBe(true);
+    for (const state of ["sending", "stopping", "stop_completed", "processing_failed", "aborted"])
+      expect(action.match({ channelState: { state } })).toBe(false);
+  });
+
   it("ignores message fields that have no runtime writer", () => {
     const action = getMonotonicAction();
 

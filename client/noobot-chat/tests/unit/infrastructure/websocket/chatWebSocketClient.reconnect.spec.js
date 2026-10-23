@@ -9,9 +9,13 @@ import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstant
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
 import {
+  createTurnLifecycleEnvelope,
   EXECUTION_QUERY_COMMAND,
   EXECUTION_SNAPSHOT_WIRE_EVENT,
   deriveAgentExecutionId,
+  TURN_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
 } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
@@ -28,6 +32,7 @@ import {
   emitReconnectComplete,
   setupWebSocketTestHooks,
   streamCommand,
+  turnLifecycleProtocolEvent,
 } from "./chatWebSocketClientTestFixtures.js";
 
 setupWebSocketTestHooks();
@@ -286,14 +291,21 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     });
     const reconnectRequestId = JSON.parse(socket.sent[1]).requestId;
 
-    socket.emitChannel("s-overlap", StreamEventEnum.TURN_LIFECYCLE, {
-      eventId: "lifecycle-overlap-1",
-      eventType: "turn.action_accepted",
-      sessionId: "s-overlap",
-      turnScopeId: "turn-overlap",
-      revision: 1,
-      sequence: 1,
-    });
+    const overlapLifecycle = turnLifecycleProtocolEvent(
+      createTurnLifecycleEnvelope({
+        eventType: TURN_EVENT.ACTION_ACCEPTED,
+        eventId: "lifecycle-overlap-1",
+        commandId: "turn-overlap",
+        sessionId: "s-overlap",
+        turnScopeId: "turn-overlap",
+        presentationMessageId: "presentation-overlap",
+        revision: 1,
+        sequence: 1,
+        phase: TURN_PHASE.ACTION,
+        state: TURN_STATE.ACTION_REQUESTING,
+      }),
+    );
+    socket.emitChannel("s-overlap", StreamEventEnum.TURN_LIFECYCLE, overlapLifecycle);
     const overlapMessage = messageEvent({
       eventId: "overlap-message",
       sessionId: "s-overlap",
@@ -305,7 +317,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     expect(onStreamEvent).toHaveBeenCalledWith({
       event: StreamEventEnum.TURN_LIFECYCLE,
       channelSessionId: "s-overlap",
-      data: expect.objectContaining({ eventType: "turn.action_accepted" }),
+      data: overlapLifecycle,
     });
     expect(onStreamEvent).toHaveBeenCalledWith({
       event: MESSAGE_EVENT_WIRE_EVENT,

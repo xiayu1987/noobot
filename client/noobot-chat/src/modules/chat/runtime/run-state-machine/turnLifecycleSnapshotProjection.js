@@ -3,13 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isAuthoritativeTerminalState } from "./constants.js";
 import { isFinalTurnState } from "./turnReducer.js";
 import {
   projectAuthoritativeTurnState,
   projectAuthoritativeTurnTerminal,
 } from "./authoritativeTurnProjection.js";
-import { deriveTurnEventType } from "@noobot/session-protocol";
+import { deriveTurnEventType, isTerminalTurnState } from "@noobot/session-protocol";
 import {
   canonicalTurnScopeId as turnKey,
   ensureSessionBucket,
@@ -46,7 +45,7 @@ function snapshotTurnDecision(registry, bucket, source, sessionId, sequence) {
     eventType,
     revision,
     state,
-    sourceIsTerminal: isAuthoritativeTerminalState(source.state),
+    sourceIsTerminal: isTerminalTurnState(source.state),
     turnScopeId,
   };
 }
@@ -175,9 +174,7 @@ function commitSnapshotMetadata(registry, bucket, snapshot, sessionId, sequence,
   })
     ? ""
     : candidateActiveScope;
-  bucket.activeTurnScopeId = isAuthoritativeTerminalState(text(snapshot.activeTurn?.state))
-    ? ""
-    : activeScope;
+  bucket.activeTurnScopeId = isTerminalTurnState(snapshot.activeTurn?.state) ? "" : activeScope;
   if (!bucket.activeTurnScopeId && previousActiveTurnScopeId) {
     const previous = bucket.turns[previousActiveTurnScopeId];
     if (previous?.dialogProcessId) delete registry.routeIndex[previous.dialogProcessId];

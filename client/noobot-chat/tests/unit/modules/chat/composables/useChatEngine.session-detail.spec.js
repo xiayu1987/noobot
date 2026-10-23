@@ -322,6 +322,7 @@ describe("useChatEngine.session-detail", () => {
         resolved: true,
         aggregateVersion: 1,
         turn: {
+          sessionId: activeSession.sessionId,
           turnScopeId: freshTurnScopeId,
           dialogProcessId: "dp-stale-stopped",
           state: "stop_completed",

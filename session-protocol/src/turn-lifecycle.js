@@ -235,6 +235,7 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
   ].filter(Boolean);
   for (const turn of turns) {
     errors.push(...collectTurnMaterializationErrors(turn));
+    if (turn.sessionId !== snapshot.sessionId) errors.push("turn_session_identity_mismatch");
     if (
       Number.isInteger(Number(turn.sequence)) &&
       Number(turn.sequence) >= 1 &&

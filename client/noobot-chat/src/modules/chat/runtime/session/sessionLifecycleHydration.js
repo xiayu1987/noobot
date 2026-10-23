@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { watch } from "vue";
+import { isTerminalTurnState } from "@noobot/session-protocol";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
-import { isLegacyTerminalDiscoveryState } from "../run-state-machine/constants.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 export function installSessionLifecycleHydration({
@@ -44,15 +44,12 @@ export function installSessionLifecycleHydration({
     if (isObjectLike(snapshot)) {
       const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
       const activeTurn = snapshot.activeTurn;
-      const activeTurnState = text(activeTurn?.state).toLowerCase();
-      const activeTurnScopeId = text(activeTurn?.turnScopeId || snapshot.activeTurnScopeId);
-      const isTerminal = isLegacyTerminalDiscoveryState(activeTurnState);
 
-      if (result?.applied === true && activeTurn && activeTurnScopeId && !isTerminal) {
-        scheduleTerminalResolution?.(sessionId, activeTurnScopeId, {
+      if (result.applied === true && activeTurn && !isTerminalTurnState(activeTurn.state)) {
+        scheduleTerminalResolution(sessionId, activeTurn.turnScopeId, {
           source: "authoritative_active_turn_hydration",
-          revision: activeTurn.revision ?? snapshot.revision,
-          sequence: activeTurn.sequence ?? snapshot.sequence,
+          revision: activeTurn.revision,
+          sequence: activeTurn.sequence,
           state: activeTurn.state,
           phase: activeTurn.phase,
           executionState: activeTurn.executionState,

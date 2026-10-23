@@ -11,6 +11,7 @@ import {
 } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { setThinkingReplayDebugLogSink } from "../../../../../../src/modules/debug/loggers/thinkingReplayDebugLogger.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { normalizeTurnTransportEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
 const message = () => ({ ...identity, id: "message-1", messageId: "message-1", content: "" });
@@ -127,7 +128,6 @@ describe("turnProjectionStore convergence", () => {
           sequenceDomain: "message-event",
           sequenceScopeId: "message-1",
           authority: "authoritative",
-          textLength: 8,
           eventTimestamp: "2026-01-01T00:00:00.000Z",
           reducerObservedAt: expect.any(String),
           sourceToReducerLatencyMs: expect.any(Number),
@@ -158,25 +158,20 @@ describe("turnProjectionStore convergence", () => {
     expect(result.turnKey).toBeTruthy();
   });
 
-  it("rejects an invalid presentation identity before buffering sequence state", () => {
-    const target = message();
-    const result = dispatchTurnEnvelope({
-      targetMessage: target,
-      envelope: envelope({
-        presentationMessageId: "",
-        eventId: "invalid-presentation",
-        eventType: "llm_delta",
-        sequence: 3,
-        text: "must not buffer",
-      }),
-      source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
+  it("rejects an invalid presentation identity at the transport entry", () => {
+    const invalid = envelope({
+      presentationMessageId: "",
+      eventId: "invalid-presentation",
+      eventType: "llm_delta",
+      sequence: 3,
+      text: "must not buffer",
     });
-    expect(result).toMatchObject({
-      applied: false,
-      result: "invalid",
-      reason: "invalid_message_event_envelope",
+    const normalized = normalizeTurnTransportEnvelope({
+      event: invalid.identity.eventType,
+      data: invalid,
     });
-    expect(target).not.toHaveProperty("messageEventState");
+    expect(normalized.protocolEnvelope).toBeNull();
+    expect(normalized.rejected).toEqual({ errors: ["missing_ordering_scope"] });
   });
 
   it("converges for live, snapshot plus reconnect increment, and full history replay", () => {

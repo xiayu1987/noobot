@@ -9,6 +9,7 @@ export * from "./replay-batch.js";
 export * from "./event-registry.js";
 export * from "./interaction.js";
 export * from "./turn-snapshot.js";
+export * from "./turn-lifecycle-event.js";
 export * from "./execution-query.js";
 export * from "./tool-presentation.js";
 export * from "./tool-timeline.js";

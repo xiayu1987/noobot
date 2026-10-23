@@ -17,7 +17,6 @@ import {
   createTurnLifecycleReceipt,
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
-  validateTurnLifecycleEnvelope,
 } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
@@ -160,13 +159,9 @@ export function createChatWebSocketClient({
     return transport.current();
   }
 
-  function logLifecycleReceipt(ws, data = {}, outcome = {}) {
+  function logLifecycleReceipt(ws, identity, outcome) {
     logTransportDiagnostics("frontend.websocket.lifecycleReceipt", () => ({
-      sessionId: normalizeTrimmedString(data?.sessionId),
-      dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
-      turnScopeId: normalizeTrimmedString(data?.turnScopeId),
-      eventId: normalizeTrimmedString(data?.eventId),
-      eventType: normalizeTrimmedString(data?.eventType),
+      ...identity,
       readyState: Number.isInteger(ws?.readyState) ? ws.readyState : null,
       bufferedAmount: Number.isFinite(ws?.bufferedAmount) ? ws.bufferedAmount : null,
       isCurrentTransport: Boolean(ws) && ws === transport.current(),
@@ -174,18 +169,51 @@ export function createChatWebSocketClient({
     }));
   }
 
-  function acknowledgeTurnLifecycleReceipt(ws, event, data = {}) {
-    if (event !== TURN_LIFECYCLE_WIRE_EVENT) return;
-    const validation = validateTurnLifecycleEnvelope(data);
-    if (!validation.valid) {
-      logLifecycleReceipt(ws, data, { result: "rejected", reasons: validation.errors });
-      return;
+  function lifecycleReceiptIdentity(lifecycle) {
+    return {
+      sessionId: lifecycle.sessionId,
+      dialogProcessId: lifecycle.dialogProcessId,
+      turnScopeId: lifecycle.turnScopeId,
+      eventId: lifecycle.eventId,
+      eventType: lifecycle.eventType,
+    };
+  }
+
+  function rejectTurnLifecycleFrame(ws, envelope, errors) {
+    logLifecycleReceipt(
+      ws,
+      {
+        sessionId: envelope.identity.sessionId,
+        turnScopeId: envelope.identity.turnScopeId,
+        eventId: envelope.identity.eventId,
+      },
+      { result: "rejected", reasons: errors },
+    );
+  }
+
+  function admitTurnLifecycleFrame(ws, transportEvent) {
+    if (transportEvent.event !== TURN_LIFECYCLE_WIRE_EVENT) {
+      return { admitted: true, lifecycle: null };
     }
+    const read = readProtocolEventPayload(transportEvent.data, {
+      wireEvent: TURN_LIFECYCLE_WIRE_EVENT,
+      family: EVENT_FAMILY.TURN_LIFECYCLE,
+    });
+    if (!read.valid) {
+      rejectTurnLifecycleFrame(ws, transportEvent.data, read.errors);
+      return { admitted: false, lifecycle: null };
+    }
+    return { admitted: true, lifecycle: read.payload };
+  }
+
+  function acknowledgeTurnLifecycleReceipt(ws, lifecycle) {
+    if (lifecycle === null) return;
+    const identity = lifecycleReceiptIdentity(lifecycle);
     try {
-      ws.send(JSON.stringify(createTurnLifecycleReceipt(data)));
-      logLifecycleReceipt(ws, data, { result: "sent" });
+      ws.send(JSON.stringify(createTurnLifecycleReceipt(lifecycle)));
+      logLifecycleReceipt(ws, identity, { result: "sent" });
     } catch (error) {
-      logLifecycleReceipt(ws, data, {
+      logLifecycleReceipt(ws, identity, {
         result: "send_failed",
         errorType: normalizeTrimmedString(error?.name || "Error"),
         errorMessage: normalizeTrimmedString(error?.message),
@@ -209,27 +237,19 @@ export function createChatWebSocketClient({
         let parsedData = {};
         try {
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
-          const receivedTransportEvent = parseAgentTransportFrame(parsed);
-          const lifecyclePayload =
-            receivedTransportEvent.event === TURN_LIFECYCLE_WIRE_EVENT
-              ? readProtocolEventPayload(receivedTransportEvent.data, {
-                  wireEvent: TURN_LIFECYCLE_WIRE_EVENT,
-                  family: EVENT_FAMILY.TURN_LIFECYCLE,
-                })
-              : null;
-          const transportEvent = receivedTransportEvent;
-          const { event, data } = transportEvent;
-          const lifecycleData = lifecyclePayload?.valid ? lifecyclePayload.payload : data;
-          const { channelSessionId } = transportEvent;
+          const transportEvent = parseAgentTransportFrame(parsed);
+          const admission = admitTurnLifecycleFrame(ws, transportEvent);
+          if (!admission.admitted) return;
+          const lifecycleData = admission.lifecycle;
+          const { event, data, channelSessionId } = transportEvent;
           parsedEvent = event;
           parsedData = data;
           const hasLiveSubscriber = isFunction(liveEventSubscriber);
-          const observedData = receivedTransportEvent.data;
           logTransportDiagnostics("frontend.websocket.transportEventReceived", () => ({
-            ...summarizeReceivedEventData(observedData),
+            ...summarizeReceivedEventData(data),
             protocolEvent: event,
             transportSequence: null,
-            authoritativeSequence: resolveAuthoritativeSequence(observedData),
+            authoritativeSequence: resolveAuthoritativeSequence(data),
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
@@ -258,7 +278,7 @@ export function createChatWebSocketClient({
             activeStreamContext?.payload &&
             isEventForStreamScope(data, activeStreamContext.payload, channelSessionId)
           ) {
-            acknowledgeTurnLifecycleReceipt(ws, event, lifecycleData);
+            acknowledgeTurnLifecycleReceipt(ws, lifecycleData);
             pendingStreamEvents.push(transportEvent);
             return;
           }
@@ -298,7 +318,7 @@ export function createChatWebSocketClient({
               owner,
             }));
 
-            acknowledgeTurnLifecycleReceipt(ws, event, lifecycleData);
+            acknowledgeTurnLifecycleReceipt(ws, lifecycleData);
           }
           if (owner === "reconnect_handler") {
             activeReconnectContext.handleProtocolEvent(transportEvent);

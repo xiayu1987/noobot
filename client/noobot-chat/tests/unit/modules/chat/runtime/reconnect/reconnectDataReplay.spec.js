@@ -13,21 +13,26 @@ import {
   INTERACTION_EVENT_TYPE,
   INTERACTION_SEQUENCE_DOMAIN,
   getEventFamily,
+  createTurnLifecycleEventEnvelope,
 } from "@noobot/event-protocol";
 import {
   createTurnLifecycleEnvelope,
   createTurnLifecycleSnapshot,
   TURN_EVENT,
-  TURN_LIFECYCLE_WIRE_EVENT,
   TURN_STATE,
 } from "@noobot/session-protocol";
+import {
+  applyTurnLifecycleEnvelope,
+  applyTurnLifecycleSnapshot,
+  createTurnRuntimeRegistryState,
+  resolveTurnRuntimeByScope,
+} from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   createReconnectControl,
   createReconnectData,
   validateReconnectData,
 } from "@noobot/agent-transport-protocol";
 
-const REPLAY_ORDERING_DOMAIN = "turn-lifecycle";
 const reconnectControl = createReconnectControl({
   requestId: "reconnect-s-1",
   identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
@@ -71,21 +76,18 @@ function batch({
   sessionId = "s-1",
   turnScopeId = "turn-1",
   sequence = 4,
+  state = TURN_STATE.PROCESSING,
   events = [],
   pendingInteractions = [],
 } = {}) {
-  const baseline = snapshot({ sessionId, turnScopeId, sequence });
+  const baseline = snapshot({ sessionId, turnScopeId, sequence, state });
   return createReplayBatch({
     sessionId,
-    streamId: `stream-${sessionId}`,
-    requestId: `reconnect-${sessionId}`,
     snapshot: createTurnSnapshotEnvelope(baseline, {
       eventId: `snapshot-event-${sessionId}-${sequence}`,
       producer: { type: "test", id: "reconnect-data-replay" },
     }),
     snapshotSequence: sequence,
-    orderingDomain: REPLAY_ORDERING_DOMAIN,
-    orderingScopeId: sessionId,
     events,
     pendingInteractions,
   });
@@ -109,25 +111,8 @@ function lifecycleEvent(sequence) {
     executionState: "sending",
     occurredAt: "2026-01-01T00:00:00.000Z",
   });
-  return createEventEnvelope({
-    family: EVENT_FAMILY.TURN_LIFECYCLE,
-    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-    identity: {
-      eventId: payload.eventId,
-      eventType: TURN_LIFECYCLE_WIRE_EVENT,
-      sessionId: payload.sessionId,
-      turnScopeId: payload.turnScopeId,
-    },
-    causality: { commandId: payload.commandId },
-    ordering: {
-      domain: REPLAY_ORDERING_DOMAIN,
-      scopeId: payload.sessionId,
-      sequence,
-      revision: payload.revision,
-    },
+  return createTurnLifecycleEventEnvelope(payload, {
     producer: { type: "test", id: "reconnect-data-replay" },
-    occurredAt: payload.occurredAt,
-    payload,
   });
 }
 
@@ -212,17 +197,17 @@ describe("applyReconnectDataReplay", () => {
         activeTurnScopeId: baseline.activeTurnScopeId,
       }),
     );
-    expect(f.applyTurnLifecycleEnvelope).toHaveBeenCalledWith(event);
+    expect(f.applyTurnLifecycleEnvelope).toHaveBeenCalledWith(event.payload);
     expect(f.applyTurnLifecycleSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
       f.applyTurnLifecycleEnvelope.mock.invocationCallOrder[0],
     );
   });
 
   it("reconciles a sequence gap and never applies the invalid tail", async () => {
-    const event = lifecycleEvent(7);
+    const replayBatch = { ...batch({ events: [lifecycleEvent(5)] }), events: [lifecycleEvent(7)] };
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: reconnectData([{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }]),
+      reconnectData: reconnectData([{ sessionId: "s-1", replayBatch }]),
       ...f,
     });
     expect(f.reconcileSessionState).toHaveBeenCalledWith({
@@ -230,6 +215,41 @@ describe("applyReconnectDataReplay", () => {
       reason: "invalid_replay_batch",
     });
     expect(f.applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
+  });
+
+  it("does not hydrate a session whose authoritative active turn has failed", async () => {
+    const f = fixture();
+    await applyReconnectDataReplay({
+      reconnectData: reconnectData([
+        { sessionId: "s-1", replayBatch: batch({ state: TURN_STATE.PROCESSING_FAILED }) },
+      ]),
+      ...f,
+    });
+    expect(f.hydrateActiveSessionBeforeReplay).not.toHaveBeenCalled();
+  });
+
+  it("drives the ordered event tail through the real turn runtime reducer", async () => {
+    const registry = createTurnRuntimeRegistryState();
+    const results = [];
+    const f = fixture({
+      applyTurnLifecycleSnapshot: (value) => applyTurnLifecycleSnapshot(registry, value),
+      applyTurnLifecycleEnvelope: async (value) => {
+        const result = applyTurnLifecycleEnvelope(registry, value);
+        results.push(result);
+        return result;
+      },
+    });
+    await applyReconnectDataReplay({
+      reconnectData: reconnectData([
+        { sessionId: "s-1", replayBatch: batch({ events: [lifecycleEvent(5)] }) },
+      ]),
+      ...f,
+    });
+    expect(results.map((result) => result.reason)).not.toContain("invalid_authoritative_envelope");
+    expect(results).toHaveLength(1);
+    expect(resolveTurnRuntimeByScope(registry, "turn-1", { sessionId: "s-1" }).lifecycleSeq).toBe(
+      5,
+    );
   });
 
   it("applies only complete pending interaction records from the batch", async () => {

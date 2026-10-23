@@ -212,9 +212,7 @@ describe("useChatEngine.resend replace turn", () => {
         message.role === RoleEnum.ASSISTANT && /^pm_/.test(message.presentationMessageId),
     );
     expect(canonicalAssistantIndex).toBeGreaterThan(replacementUserIndex);
-    expect(activeSession.value.messages[canonicalAssistantIndex]).not.toHaveProperty(
-      "turnPlaceholder",
-    );
+    expect(activeSession.value.messages[canonicalAssistantIndex].turnPlaceholder).toBe(false);
     expect(input.value).toBe("");
   });
 

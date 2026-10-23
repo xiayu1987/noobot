@@ -113,6 +113,7 @@ export function settleTerminal(
       resolved: true,
       aggregateVersion: 1,
       turn: {
+        sessionId,
         turnScopeId,
         dialogProcessId,
         state,
@@ -134,9 +135,11 @@ export function settleTerminal(
 }
 
 export function snapshot(overrides = {}) {
+  const sessionId = overrides.sessionId ?? "s1";
   const withMessageIdentity = (turn) =>
     turn
       ? {
+          sessionId,
           presentationMessageId: `msg-${turn.turnScopeId}`,
           startedAt: "2026-01-01T00:00:00.000Z",
           ...turn,
@@ -172,7 +175,7 @@ export function snapshot(overrides = {}) {
     recovery: "none",
     commandId: "snapshot-1",
     userId: "u1",
-    sessionId: "s1",
+    sessionId,
     sequence: 2,
     activeTurnScopeId: activeTurn?.turnScopeId || "",
     replacedTurns: [],

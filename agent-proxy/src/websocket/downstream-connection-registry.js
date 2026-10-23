@@ -5,90 +5,57 @@
  */
 
 export class DownstreamConnectionRegistry {
-  constructor({ now = () => Date.now() } = {}) {
+  constructor({ now }) {
     this.now = now;
     this.connections = new Map();
   }
 
-  register(socket, { onFinalize = null } = {}) {
+  register(socket, { onFinalize }) {
     const id = socket.__agentProxySocketId;
-    const existing = this.connections.get(id);
-    if (existing && !existing.finalized) return existing;
-    const record = {
-      connectionId: id,
-      socket,
-      connectedAtMs: this.now(),
-      lastSeenAtMs: this.now(),
-      awaitingPong: false,
-      finalized: false,
-      finalizeReason: "",
-      onFinalize,
-    };
-    this.connections.set(id, record);
-    return record;
+    if (this.connections.has(id)) {
+      throw new TypeError(`downstream connection already registered: ${id}`);
+    }
+    this.connections.set(id, { socket, lastSeenAtMs: this.now(), awaitingPong: false, onFinalize });
   }
 
-  touch(socketOrId) {
-    const record = this.resolve(socketOrId);
-    if (!record || record.finalized) return false;
+  touch(socket) {
+    const record = this.connections.get(socket.__agentProxySocketId);
+    if (!record) return false;
     record.lastSeenAtMs = this.now();
     record.awaitingPong = false;
     return true;
   }
 
-  finalize(socketOrId, reason = "closed") {
-    const record = this.resolve(socketOrId);
-    if (!record || record.finalized) return false;
-    record.finalized = true;
-    record.finalizeReason = reason;
-    this.connections.delete(record.connectionId);
-    record.onFinalize?.(record);
+  finalize(socket, reason) {
+    const id = socket.__agentProxySocketId;
+    const record = this.connections.get(id);
+    if (!record) return false;
+    this.connections.delete(id);
+    record.onFinalize(reason);
     return true;
   }
 
-  close(
-    socketOrId,
-    { code = 1000, reason = "closed", terminate = false, finalizeReason = reason } = {},
-  ) {
-    const record = this.resolve(socketOrId);
-    if (!record || record.finalized) return false;
-    try {
-      if (terminate && typeof record.socket?.terminate === "function") {
-        record.socket.terminate();
-      } else {
-        record.socket?.close?.(code, reason);
-      }
-    } catch {
-      try {
-        record.socket?.terminate?.();
-      } catch (error) {
-        console.warn("[agent-proxy] socket terminate failed", error);
-      }
-    }
-    this.finalize(record.connectionId, finalizeReason);
-    return true;
+  close(socket, { code, reason }) {
+    if (!this.connections.has(socket.__agentProxySocketId)) return false;
+    socket.close(code, reason);
+    return this.finalize(socket, reason);
   }
 
-  resolve(socketOrId) {
-    if (!socketOrId) return null;
-    if (typeof socketOrId === "string") return this.connections.get(socketOrId) || null;
-    return this.connections.get(socketOrId.__agentProxySocketId) || null;
+  terminate(socket, reason) {
+    if (!this.connections.has(socket.__agentProxySocketId)) return false;
+    socket.terminate();
+    return this.finalize(socket, reason);
   }
 
-  sweepHeartbeat({ timeoutMs = 0, onTimeout = null } = {}) {
+  sweepHeartbeat({ timeoutMs, onTimeout }) {
     const nowMs = this.now();
     for (const record of [...this.connections.values()]) {
-      if (record.finalized) continue;
-      if (record.awaitingPong && timeoutMs > 0 && nowMs - record.lastSeenAtMs >= timeoutMs) {
-        onTimeout?.(record);
+      if (record.awaitingPong && nowMs - record.lastSeenAtMs >= timeoutMs) {
+        onTimeout(record.socket);
         continue;
       }
       record.awaitingPong = true;
-      try {
-        record.socket?.ping?.();
-      } catch {
-        onTimeout?.(record);
-      }
+      record.socket.ping();
     }
   }
 

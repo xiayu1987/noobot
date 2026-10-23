@@ -275,6 +275,7 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
     clearPendingInteraction,
     setPendingInteractionRequest,
     isInteractionRequestHandled: vi.fn(() => false),
+    sessionLogWebSocketClient: { log: vi.fn() },
     turnRuntimeRegistry,
     applyWorkflowRuntimeEvent,
     reduceSubSessionMessageEvent,

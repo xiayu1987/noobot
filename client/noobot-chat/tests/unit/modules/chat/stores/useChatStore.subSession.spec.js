@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
+import { normalizeTurnTransportEnvelope } from "../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 import { createTurnLifecycleEnvelope, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { canonicalMessageEvent } from "../helpers/messageEventFixture.js";
 import {
@@ -471,6 +472,7 @@ describe("sub-session realtime message projection", () => {
           sequence: 2,
           recentTerminalTurns: [
             {
+              sessionId,
               turnScopeId: "workflow-node:node-1",
               presentationMessageId: "message-1",
               dialogProcessId: "dialog-1",
@@ -566,25 +568,16 @@ describe("sub-session realtime message projection", () => {
     expect(store.selectSubSessionMessages("new-child")).toBeTruthy();
   });
 
-  it("rejects events without complete workflow identity before projection", () => {
-    const store = useChatStore();
+  it("rejects events without complete workflow identity at the transport entry", () => {
     const identity = { sessionId: "child-session", turnScopeId: "workflow-node:execution-1" };
-    const missingNode = messageEvent("turn_presentation_committed", {
-      ...identity,
-      nodeExecutionId: undefined,
-    });
+    const admit = (envelope) =>
+      normalizeTurnTransportEnvelope({ event: envelope.identity.eventType, data: envelope });
+    const missingNode = messageEvent("turn_presentation_committed", identity);
     delete missingNode.payload.nodeExecutionId;
-    expect(applyMessageEvent(store, missingNode)).toMatchObject({
-      applied: false,
-      reason: "invalid_authoritative_message_event",
-    });
+    expect(admit(missingNode).rejected.errors).toContain("incomplete_workflow_identity");
     const missingParent = messageEvent("turn_presentation_committed", identity);
     delete missingParent.payload.parentSessionId;
-    expect(applyMessageEvent(store, "", missingParent)).toMatchObject({
-      applied: false,
-      reason: "invalid_authoritative_message_event",
-    });
-    expect(store.selectSubSessionMessages("child-session")).toBeNull();
+    expect(admit(missingParent).rejected.errors).toContain("missing_workflow_parent_session");
   });
 
   it("projects workflow identity from the latest event payload", () => {

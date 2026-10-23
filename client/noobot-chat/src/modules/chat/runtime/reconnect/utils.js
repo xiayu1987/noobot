@@ -11,10 +11,6 @@ export function _trimStr(x) {
   return text(x);
 }
 
-export function _ensureArray(x) {
-  return Array.isArray(x) ? x : [];
-}
-
 export function _isAssistantRole(msg) {
   return getMessageRole(msg) === RoleEnum.ASSISTANT;
 }

@@ -26,7 +26,10 @@ import {
   authoritativeLifecycle,
   authoritativeSnapshot,
 } from "./channel-manager.state-consistency.reconnect.fixtures.js";
-import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
+import {
+  TURN_LIFECYCLE_PROTOCOL_VERSION,
+  TURN_LIFECYCLE_WIRE_EVENT,
+} from "@noobot/session-protocol";
 import { TURN_ATTACHMENTS_BOUND_WIRE_EVENT } from "@noobot/session-protocol/turn-attachment-bind";
 import {
   AGENT_COMMAND,
@@ -173,7 +176,7 @@ test("reconnect projects a pending interaction without mutating its strict paylo
   );
 });
 
-test("invalid authoritative lifecycle has no journal or state projection side effects", () => {
+test("invalid upstream lifecycle is rejected at the entry with no journal or state projection side effects", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channel = manager.ensureChannel(
     createChannelKey({ userId: "user-1", sessionId: "session-invalid-lifecycle" }),
@@ -183,12 +186,12 @@ test("invalid authoritative lifecycle has no journal or state projection side ef
       turnScopeId: "stale-channel-turn",
     },
   );
-  const journalSequenceBefore = Number(channel.eventJournal?.sequence || 0);
+  const journalSequenceBefore = channel.eventJournal.sequence;
   const metricsBefore = { ...manager.successfulDataPlaneMetrics };
   const lifecycleWindowsBefore = channel.lifecycleWindowsBySessionId.size;
   const conversationStatesBefore = channel.conversationStateByScope.size;
 
-  const result = manager.pushChannelEvent(channel, "turn_lifecycle", {
+  const invalidLifecycle = {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
     eventType: "turn.completed",
     eventId: "invalid-completed-event",
@@ -203,10 +206,17 @@ test("invalid authoritative lifecycle has no journal or state projection side ef
     state: "completed",
     completionCommitId: "commit-invalid",
     summaryVersion: 1,
-  });
+  };
 
-  assert.equal(result, null);
-  assert.equal(Number(channel.eventJournal?.sequence || 0), journalSequenceBefore);
+  assert.throws(
+    () =>
+      manager.handleUpstreamMessage(
+        channel,
+        JSON.stringify({ event: TURN_LIFECYCLE_WIRE_EVENT, data: invalidLifecycle }),
+      ),
+    TypeError,
+  );
+  assert.equal(channel.eventJournal.sequence, journalSequenceBefore);
   assert.equal(channel.lifecycleWindowsBySessionId.size, lifecycleWindowsBefore);
   assert.equal(channel.conversationStateByScope.size, conversationStatesBefore);
   assert.deepEqual(manager.successfulDataPlaneMetrics, metricsBefore);

@@ -151,10 +151,9 @@ describe("workflow runtime architecture guard", () => {
     expect(replayConsumer).not.toMatch(/upsertCanonicalAssistantMessage/);
     expect(reconnectComposable).not.toMatch(/upsertCanonicalAssistantMessage/);
     expect(reconnectComposable).toMatch(/protocolViolation[\s\S]*presentation_missing/);
-    expect(batchReplay).toMatch(
-      /findMessagesByPresentationId\(targetSessionId, presentationMessageId\)/,
-    );
-    expect(batchReplay).toMatch(/materializeTurnPresentation\?\.\(envelope\)/);
+    expect(batchReplay).toMatch(/findMessagesByPresentationId\(sessionId, presentationMessageId\)/);
+    expect(batchReplay).toMatch(/materializeTurnPresentation\(envelope\)/);
+    expect(batchReplay).not.toMatch(/\?\.\(/);
     expect(batchReplay).toMatch(/canonicalTargets\.length === 0\) return false/);
     expect(batchReplay).not.toMatch(
       /find.*(?:ByRole|LastAssistant|ByDialogProcessId|ByTurnScopeId)/,

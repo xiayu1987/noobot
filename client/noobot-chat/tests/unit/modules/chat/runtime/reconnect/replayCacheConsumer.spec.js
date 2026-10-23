@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import {
-  applyReconnectMessagesToActiveSessionReplay,
-  consumeReconnectReplayCacheForSession,
-} from "../../../../../../src/modules/chat/runtime/reconnect/replayCacheConsumer.js";
-import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
+import { consumeReconnectReplayCacheForSession } from "../../../../../../src/modules/chat/runtime/reconnect/replayCacheConsumer.js";
+import { applyReconnectReplayBatchToActiveSession } from "../../../../../../src/modules/chat/runtime/reconnect/batchReplay.js";
 import { selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { createTurnKey } from "../../../../../../src/modules/chat/runtime/engine/turnIdentity.js";
@@ -63,41 +60,6 @@ function createActiveReplayFixture(overrides = {}) {
 }
 
 describe("replayCacheConsumer", () => {
-  it("keeps cached workflow-node replay out of the root message consumer", async () => {
-    const childMessages = [
-      canonicalMessageEvent({
-        eventId: "workflow-child-1",
-        eventType: "thinking",
-        sessionId: "child-session-1",
-        turnScopeId: "workflow-node:node-1",
-        presentationMessageId: "child-message-1",
-        workflowRunId: "workflow-run-1",
-        nodeExecutionId: "node-1",
-        parentSessionId: "s-1",
-        text: "working",
-      }),
-    ];
-    const replayCache = {
-      "s-1": { "__turn__s-1::workflow-node:node-1": childMessages },
-    };
-    const applyReconnectMessagesToActiveSession = vi.fn();
-    const applySubSessionReplayMessages = vi.fn(async () => ({ applied: true }));
-
-    await consumeReconnectReplayCacheForSession({
-      replayCache,
-      sessionId: "s-1",
-      applyReconnectMessagesToActiveSession,
-      applySubSessionReplayMessages,
-    });
-
-    expect(applySubSessionReplayMessages).toHaveBeenCalledWith(
-      childMessages,
-      expect.objectContaining({ rootSessionId: "s-1", turnScopeId: "workflow-node:node-1" }),
-    );
-    expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
-    expect(replayCache).toEqual({});
-  });
-
   it("consumes cached replay groups for a session and removes the session cache", async () => {
     const turnOne = authoritative("llm_delta", 1, {
       eventId: "turn-1-event-1",
@@ -134,15 +96,15 @@ describe("replayCacheConsumer", () => {
 
     await consumeReconnectReplayCacheForSession({
       replayCache,
-      sessionId: " s-1 ",
+      sessionId: "s-1",
       applyReconnectMessagesToActiveSession,
     });
 
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(2);
-    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(1, [turnOne], "dp-1", {
+    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(1, [turnOne], {
       turnScopeId: "turn-1",
     });
-    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(2, [turnTwo], "dp-2", {
+    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(2, [turnTwo], {
       turnScopeId: "turn-2",
     });
     expect(replayCache).toEqual({
@@ -155,10 +117,9 @@ describe("replayCacheConsumer", () => {
   it("keeps message replay independent from transport terminal frames", async () => {
     const fixture = createActiveReplayFixture();
 
-    await applyReconnectMessagesToActiveSessionReplay({
+    await applyReconnectReplayBatchToActiveSession({
       ...fixture,
-      dialogProcessId: "dp-1",
-      turnScopeId: "turn-1",
+      materializeTurnPresentation: vi.fn(),
       messages: [authoritative("llm_delta", 1, { text: "final" })],
     });
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
@@ -192,10 +153,9 @@ describe("replayCacheConsumer", () => {
       },
     });
 
-    await applyReconnectMessagesToActiveSessionReplay({
+    await applyReconnectReplayBatchToActiveSession({
       ...fixture,
-      dialogProcessId: "dp-1",
-      turnScopeId: "turn-1",
+      materializeTurnPresentation: vi.fn(),
       messages: [authoritative("thinking", 1, { text: "next step" })],
     });
 
@@ -204,65 +164,7 @@ describe("replayCacheConsumer", () => {
     expect(selectActivityTimelineLogs(targetMessage)[0].text).toContain("next step");
   });
 
-  it("keeps legacy reconnect errors out of canonical messages and process display mirrors", async () => {
-    const fixture = createActiveReplayFixture();
-
-    await applyReconnectMessagesToActiveSessionReplay({
-      ...fixture,
-      dialogProcessId: "dp-1",
-      turnScopeId: "turn-1",
-      messages: [
-        {
-          event: StreamEventEnum.ERROR,
-          data: {
-            seq: 9,
-            error: "tool failed",
-            dialogProcessId: "dp-1",
-            executionLogs: [
-              { event: "tool_call", text: "run tool", dialogProcessId: "dp-1" },
-              {
-                event: "tool_result",
-                text: "tool failed",
-                status: "error",
-                dialogProcessId: "dp-1",
-              },
-            ],
-          },
-        },
-      ],
-    });
-
-    const targetMessage = fixture.activeSession.value.messages[0];
-    expect(targetMessage.error).toBeUndefined();
-    expect(targetMessage.processExecutionLogTotal).toBeUndefined();
-    expect(targetMessage.processRealtimeLogs).toBeUndefined();
-    expect(targetMessage.processCompletedToolLogs).toBeUndefined();
-  });
-
-  it("does not let legacy reconnect thinking mutate canonical timelines", async () => {
-    const fixture = createActiveReplayFixture();
-
-    await applyReconnectMessagesToActiveSessionReplay({
-      ...fixture,
-      dialogProcessId: "dp-1",
-      turnScopeId: "turn-1",
-      messages: [
-        {
-          event: "message",
-          data: { seq: 7, text: "searching", event: "tool_call", dialogProcessId: "dp-1" },
-        },
-      ],
-    });
-
-    const targetMessage = fixture.activeSession.value.messages[0];
-    expect(selectToolTimelineLogs(targetMessage)).toEqual([]);
-    expect(selectActivityTimelineLogs(targetMessage)).toEqual([]);
-    expect(targetMessage.processExecutionLogTotal).toBeUndefined();
-    expect(targetMessage.processRealtimeLogs).toBeUndefined();
-    expect(targetMessage.processCompletedToolLogs).toBeUndefined();
-  });
-
-  it("derives the continuation turn from cached envelopes before resolving a reused dialog", async () => {
+  it("projects onto the presentation target when turns share a dialog process", async () => {
     const stoppedAssistant = {
       role: "assistant",
       presentationMessageId: "message-stopped",
@@ -293,10 +195,9 @@ describe("replayCacheConsumer", () => {
       },
     });
 
-    await applyReconnectMessagesToActiveSessionReplay({
+    await applyReconnectReplayBatchToActiveSession({
       ...fixture,
-      dialogProcessId: "dp-shared",
-      turnScopeId: "turn-continuation",
+      materializeTurnPresentation: vi.fn(),
       messages: [
         authoritative("thinking", 1, {
           presentationMessageId: "message-continuation",

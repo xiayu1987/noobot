@@ -10,6 +10,7 @@ import {
   createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
 import { INTERACTION_SEQUENCE_DOMAIN } from "./interaction.js";
+import { SESSION_SEQUENCE_DOMAIN } from "./turn-snapshot.js";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_TYPE,
@@ -58,14 +59,26 @@ export const validateInteractionEnvelope = (envelope) => {
   return { valid: errors.length === 0, errors };
 };
 
+const TURN_LIFECYCLE_ALIGNED_FIELDS = Object.freeze([
+  ["identity", "eventId", "eventId"],
+  ["identity", "sessionId", "sessionId"],
+  ["identity", "turnScopeId", "turnScopeId"],
+  ["causality", "commandId", "commandId"],
+  ["causality", "causationId", "causationId"],
+  ["causality", "correlationId", "correlationId"],
+  ["ordering", "scopeId", "sessionId"],
+  ["ordering", "sequence", "sequence"],
+  ["ordering", "revision", "revision"],
+]);
+
 export const validateTurnLifecycleEventEnvelope = (envelope) => {
+  const { payload } = envelope;
   const errors = [];
-  const payload = envelope?.payload;
-  const causality = envelope?.causality;
-  if (!text(causality?.commandId)) errors.push("missing_command_id");
-  for (const field of ["commandId", "causationId", "correlationId"]) {
-    if (text(causality?.[field]) !== text(payload?.[field])) {
-      errors.push(`lifecycle_${field}_mismatch`);
+  if (!isCanonicalText(envelope.causality.commandId)) errors.push("missing_command_id");
+  if (envelope.ordering.domain !== SESSION_SEQUENCE_DOMAIN) errors.push("sequence_domain_mismatch");
+  for (const [section, field, payloadField] of TURN_LIFECYCLE_ALIGNED_FIELDS) {
+    if (envelope[section][field] !== payload[payloadField]) {
+      errors.push(`lifecycle_${section}_${field}_mismatch`);
     }
   }
   return { valid: errors.length === 0, errors };

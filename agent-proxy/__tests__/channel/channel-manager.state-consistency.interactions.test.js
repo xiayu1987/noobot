@@ -10,6 +10,7 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { CHANNEL_ACTIVITY_PHASE } from "../../src/shared/constants.js";
 import {
+  canonicalInteractionRequest,
   createMockSocket,
   getEvent,
   listEvents,
@@ -17,36 +18,8 @@ import {
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
-import {
-  createEventEnvelope,
-  EVENT_FAMILY,
-  INTERACTION_EVENT_TYPE,
-  INTERACTION_SEQUENCE_DOMAIN,
-  getEventFamily,
-} from "@noobot/event-protocol";
+import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
 import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
-
-function interactionRequest({ requestId, sessionId, turnScopeId, sequence = 1, ...payload }) {
-  return createEventEnvelope({
-    family: EVENT_FAMILY.INTERACTION_REQUEST,
-    schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
-    identity: {
-      eventId: `interaction-event:${requestId}:${sequence}`,
-      eventType: INTERACTION_EVENT_TYPE.REQUEST,
-      sessionId,
-      turnScopeId,
-    },
-    causality: {},
-    ordering: {
-      domain: INTERACTION_SEQUENCE_DOMAIN,
-      scopeId: requestId,
-      sequence,
-    },
-    producer: { type: "test", id: "agent-proxy-interaction-test" },
-    occurredAt: "2026-01-01T00:00:00.000Z",
-    payload: { requestId, ...payload },
-  });
-}
 
 const hasPendingRequest = (replayBatch, requestId) =>
   replayBatch?.pendingInteractions?.some((item) => item?.payload?.requestId === requestId) === true;
@@ -74,7 +47,7 @@ test("interaction_request resolved by one client should be consistent across all
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-1",
       sessionId: "session-1",
       dialogProcessId: "dp-1",
@@ -153,7 +126,7 @@ test("interaction_pending channel_state carries state only; interaction events o
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-a",
       sessionId: "session-snapshot",
       dialogProcessId: "dp-snapshot",
@@ -165,7 +138,7 @@ test("interaction_pending channel_state carries state only; interaction events o
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-b",
       sessionId: "session-snapshot",
       dialogProcessId: "dp-snapshot",
@@ -196,7 +169,7 @@ test("failed interaction lifecycle closes the pending request across proxy and r
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-timeout",
       sessionId: "session-timeout",
       dialogProcessId: "dp-timeout",
@@ -209,7 +182,7 @@ test("failed interaction lifecycle closes the pending request across proxy and r
   const terminal = manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-timeout",
       sessionId: "session-timeout",
       dialogProcessId: "dp-timeout",
@@ -253,7 +226,7 @@ test("resolving one concurrent interaction atomically publishes the remaining pe
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-a",
       sessionId: "session-concurrent",
       dialogProcessId: "dp-concurrent",
@@ -265,7 +238,7 @@ test("resolving one concurrent interaction atomically publishes the remaining pe
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-b",
       sessionId: "session-concurrent",
       dialogProcessId: "dp-concurrent",
@@ -304,7 +277,7 @@ test("channel_state snapshot never duplicates the pending interaction payload", 
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-snapshot",
       sessionId: "session-1",
       dialogProcessId: "dp-snapshot",
@@ -339,7 +312,7 @@ test("workflow child terminal events cannot discard a pending interaction owned 
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-child",
       sessionId: "child-session",
       parentSessionId: "root-session",
@@ -428,7 +401,7 @@ test("authoritative terminal lifecycle closes pending interactions for the same 
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-terminal",
       sessionId: "session-terminal",
       dialogProcessId: "dp-terminal",
@@ -463,7 +436,7 @@ test("authoritative terminal lifecycle closes pending interactions for the same 
   assert.equal(manager.getChannelByRequestId("req-terminal"), null);
 });
 
-test("invalid interaction_request has no journal, route, pending, or state side effects", () => {
+test("invalid upstream interaction_request is rejected at the entry with no journal, route, pending, or state side effects", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channel = manager.ensureChannel(
     createChannelKey({ userId: "user-1", sessionId: "session-invalid" }),
@@ -472,17 +445,21 @@ test("invalid interaction_request has no journal, route, pending, or state side 
       sessionId: "session-invalid",
     },
   );
-  const result = manager.pushChannelEvent(
-    channel,
-    INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
-      requestId: "req-invalid",
-      sessionId: "session-invalid",
-      dialogProcessId: "dp-invalid",
-      turnScopeId: "turn-invalid",
-    }),
+  const invalidRequest = canonicalInteractionRequest({
+    requestId: "req-invalid",
+    sessionId: "session-invalid",
+    dialogProcessId: "dp-invalid",
+    turnScopeId: "turn-invalid",
+  });
+  delete invalidRequest.payload.requestId;
+  assert.throws(
+    () =>
+      manager.handleUpstreamMessage(
+        channel,
+        JSON.stringify({ event: INTERACTION_EVENT_TYPE.REQUEST, data: invalidRequest }),
+      ),
+    TypeError,
   );
-  assert.equal(result, null);
   assert.equal(channel.eventJournal.events.length, 0);
   assert.equal(channel.pendingInteractionRequests.has("req-invalid"), false);
   assert.equal(manager.getChannelByRequestId("req-invalid"), null);
@@ -528,7 +505,7 @@ test("interaction_response should resolve channel by pending requestId", () => {
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
-    interactionRequest({
+    canonicalInteractionRequest({
       requestId: "req-resolve",
       sessionId: "session-resolve",
       dialogProcessId: "dp-resolve",

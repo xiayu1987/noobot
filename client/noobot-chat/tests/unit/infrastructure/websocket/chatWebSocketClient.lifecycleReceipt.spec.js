@@ -136,8 +136,9 @@ describe("chatWebSocketClient lifecycle receipt diagnostics", () => {
 
   it("records rejected with validation reasons for an invalid lifecycle envelope", async () => {
     const { socket, receiptLogs, finish } = setup();
-    const invalid = { ...lifecycle(), eventType: "turn.unknown" };
-    socket.emitChannel("session-receipt", "turn_lifecycle", turnLifecycleProtocolEvent(invalid));
+    const valid = turnLifecycleProtocolEvent(lifecycle());
+    const invalid = { ...valid, payload: { ...valid.payload, eventType: "turn.unknown" } };
+    socket.emitChannel("session-receipt", "turn_lifecycle", invalid);
 
     const rejected = receiptLogs().filter((entry) => entry.data.result === "rejected");
     expect(rejected).toHaveLength(1);

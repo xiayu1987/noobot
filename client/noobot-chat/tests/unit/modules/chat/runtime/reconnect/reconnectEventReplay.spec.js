@@ -15,8 +15,13 @@ import { activate as activateWorkflowFrontend } from "../../../../../../../../pl
 import { createTurnKey } from "../../../../../../src/modules/chat/runtime/engine/turnIdentity.js";
 import { canonicalWorkflowRuntimeEvent } from "../../helpers/workflowRuntimeEventFixture.js";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
-import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
-import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  TURN_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
+} from "@noobot/session-protocol";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
 
@@ -89,39 +94,21 @@ describe("applyReconnectEventReplay", () => {
   it("routes authoritative TURN_LIFECYCLE envelopes directly to the lifecycle reducer", async () => {
     const replayCache = {};
     const applyTurnLifecycleEnvelope = vi.fn(() => ({ applied: true }));
-    const lifecycle = {
-      protocolVersion: 1,
+    const lifecycle = createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "event-1",
       commandId: "command-1",
-      messageId: "message-1",
-      presentationMessageId: "presentation-1",
-      eventType: "turn.processing_started",
       sessionId: "s-1",
       turnScopeId: "turn-1",
-      phase: "processing",
-      state: "processing",
+      messageId: "message-1",
+      presentationMessageId: "presentation-1",
       revision: 2,
       sequence: 2,
-    };
-    const envelope = createEventEnvelope({
-      family: EVENT_FAMILY.TURN_LIFECYCLE,
-      schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-      identity: {
-        eventId: lifecycle.eventId,
-        eventType: TURN_LIFECYCLE_WIRE_EVENT,
-        sessionId: lifecycle.sessionId,
-        turnScopeId: lifecycle.turnScopeId,
-      },
-      causality: { commandId: lifecycle.commandId },
-      ordering: {
-        domain: "session",
-        scopeId: lifecycle.sessionId,
-        sequence: lifecycle.sequence,
-        revision: lifecycle.revision,
-      },
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+    });
+    const envelope = createTurnLifecycleEventEnvelope(lifecycle, {
       producer: { type: "test", id: "turn-lifecycle-fixture" },
-      occurredAt: "2026-01-01T00:00:00.000Z",
-      payload: lifecycle,
     });
 
     const result = await applyReconnectEventReplay({
@@ -305,9 +292,49 @@ describe("applyReconnectEventReplay", () => {
     });
 
     expect(consumeReplayCacheForSession).toHaveBeenCalledWith("s-1");
-    expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith([envelope], "dp-1", {
+    expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith([envelope], {
       turnScopeId: "turn-1",
     });
+    expect(replayCache).toEqual({});
+  });
+
+  it("routes workflow-node message envelopes to the sub-session replay before root replay", async () => {
+    const replayCache = {};
+    const consumeReplayCacheForSession = vi.fn(async () => {});
+    const applyReconnectMessagesToActiveSession = vi.fn(async () => {});
+    const applySubSessionReplayMessages = vi.fn(async () => ({ applied: true, appliedCount: 1 }));
+    const envelope = canonicalMessageEvent({
+      eventId: "workflow-child-1",
+      eventType: "thinking",
+      sessionId: "child-session-1",
+      turnScopeId: "workflow-node:node-1",
+      presentationMessageId: "child-message-1",
+      dialogProcessId: "dp-child-1",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-1",
+      parentSessionId: "s-1",
+      text: "working",
+    });
+
+    const result = await applyReconnectEventReplay({
+      event: envelope.identity.eventType,
+      data: envelope,
+      replayCache,
+      isDeletedTurn: vi.fn(() => false),
+      isCurrentActiveSession: vi.fn(() => true),
+      consumeReplayCacheForSession,
+      applyReconnectMessagesToActiveSession,
+      applySubSessionReplayMessages,
+    });
+
+    expect(result).toEqual({ applied: true, appliedCount: 1 });
+    expect(applySubSessionReplayMessages).toHaveBeenCalledWith([envelope], {
+      rootSessionId: "s-1",
+      dialogProcessId: "dp-child-1",
+      turnScopeId: "workflow-node:node-1",
+    });
+    expect(consumeReplayCacheForSession).not.toHaveBeenCalled();
+    expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
     expect(replayCache).toEqual({});
   });
 

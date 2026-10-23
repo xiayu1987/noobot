@@ -23,7 +23,6 @@ import {
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_STATE,
-  isAuthoritativeTurnLifecycleEnvelope,
 } from "@noobot/session-protocol";
 import {
   EVENT_FAMILY,
@@ -32,8 +31,7 @@ import {
   validateProtocolEvent,
 } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
-import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
-import { text, isObjectLike, isCanonicalText } from "@noobot/shared/value";
+import { text, isCanonicalText } from "@noobot/shared/value";
 
 const RUNNING_CONVERSATION_STATES = Object.freeze([
   AGENT_CHANNEL_STATE.SENDING,
@@ -45,14 +43,6 @@ const TERMINAL_CONVERSATION_STATES = Object.freeze([
   AGENT_CHANNEL_STATE.ERROR,
 ]);
 
-function readAuthoritativeLifecycle(channel, eventData) {
-  const validation = validateProtocolEvent(eventData);
-  if (!channel || !validation.valid) return null;
-  if (validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) return null;
-  const lifecycle = eventData.payload;
-  return isAuthoritativeTurnLifecycleEnvelope(lifecycle) ? lifecycle : null;
-}
-
 function rejectedFrameIdentity(data) {
   return {
     sessionId: text(data?.identity?.sessionId),
@@ -61,14 +51,14 @@ function rejectedFrameIdentity(data) {
   };
 }
 
-function readLifecycleScope(eventData, lifecycle) {
-  const identity = eventData.identity || {};
+function readLifecycleScope(eventData) {
+  const lifecycle = eventData.payload;
   return {
-    eventName: text(lifecycle.eventType),
-    dialogProcessId: text(lifecycle.dialogProcessId),
-    turnScopeId: text(identity.turnScopeId),
-    sessionId: text(identity.sessionId),
-    seq: Number(eventData.ordering?.sequence || 0),
+    eventName: lifecycle.eventType,
+    dialogProcessId: lifecycle.dialogProcessId,
+    turnScopeId: eventData.identity.turnScopeId,
+    sessionId: eventData.identity.sessionId,
+    seq: eventData.ordering.sequence,
   };
 }
 
@@ -143,17 +133,17 @@ function cleanupTerminalChannel(store, channel, scope, nextState) {
 
 function buildTurnLifecycleReplay(window, sequence) {
   if (!window.length) return { events: [], hasReplayGap: sequence > 0 };
-  const first = Number(window[0]?.ordering?.sequence || 0);
+  const first = window[0].ordering.sequence;
   let previous = first - 1;
   const hasGap = window.some((item) => {
-    const current = Number(item?.ordering?.sequence || 0);
+    const current = item.ordering.sequence;
     const gap = current !== previous + 1;
     previous = current;
     return gap;
   });
   if (hasGap || sequence < first - 1) return { events: [], hasReplayGap: true };
   return {
-    events: window.filter((item) => Number(item?.ordering?.sequence) > sequence),
+    events: window.filter((item) => item.ordering.sequence > sequence),
     hasReplayGap: false,
   };
 }
@@ -243,82 +233,45 @@ class ChannelStoreMethods {
     channel._errorHandled = false;
   }
 
-  pushChannelEvent(channel, eventName = "", data = {}) {
-    if (!channel) return null;
-    const normalizedEventName = text(eventName);
-    if (!normalizedEventName) return null;
-    const dataPlaneValidation = validateDataPlaneEvent(normalizedEventName, data);
-    if (!dataPlaneValidation.valid) {
-      this.logChannelEvent(channel, {
-        category: "protocol",
-        level: "warn",
-        event: "agentProxy.channelEvent.rejected",
-        data: {
-          wireEvent: normalizedEventName,
-          errors: dataPlaneValidation.errors,
-          frameIdentity: rejectedFrameIdentity(data),
-        },
-      });
+  admitInteractionRequest(channel, data) {
+    const { requestId, lifecycle } = data.payload;
+    if (isTerminalInteractionLifecycle(lifecycle) || !this.getChannelByRequestId(requestId)) {
+      return true;
+    }
+    this.logChannelEvent(channel, {
+      category: "interaction",
+      level: "warn",
+      event: "agentProxy.interaction.rejected",
+      data: {
+        requestId,
+        reason: "duplicate_request_id",
+        frameIdentity: rejectedFrameIdentity(data),
+      },
+    });
+    return false;
+  }
+
+  pushChannelEvent(channel, eventName, data) {
+    if (
+      eventName === INTERACTION_EVENT_TYPE.REQUEST &&
+      !this.admitInteractionRequest(channel, data)
+    ) {
       return null;
-    }
-    if (normalizedEventName === INTERACTION_EVENT_TYPE.REQUEST) {
-      const validation = validateProtocolEvent(data);
-      const requestId = text(data?.payload?.requestId);
-      const lifecycle = (text(data?.payload?.lifecycle) || "pending").toLowerCase();
-      const isTerminal = validation.valid && isTerminalInteractionLifecycle(lifecycle);
-      if (
-        !validation.valid ||
-        validation.descriptor?.family !== EVENT_FAMILY.INTERACTION_REQUEST ||
-        (!isTerminal && this.getChannelByRequestId(requestId))
-      ) {
-        this.logChannelEvent(channel, {
-          category: "interaction",
-          level: "warn",
-          event: "agentProxy.interaction.rejected",
-          data: {
-            requestId,
-            reason: validation.valid
-              ? isTerminal
-                ? "terminal_without_pending_request"
-                : "duplicate_request_id"
-              : "invalid_protocol_event",
-            errors: validation.errors,
-            frameIdentity: rejectedFrameIdentity(data),
-          },
-        });
-        return null;
-      }
-    }
-    if (normalizedEventName === TURN_LIFECYCLE_WIRE_EVENT) {
-      const validation = validateProtocolEvent(data);
-      if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) {
-        this.logChannelEvent(channel, {
-          category: "protocol",
-          level: "warn",
-          event: "agentProxy.turnLifecycle.rejected",
-          data: {
-            eventId: text(data?.identity?.eventId),
-            errors: validation.errors,
-            frameIdentity: rejectedFrameIdentity(data),
-          },
-        });
-        return null;
-      }
     }
     channel.updatedAtMs = nowMs();
     if (isTransientMessageEvent(data)) {
       this.recordSuccessfulDataPlaneOperation("channelEvents");
-      return channel.eventJournal.transient(normalizedEventName, data);
+      return channel.eventJournal.transient(eventName, data);
     }
-    const envelope = channel.eventJournal.append(normalizedEventName, data);
+    const envelope = channel.eventJournal.append(eventName, data);
     if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) {
       this.recordTurnLifecycleEnvelope(channel, envelope.data);
     }
     this.recordSuccessfulDataPlaneOperation("channelEvents");
-    if (String(envelope.event || "") === INTERACTION_EVENT_TYPE.REQUEST) {
+    if (envelope.event === INTERACTION_EVENT_TYPE.REQUEST) {
       const protocolEnvelope = envelope.data;
       const interaction = protocolEnvelope.payload;
-      const requestId = text(interaction.requestId);
+      const { requestId } = interaction;
       if (isTerminalInteractionLifecycle(interaction.lifecycle)) {
         channel.pendingInteractionRequests.delete(requestId);
         this.updateConversationState(channel, {
@@ -327,7 +280,7 @@ class ChannelStoreMethods {
           turnScopeId: protocolEnvelope.identity.turnScopeId,
           state: AGENT_CHANNEL_STATE.SENDING,
           sourceEvent: INTERACTION_EVENT_TYPE.REQUEST,
-          seq: Number(protocolEnvelope.ordering.sequence),
+          seq: protocolEnvelope.ordering.sequence,
           sessionId: protocolEnvelope.identity.sessionId,
           requestId,
         });
@@ -339,7 +292,7 @@ class ChannelStoreMethods {
           turnScopeId: protocolEnvelope.identity.turnScopeId,
           state: AGENT_CHANNEL_STATE.INTERACTION_PENDING,
           sourceEvent: INTERACTION_EVENT_TYPE.REQUEST,
-          seq: Number(protocolEnvelope.ordering.sequence),
+          seq: protocolEnvelope.ordering.sequence,
           sessionId: protocolEnvelope.identity.sessionId,
           requestId,
         });
@@ -351,26 +304,18 @@ class ChannelStoreMethods {
     return envelope;
   }
 
-  recordTurnLifecycleEnvelope(channel, lifecycleEnvelope = {}) {
-    if (!channel || !isObjectLike(lifecycleEnvelope)) return null;
-    const sessionId = text(lifecycleEnvelope?.identity?.sessionId);
-    const sequence = Number(lifecycleEnvelope?.ordering?.sequence || 0);
-    const eventId = text(lifecycleEnvelope?.identity?.eventId);
-    if (!sessionId || !Number.isInteger(sequence) || sequence < 1 || !eventId) return null;
-    channel.lifecycleWindowsBySessionId ||= new Map();
-    const current = channel.lifecycleWindowsBySessionId.get(sessionId) || [];
+  recordTurnLifecycleEnvelope(channel, lifecycleEnvelope) {
+    const { sessionId, eventId } = lifecycleEnvelope.identity;
+    const { sequence } = lifecycleEnvelope.ordering;
+    const current = channel.lifecycleWindowsBySessionId.get(sessionId) ?? [];
     if (
       current.some(
-        (item) =>
-          item?.identity?.eventId === eventId || Number(item?.ordering?.sequence) === sequence,
+        (item) => item.identity.eventId === eventId || item.ordering.sequence === sequence,
       )
     )
       return null;
     const next = [...current, lifecycleEnvelope]
-      .sort(
-        (left, right) =>
-          Number(left?.ordering?.sequence || 0) - Number(right?.ordering?.sequence || 0),
-      )
+      .sort((left, right) => left.ordering.sequence - right.ordering.sequence)
       .slice(-config.maxChannelEvents);
     channel.lifecycleWindowsBySessionId.set(sessionId, next);
     return next;
@@ -511,10 +456,9 @@ class ChannelStoreMethods {
     return stateItem;
   }
 
-  _applyAuthoritativeConversationState(channel, eventData = {}) {
-    const lifecycle = readAuthoritativeLifecycle(channel, eventData);
-    if (!lifecycle) return;
-    const scope = readLifecycleScope(eventData, lifecycle);
+  _applyAuthoritativeConversationState(channel, eventData) {
+    const lifecycle = eventData.payload;
+    const scope = readLifecycleScope(eventData);
     const nextState = resolveLifecycleConversationState(scope.eventName, lifecycle);
     if (!nextState) return;
     if (RUNNING_CONVERSATION_STATES.includes(nextState)) {

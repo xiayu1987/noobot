@@ -150,8 +150,8 @@ function validateToolSecurityAssessment(value = {}) {
   return errors;
 }
 
-export function resolveMessageEventPresentationId(value = {}) {
-  return text(value?.presentationMessageId);
+export function resolveMessageEventPresentationId(payload) {
+  return payload.presentationMessageId;
 }
 
 export function resolveMessageViewKey(message = {}) {
@@ -185,8 +185,8 @@ function validatePayloadEnvelope(value) {
   const errors = NONCANONICAL_PAYLOAD_FIELDS.filter((field) => Object.hasOwn(value, field)).map(
     (field) => `noncanonical_${field}`,
   );
-  if (!text(value?.presentationMessageId)) errors.push("missing_presentation_message_id");
-  if (!text(value?.dialogProcessId)) errors.push("missing_dialog_process_id");
+  if (!isCanonicalText(value.presentationMessageId)) errors.push("missing_presentation_message_id");
+  if (!isCanonicalText(value.dialogProcessId)) errors.push("missing_dialog_process_id");
   const workflowOwned = isCanonicalText(value.workflowRunId);
   if (workflowOwned !== isCanonicalText(value.nodeExecutionId)) {
     errors.push("incomplete_workflow_identity");

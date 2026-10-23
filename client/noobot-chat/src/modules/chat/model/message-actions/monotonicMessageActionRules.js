@@ -5,8 +5,8 @@
  */
 import {
   getMessageRuntimeChannelState,
-  isLegacyTerminalDiscoveryState,
   isTerminalOutcome,
+  isTerminalRunState,
   isTurnTerminalNotice,
 } from "../../runtime/sessionRunStateMachine.js";
 import { areTurnScopeIdsEquivalent } from "../messageIdentity.js";
@@ -96,7 +96,7 @@ export function isMonotonicMessage(messageItem = {}) {
   if (normalizeText(messageItem.stopState) === "user_stopped") return true;
   const channelState = getMessageRuntimeChannelState(messageItem);
   const state = normalizeText(channelState.state);
-  return isLegacyTerminalDiscoveryState(state) || isTerminalOutcome(messageItem.terminalOutcome);
+  return isTerminalRunState(state) || isTerminalOutcome(messageItem.terminalOutcome);
 }
 function isPlainUserMessage(messageItem = {}) {
   if (!isUserMessage(messageItem)) return false;
@@ -150,9 +150,7 @@ function isMonotonicSource(messageItem = {}) {
 
 function hasAuthoritativeTerminalFact(messageItem = {}, context = {}) {
   const runtimeState = context?.messageRuntime?.state;
-  return (
-    Boolean(getMessageTurnScopeId(messageItem)) && isLegacyTerminalDiscoveryState(runtimeState)
-  );
+  return Boolean(getMessageTurnScopeId(messageItem)) && isTerminalRunState(runtimeState);
 }
 
 function attachTerminalSource(sourceMap, userMessage, sourceMessage) {

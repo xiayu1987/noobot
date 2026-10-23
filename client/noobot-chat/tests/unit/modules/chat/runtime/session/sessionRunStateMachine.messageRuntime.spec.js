@@ -12,6 +12,7 @@ import {
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
   createInitialSessionRunState,
   getMessageRuntimeChannelState,
+  isFinalizedAssistantMessage,
   isMessageInFlightAssistant,
   isMessageRunning,
   resolveSessionRunMessageRuntimeView,
@@ -313,6 +314,24 @@ describe("sessionRunStateMachine message runtime", () => {
         channelState: { state: FrontendRunState.FRONTEND_COMPLETED },
       },
     });
+  });
+
+  it("treats settled assistant messages in any run terminal state as finalized", () => {
+    const finalized = (state, pending = false, role = "assistant") =>
+      isFinalizedAssistantMessage({ role, pending, channelState: { state } });
+    for (const state of [
+      AGENT_CHANNEL_STATE.COMPLETED,
+      AGENT_CHANNEL_STATE.USER_STOPPED,
+      AGENT_CHANNEL_STATE.ERROR,
+      FrontendRunState.FRONTEND_COMPLETED,
+      FrontendRunState.USER_STOP_COMPLETED,
+      FrontendRunState.PROCESSING_ERROR,
+    ]) {
+      expect(finalized(state)).toBe(true);
+    }
+    expect(finalized(AGENT_CHANNEL_STATE.COMPLETED, true)).toBe(false);
+    expect(finalized(AGENT_CHANNEL_STATE.SENDING)).toBe(false);
+    expect(finalized(AGENT_CHANNEL_STATE.COMPLETED, false, "user")).toBe(false);
   });
 
   it("resolves message runtime selector from runtime-written channelState", () => {

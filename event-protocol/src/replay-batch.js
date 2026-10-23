@@ -3,127 +3,71 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text, isObjectLike } from "@noobot/shared/value";
-import { isPendingInteractionReplay } from "./interaction.js";
-import { validateProtocolEvent } from "./event-registry.js";
-
-const eventSequence = (event = {}) => Number(event?.ordering?.sequence || 0);
-const eventOrderingDomain = (event = {}) => text(event?.ordering?.domain);
-const eventOrderingScopeId = (event = {}) => text(event?.ordering?.scopeId);
-const eventSessionId = (event = {}) => text(event?.identity?.sessionId);
-const eventParentSessionId = (event = {}) => text(event?.payload?.parentSessionId);
-const eventId = (event = {}) => text(event?.identity?.eventId);
-
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
+import { INTERACTION_LIFECYCLE } from "./interaction.js";
+import { EVENT_FAMILY, validateProtocolEvent } from "./event-registry.js";
 import { EVENT_PROTOCOL_NAME, EVENT_PROTOCOL_VERSION } from "./envelope.js";
+import { SESSION_SEQUENCE_DOMAIN } from "./turn-snapshot.js";
+
 const REPLAY_BATCH_SCHEMA = "replay.batch";
+const REPLAY_BATCH_KEYS = new Set([
+  "protocol",
+  "sessionId",
+  "snapshot",
+  "snapshotSequence",
+  "events",
+  "pendingInteractions",
+]);
 
-export function createReplayBatch({
-  sessionId = "",
-  streamId = "",
-  requestId = "",
-  snapshot = null,
-  snapshotSequence = 0,
-  orderingDomain = "",
-  orderingScopeId = "",
-  events = [],
-  pendingInteractions = [],
-} = {}) {
-  const normalizedOrderingDomain = text(orderingDomain);
-  const normalizedOrderingScopeId = text(orderingScopeId);
-  if (!normalizedOrderingDomain || !normalizedOrderingScopeId) {
-    throw new TypeError("replay batch requires one explicit ordering stream");
+function collectHeaderErrors(batch, errors) {
+  for (const key of Object.keys(batch)) {
+    if (!REPLAY_BATCH_KEYS.has(key)) errors.push(`unknown_field:${key}`);
   }
-  const inputEvents = Array.isArray(events) ? events : [];
-  for (const event of inputEvents) {
-    const validation = validateProtocolEvent(event);
-    if (!validation.valid) {
-      throw new TypeError(`replay batch contains invalid event: ${validation.errors.join(",")}`);
-    }
-    if (
-      eventOrderingDomain(event) !== normalizedOrderingDomain ||
-      eventOrderingScopeId(event) !== normalizedOrderingScopeId
-    ) {
-      throw new TypeError("replay batch contains event from a different ordering stream");
-    }
+  const { protocol } = batch;
+  if (!isPlainObject(protocol)) {
+    errors.push("invalid_protocol");
+    return;
   }
-  const normalizedEvents = [...inputEvents].sort(
-    (left, right) => eventSequence(left) - eventSequence(right),
-  );
-  const sequence = Number(snapshotSequence || snapshot?.sequence || 0);
-  return Object.freeze({
-    protocol: {
-      name: EVENT_PROTOCOL_NAME,
-      version: EVENT_PROTOCOL_VERSION,
-      schema: REPLAY_BATCH_SCHEMA,
-    },
-    sessionId: text(sessionId),
-    streamId: text(streamId),
-    requestId: text(requestId),
-    snapshot,
-    snapshotSequence: sequence,
-    ordering: Object.freeze({
-      domain: normalizedOrderingDomain,
-      scopeId: normalizedOrderingScopeId,
-    }),
-    events: normalizedEvents,
-    pendingInteractions: (Array.isArray(pendingInteractions) ? pendingInteractions : []).filter(
-      (item) => item && typeof item === "object",
-    ),
-    cursor: {
-      fromSequence: sequence,
-      toSequence: normalizedEvents.reduce(
-        (max, event) => Math.max(max, eventSequence(event)),
-        sequence,
-      ),
-    },
-  });
+  if (protocol.name !== EVENT_PROTOCOL_NAME) errors.push("invalid_protocol_name");
+  if (protocol.version !== EVENT_PROTOCOL_VERSION) errors.push("unsupported_protocol_version");
+  if (protocol.schema !== REPLAY_BATCH_SCHEMA) errors.push("invalid_schema");
+  if (!isCanonicalText(batch.sessionId)) errors.push("missing_session_id");
+  if (!Number.isInteger(batch.snapshotSequence) || batch.snapshotSequence < 0) {
+    errors.push("invalid_snapshot_sequence");
+  }
 }
 
-const listOf = (value) => (Array.isArray(value) ? value : []);
-
-function collectReplayHeaderErrors(batch, errors) {
-  const protocol = batch?.protocol;
-  if (protocol?.name !== EVENT_PROTOCOL_NAME) errors.push("invalid_protocol_name");
-  if (Number(protocol?.version) !== EVENT_PROTOCOL_VERSION) {
-    errors.push("unsupported_protocol_version");
+function collectSessionStreamErrors(envelope, sessionId, errors, prefix) {
+  if (envelope.identity.sessionId !== sessionId) errors.push(`${prefix}_session_mismatch`);
+  if (envelope.ordering.domain !== SESSION_SEQUENCE_DOMAIN) {
+    errors.push(`${prefix}_ordering_domain_mismatch`);
   }
-  if (protocol?.schema !== REPLAY_BATCH_SCHEMA) errors.push("invalid_schema");
-  if ("cacheExpired" in batch) errors.push("unsupported_cache_expired_branch");
-  if ("expiredDialogProcessIds" in batch) errors.push("unsupported_dialog_replay_cursor");
-  if (!text(batch.sessionId)) errors.push("missing_session_id");
+  if (envelope.ordering.scopeId !== sessionId) errors.push(`${prefix}_ordering_scope_mismatch`);
 }
 
-function readReplayOrdering(batch, errors) {
-  const domain = text(batch?.ordering?.domain);
-  const scopeId = text(batch?.ordering?.scopeId);
-  if (!domain) errors.push("missing_ordering_domain");
-  if (!scopeId) errors.push("missing_ordering_scope");
-  return { domain, scopeId };
-}
-
-function readSnapshotSequence(batch, errors) {
-  const declared = Number(batch.snapshotSequence);
-  if (!Number.isInteger(declared) || declared < 0) errors.push("invalid_snapshot_sequence");
-  return Number(batch.snapshotSequence || 0);
-}
-
-function collectSnapshotErrors(snapshot, { snapshotSequence, sessionId }, errors) {
-  if (!isObjectLike(snapshot)) return;
-  const snapshotValidation = validateProtocolEvent(snapshot);
-  if (!snapshotValidation.valid) errors.push(...snapshotValidation.errors);
-  if (eventSequence(snapshot) !== snapshotSequence) errors.push("snapshot_sequence_mismatch");
-  const snapshotSessionId = eventSessionId(snapshot);
-  if (snapshotSessionId && snapshotSessionId !== sessionId) {
-    errors.push("snapshot_session_mismatch");
+function collectFamilyErrors(envelope, family, errors, prefix) {
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid) {
+    errors.push(...validation.errors);
+    return false;
   }
+  if (validation.descriptor.family !== family) {
+    errors.push(`${prefix}_family_mismatch`);
+    return false;
+  }
+  return true;
+}
+
+function collectSnapshotErrors(batch, errors) {
+  const { snapshot, snapshotSequence, sessionId } = batch;
+  if (snapshot === null) return;
+  if (!collectFamilyErrors(snapshot, EVENT_FAMILY.TURN_SNAPSHOT, errors, "snapshot")) return;
+  collectSessionStreamErrors(snapshot, sessionId, errors, "snapshot");
+  if (snapshot.ordering.sequence !== snapshotSequence) errors.push("snapshot_sequence_mismatch");
 }
 
 function collectEventIdentityErrors(event, seenEventIds, errors) {
-  const id = eventId(event);
-  if (!id) {
-    errors.push("missing_event_id");
-    return;
-  }
+  const id = event.identity.eventId;
   if (seenEventIds.has(id)) {
     errors.push(
       JSON.stringify(seenEventIds.get(id)) === JSON.stringify(event)
@@ -134,119 +78,80 @@ function collectEventIdentityErrors(event, seenEventIds, errors) {
   seenEventIds.set(id, event);
 }
 
-function collectEventTailErrors(events, { ordering, sessionId, snapshotSequence }, errors) {
+function collectEventTailErrors(batch, errors) {
+  const { events, sessionId, snapshotSequence } = batch;
+  if (!Array.isArray(events)) {
+    errors.push("events_not_array");
+    return;
+  }
   let previous = snapshotSequence;
   const seenEventIds = new Map();
-  for (const event of listOf(events)) {
-    const eventValidation = validateProtocolEvent(event);
-    if (!eventValidation.valid) errors.push(...eventValidation.errors);
-    const sequence = eventSequence(event);
-    if (eventOrderingDomain(event) !== ordering.domain) {
-      errors.push("event_ordering_domain_mismatch");
-    }
-    if (eventOrderingScopeId(event) !== ordering.scopeId) {
-      errors.push("event_ordering_scope_mismatch");
-    }
+  for (const event of events) {
+    if (!collectFamilyErrors(event, EVENT_FAMILY.TURN_LIFECYCLE, errors, "event")) continue;
+    collectSessionStreamErrors(event, sessionId, errors, "event");
     collectEventIdentityErrors(event, seenEventIds, errors);
-    const eventSession = eventSessionId(event);
-    if (eventSession && eventSession !== sessionId) errors.push("event_session_mismatch");
-    if (!Number.isInteger(sequence) || sequence !== previous + 1) {
-      errors.push("invalid_event_sequence");
-    }
-    previous = sequence;
+    if (event.ordering.sequence !== previous + 1) errors.push("invalid_event_sequence");
+    previous = event.ordering.sequence;
   }
-  return previous;
 }
 
-function collectPendingInteractionErrors(pendingInteractions, sessionId, errors) {
-  for (const interaction of listOf(pendingInteractions)) {
-    if (!isPendingInteractionReplay(interaction)) {
-      errors.push("invalid_pending_interaction");
+function collectPendingInteractionErrors(batch, errors) {
+  const { pendingInteractions, sessionId } = batch;
+  if (!Array.isArray(pendingInteractions)) {
+    errors.push("pending_interactions_not_array");
+    return;
+  }
+  for (const interaction of pendingInteractions) {
+    if (
+      !collectFamilyErrors(interaction, EVENT_FAMILY.INTERACTION_REQUEST, errors, "interaction")
+    ) {
       continue;
     }
+    if (interaction.payload.lifecycle !== INTERACTION_LIFECYCLE.PENDING) {
+      errors.push("interaction_not_pending");
+    }
     if (
-      eventSessionId(interaction) !== sessionId &&
-      eventParentSessionId(interaction) !== sessionId
+      interaction.identity.sessionId !== sessionId &&
+      interaction.payload.parentSessionId !== sessionId
     ) {
       errors.push("pending_interaction_session_mismatch");
     }
   }
 }
 
-function collectCursorErrors(cursor, { snapshotSequence, lastSequence }, errors) {
-  if (Number(cursor?.fromSequence ?? snapshotSequence) !== snapshotSequence) {
-    errors.push("invalid_cursor_from_sequence");
-  }
-  if (Number(cursor?.toSequence ?? lastSequence) !== lastSequence) {
-    errors.push("invalid_cursor_to_sequence");
-  }
-}
-
-export function validateReplayBatch(batch = {}) {
+export function validateReplayBatch(batch) {
+  if (!isPlainObject(batch)) return { valid: false, errors: ["replay_batch_not_object"] };
   const errors = [];
-  collectReplayHeaderErrors(batch, errors);
-  const ordering = readReplayOrdering(batch, errors);
-  const snapshotSequence = readSnapshotSequence(batch, errors);
-  const sessionId = text(batch.sessionId);
-  collectSnapshotErrors(batch.snapshot, { snapshotSequence, sessionId }, errors);
-  const lastSequence = collectEventTailErrors(
-    batch.events,
-    { ordering, sessionId, snapshotSequence },
-    errors,
-  );
-  collectPendingInteractionErrors(batch.pendingInteractions, sessionId, errors);
-  collectCursorErrors(batch.cursor, { snapshotSequence, lastSequence }, errors);
+  collectHeaderErrors(batch, errors);
+  if (errors.length) return { valid: false, errors };
+  collectSnapshotErrors(batch, errors);
+  collectEventTailErrors(batch, errors);
+  collectPendingInteractionErrors(batch, errors);
   return { valid: errors.length === 0, errors };
 }
 
-export function replayEventTail({
-  snapshotSequence = 0,
-  orderingDomain = "",
-  orderingScopeId = "",
-  events = [],
-  apply,
-} = {}) {
-  const base = Number(snapshotSequence || 0);
-  const normalizedDomain = text(orderingDomain);
-  const normalizedScopeId = text(orderingScopeId);
-  if (!normalizedDomain || !normalizedScopeId) {
-    return { applied: false, reason: "missing_ordering_stream" };
+export function createReplayBatch({
+  sessionId,
+  snapshot,
+  snapshotSequence,
+  events,
+  pendingInteractions,
+}) {
+  const batch = Object.freeze({
+    protocol: Object.freeze({
+      name: EVENT_PROTOCOL_NAME,
+      version: EVENT_PROTOCOL_VERSION,
+      schema: REPLAY_BATCH_SCHEMA,
+    }),
+    sessionId,
+    snapshot,
+    snapshotSequence,
+    events,
+    pendingInteractions,
+  });
+  const validation = validateReplayBatch(batch);
+  if (!validation.valid) {
+    throw new TypeError(`invalid replay batch: ${validation.errors.join(",")}`);
   }
-  const inputEvents = Array.isArray(events) ? events : [];
-  for (const event of inputEvents) {
-    const validation = validateProtocolEvent(event);
-    if (!validation.valid) {
-      return { applied: false, reason: "invalid_event_envelope", errors: validation.errors };
-    }
-    if (
-      eventOrderingDomain(event) !== normalizedDomain ||
-      eventOrderingScopeId(event) !== normalizedScopeId
-    ) {
-      return { applied: false, reason: "event_ordering_stream_mismatch" };
-    }
-  }
-  const ordered = inputEvents
-    .filter((event) => eventSequence(event) > base)
-    .sort((left, right) => eventSequence(left) - eventSequence(right));
-  let previous = base;
-  const appliedEventIds = new Set();
-  for (const event of ordered) {
-    const sequence = eventSequence(event);
-    const id = eventId(event);
-    if (id && appliedEventIds.has(id)) {
-      return { applied: false, reason: "duplicate_event_id", eventId: id };
-    }
-    if (sequence !== previous + 1) {
-      return {
-        applied: false,
-        reason: "event_sequence_gap",
-        expected: previous + 1,
-        actual: sequence,
-      };
-    }
-    apply?.(event);
-    if (id) appliedEventIds.add(id);
-    previous = sequence;
-  }
-  return { applied: true, lastSequence: previous };
+  return batch;
 }

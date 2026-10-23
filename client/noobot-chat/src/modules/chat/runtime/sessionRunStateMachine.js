@@ -6,18 +6,12 @@
 export {
   AGENT_CHANNEL_STATE,
   FrontendRunState,
-  isAuthoritativeTerminalState,
-  isLegacyTerminalDiscoveryState,
   SESSION_RUN_EVENT,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
   TURN_PENDING_COMMAND_TYPE,
 } from "./run-state-machine/constants.js";
-export {
-  isInFlightChannelState,
-  isTerminalChannelState,
-} from "./run-state-machine/channelState.js";
 export {
   isTerminalOutcome,
   isTerminalRunState,
@@ -55,6 +49,7 @@ export { resolveEventScope } from "./run-state-machine/runIdentity.js";
 export { createInitialSessionRunState, evaluateSessionRunState } from "./run-state-machine/core.js";
 export {
   getMessageRuntimeChannelState,
+  isFinalizedAssistantMessage,
   isMessageInFlightAssistant,
   isMessageRunning,
   resolveSessionRunMessageRuntimePatch,

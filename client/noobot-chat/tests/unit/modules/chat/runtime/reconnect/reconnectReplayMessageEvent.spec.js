@@ -16,6 +16,7 @@ import {
 import { selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { normalizeTurnTransportEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 
 const authoritative = (eventType, sequence, extra = {}) =>
   canonicalMessageEvent({
@@ -140,20 +141,16 @@ describe("reconnect authoritative message event replay", () => {
     expect(canonicalMessages.get("message-2").messageEventState.lastSequence).toBe(1);
   });
 
-  it("rejects reconnect message events without an authoritative presentationMessageId", () => {
-    const findMessagesByPresentationId = () => {
-      throw new Error("must not upsert an unidentified message");
-    };
-    const envelope = authoritative("llm_delta", 1, { presentationMessageId: "", text: "wrong" });
-
-    const applied = applyReconnectEnvelopeToTargetMessage({
-      envelope,
-      targetMessage: { presentationMessageId: "legacy", content: "unchanged" },
-      findMessagesByPresentationId,
-    });
-
-    expect(applied).toBe(false);
-    expect(envelope.payload.presentationMessageId).toBe("");
+  it("rejects reconnect message events without an authoritative presentationMessageId at the entry", () => {
+    for (const presentationMessageId of ["", " message-1 "]) {
+      const envelope = authoritative("llm_delta", 1, { presentationMessageId, text: "wrong" });
+      const normalized = normalizeTurnTransportEnvelope({
+        event: envelope.identity.eventType,
+        data: envelope,
+      });
+      expect(normalized.protocolEnvelope).toBeNull();
+      expect(normalized.rejected.errors.length).toBeGreaterThan(0);
+    }
   });
 
   it("uses the canonical reducer and consumes no-text tool events idempotently", () => {
@@ -445,7 +442,7 @@ describe("reconnect authoritative message event replay", () => {
     expect(staleSnapshot.result).toBe("snapshot_stale");
   });
 
-  it("ignores non-canonical transport events after canonical facts", () => {
+  it("projects canonical delta and tool facts once", () => {
     const targetMessage = {
       sessionId: "session-1",
       presentationMessageId: "message-1",
@@ -464,14 +461,6 @@ describe("reconnect authoritative message event replay", () => {
     });
     applyReconnectEnvelopeToTargetMessage({
       envelope: authoritativeTool,
-      findMessagesByPresentationId,
-    });
-    applyReconnectEnvelopeToTargetMessage({
-      envelope: { event: "delta", sequence: 1, data: { seq: 1, text: " duplicate" } },
-      findMessagesByPresentationId,
-    });
-    applyReconnectEnvelopeToTargetMessage({
-      envelope: { event: "thinking", sequence: 2, data: { seq: 2, text: "duplicate tool" } },
       findMessagesByPresentationId,
     });
 

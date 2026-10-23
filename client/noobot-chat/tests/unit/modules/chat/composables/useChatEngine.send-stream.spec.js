@@ -427,7 +427,7 @@ describe("useChatEngine.send-stream", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
-    expect(assistant?.dialogProcessId).toBeUndefined();
+    expect(assistant.dialogProcessId).toBe("");
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
@@ -556,8 +556,7 @@ describe("useChatEngine.send-stream", () => {
         sessionId: "local-1",
         data: expect.objectContaining({
           presentationMessageId: expect.any(String),
-          result: "applied",
-          errors: [],
+          reductions: [expect.objectContaining({ result: "applied" })],
         }),
       }),
     );

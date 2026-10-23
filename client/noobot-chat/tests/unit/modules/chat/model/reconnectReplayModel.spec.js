@@ -5,7 +5,15 @@
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
-import { createReplayBatch as createProtocolReplayBatch } from "@noobot/event-protocol";
+import {
+  createEventEnvelope,
+  createReplayBatch as createProtocolReplayBatch,
+  createTurnSnapshotEnvelope,
+  EVENT_FAMILY,
+  getEventFamily,
+  INTERACTION_EVENT_TYPE,
+  INTERACTION_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
@@ -17,11 +25,43 @@ import {
   patchMessageObjectPreservingUiState,
 } from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
 
-const createReplayBatch = (options = {}) =>
+const producer = { type: "test", id: "reconnect-replay-model" };
+
+const createReplayBatch = ({ sessionId, snapshot, snapshotSequence, pendingInteractions = [] }) =>
   createProtocolReplayBatch({
-    ...options,
-    orderingDomain: "session",
-    orderingScopeId: String(options.sessionId || "").trim(),
+    sessionId,
+    snapshot:
+      snapshot === null
+        ? null
+        : createTurnSnapshotEnvelope(snapshot, {
+            eventId: `snapshot-${snapshot.commandId}`,
+            producer,
+          }),
+    snapshotSequence,
+    events: [],
+    pendingInteractions,
+  });
+
+const pendingInteraction = (requestId) =>
+  createEventEnvelope({
+    family: EVENT_FAMILY.INTERACTION_REQUEST,
+    schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
+    identity: {
+      eventId: `${requestId}-event`,
+      eventType: INTERACTION_EVENT_TYPE.REQUEST,
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+    },
+    causality: {},
+    ordering: { domain: INTERACTION_SEQUENCE_DOMAIN, scopeId: requestId, sequence: 1 },
+    producer,
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    payload: {
+      requestId,
+      dialogProcessId: "dp-1",
+      content: "confirm?",
+      lifecycle: "pending",
+    },
   });
 
 describe("reconnectReplayModel", () => {
@@ -34,6 +74,7 @@ describe("reconnectReplayModel", () => {
       revision: 1,
       sequence: 1,
       state: "processing",
+      startedAt: "2026-01-01T00:00:00.000Z",
     };
     const snapshot = createTurnLifecycleSnapshot({
       commandId: "command-1",
@@ -68,6 +109,7 @@ describe("reconnectReplayModel", () => {
                 revision: 1,
                 sequence: 1,
                 state: "stop_completed",
+                startedAt: "2026-01-01T00:00:00.000Z",
               },
             }),
             snapshotSequence: 1,
@@ -108,15 +150,7 @@ describe("reconnectReplayModel", () => {
             sessionId: "s-1",
             snapshot: null,
             snapshotSequence: 0,
-            pendingInteractions: [
-              {
-                requestId: "request-1",
-                sessionId: "s-1",
-                dialogProcessId: "dp-1",
-                turnScopeId: "turn-1",
-                payload: { type: "confirm" },
-              },
-            ],
+            pendingInteractions: [pendingInteraction("request-1")],
           }),
         },
         [
@@ -161,6 +195,7 @@ describe("reconnectReplayModel", () => {
             revision: 1,
             sequence: 2,
             state: "processing",
+            startedAt: "2026-01-01T00:00:00.000Z",
           },
         }),
         snapshotSequence: 2,

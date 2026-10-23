@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
-import { _ensureArray, _trimStr } from "./utils.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../engine/turnProjectionStore.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
@@ -13,62 +11,33 @@ import {
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
 
-function summarizeReconnectEnvelope(envelope = {}) {
-  const validation = validateProtocolEvent(envelope);
+function summarizeReconnectEnvelope(envelope) {
   return {
-    event: _trimStr(envelope?.identity?.eventType),
-    eventId: _trimStr(envelope?.identity?.eventId),
-    family: _trimStr(envelope?.protocol?.family),
-    sequenceDomain: _trimStr(envelope?.ordering?.domain),
-    sequenceScopeId: _trimStr(envelope?.ordering?.scopeId),
-    sequence: Number(envelope?.ordering?.sequence || 0) || null,
-    valid: validation.valid,
-    errors: validation.errors,
+    eventId: envelope.identity.eventId,
+    eventType: envelope.payload.eventType,
+    sequenceScopeId: envelope.ordering.scopeId,
+    sequence: envelope.ordering.sequence,
   };
-}
-
-export function prepareReconnectReplayMessages({ messages = [] } = {}) {
-  const nextMessages = _ensureArray(messages).filter((envelope) => {
-    const result = validateProtocolEvent(envelope);
-    return result.valid && result.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE;
-  });
-  return { nextMessages };
-}
-
-export function shouldSkipReconnectBatchAfterTerminal({} = {}) {
-  return false;
-}
-
-export function prepareReconnectReplayBatchPlan({ messages = [] } = {}) {
-  return prepareReconnectReplayMessages({ messages });
 }
 
 export function applyReconnectEnvelopeToTargetMessage({
   envelope,
   findMessagesByPresentationId,
   materializeTurnPresentation,
-  normalizedDpId = "",
-} = {}) {
-  const validation = validateProtocolEvent(envelope);
-  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
-    return false;
-  }
+}) {
   const presentationMessageId = resolveMessageEventPresentationId(envelope.payload);
-  if (!presentationMessageId) return false;
-  const targetSessionId = _trimStr(envelope.identity.sessionId);
+  const { sessionId, turnScopeId, eventId } = envelope.identity;
   if (envelope.payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
-    const materialized = materializeTurnPresentation?.(envelope);
+    const materialized = materializeTurnPresentation(envelope);
     logThinkingReplayDebug("frontend.thinkingReplay.presentationMaterialized", () => ({
-      sessionId: targetSessionId,
-      turnScopeId: _trimStr(envelope.identity.turnScopeId),
+      sessionId,
+      turnScopeId,
       presentationMessageId,
-      applied: materialized?.applied === true,
-      reason: materialized?.reason || "",
-      createdCount: Number(materialized?.createdCount || 0),
+      ...materialized,
     }));
-    if (materialized?.applied !== true) return false;
+    if (materialized.applied !== true) return false;
   }
-  const canonicalTargets = findMessagesByPresentationId(targetSessionId, presentationMessageId);
+  const canonicalTargets = findMessagesByPresentationId(sessionId, presentationMessageId);
   if (canonicalTargets.length === 0) return false;
   const reductions = canonicalTargets.map((targetMessage) =>
     dispatchTurnEnvelope({
@@ -77,37 +46,32 @@ export function applyReconnectEnvelopeToTargetMessage({
       source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
     }),
   );
-  const reduction = reductions.find((item) => item.applied) ||
-    reductions[0] || { result: "target_missing" };
   logThinkingReplayDebug("frontend.messageEvent.reduced", () => ({
-    source: "history_replay",
-    sessionId: String(envelope.identity.sessionId),
-    dialogProcessId: String(envelope.payload.dialogProcessId || normalizedDpId),
-    turnScopeId: String(envelope.identity.turnScopeId || ""),
+    source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
+    sessionId,
+    dialogProcessId: envelope.payload.dialogProcessId,
+    turnScopeId,
     presentationMessageId,
-    eventId: String(envelope.identity.eventId),
-    eventType: String(envelope.payload.eventType),
+    eventId,
+    eventType: envelope.payload.eventType,
     sequence: envelope.ordering.sequence,
-    result: reduction.result,
-    errors: reduction.errors || [],
+    reductions: reductions.map(({ result, errors }) => ({ result, errors })),
   }));
   return true;
 }
 
 export function applyReconnectEnvelopeBatchToTargetMessage({
-  messages = [],
+  messages,
   findMessagesByPresentationId,
   materializeTurnPresentation,
-  normalizedDpId = "",
-} = {}) {
+}) {
   let appliedCount = 0;
-  for (const envelope of _ensureArray(messages)) {
+  for (const envelope of messages) {
     if (
       applyReconnectEnvelopeToTargetMessage({
         envelope,
         findMessagesByPresentationId,
         materializeTurnPresentation,
-        normalizedDpId,
       })
     )
       appliedCount += 1;
@@ -119,53 +83,17 @@ export async function applyReconnectReplayBatchToActiveSession({
   activeSession,
   findMessagesByPresentationId,
   materializeTurnPresentation,
-  messages = [],
-  dialogProcessId = "",
-  turnScopeId = "",
-} = {}) {
-  if (!activeSession?.value) return false;
-  const normalizedDpId = _trimStr(dialogProcessId);
-  const envelopeTurnScopeIds = new Set(
-    _ensureArray(messages)
-      .map((envelope) => _trimStr(envelope?.identity?.turnScopeId))
-      .filter(Boolean),
-  );
-  const normalizedTurnScopeId =
-    _trimStr(turnScopeId) || (envelopeTurnScopeIds.size === 1 ? [...envelopeTurnScopeIds][0] : "");
-  const { nextMessages } = prepareReconnectReplayBatchPlan({ messages });
-  logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", () => ({
-    sessionId: _trimStr(activeSession.value?.sessionId),
-    dialogProcessId: normalizedDpId,
-    turnScopeId: normalizedTurnScopeId,
-    inputCount: _ensureArray(messages).length,
-    replayCount: nextMessages.length,
-    filteredCount: Math.max(0, _ensureArray(messages).length - nextMessages.length),
-  }));
+  messages,
+}) {
   logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchPlanned", () => ({
-    sessionId: _trimStr(activeSession.value?.sessionId),
-    dialogProcessId: normalizedDpId,
-    turnScopeId: normalizedTurnScopeId,
-    inputCount: _ensureArray(messages).length,
-    replayCount: nextMessages.length,
-    filteredCount: Math.max(0, _ensureArray(messages).length - nextMessages.length),
-    inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
-    replayEnvelopes: nextMessages.map(summarizeReconnectEnvelope),
+    sessionId: activeSession.value.sessionId,
+    replayCount: messages.length,
+    replayEnvelopes: messages.map(summarizeReconnectEnvelope),
   }));
-  if (!nextMessages.length) {
-    logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchIgnored", () => ({
-      sessionId: _trimStr(activeSession.value?.sessionId),
-      dialogProcessId: normalizedDpId,
-      turnScopeId: normalizedTurnScopeId,
-      reason: "no_valid_message_timeline_envelopes",
-      inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
-    }));
-    return false;
-  }
   const appliedCount = applyReconnectEnvelopeBatchToTargetMessage({
-    messages: nextMessages,
+    messages,
     findMessagesByPresentationId,
     materializeTurnPresentation,
-    normalizedDpId,
   });
   return appliedCount > 0;
 }

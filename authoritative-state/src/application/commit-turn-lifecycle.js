@@ -9,9 +9,8 @@ import {
   createTurnTerminalStatus,
   deriveAuthoritativeTurnCapabilities,
   isSettlingTurnEvent,
-  TURN_LIFECYCLE_WIRE_EVENT,
 } from "@noobot/session-protocol";
-import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
+import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 import { transitionTurnLifecycle } from "../domain/turn-lifecycle-entity.js";
 import { text as clean } from "@noobot/shared/value";
 
@@ -52,30 +51,8 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
     continuationSource: turn.continuationSource,
     continuedByTurnScopeId: turn.continuedByTurnScopeId,
   });
-  return createEventEnvelope({
-    family: EVENT_FAMILY.TURN_LIFECYCLE,
-    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-    identity: {
-      eventId: payload.eventId,
-      eventType: TURN_LIFECYCLE_WIRE_EVENT,
-      sessionId: payload.sessionId,
-      turnScopeId: payload.turnScopeId,
-      executionId: payload.executionId,
-    },
-    causality: {
-      commandId: payload.commandId,
-      causationId: payload.causationId,
-      correlationId: payload.correlationId,
-    },
-    ordering: {
-      domain: "session",
-      scopeId: payload.sessionId,
-      sequence: payload.sequence,
-      revision: payload.revision,
-    },
+  return createTurnLifecycleEventEnvelope(payload, {
     producer: { type: "domain-service", id: "authoritative-turn-lifecycle" },
-    occurredAt: payload.occurredAt,
-    payload,
   });
 }
 

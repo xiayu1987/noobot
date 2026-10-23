@@ -84,6 +84,7 @@ function resolveNoobotInternalMessageType(canonicalMessage = {}) {
 function buildMessageOriginFacet(canonicalMessage = {}, { workflowMeta = null } = {}) {
   return {
     noobotInternalMessageType: resolveNoobotInternalMessageType(canonicalMessage),
+    messageOrigin: canonicalMessage.messageOrigin,
     injectedMessage: canonicalMessage.injectedMessage === true,
     injectedBy: text(canonicalMessage.injectedBy),
     pluginMessage: canonicalMessage.pluginMessage === true,

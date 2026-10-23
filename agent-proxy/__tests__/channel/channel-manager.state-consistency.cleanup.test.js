@@ -9,7 +9,12 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
 import { createChannelKey } from "../../src/shared/utils.js";
-import { createMockSocket, listEvents } from "./channel-manager.state-consistency.test-helpers.js";
+import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
+import {
+  canonicalInteractionRequest,
+  createMockSocket,
+  listEvents,
+} from "./channel-manager.state-consistency.test-helpers.js";
 
 test("newly attached subscriber should receive no_conversation snapshot state", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -101,12 +106,15 @@ test("cleanup should remove expired terminal channel and stale request mapping",
   };
 
   assert.equal(manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.COMPLETED), true);
-  manager.pushChannelEvent(channel, "interaction_request", {
-    requestId: "req-cleanup",
-    sessionId: "session-cleanup",
-    dialogProcessId: "dp-cleanup",
-    seq: 1,
-  });
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    canonicalInteractionRequest({
+      requestId: "req-cleanup",
+      sessionId: "session-cleanup",
+      dialogProcessId: "dp-cleanup",
+    }),
+  );
   channel.retention.cleanupAfterMs = Date.now() - 1;
 
   manager.cleanupExpiredChannels();

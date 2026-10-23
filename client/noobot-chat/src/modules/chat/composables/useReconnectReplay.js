@@ -16,10 +16,8 @@ import {
   ensureReconnectSessionActive as ensureReconnectSessionActiveWithContext,
   isCurrentActiveSession as isCurrentActiveSessionWithContext,
 } from "../runtime/reconnect/sessionActivation.js";
-import {
-  applyReconnectMessagesToActiveSessionReplay,
-  consumeReconnectReplayCacheForSession,
-} from "../runtime/reconnect/replayCacheConsumer.js";
+import { consumeReconnectReplayCacheForSession } from "../runtime/reconnect/replayCacheConsumer.js";
+import { applyReconnectReplayBatchToActiveSession } from "../runtime/reconnect/batchReplay.js";
 import { createReconnectReplayPublicApi } from "../runtime/reconnect/publicApi.js";
 import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
@@ -55,7 +53,7 @@ export function useReconnectReplay({
   applyWorkflowRuntimeEvent,
   reduceSubSessionMessageEvent,
   applyTurnLifecycleSnapshot,
-} = {}) {
+}) {
   const reconnectReplayContext = createReconnectReplayContext();
   const { replayCache } = reconnectReplayContext;
   let { replayHydrationPromise } = reconnectReplayContext;
@@ -95,27 +93,22 @@ export function useReconnectReplay({
     });
   }
 
-  async function applySubSessionReplayMessages(messages = [], context = {}) {
+  async function applySubSessionReplayMessages(messages, context) {
     let appliedCount = 0;
-    let authoritativeEventCount = 0;
-    for (const messageEvent of Array.isArray(messages) ? messages : []) {
-      if (!messageEvent) continue;
-      authoritativeEventCount += 1;
-      const result = reduceSubSessionMessageEvent?.(messageEvent);
-      if (result?.applied === true) appliedCount += 1;
+    for (const messageEvent of messages) {
+      if (reduceSubSessionMessageEvent(messageEvent).applied === true) appliedCount += 1;
     }
-    sessionLogWebSocketClient?.log?.({
+    sessionLogWebSocketClient.log({
       scope: "session",
       category: "debug",
       level: "debug",
       debugType: "workflow-diagnostics",
       event: "frontend.workflowTransport.subSessionReplayRouted",
-      sessionId: String(context?.rootSessionId || ""),
-      dialogProcessId: String(context?.dialogProcessId || ""),
-      turnScopeId: String(context?.turnScopeId || ""),
+      sessionId: context.rootSessionId,
+      dialogProcessId: context.dialogProcessId,
+      turnScopeId: context.turnScopeId,
       data: {
-        replayEnvelopeCount: Array.isArray(messages) ? messages.length : 0,
-        authoritativeEventCount,
+        replayEnvelopeCount: messages.length,
         appliedCount,
         rootMessageProjectionSkipped: true,
       },
@@ -218,17 +211,16 @@ export function useReconnectReplay({
     return detailApplied;
   }
 
-  async function consumeReplayCacheForSession(sessionId = "") {
+  async function consumeReplayCacheForSession(sessionId) {
     return consumeReconnectReplayCacheForSession({
       replayCache,
       sessionId,
       applyReconnectMessagesToActiveSession,
-      applySubSessionReplayMessages,
     });
   }
 
   function logReconnectReplaySystemEvent(event, payload = {}) {
-    sessionLogWebSocketClient?.log?.({
+    sessionLogWebSocketClient.log({
       scope: "session",
       category: "system",
       event,
@@ -243,22 +235,16 @@ export function useReconnectReplay({
     });
   }
 
-  async function applyReconnectMessagesToActiveSession(
-    messages,
-    dialogProcessId,
-    { turnScopeId = "" } = {},
-  ) {
-    const sessionId = text(activeSession.value?.sessionId);
+  async function applyReconnectMessagesToActiveSession(messages, { turnScopeId }) {
+    const { sessionId } = activeSession.value;
     if (isDeletedTurn({ sessionId, turnScopeId })) {
       return { applied: false, reason: "deleted_turn_tombstoned" };
     }
-    return applyReconnectMessagesToActiveSessionReplay({
+    return applyReconnectReplayBatchToActiveSession({
       activeSession,
       findMessagesByPresentationId,
       materializeTurnPresentation,
       messages,
-      dialogProcessId,
-      turnScopeId,
     });
   }
 

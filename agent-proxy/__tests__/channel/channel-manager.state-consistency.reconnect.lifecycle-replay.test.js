@@ -169,6 +169,7 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
       sequence: 2,
       activeTurnScopeId: turnScopeId,
       activeTurn: {
+        sessionId,
         turnScopeId,
         presentationMessageId: "presentation-active-2",
         dialogProcessId: "dp-authoritative-running",
@@ -239,6 +240,7 @@ test("reconnect opens a query transport without replaying the stale run command"
         activeTurn: null,
         recentTerminalTurns: [
           {
+            sessionId,
             turnScopeId,
             presentationMessageId: "presentation-query-active-1",
             dialogProcessId: "dp-query-transport",
@@ -311,6 +313,7 @@ test("snapshot query completion cannot close a connection claimed by a concurren
         sequence: 1,
         activeTurnScopeId: turnScopeId,
         activeTurn: {
+          sessionId,
           turnScopeId,
           presentationMessageId: "presentation-query-run-race",
           revision: 1,
@@ -440,6 +443,7 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
       sequence: 2,
       activeTurnScopeId: turnScopeId,
       activeTurn: {
+        sessionId,
         turnScopeId,
         presentationMessageId: "presentation-multi-active-2",
         dialogProcessId: "dp-multi-active",

@@ -11,7 +11,6 @@ import { mergeToolTimelines } from "./toolTimeline.js";
 import { mergeActivityTimelines } from "./activityTimeline.js";
 import { createTurnObservation } from "./turnObservation.js";
 import { mergeAttachmentSnapshot } from "../../model/dialogProcessChain.js";
-import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import {
   resolveSessionRunMessageRuntimePatch,
@@ -117,13 +116,9 @@ const TURN_UI_SNAPSHOT_FIELDS = new Set([
   "animationKeys",
 ]);
 
-export function dispatchTurnEnvelope({
-  targetMessage,
-  envelope,
-  source = TURN_PROJECTION_SOURCE.NORMAL_LIVE,
-} = {}) {
+export function dispatchTurnEnvelope({ targetMessage, envelope, source }) {
   const reducerObservedAtMs = Date.now();
-  const eventTimestamp = String(envelope?.occurredAt || "");
+  const eventTimestamp = envelope.occurredAt;
   const eventTimestampMs = Date.parse(eventTimestamp);
   const identity = resolveTurnIdentity(envelope);
   const turnKey = createTurnKey(identity);
@@ -132,8 +127,8 @@ export function dispatchTurnEnvelope({
       requestedSessionId: identity.sessionId,
       canonicalSessionId: identity.sessionId,
       turnKey,
-      eventId: envelope?.identity?.eventId,
-      sequence: envelope?.ordering?.sequence,
+      eventId: envelope.identity.eventId,
+      sequence: envelope.ordering.sequence,
       source,
       authority: "authoritative",
       ...values,
@@ -143,16 +138,15 @@ export function dispatchTurnEnvelope({
       dialogProcessId: identity.dialogProcessId,
       turnScopeId: identity.turnScopeId,
       source,
-      eventId: String(envelope?.identity?.eventId || ""),
-      eventType: String(envelope?.payload?.eventType || ""),
-      presentationMessageId: String(envelope?.payload?.presentationMessageId || ""),
-      protocolFamily: String(envelope?.protocol?.family || ""),
-      protocolVersion: Number(envelope?.protocol?.version || 0),
-      sequence: Number(envelope?.ordering?.sequence || 0),
-      sequenceDomain: String(envelope?.ordering?.domain || ""),
-      sequenceScopeId: String(envelope?.ordering?.scopeId || ""),
+      eventId: envelope.identity.eventId,
+      eventType: envelope.payload.eventType,
+      presentationMessageId: envelope.payload.presentationMessageId,
+      protocolFamily: envelope.protocol.family,
+      protocolVersion: envelope.protocol.version,
+      sequence: envelope.ordering.sequence,
+      sequenceDomain: envelope.ordering.domain,
+      sequenceScopeId: envelope.ordering.scopeId,
       authority: "authoritative",
-      textLength: String(envelope?.payload?.text || "").length,
       eventTimestamp,
       reducerObservedAt: new Date(reducerObservedAtMs).toISOString(),
       sourceToReducerLatencyMs: Number.isFinite(eventTimestampMs)
@@ -173,36 +167,15 @@ export function dispatchTurnEnvelope({
     }));
     return observation;
   };
-  if (!turnKey) {
+  if (!messageOwnsTurn(targetMessage, identity)) {
     return observe({
-      result: MESSAGE_EVENT_REDUCE_RESULT.INVALID,
-      errors: ["turn_identity_missing"],
-      reason: "missing_turn_identity",
-    });
-  }
-  const envelopeValidation = validateProtocolEvent(envelope);
-  if (
-    !envelopeValidation.valid ||
-    envelopeValidation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE
-  ) {
-    return observe({
-      result: MESSAGE_EVENT_REDUCE_RESULT.INVALID,
-      errors: envelopeValidation.errors,
-      reason: "invalid_message_event_envelope",
-    });
-  }
-  if (!targetMessage || !messageOwnsTurn(targetMessage, identity)) {
-    return observe({
-      result: targetMessage
-        ? MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT
-        : MESSAGE_EVENT_REDUCE_RESULT.TARGET_MISSING,
-      errors: targetMessage ? ["turn_identity_conflict"] : [],
-      source,
-      reason: targetMessage ? "turn_identity_conflict" : "target_missing",
+      result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT,
+      errors: ["turn_identity_conflict"],
+      reason: "turn_identity_conflict",
     });
   }
   const state = initializeMessageEventState(targetMessage).messageEventState;
-  const sequence = Number(envelope?.ordering?.sequence || 0);
+  const { sequence } = envelope.ordering;
   const lastSequence = Number(state.lastSequence || 0);
   if (lastSequence && sequence > lastSequence + 1) {
     state.pendingEnvelopes = {

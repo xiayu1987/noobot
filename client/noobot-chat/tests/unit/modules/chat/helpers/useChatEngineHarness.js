@@ -220,15 +220,6 @@ export const createHarness = ({
     return result;
   };
 
-  const appendMessage = vi.fn((role, content = "", attachments = [], options = {}) => {
-    const message = { ...makeMessage(role, content, attachments), ...options };
-    activeSession.value.messages.push(message);
-    activeSession.value.rawMessages.push(message);
-    activeSession.value.messageCount = activeSession.value.messages.length;
-    activeSession.value.lastMessage = message;
-    return message;
-  });
-
   const messageView = createSessionMessageView({
     sessions,
     activeSession,
@@ -236,6 +227,7 @@ export const createHarness = ({
     userId: ref("u-1"),
     isImageMime: () => false,
   });
+  const appendMessage = vi.fn(messageView.appendMessage);
   const findMessageByViewKey = vi.fn(messageView.findMessageByViewKey);
   const upsertCanonicalAssistantMessage = vi.fn((presentationMessageId, identity = {}) => {
     const normalizedPresentationId = text(presentationMessageId);
@@ -272,7 +264,7 @@ export const createHarness = ({
     findUserMessageForCommit: messageView.findUserMessageForCommit,
     materializeTurnPresentation: messageView.materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
-    makeViewMessage: (message) => ({ ...message }),
+    makeViewMessage: messageView.makeViewMessage,
     fetchSessionDetail: vi.fn(async () => ({})),
     applySessionDetail: vi.fn(),
     refreshSessionConnectorsAsync: vi.fn(),

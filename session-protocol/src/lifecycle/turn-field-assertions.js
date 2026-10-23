@@ -8,6 +8,9 @@ import {
   canonicalizeTurnScopeId,
   isCanonicalTurnScopeId,
 } from "../identity/turn-scope-identity.js";
+import { TURN_STATE } from "./turn-state.js";
+
+const TURN_STATES = new Set(Object.values(TURN_STATE));
 
 export function collectTurnScopeIdErrors(
   turnScopeId,
@@ -31,7 +34,9 @@ export function collectRequiredFieldErrors(value, code) {
 export function collectTurnMaterializationErrors(turn = {}) {
   return [
     ...collectTurnScopeIdErrors(turn.turnScopeId),
+    ...collectRequiredFieldErrors(turn.sessionId, "missing_turn_session_id"),
     ...collectRequiredFieldErrors(turn.presentationMessageId, "missing_presentation_message_id"),
+    ...(TURN_STATES.has(turn.state) ? [] : ["invalid_turn_state"]),
     ...collectPositiveIntegerErrors(turn.revision, "invalid_turn_revision"),
     ...collectPositiveIntegerErrors(turn.sequence, "invalid_turn_sequence"),
   ];

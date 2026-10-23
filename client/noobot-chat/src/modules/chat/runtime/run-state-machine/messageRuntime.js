@@ -32,11 +32,12 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   FrontendRunState.USER_STOPPING,
 ]);
 
-function isFinalizedAssistantMessage(messageItem = {}) {
+export function isFinalizedAssistantMessage(messageItem) {
   if (getMessageRole(messageItem) !== "assistant") return false;
-  const channelState = getMessageChannelState(messageItem);
-  const state = normalizeState(channelState?.state);
-  return messageItem?.pending === false && isTerminalRunState(state);
+  return (
+    messageItem.pending === false &&
+    isTerminalRunState(getMessageRuntimeChannelState(messageItem).state)
+  );
 }
 
 function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activeSession = {}) {
@@ -96,13 +97,11 @@ function buildSessionRunMessageRuntimeKey(stateItem = {}) {
     .join("|");
 }
 
-function getMessageChannelState(messageItem = {}) {
+export function getMessageRuntimeChannelState(messageItem = {}) {
   const channelState = messageItem?.channelState;
   if (!isPlainObject(channelState)) return {};
   return { ...channelState, state: normalizeState(channelState.state) };
 }
-
-export const getMessageRuntimeChannelState = getMessageChannelState;
 
 const EMPTY_TURN_RUNTIME = Object.freeze({
   state: "",
@@ -114,7 +113,7 @@ const EMPTY_TURN_RUNTIME = Object.freeze({
 });
 
 export function resolveTurnRuntimeView({ messageItem = {}, runtime = EMPTY_TURN_RUNTIME } = {}) {
-  const channelState = getMessageChannelState(messageItem);
+  const channelState = getMessageRuntimeChannelState(messageItem);
   const runtimeState = normalizeState(runtime.state);
   const state = isTerminalRunState(runtimeState)
     ? runtimeState
@@ -192,7 +191,7 @@ function buildStoppedMessageRuntimePatch({
   messageItem = {},
   stateSnapshot = createInitialSessionRunState(),
 } = {}) {
-  const channelState = getMessageChannelState(messageItem);
+  const channelState = getMessageRuntimeChannelState(messageItem);
   return {
     clearRuntimeMark: true,
     pending: false,
@@ -215,7 +214,7 @@ function isObsoletePendingAssistantMessage(messageItem = {}, activeSession = {})
   const latestAssistant = getLatestAssistantMessage(activeSession);
   if (!latestAssistant || latestAssistant === messageItem) return false;
   return MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(
-    normalizeState(getMessageChannelState(messageItem)?.state),
+    normalizeState(getMessageRuntimeChannelState(messageItem)?.state),
   );
 }
 

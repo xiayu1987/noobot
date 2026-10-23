@@ -62,6 +62,7 @@ describe("useChatSession summary and reconnect state", () => {
           replacedTurns: [],
           recentTerminalTurns: [
             {
+              sessionId: "s-snapshot",
               turnScopeId: "t-snapshot",
               dialogProcessId: "dp-snapshot",
               state: "completed",
@@ -130,6 +131,7 @@ describe("useChatSession summary and reconnect state", () => {
           replacedTurns: [],
           recentTerminalTurns: [
             {
+              sessionId,
               turnScopeId,
               dialogProcessId: "dp-action-failure",
               state: "action_failed",
@@ -190,6 +192,7 @@ describe("useChatSession summary and reconnect state", () => {
           generatedAt: "2026-07-10T00:00:00.000Z",
           recentTerminalTurns: [
             {
+              sessionId: "s-late-identity",
               turnScopeId: "t-late-identity",
               messageId: "msg-event-t-late-identity",
               presentationMessageId: "msg-t-late-identity",
@@ -332,7 +335,7 @@ describe("useChatSession summary and reconnect state", () => {
         replacedTurns: [],
         recentTerminalTurns: [
           {
-            sessionId: "",
+            sessionId: "s-async-refresh",
             turnScopeId: "t-async-refresh",
             messageId: "msg-event-t-async-refresh",
             presentationMessageId: "msg-t-async-refresh",

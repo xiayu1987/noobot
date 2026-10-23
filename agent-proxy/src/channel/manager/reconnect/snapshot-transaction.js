@@ -39,17 +39,15 @@ export async function settleSnapshotRequests(snapshotRequests) {
   );
 }
 
-function mergeResolvedSnapshot(sessionEntry, sessionId, snapshot) {
-  const snapshotSequence = Number(snapshot?.ordering?.sequence || 0);
+function mergeResolvedSnapshot(sessionEntry, snapshot) {
+  const snapshotSequence = snapshot.ordering.sequence;
+  const { replayBatch } = sessionEntry;
   sessionEntry.replayBatch = createReplayBatch({
-    ...sessionEntry.replayBatch,
+    sessionId: replayBatch.sessionId,
     snapshot,
     snapshotSequence,
-    orderingDomain: "session",
-    orderingScopeId: sessionId,
-    events: (sessionEntry.replayBatch?.events || []).filter(
-      (event) => Number(event?.ordering?.sequence || 0) > snapshotSequence,
-    ),
+    events: replayBatch.events.filter((event) => event.ordering.sequence > snapshotSequence),
+    pendingInteractions: replayBatch.pendingInteractions,
   });
   return snapshotSequence;
 }
@@ -85,11 +83,7 @@ export function applySnapshotResults(manager, sessionsMap, snapshotResults) {
     );
     const sessionEntry = sessionsMap.get(request.sessionId);
     if (request.result?.ok === true && request.result.snapshot) {
-      const snapshotSequence = mergeResolvedSnapshot(
-        sessionEntry,
-        request.sessionId,
-        request.result.snapshot,
-      );
+      const snapshotSequence = mergeResolvedSnapshot(sessionEntry, request.result.snapshot);
       logResolvedSnapshot(manager, request.channel, request, snapshotSequence);
       continue;
     }

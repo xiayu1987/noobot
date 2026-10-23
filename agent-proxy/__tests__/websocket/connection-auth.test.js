@@ -11,30 +11,26 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { authenticateDownstreamSocket } from "../../src/websocket/connection-auth.js";
 import { AGENT_PROXY_CLOSE_REASON } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
+import { initializeDownstreamSocketState } from "../../src/websocket/downstream-socket-state.js";
 
 function createGateHarness() {
   const manager = new ChannelManager({ OPEN: 1 });
   const errors = [];
-  const finalized = [];
+  const closed = [];
   manager.sendSocketError = (socket, error) => errors.push(error);
-  const socket = {
-    closeCalls: [],
-    close(code, reason) {
-      this.closeCalls.push({ code, reason });
-    },
-  };
-  const finalize = (target, reason) => finalized.push({ target, reason });
-  return { manager, errors, finalized, socket, finalize };
+  const socket = initializeDownstreamSocketState({});
+  const close = (target, options) => closed.push({ target, ...options });
+  return { manager, errors, closed, socket, close };
 }
 
 test("connection gate closes sockets whose apiKey has no recorded identity", () => {
-  const { manager, errors, finalized, socket, finalize } = createGateHarness();
+  const { manager, errors, closed, socket, close } = createGateHarness();
 
   const authenticated = authenticateDownstreamSocket({
     socket,
     requestInfo: { apiKey: "unknown-key", locale: "en" },
     channelManager: manager,
-    finalize,
+    close,
   });
 
   assert.equal(authenticated, false);
@@ -43,23 +39,20 @@ test("connection gate closes sockets whose apiKey has no recorded identity", () 
     errors.map((error) => error.code),
     [AGENT_TRANSPORT_ERROR_CODE.UNAUTHENTICATED],
   );
-  assert.deepEqual(socket.closeCalls, [
-    { code: 1008, reason: AGENT_PROXY_CLOSE_REASON.UNAUTHENTICATED },
-  ]);
-  assert.deepEqual(finalized, [
-    { target: socket, reason: AGENT_PROXY_CLOSE_REASON.UNAUTHENTICATED },
+  assert.deepEqual(closed, [
+    { target: socket, code: 1008, reason: AGENT_PROXY_CLOSE_REASON.UNAUTHENTICATED },
   ]);
 });
 
 test("connection gate snapshots the recorded userId onto the socket", () => {
-  const { manager, errors, socket, finalize } = createGateHarness();
+  const { manager, errors, closed, socket, close } = createGateHarness();
   manager.saveApiKeyIdentity({ apiKey: "key-1", userId: "user-1" });
 
   const authenticated = authenticateDownstreamSocket({
     socket,
     requestInfo: { apiKey: "key-1", locale: "zh-CN" },
     channelManager: manager,
-    finalize,
+    close,
   });
 
   assert.equal(authenticated, true);
@@ -67,6 +60,7 @@ test("connection gate snapshots the recorded userId onto the socket", () => {
   assert.equal(socket.__agentProxyApiKey, "key-1");
   assert.equal(socket.__agentProxyLocale, "zh-CN");
   assert.deepEqual(errors, []);
+  assert.deepEqual(closed, []);
 });
 
 test("saveApiKeyIdentity rejects non-canonical apiKey or userId", () => {

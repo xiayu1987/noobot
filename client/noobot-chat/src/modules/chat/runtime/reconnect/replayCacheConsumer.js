@@ -4,54 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { takeReplayCacheGroupsForSession } from "./replayCache.js";
-import { applyReconnectReplayBatchToActiveSession } from "./batchReplay.js";
-import { _trimStr } from "./utils.js";
-import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
 export async function consumeReconnectReplayCacheForSession({
   replayCache,
-  sessionId = "",
+  sessionId,
   applyReconnectMessagesToActiveSession,
-  applySubSessionReplayMessages,
-} = {}) {
-  const replayGroups = takeReplayCacheGroupsForSession(replayCache, sessionId);
-  for (const { dialogProcessId, turnScopeId, replayMessages } of replayGroups) {
-    const isWorkflowNodeReplay = replayMessages.some((envelope) => {
-      const result = validateProtocolEvent(envelope);
-      return (
-        result.valid &&
-        result.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
-        Boolean(envelope.payload?.workflowRunId && envelope.payload?.nodeExecutionId)
-      );
-    });
-    if (isWorkflowNodeReplay) {
-      await applySubSessionReplayMessages?.(replayMessages, {
-        rootSessionId: _trimStr(sessionId),
-        dialogProcessId,
-        turnScopeId,
-      });
-      continue;
-    }
-    await applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId, {
-      turnScopeId,
+}) {
+  for (const replayMessages of takeReplayCacheGroupsForSession(replayCache, sessionId)) {
+    await applyReconnectMessagesToActiveSession(replayMessages, {
+      turnScopeId: replayMessages[0].identity.turnScopeId,
     });
   }
-}
-
-export async function applyReconnectMessagesToActiveSessionReplay({
-  activeSession,
-  findMessagesByPresentationId,
-  materializeTurnPresentation,
-  messages,
-  dialogProcessId,
-  turnScopeId = "",
-} = {}) {
-  return applyReconnectReplayBatchToActiveSession({
-    activeSession,
-    findMessagesByPresentationId,
-    materializeTurnPresentation,
-    messages,
-    dialogProcessId,
-    turnScopeId,
-  });
 }

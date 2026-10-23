@@ -8,21 +8,9 @@ import {
   isTransientMessageEvent,
   resolveMessageViewKey,
 } from "@noobot/event-protocol/message-event";
-import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
 function rejectGate(reason, current = null) {
   return current ? { ok: false, reason, current } : { ok: false, reason };
-}
-
-function validateEnvelopeFamily(eventData) {
-  const envelopeValidation = validateProtocolEvent(eventData);
-  const familyMatched = envelopeValidation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE;
-  if (envelopeValidation.valid && familyMatched) return null;
-  return {
-    ok: false,
-    reason: "invalid_authoritative_message_event",
-    errors: envelopeValidation.errors,
-  };
 }
 
 function evaluateSequenceMonotonicity({ currentSession, sequenceKey, sequence }) {
@@ -33,8 +21,6 @@ function evaluateSequenceMonotonicity({ currentSession, sequenceKey, sequence })
 }
 
 export function evaluateSubSessionEventGate({ eventData, registry, createEmptySession }) {
-  const familyRejection = validateEnvelopeFamily(eventData);
-  if (familyRejection) return familyRejection;
   const { identity, payload, ordering } = eventData;
   if (!payload.workflowRunId || !payload.nodeExecutionId) {
     return rejectGate("not_workflow_message_event");

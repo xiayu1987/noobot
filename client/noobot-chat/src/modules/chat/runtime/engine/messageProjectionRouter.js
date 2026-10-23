@@ -10,7 +10,6 @@ import {
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./turnProjectionStore.js";
-import { RoleEnum } from "../../model/chatConstants.js";
 import { logTransportDiagnostics } from "../../../debug/loggers/transportDiagnosticsLogger.js";
 
 function envelopeLogFields(messageEvent) {
@@ -63,43 +62,28 @@ function materializeCommittedPresentation(messageEvent, context) {
   return materialized.applied;
 }
 
-function addLiveBotProjection(targetMessages, messageEvent, context) {
-  const { botMessage } = context;
-  const { identity } = messageEvent;
-  const ownsLiveBot =
-    botMessage.sessionId === identity.sessionId &&
-    botMessage.turnScopeId === identity.turnScopeId &&
-    botMessage.role === RoleEnum.ASSISTANT;
-  if (ownsLiveBot && !targetMessages.includes(botMessage)) targetMessages.push(botMessage);
-}
-
 function describeProjectionTarget(targetMessage) {
+  if (targetMessage === null) return { found: false };
   return {
-    found: Boolean(targetMessage),
-    presentationMessageId: String(targetMessage?.presentationMessageId || ""),
-    role: String(targetMessage?.role || ""),
-    type: String(targetMessage?.type || ""),
-    phase: String(targetMessage?.pluginMeta?.phase || ""),
-    contentLength: String(targetMessage?.content || "").length,
+    found: true,
+    role: targetMessage.role,
+    type: targetMessage.type,
+    contentLength: targetMessage.content.length,
   };
 }
 
 function reduceProjectionTargets(messageEvent, targetMessages) {
-  const reductions = targetMessages.map((message) =>
+  return targetMessages.map((message) =>
     dispatchTurnEnvelope({
       targetMessage: message,
       envelope: messageEvent,
       source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
     }),
   );
-  return (
-    reductions.find((item) => item.applied) ||
-    reductions[0] || { result: "target_missing", applied: false }
-  );
 }
 
-function logProjectionReduction({ messageEvent, reduction, targetMessage, targetBefore, context }) {
-  logProjectionOutcome(context, reduction.applied === true, {
+function logProjectionReduction({ messageEvent, reductions, applied, targetMessage, context }) {
+  logProjectionOutcome(context, applied, {
     event: "frontend.messageEvent.reduced",
     messageEvent,
     data: {
@@ -108,10 +92,8 @@ function logProjectionReduction({ messageEvent, reduction, targetMessage, target
       eventType: messageEvent.payload.eventType,
       presentationMessageId: resolveMessageEventPresentationId(messageEvent.payload),
       sequence: messageEvent.ordering.sequence,
-      result: reduction.result,
-      errors: reduction.errors || [],
-      targetBefore,
-      targetAfter: describeProjectionTarget(targetMessage),
+      reductions: reductions.map(({ result, errors }) => ({ result, errors })),
+      target: describeProjectionTarget(targetMessage),
     },
   });
 }
@@ -123,7 +105,6 @@ function projectMainSessionEvent(messageEvent, context) {
     messageEvent.identity.sessionId,
     presentationMessageId,
   );
-  addLiveBotProjection(targetMessages, messageEvent, context);
   const targetMessage = targetMessages[targetMessages.length - 1] || null;
   const targetBefore = describeProjectionTarget(targetMessage);
   logProjectionOutcome(context, Boolean(targetMessage), {
@@ -136,9 +117,10 @@ function projectMainSessionEvent(messageEvent, context) {
       target: targetBefore,
     },
   });
-  const reduction = reduceProjectionTargets(messageEvent, targetMessages);
-  logProjectionReduction({ messageEvent, reduction, targetMessage, targetBefore, context });
-  if (reduction.applied) context.navigateOnFirstResponseOnce();
+  const reductions = reduceProjectionTargets(messageEvent, targetMessages);
+  const applied = reductions.some((reduction) => reduction.applied === true);
+  logProjectionReduction({ messageEvent, reductions, applied, targetMessage, context });
+  if (applied) context.navigateOnFirstResponseOnce();
   return true;
 }
 

@@ -94,6 +94,7 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
       resolved: true,
       aggregateVersion: 1,
       turn: {
+        sessionId,
         turnScopeId,
         state,
         phase: state.replace(/_failed$/, ""),

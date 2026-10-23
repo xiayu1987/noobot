@@ -3,18 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AGENT_CHANNEL_STATE_SCOPE, AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_CHANNEL_STATE,
+  AGENT_CHANNEL_STATE_SCOPE,
+  AGENT_COMMAND,
+  isInFlightAgentChannelState,
+  isTerminalAgentChannelState,
+} from "@noobot/agent-transport-protocol";
 import { RoleEnum } from "../../model/chatConstants.js";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
 } from "../interactionPayload.js";
-import {
-  AGENT_CHANNEL_STATE,
-  getMessageRuntimeChannelState,
-  isInFlightChannelState,
-  isTerminalChannelState,
-} from "../sessionRunStateMachine.js";
+import { isFinalizedAssistantMessage } from "../sessionRunStateMachine.js";
 import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { text } from "@noobot/shared/value";
@@ -111,21 +112,15 @@ export function createChatEngineConversationState({
     return null;
   }
 
-  function isTerminalAssistantMessage(messageItem = null) {
-    if (!messageItem) return false;
-    const runtimeState = text(getMessageRuntimeChannelState(messageItem)?.state);
-    return messageItem.pending === false && isTerminalChannelState(runtimeState);
-  }
-
   function applySessionChannelState({ state, sessionId }) {
-    if (!isTerminalChannelState(state)) return;
+    if (!isTerminalAgentChannelState(state)) return;
     clearPendingInteraction();
     logResendDebug("conversationState.session.terminal", () => ({ state, sessionId }));
   }
 
   function applyTurnInFlightState(channelState, targetAssistantMessage) {
     const { state, sessionId, turnScopeId } = channelState;
-    if (isTerminalAssistantMessage(targetAssistantMessage)) {
+    if (targetAssistantMessage && isFinalizedAssistantMessage(targetAssistantMessage)) {
       logResendDebug("conversationState.inFlight.skipFinalized", () => ({
         state,
         sessionId,
@@ -157,11 +152,11 @@ export function createChatEngineConversationState({
       turnScopeId,
       targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
     }));
-    if (isInFlightChannelState(state)) {
+    if (isInFlightAgentChannelState(state)) {
       applyTurnInFlightState(channelState, targetAssistantMessage);
       return;
     }
-    if (!isTerminalChannelState(state)) return;
+    if (!isTerminalAgentChannelState(state)) return;
     clearMissingInteractionPayloadTimer({ sessionId, turnScopeId });
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;

@@ -59,6 +59,29 @@ export const AGENT_CHANNEL_STATE = Object.freeze({
   EXPIRED: "expired",
 });
 
+const TERMINAL_CHANNEL_STATES = new Set([
+  AGENT_CHANNEL_STATE.NO_CONVERSATION,
+  AGENT_CHANNEL_STATE.COMPLETED,
+  AGENT_CHANNEL_STATE.USER_STOPPED,
+  AGENT_CHANNEL_STATE.ERROR,
+  AGENT_CHANNEL_STATE.EXPIRED,
+]);
+
+const IN_FLIGHT_CHANNEL_STATES = new Set([
+  AGENT_CHANNEL_STATE.SENDING,
+  AGENT_CHANNEL_STATE.INTERACTION_PENDING,
+  AGENT_CHANNEL_STATE.STOPPING,
+  AGENT_CHANNEL_STATE.RECONNECTING,
+]);
+
+export function isTerminalAgentChannelState(state) {
+  return TERMINAL_CHANNEL_STATES.has(state);
+}
+
+export function isInFlightAgentChannelState(state) {
+  return IN_FLIGHT_CHANNEL_STATES.has(state);
+}
+
 export const AGENT_CHANNEL_STATE_SCOPE = Object.freeze({
   SESSION: "session",
   TURN: "turn",

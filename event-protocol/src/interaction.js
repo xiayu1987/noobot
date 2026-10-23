@@ -133,19 +133,6 @@ export function validateInteractionRequestPayload(data = {}) {
   return { valid: true, reason: "", missing: [] };
 }
 
-export function isPendingInteractionReplay(record = {}) {
-  if (!isPlainObject(record)) return false;
-  const eventType = text(record?.identity?.eventType);
-  if (eventType !== INTERACTION_EVENT_TYPE.REQUEST) return false;
-  const payload = record?.payload;
-  if (!isPlainObject(payload)) return false;
-  const validation = validateInteractionRequestPayload(payload);
-  return (
-    validation.valid &&
-    normalizeInteractionLifecycle(payload.lifecycle) === INTERACTION_LIFECYCLE.PENDING
-  );
-}
-
 export function validateInteractionResponsePayload(data = {}) {
   const missing = ["requestId", "dialogProcessId"].filter((key) => !text(data?.[key]));
   return missing.length

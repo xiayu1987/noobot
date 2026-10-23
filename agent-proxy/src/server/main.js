@@ -24,7 +24,7 @@ import {
 import { interceptConnectRequest } from "../http/connect-interceptor.js";
 import { bridgeDuplexStreams } from "../http/duplex-stream-bridge.js";
 import { createSessionLogClient } from "../websocket/session-log-client.js";
-import { parseRequestPathname, parseRequestQuery } from "../shared/utils.js";
+import { nowMs, parseRequestPathname, parseRequestQuery } from "../shared/utils.js";
 import {
   createFixedWindowRateLimiter,
   getClientIp,
@@ -59,7 +59,7 @@ const WebSocketServer = websocketLibrary.WebSocketServer;
 const sessionLogClient = createSessionLogClient({ WebSocketImpl: WebSocket });
 const channelManager = new ChannelManager(WebSocket, { sessionLogClient });
 const wsRouter = new WsRouter(channelManager);
-const downstreamConnections = new DownstreamConnectionRegistry();
+const downstreamConnections = new DownstreamConnectionRegistry({ now: nowMs });
 const serverInstanceId = randomUUID();
 const httpRateLimiter = createFixedWindowRateLimiter({
   windowMs: config.httpRateLimitWindowMs,
@@ -456,7 +456,7 @@ websocketServer.on("connection", (socket, request) => {
     socket,
     requestInfo,
     channelManager,
-    finalize: (target, reason) => downstreamConnections.finalize(target, reason),
+    close: (target, options) => downstreamConnections.close(target, options),
   });
   if (!authenticated) return;
 
@@ -472,7 +472,7 @@ websocketServer.on("connection", (socket, request) => {
       event: "agentProxy.chat.closed",
       data: {
         socketId: socket.__agentProxySocketId,
-        channels: [...(socket.__agentProxyChannelKeys || [])],
+        channels: [...socket.__agentProxyChannelKeys],
       },
     });
     downstreamConnections.finalize(socket, "close");
@@ -485,15 +485,10 @@ websocketServer.on("connection", (socket, request) => {
       event: "agentProxy.chat.error",
       data: {
         socketId: socket.__agentProxySocketId,
-        channels: [...(socket.__agentProxyChannelKeys || [])],
+        channels: [...socket.__agentProxyChannelKeys],
       },
     });
-    downstreamConnections.close(socket, {
-      code: 1011,
-      reason: "connection_error",
-      terminate: true,
-      finalizeReason: "error",
-    });
+    downstreamConnections.terminate(socket, "error");
   });
   socket.on("message", () => downstreamConnections.touch(socket));
   socket.on("pong", () => downstreamConnections.touch(socket));
@@ -519,11 +514,8 @@ dataPlaneMetricsTimer.unref?.();
 const heartbeatTimer = setInterval(() => {
   downstreamConnections.sweepHeartbeat({
     timeoutMs: config.wsHeartbeatTimeoutMs,
-    onTimeout: (record) => {
-      downstreamConnections.close(record.connectionId, {
-        code: 1001,
-        reason: "heartbeat_timeout",
-      });
+    onTimeout: (timedOutSocket) => {
+      downstreamConnections.close(timedOutSocket, { code: 1001, reason: "heartbeat_timeout" });
     },
   });
   for (const channel of channelManager.channelStore.values()) {

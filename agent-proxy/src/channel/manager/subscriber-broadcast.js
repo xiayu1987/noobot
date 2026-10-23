@@ -129,14 +129,14 @@ function logBroadcastDrop(manager, channel, delivery, context) {
       connectionId: delivery.connectionId,
       result: delivery.sendResult.result,
       dropReason: delivery.sendResult.reason,
-      ...resolveMessageEventTrace(envelope?.event, eventData, envelope?.sequence),
+      ...resolveMessageEventTrace(envelope.event, eventData, envelope.sequence),
     },
   });
 }
 
 function rememberDeliveredSequence(channel, subscriberSocket, envelope) {
-  if (envelope?.event === TURN_LIFECYCLE_WIRE_EVENT) return;
-  if (isTransientMessageEvent(envelope?.data)) return;
+  if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) return;
+  if (isTransientMessageEvent(envelope.data)) return;
   subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = envelope.sequence;
 }
 
@@ -251,23 +251,17 @@ class SubscriberBroadcastMethods {
   }
 
   sendChannelEvent(channel, targetSocket, envelope) {
-    if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
     const deliveryEnvelope = this.projectChannelEventForDelivery(channel, envelope);
-    if (envelope?.event !== TURN_LIFECYCLE_WIRE_EVENT) {
+    if (envelope.event !== TURN_LIFECYCLE_WIRE_EVENT) {
       return this._writeSocketFrame(targetSocket, deliveryEnvelope);
     }
-    const eventEnvelope = envelope?.data || {};
-    const eventData = eventEnvelope?.payload || {};
-    const eventId = text(eventEnvelope?.identity?.eventId);
-    const sessionId = text(eventEnvelope?.identity?.sessionId);
-    const turnScopeId = text(eventEnvelope?.identity?.turnScopeId);
-    if (!channel || !eventId || !sessionId || !turnScopeId) {
-      return { result: "failed", reason: "invalid_lifecycle_delivery_identity" };
-    }
+    const eventEnvelope = envelope.data;
+    const eventData = eventEnvelope.payload;
+    const { eventId, sessionId, turnScopeId } = eventEnvelope.identity;
     const pendingDeliveries = targetSocket.__agentProxyPendingLifecycleDeliveries;
     if (pendingDeliveries.has(eventId)) return { result: "sent", reason: "awaiting_receipt" };
     const turnKey = `${channel.key}\u0000${sessionId}\u0000${turnScopeId}`;
-    const lifecycleSequence = Number(eventEnvelope?.ordering?.sequence || 0);
+    const lifecycleSequence = eventEnvelope.ordering.sequence;
     const inFlight = targetSocket.__agentProxyLifecycleDeliveriesByTurn.get(turnKey);
     if (inFlight && inFlight.lifecycleSequence >= lifecycleSequence) {
       return { result: LIFECYCLE_SUPERSEDED, reason: "newer_lifecycle_in_flight" };
@@ -300,7 +294,7 @@ class SubscriberBroadcastMethods {
       turnScopeId,
       dialogProcessId: text(eventData.dialogProcessId),
       lifecycleSequence,
-      transportSequence: Number(envelope?.sequence || 0),
+      transportSequence: envelope.sequence,
       turnKey,
       attempts: 0,
       timer: null,
@@ -417,7 +411,6 @@ class SubscriberBroadcastMethods {
   }
 
   broadcastChannelEvent(channel, envelope) {
-    if (!channel || !envelope) return;
     const context = resolveBroadcastContext(envelope);
     if (!channel.subscribers.size && context.terminalLifecycle) {
       logTerminalDeliveryDeferred(this, channel, context);
@@ -429,8 +422,7 @@ class SubscriberBroadcastMethods {
     }
   }
 
-  broadcastChannelState(channel, stateItem = {}) {
-    if (!channel || !stateItem) return;
+  broadcastChannelState(channel, stateItem) {
     this.broadcastChannelEvent(channel, {
       sequence: channel.eventJournal.sequence,
       event: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
@@ -439,14 +431,12 @@ class SubscriberBroadcastMethods {
   }
 
   sendChannelStateSnapshot(channel, targetSocket) {
-    if (!channel || !targetSocket) return;
     for (const envelope of this.buildChannelStateSnapshot(channel)) {
       this.sendChannelEvent(channel, targetSocket, envelope);
     }
   }
 
   buildChannelStateSnapshot(channel) {
-    if (!channel) return [];
     const stateList = Array.from(channel.conversationStateByScope.values()).sort(
       (left, right) => left.updatedAtMs - right.updatedAtMs,
     );
@@ -461,7 +451,6 @@ class SubscriberBroadcastMethods {
   }
 
   _writeSocketFrame(targetSocket, frame) {
-    if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
     if (targetSocket.readyState !== this.WebSocket.OPEN) {
       return { result: "skipped", reason: "socket_not_open" };
     }

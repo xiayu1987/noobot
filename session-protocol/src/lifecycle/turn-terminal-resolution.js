@@ -41,7 +41,7 @@ export function createTurnTerminalResolution({
     reason: clean(reason),
     retryAfterMs: Math.max(0, Number(retryAfterMs || 0)),
     aggregateVersion: aggregateVersion == null ? null : Number(aggregateVersion),
-    turn: turn ? { ...snapshotTurn(turn), sessionId: clean(turn.sessionId || sessionId) } : null,
+    turn: turn ? snapshotTurn(turn) : null,
     generatedAt: clean(generatedAt),
   };
 }

@@ -6,7 +6,7 @@
 import { AGENT_TRANSPORT_ERROR_CODE } from "@noobot/agent-transport-protocol";
 import { AGENT_PROXY_CLOSE_REASON } from "../shared/constants.js";
 
-export function authenticateDownstreamSocket({ socket, requestInfo, channelManager, finalize }) {
+export function authenticateDownstreamSocket({ socket, requestInfo, channelManager, close }) {
   socket.__agentProxyApiKey = requestInfo.apiKey;
   socket.__agentProxyLocale = requestInfo.locale;
   const socketIdentity = channelManager.resolveApiKeyIdentity(requestInfo.apiKey);
@@ -18,7 +18,6 @@ export function authenticateDownstreamSocket({ socket, requestInfo, channelManag
     code: AGENT_TRANSPORT_ERROR_CODE.UNAUTHENTICATED,
     identity: {},
   });
-  socket.close(1008, AGENT_PROXY_CLOSE_REASON.UNAUTHENTICATED);
-  finalize(socket, AGENT_PROXY_CLOSE_REASON.UNAUTHENTICATED);
+  close(socket, { code: 1008, reason: AGENT_PROXY_CLOSE_REASON.UNAUTHENTICATED });
   return false;
 }

@@ -23,7 +23,27 @@ import {
   parseAgentTransportFrame,
   validateAgentChannelState,
   usesExactAgentTransportPayload,
+  isInFlightAgentChannelState,
+  isTerminalAgentChannelState,
 } from "../src/events.js";
+
+test("every channel state belongs to exactly one of terminal or in-flight", () => {
+  const terminal = ["no_conversation", "completed", "user_stopped", "error", "expired"];
+  const inFlight = ["sending", "interaction_pending", "stopping", "reconnecting"];
+  assert.deepEqual([...terminal, ...inFlight].sort(), Object.values(AGENT_CHANNEL_STATE).sort());
+  for (const state of terminal) {
+    assert.equal(isTerminalAgentChannelState(state), true, state);
+    assert.equal(isInFlightAgentChannelState(state), false, state);
+  }
+  for (const state of inFlight) {
+    assert.equal(isInFlightAgentChannelState(state), true, state);
+    assert.equal(isTerminalAgentChannelState(state), false, state);
+  }
+  for (const state of ["cancelled", " completed", "COMPLETED", "", undefined]) {
+    assert.equal(isTerminalAgentChannelState(state), false, String(state));
+    assert.equal(isInFlightAgentChannelState(state), false, String(state));
+  }
+});
 
 test("transport protocol declares events whose payload cannot be enriched", () => {
   assert.equal(usesExactAgentTransportPayload(AGENT_TRANSPORT_EVENT.ERROR), true);

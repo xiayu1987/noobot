@@ -233,24 +233,27 @@ export function readProtocolEventPayload(envelope, { wireEvent, family }) {
   };
 }
 
-export function readProtocolEventReducerInput(envelope) {
-  const validation = validateProtocolEvent(envelope);
-  if (!validation.valid) return { ...validation, input: null };
-  let input = envelope.payload;
-  if (validation.descriptor.reducerInput === EVENT_REDUCER_INPUT.ENVELOPE) {
-    input = envelope;
-  } else if (validation.descriptor.reducerInput === EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD) {
-    input = {
+export function projectProtocolEventReducerInput(envelope) {
+  const { reducerInput } = byFamily.get(envelope.protocol.family);
+  if (reducerInput === EVENT_REDUCER_INPUT.ENVELOPE) return envelope;
+  if (reducerInput === EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD) {
+    return {
       ...envelope.payload,
       sessionId: envelope.identity.sessionId,
       turnScopeId: envelope.identity.turnScopeId,
     };
   }
+  return envelope.payload;
+}
+
+export function readProtocolEventReducerInput(envelope) {
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid) return { ...validation, input: null };
   return {
     valid: true,
     errors: [],
     descriptor: validation.descriptor,
-    input,
+    input: projectProtocolEventReducerInput(envelope),
   };
 }
 export function validateProtocolEvent(envelope) {

@@ -230,15 +230,12 @@ export function createSendStreamEventHandler(context) {
       return;
     if (
       routeMessageProjectionEvent(protocolEnvelope, family, {
-        botMessage: botMsg,
         channelSessionId,
         findMessagesByPresentationId,
         materializeTurnPresentation,
         logSessionEvent,
         navigateOnFirstResponseOnce,
         reduceSubSessionMessageEvent,
-        sessionId,
-        turnScopeId,
       })
     )
       return;

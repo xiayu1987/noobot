@@ -9,10 +9,8 @@ import {
   TURN_EVENT,
 } from "@noobot/session-protocol";
 import {
-  createEventEnvelope,
+  createTurnLifecycleEventEnvelope,
   createTurnSnapshotEnvelope,
-  EVENT_FAMILY,
-  getEventFamily,
 } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -71,24 +69,7 @@ export function authoritativeLifecycle(fields = {}) {
     completionCommitId: terminal ? `commit-${fields.eventId}` : "",
     ...fields,
   });
-  return createEventEnvelope({
-    family: EVENT_FAMILY.TURN_LIFECYCLE,
-    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-    identity: {
-      eventId: payload.eventId,
-      eventType: "turn_lifecycle",
-      sessionId: payload.sessionId,
-      turnScopeId: payload.turnScopeId,
-    },
-    causality: { commandId: payload.commandId },
-    ordering: {
-      domain: "session",
-      scopeId: payload.sessionId,
-      sequence: payload.sequence,
-      revision: payload.revision,
-    },
+  return createTurnLifecycleEventEnvelope(payload, {
     producer: { type: "test", id: "agent-proxy-reconnect-fixture" },
-    occurredAt: payload.occurredAt,
-    payload,
   });
 }

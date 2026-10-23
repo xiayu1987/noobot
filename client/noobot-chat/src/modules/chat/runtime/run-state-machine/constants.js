@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_TERMINAL_STATES } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
 import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
 
 export const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
@@ -19,37 +17,6 @@ export const SESSION_RUN_MESSAGE_RUNTIME_REASON = Object.freeze({
 });
 
 export { AGENT_CHANNEL_STATE };
-
-export const BackendTerminalStates = Object.freeze([
-  AGENT_CHANNEL_STATE.COMPLETED,
-  AGENT_CHANNEL_STATE.USER_STOPPED,
-  AGENT_CHANNEL_STATE.ERROR,
-  AGENT_CHANNEL_STATE.EXPIRED,
-  AGENT_CHANNEL_STATE.NO_CONVERSATION,
-]);
-
-const AUTHORITATIVE_TERMINAL_STATES = TURN_TERMINAL_STATES;
-
-const LEGACY_TERMINAL_DISCOVERY_STATES = Object.freeze([
-  ...AUTHORITATIVE_TERMINAL_STATES,
-  "user_stopped",
-  "failed",
-  "error",
-  "expired",
-  "cancelled",
-  "aborted",
-]);
-
-const AUTHORITATIVE_TERMINAL_STATE_SET = new Set(AUTHORITATIVE_TERMINAL_STATES);
-const LEGACY_TERMINAL_DISCOVERY_STATE_SET = new Set(LEGACY_TERMINAL_DISCOVERY_STATES);
-
-export function isAuthoritativeTerminalState(value = "") {
-  return AUTHORITATIVE_TERMINAL_STATE_SET.has(text(value).toLowerCase());
-}
-
-export function isLegacyTerminalDiscoveryState(value = "") {
-  return LEGACY_TERMINAL_DISCOVERY_STATE_SET.has(text(value).toLowerCase());
-}
 
 export const FrontendRunState = Object.freeze({
   IDLE: "idle",

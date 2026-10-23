@@ -6,7 +6,6 @@
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 import { normalizeReplayCacheKey } from "./replayCache.js";
-import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../engine/turnTransportEnvelope.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
@@ -54,9 +53,8 @@ export async function applyReconnectEventReplay({
     sessionId: replaySessionId,
     turnScopeId: replayTurnScopeId,
     protocolEvent: replayEvent,
-    dialogProcessId: _trimStr(protocolEnvelope.payload?.dialogProcessId),
-    commandId: _trimStr(protocolEnvelope.causality?.commandId),
-    lifecycleSequence: Number(protocolEnvelope.ordering.sequence),
+    commandId: protocolEnvelope.causality.commandId,
+    sequence: protocolEnvelope.ordering.sequence,
   }));
   if (isDeletedTurn({ sessionId: replaySessionId, turnScopeId: replayTurnScopeId })) {
     logThinkingReplayDebug("frontend.thinkingReplay.replayEventRejected", () => ({
@@ -76,11 +74,10 @@ export async function applyReconnectEventReplay({
         turnScopeId: replayTurnScopeId,
       });
     }
-    const { dialogProcessId } = envelope.payload;
     const { sessionId, turnScopeId } = envelope.identity;
     if (isCurrentActiveSession(sessionId)) {
       await consumeReplayCacheForSession(sessionId);
-      await applyReconnectMessagesToActiveSession([envelope], dialogProcessId, {
+      await applyReconnectMessagesToActiveSession([envelope], {
         turnScopeId,
       });
       return { applied: true, reason: "message_event_replayed" };

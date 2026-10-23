@@ -18,7 +18,11 @@ import {
 import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
-import { INTERACTION_EVENT_TYPE, createReplayBatch } from "@noobot/event-protocol";
+import {
+  INTERACTION_EVENT_TYPE,
+  createReplayBatch,
+  createTurnSnapshotEnvelope,
+} from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protocol";
@@ -396,6 +400,7 @@ describe("useReconnectReplay", () => {
         presentationMessageId: "message-dp-new",
         dialogProcessId: "dp-new",
         state: TURN_STATE.PROCESSING,
+        startedAt: "2026-01-01T00:00:00.000Z",
         executionState: "sending",
         revision: 1,
         sequence: 1,
@@ -412,12 +417,13 @@ describe("useReconnectReplay", () => {
           sessionId: "s-1",
           replayBatch: createReplayBatch({
             sessionId: "s-1",
-            streamId: "stream-s-1",
-            requestId: "reconnect-s-1",
-            orderingDomain: "turn-lifecycle",
-            orderingScopeId: "s-1",
-            snapshot,
+            snapshot: createTurnSnapshotEnvelope(snapshot, {
+              eventId: "snapshot-command-dp-new",
+              producer: { type: "test", id: "use-reconnect-replay" },
+            }),
             snapshotSequence: 1,
+            events: [],
+            pendingInteractions: [],
           }),
         },
       ]),

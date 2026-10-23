@@ -6,7 +6,12 @@
 import { describe, expect, it } from "vitest";
 import { normalizeTurnTransportEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
-import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
+import {
+  createEventEnvelope,
+  EVENT_FAMILY,
+  getEventFamily,
+  createTurnLifecycleEventEnvelope,
+} from "@noobot/event-protocol";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -75,20 +80,8 @@ describe("turnTransportEnvelope", () => {
       phase: TURN_PHASE.PROCESSING,
       state: TURN_STATE.PROCESSING,
     });
-    const protocolEnvelope = createEventEnvelope({
-      family: EVENT_FAMILY.TURN_LIFECYCLE,
-      schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-      identity: {
-        eventId: lifecycle.eventId,
-        eventType: TURN_LIFECYCLE_WIRE_EVENT,
-        sessionId: lifecycle.sessionId,
-        turnScopeId: lifecycle.turnScopeId,
-      },
-      causality: { commandId: lifecycle.commandId },
-      ordering: { domain: "session", scopeId: lifecycle.sessionId, sequence: 2, revision: 2 },
+    const protocolEnvelope = createTurnLifecycleEventEnvelope(lifecycle, {
       producer: { type: "test", id: "turn-transport-envelope" },
-      occurredAt: lifecycle.occurredAt,
-      payload: lifecycle,
     });
 
     const normalized = normalizeTurnTransportEnvelope({

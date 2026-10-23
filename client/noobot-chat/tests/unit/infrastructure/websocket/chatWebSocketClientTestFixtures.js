@@ -12,8 +12,7 @@ import {
   createReconnectComplete,
   createTurnRunCommand,
 } from "@noobot/agent-transport-protocol";
-import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
-import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 
 export class MockWebSocket {
   static CONNECTING = 0;
@@ -103,30 +102,8 @@ export function emitCommandReceipt(
 }
 
 export function turnLifecycleProtocolEvent(payload) {
-  return createEventEnvelope({
-    family: EVENT_FAMILY.TURN_LIFECYCLE,
-    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-    identity: {
-      eventId: payload.eventId,
-      eventType: TURN_LIFECYCLE_WIRE_EVENT,
-      sessionId: payload.sessionId,
-      turnScopeId: payload.turnScopeId,
-      executionId: payload.executionId,
-    },
-    causality: {
-      commandId: payload.commandId,
-      causationId: payload.causationId,
-      correlationId: payload.correlationId,
-    },
-    ordering: {
-      domain: "session",
-      scopeId: payload.sessionId,
-      sequence: payload.sequence,
-      revision: payload.revision,
-    },
+  return createTurnLifecycleEventEnvelope(payload, {
     producer: { type: "test", id: "chat-websocket-client" },
-    occurredAt: payload.occurredAt || "2026-01-01T00:00:00.000Z",
-    payload,
   });
 }
 

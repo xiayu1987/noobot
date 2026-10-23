@@ -395,6 +395,7 @@ class UpstreamConnectionMethods {
     if (this.routeExecutionQueryResponse(channel, eventName, eventData)) return;
     if (this.routeFailedQueryReceipt(channel, eventName, eventData)) return;
     const eventEnvelope = this.pushChannelEvent(channel, eventName, eventData);
+    if (eventEnvelope === null) return;
     this.recordSuccessfulDataPlaneOperation("upstreamMessages");
     this.broadcastChannelEvent(channel, eventEnvelope);
   }

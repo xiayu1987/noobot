@@ -13,12 +13,13 @@ import {
   getEventFamily,
   validateInteractionAuthority,
   validateInteractionRequestPayload,
-  isPendingInteractionReplay,
   INTERACTION_LIFECYCLE,
   isTerminalInteractionLifecycle,
   createEventEnvelope,
+  createTurnLifecycleEventEnvelope,
   readProtocolEventPayload,
   readProtocolEventReducerInput,
+  projectProtocolEventReducerInput,
   validateProtocolEvent,
 } from "../src/index.js";
 import {
@@ -119,20 +120,8 @@ test("protocol payload reader validates wire identity and returns the canonical 
     phase: TURN_PHASE.PROCESSING,
     state: TURN_STATE.PROCESSING,
   });
-  const envelope = createEventEnvelope({
-    family: EVENT_FAMILY.TURN_LIFECYCLE,
-    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-    identity: {
-      eventId: payload.eventId,
-      eventType: TURN_LIFECYCLE_WIRE_EVENT,
-      sessionId: payload.sessionId,
-      turnScopeId: payload.turnScopeId,
-    },
-    causality: { commandId: payload.commandId },
-    ordering: { domain: "session", scopeId: payload.sessionId, sequence: 2, revision: 2 },
+  const envelope = createTurnLifecycleEventEnvelope(payload, {
     producer: { type: "test", id: "event-registry" },
-    occurredAt: payload.occurredAt,
-    payload,
   });
 
   assert.equal(
@@ -171,23 +160,12 @@ test("event family declares the exact reducer input projection", () => {
     phase: TURN_PHASE.PROCESSING,
     state: TURN_STATE.PROCESSING,
   });
-  const turnEnvelope = createEventEnvelope({
-    family: EVENT_FAMILY.TURN_LIFECYCLE,
-    schemaVersion: getEventFamily(EVENT_FAMILY.TURN_LIFECYCLE).schemaVersion,
-    identity: {
-      eventId: turnPayload.eventId,
-      eventType: TURN_LIFECYCLE_WIRE_EVENT,
-      sessionId: turnPayload.sessionId,
-      turnScopeId: turnPayload.turnScopeId,
-    },
-    causality: { commandId: turnPayload.commandId },
-    ordering: { domain: "session", scopeId: turnPayload.sessionId, sequence: 2, revision: 2 },
+  const turnEnvelope = createTurnLifecycleEventEnvelope(turnPayload, {
     producer: { type: "test", id: "event-reducer" },
-    occurredAt: turnPayload.occurredAt,
-    payload: turnPayload,
   });
 
   assert.equal(readProtocolEventReducerInput(turnEnvelope).input, turnPayload);
+  assert.equal(projectProtocolEventReducerInput(turnEnvelope), turnPayload);
   assert.equal(getEventFamily(EVENT_FAMILY.ATTACHMENT_LIFECYCLE).reducerInput, "payload");
   assert.equal(getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).reducerInput, "identity_payload");
   assert.equal(getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).reducerInput, "envelope");
@@ -216,6 +194,10 @@ test("interaction reducer input combines the canonical envelope identity with it
     },
   });
 
+  assert.deepEqual(
+    projectProtocolEventReducerInput(envelope),
+    readProtocolEventReducerInput(envelope).input,
+  );
   assert.deepEqual(readProtocolEventReducerInput(envelope).input, {
     requestId: "request-1",
     dialogProcessId: "dialog-1",
@@ -274,38 +256,6 @@ test("interaction lifecycle is canonical and terminal states require resolvedBy"
   assert.equal(
     validateInteractionRequestPayload({ ...base, lifecycle: "failed", resolvedBy: "system" }).valid,
     true,
-  );
-});
-
-test("replay interaction records are atomic and complete", () => {
-  const valid = {
-    identity: { eventType: "interaction_request" },
-    payload: {
-      requestId: "request-1",
-      sessionId: "session-1",
-      dialogProcessId: "process-1",
-      turnScopeId: "turn-1",
-      interactionType: "approval",
-    },
-  };
-  assert.equal(isPendingInteractionReplay(valid), true);
-  assert.equal(
-    isPendingInteractionReplay({
-      ...valid,
-      payload: { ...valid.payload, requestId: "" },
-    }),
-    false,
-  );
-  assert.equal(
-    isPendingInteractionReplay({ identity: { eventType: "delta" }, payload: valid.payload }),
-    false,
-  );
-  assert.equal(
-    isPendingInteractionReplay({
-      ...valid,
-      payload: { ...valid.payload, lifecycle: "failed", resolvedBy: "system" },
-    }),
-    false,
   );
 });
 
@@ -373,14 +323,14 @@ test("turn lifecycle envelope causality must equal the payload causality", () =>
   assert.equal(validateProtocolEvent(envelopeWith(exact)).valid, true);
   assert.deepEqual(validateProtocolEvent(envelopeWith({ ...exact, commandId: "" })).errors, [
     "missing_command_id",
-    "lifecycle_commandId_mismatch",
+    "lifecycle_causality_commandId_mismatch",
   ]);
   assert.deepEqual(
     validateProtocolEvent(envelopeWith({ ...exact, commandId: "command-other" })).errors,
-    ["lifecycle_commandId_mismatch"],
+    ["lifecycle_causality_commandId_mismatch"],
   );
   assert.deepEqual(
     validateProtocolEvent(envelopeWith({ ...exact, causationId: "", correlationId: "x" })).errors,
-    ["lifecycle_causationId_mismatch", "lifecycle_correlationId_mismatch"],
+    ["lifecycle_causality_causationId_mismatch", "lifecycle_causality_correlationId_mismatch"],
   );
 });

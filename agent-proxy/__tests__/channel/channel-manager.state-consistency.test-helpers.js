@@ -7,6 +7,7 @@ import {
   createEventEnvelope,
   EVENT_FAMILY,
   INTERACTION_EVENT_TYPE,
+  INTERACTION_LIFECYCLE,
   INTERACTION_SEQUENCE_DOMAIN,
   getEventFamily,
 } from "@noobot/event-protocol";
@@ -83,7 +84,13 @@ export function canonicalInteractionRequest({
     ordering: { domain: INTERACTION_SEQUENCE_DOMAIN, scopeId: requestId, sequence },
     producer: { type: "test", id: "agent-proxy-test" },
     occurredAt: "2026-08-17T00:00:00.000Z",
-    payload: { requestId, dialogProcessId, ...payload },
+    payload: {
+      requestId,
+      dialogProcessId,
+      content: "confirm?",
+      lifecycle: INTERACTION_LIFECYCLE.PENDING,
+      ...payload,
+    },
   });
 }
 

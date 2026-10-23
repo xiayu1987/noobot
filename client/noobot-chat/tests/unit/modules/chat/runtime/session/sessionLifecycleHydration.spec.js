@@ -120,4 +120,49 @@ describe("sessionLifecycleHydration", () => {
     );
     expect(scheduleTerminalResolution.mock.calls[0][2]).not.toHaveProperty("persistenceScope");
   });
+
+  function installWithActiveTurn(state, applied = true) {
+    const scheduleTerminalResolution = vi.fn();
+    installSessionLifecycleHydration({
+      sessions: ref([
+        {
+          sessionId: "session-1",
+          messages: [],
+          turnTimings: [],
+          turnLifecycleSnapshot: {
+            sessionId: "session-1",
+            sequence: 2,
+            activeTurnScopeId: "turn-1",
+            activeTurn: { turnScopeId: "turn-1", state, revision: 2, sequence: 2 },
+            recentTerminalTurns: [],
+            replacedTurns: [],
+          },
+        },
+      ]),
+      activeSessionId: ref("session-1"),
+      chatStore: {
+        applyTurnTimingSnapshot: vi.fn(() => ({ applied: true })),
+        applyTurnLifecycleSnapshot: vi.fn(() => ({ applied })),
+        pruneTerminalTurns: vi.fn(),
+      },
+      scheduleTerminalResolution,
+    });
+    return scheduleTerminalResolution;
+  }
+
+  it("does not schedule discovery for any authoritative terminal turn state", () => {
+    for (const state of [
+      "completed",
+      "stop_completed",
+      "action_failed",
+      "processing_failed",
+      "completion_failed",
+      "stop_failed",
+    ])
+      expect(installWithActiveTurn(state)).not.toHaveBeenCalled();
+  });
+
+  it("does not schedule discovery when the snapshot was rejected", () => {
+    expect(installWithActiveTurn("processing", false)).not.toHaveBeenCalled();
+  });
 });

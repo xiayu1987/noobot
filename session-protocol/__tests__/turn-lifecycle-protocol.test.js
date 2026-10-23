@@ -110,14 +110,89 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
       ...snapshot,
       activeTurnScopeId: "turn-old",
       activeTurn: {
+        sessionId: snapshot.sessionId,
         turnScopeId: "turn-old",
         presentationMessageId: "presentation-old",
+        state: TURN_STATE.PROCESSING,
         revision: 1,
         sequence: 7,
         startedAt: "2026-08-02T09:59:00.000Z",
       },
     }).errors,
     ["replaced_turn_still_materialized"],
+  );
+});
+
+test("snapshot turn state must be an authoritative turn state", () => {
+  const activeTurn = {
+    sessionId: "session-state-1",
+    turnScopeId: "turn-state-1",
+    presentationMessageId: "presentation-state-1",
+    state: TURN_STATE.PROCESSING,
+    revision: 1,
+    sequence: 1,
+    startedAt: "2026-08-02T09:59:00.000Z",
+  };
+  const base = {
+    ...createTurnLifecycleSnapshot({
+      commandId: "snapshot-state-1",
+      sessionId: "session-state-1",
+      sequence: 1,
+    }),
+    activeTurnScopeId: "turn-state-1",
+  };
+  assert.deepEqual(validateTurnLifecycleSnapshot({ ...base, activeTurn }).errors, []);
+  for (const state of [undefined, "", " processing", "running", "user_stopped"]) {
+    assert.deepEqual(
+      validateTurnLifecycleSnapshot({ ...base, activeTurn: { ...activeTurn, state } }).errors,
+      ["invalid_turn_state"],
+    );
+  }
+  assert.deepEqual(
+    validateTurnLifecycleSnapshot({
+      ...base,
+      recentTerminalTurns: [{ ...activeTurn, turnScopeId: "turn-state-0", state: "" }],
+    }).errors,
+    ["invalid_turn_state"],
+  );
+});
+
+test("snapshot turn sessionId is required and must equal the snapshot sessionId", () => {
+  const activeTurn = {
+    sessionId: "session-turn-identity",
+    turnScopeId: "turn-identity-1",
+    presentationMessageId: "presentation-identity-1",
+    state: TURN_STATE.PROCESSING,
+    revision: 1,
+    sequence: 1,
+    startedAt: "2026-08-02T09:59:00.000Z",
+  };
+  const base = {
+    ...createTurnLifecycleSnapshot({
+      commandId: "snapshot-identity-1",
+      sessionId: "session-turn-identity",
+      sequence: 1,
+    }),
+    activeTurnScopeId: "turn-identity-1",
+  };
+  assert.deepEqual(validateTurnLifecycleSnapshot({ ...base, activeTurn }).errors, []);
+  assert.deepEqual(
+    validateTurnLifecycleSnapshot({ ...base, activeTurn: { ...activeTurn, sessionId: "" } }).errors,
+    ["missing_turn_session_id", "turn_session_identity_mismatch"],
+  );
+  assert.deepEqual(
+    validateTurnLifecycleSnapshot({
+      ...base,
+      recentTerminalTurns: [
+        {
+          ...activeTurn,
+          turnScopeId: "turn-identity-0",
+          state: TURN_STATE.COMPLETED,
+          sessionId: "session-other",
+        },
+      ],
+    }).errors,
+    ["turn_session_identity_mismatch"],
   );
 });
 
@@ -132,6 +207,7 @@ test("snapshot recovery is an explicit read-side assessment bound to the active 
   assert.deepEqual(validateTurnLifecycleSnapshot(idle), { valid: true, errors: [] });
 
   const activeTurn = {
+    sessionId: "session-recovery",
     turnScopeId: "turn-recovery",
     presentationMessageId: "presentation-recovery",
     state: TURN_STATE.PROCESSING,
@@ -167,6 +243,7 @@ test("active Turn snapshot requires its authoritative start time", () => {
     sequence: 1,
     activeTurnScopeId: "turn-active",
     activeTurn: {
+      sessionId: "session-active-timing",
       turnScopeId: "turn-active",
       presentationMessageId: "presentation-active",
       state: TURN_STATE.PROCESSING,

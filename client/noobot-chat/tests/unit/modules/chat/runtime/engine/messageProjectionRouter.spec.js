@@ -27,8 +27,6 @@ const finalEvent = (overrides = {}) =>
 function contextFor(messages, logSessionEvent = vi.fn()) {
   return {
     channelSessionId: "session-1",
-    sessionId: "session-1",
-    turnScopeId: "turn-1",
     findMessagesByPresentationId(sessionId, presentationMessageId) {
       return messages.filter(
         (message) =>
@@ -36,7 +34,6 @@ function contextFor(messages, logSessionEvent = vi.fn()) {
           message.presentationMessageId === presentationMessageId,
       );
     },
-    botMessage: { sessionId: "session-1", turnScopeId: "turn-previous", role: "assistant" },
     materializeTurnPresentation: vi.fn(),
     reduceSubSessionMessageEvent: vi.fn(),
     logSessionEvent,
@@ -99,7 +96,8 @@ describe("live canonical message projection", () => {
         level: "warn",
         data: expect.objectContaining({
           presentationMessageId: "unexpected-assistant-message",
-          result: "target_missing",
+          reductions: [],
+          target: { found: false },
         }),
       }),
     );
@@ -177,8 +175,8 @@ describe("live canonical message projection", () => {
       expect.objectContaining({
         event: "frontend.messageEvent.reduced",
         data: expect.objectContaining({
-          result: "applied",
-          targetAfter: expect.objectContaining({ contentLength: 12 }),
+          reductions: [{ result: "applied", errors: undefined }],
+          target: expect.objectContaining({ found: true, contentLength: 12 }),
         }),
       }),
     );

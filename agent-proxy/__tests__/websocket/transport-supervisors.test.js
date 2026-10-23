@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { DownstreamConnectionRegistry } from "../../src/websocket/downstream-connection-registry.js";
 import { UpstreamTransportSupervisor } from "../../src/websocket/upstream-transport-supervisor.js";
+import { initializeDownstreamSocketState } from "../../src/websocket/downstream-socket-state.js";
 
 class FakeWebSocket extends EventEmitter {
   static OPEN = 1;
@@ -95,59 +96,73 @@ test("upstream supervisor terminates a replaced socket that never completes clos
   assert.equal(supervisor.socket, second.socket);
 });
 
-test("downstream registry finalizes error and close only once", () => {
-  let finalized = 0;
-  const socket = { __agentProxySocketId: "connection-1" };
-  const registry = new DownstreamConnectionRegistry();
-  registry.register(socket, {
-    onFinalize: () => {
-      finalized += 1;
-    },
-  });
-
-  assert.equal(registry.finalize(socket, "error"), true);
-  assert.equal(registry.finalize(socket, "close"), false);
-  assert.equal(finalized, 1);
-  assert.equal(registry.size, 0);
-});
-
-test("downstream registry owns graceful physical close and finalization", () => {
-  let finalizedReason = "";
-  const socket = {
-    __agentProxySocketId: "connection-close",
+function createDownstreamSocket() {
+  return initializeDownstreamSocketState({
     closeCalls: [],
+    terminateCalls: 0,
+    pingCalls: 0,
     close(code, reason) {
       this.closeCalls.push({ code, reason });
     },
-  };
-  const registry = new DownstreamConnectionRegistry();
-  registry.register(socket, {
-    onFinalize: (record) => {
-      finalizedReason = record.finalizeReason;
+    terminate() {
+      this.terminateCalls += 1;
+    },
+    ping() {
+      this.pingCalls += 1;
     },
   });
+}
+
+function createDownstreamRegistry(now) {
+  const finalized = [];
+  const registry = new DownstreamConnectionRegistry({ now });
+  const register = (socket) =>
+    registry.register(socket, { onFinalize: (reason) => finalized.push(reason) });
+  return { registry, register, finalized };
+}
+
+test("downstream registry finalizes error and close only once", () => {
+  const socket = createDownstreamSocket();
+  const { registry, register, finalized } = createDownstreamRegistry(() => 0);
+  register(socket);
+
+  assert.equal(registry.finalize(socket, "error"), true);
+  assert.equal(registry.finalize(socket, "close"), false);
+  assert.deepEqual(finalized, ["error"]);
+  assert.equal(registry.size, 0);
+});
+
+test("downstream registry rejects duplicate registration", () => {
+  const socket = createDownstreamSocket();
+  const { register } = createDownstreamRegistry(() => 0);
+  register(socket);
+  assert.throws(() => register(socket), TypeError);
+});
+
+test("downstream registry owns graceful physical close and finalization", () => {
+  const socket = createDownstreamSocket();
+  const { registry, register, finalized } = createDownstreamRegistry(() => 0);
+  register(socket);
 
   assert.equal(registry.close(socket, { code: 1001, reason: "heartbeat_timeout" }), true);
   assert.deepEqual(socket.closeCalls, [{ code: 1001, reason: "heartbeat_timeout" }]);
-  assert.equal(finalizedReason, "heartbeat_timeout");
+  assert.deepEqual(finalized, ["heartbeat_timeout"]);
   assert.equal(registry.size, 0);
-  assert.equal(registry.close(socket), false);
+  assert.equal(registry.close(socket, { code: 1000, reason: "closed" }), false);
+  assert.equal(socket.closeCalls.length, 1);
 });
 
 test("downstream registry terminates errored physical sockets before finalization", () => {
-  let terminated = 0;
-  const socket = {
-    __agentProxySocketId: "connection-error",
-    terminate() {
-      terminated += 1;
-    },
-  };
-  const registry = new DownstreamConnectionRegistry();
-  registry.register(socket);
+  const socket = createDownstreamSocket();
+  const { registry, register, finalized } = createDownstreamRegistry(() => 0);
+  register(socket);
 
-  assert.equal(registry.close(socket, { terminate: true, finalizeReason: "error" }), true);
-  assert.equal(terminated, 1);
+  assert.equal(registry.terminate(socket, "error"), true);
+  assert.equal(socket.terminateCalls, 1);
+  assert.deepEqual(finalized, ["error"]);
   assert.equal(registry.size, 0);
+  assert.equal(registry.terminate(socket, "error"), false);
+  assert.equal(socket.terminateCalls, 1);
 });
 
 test("upstream supervisor reports constructor failures without corrupting ownership", () => {
@@ -223,17 +238,21 @@ test("upstream supervisor contains close-handler failures", () => {
 test("downstream heartbeat closes only records that missed pong", () => {
   let currentMs = 0;
   const timedOut = [];
-  const socket = { __agentProxySocketId: "connection-heartbeat", ping() {} };
-  const registry = new DownstreamConnectionRegistry({ now: () => currentMs });
-  registry.register(socket);
-  registry.sweepHeartbeat({
-    timeoutMs: 100,
-    onTimeout: (record) => timedOut.push(record.connectionId),
-  });
-  currentMs = 100;
-  registry.sweepHeartbeat({
-    timeoutMs: 100,
-    onTimeout: (record) => timedOut.push(record.connectionId),
-  });
-  assert.deepEqual(timedOut, ["connection-heartbeat"]);
+  const socket = createDownstreamSocket();
+  const { registry, register } = createDownstreamRegistry(() => currentMs);
+  register(socket);
+  const sweep = () =>
+    registry.sweepHeartbeat({
+      timeoutMs: 100,
+      onTimeout: (target) => timedOut.push(target),
+    });
+  sweep();
+  assert.equal(socket.pingCalls, 1);
+  currentMs = 50;
+  assert.equal(registry.touch(socket), true);
+  sweep();
+  assert.deepEqual(timedOut, []);
+  currentMs = 150;
+  sweep();
+  assert.deepEqual(timedOut, [socket]);
 });

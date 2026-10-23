@@ -9,7 +9,7 @@ import { text } from "@noobot/shared/value";
 
 export const TURN_SNAPSHOT_EVENT_FAMILY = "turn.snapshot";
 export const TURN_SNAPSHOT_SCHEMA_VERSION = 1;
-const TURN_SNAPSHOT_SEQUENCE_DOMAIN = "session";
+export const SESSION_SEQUENCE_DOMAIN = "session";
 
 export function createTurnSnapshotEnvelope(
   snapshot,
@@ -31,7 +31,7 @@ export function createTurnSnapshotEnvelope(
     },
     causality: { commandId: snapshot.commandId },
     ordering: {
-      domain: TURN_SNAPSHOT_SEQUENCE_DOMAIN,
+      domain: SESSION_SEQUENCE_DOMAIN,
       scopeId: snapshot.sessionId,
       sequence,
     },
@@ -47,7 +47,7 @@ export function validateTurnSnapshotEnvelope(envelope = {}) {
   if (!payloadValidation.valid) errors.push(...payloadValidation.errors);
   if (envelope?.identity?.eventType !== TURN_SNAPSHOT_WIRE_EVENT)
     errors.push("invalid_snapshot_wire_event");
-  if (envelope?.ordering?.domain !== TURN_SNAPSHOT_SEQUENCE_DOMAIN)
+  if (envelope?.ordering?.domain !== SESSION_SEQUENCE_DOMAIN)
     errors.push("sequence_domain_mismatch");
   if (envelope?.ordering?.scopeId !== envelope?.identity?.sessionId)
     errors.push("sequence_scope_mismatch");

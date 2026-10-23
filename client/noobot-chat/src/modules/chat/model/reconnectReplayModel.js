@@ -17,29 +17,22 @@ import {
   getMessageTurnScopeId,
 } from "./messageIdentity.js";
 import { parseTimeMs } from "./timeFields.js";
-import { isAuthoritativeTerminalState } from "../runtime/sessionRunStateMachine.js";
 import { hydrateTurnSnapshot } from "../runtime/engine/turnProjectionStore.js";
 import { text } from "@noobot/shared/value";
+import { isTerminalTurnState } from "@noobot/session-protocol";
 
-function isSessionEntryRunning(sessionEntry = {}) {
-  const sessionId = text(sessionEntry?.sessionId);
-  const snapshot = sessionEntry?.replayBatch?.snapshot || {};
-  const activeTurn = snapshot?.activeTurn || snapshot?.payload?.activeTurn || {};
-  const activeTurnSessionId = text(activeTurn?.sessionId || snapshot?.sessionId);
-  const activeTurnScopeId = text(activeTurn?.turnScopeId);
-  const activeTurnState = text(activeTurn?.state);
-  if (!activeTurnState || isAuthoritativeTerminalState(activeTurnState)) return false;
-  return Boolean(sessionId && activeTurnSessionId === sessionId && activeTurnScopeId);
+function isSessionEntryRunning(sessionEntry) {
+  const { snapshot } = sessionEntry.replayBatch;
+  if (snapshot === null) return false;
+  const { activeTurn } = snapshot.payload;
+  return activeTurn !== null && !isTerminalTurnState(activeTurn.state);
 }
 
-function hasPendingInteractions(sessionEntry = {}) {
-  return (
-    Array.isArray(sessionEntry?.replayBatch?.pendingInteractions) &&
-    sessionEntry.replayBatch.pendingInteractions.length > 0
-  );
+function hasPendingInteractions(sessionEntry) {
+  return sessionEntry.replayBatch.pendingInteractions.length > 0;
 }
 
-function isDialogProcessRecoverable(sessionEntry = {}) {
+function isDialogProcessRecoverable(sessionEntry) {
   if (isSessionEntryRunning(sessionEntry)) return true;
   return hasPendingInteractions(sessionEntry);
 }
