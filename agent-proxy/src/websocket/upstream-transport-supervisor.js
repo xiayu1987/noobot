@@ -5,13 +5,7 @@
  */
 
 import { text } from "@noobot/shared/value";
-
-const UPSTREAM_TRANSPORT_PHASE = Object.freeze({
-  IDLE: "idle",
-  CONNECTING: "connecting",
-  OPEN: "open",
-  DISPOSED: "disposed",
-});
+import { UPSTREAM_TRANSPORT_PHASE } from "../shared/constants.js";
 
 export class UpstreamTransportSupervisor {
   constructor(WebSocketImpl, { closeGraceMs = 2000 } = {}) {
@@ -93,24 +87,6 @@ export class UpstreamTransportSupervisor {
     const requiredPurpose = text(purpose);
     if (requiredPurpose && this.purpose !== requiredPurpose) return false;
     return this.close(code, reason);
-  }
-
-  adopt(socket) {
-    if (this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return false;
-    if (this.socket && this.socket !== socket) {
-      this._retireSocket(this.socket, 1000, "replaced");
-    }
-    this.generation += 1;
-    this.socket = socket || null;
-    this.handlers = null;
-    this.purpose = socket ? "run" : "";
-    this.phase = !socket
-      ? UPSTREAM_TRANSPORT_PHASE.IDLE
-      : socket.readyState === this.WebSocket.OPEN
-        ? UPSTREAM_TRANSPORT_PHASE.OPEN
-        : UPSTREAM_TRANSPORT_PHASE.CONNECTING;
-    if (socket) this.everConnected = true;
-    return true;
   }
 
   isCurrent(socket, generation = this.generation) {

@@ -10,7 +10,10 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { WsRouter } from "../../src/websocket/ws-router.js";
-import { AGENT_PROXY_ERROR } from "../../src/shared/constants.js";
+import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { createChannelKey } from "../../src/shared/utils.js";
+import { FakeUpstreamWebSocket } from "../channel/channel-manager.state-consistency.test-helpers.js";
+import { CommandRegistry, PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
 import {
   AGENT_COMMAND,
   AGENT_TRANSPORT_EVENT,
@@ -23,6 +26,12 @@ import {
 } from "@noobot/agent-transport-protocol";
 
 const WEBSOCKET_MESSAGE_EVENT = "message";
+function createChannel(sessionId = "session-1") {
+  return new ChannelManager(FakeUpstreamWebSocket).ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId }),
+    {},
+  );
+}
 
 function runCommand({
   commandType = AGENT_COMMAND.CONTINUE,
@@ -71,7 +80,9 @@ async function waitForFile(filePath, timeoutMs = 5000) {
 function createMockSocket() {
   const handlers = new Map();
   return {
+    __agentProxySocketId: "socket-1",
     __agentProxyApiKey: "api-key-1",
+    __agentProxyLocale: "zh-CN",
     __agentProxyUserId: "user-1",
     on(eventName, handler) {
       handlers.set(eventName, handler);
@@ -88,7 +99,7 @@ function createMockSocket() {
 }
 
 function createForwardingChannelManager({
-  targetChannel = { key: "channel-1", upstreamSocket: { readyState: 1 } },
+  targetChannel = createChannel(),
   hasPermission = true,
   forwardResult = true,
 } = {}) {
@@ -107,16 +118,16 @@ function createForwardingChannelManager({
       calls.resolve.push({ socket, payload });
       return targetChannel;
     },
-    hasChannelPermission(channel, apiKey, userId) {
-      calls.permission.push({ channel, apiKey, userId });
+    hasChannelPermission(channel, socket) {
+      calls.permission.push({ channel, socket });
       return hasPermission;
     },
     forwardToUpstream(channel, payload) {
       calls.forward.push({ channel, payload });
       return forwardResult;
     },
-    sendSocketError(socket, message) {
-      calls.errors.push({ socket, message });
+    sendSocketError(socket, error) {
+      calls.errors.push({ socket, ...error });
     },
     sendSocketEvent(socket, envelope) {
       calls.events.push({ socket, envelope });
@@ -140,7 +151,7 @@ test("ws router settles lifecycle receipts at the downstream transport boundary"
     turnScopeId: "turn-1",
   };
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.deepEqual(channelManager.calls.lifecycleReceipts, [{ socket, payload }]);
@@ -149,8 +160,14 @@ test("ws router settles lifecycle receipts at the downstream transport boundary"
 });
 
 test("ws router forwards execution queries by authoritative commandType", () => {
-  const targetChannel = { key: "channel-1", pendingExecutionRequests: new Map() };
+  const targetChannel = createChannel();
   const channelManager = createForwardingChannelManager({ targetChannel });
+  channelManager.commandRegistry = new CommandRegistry({
+    now: () => 0,
+    ttlMs: 1000,
+    onRemove: () => {},
+    maxRemovals: 1,
+  });
   const socket = createMockSocket();
   const payload = createExecutionQueryCommand({
     commandType: AGENT_COMMAND.EXECUTION_TREE_GET,
@@ -159,13 +176,16 @@ test("ws router forwards execution queries by authoritative commandType", () => 
     query: { executionId: "", rootExecutionId: "workflow-root" },
   });
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
   assert.equal(channelManager.calls.forward.length, 1);
   assert.deepEqual(channelManager.calls.forward[0].payload, payload);
-  assert.equal(targetChannel.pendingExecutionRequests.get("execution-query-1"), socket);
+  const record = channelManager.commandRegistry.commands.get("execution-query-1");
+  assert.equal(record.channelKey, targetChannel.key);
+  assert.equal(record.kind, PENDING_COMMAND_KIND.EXECUTION_QUERY);
+  assert.equal(record.socket, socket);
 });
 
 test("ws router forwards continue command to upstream", () => {
@@ -173,14 +193,13 @@ test("ws router forwards continue command to upstream", () => {
   const socket = createMockSocket();
   const payload = runCommand();
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
   assert.equal(channelManager.calls.resolve.length, 1);
   assert.equal(channelManager.calls.permission.length, 1);
-  assert.equal(channelManager.calls.permission[0].apiKey, "api-key-1");
-  assert.equal(channelManager.calls.permission[0].userId, "user-1");
+  assert.equal(channelManager.calls.permission[0].socket, socket);
   assert.equal(channelManager.calls.forward.length, 1);
   assert.deepEqual(channelManager.calls.forward[0].payload, payload);
 });
@@ -191,12 +210,12 @@ test("ws router contains channel-start failures and closes only the failed conne
     startOrJoinChannel() {
       throw Object.assign(new Error("constructor failed"), { code: "ERR_INVALID_URL" });
     },
-    sendSocketError(socket, message) {
-      errors.push({ socket, message });
+    sendSocketError(socket, error) {
+      errors.push({ socket, ...error });
     },
   };
   const socket = createMockSocket();
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
 
   assert.doesNotThrow(() =>
     socket.emit(
@@ -211,7 +230,7 @@ test("ws router contains channel-start failures and closes only the failed conne
     ),
   );
   assert.equal(errors.length, 1);
-  assert.equal(errors[0].message, AGENT_PROXY_ERROR.ROUTE_FAILED);
+  assert.equal(errors[0].code, AGENT_TRANSPORT_ERROR_CODE.ROUTE_FAILED);
   assert.deepEqual(socket.closeCalls, [{ code: 1011, reason: "route_failed" }]);
 });
 
@@ -221,16 +240,16 @@ test("ws router contains action-handler failures and does not rethrow through Ev
     resolveChannelFromSocketMessage() {
       throw new TypeError("invalid channel state");
     },
-    sendSocketError(socket, message) {
-      errors.push({ socket, message });
+    sendSocketError(socket, error) {
+      errors.push({ socket, ...error });
     },
   };
   const socket = createMockSocket();
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
 
   assert.doesNotThrow(() => socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand())));
   assert.equal(errors.length, 1);
-  assert.equal(errors[0].message, AGENT_PROXY_ERROR.ROUTE_FAILED);
+  assert.equal(errors[0].code, AGENT_TRANSPORT_ERROR_CODE.ROUTE_FAILED);
   assert.deepEqual(socket.closeCalls, [{ code: 1011, reason: "route_failed" }]);
 });
 
@@ -240,12 +259,12 @@ test("ws router reports reconnect transaction failure without closing the shared
     handleReconnect() {
       return Promise.reject(new Error("authoritative_snapshot_failed"));
     },
-    sendSocketError(socket, message, options) {
-      errors.push({ socket, message, options });
+    sendSocketError(socket, error) {
+      errors.push({ socket, ...error });
     },
   };
   const socket = createMockSocket();
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
 
   socket.emit(
     WEBSOCKET_MESSAGE_EVENT,
@@ -260,11 +279,8 @@ test("ws router reports reconnect transaction failure without closing the shared
   await Promise.resolve();
 
   assert.equal(errors.length, 1);
-  assert.equal(errors[0].message, AGENT_PROXY_ERROR.RECONNECT_FAILED);
-  assert.deepEqual(errors[0].options, {
-    code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
-    identity: { sessionId: "s-reconnect" },
-  });
+  assert.equal(errors[0].code, AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED);
+  assert.deepEqual(errors[0].identity, { sessionId: "s-reconnect" });
   assert.deepEqual(socket.closeCalls, []);
 });
 
@@ -277,10 +293,7 @@ test("ws router stop forwards request without synthesizing user_stopped", () => 
     broadcast: [],
     errors: [],
   };
-  const targetChannel = {
-    key: "channel-1",
-    eventSequence: 7,
-  };
+  const targetChannel = createChannel();
   const channelManager = {
     resolveChannelFromSocketMessage() {
       return targetChannel;
@@ -305,14 +318,14 @@ test("ws router stop forwards request without synthesizing user_stopped", () => 
     broadcastChannelEvent(channel, envelope) {
       calls.broadcast.push({ channel, envelope });
     },
-    sendSocketError(socket, message) {
-      calls.errors.push({ socket, message });
+    sendSocketError(socket, error) {
+      calls.errors.push({ socket, ...error });
     },
   };
   const socket = createMockSocket();
   const payload = stopCommand();
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(calls.errors.length, 0);
@@ -328,16 +341,17 @@ test("ws router forwards user interjections to the active scoped channel", () =>
   const socket = createMockSocket();
   const payload = interjectionCommand();
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
   assert.equal(channelManager.calls.forward.length, 1);
-  assert.equal(channelManager.calls.forward[0].channel.key, "channel-1");
+  assert.equal(
+    channelManager.calls.forward[0].channel.key,
+    createChannelKey({ userId: "user-1", sessionId: "session-1" }),
+  );
   assert.deepEqual(channelManager.calls.forward[0].payload, payload);
-  assert.deepEqual(channelManager.calls.permission[0].slice?.(), undefined);
-  assert.equal(channelManager.calls.permission[0].apiKey, "api-key-1");
-  assert.equal(channelManager.calls.permission[0].userId, "user-1");
+  assert.equal(channelManager.calls.permission[0].socket, socket);
 });
 
 test("ws router stop reports transport failure without creating a Turn error", () => {
@@ -347,7 +361,7 @@ test("ws router stop reports transport failure without creating a Turn error", (
     broadcast: [],
     errors: [],
   };
-  const targetChannel = { key: "channel-1", eventSequence: 3 };
+  const targetChannel = createChannel();
   const channelManager = {
     resolveChannelFromSocketMessage() {
       return targetChannel;
@@ -369,32 +383,20 @@ test("ws router stop reports transport failure without creating a Turn error", (
     broadcastChannelEvent(channel, envelope) {
       calls.broadcast.push({ channel, envelope });
     },
-    sendSocketError(socket, message) {
-      calls.errors.push({ socket, message });
+    sendSocketError(socket, error) {
+      calls.errors.push({ socket, ...error });
     },
   };
   const socket = createMockSocket();
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(stopCommand()));
 
   assert.equal(calls.errors.length, 1);
-  assert.equal(calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+  assert.equal(calls.errors[0].code, AGENT_TRANSPORT_ERROR_CODE.UPSTREAM_UNAVAILABLE);
   assert.equal(calls.push.length, 0);
   assert.equal(calls.mark.length, 0);
   assert.equal(calls.broadcast.length, 0);
-});
-
-test("ws router reports upstream unavailable when continue action has no target channel", () => {
-  const channelManager = createForwardingChannelManager({ targetChannel: null });
-  const socket = createMockSocket();
-
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
-  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand()));
-
-  assert.equal(channelManager.calls.forward.length, 0);
-  assert.equal(channelManager.calls.errors.length, 1);
-  assert.equal(channelManager.calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
 });
 
 test("ws router recreates a missing continue channel after proxy restart", () => {
@@ -402,16 +404,15 @@ test("ws router recreates a missing continue channel after proxy restart", () =>
   channelManager.calls.start = [];
   channelManager.startOrJoinChannel = (options) => channelManager.calls.start.push(options);
   const socket = createMockSocket();
-  socket.__agentProxyLocale = "zh-CN";
   const payload = runCommand();
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
   assert.equal(channelManager.calls.start.length, 1);
-  assert.equal(channelManager.calls.start[0].connectionApiKey, "api-key-1");
-  assert.equal(channelManager.calls.start[0].connectionLocale, "zh-CN");
+  assert.deepEqual(Object.keys(channelManager.calls.start[0]), ["socket", "payload"]);
+  assert.equal(channelManager.calls.start[0].socket, socket);
   assert.equal(channelManager.calls.start[0].payload.identity.sessionId, "session-1");
 });
 
@@ -434,39 +435,40 @@ test("ws router does not reuse previous session active channel for another sessi
       }
       return null;
     },
-    hasChannelPermission(channel, apiKey, userId) {
-      calls.permission.push({ channel, apiKey, userId });
+    hasChannelPermission(channel, socket) {
+      calls.permission.push({ channel, socket });
       return true;
     },
     forwardToUpstream(channel, payload) {
       calls.forward.push({ channel, payload });
       return true;
     },
-    sendSocketError(socket, message) {
-      calls.errors.push({ socket, message });
+    sendSocketError(socket, error) {
+      calls.errors.push({ socket, ...error });
+    },
+    startOrJoinChannel(options) {
+      calls.start.push(options);
     },
   };
+  calls.start = [];
   const socket = createMockSocket();
   socket.__agentProxyActiveChannelKey = previousSessionChannel.key;
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand({ sessionId: "session-new" })));
 
   assert.equal(channelManager.calls.permission.length, 0);
   assert.equal(channelManager.calls.forward.length, 0);
-  assert.equal(channelManager.calls.errors.length, 1);
-  assert.equal(channelManager.calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+  assert.equal(channelManager.calls.errors.length, 0);
+  assert.equal(channelManager.calls.start.length, 1);
+  assert.equal(channelManager.calls.start[0].payload.identity.sessionId, "session-new");
 });
 
 test("ws router restarts upstream on existing channel when continue action has closed upstream", () => {
-  const targetChannel = {
-    key: "channel-1",
-    apiKey: "channel-api-key",
-    locale: "zh-CN",
-    cleanupAfterMs: 123,
-    upstreamClosed: true,
-    _errorHandled: true,
-  };
+  const targetChannel = createChannel();
+  targetChannel.retention.cleanupAfterMs = 123;
+  targetChannel.upstreamClosed = true;
+  targetChannel._errorHandled = true;
   const channelManager = createForwardingChannelManager({
     targetChannel,
     forwardResult: false,
@@ -476,46 +478,51 @@ test("ws router restarts upstream on existing channel when continue action has c
   channelManager.closeUpstreamChannel = (channel, closeCode, reason) => {
     channelManager.calls.close.push({ channel, closeCode, reason });
   };
-  channelManager.connectUpstreamChannel = (channel, apiKey, locale) => {
-    channelManager.calls.connect.push({ channel, apiKey, locale });
+  channelManager.resetChannelRun = (channel) =>
+    new ChannelManager(FakeUpstreamWebSocket).resetChannelRun(channel);
+  channelManager.connectUpstreamChannel = (channel, apiKey, locale, options) => {
+    channelManager.calls.connect.push({ channel, apiKey, locale, options });
   };
   const socket = createMockSocket();
   const payload = runCommand({ turnScopeId: "turn-resume" });
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
-  assert.equal(channelManager.calls.forward.length, 0);
+  assert.equal(channelManager.calls.forward.length, 1);
+  assert.equal(channelManager.calls.forward[0].channel, targetChannel);
   assert.equal(channelManager.calls.close.length, 1);
   assert.equal(channelManager.calls.connect.length, 1);
   assert.deepEqual(targetChannel.startPayload, payload);
-  assert.equal(targetChannel.cleanupAfterMs, 0);
+  assert.equal(targetChannel.retention.cleanupAfterMs, 0);
   assert.equal(targetChannel.upstreamClosed, false);
   assert.equal(targetChannel._errorHandled, false);
   assert.equal(channelManager.calls.connect[0].apiKey, "api-key-1");
   assert.equal(channelManager.calls.connect[0].locale, "zh-CN");
+  assert.deepEqual(channelManager.calls.connect[0].options, {
+    initialCommands: [payload],
+    purpose: "run",
+  });
 });
 
 test("ws router denies continue action without channel permission", () => {
   const channelManager = createForwardingChannelManager({ hasPermission: false });
   const socket = createMockSocket();
 
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand()));
 
   assert.equal(channelManager.calls.forward.length, 0);
   assert.equal(channelManager.calls.errors.length, 1);
-  assert.equal(
-    channelManager.calls.errors[0].message,
-    AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(AGENT_COMMAND.CONTINUE),
-  );
+  assert.equal(channelManager.calls.errors[0].code, AGENT_TRANSPORT_ERROR_CODE.PERMISSION_DENIED);
+  assert.deepEqual(channelManager.calls.errors[0].params, { action: AGENT_COMMAND.CONTINUE });
 });
 
 test("ws router rejects legacy agent actions instead of using a compatibility route", () => {
   const channelManager = createForwardingChannelManager();
   const socket = createMockSocket();
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
 
   socket.emit(
     WEBSOCKET_MESSAGE_EVENT,
@@ -523,10 +530,8 @@ test("ws router rejects legacy agent actions instead of using a compatibility ro
   );
 
   assert.equal(channelManager.calls.forward.length, 0);
-  assert.equal(
-    channelManager.calls.errors[0].message,
-    AGENT_PROXY_ERROR.UNSUPPORTED_ACTION("continue"),
-  );
+  assert.equal(channelManager.calls.errors[0].code, AGENT_TRANSPORT_ERROR_CODE.UNSUPPORTED_ACTION);
+  assert.deepEqual(channelManager.calls.errors[0].params, { action: "continue" });
 });
 
 test("ws router reports strict protocol validation errors without a generic route failure", () => {
@@ -536,7 +541,7 @@ test("ws router reports strict protocol validation errors without a generic rout
     ...runCommand({ commandType: AGENT_COMMAND.SEND }),
     requestId: "legacy-stream-request-id",
   };
-  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  new WsRouter(channelManager).handle(socket);
 
   socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(command));
 
@@ -582,20 +587,20 @@ test("ws router writes sanitized system event for invalid JSON payload", async (
   );
   const sendSocketErrors = [];
   const channelManager = {
-    sendSocketError(socket, message) {
-      sendSocketErrors.push({ socket, message });
+    sendSocketError(socket, error) {
+      sendSocketErrors.push({ socket, ...error });
     },
   };
   const socket = createMockSocket();
   const rawData = '{"apikey":"secret-token","authorization":"Bearer hidden"';
 
   try {
-    new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+    new WsRouter(channelManager).handle(socket);
     socket.emit(WEBSOCKET_MESSAGE_EVENT, rawData);
 
     assert.equal(sendSocketErrors.length, 1);
     assert.equal(sendSocketErrors[0].socket, socket);
-    assert.equal(sendSocketErrors[0].message, AGENT_PROXY_ERROR.INVALID_JSON_PAYLOAD);
+    assert.equal(sendSocketErrors[0].code, AGENT_TRANSPORT_ERROR_CODE.INVALID_JSON_PAYLOAD);
 
     await waitForFile(eventFile);
     const raw = await readFile(eventFile, "utf8");

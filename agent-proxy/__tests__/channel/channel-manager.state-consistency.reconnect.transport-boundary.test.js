@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { CHANNEL_ACTIVITY_PHASE } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
@@ -25,9 +26,7 @@ test("data-plane events do not create channel business state from start payload"
     sessionId: "session-turn-scope",
     turnScopeId: "turn-scope-1",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
@@ -53,9 +52,7 @@ test("reconnect does not derive authoritative sending state from a running trans
     sessionId: "session-snapshot-running",
     turnScopeId: "turn-scope-snapshot-running",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(
@@ -83,9 +80,7 @@ test("reconnect leaves business state empty for a running transport without auth
     sessionId: "session-running-empty",
     turnScopeId: "turn-scope-running",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(
@@ -114,11 +109,8 @@ test("reconnect does not manufacture an error when a transport socket disappears
     sessionId,
     turnScopeId: "turn-orphaned-running",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.upstreamEverConnected = true;
-  channel.upstreamSocket = null;
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
+  channel.transport.socket = null;
   channel.upstreamClosed = true;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -128,7 +120,7 @@ test("reconnect does not manufacture an error when a transport socket disappears
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
     (item) => String(item?.sessionId || "") === sessionId,
   );
-  assert.equal(channel.status, "running");
+  assert.equal(channel.activity.phase, CHANNEL_ACTIVITY_PHASE.RUNNING);
   assert.equal("hasRunningTask" in sessionEntry, false);
   assert.equal("currentRun" in sessionEntry, false);
   assert.equal("conversationStates" in sessionEntry, false);
@@ -143,11 +135,8 @@ test("reconnect keeps transport status separate from authoritative running state
     sessionId,
     turnScopeId: "turn-live-running",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.upstreamEverConnected = true;
-  channel.upstreamSocket = { readyState: 1 };
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
+  channel.transport.socket = { readyState: 1 };
   channel.upstreamClosed = false;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -157,7 +146,7 @@ test("reconnect keeps transport status separate from authoritative running state
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
     (item) => String(item?.sessionId || "") === sessionId,
   );
-  assert.equal(channel.status, "running");
+  assert.equal(channel.activity.phase, CHANNEL_ACTIVITY_PHASE.RUNNING);
   assert.equal("hasRunningTask" in sessionEntry, false);
   assert.equal("currentRun" in sessionEntry, false);
 });

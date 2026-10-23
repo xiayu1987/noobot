@@ -6,9 +6,11 @@
 import assert from "node:assert/strict";
 import { readdir } from "node:fs/promises";
 import test from "node:test";
+import { QUALITY_STEPS } from "./quality-steps.mjs";
 import { readRepositoryJson, repositoryPathExists } from "./repository-files.mjs";
 
 const QUALITY_ENTRY = "check:quality";
+const QUALITY_RUNNER = "node ./scripts/run-quality-checks.mjs";
 const HOOK_ENTRIES = Object.freeze({
   "check-commit-message.mjs": {
     hook: "hooks/commit-msg",
@@ -20,22 +22,19 @@ async function rootScripts() {
   return (await readRepositoryJson("package.json")).scripts;
 }
 
-function qualitySteps(scripts) {
-  return scripts[QUALITY_ENTRY].split(" && ").map((step) => {
-    const match = /^npm run -s ([\w:-]+)$/.exec(step);
-    assert.ok(match, `${QUALITY_ENTRY} step must be "npm run -s <script>": ${step}`);
-    return match[1];
-  });
-}
-
 async function checkScriptFiles() {
   const entries = await readdir(new URL("..", import.meta.url));
   return entries.filter((name) => /^check-[\w-]+\.mjs$/.test(name) && !name.endsWith(".test.mjs"));
 }
 
+test("check:quality delegates to the quality runner", async () => {
+  const scripts = await rootScripts();
+  assert.equal(scripts[QUALITY_ENTRY], QUALITY_RUNNER);
+});
+
 test("every check script runs from check:quality exactly once", async () => {
   const scripts = await rootScripts();
-  const steps = qualitySteps(scripts);
+  const steps = QUALITY_STEPS;
   assert.deepEqual(
     steps.filter((step, index) => steps.indexOf(step) !== index),
     [],

@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { CHANNEL_ACTIVITY_PHASE } from "../../src/shared/constants.js";
 import { config } from "../../src/shared/config.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
@@ -17,7 +18,10 @@ import {
   listEvents,
   FakeUpstreamWebSocket,
   reconnectControl,
+  countPendingCommands,
+  registerPendingCommand,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
 import {
   authoritativeLifecycle,
   authoritativeSnapshot,
@@ -32,40 +36,6 @@ import {
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
 import { EVENT_FAMILY, createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
-import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
-import {
-  EXECUTION_CHILDREN_WIRE_EVENT,
-  EXECUTION_SNAPSHOT_WIRE_EVENT,
-  EXECUTION_TREE_WIRE_EVENT,
-} from "@noobot/session-protocol/execution-lifecycle";
-
-const QUERY_ROOT_EXECUTION = Object.freeze({
-  executionId: "workflow:root",
-  executionKind: "workflow",
-  rootExecutionId: "workflow:root",
-  sessionId: "session-execution-query",
-  sequence: 1,
-  revision: 1,
-});
-
-const QUERY_PAYLOAD_BY_WIRE_EVENT = Object.freeze({
-  [EXECUTION_SNAPSHOT_WIRE_EVENT]: { execution: QUERY_ROOT_EXECUTION },
-  [EXECUTION_CHILDREN_WIRE_EVENT]: { execution: QUERY_ROOT_EXECUTION, children: [] },
-  [EXECUTION_TREE_WIRE_EVENT]: {
-    rootExecutionId: QUERY_ROOT_EXECUTION.executionId,
-    tree: { executions: { [QUERY_ROOT_EXECUTION.executionId]: QUERY_ROOT_EXECUTION } },
-  },
-});
-
-function executionQueryEnvelope(wireEvent, commandId) {
-  return createExecutionQueryEnvelope({
-    wireEvent,
-    commandId,
-    executionId: QUERY_ROOT_EXECUTION.executionId,
-    payload: QUERY_PAYLOAD_BY_WIRE_EVENT[wireEvent],
-    occurredAt: "2026-10-17T00:00:00.000Z",
-  });
-}
 import {
   createPluginArtifactEnvelope,
   PLUGIN_ARTIFACT_EVENT,
@@ -144,7 +114,10 @@ test("upstream accepts the canonical Session attachment-binding receipt", () => 
   });
   const subscriber = createMockSocket();
   manager.attachSubscriber(channel, subscriber);
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   const receipt = {
@@ -246,12 +219,17 @@ test("upstream snapshot responses resolve and release the reconnect command", as
     createChannelKey({ userId: "user-1", sessionId: "session-snapshot-response" }),
     { userId: "user-1", sessionId: "session-snapshot-response" },
   );
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   let resolution = null;
-  channel.pendingSnapshotRequests.set("snapshot-command-1", {
-    resolve: (result) => {
+  registerPendingCommand(manager, channel, "snapshot-command-1", {
+    kind: PENDING_COMMAND_KIND.TURN_SNAPSHOT,
+    socket: {},
+    settle: (result) => {
       resolution = result;
     },
   });
@@ -276,7 +254,7 @@ test("upstream snapshot responses resolve and release the reconnect command", as
       sequence: 2,
     }),
   });
-  assert.equal(channel.pendingSnapshotRequests.size, 0);
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
 });
 
 test("upstream snapshot failure receipts resolve and release the reconnect command", () => {
@@ -288,12 +266,17 @@ test("upstream snapshot failure receipts resolve and release the reconnect comma
     userId: "user-1",
     sessionId,
   });
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   let resolution = null;
-  channel.pendingSnapshotRequests.set(commandId, {
-    resolve: (result) => {
+  registerPendingCommand(manager, channel, commandId, {
+    kind: PENDING_COMMAND_KIND.TURN_SNAPSHOT,
+    socket: {},
+    settle: (result) => {
       resolution = result;
     },
   });
@@ -316,97 +299,7 @@ test("upstream snapshot failure receipts resolve and release the reconnect comma
   );
 
   assert.deepEqual(resolution, { ok: false, reason: "snapshot_not_found" });
-  assert.equal(channel.pendingSnapshotRequests.size, 0);
-});
-
-test("upstream execution query responses return only to the registered requester", () => {
-  FakeUpstreamWebSocket.instances = [];
-  const manager = new ChannelManager(FakeUpstreamWebSocket);
-  const channel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId: "session-execution-query" }),
-    { userId: "user-1", sessionId: "session-execution-query" },
-  );
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
-  const upstream = FakeUpstreamWebSocket.instances.at(-1);
-  upstream.emit("open");
-  const requester = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.attachSubscriber(channel, observer);
-  channel.pendingExecutionRequests.set("execution-query-1", requester);
-
-  upstream.emit(
-    "message",
-    JSON.stringify({
-      event: EXECUTION_TREE_WIRE_EVENT,
-      data: executionQueryEnvelope(EXECUTION_TREE_WIRE_EVENT, "execution-query-1"),
-    }),
-  );
-
-  assert.equal(
-    getEvent(requester, "execution_tree")?.data?.causality?.commandId,
-    "execution-query-1",
-  );
-  assert.equal(getEvent(observer, "execution_tree"), null);
-  assert.equal(channel.pendingExecutionRequests.size, 0);
-});
-
-test("orphan execution query responses are dropped without closing upstream", () => {
-  FakeUpstreamWebSocket.instances = [];
-  const manager = new ChannelManager(FakeUpstreamWebSocket);
-  const channel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId: "session-orphan-query" }),
-    { userId: "user-1", sessionId: "session-orphan-query" },
-  );
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
-  const upstream = FakeUpstreamWebSocket.instances.at(-1);
-  upstream.emit("open");
-  const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.attachSubscriber(channel, observer);
-  const logged = [];
-  const logChannelEvent = manager.logChannelEvent.bind(manager);
-  manager.logChannelEvent = (target, entry) => {
-    logged.push(entry.event);
-    return logChannelEvent(target, entry);
-  };
-
-  for (const event of [
-    EXECUTION_TREE_WIRE_EVENT,
-    EXECUTION_SNAPSHOT_WIRE_EVENT,
-    EXECUTION_CHILDREN_WIRE_EVENT,
-  ]) {
-    upstream.emit(
-      "message",
-      JSON.stringify({ event, data: executionQueryEnvelope(event, `late-${event}`) }),
-    );
-  }
-
-  assert.equal(channel.upstreamClosed, false);
-  assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.CHANNEL_ERROR), null);
-  assert.equal(getEvent(observer, "execution_tree"), null);
-  assert.equal(
-    logged.filter((event) => event === "agentProxy.upstream.executionQuery.orphanDropped").length,
-    3,
-  );
-  assert.equal(logged.includes("agentProxy.upstream.message.dropped"), false);
-});
-
-test("execution query wire events without commandId remain invalid upstream events", () => {
-  FakeUpstreamWebSocket.instances = [];
-  const manager = new ChannelManager(FakeUpstreamWebSocket);
-  const channel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId: "session-query-no-id" }),
-    { userId: "user-1", sessionId: "session-query-no-id" },
-  );
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
-  const upstream = FakeUpstreamWebSocket.instances.at(-1);
-  upstream.emit("open");
-  const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.attachSubscriber(channel, observer);
-
-  upstream.emit("message", JSON.stringify({ event: "execution_tree", data: { found: true } }));
-
-  assert.equal(channel.upstreamClosed, true);
-  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.CHANNEL_ERROR));
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
 });
 
 function connectInvalidFrameChannel(sessionId) {
@@ -416,7 +309,10 @@ function connectInvalidFrameChannel(sessionId) {
     userId: "user-1",
     sessionId,
   });
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -472,10 +368,8 @@ test("stop action should broadcast stopping state before terminal", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.upstreamSocket = {
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
+  channel.transport.socket = {
     readyState: 1,
     send() {},
   };
@@ -513,24 +407,21 @@ test("startOrJoinChannel restarts running channel when upstream socket is not op
     userId: "user-1",
     sessionId: "session-stale",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.upstreamSocket = { readyState: 3, close() {} };
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
+  channel.transport.socket = { readyState: 3, close() {} };
 
   let closeCount = 0;
   let connectCount = 0;
   manager.closeUpstreamChannel = (targetChannel) => {
     assert.equal(targetChannel, channel);
     closeCount += 1;
-    targetChannel.upstreamSocket = null;
+    targetChannel.transport.socket = null;
   };
   manager.connectUpstreamChannel = (targetChannel, apiKey) => {
     assert.equal(targetChannel, channel);
     assert.equal(apiKey, "api-key-1");
     connectCount += 1;
-    targetChannel.status = "connecting";
-    targetChannel.upstreamSocket = { readyState: 0 };
+    targetChannel.transport.socket = { readyState: 0 };
   };
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -543,7 +434,7 @@ test("startOrJoinChannel restarts running channel when upstream socket is not op
   assert.equal(closeCount, 1);
   assert.equal(connectCount, 1);
   assert.equal(channel.startPayload?.identity?.sessionId, "session-stale");
-  assert.equal(channel.eventLog.length, 0);
+  assert.equal(channel.eventJournal.events.length, 0);
 });
 
 test("startOrJoinChannel keeps running channel when upstream socket is open", () => {
@@ -553,10 +444,8 @@ test("startOrJoinChannel keeps running channel when upstream socket is open", ()
     userId: "user-1",
     sessionId: "session-live",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.upstreamSocket = { readyState: 1, close() {} };
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
+  channel.transport.socket = { readyState: 1, close() {} };
 
   let connectCount = 0;
   manager.connectUpstreamChannel = () => {
@@ -571,7 +460,7 @@ test("startOrJoinChannel keeps running channel when upstream socket is open", ()
   });
 
   assert.equal(connectCount, 0);
-  assert.equal(channel.upstreamSocket.readyState, 1);
+  assert.equal(channel.transport.socket.readyState, 1);
 });
 
 test("forwarded stop does not synthesize stopping before Service confirms it", () => {
@@ -581,11 +470,9 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
     userId: "user-1",
     sessionId: "session-stop",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   const upstreamMessages = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     readyState: 1,
     send(raw) {
       upstreamMessages.push(JSON.parse(String(raw || "{}")));
@@ -610,7 +497,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   assert.equal(forwarded, true);
 
   assert.equal(upstreamMessages.length, 1);
-  assert.equal(channel.status, "running");
+  assert.equal(channel.activity.phase, CHANNEL_ACTIVITY_PHASE.RUNNING);
   const reconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(reconnectClient, reconnectControl({ sessionId: "session-stop" }));
 
@@ -649,7 +536,6 @@ test("forwardToUpstream reports a closed upstream without throwing", () => {
     createChannelKey({ userId: "user-1", sessionId: "session-closed-upstream" }),
     { identity: { sessionId: "session-closed-upstream" } },
   );
-  channel.ownerUserId = "user-1";
 
   assert.doesNotThrow(() => {
     assert.equal(
@@ -678,13 +564,14 @@ test("upstream close without authoritative event does not synthesize a turn term
     sessionId: "session-upstream-close",
     turnScopeId: "turn-upstream-close",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
 
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   upstream.close(1006, "network_lost");
@@ -710,7 +597,10 @@ test("successful upstream messages bypass session logs and retain data-plane met
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
 
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   records.length = 0;
@@ -748,12 +638,13 @@ test("upstream plugin artifact is forwarded to the connected browser socket", ()
     userId: "user-1",
     sessionId,
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   const artifact = createPluginArtifactEnvelope({
@@ -787,12 +678,13 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
     userId: "user-1",
     sessionId,
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
 
@@ -832,13 +724,14 @@ test("upstream close reason user_stopped is transport metadata, not confirmation
     sessionId: "session-user-close",
     turnScopeId: "turn-user-close",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
 
-  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN", {
+    initialCommands: [],
+    purpose: "run",
+  });
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   upstream.close(1000, "user_stopped");

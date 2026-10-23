@@ -4,84 +4,70 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isCanonicalText } from "@noobot/shared/value";
+
+export const PENDING_COMMAND_KIND = Object.freeze({
+  TURN_SNAPSHOT: "turn_snapshot",
+  EXECUTION_QUERY: "execution_query",
+});
+
+const PENDING_COMMAND_KINDS = new Set(Object.values(PENDING_COMMAND_KIND));
 
 export class CommandRegistry {
-  constructor({
-    now = () => Date.now(),
-    defaultTtlMs = 0,
-    onRemove = null,
-    maxRemovals = 256,
-  } = {}) {
+  constructor({ now, ttlMs, onRemove, maxRemovals }) {
     this.now = now;
-    this.defaultTtlMs = Math.max(0, Number(defaultTtlMs || 0));
+    this.ttlMs = ttlMs;
+    this.onRemove = onRemove;
+    this.maxRemovals = maxRemovals;
     this.commands = new Map();
-    this.routes = new Map();
-    this.onRemove = typeof onRemove === "function" ? onRemove : null;
-    this.maxRemovals = Math.max(0, Number(maxRemovals || 0));
     this.removals = new Map();
   }
 
-  register(
-    commandId,
-    { channelKey = "", commandType = "command", requester = null, ttlMs = this.defaultTtlMs } = {},
-  ) {
-    const id = text(commandId);
-    if (!id) return null;
+  register(commandId, { channelKey, kind, socket, settle }) {
+    if (!isCanonicalText(commandId) || !isCanonicalText(channelKey)) {
+      throw new TypeError("pending command requires canonical commandId and channelKey");
+    }
+    if (!PENDING_COMMAND_KINDS.has(kind))
+      throw new TypeError(`unknown pending command kind: ${kind}`);
+    if (this.commands.has(commandId))
+      throw new TypeError(`pending command already registered: ${commandId}`);
     const createdAtMs = this.now();
     const record = {
-      commandId: id,
-      channelKey: text(channelKey),
-      commandType: text(commandType) || "command",
-      requester,
+      commandId,
+      channelKey,
+      kind,
+      socket,
+      settle,
       createdAtMs,
-      expiresAtMs: Number(ttlMs || 0) > 0 ? createdAtMs + Number(ttlMs) : 0,
+      expiresAtMs: createdAtMs + this.ttlMs,
     };
-    this.commands.set(id, record);
+    this.commands.set(commandId, record);
     return record;
   }
 
-  get(commandId) {
-    return this.commands.get(text(commandId)) || null;
+  take(commandId, { channelKey, kind }, reason) {
+    const record = this.commands.get(commandId);
+    if (!record || record.channelKey !== channelKey || record.kind !== kind) return null;
+    return this.remove(record, reason);
   }
 
-  consume(commandId) {
-    return this.remove(commandId, "consumed");
-  }
-
-  delete(commandId, reason = "deleted") {
-    return this.remove(commandId, reason) !== null;
-  }
-
-  remove(commandId, reason = "deleted") {
-    const id = text(commandId);
-    const record = this.commands.get(id) || null;
-    if (!record) return null;
-    this.commands.delete(id);
+  remove(record, reason) {
+    this.commands.delete(record.commandId);
+    const removedAtMs = this.now();
     const removal = {
-      commandId: id,
+      commandId: record.commandId,
       channelKey: record.channelKey,
-      commandType: record.commandType,
-      reason: text(reason) || "deleted",
-      registeredForMs: Math.max(0, this.now() - record.createdAtMs),
-      removedAtMs: this.now(),
+      commandType: record.kind,
+      reason,
+      registeredForMs: Math.max(0, removedAtMs - record.createdAtMs),
+      removedAtMs,
     };
     this.rememberRemoval(removal);
-    this.notifyRemoval(removal);
+    this.onRemove(removal);
     return record;
-  }
-
-  notifyRemoval(removal) {
-    try {
-      this.onRemove?.(removal);
-      return true;
-    } catch {
-      return false;
-    }
   }
 
   rememberRemoval(removal) {
-    if (!this.maxRemovals) return;
     this.removals.delete(removal.commandId);
     this.removals.set(removal.commandId, removal);
     while (this.removals.size > this.maxRemovals) {
@@ -90,76 +76,24 @@ export class CommandRegistry {
   }
 
   lastRemoval(commandId) {
-    return this.removals.get(text(commandId)) || null;
+    return this.removals.get(commandId) || null;
   }
 
-  registerRoute(requestId, { channelKey = "", createdAtMs = this.now() } = {}) {
-    const id = text(requestId);
-    if (!id) return null;
-    const route = {
-      channelKey: text(channelKey),
-      createdAtMs: Number(createdAtMs || this.now()),
-    };
-    this.routes.set(id, route);
-    return route;
-  }
-
-  cancelRequester(requester) {
+  cancelSocket(socket) {
     let cancelled = 0;
-    for (const [commandId, record] of this.commands.entries()) {
-      if (record.requester !== requester && record.requester?.socket !== requester) continue;
-      this.remove(commandId, "requester_disconnected");
-      record.requester?.resolve?.({ ok: false, reason: "requester_disconnected" });
+    for (const record of [...this.commands.values()]) {
+      if (record.socket !== socket) continue;
+      this.remove(record, "requester_disconnected");
       cancelled += 1;
     }
     return cancelled;
   }
 
-  cleanup({ channelExists = () => true, interactionPending = () => false } = {}) {
+  cleanup(channelExists) {
     const currentMs = this.now();
-    for (const [commandId, record] of this.commands.entries()) {
-      if (!channelExists(record.channelKey)) this.remove(commandId, "channel_missing");
-      else if (record.expiresAtMs > 0 && currentMs >= record.expiresAtMs)
-        this.remove(commandId, "ttl_expired");
+    for (const record of [...this.commands.values()]) {
+      if (!channelExists(record.channelKey)) this.remove(record, "channel_missing");
+      else if (currentMs >= record.expiresAtMs) this.remove(record, "ttl_expired");
     }
-    for (const [requestId, route] of this.routes.entries()) {
-      if (interactionPending(route.channelKey, requestId)) continue;
-      if (
-        !channelExists(route.channelKey) ||
-        !route.createdAtMs ||
-        currentMs - route.createdAtMs >= this.defaultTtlMs
-      ) {
-        this.routes.delete(requestId);
-      }
-    }
-  }
-
-  createMapFacade(channelKey, commandType) {
-    const registry = this;
-    return {
-      set(commandId, requester) {
-        registry.register(commandId, { channelKey, commandType, requester });
-        return this;
-      },
-      get(commandId) {
-        const record = registry.get(commandId);
-        return record?.channelKey === channelKey && record?.commandType === commandType
-          ? record.requester
-          : undefined;
-      },
-      delete(commandId, reason = "deleted") {
-        const record = registry.get(commandId);
-        if (record?.channelKey !== channelKey || record?.commandType !== commandType) return false;
-        return registry.delete(commandId, reason);
-      },
-      has(commandId) {
-        return this.get(commandId) !== undefined;
-      },
-      get size() {
-        return [...registry.commands.values()].filter(
-          (record) => record.channelKey === channelKey && record.commandType === commandType,
-        ).length;
-      },
-    };
   }
 }

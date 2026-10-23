@@ -4,13 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  AGENT_PROXY_ERROR,
-  CHANNEL_RETENTION_PHASE,
-  CHANNEL_STATUS,
+  CHANNEL_ACTIVITY_PHASE,
+  UPSTREAM_TRANSPORT_PHASE,
   CONVERSATION_SOURCE_EVENT,
   UPSTREAM_CLOSE_REASON,
 } from "../../shared/constants.js";
-import { normalizeApiKey, createChannelKey, buildFingerprint } from "../../shared/utils.js";
+import { createChannelKey, buildFingerprint } from "../../shared/utils.js";
 import { writeAgentProxyRouteDebugEvent } from "../../runtime-events/route-debug-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
 import {
@@ -66,105 +65,37 @@ function buildInteractionConversationPatch({ resolved, hasRemainingInteraction, 
 }
 
 class ChannelFlowMethods {
-  resolveChannelFromSocketMessage(socket, payload = {}) {
-    const commandType = text(payload?.commandType).toLowerCase();
-    if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
-      const channel = this.getChannelByRequestId(payload?.interaction?.requestId);
-      if (channel) {
-        void writeAgentProxyRouteDebugEvent({
-          event: "agentProxy.route.resolve.matched",
-          payload,
-          socket,
-          channel,
-          data: { routeSource: "request_id" },
-        });
-        return channel;
-      }
-    }
-    const identity =
-      payload?.identity && typeof payload.identity === "object" ? payload.identity : {};
-    const sessionId = text(identity.sessionId);
-    const explicitChannelKey = text(payload?.channelKey);
-    if (explicitChannelKey && this.hasChannel(explicitChannelKey)) {
-      if (sessionId && this.getChannel(explicitChannelKey).identity.sessionId !== sessionId) {
-        void writeAgentProxyRouteDebugEvent({
-          event: "agentProxy.route.resolve.rejected",
-          payload,
-          socket,
-          data: { reason: "explicit_channel_session_mismatch", explicitChannelKey },
-        });
-        return null;
-      }
-      const channel = this.getChannel(explicitChannelKey);
-      void writeAgentProxyRouteDebugEvent({
-        event: "agentProxy.route.resolve.matched",
-        payload,
-        socket,
-        channel,
-        data: { routeSource: "explicit_channel_key" },
-      });
-      return channel;
-    }
-    const userId = text(socket?.__agentProxyUserId);
-    if (sessionId && userId) {
-      const constructedKey = createChannelKey({
-        userId,
-        sessionId,
-        parentSessionId: identity.parentSessionId,
-        parentDialogProcessId: identity.parentDialogProcessId,
-      });
-      if (this.hasChannel(constructedKey)) {
-        const channel = this.getChannel(constructedKey);
-        void writeAgentProxyRouteDebugEvent({
-          event: "agentProxy.route.resolve.matched",
-          payload,
-          socket,
-          channel,
-          data: { routeSource: "constructed_key", usedSocketUserId: true },
-        });
-        return channel;
-      }
-      void writeAgentProxyRouteDebugEvent({
-        event: "agentProxy.route.resolve.missed",
-        payload,
-        socket,
-        data: { routeSource: "constructed_key", usedSocketUserId: true },
-      });
-    }
-    const activeChannelKey = text(socket?.__agentProxyActiveChannelKey);
-    if (activeChannelKey && this.hasChannel(activeChannelKey)) {
-      if (sessionId && this.getChannel(activeChannelKey).identity.sessionId !== sessionId) {
-        void writeAgentProxyRouteDebugEvent({
-          event: "agentProxy.route.resolve.rejected",
-          payload,
-          socket,
-          data: { reason: "active_channel_session_mismatch", activeChannelKey },
-        });
-        return null;
-      }
-      const channel = this.getChannel(activeChannelKey);
-      void writeAgentProxyRouteDebugEvent({
-        event: "agentProxy.route.resolve.matched",
-        payload,
-        socket,
-        channel,
-        data: { routeSource: "active_channel" },
-      });
-      return channel;
-    }
+  resolveChannelFromSocketMessage(socket, command) {
+    const resolved =
+      command.commandType === AGENT_COMMAND.INTERACTION_RESPONSE
+        ? this.resolveInteractionChannel(command)
+        : this.resolveIdentityChannel(socket, command);
     void writeAgentProxyRouteDebugEvent({
-      event: "agentProxy.route.resolve.notFound",
-      payload,
+      event: resolved.channel
+        ? "agentProxy.route.resolve.matched"
+        : "agentProxy.route.resolve.notFound",
+      payload: command,
       socket,
-      data: {
-        reason: "no_matching_channel",
-        hasSessionId: Boolean(sessionId),
-        hasUserId: Boolean(userId),
-        hasActiveChannelKey: Boolean(activeChannelKey),
-        hasExplicitChannelKey: Boolean(explicitChannelKey),
-      },
+      channel: resolved.channel,
+      data: { routeSource: resolved.routeSource },
     });
-    return null;
+    return resolved.channel;
+  }
+
+  resolveInteractionChannel(command) {
+    const channel = this.getChannelByRequestId(command.interaction.requestId);
+    return { routeSource: "pending_interaction", channel };
+  }
+
+  resolveIdentityChannel(socket, command) {
+    const { identity } = command;
+    const channelKey = createChannelKey({
+      userId: socket.__agentProxyUserId,
+      sessionId: identity.sessionId,
+      parentSessionId: identity.parentSessionId,
+      parentDialogProcessId: identity.parentDialogProcessId,
+    });
+    return { routeSource: "channel_key", channel: this.channelStore.get(channelKey) ?? null };
   }
 
   logForwardSkipped(channel, payload = {}) {
@@ -253,7 +184,6 @@ class ChannelFlowMethods {
     if (!requestId) return;
     const resolvedEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
     channel.pendingInteractionRequests.delete(requestId);
-    this.requestChannelMap.delete(requestId);
     if (!resolvedEnvelope) return;
     const resolved = projectResolvedInteractionIdentity(resolvedEnvelope);
     const hasRemainingInteraction = Array.from(channel.pendingInteractionRequests.values()).some(
@@ -265,14 +195,14 @@ class ChannelFlowMethods {
     );
   }
 
-  forwardToUpstream(channel, payload = {}) {
-    if (!channel?.upstreamSocket || channel.upstreamSocket.readyState !== this.WebSocket.OPEN) {
+  forwardToUpstream(channel, payload) {
+    if (channel.transport.socket?.readyState !== this.WebSocket.OPEN) {
       this.logForwardSkipped(channel, payload);
       return false;
     }
-    const commandType = text(payload?.commandType).toLowerCase();
+    const { commandType } = payload;
     try {
-      channel.upstreamSocket.send(JSON.stringify(payload || {}));
+      channel.transport.socket.send(JSON.stringify(payload));
       if (RUN_COMMAND_TYPES.includes(commandType)) channel.transport.claimPurpose("run");
       this.logForwardSent(channel, payload);
       if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
@@ -285,21 +215,10 @@ class ChannelFlowMethods {
     }
   }
 
-  startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
-    const normalizedConnectionApiKey = normalizeApiKey(connectionApiKey);
-    if (!normalizedConnectionApiKey) {
-      this.sendSocketError(socket, AGENT_PROXY_ERROR.REQUIRES_APIKEY);
-      return;
-    }
-    const identity =
-      payload?.identity && typeof payload.identity === "object" ? payload.identity : {};
-    const identityItem = this.resolveApiKeyIdentity(normalizedConnectionApiKey);
-    const userId = text(socket?.__agentProxyUserId || identityItem?.userId);
-    const sessionId = text(identity.sessionId);
-    if (!userId || !sessionId) {
-      this.sendSocketError(socket, AGENT_PROXY_ERROR.REQUIRES_USERID_SESSIONID);
-      return;
-    }
+  startOrJoinChannel({ socket, payload }) {
+    const { identity } = payload;
+    const userId = socket.__agentProxyUserId;
+    const { sessionId } = identity;
     const channelKey = createChannelKey({
       userId,
       sessionId,
@@ -307,54 +226,42 @@ class ChannelFlowMethods {
       parentDialogProcessId: identity.parentDialogProcessId,
     });
     const channel = this.ensureChannel(channelKey, payload);
-    if (!channel) return;
-    const requesterUserId = text(socket?.__agentProxyUserId) || text(identityItem?.userId);
-    if (!channel.ownerApiKey) {
-      channel.ownerApiKey = normalizedConnectionApiKey;
-    }
-    if (!channel.ownerUserId) {
-      channel.ownerUserId = requesterUserId;
-    }
-    if (!this.hasChannelPermission(channel, normalizedConnectionApiKey, requesterUserId)) {
-      this.sendSocketError(socket, AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION("start_or_join"));
-      return;
-    }
 
     const nextPayloadFingerprint = buildFingerprint(payload);
-    const hasReusableUpstream = channel?.transport?.socket?.readyState === this.WebSocket.OPEN;
+    const hasReusableUpstream = channel.transport.socket?.readyState === this.WebSocket.OPEN;
     const isActiveChannelStatus =
-      channel.activity.phase === CHANNEL_STATUS.RUNNING ||
-      channel.transport.phase === CHANNEL_STATUS.CONNECTING ||
+      channel.activity.phase === CHANNEL_ACTIVITY_PHASE.RUNNING ||
+      channel.transport.phase === UPSTREAM_TRANSPORT_PHASE.CONNECTING ||
       channel.pendingInteractionRequests.size > 0;
     const keepExistingRun = isActiveChannelStatus && hasReusableUpstream;
-    const shouldStartNewRun = !keepExistingRun;
 
     this.attachSubscriber(channel, socket);
     if (keepExistingRun) {
-      const sequenceByChannel = socket.__agentProxyLastSequenceByChannel || {};
-      this.replayChannelEvents(channel, socket, Number(sequenceByChannel[channel.key] || 0));
+      this.replayChannelEvents(
+        channel,
+        socket,
+        socket.__agentProxyLastSequenceByChannel[channel.key],
+      );
     } else {
       this.syncSocketToChannelTail(channel, socket);
     }
     this.logSessionEvent(channel, {
       category: "interaction",
-      event: shouldStartNewRun ? "agentProxy.channel.start" : "agentProxy.channel.join",
+      event: keepExistingRun ? "agentProxy.channel.join" : "agentProxy.channel.start",
       sessionId,
       data: {
         channelKey: channel.key,
-        socketId: socket?.__agentProxySocketId,
+        socketId: socket.__agentProxySocketId,
         keepExistingRun,
         sessionId,
         userId,
         channelActivityPhase: channel.activity.phase,
         channelTransportPhase: channel.transport.phase,
         hasReusableUpstream,
-        upstreamReadyState: channel?.upstreamSocket?.readyState,
       },
     });
 
     if (keepExistingRun) return;
-    if (!shouldStartNewRun) return;
 
     channel.startPayload = { ...payload };
     channel.startFingerprint = nextPayloadFingerprint;
@@ -369,12 +276,7 @@ class ChannelFlowMethods {
       sourceEvent: CONVERSATION_SOURCE_EVENT.RESTART,
       seq: 0,
     });
-    channel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
-    channel.retention.terminalStatus = "";
-    channel.retention.cleanupAfterMs = 0;
-    channel.activity.phase = CHANNEL_STATUS.IDLE;
-    channel.upstreamClosed = false;
-    channel._errorHandled = false;
+    this.resetChannelRun(channel);
     if (isActiveChannelStatus && !hasReusableUpstream) {
       void writeAgentProxyRouteDebugEvent({
         event: "agentProxy.route.startOrJoin.restartStaleUpstream",
@@ -385,12 +287,14 @@ class ChannelFlowMethods {
           reason: "active_channel_without_open_upstream",
           previousActivityPhase,
           previousTransportPhase,
-          upstreamReadyState: channel?.upstreamSocket?.readyState,
         },
       });
     }
     this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.RESTART);
-    this.connectUpstreamChannel(channel, normalizedConnectionApiKey, text(connectionLocale));
+    this.connectUpstreamChannel(channel, socket.__agentProxyApiKey, socket.__agentProxyLocale, {
+      initialCommands: [channel.startPayload],
+      purpose: "run",
+    });
   }
 }
 

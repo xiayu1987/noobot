@@ -5,9 +5,8 @@
  */
 import { config } from "../../shared/config.js";
 import {
+  CHANNEL_ACTIVITY_PHASE,
   CHANNEL_RETENTION_PHASE,
-  CHANNEL_STATUS,
-  CLIENT_ROLE,
   CONVERSATION_SOURCE_EVENT,
   SESSION_CHANNEL_STATE_KEY,
 } from "../../shared/constants.js";
@@ -16,7 +15,7 @@ import {
   AGENT_CHANNEL_STATE_SCOPE,
   createAgentChannelState,
 } from "@noobot/agent-transport-protocol";
-import { normalizeApiKey, nowMs, parseChannelKey } from "../../shared/utils.js";
+import { nowMs, parseChannelKey } from "../../shared/utils.js";
 import {
   isFailedTurnState,
   isTerminalTurnEvent,
@@ -34,7 +33,7 @@ import {
 } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text, isObjectLike, isCanonicalText } from "@noobot/shared/value";
 
 const RUNNING_CONVERSATION_STATES = Object.freeze([
   AGENT_CHANNEL_STATE.SENDING,
@@ -93,8 +92,7 @@ function resolveLifecycleConversationState(eventName, lifecycle) {
   return "";
 }
 
-function resetChannelToRunning(channel) {
-  channel.activity.phase = CHANNEL_STATUS.RUNNING;
+function activateChannelRetention(channel) {
   channel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
   channel.retention.terminalStatus = "";
   channel.retention.cleanupAfterMs = 0;
@@ -114,12 +112,11 @@ function isPendingInteractionInScope(envelope, scope) {
   );
 }
 
-function clearScopedPendingInteractions(store, channel, scope) {
+function clearScopedPendingInteractions(channel, scope) {
   let clearedCount = 0;
   for (const [requestId, envelope] of channel.pendingInteractionRequests.entries()) {
     if (!isPendingInteractionInScope(envelope, scope)) continue;
     channel.pendingInteractionRequests.delete(requestId);
-    store.requestChannelMap.delete(requestId);
     clearedCount += 1;
   }
   return clearedCount;
@@ -127,7 +124,7 @@ function clearScopedPendingInteractions(store, channel, scope) {
 
 function cleanupTerminalChannel(store, channel, scope, nextState) {
   if (scope.sessionId && scope.sessionId !== channel.identity.sessionId) return;
-  const clearedPendingInteractionCount = clearScopedPendingInteractions(store, channel, scope);
+  const clearedPendingInteractionCount = clearScopedPendingInteractions(channel, scope);
   store.logSessionEvent(channel, {
     category: "interaction",
     event: "agentProxy.interaction.terminalCleanup",
@@ -141,10 +138,7 @@ function cleanupTerminalChannel(store, channel, scope, nextState) {
       remainingPendingInteractionCount: channel.pendingInteractionRequests.size,
     },
   });
-  store.markChannelTerminal(
-    channel,
-    nextState === AGENT_CHANNEL_STATE.COMPLETED ? CHANNEL_STATUS.DONE : nextState,
-  );
+  store.markChannelTerminal(channel, nextState);
 }
 
 function buildTurnLifecycleReplay(window, sequence) {
@@ -186,22 +180,19 @@ function latestLifecycleEntry(channels = [], sessionId = "") {
 }
 
 class ChannelStoreMethods {
-  ensureChannel(channelKey = "", startPayload = {}) {
-    const normalizedChannelKey = text(channelKey);
-    if (!normalizedChannelKey) return null;
-    const existingChannel = this.channelStore.get(normalizedChannelKey);
+  ensureChannel(channelKey, startPayload) {
+    const existingChannel = this.channelStore.get(channelKey);
     if (existingChannel) return existingChannel;
-    const identity = parseChannelKey(normalizedChannelKey);
+    const identity = parseChannelKey(channelKey);
     const upstreamTransport = this.createUpstreamTransport();
-    const eventJournal = this.createEventJournal();
     const nextChannel = {
-      key: normalizedChannelKey,
+      key: channelKey,
       identity,
       createdAtMs: nowMs(),
       updatedAtMs: nowMs(),
       subscribers: new Set(),
       transport: upstreamTransport,
-      activity: { phase: CHANNEL_STATUS.IDLE },
+      activity: { phase: CHANNEL_ACTIVITY_PHASE.IDLE },
       retention: {
         phase: CHANNEL_RETENTION_PHASE.ACTIVE,
         terminalStatus: "",
@@ -209,92 +200,16 @@ class ChannelStoreMethods {
       },
       apiKey: "",
       locale: "",
-      startPayload: null,
+      startPayload: { ...startPayload },
       startFingerprint: "",
-      eventJournal,
+      eventJournal: this.createEventJournal(),
       lifecycleWindowsBySessionId: new Map(),
-      pendingSnapshotRequests: this.commandRegistry.createMapFacade(
-        normalizedChannelKey,
-        "turn_snapshot",
-      ),
-      pendingExecutionRequests: this.commandRegistry.createMapFacade(
-        normalizedChannelKey,
-        "execution_query",
-      ),
       pendingInteractionRequests: new Map(),
       upstreamClosed: false,
-      ownerApiKey: "",
-      ownerUserId: "",
       _errorHandled: false,
       conversationStateByScope: new Map(),
     };
-    Object.defineProperties(nextChannel, {
-      upstreamSocket: {
-        enumerable: false,
-        get: () => upstreamTransport.socket,
-        set: (socket) => upstreamTransport.adopt(socket),
-      },
-      upstreamEverConnected: {
-        enumerable: false,
-        get: () => upstreamTransport.everConnected,
-        set: (value) => {
-          if (value) upstreamTransport.everConnected = true;
-        },
-      },
-      cleanupAfterMs: {
-        enumerable: false,
-        get: () => nextChannel.retention.cleanupAfterMs,
-        set: (value) => {
-          nextChannel.retention.cleanupAfterMs = Number(value || 0);
-        },
-      },
-      status: {
-        enumerable: false,
-        get: () =>
-          nextChannel.retention.terminalStatus ||
-          (nextChannel.activity.phase === CHANNEL_STATUS.RUNNING
-            ? CHANNEL_STATUS.RUNNING
-            : upstreamTransport.phase),
-        set: (value) => {
-          const normalized = text(value);
-          if (
-            [CHANNEL_STATUS.DONE, CHANNEL_STATUS.USER_STOPPED, CHANNEL_STATUS.ERROR].includes(
-              normalized,
-            )
-          ) {
-            nextChannel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
-            nextChannel.retention.terminalStatus = normalized;
-            return;
-          }
-          nextChannel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
-          nextChannel.retention.terminalStatus = "";
-          if (normalized === CHANNEL_STATUS.RUNNING) {
-            nextChannel.activity.phase = CHANNEL_STATUS.RUNNING;
-            return;
-          }
-          nextChannel.activity.phase = CHANNEL_STATUS.IDLE;
-          upstreamTransport.phase = normalized || CHANNEL_STATUS.IDLE;
-        },
-      },
-      eventLog: {
-        enumerable: false,
-        get: () => eventJournal.events,
-        set: (events) => {
-          eventJournal.events = Array.isArray(events) ? events : [];
-        },
-      },
-      eventSequence: {
-        enumerable: false,
-        get: () => eventJournal.sequence,
-        set: (value) => {
-          eventJournal.sequence = Math.max(0, Number(value || 0));
-        },
-      },
-    });
-    if (isObjectLike(startPayload)) {
-      nextChannel.startPayload = { ...startPayload };
-    }
-    this.channelStore.set(normalizedChannelKey, nextChannel);
+    this.channelStore.set(channelKey, nextChannel);
     this.updateConversationState(nextChannel, {
       scope: AGENT_CHANNEL_STATE_SCOPE.SESSION,
       sessionId: nextChannel.identity.sessionId,
@@ -306,32 +221,26 @@ class ChannelStoreMethods {
     return nextChannel;
   }
 
-  getChannel(channelKey) {
-    return this.channelStore.get(text(channelKey)) || null;
-  }
-
-  hasChannel(channelKey) {
-    return this.channelStore.has(text(channelKey));
-  }
-
   deleteChannel(channelKey) {
-    const normalizedChannelKey = text(channelKey);
-    const channel = this.channelStore.get(normalizedChannelKey);
-    for (const subscriber of channel?.subscribers || []) {
-      subscriber?.__agentProxyChannelKeys?.delete?.(normalizedChannelKey);
-      if (subscriber?.__agentProxyActiveChannelKey === normalizedChannelKey) {
-        subscriber.__agentProxyActiveChannelKey = "";
-      }
-      if (subscriber?.__agentProxyLastSequenceByChannel) {
-        delete subscriber.__agentProxyLastSequenceByChannel[normalizedChannelKey];
-      }
+    const channel = this.channelStore.get(channelKey);
+    for (const subscriber of channel.subscribers) {
+      this.clearChannelLifecycleDeliveries(subscriber, channelKey);
+      subscriber.__agentProxyChannelKeys.delete(channelKey);
+      delete subscriber.__agentProxyLastSequenceByChannel[channelKey];
     }
-    channel?.transport?.dispose?.(1000, "channel_deleted");
-    this.channelStore.delete(normalizedChannelKey);
+    channel.transport.dispose(1000, "channel_deleted");
+    this.channelStore.delete(channelKey);
   }
 
   get channelCount() {
     return this.channelStore.size;
+  }
+
+  resetChannelRun(channel) {
+    activateChannelRetention(channel);
+    channel.activity.phase = CHANNEL_ACTIVITY_PHASE.IDLE;
+    channel.upstreamClosed = false;
+    channel._errorHandled = false;
   }
 
   pushChannelEvent(channel, eventName = "", data = {}) {
@@ -360,9 +269,7 @@ class ChannelStoreMethods {
       if (
         !validation.valid ||
         validation.descriptor?.family !== EVENT_FAMILY.INTERACTION_REQUEST ||
-        (!isTerminal &&
-          (channel.pendingInteractionRequests.has(requestId) ||
-            this.requestChannelMap.has(requestId)))
+        (!isTerminal && this.getChannelByRequestId(requestId))
       ) {
         this.logChannelEvent(channel, {
           category: "interaction",
@@ -414,7 +321,6 @@ class ChannelStoreMethods {
       const requestId = text(interaction.requestId);
       if (isTerminalInteractionLifecycle(interaction.lifecycle)) {
         channel.pendingInteractionRequests.delete(requestId);
-        this.requestChannelMap.delete(requestId);
         this.updateConversationState(channel, {
           scope: AGENT_CHANNEL_STATE_SCOPE.TURN,
           dialogProcessId: interaction.dialogProcessId,
@@ -426,10 +332,6 @@ class ChannelStoreMethods {
           requestId,
         });
       } else {
-        this.commandRegistry.registerRoute(requestId, {
-          channelKey: channel.key,
-          createdAtMs: nowMs(),
-        });
         channel.pendingInteractionRequests.set(requestId, protocolEnvelope);
         this.updateConversationState(channel, {
           scope: AGENT_CHANNEL_STATE_SCOPE.TURN,
@@ -616,7 +518,8 @@ class ChannelStoreMethods {
     const nextState = resolveLifecycleConversationState(scope.eventName, lifecycle);
     if (!nextState) return;
     if (RUNNING_CONVERSATION_STATES.includes(nextState)) {
-      resetChannelToRunning(channel);
+      activateChannelRetention(channel);
+      channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
     } else if (TERMINAL_CONVERSATION_STATES.includes(nextState)) {
       cleanupTerminalChannel(this, channel, scope, nextState);
     }
@@ -634,42 +537,25 @@ class ChannelStoreMethods {
   }
 
   getChannelByRequestId(requestId) {
-    const rid = text(requestId);
-    if (!rid || !this.requestChannelMap.has(rid)) return null;
-    const mappedEntry = this.requestChannelMap.get(rid);
-    const mappedChannelKey = typeof mappedEntry === "object" ? mappedEntry.channelKey : mappedEntry;
-    return this.channelStore.get(mappedChannelKey) || null;
-  }
-
-  saveApiKeyIdentity({ apiKey = "", userId = "", role = "" } = {}) {
-    const normalizedApiKey = normalizeApiKey(apiKey);
-    const normalizedUserId = text(userId);
-    if (!normalizedApiKey || !normalizedUserId) return;
-    this.apiKeyIdentityStore.set(normalizedApiKey, {
-      apiKey: normalizedApiKey,
-      userId: normalizedUserId,
-      role: text(role) || CLIENT_ROLE.USER,
-      updatedAtMs: nowMs(),
-    });
-  }
-
-  resolveApiKeyIdentity(apiKey = "") {
-    const normalizedApiKey = normalizeApiKey(apiKey);
-    if (!normalizedApiKey || !this.apiKeyIdentityStore.has(normalizedApiKey)) return null;
-    return this.apiKeyIdentityStore.get(normalizedApiKey) || null;
-  }
-
-  hasChannelPermission(channel, apiKey = "", requesterUserId = "") {
-    if (!channel) return false;
-    const normalizedApiKey = normalizeApiKey(apiKey);
-    const ownerApiKey = normalizeApiKey(channel?.ownerApiKey || "");
-    const normalizedRequesterUserId = text(requesterUserId);
-    const ownerUserId = text(channel?.ownerUserId);
-    if (ownerUserId && normalizedRequesterUserId && ownerUserId === normalizedRequesterUserId) {
-      return true;
+    for (const channel of this.channelStore.values()) {
+      if (channel.pendingInteractionRequests.has(requestId)) return channel;
     }
-    if (!ownerApiKey) return Boolean(normalizedApiKey);
-    return Boolean(normalizedApiKey && normalizedApiKey === ownerApiKey);
+    return null;
+  }
+
+  saveApiKeyIdentity({ apiKey, userId }) {
+    if (!isCanonicalText(apiKey) || !isCanonicalText(userId)) {
+      throw new TypeError("api key identity requires canonical apiKey and userId");
+    }
+    this.apiKeyIdentityStore.set(apiKey, { userId, updatedAtMs: nowMs() });
+  }
+
+  resolveApiKeyIdentity(apiKey) {
+    return this.apiKeyIdentityStore.get(apiKey);
+  }
+
+  hasChannelPermission(channel, socket) {
+    return channel.identity.userId === socket.__agentProxyUserId;
   }
 }
 

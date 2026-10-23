@@ -91,5 +91,6 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
 
   agentProxy: {
     invalidUpstreamFrameLimit: 5,
+    commandRemovalHistoryLimit: 256,
   },
 });

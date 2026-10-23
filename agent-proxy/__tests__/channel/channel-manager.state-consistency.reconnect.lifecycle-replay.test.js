@@ -7,7 +7,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
-import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
@@ -15,8 +14,12 @@ import {
   FakeUpstreamWebSocket,
   getEvent,
   reconnectControl,
+  deliverPendingCommand,
+  pendingCommand,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import {
   authoritativeLifecycle,
@@ -109,8 +112,6 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
     sessionId,
     turnScopeId,
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   manager.pushChannelEvent(
     channel,
     "turn_lifecycle",
@@ -154,13 +155,13 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
     }),
   );
   const forwarded = [];
-  channel.upstreamSocket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
+  channel.transport.socket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
   const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
   assert.equal(getEvent(client, "reconnect_data"), null);
   const commandId = forwarded[0]?.commandId;
-  channel.pendingSnapshotRequests.get(commandId).resolve({
+  deliverPendingCommand(manager, channel, commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT, {
     ok: true,
     snapshot: authoritativeSnapshot({
       commandId,
@@ -201,10 +202,7 @@ test("reconnect opens a query transport without replaying the stale run command"
     turnScopeId,
     message: "stale run must not be replayed",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
-  channel.retention.terminalStatus = CHANNEL_STATUS.USER_STOPPED;
+  assert.equal(manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.USER_STOPPED), true);
   manager.pushChannelEvent(
     channel,
     "turn_lifecycle",
@@ -272,8 +270,6 @@ test("snapshot query completion cannot close a connection claimed by a concurren
     userId: "user-1",
     sessionId,
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   manager.pushChannelEvent(
     channel,
     "turn_lifecycle",
@@ -328,7 +324,7 @@ test("snapshot query completion cannot close a connection claimed by a concurren
   );
   await reconnectPromise;
 
-  assert.equal(channel.upstreamSocket, upstream);
+  assert.equal(channel.transport.socket, upstream);
   assert.equal(upstream.readyState, FakeUpstreamWebSocket.OPEN);
   assert.equal(channel.transport.status().purpose, "run");
 });
@@ -342,8 +338,6 @@ test("terminal lifecycle removes the reconnect active-run projection", () => {
     sessionId,
     turnScopeId,
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   for (const envelope of [
     {
       eventType: "turn.processing_started",
@@ -395,10 +389,6 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
     createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-b" }),
     { userId: "user-1", sessionId, parentDialogProcessId: "parent-b" },
   );
-  for (const channel of [firstChannel, secondChannel]) {
-    channel.ownerApiKey = "api-key-1";
-    channel.ownerUserId = "user-1";
-  }
   manager.pushChannelEvent(
     firstChannel,
     "turn_lifecycle",
@@ -433,16 +423,16 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
   );
   const forwarded = [];
   const upstreamSocket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
-  firstChannel.upstreamSocket = upstreamSocket;
-  secondChannel.upstreamSocket = upstreamSocket;
+  firstChannel.transport.socket = upstreamSocket;
+  secondChannel.transport.socket = upstreamSocket;
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
   const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
   const commandId = forwarded[0]?.commandId;
-  const snapshotRequest =
-    firstChannel.pendingSnapshotRequests.get(commandId) ||
-    secondChannel.pendingSnapshotRequests.get(commandId);
-  snapshotRequest.resolve({
+  const snapshotChannel = [firstChannel, secondChannel].find((candidate) =>
+    pendingCommand(manager, candidate, commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT),
+  );
+  deliverPendingCommand(manager, snapshotChannel, commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT, {
     ok: true,
     snapshot: authoritativeSnapshot({
       commandId,
@@ -482,10 +472,6 @@ test("latest terminal lifecycle wins across channels of the same session", () =>
     createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-terminal" }),
     { userId: "user-1", sessionId },
   );
-  for (const channel of [activeChannel, terminalChannel]) {
-    channel.ownerApiKey = "api-key-1";
-    channel.ownerUserId = "user-1";
-  }
   for (const [channel, envelope] of [
     [
       activeChannel,

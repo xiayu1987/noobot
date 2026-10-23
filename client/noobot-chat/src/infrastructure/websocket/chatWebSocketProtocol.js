@@ -7,23 +7,11 @@ import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
   getAgentCommandIdentity,
-  validateAgentCommandReceipt,
-  validateAgentCommandRejection,
 } from "@noobot/agent-transport-protocol";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 export function normalizeTrimmedString(value = "") {
   return text(value);
-}
-
-export function normalizeErrorMessage(value, fallback = "") {
-  if (typeof value === "string") return value.trim() || fallback;
-  if (!isObjectLike(value)) return fallback;
-  for (const candidate of [value.message, value.reason, value.description, value.error]) {
-    const normalized = normalizeErrorMessage(candidate, "");
-    if (normalized) return normalized;
-  }
-  return fallback;
 }
 
 export function isEventForStreamScope(data, payload, channelSessionId) {
@@ -34,17 +22,13 @@ export function isEventForStreamScope(data, payload, channelSessionId) {
   );
 }
 
-const COMMAND_RESULT_VALIDATORS = new Map([
-  [AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, validateAgentCommandReceipt],
-  [AGENT_TRANSPORT_EVENT.COMMAND_REJECTED, validateAgentCommandRejection],
+export const COMMAND_RESULT_EVENTS = new Set([
+  AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+  AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
 ]);
 
 export function isCommandResultForPayload(event, data, payload) {
-  const validator = COMMAND_RESULT_VALIDATORS.get(event);
-  if (!validator) return false;
-  const validation = validator(data);
-  if (!validation.valid) throw new TypeError(validation.errors.join(","));
-  return data.commandId === payload.commandId;
+  return COMMAND_RESULT_EVENTS.has(event) && data.commandId === payload.commandId;
 }
 
 export function isCommandFailureResult(event, data) {

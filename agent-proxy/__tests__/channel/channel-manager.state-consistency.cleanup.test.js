@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, listEvents } from "./channel-manager.state-consistency.test-helpers.js";
 
@@ -17,8 +18,6 @@ test("newly attached subscriber should receive no_conversation snapshot state", 
     userId: "user-1",
     sessionId: "session-init",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
@@ -39,15 +38,14 @@ test("detachSocketFromAllChannels should detach terminal subscribers and schedul
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
   manager.attachSubscriber(channel, client);
-  channel.status = "done";
+  assert.equal(manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.COMPLETED), true);
   const beforeDetachMs = Date.now();
 
   assert.doesNotThrow(() => manager.detachSocketFromAllChannels(client));
   assert.equal(channel.subscribers.has(client), false);
   assert.equal(client.__agentProxyChannelKeys.size, 0);
-  assert.equal(client.__agentProxyActiveChannelKey, "");
   assert.deepEqual(client.__agentProxyLastSequenceByChannel, {});
-  assert.equal(channel.cleanupAfterMs >= beforeDetachMs, true);
+  assert.equal(channel.retention.cleanupAfterMs >= beforeDetachMs, true);
 });
 
 test("resolveChannelFromSocketMessage rejects explicit channelKey from another session", () => {
@@ -96,25 +94,25 @@ test("cleanup should remove expired terminal channel and stale request mapping",
     sessionId: "session-cleanup",
   });
   const closed = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     close(code, reason) {
       closed.push({ code, reason });
     },
   };
 
+  assert.equal(manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.COMPLETED), true);
   manager.pushChannelEvent(channel, "interaction_request", {
     requestId: "req-cleanup",
     sessionId: "session-cleanup",
     dialogProcessId: "dp-cleanup",
     seq: 1,
   });
-  channel.status = "done";
-  channel.cleanupAfterMs = Date.now() - 1;
+  channel.retention.cleanupAfterMs = Date.now() - 1;
 
   manager.cleanupExpiredChannels();
 
-  assert.equal(manager.hasChannel(channelKey), false);
-  assert.equal(manager.requestChannelMap.has("req-cleanup"), false);
+  assert.equal(manager.channelStore.has(channelKey), false);
+  assert.equal(manager.getChannelByRequestId("req-cleanup"), null);
   assert.deepEqual(closed, [{ code: 1000, reason: "cleanup" }]);
 });
 
@@ -126,17 +124,16 @@ test("cleanup should remove expired idle channel without subscribers", () => {
     sessionId: "session-idle-cleanup",
   });
   const closed = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     close(code, reason) {
       closed.push({ code, reason });
     },
   };
 
-  channel.status = "idle";
   channel.updatedAtMs = 1;
 
   manager.cleanupExpiredChannels();
 
-  assert.equal(manager.hasChannel(channelKey), false);
+  assert.equal(manager.channelStore.has(channelKey), false);
   assert.deepEqual(closed, [{ code: 1000, reason: "cleanup" }]);
 });

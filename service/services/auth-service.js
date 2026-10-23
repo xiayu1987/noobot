@@ -13,7 +13,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, text } from "@noobot/shared/value";
 
 const DEFAULT_API_KEY_TTL_MS = TIME_THRESHOLDS.service.apiKeyTtlMs;
 
@@ -34,10 +34,11 @@ export function createAuthService({
     });
   }
 
-  function issueApiKey({ userId, role = "user" }) {
+  function issueApiKey({ userId, role }) {
+    if (!isCanonicalText(userId)) throw new TypeError("issueApiKey requires canonical userId");
     const apiKey = randomBytes(24).toString("hex");
     apiKeyStore.set(apiKey, {
-      userId: text(userId),
+      userId,
       role: isSuperAdminRole(role) ? SUPER_ADMIN_ROLE : "user",
       issuedAt: Date.now(),
     });
@@ -75,7 +76,7 @@ export function createAuthService({
     if (!apiKey) return null;
     const authInfo = apiKeyStore.get(apiKey);
     if (!authInfo) return null;
-    const isExpired = Date.now() - Number(authInfo.issuedAt || 0) > apiKeyTtlMs;
+    const isExpired = Date.now() - authInfo.issuedAt > apiKeyTtlMs;
     if (isExpired) {
       apiKeyStore.delete(apiKey);
       return null;
@@ -83,11 +84,9 @@ export function createAuthService({
     return authInfo;
   }
 
-  function isForbiddenUserScope(authInfo, requestUserId = "") {
-    const normalizedRequestUserId = text(requestUserId);
-    if (!normalizedRequestUserId) return false;
-    if (isSuperAdminRole(authInfo?.role)) return false;
-    return String(authInfo?.userId || "") !== normalizedRequestUserId;
+  function isForbiddenUserScope(authInfo, requestUserId) {
+    if (isSuperAdminRole(authInfo.role)) return false;
+    return authInfo.userId !== requestUserId;
   }
 
   function requireApiKey(req, res, next) {
@@ -99,9 +98,10 @@ export function createAuthService({
       return;
     }
     req.auth = authInfo;
-    const requestUserId =
-      text(req.params?.userId) || text(req.body?.userId) || text(req.query?.userId);
-    if (isForbiddenUserScope(authInfo, requestUserId)) {
+    const requestUserIds = [req.params?.userId, req.body?.userId, req.query?.userId]
+      .map((value) => text(value))
+      .filter(Boolean);
+    if (requestUserIds.some((requestUserId) => isForbiddenUserScope(authInfo, requestUserId))) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         ok: false,
         error: translateText("auth.forbiddenUserScope", req.locale),

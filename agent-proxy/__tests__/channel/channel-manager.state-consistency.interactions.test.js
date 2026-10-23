@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
+import { CHANNEL_ACTIVITY_PHASE } from "../../src/shared/constants.js";
 import {
   createMockSocket,
   getEvent,
@@ -61,10 +62,8 @@ test("interaction_request resolved by one client should be consistent across all
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.upstreamSocket = {
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
+  channel.transport.socket = {
     readyState: 1,
     sent: [],
     send(raw) {
@@ -146,9 +145,7 @@ test("interaction_pending channel_state carries state only; interaction events o
     userId: "user-1",
     sessionId: "session-snapshot",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
@@ -195,9 +192,7 @@ test("failed interaction lifecycle closes the pending request across proxy and r
     userId: "user-1",
     sessionId: "session-timeout",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   manager.pushChannelEvent(
     channel,
     INTERACTION_EVENT_TYPE.REQUEST,
@@ -243,10 +238,8 @@ test("resolving one concurrent interaction atomically publishes the remaining pe
     userId: "user-1",
     sessionId: "session-concurrent",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
-  channel.upstreamSocket = {
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
+  channel.transport.socket = {
     readyState: 1,
     sent: [],
     send(raw) {
@@ -306,9 +299,7 @@ test("channel_state snapshot never duplicates the pending interaction payload", 
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   manager.pushChannelEvent(
     channel,
@@ -343,9 +334,7 @@ test("workflow child terminal events cannot discard a pending interaction owned 
     sessionId: "root-session",
     turnScopeId: "root-turn",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   manager.pushChannelEvent(
     channel,
@@ -405,7 +394,7 @@ test("workflow child terminal state does not own root channel retention", () => 
     userId: "user-1",
     sessionId: "root-session",
   });
-  channel.status = "running";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   manager.pushChannelEvent(
     channel,
@@ -471,7 +460,7 @@ test("authoritative terminal lifecycle closes pending interactions for the same 
     }),
   );
   assert.equal(channel.pendingInteractionRequests.has("req-terminal"), false);
-  assert.equal(manager.requestChannelMap.has("req-terminal"), false);
+  assert.equal(manager.getChannelByRequestId("req-terminal"), null);
 });
 
 test("invalid interaction_request has no journal, route, pending, or state side effects", () => {
@@ -496,7 +485,7 @@ test("invalid interaction_request has no journal, route, pending, or state side 
   assert.equal(result, null);
   assert.equal(channel.eventJournal.events.length, 0);
   assert.equal(channel.pendingInteractionRequests.has("req-invalid"), false);
-  assert.equal(manager.requestChannelMap.has("req-invalid"), false);
+  assert.equal(manager.getChannelByRequestId("req-invalid"), null);
   assert.equal(channel.conversationStateByScope.has("turn-invalid"), false);
 });
 

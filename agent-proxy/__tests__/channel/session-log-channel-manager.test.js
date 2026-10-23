@@ -112,7 +112,6 @@ test("ChannelManager conversation state requires an explicit sessionId", () => {
     parentDialogProcessId: "",
   });
   assert.ok(Object.isFrozen(channel.identity));
-  channel.ownerApiKey = "owner-key";
   channel.apiKey = "upstream-key";
 
   records.length = 0;

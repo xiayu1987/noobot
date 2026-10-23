@@ -3,39 +3,31 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-import { text } from "@noobot/shared/value";
 export class ChannelEventJournal {
-  constructor({ maxEvents = 0 } = {}) {
-    this.maxEvents = Math.max(0, Number(maxEvents || 0));
+  constructor({ maxEvents }) {
+    if (!Number.isInteger(maxEvents) || maxEvents < 1) {
+      throw new TypeError("channel event journal requires positive integer maxEvents");
+    }
+    this.maxEvents = maxEvents;
     this.sequence = 0;
     this.events = [];
   }
 
-  append(event = "message", data = {}) {
-    const envelope = {
-      sequence: ++this.sequence,
-      event: text(event) || "message",
-      data: data && typeof data === "object" ? data : {},
-    };
+  append(event, data) {
+    const envelope = { sequence: ++this.sequence, event, data };
     this.events.push(envelope);
-    if (this.maxEvents > 0 && this.events.length > this.maxEvents) {
+    if (this.events.length > this.maxEvents) {
       this.events = this.events.slice(-this.maxEvents);
     }
     return envelope;
   }
 
-  transient(event = "message", data = {}) {
-    return {
-      sequence: this.sequence,
-      event: text(event) || "message",
-      data: data && typeof data === "object" ? data : {},
-    };
+  transient(event, data) {
+    return { sequence: this.sequence, event, data };
   }
 
-  after(sequence = 0) {
-    const cursor = Math.max(0, Number(sequence || 0));
-    return this.events.filter((event) => Number(event?.sequence || 0) > cursor);
+  after(sequence) {
+    return this.events.filter((event) => event.sequence > sequence);
   }
 
   reset() {

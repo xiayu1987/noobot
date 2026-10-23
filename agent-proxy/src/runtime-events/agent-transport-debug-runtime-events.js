@@ -12,33 +12,33 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { text } from "@noobot/shared/value";
 
 function resolveEventIdentity({ summary, socket, channel }) {
-  const channelIdentity = channel?.identity || null;
-  if (channelIdentity && channelIdentity.sessionId === summary.sessionId) {
-    return {
-      userId: channelIdentity.userId,
-      parentSessionId: summary.parentSessionId || channelIdentity.parentSessionId,
-    };
+  if (channel) {
+    const { userId, sessionId, parentSessionId } = channel.identity;
+    return { scope: "session", userId, sessionId, parentSessionId };
   }
+  const userId = socket.__agentProxyUserId;
   return {
-    userId: text(socket?.__agentProxyUserId || channelIdentity?.userId),
+    scope: summary.sessionId ? "session" : "system",
+    userId,
+    sessionId: summary.sessionId,
     parentSessionId: summary.parentSessionId,
   };
 }
 
-export function writeAgentTransportDebugEvent({
-  event,
-  command,
-  socket = null,
-  channel = null,
-  data = {},
-} = {}) {
+export function writeAgentTransportDebugEvent({ event, command, socket, channel, data }) {
+  if (Boolean(socket) === Boolean(channel)) {
+    throw new TypeError("agent transport debug event requires exactly one of socket or channel");
+  }
   const summary = summarizeAgentTransportCommand(command, data);
-  const { userId, parentSessionId } = resolveEventIdentity({ summary, socket, channel });
+  const { scope, userId, sessionId, parentSessionId } = resolveEventIdentity({
+    summary,
+    socket,
+    channel,
+  });
   return writeRuntimeEvent({
-    scope: summary.sessionId ? "session" : "system",
+    scope,
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,
@@ -46,7 +46,7 @@ export function writeAgentTransportDebugEvent({
     debugType: AGENT_TRANSPORT_DEBUG_TYPE,
     event,
     userId,
-    sessionId: summary.sessionId,
+    sessionId,
     parentSessionId,
     dialogProcessId: summary.dialogProcessId,
     turnScopeId: summary.turnScopeId,

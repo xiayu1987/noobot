@@ -142,6 +142,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
         code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
         message: "reconnect failed",
         identity: { sessionId: "s-failed-reconnect" },
+        occurredAt: "2026-01-01T00:00:00.000Z",
       }),
     );
 
@@ -491,7 +492,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     socket.onopen?.();
     const errorData = createAgentTransportError({
-      code: "replayed_failure",
+      code: AGENT_TRANSPORT_ERROR_CODE.UPSTREAM_UNAVAILABLE,
       message: "failed attempt",
       identity: { sessionId: "s-1", dialogProcessId: "dp-failed" },
       occurredAt: "2026-01-01T00:00:00.000Z",

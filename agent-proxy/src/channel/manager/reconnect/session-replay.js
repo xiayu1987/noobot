@@ -14,6 +14,7 @@ import {
 import { isActionableTurnRecovery } from "@noobot/session-protocol";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 import { text } from "@noobot/shared/value";
+import { PENDING_COMMAND_KIND } from "../../command-registry.js";
 
 export function groupReconnectChannels(manager, channelKeys) {
   const channelsBySessionId = new Map();
@@ -44,15 +45,25 @@ function selectSnapshotChannel(channels) {
     .at(0);
 }
 
-function createSnapshotPromise(snapshotChannel, commandId, socket) {
+function pendingSnapshot(channel) {
+  return { channelKey: channel.key, kind: PENDING_COMMAND_KIND.TURN_SNAPSHOT };
+}
+
+export function cancelPendingSnapshot(manager, channel, commandId, reason) {
+  const record = manager.commandRegistry.take(commandId, pendingSnapshot(channel), reason);
+  if (record) record.settle({ ok: false, reason });
+}
+
+function createSnapshotPromise(manager, snapshotChannel, commandId, socket) {
   return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      snapshotChannel.pendingSnapshotRequests.delete(commandId);
-      resolve({ ok: false, reason: "snapshot_timeout" });
-    }, config.reconnectSnapshotTimeoutMs);
-    snapshotChannel.pendingSnapshotRequests.set(commandId, {
+    const timeout = setTimeout(
+      () => cancelPendingSnapshot(manager, snapshotChannel, commandId, "snapshot_timeout"),
+      config.reconnectSnapshotTimeoutMs,
+    );
+    manager.commandRegistry.register(commandId, {
+      ...pendingSnapshot(snapshotChannel),
       socket,
-      resolve: (result) => {
+      settle: (result) => {
         clearTimeout(timeout);
         resolve(result);
       },
@@ -67,7 +78,7 @@ async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
   const { channel, sessionId } = request;
   const commandId = `proxy-finalize:${sessionId}:${randomUUID()}`;
   request.commandIds.push(commandId);
-  const promise = createSnapshotPromise(channel, commandId, socket);
+  const promise = createSnapshotPromise(manager, channel, commandId, socket);
   const forwarded = manager.forwardToUpstream(
     channel,
     createTurnFinalizeCommand({
@@ -77,9 +88,7 @@ async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
     }),
   );
   if (!forwarded) {
-    const pendingRequest = channel.pendingSnapshotRequests.get(commandId);
-    channel.pendingSnapshotRequests.delete(commandId);
-    pendingRequest.resolve({ ok: false, reason: "finalize_forward_failed" });
+    cancelPendingSnapshot(manager, channel, commandId, "finalize_forward_failed");
   }
   const finalized = await promise;
   if (finalized?.ok === true && finalized.snapshot) return finalized;
@@ -98,7 +107,7 @@ function startSnapshotRequest(manager, socket, sessionId, channels, knownSequenc
   const channel = selectSnapshotChannel(channels);
   const commandId = `proxy-snapshot:${sessionId}:${randomUUID()}`;
   const request = { sessionId, channel, commandId, commandIds: [commandId], cancelled: false };
-  const snapshotPromise = createSnapshotPromise(channel, commandId, socket);
+  const snapshotPromise = createSnapshotPromise(manager, channel, commandId, socket);
   const command = createTurnSnapshotCommand({
     commandId,
     identity: { sessionId },
@@ -109,14 +118,12 @@ function startSnapshotRequest(manager, socket, sessionId, channels, knownSequenc
     ? null
     : manager.connectUpstreamChannel(
         channel,
-        text(socket?.__agentProxyApiKey),
-        text(socket?.__agentProxyLocale),
-        { initialPayload: null, initialCommands: [command], purpose: "snapshot_query" },
+        socket.__agentProxyApiKey,
+        socket.__agentProxyLocale,
+        { initialCommands: [command], purpose: "snapshot_query" },
       );
   if (!forwarded && !queryConnection) {
-    const pendingRequest = channel.pendingSnapshotRequests.get(commandId);
-    channel.pendingSnapshotRequests.delete(commandId);
-    pendingRequest.resolve({ ok: false, reason: "snapshot_forward_failed" });
+    cancelPendingSnapshot(manager, channel, commandId, "snapshot_forward_failed");
   }
   request.queryConnection = queryConnection;
   request.promise = snapshotPromise.then((result) =>
@@ -196,7 +203,7 @@ export function logPreparedAuthorityBatches(manager, sessions, channelsBySession
         lifecycleTailCount: sessionEntry.replayBatch?.events?.length || 0,
         pendingInteractionCount: sessionEntry.replayBatch?.pendingInteractions?.length || 0,
         excludedDataPlaneEventCount: sessionChannels.reduce(
-          (count, channel) => count + Number(channel?.eventLog?.length || 0),
+          (count, channel) => count + channel.eventJournal.events.length,
           0,
         ),
       },

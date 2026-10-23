@@ -6,9 +6,9 @@
 import http from "node:http";
 import https from "node:https";
 import { config } from "../shared/config.js";
-import { AGENT_PROXY_ERROR } from "../shared/constants.js";
+import { AGENT_PROXY_HTTP_ERROR_CODE } from "../shared/constants.js";
 import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
-import { localizeAgentProxyMessage, resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
+import { localizeAgentProxyError, resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 import { buildSecurityHeaders } from "./security.js";
 import {
   writeAgentProxyInvalidRequestUrlEvent,
@@ -18,14 +18,10 @@ import {
 } from "../runtime-events/http-runtime-events.js";
 import { text } from "@noobot/shared/value";
 
-function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {
-  if (Number(statusCode || 500) < 500) {
-    return String(message || "Bad Gateway");
-  }
-  if (config.exposeUpstreamErrorDetail) {
-    return String(message || "Bad Gateway");
-  }
-  return "Bad Gateway";
+function resolveProxyErrorText({ statusCode, code, locale, detail }) {
+  if (statusCode < 500) return localizeAgentProxyError(code, locale);
+  if (!config.exposeUpstreamErrorDetail) return "Bad Gateway";
+  return detail || localizeAgentProxyError(code, locale);
 }
 
 export function decorateProxyResponseHeaders(headers = {}) {
@@ -36,9 +32,8 @@ export function decorateProxyResponseHeaders(headers = {}) {
   };
 }
 
-export function writeProxyError(response, statusCode = 502, message = "Bad Gateway", locale = "") {
-  if (!response || response.headersSent) return;
-  const localizedMessage = localizeAgentProxyMessage(message, locale) || message;
+export function writeProxyError(response, { statusCode, code, locale, detail }) {
+  if (response.headersSent) return;
   response.writeHead(
     statusCode,
     decorateProxyResponseHeaders({ "Content-Type": "application/json" }),
@@ -46,7 +41,7 @@ export function writeProxyError(response, statusCode = 502, message = "Bad Gatew
   response.end(
     JSON.stringify({
       ok: false,
-      error: resolveSafeErrorMessage(statusCode, localizedMessage),
+      error: resolveProxyErrorText({ statusCode, code, locale, detail }),
     }),
   );
 }
@@ -62,8 +57,11 @@ export function collectRequestBody(request) {
     request.on("data", (chunk) => {
       totalSize += chunk.length;
       if (totalSize > config.maxBodySize) {
-        request.destroy(new Error("request body too large"));
-        reject(new Error("request body too large"));
+        const tooLarge = Object.assign(new Error("request body too large"), {
+          code: AGENT_PROXY_HTTP_ERROR_CODE.REQUEST_BODY_TOO_LARGE,
+        });
+        request.destroy(tooLarge);
+        reject(tooLarge);
         return;
       }
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk || "")));
@@ -111,7 +109,11 @@ export function proxyHttpRequest(request, response) {
         method,
       });
     }
-    writeProxyError(response, 400, AGENT_PROXY_ERROR.INVALID_REQUEST_URL, locale);
+    writeProxyError(response, {
+      statusCode: 400,
+      code: AGENT_PROXY_HTTP_ERROR_CODE.INVALID_REQUEST_URL,
+      locale,
+    });
     return;
   }
   if (traceId) {
@@ -202,7 +204,12 @@ export function proxyHttpRequest(request, response) {
         error: String(error?.message || error || ""),
       });
     }
-    writeProxyError(response, 502, error?.message || AGENT_PROXY_ERROR.UPSTREAM_HTTP_ERROR, locale);
+    writeProxyError(response, {
+      statusCode: 502,
+      code: AGENT_PROXY_HTTP_ERROR_CODE.UPSTREAM_HTTP_ERROR,
+      locale,
+      detail: error.message,
+    });
   });
   request.pipe(upstreamRequest);
 }

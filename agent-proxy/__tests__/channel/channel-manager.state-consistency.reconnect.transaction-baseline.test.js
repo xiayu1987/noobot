@@ -13,7 +13,11 @@ import {
   canonicalMessageEvent,
   getEvent,
   reconnectControl,
+  countPendingCommands,
+  deliverPendingCommand,
+  pendingCommand,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import {
   AGENT_COMMAND,
@@ -29,10 +33,8 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
     userId: "user-1",
     sessionId,
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const forwarded = [];
-  channel.upstreamSocket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
+  channel.transport.socket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
   manager.recordTurnLifecycleEnvelope(channel, {
     eventId: "e3",
     sessionId,
@@ -54,12 +56,12 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
   assert.equal(forwarded[0].commandType, "turn.snapshot.get");
   assert.equal(forwarded[0].identity.sessionId, sessionId);
   assert.equal(forwarded[0].options.knownSequence, 1);
-  assert.equal(channel.pendingSnapshotRequests.size, 1);
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 1);
   assert.equal(getEvent(client, "reconnect_data"), null);
   assert.equal(getEvent(client, "reconnect_complete"), null);
 
   const commandId = forwarded[0].commandId;
-  channel.pendingSnapshotRequests.get(commandId).resolve({
+  deliverPendingCommand(manager, channel, commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT, {
     ok: true,
     snapshot: {
       protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
@@ -121,8 +123,6 @@ test("reconnect sends the authoritative baseline before channel state snapshots"
     sessionId,
     turnScopeId: "turn-baseline-order",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   manager.pushChannelEvent(channel, "interaction_request", {
     sessionId,
     dialogProcessId: "dp-baseline-order",
@@ -148,10 +148,8 @@ test("reconnect buffers live events until after the authoritative baseline", asy
     sessionId,
     turnScopeId: "turn-reconnect-live-buffer",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const forwarded = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     readyState: 1,
     send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
   };
@@ -183,8 +181,7 @@ test("reconnect buffers live events until after the authoritative baseline", asy
   assert.equal(getEvent(client, MESSAGE_EVENT_WIRE_EVENT), null);
 
   const commandId = forwarded[0]?.commandId;
-  const requester = channel.pendingSnapshotRequests.get(commandId);
-  requester.resolve({
+  deliverPendingCommand(manager, channel, commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT, {
     ok: true,
     snapshot: {
       protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
@@ -221,10 +218,8 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
     sessionId,
     turnScopeId: "turn-reconnect-state-baseline",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const forwarded = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     readyState: 1,
     send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
   };
@@ -263,8 +258,13 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
     seq: 4,
   });
 
-  const pendingRequest = channel.pendingSnapshotRequests.get(forwarded[0]?.commandId);
-  pendingRequest.resolve({ ok: false, reason: "snapshot_unavailable" });
+  deliverPendingCommand(
+    manager,
+    channel,
+    forwarded[0]?.commandId,
+    PENDING_COMMAND_KIND.TURN_SNAPSHOT,
+    { ok: false, reason: "snapshot_unavailable" },
+  );
   await assert.rejects(reconnectPromise, /authoritative_snapshot_failed/);
   assert.equal(getEvent(client, "reconnect_data"), null);
   assert.equal(getEvent(client, "reconnect_complete"), null);
@@ -283,10 +283,8 @@ test("reconnect removes a channel whose Session is authoritatively deleted", asy
     sessionId,
     turnScopeId: "turn-deleted-before-reconnect",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const forwarded = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     readyState: 1,
     send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
   };
@@ -306,11 +304,16 @@ test("reconnect removes a channel whose Session is authoritatively deleted", asy
       knownLifecycleSequenceMap: { [sessionId]: 1 },
     }),
   );
-  const pendingRequest = channel.pendingSnapshotRequests.get(forwarded[0]?.commandId);
-  pendingRequest.resolve({ ok: false, reason: "session_not_found" });
+  deliverPendingCommand(
+    manager,
+    channel,
+    forwarded[0]?.commandId,
+    PENDING_COMMAND_KIND.TURN_SNAPSHOT,
+    { ok: false, reason: "session_not_found" },
+  );
   await reconnectPromise;
 
-  assert.equal(manager.hasChannel(channelKey), false);
+  assert.equal(manager.channelStore.has(channelKey), false);
   assert.equal(client.__agentProxyChannelKeys.has(channelKey), false);
   assert.deepEqual(getEvent(client, "reconnect_data")?.data?.sessions, []);
   assert.equal(getEvent(client, "reconnect_complete")?.data?.totalSessions, 0);
@@ -329,10 +332,8 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     sessionId,
     turnScopeId: "turn-reconnect-superseded",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const forwarded = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     readyState: 1,
     send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
   };
@@ -362,9 +363,14 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     }),
   );
   assert.notEqual(forwarded[0]?.commandId, forwarded[1]?.commandId);
-  assert.equal(channel.pendingSnapshotRequests.has(forwarded[0]?.commandId), false);
+  assert.equal(
+    Boolean(
+      pendingCommand(manager, channel, forwarded[0]?.commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT),
+    ),
+    false,
+  );
   const currentCommandId = forwarded[1]?.commandId;
-  channel.pendingSnapshotRequests.get(currentCommandId).resolve({
+  deliverPendingCommand(manager, channel, currentCommandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT, {
     ok: true,
     snapshot: {
       protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
@@ -408,10 +414,8 @@ function setupRecoveryReconnect(sessionId) {
     userId: "user-1",
     sessionId,
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   const forwarded = [];
-  channel.upstreamSocket = {
+  channel.transport.socket = {
     readyState: 1,
     send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
   };
@@ -505,7 +509,7 @@ test("an orphan-flagged snapshot is settled once via turn.finalize and the settl
   assert.equal(entry.replayBatch.snapshot.payload.recovery, "none");
   assert.equal(entry.replayBatch.snapshotSequence, 4);
   assert.equal(forwarded.length, 2);
-  assert.equal(channel.pendingSnapshotRequests.size, 0);
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
 });
 
 test("a failed recovery finalize keeps the original authoritative snapshot and completes reconnect", async () => {
@@ -546,7 +550,7 @@ test("a failed recovery finalize keeps the original authoritative snapshot and c
   assert.equal(entry.replayBatch.snapshot.causality.commandId, snapshotCommandId);
   assert.equal(entry.replayBatch.snapshot.payload.recovery, "orphan");
   assert.equal(getEvent(client, "reconnect_complete")?.data?.totalSessions, 1);
-  assert.equal(channel.pendingSnapshotRequests.size, 0);
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
 });
 
 test("cancelling reconnect during recovery finalize clears both pending command ids", async () => {
@@ -566,7 +570,12 @@ test("cancelling reconnect during recovery finalize clears both pending command 
   );
   await flushMicrotasks();
   const finalizeCommandId = forwarded[1].commandId;
-  assert.equal(channel.pendingSnapshotRequests.has(finalizeCommandId), true);
+  assert.equal(
+    Boolean(
+      pendingCommand(manager, channel, finalizeCommandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT),
+    ),
+    true,
+  );
 
   const superseding = manager.handleReconnect(
     client,
@@ -576,8 +585,18 @@ test("cancelling reconnect during recovery finalize clears both pending command 
       knownLifecycleSequenceMap: { [sessionId]: 3 },
     }),
   );
-  assert.equal(channel.pendingSnapshotRequests.has(snapshotCommandId), false);
-  assert.equal(channel.pendingSnapshotRequests.has(finalizeCommandId), false);
+  assert.equal(
+    Boolean(
+      pendingCommand(manager, channel, snapshotCommandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT),
+    ),
+    false,
+  );
+  assert.equal(
+    Boolean(
+      pendingCommand(manager, channel, finalizeCommandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT),
+    ),
+    false,
+  );
   await reconnectPromise.catch(() => {});
 
   const currentCommandId = forwarded.at(-1).commandId;
@@ -598,4 +617,39 @@ test("cancelling reconnect during recovery finalize clears both pending command 
       .map((item) => item.data.requestId),
     ["reconnect-superseding"],
   );
+});
+
+test("releasing a disconnected socket settles its reconnect snapshot immediately", async () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-disconnect";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
+  const forwarded = [];
+  channel.transport.socket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
+  manager.recordTurnLifecycleEnvelope(channel, {
+    eventId: "e3",
+    sessionId,
+    turnScopeId: "t1",
+    revision: 3,
+    sequence: 3,
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  const reconnectPromise = manager.handleReconnect(
+    client,
+    reconnectControl({ sessionId, knownLifecycleSequenceMap: { [sessionId]: 1 } }),
+  );
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 1);
+
+  manager.releaseSocket(client);
+
+  assert.equal(manager.commandRegistry.commands.size, 0);
+  assert.equal(
+    manager.commandRegistry.lastRemoval(forwarded[0].commandId).reason,
+    "requester_disconnected",
+  );
+  await reconnectPromise;
+  assert.equal(getEvent(client, "reconnect_data"), null);
+  assert.equal(getEvent(client, "reconnect_complete"), null);
 });

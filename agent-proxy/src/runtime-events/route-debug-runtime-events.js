@@ -8,50 +8,33 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { text } from "@noobot/shared/value";
 
-function firstTrimmed(...candidates) {
-  return text(candidates.find(Boolean));
-}
-
-function firstLowerTrimmed(...candidates) {
-  return firstTrimmed(...candidates).toLowerCase();
-}
-
-function resolvePayloadSessionId(payload) {
-  return text(payload?.identity?.sessionId);
-}
-
-function summarizeRouteChannel(channel, data) {
+export function summarizeChannelState(channel) {
+  if (!channel) return {};
+  const transport = channel.transport.status();
   return {
-    targetChannelKey: String(channel?.key || data?.targetChannelKey || ""),
-    channelStatus: String(channel?.status || data?.channelStatus || ""),
-    upstreamReadyState: channel?.upstreamSocket?.readyState ?? data?.upstreamReadyState ?? null,
+    targetChannelKey: channel.key,
+    activityPhase: channel.activity.phase,
+    retentionPhase: channel.retention.phase,
+    terminalStatus: channel.retention.terminalStatus,
+    transportPhase: transport.phase,
+    transportReadyState: transport.readyState,
+    transportPurpose: transport.purpose,
+    transportEverConnected: transport.everConnected,
   };
 }
 
-function summarizeRouteData({ payload, socket, channel, data }) {
-  return {
-    action: firstLowerTrimmed(payload?.action, data?.action),
-    commandType: firstLowerTrimmed(payload?.commandType, data?.commandType),
-    payloadSessionId: resolvePayloadSessionId(payload),
-    payloadUserIdPresent: false,
-    payloadChannelKeyPresent: Boolean(payload?.channelKey),
-    socketUserIdPresent: Boolean(socket?.__agentProxyUserId),
-    socketActiveChannelKeyPresent: Boolean(socket?.__agentProxyActiveChannelKey),
-    ...summarizeRouteChannel(channel, data),
-    ...data,
-  };
+function summarizeRouteCommand(command) {
+  if (!command) return {};
+  return { commandType: command.commandType, payloadSessionId: command.identity.sessionId };
 }
 
-export function writeAgentProxyRouteDebugEvent({
-  event = "agentProxy.route.debug",
-  payload = {},
-  socket = null,
-  channel = null,
-  data = {},
-} = {}) {
-  const route = { payload, socket, channel, data };
+function summarizeRouteSocket(socket) {
+  if (!socket) return {};
+  return { connectionId: socket.__agentProxySocketId, socketUserId: socket.__agentProxyUserId };
+}
+
+export function writeAgentProxyRouteDebugEvent({ event, payload, socket, channel, data }) {
   return writeRuntimeEvent({
     scope: "system",
     source: "agent-proxy",
@@ -60,6 +43,11 @@ export function writeAgentProxyRouteDebugEvent({
     level: "debug",
     debugType: "agent-proxy-route",
     event,
-    data: summarizeRouteData(route),
+    data: {
+      ...summarizeRouteCommand(payload),
+      ...summarizeRouteSocket(socket),
+      ...summarizeChannelState(channel),
+      ...data,
+    },
   });
 }

@@ -317,6 +317,7 @@ export const enUSMessages = {
     reconnectConnectFailed: "Reconnect connection failed",
     reconnectClosed: "Reconnect connection closed",
     reconnectFailed: "Reconnect failed, refreshing sessions",
+    websocketRequestTimeout: "WebSocket request timed out",
   },
   chat: {
     newSession: "New Session",

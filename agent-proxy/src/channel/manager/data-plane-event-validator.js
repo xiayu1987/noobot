@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  AGENT_TRANSPORT_EVENT,
-  validateAgentCommandReceipt,
-  validateAgentTransportError,
+  usesExactAgentTransportPayload,
+  validateAgentTransportPayload,
 } from "@noobot/agent-transport-protocol";
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import {
@@ -26,11 +25,8 @@ const SESSION_RECEIPT_VALIDATORS = new Map([
 
 export function validateDataPlaneEvent(eventName, data) {
   const normalizedEventName = text(eventName);
-  if (normalizedEventName === AGENT_TRANSPORT_EVENT.CHANNEL_ERROR) {
-    return validateAgentTransportError(data);
-  }
-  if (normalizedEventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {
-    return validateAgentCommandReceipt(data);
+  if (usesExactAgentTransportPayload(normalizedEventName)) {
+    return validateAgentTransportPayload(normalizedEventName, data);
   }
   const sessionReceiptValidator = SESSION_RECEIPT_VALIDATORS.get(normalizedEventName);
   if (sessionReceiptValidator) {

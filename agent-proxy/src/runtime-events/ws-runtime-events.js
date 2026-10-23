@@ -8,7 +8,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { ensureConnectionId } from "../shared/utils.js";
+import { summarizeChannelState } from "./route-debug-runtime-events.js";
 
 function resolveRawDataInfo(rawData) {
   const rawDataType = Buffer.isBuffer(rawData) ? "buffer" : typeof rawData;
@@ -31,7 +31,12 @@ export function writeAgentProxyInvalidJsonPayloadEvent({ rawData } = {}) {
   });
 }
 
-export function writeAgentProxyWebSocketLifecycleEvent({ event, socket = null, data = {} } = {}) {
+function summarizeLifecycleSocket(socket) {
+  if (!socket) return {};
+  return { connectionId: socket.__agentProxySocketId, readyState: socket.readyState };
+}
+
+export function writeAgentProxyWebSocketLifecycleEvent({ event, socket, data }) {
   return writeRuntimeEvent({
     scope: "system",
     source: "agent-proxy",
@@ -39,20 +44,11 @@ export function writeAgentProxyWebSocketLifecycleEvent({ event, socket = null, d
     category: "agent-proxy-websocket",
     level: "info",
     event,
-    data: {
-      connectionId: ensureConnectionId(socket),
-      readyState: socket?.readyState ?? null,
-      ...data,
-    },
+    data: { ...summarizeLifecycleSocket(socket), ...data },
   });
 }
 
-export function writeAgentProxyRouteLifecycleEvent({
-  event,
-  socket = null,
-  channel = null,
-  data = {},
-} = {}) {
+export function writeAgentProxyRouteLifecycleEvent({ event, socket, channel, data }) {
   return writeRuntimeEvent({
     scope: "system",
     source: "agent-proxy",
@@ -60,12 +56,7 @@ export function writeAgentProxyRouteLifecycleEvent({
     category: RUNTIME_EVENT_CATEGORIES.AGENT_PROXY_ROUTE,
     level: "info",
     event,
-    data: {
-      connectionId: ensureConnectionId(socket),
-      channelStatus: String(channel?.status || ""),
-      upstreamReadyState: channel?.upstreamSocket?.readyState ?? null,
-      ...data,
-    },
+    data: { ...summarizeLifecycleSocket(socket), ...summarizeChannelState(channel), ...data },
   });
 }
 

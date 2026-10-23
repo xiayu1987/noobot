@@ -11,6 +11,8 @@ import { reconnectMethods } from "./manager/reconnect.js";
 import { cleanupMethods } from "./manager/cleanup.js";
 import { UpstreamTransportSupervisor } from "../websocket/upstream-transport-supervisor.js";
 import { CommandRegistry } from "./command-registry.js";
+import { nowMs } from "../shared/utils.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { config } from "../shared/config.js";
 import { ChannelEventJournal } from "./channel-event-journal.js";
 import { resolveOptionalSessionId } from "@noobot/runtime-events/session-id";
@@ -37,10 +39,11 @@ export class ChannelManager {
     this.sessionLogClient = sessionLogClient;
     this.channelStore = new Map();
     this.commandRegistry = new CommandRegistry({
-      defaultTtlMs: config.requestIdTtlMs,
+      now: nowMs,
+      ttlMs: config.requestIdTtlMs,
       onRemove: (removal) => this.logCommandRemoval(removal),
+      maxRemovals: QUANTITY_THRESHOLDS.agentProxy.commandRemovalHistoryLimit,
     });
-    this.requestChannelMap = this.commandRegistry.routes;
     this.apiKeyIdentityStore = new Map();
     this.createUpstreamTransport = () => new UpstreamTransportSupervisor(WebSocket);
     this.createEventJournal = () => new ChannelEventJournal({ maxEvents: config.maxChannelEvents });
@@ -82,8 +85,8 @@ export class ChannelManager {
   }
 
   logCommandRemoval(removal) {
-    if (removal?.reason === "delivered") return false;
-    const channel = this.channelStore.get(removal?.channelKey);
+    if (removal.reason === "delivered") return false;
+    const channel = this.channelStore.get(removal.channelKey);
     return this.logChannelEvent(channel, {
       category: "transport",
       level: "info",

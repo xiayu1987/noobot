@@ -22,7 +22,7 @@ test("reconnect snapshot forward event takes identity from channel key without s
     sessionId: "child-session",
     parentSessionId: "root-session",
   });
-  const channel = { key, identity: parseChannelKey(key), ownerUserId: "" };
+  const channel = { key, identity: parseChannelKey(key) };
   const command = createTurnSnapshotCommand({
     commandId: "proxy-snapshot:child-session:test",
     identity: { sessionId: "child-session" },
@@ -47,4 +47,58 @@ test("reconnect snapshot forward event takes identity from channel key without s
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
     await rm(workspaceRoot, { recursive: true, force: true });
   }
+});
+
+test("socket command takes userId from the connection identity snapshot", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "agent-proxy-transport-events-"));
+  const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
+  process.env.NOOBOT_WORKSPACE_ROOT = workspaceRoot;
+  const command = createTurnSnapshotCommand({
+    commandId: "proxy-snapshot:socket-session:test",
+    identity: { sessionId: "socket-session" },
+    options: { knownSequence: 0, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
+  });
+
+  try {
+    const result = await writeAgentTransportDebugEvent({
+      event: "agentProxy.agentTransport.commandReceived",
+      command,
+      socket: { __agentProxyUserId: "user-a" },
+      data: { accepted: true, transport: "websocket" },
+    });
+
+    assert.equal(result.ok, true, String(result.error?.message || ""));
+    assert.equal(result.record.scope, "session");
+    assert.equal(result.record.userId, "user-a");
+    assert.equal(result.record.sessionId, "socket-session");
+  } finally {
+    if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
+    else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test("debug event attribution requires exactly one of socket or channel", () => {
+  const command = createTurnSnapshotCommand({
+    commandId: "proxy-snapshot:any:test",
+    identity: { sessionId: "any-session" },
+    options: { knownSequence: 0, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
+  });
+  const key = createChannelKey({ userId: "user-a", sessionId: "any-session" });
+  const channel = { key, identity: parseChannelKey(key) };
+  assert.throws(
+    () => writeAgentTransportDebugEvent({ event: "e", command, data: {} }),
+    /exactly one of socket or channel/,
+  );
+  assert.throws(
+    () =>
+      writeAgentTransportDebugEvent({
+        event: "e",
+        command,
+        socket: { __agentProxyUserId: "user-a" },
+        channel,
+        data: {},
+      }),
+    /exactly one of socket or channel/,
+  );
 });

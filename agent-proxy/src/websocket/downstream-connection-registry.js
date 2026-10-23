@@ -4,17 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
-
 export class DownstreamConnectionRegistry {
   constructor({ now = () => Date.now() } = {}) {
     this.now = now;
     this.connections = new Map();
   }
 
-  register(socket, { connectionId = "", onFinalize = null } = {}) {
-    const id = text(connectionId || socket?.__agentProxySocketId);
-    if (!socket || !id) return null;
+  register(socket, { onFinalize = null } = {}) {
+    const id = socket.__agentProxySocketId;
     const existing = this.connections.get(id);
     if (existing && !existing.finalized) return existing;
     const record = {
@@ -43,7 +40,7 @@ export class DownstreamConnectionRegistry {
     const record = this.resolve(socketOrId);
     if (!record || record.finalized) return false;
     record.finalized = true;
-    record.finalizeReason = text(reason) || "closed";
+    record.finalizeReason = reason;
     this.connections.delete(record.connectionId);
     record.onFinalize?.(record);
     return true;
@@ -75,8 +72,7 @@ export class DownstreamConnectionRegistry {
   resolve(socketOrId) {
     if (!socketOrId) return null;
     if (typeof socketOrId === "string") return this.connections.get(socketOrId) || null;
-    const id = text(socketOrId.__agentProxySocketId);
-    return id ? this.connections.get(id) || null : null;
+    return this.connections.get(socketOrId.__agentProxySocketId) || null;
   }
 
   sweepHeartbeat({ timeoutMs = 0, onTimeout = null } = {}) {

@@ -17,7 +17,7 @@ export function createChatEngineSender({
   activeSession,
   activeSessionId,
   allowUserInteraction,
-  applyConversationStateFromEvent,
+  applyConversationState,
   appendMessage,
   findUserMessageForCommit,
   findMessagesByPresentationId,
@@ -82,7 +82,7 @@ export function createChatEngineSender({
   };
   const streamHandlerDependencies = {
     activeSession,
-    applyConversationStateFromEvent,
+    applyConversationState,
     applyWorkflowRuntimeEvent,
     reduceSubSessionMessageEvent,
     clearMissingInteractionPayloadTimer,

@@ -87,7 +87,7 @@ test("auth-service: URL parse failure does not break header API key auth", () =>
     const service = createAuthService({
       translateText: (key = "") => String(key || ""),
     });
-    const apiKey = service.issueApiKey({ userId: "u1" });
+    const apiKey = service.issueApiKey({ userId: "u1", role: "user" });
 
     const auth = service.resolveAuthByApiKey({
       url: "http://[?apikey=SHOULD_NOT_BE_USED",
@@ -97,3 +97,37 @@ test("auth-service: URL parse failure does not break header API key auth", () =>
 
     assert.deepEqual(auth?.userId, "u1");
   }));
+
+test("auth-service: issueApiKey rejects non-canonical userId", () => {
+  const service = createAuthService({ translateText: (key) => key });
+  for (const userId of ["", " u1", undefined]) {
+    assert.throws(() => service.issueApiKey({ userId, role: "user" }), TypeError);
+  }
+});
+
+test("auth-service: requireApiKey forbids any mismatched userId source", () => {
+  const service = createAuthService({ translateText: (key) => key });
+  const apiKey = service.issueApiKey({ userId: "u1", role: "user" });
+  let statusCode = 0;
+  let nextCalled = false;
+  const res = {
+    status(code) {
+      statusCode = code;
+      return { json() {} };
+    },
+  };
+  service.requireApiKey(
+    {
+      headers: { "x-api-key": apiKey },
+      params: { userId: "u1" },
+      body: { userId: "u2" },
+      query: {},
+    },
+    res,
+    () => {
+      nextCalled = true;
+    },
+  );
+  assert.equal(nextCalled, false);
+  assert.equal(statusCode, 403);
+});

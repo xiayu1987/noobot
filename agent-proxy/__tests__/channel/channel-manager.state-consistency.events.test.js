@@ -7,12 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
-import { TRANSPORT_TRACE_PROTOCOL_KIND } from "../../src/shared/constants.js";
 import {
-  createChannelKey,
-  ensureConnectionId,
-  resolveMessageEventTrace,
-} from "../../src/shared/utils.js";
+  CHANNEL_ACTIVITY_PHASE,
+  TRANSPORT_TRACE_PROTOCOL_KIND,
+} from "../../src/shared/constants.js";
+import { createChannelKey, resolveMessageEventTrace } from "../../src/shared/utils.js";
 import { createMockSocket } from "./channel-manager.state-consistency.test-helpers.js";
 import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
@@ -68,9 +67,7 @@ test("live business event broadcast should include channel sessionId without ove
     sessionId: "session-1",
     requestId: "stream-command-request",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
@@ -103,7 +100,7 @@ test("event replay should include channel sessionId without mutating cached enve
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   const envelope = manager.pushChannelEvent(
     channel,
@@ -126,9 +123,7 @@ test("normal JOIN replay includes committed events during a socket gap", () => {
     userId: "user-1",
     sessionId: "session-1",
   });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   const artifact = createPluginArtifactEnvelope({
     sequence: 1,
     revision: 1,
@@ -161,9 +156,7 @@ test("broadcast event order should be identical across same-channel clients", ()
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   const clientA = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   const clientB = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
@@ -195,13 +188,6 @@ test("broadcast event order should be identical across same-channel clients", ()
   );
   assert.equal(clientA.__agentProxyLastSequenceByChannel[channelKey], 5);
   assert.equal(clientB.__agentProxyLastSequenceByChannel[channelKey], 5);
-});
-
-test("connection ids are stable per socket and isolated between sockets", () => {
-  const socketA = createMockSocket();
-  const socketB = createMockSocket();
-  assert.equal(ensureConnectionId(socketA), ensureConnectionId(socketA));
-  assert.notEqual(ensureConnectionId(socketA), ensureConnectionId(socketB));
 });
 
 test("message event tracing only accepts the shared authoritative envelope", () => {
@@ -242,7 +228,6 @@ test("broadcast only records unsuccessful delivery results", () => {
   );
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.ownerApiKey = "api-key-1";
   const openSocket = createMockSocket();
   const closedSocket = createMockSocket();
   closedSocket.readyState = 3;
@@ -275,9 +260,7 @@ test("transport-only deltas broadcast live without entering the journal or movin
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
 
@@ -306,8 +289,8 @@ test("transport-only deltas broadcast live without entering the journal or movin
     delivered.map((item) => item.data.payload.text),
     ["content", "chunk-1", "chunk-2", "chunk-3"],
   );
-  assert.equal(channel.eventLog.length, 1);
-  assert.equal(channel.eventSequence, 1);
+  assert.equal(channel.eventJournal.events.length, 1);
+  assert.equal(channel.eventJournal.sequence, 1);
   assert.equal(client.__agentProxyLastSequenceByChannel[channelKey], 1);
 
   const joiner = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });

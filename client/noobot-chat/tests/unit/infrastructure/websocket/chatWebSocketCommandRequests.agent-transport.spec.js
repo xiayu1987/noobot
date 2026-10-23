@@ -7,14 +7,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AGENT_TRANSPORT_EVENT,
   createAgentCommandRejection,
+  parseAgentTransportFrame,
 } from "@noobot/agent-transport-protocol";
 import { createWebSocketCommandRequests } from "../../../../src/infrastructure/websocket/chatWebSocketCommandRequests.js";
+
+function createDiagnosticCallbacks() {
+  return { onCommandSending: vi.fn(), onCommandSent: vi.fn(), onCommandSendFailed: vi.fn() };
+}
 
 describe("chat websocket command transport diagnostics", () => {
   it("reports command sending and sent around the physical websocket write", () => {
     const socket = { readyState: 1, send: vi.fn() };
-    const onCommandSending = vi.fn();
-    const onCommandSent = vi.fn();
+    const { onCommandSending, onCommandSent, onCommandSendFailed } = createDiagnosticCallbacks();
     const command = { protocolVersion: 1, commandType: "stop", commandId: "command-1" };
     vi.stubGlobal("WebSocket", { OPEN: 1 });
     const requests = createWebSocketCommandRequests({
@@ -23,6 +27,7 @@ describe("chat websocket command transport diagnostics", () => {
       translateText: (key) => key,
       onCommandSending,
       onCommandSent,
+      onCommandSendFailed,
     });
 
     requests.sendJson(command);
@@ -41,12 +46,14 @@ describe("chat websocket command transport diagnostics", () => {
         throw error;
       }),
     };
-    const onCommandSendFailed = vi.fn();
+    const { onCommandSending, onCommandSent, onCommandSendFailed } = createDiagnosticCallbacks();
     vi.stubGlobal("WebSocket", { OPEN: 1 });
     const requests = createWebSocketCommandRequests({
       getActiveSocket: () => socket,
       timeoutMs: 100,
       translateText: (key) => key,
+      onCommandSending,
+      onCommandSent,
       onCommandSendFailed,
     });
 
@@ -62,6 +69,7 @@ describe("chat websocket command transport diagnostics", () => {
       getActiveSocket: () => socket,
       timeoutMs: 1000,
       translateText: (key) => key,
+      ...createDiagnosticCallbacks(),
     });
     const command = {
       protocolVersion: 1,
@@ -75,7 +83,7 @@ describe("chat websocket command transport diagnostics", () => {
       occurredAt: "2026-01-01T00:00:00.000Z",
     });
 
-    const pending = requests.requestJson(command);
+    const pending = requests.requestJson(command, { expectedEvents: [] });
     requests.settle(AGENT_TRANSPORT_EVENT.COMMAND_REJECTED, rejection);
 
     await expect(pending).rejects.toMatchObject({
@@ -86,30 +94,20 @@ describe("chat websocket command transport diagnostics", () => {
     vi.unstubAllGlobals();
   });
 
-  it("refuses a rejection frame that violates the rejection protocol", () => {
-    const socket = { readyState: 1, send: vi.fn() };
-    vi.stubGlobal("WebSocket", { OPEN: 1 });
-    const requests = createWebSocketCommandRequests({
-      getActiveSocket: () => socket,
-      timeoutMs: 1000,
-      translateText: (key) => key,
-    });
-    const pending = requests.requestJson({ commandId: "command-4", commandType: "stop" });
-    const settled = pending.catch((error) => error);
-
+  it("refuses a rejection frame that violates the rejection protocol at the frame boundary", () => {
     expect(() =>
-      requests.settle(AGENT_TRANSPORT_EVENT.COMMAND_REJECTED, {
-        protocolVersion: 1,
-        commandId: "command-4",
-        commandType: "stop",
-        identity: { sessionId: "session-1" },
-        occurredAt: "2026-01-01T00:00:00.000Z",
-        error: { code: "x", message: "x" },
-        outcome: "failed",
+      parseAgentTransportFrame({
+        event: AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
+        data: {
+          protocolVersion: 1,
+          commandId: "command-4",
+          commandType: "stop",
+          identity: { sessionId: "session-1" },
+          occurredAt: "2026-01-01T00:00:00.000Z",
+          error: { code: "x", message: "x" },
+          outcome: "failed",
+        },
       }),
     ).toThrow(/unknown_rejection_field/);
-    requests.rejectAll(new Error("teardown"));
-    vi.unstubAllGlobals();
-    return settled;
   });
 });

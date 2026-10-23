@@ -315,6 +315,7 @@ export const zhCNMessages = {
     reconnectConnectFailed: "重连连接失败",
     reconnectClosed: "重连连接已关闭",
     reconnectFailed: "断线重连失败，正在刷新会话",
+    websocketRequestTimeout: "WebSocket 请求超时",
   },
   chat: {
     newSession: "新会话",

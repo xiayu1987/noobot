@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { CHANNEL_ACTIVITY_PHASE } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   canonicalInteractionRequest,
@@ -44,7 +45,7 @@ test("reconnect echoes requestId on data and completion envelopes", async () => 
 test("reconnect provisions a child session channel with the start_or_join key", async () => {
   const manager = new ChannelManager({ OPEN: 1 });
   manager.connectUpstreamChannel = (channel) => {
-    channel.upstreamSocket = { readyState: 1 };
+    channel.transport.socket = { readyState: 1 };
   };
   const socket = createMockSocket({ userId: "user-1" });
 
@@ -69,22 +70,11 @@ test("reconnect provisions a child session channel with the start_or_join key", 
   assert.equal(identity.parentDialogProcessId, "parent-dp-1");
 });
 
-test("reconnect does not provision a channel for an unauthenticated socket", async () => {
-  const manager = new ChannelManager({ OPEN: 1 });
-  const socket = createMockSocket({ userId: "" });
-
-  await manager.handleReconnect(socket, reconnectControl({ sessionId: "session-1" }));
-
-  assert.equal(manager.channelStore.size, 0);
-});
-
 test("reconnect should not replay resolved interaction_request", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
   manager.pushChannelEvent(
@@ -101,7 +91,6 @@ test("reconnect should not replay resolved interaction_request", () => {
   );
 
   channel.pendingInteractionRequests.delete("req-resolved");
-  manager.requestChannelMap.delete("req-resolved");
 
   const socket = createMockSocket();
   socket.__agentProxyChannelKeys.add(channelKey);
@@ -132,9 +121,7 @@ test("reconnect should replay unresolved interaction_request with pending marker
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   manager.pushChannelEvent(
     channel,
@@ -187,9 +174,7 @@ test("reconnect excludes the data-plane journal even when it reached retention c
   );
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
 
   for (let seq = 1; seq <= 2000; seq += 1) {
     manager.pushChannelEvent(

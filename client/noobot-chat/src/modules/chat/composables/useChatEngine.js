@@ -272,7 +272,7 @@ export function useChatEngine({
   });
 
   const {
-    applyConversationStateFromEvent,
+    applyConversationState,
     clearMissingInteractionPayloadTimer,
     disposeConversationState,
     tryAutoResolveInteraction,
@@ -307,7 +307,7 @@ export function useChatEngine({
     ensureConnected,
   };
   const senderConversationDeps = {
-    applyConversationStateFromEvent,
+    applyConversationState,
     applyAssistantFailureState,
     applySessionDetail,
     appendMessage,

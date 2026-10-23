@@ -116,10 +116,10 @@ export const CHECK = defineCheck({
     },
   ],
   baseline: {
-    fallbackChain: 508,
-    inlineTrim: 80,
+    fallbackChain: 501,
+    inlineTrim: 79,
     typeCheck: 0,
-    rawTypeof: 605,
+    rawTypeof: 588,
     textShadow: 0,
     exemptions: 13,
   },

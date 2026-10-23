@@ -48,10 +48,7 @@ function publishBufferedEvents(manager, socket, transaction) {
     const sendResult = manager.sendChannelEvent(channel, socket, envelope);
     if (!["sent", "queued"].includes(sendResult.result)) continue;
     if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) continue;
-    socket.__agentProxyLastSequenceByChannel ||= {};
-    socket.__agentProxyLastSequenceByChannel[bufferedEvent.channelKey] = Number(
-      bufferedEvent.sequence || 0,
-    );
+    socket.__agentProxyLastSequenceByChannel[bufferedEvent.channelKey] = bufferedEvent.sequence;
   }
 }
 

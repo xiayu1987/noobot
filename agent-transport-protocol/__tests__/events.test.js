@@ -14,6 +14,9 @@ import {
   createAgentCommandReceipt,
   createAgentCommandRejection,
   validateAgentCommandRejection,
+  createAgentTransportError,
+  validateAgentTransportError,
+  AGENT_TRANSPORT_ERROR_CODE,
   createAgentChannelState,
   createAgentChannelFrame,
   createAgentDirectFrame,
@@ -156,6 +159,37 @@ test("command rejection requires canonical command, session and error facts", ()
   );
 });
 
+test("transport error carries an enumerated code and projects canonical identity", () => {
+  const occurredAt = "2026-01-01T00:00:00.000Z";
+  const errorEvent = createAgentTransportError({
+    code: AGENT_TRANSPORT_ERROR_CODE.UPSTREAM_UNAVAILABLE,
+    message: "upstream unavailable",
+    identity: { sessionId: "s", turnScopeId: "", parentSessionId: "p" },
+    occurredAt,
+  });
+  assert.deepEqual(errorEvent.identity, { sessionId: "s" });
+  assert.throws(
+    () =>
+      createAgentTransportError({
+        code: "agentProxy upstream is unavailable",
+        message: "m",
+        identity: {},
+        occurredAt,
+      }),
+    /invalid_transport_error_code/,
+  );
+  assert.deepEqual(validateAgentTransportError({ ...errorEvent, commandId: "c" }).errors, [
+    "unknown_transport_error_field:commandId",
+  ]);
+  assert.deepEqual(validateAgentTransportError({ ...errorEvent, message: " m" }).errors, [
+    "missing_transport_error_message",
+  ]);
+  assert.deepEqual(
+    validateAgentTransportError({ ...errorEvent, identity: { sessionId: "" } }).errors,
+    ["invalid_transport_error_identity_field:sessionId"],
+  );
+});
+
 test("command receipt outcome is matched exactly without case folding", () => {
   assert.throws(
     () =>
@@ -243,4 +277,43 @@ test("channel state rejects unknown fields, states and scopes", () => {
     "invalid_channel_state",
     "invalid_channel_state_scope",
   ]);
+});
+
+test("frames validate transport-owned payloads at the boundary", () => {
+  const validError = createAgentTransportError({
+    code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
+    message: "reconnect failed",
+    identity: { sessionId: "s-1" },
+    occurredAt: "2026-01-01T00:00:00.000Z",
+  });
+  assert.equal(
+    parseAgentTransportFrame({ event: AGENT_TRANSPORT_EVENT.ERROR, data: validError }).data,
+    validError,
+  );
+  assert.throws(
+    () =>
+      parseAgentTransportFrame({
+        event: AGENT_TRANSPORT_EVENT.ERROR,
+        data: { ...validError, code: "replayed_failure" },
+      }),
+    /invalid_transport_error_code/,
+  );
+  assert.throws(
+    () =>
+      parseAgentTransportFrame({
+        event: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
+        data: { protocolVersion: 1, sessionId: "s-1" },
+        channelSessionId: "s-1",
+      }),
+    /invalid_channel_state/,
+  );
+  assert.throws(
+    () =>
+      createAgentChannelFrame({
+        event: AGENT_TRANSPORT_EVENT.CHANNEL_ERROR,
+        data: { ...validError, message: "" },
+        channelSessionId: "s-1",
+      }),
+    /missing_transport_error_message/,
+  );
 });

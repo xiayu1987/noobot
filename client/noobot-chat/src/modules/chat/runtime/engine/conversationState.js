@@ -3,12 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  AGENT_CHANNEL_STATE_SCOPE,
-  AGENT_COMMAND,
-  validateAgentChannelState,
-} from "@noobot/agent-transport-protocol";
-import { RoleEnum, StreamEventEnum } from "../../model/chatConstants.js";
+import { AGENT_CHANNEL_STATE_SCOPE, AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+import { RoleEnum } from "../../model/chatConstants.js";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
@@ -172,12 +168,7 @@ export function createChatEngineConversationState({
     }
   }
 
-  function applyConversationState(channelState = {}) {
-    const validation = validateAgentChannelState(channelState);
-    if (!validation.valid) {
-      logResendDebug("conversationState.invalid", () => ({ errors: validation.errors }));
-      return;
-    }
+  function applyConversationState(channelState) {
     const applied = channelState.sessionId === text(activeSession.value?.sessionId);
     onConversationState?.({ source: "stream", ...channelState, applied });
     if (!applied) return;
@@ -186,11 +177,6 @@ export function createChatEngineConversationState({
       return;
     }
     applyTurnChannelState(channelState);
-  }
-
-  function applyConversationStateFromEvent(eventName = "", eventData = {}) {
-    if (text(eventName) !== StreamEventEnum.CHANNEL_STATE) return;
-    applyConversationState(eventData);
   }
 
   function disposeConversationState() {
@@ -203,7 +189,6 @@ export function createChatEngineConversationState({
 
   return {
     applyConversationState,
-    applyConversationStateFromEvent,
     clearMissingInteractionPayloadTimer,
     disposeConversationState,
     tryAutoResolveInteraction,

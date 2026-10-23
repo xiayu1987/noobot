@@ -5,24 +5,23 @@
  */
 import { createReplayBatch } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
+import { cancelPendingSnapshot } from "./session-replay.js";
 
-export function createReconnectTransaction(snapshotRequests) {
+export function createReconnectTransaction(manager, snapshotRequests) {
   const transaction = {
     eventBuffer: [],
     channelStateBaseline: [],
     snapshotRequests,
     cancelled: false,
-    cancel(reason = "reconnect_cancelled") {
+    cancel(reason) {
       if (transaction.cancelled) return;
       transaction.cancelled = true;
       for (const request of snapshotRequests) {
         request.cancelled = true;
         for (const commandId of request.commandIds) {
-          const pendingRequest = request.channel.pendingSnapshotRequests.get(commandId);
-          request.channel.pendingSnapshotRequests.delete(commandId);
-          pendingRequest?.resolve({ ok: false, reason });
+          cancelPendingSnapshot(manager, request.channel, commandId, reason);
         }
-        request.channel?.transport?.closeOwnedConnection(request.queryConnection, 1000, reason, {
+        request.channel.transport.closeOwnedConnection(request.queryConnection, 1000, reason, {
           purpose: "snapshot_query",
         });
       }

@@ -4,20 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { randomUUID } from "node:crypto";
-import { CLIENT_ROLE, TRANSPORT_TRACE_PROTOCOL_KIND } from "./constants.js";
+import { TRANSPORT_TRACE_PROTOCOL_KIND } from "./constants.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
-
-export function ensureConnectionId(socket = null) {
-  if (!socket) return "";
-  const existing = text(socket.__agentProxyConnectionId);
-  if (existing) return existing;
-  const connectionId = randomUUID();
-  socket.__agentProxyConnectionId = connectionId;
-  return connectionId;
-}
 
 export function resolveMessageEventTrace(eventName = "", data = {}, transportSequence = 0) {
   const normalizedEventName = text(eventName);
@@ -43,10 +33,6 @@ export function resolveMessageEventTrace(eventName = "", data = {}, transportSeq
     turnScopeId: text(authoritative?.identity?.turnScopeId),
     dialogProcessId: text(authoritative?.payload?.dialogProcessId),
   };
-}
-
-export function normalizeApiKey(input = "") {
-  return text(input);
 }
 
 const CHANNEL_KEY_SEPARATOR = "::";
@@ -101,21 +87,6 @@ export function parseRequestPathname(request = null) {
   } catch {
     return "";
   }
-}
-
-export function buildClientPermissions(role = CLIENT_ROLE.USER) {
-  const normalizedRole = text(role) || CLIENT_ROLE.USER || CLIENT_ROLE.USER;
-  const isSuperAdmin = normalizedRole === CLIENT_ROLE.SUPER_ADMIN;
-  return {
-    role: normalizedRole,
-    canChat: true,
-    canUseAgentProxy: true,
-    canAccessWorkspace: true,
-    canAccessAdmin: isSuperAdmin,
-    canManageUsers: isSuperAdmin,
-    canManageTemplate: isSuperAdmin,
-    canManageSystemConfigParams: isSuperAdmin,
-  };
 }
 
 export function nowMs() {

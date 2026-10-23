@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean, isObjectLike } from "@noobot/shared/value";
+import { text as clean, isCanonicalText, isObjectLike } from "@noobot/shared/value";
 import { normalizeExecutionIdentity } from "./execution-lifecycle.js";
 import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
@@ -85,28 +85,40 @@ const EVENT_STATE = TURN_EVENT_STATE;
 const EVENT_PHASE = TURN_EVENT_PHASE;
 const FAILED_PHASE_STATE = TURN_FAILED_PHASE_STATE;
 
-export function createTurnLifecycleReceipt({
-  eventId = "",
-  sessionId = "",
-  turnScopeId = "",
-} = {}) {
-  return {
+const TURN_LIFECYCLE_RECEIPT_FIELDS = Object.freeze([
+  "action",
+  "protocolVersion",
+  "eventId",
+  "sessionId",
+  "turnScopeId",
+]);
+
+export function createTurnLifecycleReceipt({ eventId, sessionId, turnScopeId }) {
+  const receipt = {
     action: TURN_LIFECYCLE_RECEIPT_ACTION,
     protocolVersion: TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION,
-    eventId: clean(eventId),
-    sessionId: clean(sessionId),
-    turnScopeId: canonicalizeTurnScopeId(turnScopeId),
+    eventId,
+    sessionId,
+    turnScopeId,
   };
+  const validation = validateTurnLifecycleReceipt(receipt);
+  if (!validation.valid) {
+    throw new TypeError(`invalid turn lifecycle receipt: ${validation.errors.join(",")}`);
+  }
+  return receipt;
 }
 
-export function validateTurnLifecycleReceipt(receipt = {}) {
-  const errors = [];
-  if (clean(receipt.action) !== TURN_LIFECYCLE_RECEIPT_ACTION) errors.push("invalid_action");
-  if (Number(receipt.protocolVersion) !== TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION) {
+export function validateTurnLifecycleReceipt(receipt) {
+  if (!isObjectLike(receipt)) return { valid: false, errors: ["invalid_receipt"] };
+  const errors = Object.keys(receipt)
+    .filter((key) => !TURN_LIFECYCLE_RECEIPT_FIELDS.includes(key))
+    .map((key) => `unknown_field:${key}`);
+  if (receipt.action !== TURN_LIFECYCLE_RECEIPT_ACTION) errors.push("invalid_action");
+  if (receipt.protocolVersion !== TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION) {
     errors.push("unsupported_protocol_version");
   }
-  if (!clean(receipt.eventId)) errors.push("missing_event_id");
-  if (!clean(receipt.sessionId)) errors.push("missing_session_id");
+  if (!isCanonicalText(receipt.eventId)) errors.push("missing_event_id");
+  if (!isCanonicalText(receipt.sessionId)) errors.push("missing_session_id");
   errors.push(...collectTurnScopeIdErrors(receipt.turnScopeId));
   return { valid: errors.length === 0, errors };
 }
@@ -342,8 +354,8 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (Number(envelope.protocolVersion) !== TURN_LIFECYCLE_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
   if (!EVENT_VALUES.has(clean(envelope.eventType))) errors.push("invalid_event_type");
-  if (!clean(envelope.eventId)) errors.push("missing_event_id");
-  if (!clean(envelope.sessionId)) errors.push("missing_session_id");
+  if (!isCanonicalText(envelope.eventId)) errors.push("missing_event_id");
+  if (!isCanonicalText(envelope.sessionId)) errors.push("missing_session_id");
   errors.push(...collectTurnScopeIdErrors(envelope.turnScopeId));
   errors.push(
     ...collectRequiredFieldErrors(

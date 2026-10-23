@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "../shared/config.js";
-import { AGENT_PROXY_ERROR } from "../shared/constants.js";
+import { AGENT_PROXY_HTTP_ERROR_CODE } from "../shared/constants.js";
 import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
-import { buildClientPermissions } from "../shared/utils.js";
 import { collectRequestBody, writeProxyError, decorateProxyResponseHeaders } from "./http-proxy.js";
 import { isLoopbackAddress, resolveHeaderValue, secureEquals } from "./security.js";
 import {
@@ -44,12 +43,14 @@ export async function interceptConnectRequest(request, response, channelManager)
   try {
     requestBodyBuffer = await collectRequestBody(request);
   } catch (error) {
-    writeProxyError(
-      response,
-      413,
-      error?.message || AGENT_PROXY_ERROR.REQUEST_BODY_TOO_LARGE,
+    const tooLarge = error.code === AGENT_PROXY_HTTP_ERROR_CODE.REQUEST_BODY_TOO_LARGE;
+    writeProxyError(response, {
+      statusCode: tooLarge ? 413 : 400,
+      code: tooLarge
+        ? AGENT_PROXY_HTTP_ERROR_CODE.REQUEST_BODY_TOO_LARGE
+        : AGENT_PROXY_HTTP_ERROR_CODE.REQUEST_BODY_READ_FAILED,
       locale,
-    );
+    });
     return;
   }
   const forwardedHeaders = { ...(request?.headers || {}) };
@@ -71,7 +72,11 @@ export async function interceptConnectRequest(request, response, channelManager)
       },
       error,
     });
-    writeProxyError(response, 500, AGENT_PROXY_ERROR.INVALID_UPSTREAM_BASE_URL, locale);
+    writeProxyError(response, {
+      statusCode: 500,
+      code: AGENT_PROXY_HTTP_ERROR_CODE.INVALID_UPSTREAM_BASE_URL,
+      locale,
+    });
     return;
   }
   let upstreamResponse = null;
@@ -83,12 +88,12 @@ export async function interceptConnectRequest(request, response, channelManager)
       signal: AbortSignal.timeout(config.httpUpstreamTimeoutMs),
     });
   } catch (error) {
-    writeProxyError(
-      response,
-      502,
-      error?.message || AGENT_PROXY_ERROR.CONNECT_INTERCEPT_FAILED,
+    writeProxyError(response, {
+      statusCode: 502,
+      code: AGENT_PROXY_HTTP_ERROR_CODE.CONNECT_INTERCEPT_FAILED,
       locale,
-    );
+      detail: error.message,
+    });
     return;
   }
 
@@ -99,42 +104,20 @@ export async function interceptConnectRequest(request, response, channelManager)
     "x-agent-proxy-intercept": "connect",
   };
 
-  if (contentType.includes("application/json")) {
-    try {
-      const parsedJson = JSON.parse(String(rawText || "{}"));
-      const responsePayload =
-        parsedJson && typeof parsedJson === "object"
-          ? {
-              ...parsedJson,
-              permissions:
-                parsedJson?.permissions && typeof parsedJson.permissions === "object"
-                  ? parsedJson.permissions
-                  : buildClientPermissions(parsedJson?.role || "user"),
-              agentProxy: {
-                enabled: true,
-                wsPath: "/chat/ws",
-              },
-            }
-          : parsedJson;
-      channelManager.saveApiKeyIdentity({
-        apiKey: responsePayload?.apiKey || "",
-        userId: responsePayload?.userId || "",
-        role: responsePayload?.role || "",
-      });
-      response.writeHead(statusCode, {
-        ...decorateProxyResponseHeaders(headers),
-        "content-type": "application/json; charset=utf-8",
-      });
-      response.end(JSON.stringify(responsePayload));
-      return;
-    } catch {
-      response.writeHead(statusCode, {
-        ...decorateProxyResponseHeaders(headers),
-        "content-type": contentType || "application/json; charset=utf-8",
-      });
-      response.end(rawText);
-      return;
-    }
+  if (upstreamResponse.ok && contentType.includes("application/json")) {
+    const connectPayload = JSON.parse(rawText);
+    channelManager.saveApiKeyIdentity({
+      apiKey: connectPayload.apiKey,
+      userId: connectPayload.userId,
+    });
+    response.writeHead(statusCode, {
+      ...decorateProxyResponseHeaders(headers),
+      "content-type": "application/json; charset=utf-8",
+    });
+    response.end(
+      JSON.stringify({ ...connectPayload, agentProxy: { enabled: true, wsPath: "/chat/ws" } }),
+    );
+    return;
   }
 
   response.writeHead(statusCode, {

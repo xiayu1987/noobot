@@ -202,6 +202,22 @@ test("turn lifecycle receipt identifies one authoritative delivery without carry
     }).errors,
     ["non_canonical_turn_scope_id"],
   );
+  assert.deepEqual(validateTurnLifecycleReceipt({ ...receipt, eventId: " evt-receipt-1" }).errors, [
+    "missing_event_id",
+  ]);
+  assert.deepEqual(
+    validateTurnLifecycleReceipt({ ...receipt, protocolVersion: String(receipt.protocolVersion) })
+      .errors,
+    ["unsupported_protocol_version"],
+  );
+  assert.deepEqual(validateTurnLifecycleReceipt({ ...receipt, extra: true }).errors, [
+    "unknown_field:extra",
+  ]);
+  assert.deepEqual(validateTurnLifecycleReceipt(null).errors, ["invalid_receipt"]);
+  assert.throws(
+    () => createTurnLifecycleReceipt({ eventId: "evt-1", sessionId: " s", turnScopeId: "turn-1" }),
+    /missing_session_id/,
+  );
 });
 
 test("turn lifecycle envelope requires stable identity and monotonic coordinates", () => {

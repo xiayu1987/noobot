@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "../../shared/config.js";
-import { CHANNEL_STATUS } from "../../shared/constants.js";
+import { CHANNEL_ACTIVITY_PHASE, UPSTREAM_TRANSPORT_PHASE } from "../../shared/constants.js";
 import { createChannelKey, nowMs } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 import {
@@ -21,13 +21,10 @@ import {
   publishEmptyReconnect,
   publishReconnectTransaction,
 } from "./reconnect/reconnect-publisher.js";
-import { text } from "@noobot/shared/value";
 
 function cancelSupersededReconnect(manager, socket) {
   manager.clearPendingLifecycleDeliveries(socket);
-  const supersededTransaction = socket.__agentProxyReconnectTransaction;
-  socket.__agentProxyReconnectTransaction = null;
-  supersededTransaction?.cancel?.("reconnect_superseded");
+  manager.cancelReconnectTransaction(socket, "reconnect_superseded");
 }
 
 function hasSessionChannel(manager, sessionId) {
@@ -40,8 +37,7 @@ function hasSessionChannel(manager, sessionId) {
 }
 
 async function provisionReconnectChannel(manager, socket, session) {
-  const userId = text(socket?.__agentProxyUserId);
-  if (!userId) return [];
+  const userId = socket.__agentProxyUserId;
   const channelKey = createChannelKey({
     userId,
     sessionId: session.sessionId,
@@ -49,14 +45,12 @@ async function provisionReconnectChannel(manager, socket, session) {
     parentDialogProcessId: session.parentDialogProcessId,
   });
   const channel = manager.ensureChannel(channelKey, { sessionId: session.sessionId, userId });
-  const apiKey = text(socket?.__agentProxyApiKey);
-  if (!channel || !manager.hasChannelPermission(channel, apiKey, userId)) return [];
-  manager.connectUpstreamChannel(channel, apiKey, text(socket?.__agentProxyLocale), {
-    initialPayload: null,
+  manager.connectUpstreamChannel(channel, socket.__agentProxyApiKey, socket.__agentProxyLocale, {
+    initialCommands: [],
     purpose: "reconnect_session",
   });
   const deadline = nowMs() + config.reconnectSnapshotTimeoutMs;
-  while (channel.upstreamSocket?.readyState !== manager.WebSocket.OPEN && nowMs() < deadline) {
+  while (channel.transport.phase !== UPSTREAM_TRANSPORT_PHASE.OPEN && nowMs() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return [channelKey];
@@ -78,13 +72,25 @@ function isReconnectChannelCandidate(channel, currentSessionId) {
   if (!currentSessionId) return true;
   if (channel.identity.sessionId === currentSessionId) return true;
   return (
-    channel.activity.phase === CHANNEL_STATUS.RUNNING ||
-    channel.transport.phase === CHANNEL_STATUS.CONNECTING ||
-    Boolean(channel.pendingInteractionRequests?.size)
+    channel.activity.phase === CHANNEL_ACTIVITY_PHASE.RUNNING ||
+    channel.transport.phase === UPSTREAM_TRANSPORT_PHASE.CONNECTING ||
+    channel.pendingInteractionRequests.size > 0
   );
 }
 
 class ReconnectMethods {
+  releaseSocket(socket) {
+    this.cancelReconnectTransaction(socket, "requester_disconnected");
+    this.commandRegistry.cancelSocket(socket);
+    this.detachSocketFromAllChannels(socket);
+  }
+
+  cancelReconnectTransaction(socket, reason) {
+    const transaction = socket.__agentProxyReconnectTransaction;
+    socket.__agentProxyReconnectTransaction = null;
+    if (transaction) transaction.cancel(reason);
+  }
+
   async handleReconnect(socket, control) {
     const { identity } = control;
     const currentSessionId = identity.sessionId;
@@ -114,7 +120,7 @@ class ReconnectMethods {
       return;
     }
     const snapshotRequests = [];
-    const reconnectTransaction = createReconnectTransaction(snapshotRequests);
+    const reconnectTransaction = createReconnectTransaction(this, snapshotRequests);
     socket.__agentProxyReconnectTransaction = reconnectTransaction;
     const channelsBySessionId = groupReconnectChannels(this, reconnectChannelKeys);
     const { sessionsMap } = prepareSessionReplays({
@@ -159,12 +165,10 @@ class ReconnectMethods {
     if (currentSocketChannelKeys.length) {
       return currentSocketChannelKeys;
     }
-    const requesterApiKey = text(socket?.__agentProxyApiKey);
-    const requesterUserId = text(socket?.__agentProxyUserId);
     const resolvedChannelKeys = [];
     for (const [channelKey, channel] of this.channelStore.entries()) {
       if (!isReconnectChannelCandidate(channel, currentSessionId)) continue;
-      if (!this.hasChannelPermission(channel, requesterApiKey, requesterUserId)) continue;
+      if (!this.hasChannelPermission(channel, socket)) continue;
       resolvedChannelKeys.push(channelKey);
     }
     return resolvedChannelKeys;

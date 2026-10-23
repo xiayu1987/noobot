@@ -3,10 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AGENT_PROXY_ERROR } from "../../shared/constants.js";
 import { config } from "../../shared/config.js";
-import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
-import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
+import { nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
+import { localizeAgentProxyError } from "noobot-i18n/agent-proxy";
 import {
   isTerminalTurnEvent,
   TURN_LIFECYCLE_WIRE_EVENT,
@@ -76,11 +75,11 @@ function logTerminalDeliveryDeferred(manager, channel, context) {
 }
 
 function bufferForReconnect(manager, channel, subscriberSocket, context) {
-  const eventBuffer = subscriberSocket.__agentProxyReconnectTransaction?.eventBuffer;
-  if (!Array.isArray(eventBuffer)) return false;
-  eventBuffer.push({
+  const transaction = subscriberSocket.__agentProxyReconnectTransaction;
+  if (transaction === null) return false;
+  transaction.eventBuffer.push({
     channelKey: channel.key,
-    sequence: Number(context.envelope?.sequence || 0),
+    sequence: context.envelope.sequence,
     envelope: context.envelope,
   });
   if (context.terminalLifecycle) {
@@ -90,7 +89,7 @@ function bufferForReconnect(manager, channel, subscriberSocket, context) {
       ...terminalLogIdentity(context),
       data: {
         channelKey: channel.key,
-        connectionId: ensureConnectionId(subscriberSocket),
+        connectionId: subscriberSocket.__agentProxySocketId,
         ...terminalEventFields(context),
         ...terminalSequences(context),
         result: "buffered_for_reconnect",
@@ -138,13 +137,11 @@ function logBroadcastDrop(manager, channel, delivery, context) {
 function rememberDeliveredSequence(channel, subscriberSocket, envelope) {
   if (envelope?.event === TURN_LIFECYCLE_WIRE_EVENT) return;
   if (isTransientMessageEvent(envelope?.data)) return;
-  subscriberSocket.__agentProxyLastSequenceByChannel =
-    subscriberSocket.__agentProxyLastSequenceByChannel || {};
-  subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(envelope?.sequence || 0);
+  subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = envelope.sequence;
 }
 
 function deliverBroadcastToSubscriber(manager, channel, subscriberSocket, context) {
-  const connectionId = ensureConnectionId(subscriberSocket);
+  const connectionId = subscriberSocket.__agentProxySocketId;
   const sendResult = manager.sendChannelEvent(channel, subscriberSocket, context.envelope);
   const accepted = isAcceptedChannelDelivery(sendResult);
   const delivery = { subscriberSocket, connectionId, sendResult, accepted };
@@ -159,19 +156,17 @@ function deliverBroadcastToSubscriber(manager, channel, subscriberSocket, contex
 
 class SubscriberBroadcastMethods {
   attachSubscriber(channel, socket, { sendStateSnapshot = true } = {}) {
-    if (!channel || !socket) return;
-    channel.subscribers.add(socket);
-    socket.__agentProxyChannelKeys = socket.__agentProxyChannelKeys || new Set();
-    socket.__agentProxyChannelKeys.add(channel.key);
-    socket.__agentProxyActiveChannelKey = channel.key;
+    if (!channel.subscribers.has(socket)) {
+      channel.subscribers.add(socket);
+      socket.__agentProxyChannelKeys.add(channel.key);
+      socket.__agentProxyLastSequenceByChannel[channel.key] = 0;
+    }
     if (sendStateSnapshot) this.sendChannelStateSnapshot(channel, socket);
   }
 
   detachSocketFromAllChannels(socket) {
-    if (!socket) return;
     this.clearPendingLifecycleDeliveries(socket);
-    const connectedChannelKeys = socket.__agentProxyChannelKeys || new Set();
-    for (const channelKey of connectedChannelKeys) {
+    for (const channelKey of socket.__agentProxyChannelKeys) {
       const channel = this.channelStore.get(channelKey);
       if (!channel) continue;
       channel.subscribers.delete(socket);
@@ -180,36 +175,38 @@ class SubscriberBroadcastMethods {
         channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
       }
     }
-    socket.__agentProxyChannelKeys = new Set();
-    socket.__agentProxyActiveChannelKey = "";
-    socket.__agentProxyLastSequenceByChannel = {};
+    for (const channelKey of socket.__agentProxyChannelKeys) {
+      delete socket.__agentProxyLastSequenceByChannel[channelKey];
+    }
+    socket.__agentProxyChannelKeys.clear();
+  }
+
+  clearChannelLifecycleDeliveries(socket, channelKey) {
+    for (const delivery of [...socket.__agentProxyPendingLifecycleDeliveries.values()]) {
+      if (delivery.channel.key === channelKey)
+        this._removePendingLifecycleDelivery(socket, delivery);
+    }
   }
 
   clearPendingLifecycleDeliveries(socket) {
-    const pendingDeliveries = socket?.__agentProxyPendingLifecycleDeliveries;
-    if (!(pendingDeliveries instanceof Map)) return 0;
+    const pendingDeliveries = socket.__agentProxyPendingLifecycleDeliveries;
     for (const delivery of pendingDeliveries.values()) {
-      if (delivery?.timer) clearTimeout(delivery.timer);
+      clearTimeout(delivery.timer);
     }
     const cleared = pendingDeliveries.size;
     pendingDeliveries.clear();
-    socket.__agentProxyLifecycleDeliveriesByTurn?.clear?.();
+    socket.__agentProxyLifecycleDeliveriesByTurn.clear();
     return cleared;
   }
 
-  acknowledgeTurnLifecycleDelivery(socket, receipt = {}) {
+  acknowledgeTurnLifecycleDelivery(socket, receipt) {
     const validation = validateTurnLifecycleReceipt(receipt);
     if (!validation.valid) {
       return { acknowledged: false, reason: validation.errors.join(",") };
     }
-    const eventId = String(receipt.eventId).trim();
-    const pendingDeliveries = socket?.__agentProxyPendingLifecycleDeliveries;
-    const delivery = pendingDeliveries instanceof Map ? pendingDeliveries.get(eventId) : null;
+    const delivery = socket.__agentProxyPendingLifecycleDeliveries.get(receipt.eventId);
     if (!delivery) return { acknowledged: false, reason: "delivery_not_pending" };
-    if (
-      String(receipt.sessionId).trim() !== delivery.sessionId ||
-      String(receipt.turnScopeId).trim() !== delivery.turnScopeId
-    ) {
+    if (receipt.sessionId !== delivery.sessionId || receipt.turnScopeId !== delivery.turnScopeId) {
       return { acknowledged: false, reason: "delivery_scope_mismatch" };
     }
     this._removePendingLifecycleDelivery(socket, delivery);
@@ -222,7 +219,7 @@ class SubscriberBroadcastMethods {
         dialogProcessId: delivery.dialogProcessId,
         turnScopeId: delivery.turnScopeId,
         data: {
-          connectionId: ensureConnectionId(socket),
+          connectionId: socket.__agentProxySocketId,
           eventId: delivery.eventId,
           eventType: delivery.eventType,
           lifecycleSequence: delivery.lifecycleSequence,
@@ -232,9 +229,8 @@ class SubscriberBroadcastMethods {
         },
       });
     }
-    socket.__agentProxyLastSequenceByChannel ||= {};
     socket.__agentProxyLastSequenceByChannel[delivery.channel.key] = Math.max(
-      Number(socket.__agentProxyLastSequenceByChannel[delivery.channel.key] || 0),
+      socket.__agentProxyLastSequenceByChannel[delivery.channel.key],
       delivery.transportSequence,
     );
     return {
@@ -268,13 +264,11 @@ class SubscriberBroadcastMethods {
     if (!channel || !eventId || !sessionId || !turnScopeId) {
       return { result: "failed", reason: "invalid_lifecycle_delivery_identity" };
     }
-    targetSocket.__agentProxyPendingLifecycleDeliveries ||= new Map();
-    targetSocket.__agentProxyLifecycleDeliveriesByTurn ||= new Map();
     const pendingDeliveries = targetSocket.__agentProxyPendingLifecycleDeliveries;
     if (pendingDeliveries.has(eventId)) return { result: "sent", reason: "awaiting_receipt" };
     const turnKey = `${channel.key}\u0000${sessionId}\u0000${turnScopeId}`;
     const lifecycleSequence = Number(eventEnvelope?.ordering?.sequence || 0);
-    const inFlight = targetSocket.__agentProxyLifecycleDeliveriesByTurn.get(turnKey) || null;
+    const inFlight = targetSocket.__agentProxyLifecycleDeliveriesByTurn.get(turnKey);
     if (inFlight && inFlight.lifecycleSequence >= lifecycleSequence) {
       return { result: LIFECYCLE_SUPERSEDED, reason: "newer_lifecycle_in_flight" };
     }
@@ -287,7 +281,7 @@ class SubscriberBroadcastMethods {
         dialogProcessId: text(eventData.dialogProcessId),
         turnScopeId,
         data: {
-          connectionId: ensureConnectionId(targetSocket),
+          connectionId: targetSocket.__agentProxySocketId,
           supersededEventId: inFlight.eventId,
           supersededEventType: inFlight.eventType,
           supersededLifecycleSequence: inFlight.lifecycleSequence,
@@ -331,7 +325,7 @@ class SubscriberBroadcastMethods {
       this._removePendingLifecycleDelivery(targetSocket, delivery);
       return sendResult;
     }
-    if (targetSocket.__agentProxyPendingLifecycleDeliveries?.get(delivery.eventId) !== delivery) {
+    if (targetSocket.__agentProxyPendingLifecycleDeliveries.get(delivery.eventId) !== delivery) {
       return sendResult;
     }
     delivery.timer = setTimeout(
@@ -343,18 +337,17 @@ class SubscriberBroadcastMethods {
   }
 
   _removePendingLifecycleDelivery(targetSocket, delivery) {
-    if (!delivery) return;
     if (delivery.timer) clearTimeout(delivery.timer);
     delivery.timer = null;
-    targetSocket?.__agentProxyPendingLifecycleDeliveries?.delete(delivery.eventId);
-    const byTurn = targetSocket?.__agentProxyLifecycleDeliveriesByTurn;
-    if (byTurn instanceof Map && byTurn.get(delivery.turnKey) === delivery) {
+    targetSocket.__agentProxyPendingLifecycleDeliveries.delete(delivery.eventId);
+    const byTurn = targetSocket.__agentProxyLifecycleDeliveriesByTurn;
+    if (byTurn.get(delivery.turnKey) === delivery) {
       byTurn.delete(delivery.turnKey);
     }
   }
 
-  _retryPendingLifecycleDelivery(targetSocket, eventId = "") {
-    const delivery = targetSocket?.__agentProxyPendingLifecycleDeliveries?.get(eventId);
+  _retryPendingLifecycleDelivery(targetSocket, eventId) {
+    const delivery = targetSocket.__agentProxyPendingLifecycleDeliveries.get(eventId);
     if (!delivery) return false;
     if (delivery.timer) {
       clearTimeout(delivery.timer);
@@ -374,7 +367,7 @@ class SubscriberBroadcastMethods {
           lifecycleSequence: delivery.lifecycleSequence,
           transportSequence: delivery.transportSequence,
           attempts: delivery.attempts,
-          connectionId: ensureConnectionId(targetSocket),
+          connectionId: targetSocket.__agentProxySocketId,
         },
       });
       this.clearPendingLifecycleDeliveries(targetSocket);
@@ -399,20 +392,15 @@ class SubscriberBroadcastMethods {
           lifecycleSequence: delivery.lifecycleSequence,
           transportSequence: delivery.transportSequence,
           attempt: delivery.attempts,
-          connectionId: ensureConnectionId(targetSocket),
+          connectionId: targetSocket.__agentProxySocketId,
         },
       });
     }
     return this._deliverPendingLifecycle(targetSocket, delivery).result === "sent";
   }
 
-  replayChannelEvents(channel, targetSocket, lastSequence = 0) {
-    if (!channel || !targetSocket) return;
-    const expectedSequence = Math.max(0, Number(lastSequence || 0));
-    const replayEvents = channel.eventLog.filter(
-      (eventEnvelope) => Number(eventEnvelope?.sequence || 0) > expectedSequence,
-    );
-    for (const eventEnvelope of replayEvents) {
+  replayChannelEvents(channel, targetSocket, lastSequence) {
+    for (const eventEnvelope of channel.eventJournal.after(lastSequence)) {
       const sendResult = this.sendChannelEvent(channel, targetSocket, eventEnvelope);
       if (
         !isAcceptedChannelDelivery(sendResult) ||
@@ -420,20 +408,12 @@ class SubscriberBroadcastMethods {
       ) {
         continue;
       }
-      targetSocket.__agentProxyLastSequenceByChannel ||= {};
-      targetSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(
-        eventEnvelope?.sequence || 0,
-      );
+      targetSocket.__agentProxyLastSequenceByChannel[channel.key] = eventEnvelope.sequence;
     }
   }
 
   syncSocketToChannelTail(channel, targetSocket) {
-    if (!channel || !targetSocket) return;
-    targetSocket.__agentProxyLastSequenceByChannel =
-      targetSocket.__agentProxyLastSequenceByChannel || {};
-    targetSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(
-      channel?.eventSequence || 0,
-    );
+    targetSocket.__agentProxyLastSequenceByChannel[channel.key] = channel.eventJournal.sequence;
   }
 
   broadcastChannelEvent(channel, envelope) {
@@ -452,7 +432,7 @@ class SubscriberBroadcastMethods {
   broadcastChannelState(channel, stateItem = {}) {
     if (!channel || !stateItem) return;
     this.broadcastChannelEvent(channel, {
-      sequence: Number(channel?.eventSequence || 0),
+      sequence: channel.eventJournal.sequence,
       event: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
       data: stateItem,
     });
@@ -504,19 +484,30 @@ class SubscriberBroadcastMethods {
     }
   }
 
-  sendSocketError(targetSocket, errorMessage = "", options = {}) {
-    const localizedError = localizeAgentProxyMessage(
-      String(errorMessage || ""),
-      text(targetSocket?.__agentProxyLocale),
-    );
+  sendSocketError(targetSocket, { code, params, identity }) {
     this.sendSocketEvent(targetSocket, {
       event: AGENT_TRANSPORT_EVENT.ERROR,
       data: createAgentTransportError({
-        code: text(options.code) || "AGENT_PROXY_ERROR",
-        message: text(localizedError) || AGENT_PROXY_ERROR.DEFAULT,
-        identity: options.identity || {},
+        code,
+        message: localizeAgentProxyError(code, targetSocket.__agentProxyLocale, params),
+        identity,
+        occurredAt: new Date().toISOString(),
       }),
     });
+  }
+
+  broadcastChannelError(channel, code) {
+    const errorEnvelope = this.pushChannelEvent(
+      channel,
+      AGENT_TRANSPORT_EVENT.CHANNEL_ERROR,
+      createAgentTransportError({
+        code,
+        message: localizeAgentProxyError(code, channel.locale),
+        identity: { sessionId: channel.identity.sessionId },
+        occurredAt: new Date().toISOString(),
+      }),
+    );
+    this.broadcastChannelEvent(channel, errorEnvelope);
   }
 }
 

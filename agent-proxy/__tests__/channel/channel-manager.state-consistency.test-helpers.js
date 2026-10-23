@@ -16,6 +16,7 @@ import {
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
 import { createReconnectControl } from "@noobot/agent-transport-protocol";
+import { initializeDownstreamSocketState } from "../../src/websocket/downstream-socket-state.js";
 
 export function reconnectControl({
   sessionId = "",
@@ -87,16 +88,15 @@ export function canonicalInteractionRequest({
 }
 
 export function createMockSocket({ apiKey = "api-key-1", userId = "user-1" } = {}) {
-  return {
+  return initializeDownstreamSocketState({
     readyState: 1,
     sentEvents: [],
-    __agentProxyChannelKeys: new Set(),
     __agentProxyApiKey: apiKey,
     __agentProxyUserId: userId,
     send(raw) {
       this.sentEvents.push(JSON.parse(String(raw || "{}")));
     },
-  };
+  });
 }
 
 export function getEvent(socket, eventName) {
@@ -145,4 +145,33 @@ export function sortReconnectSessions(payload = {}) {
       replayBatch: sessionEntry?.replayBatch || null,
     }))
     .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+}
+
+export function registerPendingCommand(manager, channel, commandId, { kind, socket, settle }) {
+  return manager.commandRegistry.register(commandId, {
+    channelKey: channel.key,
+    kind,
+    socket,
+    settle,
+  });
+}
+
+export function pendingCommand(manager, channel, commandId, kind) {
+  const record = manager.commandRegistry.commands.get(commandId);
+  return record && record.channelKey === channel.key && record.kind === kind ? record : null;
+}
+
+export function countPendingCommands(manager, channel, kind) {
+  return [...manager.commandRegistry.commands.values()].filter(
+    (record) => record.channelKey === channel.key && record.kind === kind,
+  ).length;
+}
+
+export function deliverPendingCommand(manager, channel, commandId, kind, outcome) {
+  const record = manager.commandRegistry.take(
+    commandId,
+    { channelKey: channel.key, kind },
+    "delivered",
+  );
+  record.settle(outcome);
 }

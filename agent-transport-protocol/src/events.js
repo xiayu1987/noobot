@@ -21,18 +21,30 @@ export const AGENT_TRANSPORT_EVENT = Object.freeze({
 
 export const AGENT_TRANSPORT_ERROR_CODE = Object.freeze({
   RECONNECT_FAILED: "RECONNECT_FAILED",
+  ROUTE_FAILED: "ROUTE_FAILED",
+  INVALID_JSON_PAYLOAD: "INVALID_JSON_PAYLOAD",
+  INVALID_AGENT_COMMAND: "INVALID_AGENT_COMMAND",
+  UNSUPPORTED_ACTION: "UNSUPPORTED_ACTION",
+  PERMISSION_DENIED: "PERMISSION_DENIED",
+  UPSTREAM_UNAVAILABLE: "UPSTREAM_UNAVAILABLE",
+  UNAUTHENTICATED: "UNAUTHENTICATED",
+  UPSTREAM_URL_EMPTY: "UPSTREAM_URL_EMPTY",
+  FAILED_TO_SEND_PAYLOAD: "FAILED_TO_SEND_PAYLOAD",
+  UPSTREAM_WEBSOCKET_ERROR: "UPSTREAM_WEBSOCKET_ERROR",
+  INVALID_UPSTREAM_EVENT: "INVALID_UPSTREAM_EVENT",
 });
 
-const EXACT_PAYLOAD_EVENTS = new Set([
-  AGENT_TRANSPORT_EVENT.ERROR,
-  AGENT_TRANSPORT_EVENT.CHANNEL_ERROR,
-  AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-  AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
-  AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
+const TRANSPORT_ERROR_CODES = new Set(Object.values(AGENT_TRANSPORT_ERROR_CODE));
+const TRANSPORT_ERROR_FIELDS = new Set([
+  "protocolVersion",
+  "code",
+  "message",
+  "identity",
+  "occurredAt",
 ]);
 
 export function usesExactAgentTransportPayload(eventName) {
-  return EXACT_PAYLOAD_EVENTS.has(text(eventName));
+  return EXACT_PAYLOAD_VALIDATORS.has(eventName);
 }
 
 export const AGENT_CHANNEL_STATE = Object.freeze({
@@ -114,7 +126,7 @@ function collectChannelStateScopeErrors(channelState, errors) {
   }
 }
 
-export function validateAgentChannelState(channelState = {}) {
+export function validateAgentChannelState(channelState) {
   const errors = [];
   if (!isPlainObject(channelState)) {
     return { valid: false, errors: ["channel_state_not_object"] };
@@ -147,58 +159,30 @@ export const AGENT_COMMAND_RECEIPT_OUTCOME = Object.freeze({
 
 const COMMAND_RECEIPT_OUTCOMES = new Set(Object.values(AGENT_COMMAND_RECEIPT_OUTCOME));
 
-export function createAgentTransportError({
-  code = "",
-  message = "",
-  commandId = "",
-  identity = {},
-  occurredAt = new Date().toISOString(),
-} = {}) {
-  const errorEvent = {
-    protocolVersion: 1,
-    code: text(code),
-    message: text(message),
-    occurredAt: text(occurredAt),
-    ...(text(commandId) ? { commandId: text(commandId) } : {}),
-    identity: {
-      sessionId: text(identity.sessionId),
-      turnScopeId: text(identity.turnScopeId),
-      dialogProcessId: text(identity.dialogProcessId),
+export function createAgentTransportError({ code, message, identity, occurredAt }) {
+  return freezeValid(
+    {
+      protocolVersion: 1,
+      code,
+      message,
+      identity: projectCommandResultIdentity(identity),
+      occurredAt,
     },
-  };
-  const validation = validateAgentTransportError(errorEvent);
-  if (!validation.valid) throw new TypeError(validation.errors.join(","));
-  return Object.freeze(errorEvent);
+    validateAgentTransportError,
+  );
 }
 
-export function validateAgentTransportError(errorEvent = {}) {
-  const errors = [];
+export function validateAgentTransportError(errorEvent) {
   if (!isPlainObject(errorEvent)) {
     return { valid: false, errors: ["transport_error_not_object"] };
   }
-  const allowed = new Set([
-    "protocolVersion",
-    "code",
-    "message",
-    "commandId",
-    "identity",
-    "occurredAt",
-  ]);
-  for (const key of Object.keys(errorEvent)) {
-    if (!allowed.has(key)) errors.push(`unknown_transport_error_field:${key}`);
-  }
-  if (Number(errorEvent.protocolVersion) !== 1) errors.push("unsupported_transport_error_version");
-  if (!text(errorEvent.code)) errors.push("missing_transport_error_code");
-  if (!text(errorEvent.message)) errors.push("missing_transport_error_message");
-  if (!isPlainObject(errorEvent.identity)) {
-    errors.push("transport_error_identity_not_object");
-  } else {
-    const identityAllowed = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);
-    for (const key of Object.keys(errorEvent.identity)) {
-      if (!identityAllowed.has(key)) errors.push(`unknown_transport_error_identity_field:${key}`);
-    }
-  }
-  if (!text(errorEvent.occurredAt) || Number.isNaN(Date.parse(errorEvent.occurredAt))) {
+  const errors = [];
+  collectUnknownFields(errorEvent, TRANSPORT_ERROR_FIELDS, "unknown_transport_error_field", errors);
+  if (errorEvent.protocolVersion !== 1) errors.push("unsupported_transport_error_version");
+  if (!TRANSPORT_ERROR_CODES.has(errorEvent.code)) errors.push("invalid_transport_error_code");
+  if (!isCanonicalText(errorEvent.message)) errors.push("missing_transport_error_message");
+  validateCommandResultIdentity(errorEvent.identity, "transport_error", errors);
+  if (!isCanonicalText(errorEvent.occurredAt) || Number.isNaN(Date.parse(errorEvent.occurredAt))) {
     errors.push("invalid_transport_error_occurred_at");
   }
   return { valid: errors.length === 0, errors };
@@ -238,25 +222,32 @@ function projectCommandResultIdentity(identity) {
   );
 }
 
+function validateCommandResultIdentity(identity, prefix, errors) {
+  if (!isPlainObject(identity)) {
+    errors.push(`${prefix}_identity_not_object`);
+    return false;
+  }
+  collectUnknownFields(
+    identity,
+    COMMAND_RESULT_IDENTITY_FIELDS,
+    `unknown_${prefix}_identity_field`,
+    errors,
+  );
+  for (const key of Object.keys(identity)) {
+    if (!isCanonicalText(identity[key])) errors.push(`invalid_${prefix}_identity_field:${key}`);
+  }
+  return true;
+}
+
 function validateCommandResultCommon(result, prefix, errors) {
   if (result.protocolVersion !== 1) errors.push(`unsupported_${prefix}_version`);
   if (!isCanonicalText(result.commandId)) errors.push("missing_command_id");
   if (!isCanonicalText(result.commandType)) errors.push("missing_command_type");
-  if (!isPlainObject(result.identity)) {
-    errors.push(`${prefix}_identity_not_object`);
-  } else {
-    collectUnknownFields(
-      result.identity,
-      COMMAND_RESULT_IDENTITY_FIELDS,
-      `unknown_${prefix}_identity_field`,
-      errors,
-    );
-    for (const key of Object.keys(result.identity)) {
-      if (!isCanonicalText(result.identity[key])) {
-        errors.push(`invalid_${prefix}_identity_field:${key}`);
-      }
-    }
-    if (!isCanonicalText(result.identity.sessionId)) errors.push("missing_session_id");
+  if (
+    validateCommandResultIdentity(result.identity, prefix, errors) &&
+    !isCanonicalText(result.identity.sessionId)
+  ) {
+    errors.push("missing_session_id");
   }
   if (!isCanonicalText(result.occurredAt) || Number.isNaN(Date.parse(result.occurredAt))) {
     errors.push("invalid_occurred_at");
@@ -333,6 +324,20 @@ export function validateAgentCommandRejection(rejection) {
   return { valid: errors.length === 0, errors };
 }
 
+const EXACT_PAYLOAD_VALIDATORS = new Map([
+  [AGENT_TRANSPORT_EVENT.ERROR, validateAgentTransportError],
+  [AGENT_TRANSPORT_EVENT.CHANNEL_ERROR, validateAgentTransportError],
+  [AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, validateAgentCommandReceipt],
+  [AGENT_TRANSPORT_EVENT.COMMAND_REJECTED, validateAgentCommandRejection],
+  [AGENT_TRANSPORT_EVENT.CHANNEL_STATE, validateAgentChannelState],
+]);
+
+export function validateAgentTransportPayload(eventName, data) {
+  const validator = EXACT_PAYLOAD_VALIDATORS.get(eventName);
+  if (!validator) throw new TypeError(`no transport payload contract: ${eventName}`);
+  return validator(data);
+}
+
 const DIRECT_TRANSPORT_EVENTS = new Set([
   AGENT_TRANSPORT_EVENT.READY,
   AGENT_TRANSPORT_EVENT.ERROR,
@@ -352,7 +357,12 @@ function collectFrameErrors(frame, allowedFields) {
     if (!allowedFields.has(key)) errors.push(`unknown_transport_frame_field:${key}`);
   }
   if (!isCanonicalText(frame.event)) errors.push("missing_transport_event");
-  if (!isPlainObject(frame.data)) errors.push("invalid_transport_event_data");
+  if (!isPlainObject(frame.data)) {
+    errors.push("invalid_transport_event_data");
+    return errors;
+  }
+  const payloadValidator = EXACT_PAYLOAD_VALIDATORS.get(frame.event);
+  if (payloadValidator) errors.push(...payloadValidator(frame.data).errors);
   return errors;
 }
 

@@ -152,7 +152,6 @@ export function createReconnectCoordinator({
           replayFailureCount: reconnectReplayFailures.length,
           activeTurnAfter: summarizeStateMachineTurn(replayRuntime),
         }));
-        if (typeof chatWebSocketClient.requestJson !== "function") return;
         const sessionId = text(activeSession.value?.sessionId);
         const currentTurn = resolveSessionTurnRuntime(
           turnRuntimeRegistry.value,

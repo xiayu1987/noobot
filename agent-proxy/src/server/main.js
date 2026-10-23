@@ -11,7 +11,8 @@ import { randomUUID } from "node:crypto";
 import { config } from "../shared/config.js";
 import { ChannelManager } from "../channel/channel-manager.js";
 import { WsRouter } from "../websocket/ws-router.js";
-import { AGENT_PROXY_CLOSE_REASON, AGENT_PROXY_ERROR } from "../shared/constants.js";
+import { initializeDownstreamSocketState } from "../websocket/downstream-socket-state.js";
+import { AGENT_PROXY_HTTP_ERROR_CODE } from "../shared/constants.js";
 import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/session-protocol";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import {
@@ -23,7 +24,7 @@ import {
 import { interceptConnectRequest } from "../http/connect-interceptor.js";
 import { bridgeDuplexStreams } from "../http/duplex-stream-bridge.js";
 import { createSessionLogClient } from "../websocket/session-log-client.js";
-import { parseRequestPathname, parseRequestQuery, normalizeApiKey } from "../shared/utils.js";
+import { parseRequestPathname, parseRequestQuery } from "../shared/utils.js";
 import {
   createFixedWindowRateLimiter,
   getClientIp,
@@ -34,6 +35,7 @@ import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 import { writeAgentProxyHttpServerListenStartedEvent } from "../runtime-events/startup-events.js";
 import { writeAgentProxyDataPlaneMetricsEvent } from "../runtime-events/ws-runtime-events.js";
 import { DownstreamConnectionRegistry } from "../websocket/downstream-connection-registry.js";
+import { authenticateDownstreamSocket } from "../websocket/connection-auth.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -305,11 +307,19 @@ const httpServer = http.createServer((request, response) => {
   const requestOrigin = text(request?.headers?.origin);
 
   if (!isIpTrusted(clientIp, config.trustedIps)) {
-    writeProxyError(response, 403, AGENT_PROXY_ERROR.CLIENT_IP_NOT_ALLOWED, locale);
+    writeProxyError(response, {
+      statusCode: 403,
+      code: AGENT_PROXY_HTTP_ERROR_CODE.CLIENT_IP_NOT_ALLOWED,
+      locale,
+    });
     return;
   }
   if (requestOrigin && !isOriginTrusted(requestOrigin, config.trustedOrigins)) {
-    writeProxyError(response, 403, AGENT_PROXY_ERROR.ORIGIN_NOT_ALLOWED, locale);
+    writeProxyError(response, {
+      statusCode: 403,
+      code: AGENT_PROXY_HTTP_ERROR_CODE.ORIGIN_NOT_ALLOWED,
+      locale,
+    });
     return;
   }
   if (config.httpRateLimitEnabled) {
@@ -350,12 +360,12 @@ const httpServer = http.createServer((request, response) => {
 
   if (config.connectPaths.includes(pathname)) {
     interceptConnectRequest(request, response, channelManager).catch((error) => {
-      writeProxyError(
-        response,
-        500,
-        error?.message || AGENT_PROXY_ERROR.CONNECT_INTERCEPT_ERROR,
+      writeProxyError(response, {
+        statusCode: 500,
+        code: AGENT_PROXY_HTTP_ERROR_CODE.CONNECT_INTERCEPT_ERROR,
         locale,
-      );
+        detail: error.message,
+      });
     });
     return;
   }
@@ -424,48 +434,33 @@ httpServer.on("upgrade", (request, socket, head) => {
     return;
   }
   websocketServer.handleUpgrade(request, socket, head, (webSocket) => {
-    webSocket.__agentProxySocketId = randomUUID();
-    webSocket.__agentProxyChannelKeys = new Set();
-    webSocket.__agentProxyLastSequenceByChannel = {};
+    initializeDownstreamSocketState(webSocket);
     websocketServer.emit("connection", webSocket, request);
   });
 });
 
 websocketServer.on("connection", (socket, request) => {
   downstreamConnections.register(socket, {
-    connectionId: socket.__agentProxySocketId,
     onFinalize: () => {
-      channelManager.commandRegistry.cancelRequester(socket);
-      channelManager.detachSocketFromAllChannels(socket);
+      channelManager.releaseSocket(socket);
     },
   });
   const requestInfo = parseRequestQuery(request);
-  const connectionApiKey = normalizeApiKey(requestInfo.apiKey);
-  const connectionLocale = requestInfo.locale;
-  socket.__agentProxyApiKey = connectionApiKey;
-  socket.__agentProxyLocale = connectionLocale;
-  const socketIdentity = channelManager.resolveApiKeyIdentity(connectionApiKey);
-  socket.__agentProxyUserId = text(socketIdentity?.userId);
+  const connectionApiKey = requestInfo.apiKey;
   logAgentProxyEvent(connectionApiKey, {
     category: "agent-proxy",
     event: "agentProxy.chat.connected",
     data: { pathname: requestInfo.pathname, socketId: socket.__agentProxySocketId },
   });
+  const authenticated = authenticateDownstreamSocket({
+    socket,
+    requestInfo,
+    channelManager,
+    finalize: (target, reason) => downstreamConnections.finalize(target, reason),
+  });
+  if (!authenticated) return;
 
-  if (!connectionApiKey) {
-    channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.MISSING_APIKEY);
-    try {
-      socket.close(1008, AGENT_PROXY_CLOSE_REASON.MISSING_APIKEY);
-    } catch (error) {
-      agentProxyLogDiagnostic("missing api key socket close failed", {
-        error: error?.message || String(error),
-      });
-    }
-    downstreamConnections.finalize(socket, "missing_apikey");
-    return;
-  }
-
-  wsRouter.handle(socket, connectionApiKey, connectionLocale);
+  wsRouter.handle(socket);
   channelManager.sendSocketEvent(socket, {
     event: AGENT_TRANSPORT_EVENT.READY,
     data: { serverInstanceId, protocolVersion: TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION },

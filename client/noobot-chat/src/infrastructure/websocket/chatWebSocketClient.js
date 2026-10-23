@@ -39,7 +39,6 @@ import {
   isCommandFailureResult,
   isCommandResultForPayload,
   isEventForStreamScope,
-  normalizeErrorMessage,
   normalizeTrimmedString,
 } from "./chatWebSocketProtocol.js";
 import { isFunction } from "@noobot/shared/value";
@@ -676,12 +675,10 @@ export function createChatWebSocketClient({
 
           if (
             event === AGENT_TRANSPORT_EVENT.ERROR &&
-            data?.code === AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED
+            data.code === AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED
           ) {
-            const error = new Error(
-              normalizeErrorMessage(data?.message, translateText("infra.reconnectFailed")),
-            );
-            error.code = normalizeTrimmedString(data?.code);
+            const error = new Error(data.message);
+            error.code = data.code;
             failReconnect(error, { rejectRequests: false });
             return;
           }

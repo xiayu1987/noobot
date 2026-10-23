@@ -138,7 +138,7 @@ function routeAuthoritativeRuntimeEvent({
 export function createSendStreamEventHandler(context) {
   const {
     activeSession,
-    applyConversationStateFromEvent,
+    applyConversationState,
     applyTurnLifecycleEnvelope,
     applyWorkflowRuntimeEvent,
     botMessage: botMsg,
@@ -195,7 +195,7 @@ export function createSendStreamEventHandler(context) {
     }));
 
     if (event === StreamEventEnum.CHANNEL_STATE) {
-      applyConversationStateFromEvent(event, data);
+      applyConversationState(data);
       return;
     }
     if (

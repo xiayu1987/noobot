@@ -6,7 +6,8 @@
 import { config } from "../../shared/config.js";
 import {
   CHANNEL_RETENTION_PHASE,
-  CHANNEL_STATUS,
+  CHANNEL_ACTIVITY_PHASE,
+  UPSTREAM_TRANSPORT_PHASE,
   UPSTREAM_CLOSE_REASON,
 } from "../../shared/constants.js";
 import { nowMs } from "../../shared/utils.js";
@@ -17,48 +18,22 @@ class CleanupMethods {
     for (const [channelKey, channel] of this.channelStore.entries()) {
       const canCleanupTerminal =
         channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED &&
-        Number(channel.retention.cleanupAfterMs || 0) > 0 &&
-        currentMs >= Number(channel.retention.cleanupAfterMs || 0);
+        currentMs >= channel.retention.cleanupAfterMs;
       const canCleanupIdle =
-        channel.transport.phase === CHANNEL_STATUS.IDLE &&
-        channel.activity.phase === CHANNEL_STATUS.IDLE &&
+        channel.transport.phase === UPSTREAM_TRANSPORT_PHASE.IDLE &&
+        channel.activity.phase === CHANNEL_ACTIVITY_PHASE.IDLE &&
         !channel.subscribers.size &&
-        currentMs - Number(channel.updatedAtMs || currentMs) > config.channelRetentionMs;
+        currentMs - channel.updatedAtMs > config.channelRetentionMs;
       if (!canCleanupTerminal && !canCleanupIdle) continue;
       this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLEANUP);
-      for (const [requestId, mappedEntry] of this.requestChannelMap.entries()) {
-        const mappedChannelKey =
-          typeof mappedEntry === "object" ? mappedEntry.channelKey : mappedEntry;
-        if (mappedChannelKey === channelKey) {
-          this.requestChannelMap.delete(requestId);
-        }
-      }
       this.deleteChannel(channelKey);
     }
     for (const [apiKey, identityItem] of this.apiKeyIdentityStore.entries()) {
-      const updatedAtMs = Number(identityItem?.updatedAtMs || 0);
-      if (!updatedAtMs || currentMs - updatedAtMs > config.apiKeyRetentionMs) {
+      if (currentMs - identityItem.updatedAtMs > config.apiKeyRetentionMs) {
         this.apiKeyIdentityStore.delete(apiKey);
       }
     }
-    for (const [requestId, mappedEntry] of this.requestChannelMap.entries()) {
-      const createdAtMs =
-        typeof mappedEntry === "object" ? Number(mappedEntry.createdAtMs || 0) : 0;
-      const mappedChannelKey =
-        typeof mappedEntry === "object" ? mappedEntry.channelKey : mappedEntry;
-      const mappedChannel = this.channelStore.get(mappedChannelKey);
-      if (mappedChannel?.pendingInteractionRequests?.has(requestId)) {
-        continue;
-      }
-      if (!createdAtMs || currentMs - createdAtMs > config.requestIdTtlMs) {
-        this.requestChannelMap.delete(requestId);
-      }
-    }
-    this.commandRegistry.cleanup({
-      channelExists: (channelKey) => this.channelStore.has(channelKey),
-      interactionPending: (channelKey, requestId) =>
-        this.channelStore.get(channelKey)?.pendingInteractionRequests?.has(requestId) === true,
-    });
+    this.commandRegistry.cleanup((channelKey) => this.channelStore.has(channelKey));
   }
 }
 

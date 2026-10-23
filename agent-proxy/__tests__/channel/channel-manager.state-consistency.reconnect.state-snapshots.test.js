@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { CHANNEL_ACTIVITY_PHASE } from "../../src/shared/constants.js";
+import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
@@ -22,12 +24,23 @@ import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 test("reconnect state should be consistent for all same-user clients across channel statuses", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const statusMatrix = [
-    { status: "idle" },
-    { status: "connecting" },
-    { status: "running" },
-    { status: "done" },
-    { status: "user_stopped" },
-    { status: "error" },
+    { status: "idle", apply: () => {} },
+    {
+      status: "running",
+      apply: (channel) => (channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING),
+    },
+    {
+      status: "completed",
+      apply: (channel) => manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.COMPLETED),
+    },
+    {
+      status: "user_stopped",
+      apply: (channel) => manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.USER_STOPPED),
+    },
+    {
+      status: "error",
+      apply: (channel) => manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.ERROR),
+    },
   ];
 
   for (const item of statusMatrix) {
@@ -35,8 +48,6 @@ test("reconnect state should be consistent for all same-user clients across chan
 
     const channelKey = createChannelKey({ userId: "user-1", sessionId });
     const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId });
-    channel.ownerApiKey = "api-key-1";
-    channel.ownerUserId = "user-1";
     manager.pushChannelEvent(
       channel,
       MESSAGE_EVENT_WIRE_EVENT,
@@ -46,7 +57,7 @@ test("reconnect state should be consistent for all same-user clients across chan
         text: item.status,
       }),
     );
-    channel.status = item.status;
+    item.apply(channel);
   }
 
   const clientA = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -93,9 +104,7 @@ test("reconnect state should be isolated between different users", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   manager.pushChannelEvent(
     channel,
     MESSAGE_EVENT_WIRE_EVENT,
@@ -119,9 +128,7 @@ test("reconnect should include pending interactions without a conversationStates
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "running";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
+  channel.activity.phase = CHANNEL_ACTIVITY_PHASE.RUNNING;
   manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
   manager.pushChannelEvent(
     channel,
@@ -164,8 +171,6 @@ test("reconnect preserves cached authoritative states without synthesizing curre
     sessionId: "session-current-run",
     turnScopeId: "turn-current",
   });
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   manager.updateConversationState(channel, {
     sessionId: "session-current-run",
     dialogProcessId: "dp-old",
@@ -184,7 +189,7 @@ test("reconnect preserves cached authoritative states without synthesizing curre
     sourceEvent: "turn.completed",
     seq: 20,
   });
-  channel.status = "done";
+  assert.equal(manager.markChannelTerminal(channel, AGENT_CHANNEL_STATE.COMPLETED), true);
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(
@@ -207,9 +212,6 @@ test("reconnect does not expose the removed data-plane cache-expiry branch", () 
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
-  channel.status = "connecting";
-  channel.ownerApiKey = "api-key-1";
-  channel.ownerUserId = "user-1";
   manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });

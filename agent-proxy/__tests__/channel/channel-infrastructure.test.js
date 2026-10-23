@@ -6,8 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ChannelEventJournal } from "../../src/channel/channel-event-journal.js";
-import { CommandRegistry } from "../../src/channel/command-registry.js";
+import { CommandRegistry, PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { initializeDownstreamSocketState } from "../../src/websocket/downstream-socket-state.js";
 import { config } from "../../src/shared/config.js";
 import {
   createTurnLifecycleEnvelope,
@@ -59,97 +60,99 @@ test("channel event journal is the bounded ordered replay source", () => {
   );
 });
 
-test("command registry cancels requester commands and expires routes", () => {
-  let currentMs = 0;
-  const requester = {};
-  const registry = new CommandRegistry({ now: () => currentMs, defaultTtlMs: 100 });
-  registry.register("snapshot-1", {
-    channelKey: "channel-1",
-    commandType: "turn_snapshot",
-    requester,
-  });
-  registry.registerRoute("interaction-1", { channelKey: "channel-1" });
-  assert.equal(registry.cancelRequester(requester), 1);
-  currentMs = 100;
-  registry.cleanup({ channelExists: () => true });
-  assert.equal(registry.routes.has("interaction-1"), false);
-});
-
-test("command registry cancels reconnect snapshot commands by nested socket requester", () => {
-  const registry = new CommandRegistry();
-  const socket = {};
-  let resolution = null;
-  registry.register("snapshot-reconnect", {
-    channelKey: "channel-1",
-    commandType: "turn_snapshot",
-    requester: {
-      socket,
-      resolve: (result) => {
-        resolution = result;
-      },
-    },
-  });
-
-  assert.equal(registry.cancelRequester(socket), 1);
-  assert.deepEqual(resolution, { ok: false, reason: "requester_disconnected" });
-  assert.equal(registry.get("snapshot-reconnect"), null);
-});
-
-test("command registry records why each command was removed", () => {
+function createRegistry(overrides = {}) {
   let currentMs = 1000;
   const removals = [];
   const registry = new CommandRegistry({
     now: () => currentMs,
-    defaultTtlMs: 100,
-    maxRemovals: 3,
+    ttlMs: 100,
     onRemove: (removal) => removals.push(removal),
+    maxRemovals: 3,
+    ...overrides,
   });
-  const socket = {};
-  const register = (id, channelKey = "channel-1") =>
-    registry.register(id, { channelKey, commandType: "execution_query", requester: socket });
-  register("q-delivered");
-  register("q-cancelled");
-  register("q-expired", "channel-2");
-  register("q-missing", "channel-gone");
-  currentMs = 1040;
-  assert.equal(registry.delete("q-delivered", "delivered"), true);
-  assert.equal(registry.delete("q-unknown", "delivered"), false);
-  assert.equal(registry.cancelRequester(socket), 3);
+  return { registry, removals, advance: (ms) => (currentMs += ms) };
+}
 
-  register("q-expired", "channel-2");
-  register("q-missing", "channel-gone");
-  currentMs = 1200;
-  registry.cleanup({ channelExists: (key) => key !== "channel-gone" });
+const EXECUTION = { channelKey: "channel-1", kind: PENDING_COMMAND_KIND.EXECUTION_QUERY };
+
+function registerExecution(registry, commandId, socket, channelKey = "channel-1") {
+  return registry.register(commandId, {
+    channelKey,
+    kind: PENDING_COMMAND_KIND.EXECUTION_QUERY,
+    socket,
+    settle: () => {},
+  });
+}
+
+test("command registry rejects non-canonical, unknown-kind and duplicate registrations", () => {
+  const { registry } = createRegistry();
+  const socket = {};
+  assert.throws(() => registerExecution(registry, " q-1", socket), TypeError);
+  assert.throws(
+    () => registry.register("q-1", { channelKey: "channel-1", kind: "other", socket, settle() {} }),
+    TypeError,
+  );
+  registerExecution(registry, "q-1", socket);
+  assert.throws(() => registerExecution(registry, "q-1", socket), TypeError);
+});
+
+test("command registry take only releases a record matching channel and kind", () => {
+  const { registry, removals } = createRegistry();
+  const socket = {};
+  registerExecution(registry, "q-1", socket);
+  assert.equal(registry.take("q-1", { ...EXECUTION, channelKey: "channel-2" }, "delivered"), null);
+  assert.equal(
+    registry.take("q-1", { ...EXECUTION, kind: PENDING_COMMAND_KIND.TURN_SNAPSHOT }, "delivered"),
+    null,
+  );
+  assert.equal(registry.take("q-1", EXECUTION, "delivered").socket, socket);
+  assert.equal(registry.take("q-1", EXECUTION, "delivered"), null);
+  assert.deepEqual(
+    removals.map(({ commandId, reason }) => [commandId, reason]),
+    [["q-1", "delivered"]],
+  );
+});
+
+test("command registry records why each command was removed", () => {
+  const { registry, removals, advance } = createRegistry();
+  const socket = {};
+  registerExecution(registry, "q-delivered", socket);
+  registerExecution(registry, "q-cancelled", socket);
+  registerExecution(registry, "q-other", {});
+  advance(40);
+  registry.take("q-delivered", EXECUTION, "delivered");
+  assert.equal(registry.cancelSocket(socket), 1);
+
+  registerExecution(registry, "q-expired", socket, "channel-2");
+  registerExecution(registry, "q-missing", socket, "channel-gone");
+  advance(100);
+  registry.cleanup((key) => key !== "channel-gone");
 
   assert.deepEqual(
     removals.map(({ commandId, reason }) => [commandId, reason]),
     [
       ["q-delivered", "delivered"],
       ["q-cancelled", "requester_disconnected"],
-      ["q-expired", "requester_disconnected"],
-      ["q-missing", "requester_disconnected"],
+      ["q-other", "ttl_expired"],
       ["q-expired", "ttl_expired"],
       ["q-missing", "channel_missing"],
     ],
   );
   assert.equal(removals[0].registeredForMs, 40);
-  assert.equal(removals[4].registeredForMs, 160);
+  assert.equal(removals[3].registeredForMs, 100);
   assert.equal(registry.lastRemoval("q-expired").reason, "ttl_expired");
   assert.equal(registry.removals.size, 3);
   assert.equal(registry.lastRemoval("q-delivered"), null);
 });
 
-test("command registry removal callback failures do not interrupt removal", () => {
-  const registry = new CommandRegistry({
+test("command registry surfaces removal callback contract failures", () => {
+  const { registry } = createRegistry({
     onRemove: () => {
-      throw new Error("log sink down");
+      throw new Error("invalid removal log");
     },
   });
-  const socket = {};
-  registry.register("q-1", { requester: socket });
-  registry.register("q-2", { requester: socket });
-  assert.equal(registry.cancelRequester(socket), 2);
-  assert.equal(registry.commands.size, 0);
+  registerExecution(registry, "q-1", {});
+  assert.throws(() => registry.take("q-1", EXECUTION, "delivered"), /invalid removal log/);
 });
 
 test("command removal session log events satisfy the runtime event schema", () => {
@@ -162,12 +165,12 @@ test("command removal session log events satisfy the runtime event schema", () =
   );
   channel.apiKey = "key-1";
   logged.length = 0;
-  const register = (id) =>
-    manager.commandRegistry.register(id, { channelKey: channel.key, requester: {} });
-  register("q-delivered");
-  register("q-orphaned");
-  manager.commandRegistry.delete("q-delivered", "delivered");
-  manager.commandRegistry.delete("q-orphaned", "forward_failed");
+  const pending = { channelKey: channel.key, kind: PENDING_COMMAND_KIND.EXECUTION_QUERY };
+  for (const id of ["q-delivered", "q-orphaned"]) {
+    manager.commandRegistry.register(id, { ...pending, socket: {}, settle: () => {} });
+  }
+  manager.commandRegistry.take("q-delivered", pending, "delivered");
+  manager.commandRegistry.take("q-orphaned", pending, "forward_failed");
 
   assert.equal(logged.length, 1);
   const record = normalizeRuntimeEventEnvelope({
@@ -207,15 +210,17 @@ test("subscriber delivery closes a slow consumer at the backpressure boundary", 
 
 test("authoritative lifecycle delivery remains pending until the browser receipt", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
-  const channel = channelStub("session-1");
-  const socket = {
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, { sessionId: "session-1", userId: "user-1" });
+  const socket = initializeDownstreamSocketState({
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
     send(raw) {
       this.sent.push(JSON.parse(raw));
     },
-  };
+  });
+  manager.attachSubscriber(channel, socket, { sendStateSnapshot: false });
   const lifecycle = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-1",
@@ -239,7 +244,7 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
     "sent",
   );
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-1"), true);
-  assert.equal(socket.__agentProxyLastSequenceByChannel?.[channel.key], undefined);
+  assert.equal(socket.__agentProxyLastSequenceByChannel[channel.key], 0);
 
   assert.equal(manager._retryPendingLifecycleDelivery(socket, "event-1"), true);
   assert.equal(socket.sent.length, 2);
@@ -260,14 +265,14 @@ test("newer lifecycle state supersedes the in-flight state and is delivered imme
   const channel = channelStub("session-ordered");
   const logged = [];
   manager.logSessionEvent = (_channel, entry) => logged.push(entry);
-  const socket = {
+  const socket = initializeDownstreamSocketState({
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
     send(raw) {
       this.sent.push(JSON.parse(raw));
     },
-  };
+  });
   const createLifecycle = ({ eventType, eventId, sequence, phase, state }) =>
     createTurnLifecycleEnvelope({
       eventType,
@@ -342,14 +347,14 @@ test("newer lifecycle state supersedes the in-flight state and is delivered imme
 test("older lifecycle state is superseded by the in-flight newer state and not sent", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
   const channel = channelStub("session-stale");
-  const socket = {
+  const socket = initializeDownstreamSocketState({
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
     send(raw) {
       this.sent.push(JSON.parse(raw));
     },
-  };
+  });
   const base = {
     commandId: "command-stale",
     sessionId: "session-stale",
@@ -401,12 +406,10 @@ test("older lifecycle state is superseded by the in-flight newer state and not s
 test("detaching a subscriber clears lifecycle receipt timers", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   let timerCleared = false;
-  const socket = {
-    __agentProxyChannelKeys: new Set(),
-    __agentProxyPendingLifecycleDeliveries: new Map([
-      ["event-1", { timer: { [Symbol.toPrimitive]: () => 1 } }],
-    ]),
-  };
+  const socket = initializeDownstreamSocketState({});
+  socket.__agentProxyPendingLifecycleDeliveries.set("event-1", {
+    timer: { [Symbol.toPrimitive]: () => 1 },
+  });
   const originalClearTimeout = globalThis.clearTimeout;
   globalThis.clearTimeout = () => {
     timerCleared = true;
@@ -424,14 +427,14 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
   const manager = new ChannelManager({ OPEN: 1 });
   const channel = channelStub("session-timeout");
   const closeCalls = [];
-  const socket = {
+  const socket = initializeDownstreamSocketState({
     readyState: 1,
     bufferedAmount: 0,
     send() {},
     close(code, reason) {
       closeCalls.push({ code, reason });
     },
-  };
+  });
   const lifecycle = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.COMPLETED,
     eventId: "event-timeout",
@@ -467,7 +470,7 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
   const logged = [];
   manager.logSessionEvent = (_channel, entry) => logged.push(entry);
   const closeCalls = [];
-  const socket = {
+  const socket = initializeDownstreamSocketState({
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
@@ -477,7 +480,7 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
     close(code, reason) {
       closeCalls.push({ code, reason });
     },
-  };
+  });
   const base = {
     commandId: "command-drop",
     sessionId: "session-drop",

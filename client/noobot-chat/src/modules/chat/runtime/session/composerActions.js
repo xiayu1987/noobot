@@ -43,7 +43,7 @@ export function createComposerActions({
       interaction: { message },
     });
     try {
-      await requestJson(command);
+      await requestJson(command, { expectedEvents: [] });
       if (text(input.value) === message) input.value = "";
       return true;
     } catch (error) {
