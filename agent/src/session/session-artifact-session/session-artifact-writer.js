@@ -196,7 +196,7 @@ async function commitTurnJournal({
     return { committedBytes: await replaceJournalRecords(file, []), recordCount: 0 };
   }
   return {
-    committedBytes: await appendJournal(file, records, previous?.committedBytes || 0),
+    committedBytes: await appendJournal(file, records, previous ? previous.committedBytes : 0),
     recordCount: (Number(previous?.recordCount) || 0) + records.length,
   };
 }

@@ -7,6 +7,7 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
+import { assertTurnJournalBoundary } from "@noobot/session-repair";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import { RUNTIME_EVENTS_DIR } from "@noobot/runtime-events";
 import {
@@ -154,13 +155,10 @@ async function upgradeTurnJournal({ sessionDir, turn, hashMap, stage }) {
   try {
     raw = await readFile(filePath);
   } catch (error) {
-    if (error?.code === "ENOENT" && Number(turn.committedBytes || 0) === 0) return null;
+    if (error?.code === "ENOENT" && turn.committedBytes === 0) return null;
     throw error;
   }
-  const committedBytes = Number(turn.committedBytes || 0);
-  if (raw.length < committedBytes) {
-    throw upgradeError("journal_shorter_than_committed", { filePath, committedBytes });
-  }
+  const committedBytes = assertTurnJournalBoundary(filePath, raw.length, turn.committedBytes);
   const records = parseJournalLines(raw.subarray(0, committedBytes).toString("utf8"), filePath);
   const result = upgradeJournalRecords(records, filePath, hashMap);
   if (!result.upgraded) return null;

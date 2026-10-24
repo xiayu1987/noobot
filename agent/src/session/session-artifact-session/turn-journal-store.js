@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
-import { SESSION_REPAIR_ERROR_CODE } from "@noobot/session-repair";
+import { SESSION_ARTIFACT_SCHEMA_VERSION, SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { SESSION_REPAIR_ERROR_CODE, assertTurnJournalBoundary } from "@noobot/session-repair";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
@@ -155,15 +155,15 @@ export async function readJournalRecords(file, committedBytes) {
   try {
     raw = await readFile(file);
   } catch (error) {
-    if (error?.code === "ENOENT" && Number(committedBytes || 0) === 0) return [];
+    if (error?.code === "ENOENT" && committedBytes === 0) return [];
     if (error?.code === "ENOENT") {
       const failure = new Error(`session turn journal is missing: ${file}`);
-      failure.code = "SESSION_TURN_ARTIFACT_MISSING";
+      failure.code = SESSION_REPAIR_ERROR_CODE.TURN_ARTIFACT_MISSING;
       throw failure;
     }
     throw error;
   }
-  const limit = Math.max(0, Math.min(raw.length, Number(committedBytes) || 0));
+  const limit = assertTurnJournalBoundary(file, raw.length, committedBytes);
   const records = [];
   for (const line of raw.subarray(0, limit).toString("utf8").split("\n")) {
     if (!line.trim()) continue;
@@ -192,9 +192,13 @@ function materializeJournal(records, order = [], baseMessages = []) {
     if (record.op === "remove") byUid.delete(uid);
     else if (record.op === "upsert" && isObjectLike(record.message)) byUid.set(uid, record.message);
   }
-  const ordered = (Array.isArray(order) ? order : [])
-    .map((uid) => byUid.get(text(uid)))
-    .filter(Boolean);
+  const ordered = (Array.isArray(order) ? order : []).map((uid) => {
+    const message = byUid.get(text(uid));
+    if (message) return message;
+    const error = new Error(`turn journal is missing an ordered message: ${text(uid)}`);
+    error.code = SESSION_ERROR_CODE.TURN_JOURNAL_MESSAGE_MISSING;
+    throw error;
+  });
   const remaining = [...byUid.entries()]
     .filter(([uid]) => !order.includes(uid))
     .map(([, message]) => message);
@@ -211,7 +215,7 @@ export async function appendJournal(file, records, committedBytes = 0) {
   const handle = await open(file, "a+");
   try {
     const currentSize = (await handle.stat()).size;
-    const committed = Math.max(0, Math.min(currentSize, Number(committedBytes) || 0));
+    const committed = assertTurnJournalBoundary(file, currentSize, committedBytes);
     if (currentSize !== committed) await handle.truncate(committed);
     if (!records.length) return committed;
     const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");

@@ -20,7 +20,7 @@ import {
   writeArtifactIndex,
 } from "./session-artifact-execution-logs.js";
 import { resolveTurnArtifactPath, readRecentSessionTurns } from "./session-artifact-session.js";
-import { SESSION_REPAIR_ERROR_CODE, reconcileExecutionSegmentIndex } from "@noobot/session-repair";
+import { assertTurnJournalBoundary, reconcileExecutionSegmentIndex } from "@noobot/session-repair";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 
 function diagnostic(code, message, extra = {}) {
@@ -62,11 +62,7 @@ export async function inspectSessionArtifacts({ sessionDir = "" } = {}) {
       referenced.add(path.basename(resolved));
       if (Number(manifest.schemaVersion) === SESSION_ARTIFACT_SCHEMA_VERSION) {
         const raw = await readFile(resolved);
-        if (raw.length < Number(item?.committedBytes || 0))
-          throw Object.assign(
-            new Error(`turn journal is shorter than committed watermark: ${file}`),
-            { code: SESSION_REPAIR_ERROR_CODE.TURN_JOURNAL_TRUNCATED },
-          );
+        assertTurnJournalBoundary(file, raw.length, item?.committedBytes);
       } else await readJsonArtifactFile(resolved);
       result.turns.referenced += 1;
     } catch (error) {

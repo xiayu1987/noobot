@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import { readSessionForProtocolRepair } from "@noobot/session-repair";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
 import { readJsonWithStorage } from "./artifact-json-io.js";
@@ -32,7 +33,11 @@ async function readCanonicalManifest({ storageService, sessionDir }) {
   return session;
 }
 
-async function materializeOrderedMessages(sessionDir, session, turnItems) {
+function sessionMessageReferences(session) {
+  return Array.isArray(session.messageOrder) ? session.messageOrder : [];
+}
+
+async function materializeOrderedMessages(sessionDir, turnItems, references) {
   const messagesByUid = new Map();
   for (const item of turnItems) {
     const records = await readJournalRecords(
@@ -43,16 +48,28 @@ async function materializeOrderedMessages(sessionDir, session, turnItems) {
     for (const message of materializeTurnJournal(records, item.messageOrder, summarySnapshots))
       messagesByUid.set(message.messageUid, message);
   }
-  return (Array.isArray(session.messageOrder) ? session.messageOrder : [])
-    .map((reference) => messagesByUid.get(text(reference?.messageUid)))
-    .filter(Boolean);
+  return references.map((reference) => {
+    const messageUid = text(reference?.messageUid);
+    const message = messagesByUid.get(messageUid);
+    if (message) return message;
+    const error = new Error(`session message order references a missing message: ${messageUid}`);
+    error.code = SESSION_ERROR_CODE.MESSAGE_ORDER_MESSAGE_MISSING;
+    throw error;
+  });
 }
 
 export async function readSessionArtifact({ storageService = null, sessionDir = "" } = {}) {
   const session = await readCanonicalManifest({ storageService, sessionDir });
   if (!session) return null;
   const turnItems = Array.isArray(session.turnOrder) ? session.turnOrder : [];
-  return { ...session, messages: await materializeOrderedMessages(sessionDir, session, turnItems) };
+  return {
+    ...session,
+    messages: await materializeOrderedMessages(
+      sessionDir,
+      turnItems,
+      sessionMessageReferences(session),
+    ),
+  };
 }
 
 export async function readSessionTurnView({
@@ -71,10 +88,19 @@ export async function readSessionTurnView({
       (lastMessageUid && item?.messageOrder?.includes(lastMessageUid)) ||
       turnArtifactRequiresRewrite(session, item),
   );
+  const viewMessageUids = new Set(
+    turnItems.flatMap((item) => (Array.isArray(item.messageOrder) ? item.messageOrder : [])),
+  );
   return {
     session: {
       ...session,
-      messages: await materializeOrderedMessages(sessionDir, session, turnItems),
+      messages: await materializeOrderedMessages(
+        sessionDir,
+        turnItems,
+        sessionMessageReferences(session).filter((reference) =>
+          viewMessageUids.has(text(reference?.messageUid)),
+        ),
+      ),
     },
     turnScopeIds: turnItems.map((item) => text(item.turnScopeId)),
   };

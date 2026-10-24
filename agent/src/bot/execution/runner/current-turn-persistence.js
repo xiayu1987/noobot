@@ -5,6 +5,7 @@
  */
 import { emitEvent } from "../../../events/index.js";
 import { text } from "@noobot/shared/value";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 
 function checkpointKey(message = {}, index = 0) {
   const messageUid = text(message?.messageUid);
@@ -50,6 +51,17 @@ function projectActivityDurability(activityMessages, durableMessages) {
     );
     return { messageUid, expectedEventIds, durableEventIds, missingEventIds };
   });
+}
+
+function assertMessagesDurable(messages, durableUids) {
+  const missing = messages
+    .map((message) => text(message.messageUid))
+    .filter((messageUid) => !durableUids.has(messageUid));
+  if (missing.length === 0) return;
+  const error = new Error(`turn checkpoint messages were not persisted: ${missing.join(",")}`);
+  error.code = SESSION_ERROR_CODE.TURN_MESSAGE_NOT_PERSISTED;
+  error.missingMessageUids = missing;
+  throw error;
 }
 
 function projectPersistedMessage(message = {}) {
@@ -98,6 +110,7 @@ export function bindCurrentTurnPersistence({
   let batchDepth = 0;
   let persistenceRequested = false;
   const persistedFingerprints = new Map();
+  const durableMessageUids = new Set();
 
   const enqueuePersistence = () => {
     const persist = async () => {
@@ -110,9 +123,10 @@ export function bindCurrentTurnPersistence({
       );
       const messagesToPersist = changedEntries.map(({ message }) => message);
       if (!messagesToPersist.length) {
-        dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
-          .map((item = {}) => text(item.messageUid))
-          .filter(Boolean);
+        assertMessagesDurable(messages, durableMessageUids);
+        dispatchRuntime.timelineCheckpointPersistedMessageUids = messages.map((item = {}) =>
+          text(item.messageUid),
+        );
         return;
       }
       const persistedMessages = await appendAgentMessages({
@@ -125,6 +139,8 @@ export function bindCurrentTurnPersistence({
         eventListener,
         persistenceScope,
       });
+      for (const message of persistedMessages) durableMessageUids.add(text(message.messageUid));
+      assertMessagesDurable(messages, durableMessageUids);
       const activityMessages = messagesToPersist.filter(
         (item = {}) =>
           text(item.messageUid) &&
@@ -153,9 +169,9 @@ export function bindCurrentTurnPersistence({
       for (const { key, fingerprint } of changedEntries) {
         if (fingerprint !== null) persistedFingerprints.set(key, fingerprint);
       }
-      dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
-        .map((item = {}) => text(item.messageUid))
-        .filter(Boolean);
+      dispatchRuntime.timelineCheckpointPersistedMessageUids = messages.map((item = {}) =>
+        text(item.messageUid),
+      );
       emitEvent(eventListener, "timeline_checkpoint_verified", {
         sessionId,
         dialogProcessId,

@@ -486,6 +486,41 @@ workspace/<userId>/runtime/plugin-data/harness/runs/<dialogProcessId>/
 
 断言：工具结果与权威插件产物一致；Session 产物区只渲染一张 Three.js 动画卡片，角色管理面板不得重复渲染；移动端可见且刷新后从 Session 恢复。
 
+### PBE-049：停止并删除后再次发送
+
+步骤：停止运行中的 Turn，删除该 Turn，再在同页发送新消息。
+
+断言：不残留孤立终态；新发送使用新的 `turnScopeId`；全程不出现孤立终态错误。
+
+### PBE-050：首轮停止与用户插话 FIFO
+
+步骤：首轮运行中停止，继续后连续发送两条插话，再刷新页面。
+
+断言：停止只产生一份快照；插话按 FIFO 注入，与所在 Turn 身份一致；持久化顺序正确，刷新后可以恢复。
+
+### PBE-051：MCP 子 Session 的 user_interaction authority
+
+步骤：MCP 工具在子 Session 中发起 `user_interaction`，用户在主页面完成交互卡片。
+
+断言：子 Session 与主 Session 不同，交互请求带有权威 `dialogProcessId`；子工具事件为一对 start/end，结果回到模型；不得出现 `session_not_found` 或 authority 提交失败。
+
+### PBE-052：发送、锁失败、停止并删除的 canonical 复现
+
+步骤：回答显示后再次发送，触发锁失败，然后停止并删除。
+
+断言：页面不得出现 `multiple canonical` 错误。
+
+### PBE-053～054：执行报告的权威 dialogProcessId
+
+- PBE-053：停止后的执行报告，以及恢复后的执行报告，都使用发送命令的 `dialogProcessId`，请求返回 200。
+- PBE-054：首个事件到达前停止，执行报告不得发出空的 `dialogProcessId`，请求返回 200。
+
+### PBE-055：可恢复工具错误进入 durable journal
+
+步骤：模型先调用 `help`，再用不存在的连接器调用 `access_connector`，然后自然完成。
+
+断言：该 Turn 的 durable journal 中，assistant 的 `tool_calls` 含 `access_connector`；对应 `tool_call_id` 的 tool 结果已落盘，且包含 `RECOVERABLE_SELECTED_CONNECTOR_MISMATCH`。
+
 ### 模型调用唯一观测边界
 
 模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。

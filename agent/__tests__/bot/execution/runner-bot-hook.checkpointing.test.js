@@ -7,6 +7,7 @@ import test from "node:test";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import { createModelMessageId } from "@noobot/session-protocol/message-identity";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import {
   createRunner,
   createTestAgentExecutionScope,
@@ -208,7 +209,10 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
   });
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
-    appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
+    appendAgentMessages: async (payload = {}) => {
+      checkpointPayloads.push(payload);
+      return payload.messages;
+    },
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
       userMessageAttachments: [],
@@ -269,6 +273,7 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
     appendAgentMessages: async ({ messages = [] } = {}) => {
       attempts.push(messages.map((message) => message.messageUid));
       if (attempts.length === 1) throw new Error("checkpoint unavailable");
+      return messages;
     },
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
@@ -361,4 +366,45 @@ test("SessionExecutionRunner hands the validated persistence scope to session in
   );
 
   assert.deepEqual(initializedScopes, [persistenceScope]);
+});
+
+test("SessionExecutionRunner rejects a checkpoint whose messages are missing from the durable result", async () => {
+  const runtime = Object.assign(createTestRuntimeContext(), {
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      { messageUid: "sm_durable", role: "tool", type: "tool_result", content: "a" },
+      { messageUid: "sm_lost", role: "tool", type: "tool_result", content: "b" },
+    ]),
+  });
+  const runtimeAgentContext = createTestAgentExecutionScope(runtime);
+  const runner = createRunner({
+    appendAgentMessages: async ({ messages = [] } = {}) =>
+      messages.filter((message) => message.messageUid !== "sm_lost"),
+    prepareAgentTurnExecution: async () => ({
+      agentContext: runtimeAgentContext,
+      userMessageAttachments: [],
+    }),
+    agentRunner: async ({ agentContext }) => {
+      await assert.rejects(agentContext.bindings.runtime.persistCurrentTurnMessages(), {
+        code: SESSION_ERROR_CODE.TURN_MESSAGE_NOT_PERSISTED,
+        missingMessageUids: ["sm_lost"],
+      });
+      return {
+        output: "ok",
+        modelMessageId: createModelMessageId(),
+        traces: [],
+        turnMessages: [],
+        turnTasks: [],
+        modelLoopRound: 0,
+        modelMessages: [],
+      };
+    },
+  });
+
+  await runner.runAcceptedSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "task",
+    turnScopeId: "turn-checkpoint-lost",
+  });
+  assert.deepEqual(runtime.timelineCheckpointPersistedMessageUids, []);
 });

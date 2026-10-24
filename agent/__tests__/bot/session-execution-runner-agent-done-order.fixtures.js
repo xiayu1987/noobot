@@ -43,7 +43,7 @@ export function createRunner({
   getSessionTurns = async () => [],
   getTurnSummaryCheckpointState = async ({ dialogProcessId, turnScopeId }) =>
     createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }),
-  appendAgentMessages = async () => [],
+  appendAgentMessages = async ({ messages = [] } = {}) => messages,
 }) {
   const defaultRuntime = runtime || createTestRuntimeContext();
   let authorityEventSequence = 0;

@@ -9,6 +9,7 @@ import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ERROR_CODE,
   createSessionDeletedError,
 } from "@noobot/session-protocol";
 
@@ -609,9 +610,41 @@ test("session reader reports missing and corrupted turn artifacts", async () =>
     await assert.rejects(readSessionArtifact({ sessionDir: root }), {
       code: "SESSION_TURN_ARTIFACT_MISSING",
     });
+    const committedBytes = manifest.turnOrder[0].committedBytes;
     await writeFile(turnFile, "{broken", "utf8");
     await assert.rejects(readSessionArtifact({ sessionDir: root }), {
+      code: "TURN_JOURNAL_TRUNCATED",
+    });
+    await writeFile(turnFile, "{".padEnd(committedBytes, "x"), "utf8");
+    await assert.rejects(readSessionArtifact({ sessionDir: root }), {
       code: "ARTIFACT_JSON_CORRUPTED",
+    });
+  }));
+
+test("session reader rejects order references to messages that were never committed", async () =>
+  withTemp(async (root) => {
+    const files = buildSessionArtifactFileMap(root);
+    await writeSessionArtifact({
+      sessionDir: root,
+      sessionPayload: {
+        ...createTestSessionRequiredFields(),
+        sessionId: "order-gap",
+        aggregateVersion: 0,
+        messages: [{ role: "user", content: "x", turnScopeId: "x" }],
+      },
+    });
+    const original = JSON.parse(await readFile(files.session, "utf8"));
+    const withTurnGap = structuredClone(original);
+    withTurnGap.turnOrder[0].messageOrder.push("sm_never_committed");
+    await writeFile(files.session, JSON.stringify(withTurnGap), "utf8");
+    await assert.rejects(readSessionArtifact({ sessionDir: root }), {
+      code: SESSION_ERROR_CODE.TURN_JOURNAL_MESSAGE_MISSING,
+    });
+    const withSessionGap = structuredClone(original);
+    withSessionGap.messageOrder.push({ messageUid: "sm_never_committed" });
+    await writeFile(files.session, JSON.stringify(withSessionGap), "utf8");
+    await assert.rejects(readSessionArtifact({ sessionDir: root }), {
+      code: SESSION_ERROR_CODE.MESSAGE_ORDER_MESSAGE_MISSING,
     });
   }));
 

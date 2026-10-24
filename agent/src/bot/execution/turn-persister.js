@@ -5,7 +5,14 @@
  */
 
 import { isPlainObject, text } from "@noobot/shared/value";
-import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import {
+  SESSION_DELETED_REASON,
+  SESSION_ERROR_CODE,
+  SESSION_NOT_FOUND_REASON,
+  createSessionDeletedError,
+  createSessionNotFoundError,
+  normalizeDialogProcessId,
+} from "@noobot/session-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { emitEvent } from "../../events/index.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
@@ -384,10 +391,19 @@ export class SessionTurnPersister {
       turns: turnPayloads,
       persistenceScope: input.persistenceScope,
     });
-    if (!appendResult.appended) return appendResult.turns;
+    if (!appendResult.appended) throw createTurnAppendRejectedError(appendResult, input);
     for (const turnPayload of turnPayloads) {
       emitEvent(input.eventListener, `${turnPayload.role}_message_saved`, {});
     }
     return appendResult.turns;
   }
+}
+
+function createTurnAppendRejectedError({ reason }, { userId, sessionId }) {
+  if (reason === SESSION_DELETED_REASON)
+    return createSessionDeletedError({ userId, sessionId, operation: "appendTurns" });
+  if (reason === SESSION_NOT_FOUND_REASON) return createSessionNotFoundError({ userId, sessionId });
+  const error = new Error(`session turn append was rejected: ${text(reason)}`);
+  error.code = SESSION_ERROR_CODE.TURN_APPEND_REJECTED;
+  return error;
 }

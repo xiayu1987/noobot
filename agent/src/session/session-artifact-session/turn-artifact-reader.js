@@ -30,7 +30,7 @@ async function materializeTurn(sessionDir, item) {
   return {
     turnId: item.turnId,
     artifactOrdinal: item.artifactOrdinal,
-    committedBytes: Math.max(0, Number(item.committedBytes) || 0),
+    committedBytes: item.committedBytes,
     turnScopeId: item.turnScopeId,
     dialogProcessId: item.dialogProcessId,
     messages: materializeTurnJournal(records, item.messageOrder, summarySnapshots),

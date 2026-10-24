@@ -20,14 +20,24 @@ export async function readRepairJson(file) {
   }
 }
 
-export async function readRepairJournal(file, committedBytes) {
-  const raw = await readFile(file);
-  const committed = Number(committedBytes || 0);
-  if (!Number.isSafeInteger(committed) || committed < 0 || raw.length < committed) {
-    throw Object.assign(new Error(`Session repair journal has an invalid boundary: ${file}`), {
+export function assertTurnJournalBoundary(file, journalBytes, committedBytes) {
+  if (
+    !Number.isSafeInteger(committedBytes) ||
+    committedBytes < 0 ||
+    journalBytes < committedBytes
+  ) {
+    throw Object.assign(new Error(`turn journal has an invalid committed boundary: ${file}`), {
       code: SESSION_REPAIR_ERROR_CODE.TURN_JOURNAL_TRUNCATED,
+      journalBytes,
+      committedBytes,
     });
   }
+  return committedBytes;
+}
+
+export async function readRepairJournal(file, committedBytes) {
+  const raw = await readFile(file);
+  const committed = assertTurnJournalBoundary(file, raw.length, committedBytes);
   return raw
     .subarray(0, committed)
     .toString("utf8")

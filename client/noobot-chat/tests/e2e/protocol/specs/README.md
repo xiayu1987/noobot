@@ -79,6 +79,10 @@ the final answer.
 - `048`：动画 GLB 导入、模型工具调用、权威 Session 产物及桌面/移动端渲染。
 - `049`：停止 Turn 删除后同页重新发送。
 - `050`：首轮停止及用户插话 FIFO 注入、持久化与刷新恢复。
+- `051`：MCP 子 Session 的 `user_interaction` authority 闭环。
+- `052`：发送、锁失败、停止并删除的 canonical 复现。
+- `053`：执行报告使用权威 `dialogProcessId`（PBE-053、PBE-054）。
+- `054`：可恢复工具错误的 tool_result 进入 durable journal（PBE-055）。
 - PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 

@@ -7,7 +7,12 @@ import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-pro
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createSessionPersistenceScope } from "@noobot/session-protocol";
+import {
+  SESSION_DELETED_REASON,
+  SESSION_ERROR_CODE,
+  SESSION_NOT_FOUND_REASON,
+  createSessionPersistenceScope,
+} from "@noobot/session-protocol";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 import {
   FLOW_CONTROL_ROLE,
@@ -541,4 +546,28 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
 
   assert.equal(appendedTurns[0].interjectionSequence, 1);
   assert.equal(appendedTurns[0].ts, "2026-09-18T01:00:00.000Z");
+});
+
+test("appendAgentMessages rejects an append the Session did not accept", async () => {
+  const createPersister = (reason) =>
+    new SessionTurnPersister({
+      session: {
+        appendExecutionLog: async () => {},
+        appendTurns: async () => ({ appended: false, reason, turns: [] }),
+      },
+    });
+  const input = {
+    userId: "u1",
+    sessionId: "s1",
+    messages: [{ messageUid: "sm_1", role: "tool", content: "r", tool_call_id: "call_1" }],
+  };
+  await assert.rejects(createPersister(SESSION_DELETED_REASON).appendAgentMessages(input), {
+    code: SESSION_ERROR_CODE.SESSION_DELETED,
+  });
+  await assert.rejects(createPersister(SESSION_NOT_FOUND_REASON).appendAgentMessages(input), {
+    code: SESSION_ERROR_CODE.SESSION_NOT_FOUND,
+  });
+  await assert.rejects(createPersister("locked").appendAgentMessages(input), {
+    code: SESSION_ERROR_CODE.TURN_APPEND_REJECTED,
+  });
 });
