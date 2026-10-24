@@ -220,7 +220,9 @@ export class FileMutationCoordinator {
     const key = path.resolve(lockPath);
     const heldLocks = this.asyncHeldLocks.getStore();
     const held = heldLocks?.get(key);
-    if (held) {
+    // Reentry only counts while the owning operation is still running. Async work that was
+    // scheduled inside the lock inherits this store, but must not bypass the lock after release.
+    if (held && !held.released) {
       held.depth += 1;
       try {
         return await operation();
@@ -312,10 +314,12 @@ export class FileMutationCoordinator {
     }, heartbeatInterval(this.staleMs));
     heartbeat.unref?.();
     const nextHeldLocks = new Map(heldLocks || []);
-    nextHeldLocks.set(key, { depth: 1 });
+    const heldEntry = { depth: 1, released: false };
+    nextHeldLocks.set(key, heldEntry);
     try {
       return await this.asyncHeldLocks.run(nextHeldLocks, operation);
     } finally {
+      heldEntry.released = true;
       clearInterval(heartbeat);
       await cleanupBestEffort(() => lockHandle.close(), "fileMutation.closeLock", key);
       const currentOwner = await fsReadFile(key, "utf8").catch(() => "");

@@ -16,7 +16,7 @@ export {
   reconcileUncommittedAggregateConflictContinuations,
 } from "./document-migration.js";
 export { reconcileExecutionSegmentIndex, reconcileSessionSummaryIndex } from "./index-reconcile.js";
-export { runAtomicSessionRepair } from "./atomic-repair.js";
+export { isSessionRepairTempDirectoryName, runAtomicSessionRepair } from "./atomic-repair.js";
 export {
   SESSION_TREE_REJECTION,
   SESSION_TREE_SHAPE,

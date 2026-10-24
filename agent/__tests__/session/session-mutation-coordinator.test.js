@@ -33,6 +33,31 @@ test("mutation coordinator distinguishes nested re-entry from concurrent callers
     assert.deepEqual(order, ["a-start", "a-nested", "a-end", "b"]);
   }));
 
+test("mutation coordinator does not treat work escaping a released lock as re-entry", async () =>
+  withTemp(async (root) => {
+    const coordinator = new SessionMutationCoordinator({ timeoutMs: 2000, pollMs: 2 });
+    const lockPath = path.join(root, ".lock");
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let inside = 0;
+    let maxInside = 0;
+    const critical = async () => {
+      inside += 1;
+      maxInside = Math.max(maxInside, inside);
+      await sleep(40);
+      inside -= 1;
+    };
+    let escaped;
+    await coordinator.run(lockPath, async () => {
+      // Scheduled while holding the lock, executes after release with the inherited ALS store.
+      escaped = (async () => {
+        await sleep(20);
+        await coordinator.run(lockPath, critical);
+      })();
+    });
+    await Promise.all([escaped, coordinator.run(lockPath, critical)]);
+    assert.equal(maxInside, 1);
+  }));
+
 test("mutation coordinator uses an atomic lock file and removes it after release", async () =>
   withTemp(async (root) => {
     const coordinator = new SessionMutationCoordinator();

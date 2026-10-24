@@ -7,6 +7,7 @@ import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import {
   assertTransferEnvelope,
   isTransferEnvelopeField,
+  upgradeTransferEnvelopesInValue,
 } from "@noobot/semantic-transfer-protocol";
 import {
   SESSION_COMMAND,
@@ -171,10 +172,26 @@ function migrateMessage(
     delete next.injected_message_type;
     changed = true;
   }
-  if (transferMigration) {
-    changed = migrateSemanticTransfers(next, transferMigration) || changed;
+  try {
+    // Legacy sessions may carry v2 envelopes (messageId) that the layout v6 upgrade never
+    // reached; upgrade them in place before reason migration and strict validation.
+    const envelopeUpgrade = upgradeTransferEnvelopesInValue(next);
+    if (envelopeUpgrade.upgraded) {
+      Object.assign(next, envelopeUpgrade.value);
+      changed = true;
+    }
+    if (transferMigration) {
+      changed = migrateSemanticTransfers(next, transferMigration) || changed;
+    }
+    validateTransferCollections(next);
+  } catch (error) {
+    // Classify as a per-Session data rejection so callers quarantine this Session
+    // instead of aborting the whole workspace upgrade.
+    throw Object.assign(
+      new Error(`Session message ${index} has unmigratable transfer envelopes: ${error.message}`),
+      { code: SESSION_REPAIR_ERROR_CODE.TRANSFER_ENVELOPE_UNMIGRATABLE, cause: error },
+    );
   }
-  validateTransferCollections(next);
   if (!hadSessionId) delete next.sessionId;
   return { message: next, changed };
 }

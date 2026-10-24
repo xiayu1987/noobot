@@ -5,6 +5,7 @@
  */
 import { access, readdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
+import { isSessionRepairTempDirectoryName } from "@noobot/session-repair";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session/session-artifact-files.js";
 
 const SESSION_ARTIFACT_DIRECTORIES = new Set(Object.values(SESSION_ARTIFACT_FILE_NAMES));
@@ -34,6 +35,8 @@ export async function* walkSessionManifestDirectories(directory) {
     if (!entry.isDirectory()) continue;
     if (SESSION_ARTIFACT_DIRECTORIES.has(entry.name)) continue;
     if (entry.name.endsWith(MUTATION_LOCK_SUFFIX)) continue;
+    // Atomic repair staging/backup copies are not Sessions; never upgrade or quarantine them.
+    if (isSessionRepairTempDirectoryName(entry.name)) continue;
     const child = path.join(directory, entry.name);
     if (await hasSessionManifest(child)) yield child;
     yield* walkSessionManifestDirectories(child);
