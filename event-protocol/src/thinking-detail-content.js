@@ -56,9 +56,9 @@ function compareContentFacts(left = {}, right = {}) {
   }
   if (Number.isFinite(leftTime) !== Number.isFinite(rightTime))
     return Number.isFinite(leftTime) ? -1 : 1;
-  const sequenceDifference = Number(left.sequence || 0) - Number(right.sequence || 0);
+  const sequenceDifference = left.sequence - right.sequence;
   if (sequenceDifference) return sequenceDifference;
-  return text(left.contentId).localeCompare(text(right.contentId));
+  return left.contentId.localeCompare(right.contentId);
 }
 
 export function reduceThinkingDetailContentTimelines(...timelines) {
@@ -66,7 +66,7 @@ export function reduceThinkingDetailContentTimelines(...timelines) {
   for (const timeline of timelines) {
     for (const fact of Array.isArray(timeline) ? timeline : []) {
       if (!isThinkingDetailContentFact(fact)) continue;
-      factsByContentId.set(text(fact.contentId), Object.freeze({ ...fact }));
+      factsByContentId.set(fact.contentId, Object.freeze({ ...fact }));
     }
   }
   return Object.freeze([...factsByContentId.values()].sort(compareContentFacts));
@@ -78,7 +78,7 @@ function messageContentFact(message = {}, contentKind, index) {
   if (!identity || !value) return null;
   const sequence =
     contentKind === THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION
-      ? Number(message?.interjectionSequence || 0)
+      ? message.interjectionSequence
       : index + 1;
   return {
     contentId: `message:${identity}`,
@@ -101,7 +101,7 @@ function activityContentKind(activity = {}) {
     : THINKING_DETAIL_CONTENT_KIND.THINKING;
 }
 
-function activityContentFact(activity = {}, index) {
+function activityContentFact(activity) {
   const eventId = text(activity?.eventId);
   const value = text(activity?.text);
   if (!eventId || !value) return null;
@@ -115,7 +115,7 @@ function activityContentFact(activity = {}, index) {
     sourceEventId: eventId,
     text: value,
     timestamp: text(activity?.timestamp),
-    sequence: Number(activity?.sequence || index + 1),
+    sequence: activity.sequence,
     sessionId: text(activity?.sessionId),
     dialogProcessId: text(activity?.dialogProcessId),
     turnScopeId: text(activity?.turnScopeId),
@@ -153,14 +153,14 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
       if (fact) timeline.push(fact);
     }
   }
-  for (const [index, activity] of activities.entries()) {
+  for (const activity of activities) {
     if (
       supersededRelayCorrelationIds.size &&
       supersededRelayCorrelationIds.has(text(activity?.relayCorrelationId))
     ) {
       continue;
     }
-    const fact = activityContentFact(activity, index);
+    const fact = activityContentFact(activity);
     if (fact) timeline.push(fact);
   }
   return reduceThinkingDetailContentTimelines(timeline);

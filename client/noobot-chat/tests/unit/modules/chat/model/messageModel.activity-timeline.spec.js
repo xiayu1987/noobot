@@ -56,7 +56,7 @@ describe("messageModel activity timeline folding", () => {
           executionLogTotal: 12,
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -86,7 +86,7 @@ describe("messageModel activity timeline folding", () => {
           thinkingFinishedAt: 1700000012000,
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { normalizeTrimmedString } from "./utils.js";
 import { applyLatestSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
 import {
   TURN_COMMITTED_WIRE_EVENT,
@@ -15,7 +14,6 @@ import {
   validateTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
 import { isTerminalTurnEvent } from "@noobot/session-protocol/turn-lifecycle";
-import { isFunction } from "@noobot/shared/value";
 
 const TURN_USER_MESSAGE_EVENTS = Object.freeze({
   [TURN_COMMITTED_WIRE_EVENT]: {
@@ -28,13 +26,16 @@ const TURN_USER_MESSAGE_EVENTS = Object.freeze({
   },
 });
 
+function rejectedByException(error) {
+  return { applied: false, reason: "reducer_exception", errors: [error.message] };
+}
+
 export function routeForeignTurnLifecycleEvent(event, data, context) {
-  const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
-  const transportEvent = normalizeTrimmedString(event).toLowerCase();
-  if (transportEvent === StreamEventEnum.TURN_LIFECYCLE) {
-    const eventSessionId = normalizeTrimmedString(data?.sessionId);
-    const mainSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
-    const parentSessionId = normalizeTrimmedString(data?.parentSessionId);
+  const { applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
+  if (event === StreamEventEnum.TURN_LIFECYCLE) {
+    const eventSessionId = data.sessionId;
+    const mainSessionId = sessionId;
+    const parentSessionId = data.parentSessionId;
     const isChildLifecycle = Boolean(
       eventSessionId &&
       mainSessionId &&
@@ -42,36 +43,29 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
       parentSessionId &&
       parentSessionId === mainSessionId,
     );
-    logSessionEvent?.({
+    logSessionEvent({
       category: "debug",
       level: "debug",
       debugType: "workflow-diagnostics",
       event: "frontend.authoritativeState.lifecycleRouteEvaluated",
-      sessionId: mainSessionId || eventSessionId,
-      dialogProcessId: data?.dialogProcessId || "",
-      turnScopeId: data?.turnScopeId || "",
+      sessionId: mainSessionId,
+      dialogProcessId: data.dialogProcessId,
+      turnScopeId: data.turnScopeId,
       data: {
         route: isChildLifecycle ? "child" : "main",
         eventSessionId,
         mainSessionId,
         parentSessionId,
-        eventType: normalizeTrimmedString(data?.eventType).toLowerCase(),
-        revision: Number(data?.revision || 0),
-        sequence: Number(data?.sequence || 0),
-        hasPersistenceScope: Boolean(data?.persistenceScope?.scopeId),
-        reducerAvailable: isFunction(applyTurnLifecycleEnvelope),
+        eventType: data.eventType,
+        revision: data.revision,
+        sequence: data.sequence,
       },
     });
     if (isChildLifecycle) {
-      const result = applyTurnLifecycleEnvelope?.(data);
-      const terminalLifecycle = isTerminalTurnEvent(
-        normalizeTrimmedString(data?.eventType).toLowerCase(),
-      );
-      const logReduction = (reduction = {}) => {
-        const rejected = reduction?.applied !== true;
-        const subSessionProjection = reduction?.subSessionEffect?.subSessionProjection || null;
-        const projectedSession = subSessionProjection?.session || null;
-        return logSessionEvent?.({
+      const terminalLifecycle = isTerminalTurnEvent(data.eventType);
+      const logReduction = (reduction) => {
+        const rejected = reduction.applied !== true;
+        return logSessionEvent({
           category: terminalLifecycle || rejected ? "state" : "debug",
           level: rejected ? "warn" : terminalLifecycle ? "info" : "debug",
           ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
@@ -81,45 +75,25 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
               ? "frontend.authoritativeState.foreignTurnRejected"
               : "frontend.authoritativeState.foreignTurnReduced",
           sessionId: mainSessionId,
-          dialogProcessId: data?.dialogProcessId || "",
-          turnScopeId: data?.turnScopeId || "",
+          dialogProcessId: data.dialogProcessId,
+          turnScopeId: data.turnScopeId,
           data: {
             childSessionId: eventSessionId,
-            parentSessionId: data?.parentSessionId || "",
-            eventId: data?.eventId || "",
-            eventType: data?.eventType || "",
-            revision: Number(data?.revision || 0),
-            sequence: Number(data?.sequence || 0),
-            applied: reduction?.applied === true,
-            reason: reduction?.reason || "",
-            projectionApplied: subSessionProjection?.applied === true,
-            projectionReason: subSessionProjection?.reason || "",
-            projectedStatus: projectedSession?.status || "",
-            projectedMessages: (Array.isArray(projectedSession?.messages)
-              ? projectedSession.messages
-              : []
-            ).map((message = {}) => ({
-              messageUid: normalizeTrimmedString(message?.messageUid),
-              presentationMessageId: normalizeTrimmedString(message?.presentationMessageId),
-              role: normalizeTrimmedString(message?.role),
-              turnScopeId: normalizeTrimmedString(message?.turnScopeId),
-              pending: message?.pending,
-              channelState: normalizeTrimmedString(message?.channelState?.state),
-            })),
+            parentSessionId: data.parentSessionId,
+            eventId: data.eventId,
+            eventType: data.eventType,
+            revision: data.revision,
+            sequence: data.sequence,
+            applied: !rejected,
+            reason: reduction.reason,
+            errors: reduction.errors,
             terminalResolutionScheduled: terminalLifecycle,
           },
         });
       };
-      if (result && typeof result.then === "function") {
-        void result.then(logReduction, (error) =>
-          logReduction({
-            applied: false,
-            reason: String(error?.message || "foreign_turn_reduction_failed"),
-          }),
-        );
-      } else {
-        logReduction(result);
-      }
+      void applyTurnLifecycleEnvelope(data).then(logReduction, (error) =>
+        logReduction(rejectedByException(error)),
+      );
       return true;
     }
   }
@@ -127,21 +101,12 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
 }
 
 export function routeCurrentTurnLifecycleEvent(event, data, context) {
-  const {
-    activeSession,
-    applyTurnLifecycleEnvelope,
-    findUserMessageForCommit,
-    logSessionEvent,
-    makeViewMessage,
-    sessionId,
-  } = context;
-  if (normalizeTrimmedString(event).toLowerCase() === StreamEventEnum.TURN_LIFECYCLE) {
-    const lifecycleEventType = normalizeTrimmedString(data?.eventType).toLowerCase();
-    const result = applyTurnLifecycleEnvelope?.(data);
-    const logReduction = (reduction = {}) => {
-      const rejected = reduction?.applied !== true;
-      const terminalLifecycle = isTerminalTurnEvent(lifecycleEventType);
-      logSessionEvent?.({
+  const { applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
+  if (event === StreamEventEnum.TURN_LIFECYCLE) {
+    const terminalLifecycle = isTerminalTurnEvent(data.eventType);
+    const logReduction = (reduction) => {
+      const rejected = reduction.applied !== true;
+      logSessionEvent({
         category: terminalLifecycle || rejected ? "state" : "debug",
         level: rejected ? "warn" : terminalLifecycle ? "info" : "debug",
         ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
@@ -150,85 +115,75 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
           : rejected
             ? "frontend.authoritativeState.mainTurnRejected"
             : "frontend.authoritativeState.mainTurnReduced",
-        sessionId: normalizeTrimmedString(data?.sessionId || sessionId),
-        dialogProcessId: data?.dialogProcessId || "",
-        turnScopeId: data?.turnScopeId || "",
+        sessionId: data.sessionId,
+        dialogProcessId: data.dialogProcessId,
+        turnScopeId: data.turnScopeId,
         data: {
-          eventId: normalizeTrimmedString(data?.eventId),
-          eventType: normalizeTrimmedString(data?.eventType).toLowerCase(),
-          revision: Number(data?.revision || 0),
-          sequence: Number(data?.sequence || 0),
-          applied: reduction?.applied === true,
-          reason: normalizeTrimmedString(reduction?.reason),
-          errors: Array.isArray(reduction?.errors) ? reduction.errors : [],
-          projectedState: normalizeTrimmedString(reduction?.turn?.state),
-          projectedTerminal: normalizeTrimmedString(reduction?.turn?.terminal),
+          eventId: data.eventId,
+          eventType: data.eventType,
+          revision: data.revision,
+          sequence: data.sequence,
+          applied: !rejected,
+          reason: reduction.reason,
+          errors: reduction.errors,
+          projectedState: reduction.turn?.state,
+          projectedTerminal: reduction.turn?.terminal,
         },
       });
     };
-    if (result && typeof result.then === "function") {
-      void result.then(logReduction, (error) =>
-        logReduction({
-          applied: false,
-          reason: String(error?.message || "main_turn_reduction_failed"),
-        }),
-      );
-    } else {
-      logReduction(result);
-    }
+    void applyTurnLifecycleEnvelope(data).then(logReduction, (error) =>
+      logReduction(rejectedByException(error)),
+    );
     return true;
   }
   const userMessageEvent = TURN_USER_MESSAGE_EVENTS[event];
   if (!userMessageEvent) return false;
-  const eventSessionId = normalizeTrimmedString(data?.sessionId);
-  const targetSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
-  const committedUserMessage = data?.userMessage;
   const validation = userMessageEvent.validate(data);
-  let applied = false;
-  let reason = "";
   if (!validation.ok) {
-    reason = `protocol:${validation.errors[0]}`;
-  } else if (eventSessionId !== targetSessionId) {
-    reason = "committed_session_mismatch";
-  } else {
-    applyLatestSessionAggregateVersion(activeSession.value, {
-      aggregateVersion: data.aggregateVersion,
+    logSessionEvent({
+      category: "state",
+      level: "warn",
+      event: `${userMessageEvent.logPrefix}.userMessageRejected`,
+      sessionId,
+      data: { applied: false, reason: "protocol_invalid", errors: validation.errors },
     });
-    const targetMessage = findUserMessageForCommit(targetSessionId, committedUserMessage);
-    if (!targetMessage) {
-      reason = "committed_user_target_missing";
-    } else {
-      const projectedMessage =
-        typeof makeViewMessage === "function"
-          ? makeViewMessage(committedUserMessage)
-          : committedUserMessage;
-      Object.assign(targetMessage, projectedMessage);
-      targetMessage.attachments = Array.isArray(projectedMessage?.attachments)
-        ? projectedMessage.attachments.map((attachment) => ({ ...attachment }))
-        : [];
-      applied = true;
-      reason = "applied";
-    }
+    return true;
   }
-  logSessionEvent?.({
+  const { userMessage } = data;
+  const reason = applyCommittedUserMessage(data, context);
+  const applied = reason === "applied";
+  logSessionEvent({
     category: applied ? "message" : "state",
     level: applied ? "info" : "warn",
     event: applied
       ? `${userMessageEvent.logPrefix}.userMessageApplied`
       : `${userMessageEvent.logPrefix}.userMessageRejected`,
-    sessionId: eventSessionId || targetSessionId,
-    dialogProcessId: data?.dialogProcessId || "",
-    turnScopeId: data?.turnScopeId || "",
+    sessionId: data.sessionId,
+    dialogProcessId: data.dialogProcessId,
+    turnScopeId: data.turnScopeId,
     data: {
       applied,
       reason,
-      messageUid: normalizeTrimmedString(committedUserMessage?.messageUid),
-      userMessageId: normalizeTrimmedString(committedUserMessage?.userMessageId),
-      attachmentCount: Array.isArray(committedUserMessage?.attachments)
-        ? committedUserMessage.attachments.length
-        : 0,
-      aggregateVersion: Number(data?.aggregateVersion || 0),
+      messageUid: userMessage.messageUid,
+      userMessageId: userMessage.userMessageId,
+      aggregateVersion: data.aggregateVersion,
     },
   });
   return true;
+}
+
+function applyCommittedUserMessage(data, context) {
+  const { findSession, findUserMessageForCommit, makeViewMessage, sessionId } = context;
+  if (data.sessionId !== sessionId) return "committed_session_mismatch";
+  const session = findSession(sessionId);
+  if (!session) return "committed_session_missing";
+  applyLatestSessionAggregateVersion(session, { aggregateVersion: data.aggregateVersion });
+  const targetMessage = findUserMessageForCommit(sessionId, data.userMessage);
+  if (!targetMessage) return "committed_user_target_missing";
+  const projectedMessage = makeViewMessage(data.userMessage, { sessionId });
+  Object.assign(targetMessage, projectedMessage);
+  targetMessage.attachments = projectedMessage.attachments.map((attachment) => ({
+    ...attachment,
+  }));
+  return "applied";
 }

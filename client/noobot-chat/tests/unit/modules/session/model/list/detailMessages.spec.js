@@ -3,19 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildNormalizedDetailMessages } from "../../../../../../src/modules/session/model/list/detailMessages.js";
 
 describe("buildNormalizedDetailMessages turnTimings", () => {
-  it("binds projected messages to their session envelope identity", () => {
+  it("hands the session envelope identity to the message factory", () => {
+    const makeViewMessage = vi.fn((message, { sessionId }) => ({ ...message, sessionId }));
     const messages = buildNormalizedDetailMessages({
       detailMessages: [{ role: "assistant", turnScopeId: "turn-session" }],
       rootSessionId: "session-envelope",
       isSummaryDetail: true,
-      makeViewMessage: (message) => ({ ...message }),
+      makeViewMessage,
     });
 
+    expect(makeViewMessage).toHaveBeenCalledWith(expect.any(Object), {
+      sessionId: "session-envelope",
+    });
     expect(messages[0]).toMatchObject({
       sessionId: "session-envelope",
       turnScopeId: "turn-session",

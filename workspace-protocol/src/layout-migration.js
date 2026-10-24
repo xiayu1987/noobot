@@ -71,6 +71,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     toVersion: 11,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
   }),
+  Object.freeze({
+    id: "session-turn-terminal-description-v12",
+    toVersion: 12,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
 ]);
 
 function layoutStateError(message) {

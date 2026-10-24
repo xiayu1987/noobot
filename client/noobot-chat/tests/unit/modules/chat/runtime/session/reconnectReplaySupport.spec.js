@@ -8,6 +8,16 @@ import { describe, expect, it, vi } from "vitest";
 import { renderActiveSessionBeforeReplay } from "../../../../../../src/modules/chat/runtime/reconnect/hydrationReplay.js";
 import { createReconnectReplayPublicApi } from "../../../../../../src/modules/chat/runtime/reconnect/publicApi.js";
 
+function hydrate(activeSession, chatList) {
+  return renderActiveSessionBeforeReplay({
+    activeSession,
+    chatList,
+    getReplayHydrationPromise: () => null,
+    setReplayHydrationPromise: vi.fn(),
+    onError: vi.fn(),
+  });
+}
+
 describe("reconnectReplay support modules", () => {
   it("exposes test internals only in test mode", () => {
     const internals = {
@@ -37,11 +47,10 @@ describe("reconnectReplay support modules", () => {
     const fetchSessionDetail = vi.fn(async () => detail);
     const applySessionDetail = vi.fn();
 
-    const result = await renderActiveSessionBeforeReplay({
-      activeSession: { value: { id: "s-1", sessionId: "s-1", messages: [] } },
-      activeSessionId: { value: "s-1" },
-      chatList: { fetchSessionDetail, applySessionDetail },
-    });
+    const result = await hydrate(
+      { value: { id: "s-1", sessionId: "s-1", messages: [] } },
+      { fetchSessionDetail, applySessionDetail },
+    );
 
     expect(result).toBe(true);
     expect(fetchSessionDetail).toHaveBeenCalledWith("s-1", {
@@ -52,18 +61,18 @@ describe("reconnectReplay support modules", () => {
 
   it("does not hydrate a local Session from its client identity", async () => {
     const fetchSessionDetail = vi.fn();
-    const result = await renderActiveSessionBeforeReplay({
-      activeSession: { value: { id: "local-1", sessionId: "", isLocal: true, messages: [] } },
-      activeSessionId: { value: "local-1" },
-      chatList: { fetchSessionDetail, applySessionDetail: vi.fn() },
-    });
+    const result = await hydrate(
+      { value: { id: "local-1", sessionId: "", isLocal: true, messages: [] } },
+      { fetchSessionDetail, applySessionDetail: vi.fn() },
+    );
 
     expect(result).toBe(false);
     expect(fetchSessionDetail).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["empty detail", { sessions: [] }],
+    ["skipped request", null],
+    ["empty detail", { sessionId: "s-1", sessions: [] }],
     [
       "mismatched top-level identity",
       { sessionId: "s-other", sessions: [{ sessionId: "s-other" }] },
@@ -71,14 +80,10 @@ describe("reconnectReplay support modules", () => {
     ["mismatched session document", { sessionId: "s-1", sessions: [{ sessionId: "s-other" }] }],
   ])("rejects %s before applying reconnect hydration", async (_label, detail) => {
     const applySessionDetail = vi.fn();
-    const result = await renderActiveSessionBeforeReplay({
-      activeSession: { value: { id: "s-1", sessionId: "s-1", messages: [] } },
-      activeSessionId: { value: "s-1" },
-      chatList: {
-        fetchSessionDetail: vi.fn(async () => detail),
-        applySessionDetail,
-      },
-    });
+    const result = await hydrate(
+      { value: { id: "s-1", sessionId: "s-1", messages: [] } },
+      { fetchSessionDetail: vi.fn(async () => detail), applySessionDetail },
+    );
 
     expect(result).toBe(false);
     expect(applySessionDetail).not.toHaveBeenCalled();
@@ -87,16 +92,12 @@ describe("reconnectReplay support modules", () => {
   it("does not apply hydration after the active session changes during the request", async () => {
     const activeSession = { value: { id: "s-1", sessionId: "s-1", messages: [] } };
     const applySessionDetail = vi.fn();
-    const result = await renderActiveSessionBeforeReplay({
-      activeSession,
-      activeSessionId: { value: "s-1" },
-      chatList: {
-        fetchSessionDetail: vi.fn(async () => {
-          activeSession.value = { id: "s-2", sessionId: "s-2", messages: [] };
-          return { sessionId: "s-1", sessions: [{ sessionId: "s-1", messages: [] }] };
-        }),
-        applySessionDetail,
-      },
+    const result = await hydrate(activeSession, {
+      fetchSessionDetail: vi.fn(async () => {
+        activeSession.value = { id: "s-2", sessionId: "s-2", messages: [] };
+        return { sessionId: "s-1", sessions: [{ sessionId: "s-1", messages: [] }] };
+      }),
+      applySessionDetail,
     });
 
     expect(result).toBe(false);

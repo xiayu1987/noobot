@@ -10,6 +10,8 @@ import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability
 import {
   collectPositiveIntegerErrors,
   collectRequiredFieldErrors,
+  collectDialogProcessIdErrors,
+  collectParentSessionIdErrors,
   collectTurnMaterializationErrors,
   collectTurnScopeIdErrors,
 } from "./lifecycle/turn-field-assertions.js";
@@ -275,10 +277,10 @@ export function createTurnLifecycleEnvelope({
   correlationId = "",
   userId = "",
   sessionId,
-  parentSessionId = "",
+  parentSessionId,
   turnScopeId,
   presentationMessageId = "",
-  dialogProcessId = "",
+  dialogProcessId,
   revision,
   sequence,
   phase,
@@ -310,10 +312,6 @@ export function createTurnLifecycleEnvelope({
     rootExecutionId,
     origin,
     stage,
-    sessionId,
-    parentSessionId,
-    turnScopeId,
-    dialogProcessId,
   });
   const envelope = {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
@@ -324,10 +322,10 @@ export function createTurnLifecycleEnvelope({
     correlationId: clean(correlationId),
     userId: clean(userId),
     sessionId: clean(sessionId),
-    parentSessionId: clean(parentSessionId),
+    parentSessionId,
     turnScopeId: canonicalizeTurnScopeId(turnScopeId),
     presentationMessageId: clean(presentationMessageId),
-    dialogProcessId: clean(dialogProcessId),
+    dialogProcessId,
     revision: Number(revision || 0),
     sequence: Number(sequence || 0),
     phase: clean(phase),
@@ -345,7 +343,12 @@ export function createTurnLifecycleEnvelope({
     payload: payload && typeof payload === "object" ? payload : {},
     continuationSource: normalizeTurnContinuationSource(continuationSource) || undefined,
     continuedByTurnScopeId: canonicalizeTurnScopeId(continuedByTurnScopeId),
-    ...executionIdentity,
+    executionId: executionIdentity.executionId,
+    executionKind: executionIdentity.executionKind,
+    parentExecutionId: executionIdentity.parentExecutionId,
+    rootExecutionId: executionIdentity.rootExecutionId,
+    origin: executionIdentity.origin,
+    stage: executionIdentity.stage,
   };
   return envelope;
 }
@@ -364,6 +367,8 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
       "missing_presentation_message_id",
     ),
   );
+  errors.push(...collectDialogProcessIdErrors(envelope.dialogProcessId));
+  errors.push(...collectParentSessionIdErrors(envelope.parentSessionId));
   errors.push(...collectPositiveIntegerErrors(envelope.revision, "invalid_revision"));
   errors.push(...collectPositiveIntegerErrors(envelope.sequence, "invalid_sequence"));
   const eventType = clean(envelope.eventType);

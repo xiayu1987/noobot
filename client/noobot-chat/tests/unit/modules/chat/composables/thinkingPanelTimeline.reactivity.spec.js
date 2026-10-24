@@ -27,6 +27,7 @@ function interjectionFact(index) {
     sessionId: "session-a",
     dialogProcessId: "process-a",
     turnScopeId: "turn-a",
+    presentationMessageId: "presentation-a",
   });
 }
 

@@ -132,8 +132,8 @@ export function isCanonicalActivityTimelineFact(value = {}) {
     text(value.eventId) &&
     ACTIVITY_EVENT_TYPES.has(text(value.eventType)) &&
     typeof value.text === "string" &&
-    Number.isInteger(Number(value.sequence)) &&
-    Number(value.sequence) > 0 &&
+    Number.isInteger(value.sequence) &&
+    value.sequence > 0 &&
     text(value.sequenceScopeId) &&
     text(value.sequenceDomain) &&
     text(value.authority) === "authoritative" &&
@@ -153,13 +153,11 @@ export function mergeCanonicalActivityTimelines(...timelines) {
       ? `activity:${text(fact.activityId)}`
       : `event:${text(fact.eventId)}`;
     const previous = byIdentity.get(identity);
-    if (!previous || Number(fact.sequence) >= Number(previous.sequence)) {
+    if (!previous || fact.sequence >= previous.sequence) {
       byIdentity.set(identity, fact);
     }
   }
-  return [...byIdentity.values()].sort(
-    (left, right) => Number(left.sequence) - Number(right.sequence),
-  );
+  return [...byIdentity.values()].sort((left, right) => left.sequence - right.sequence);
 }
 
 export function selectCanonicalActivityTimeline(message = {}) {

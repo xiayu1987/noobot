@@ -568,7 +568,11 @@ it("uses Session + Turn scope as terminal authority despite a changed dialog rou
     seq: 3,
   });
 
-  const resolved = settleTerminal(registry, { dialogProcessId: "", revision: 4, sequence: 4 });
+  const resolved = settleTerminal(registry, {
+    dialogProcessId: "new-dp",
+    revision: 4,
+    sequence: 4,
+  });
   expect(resolved).toMatchObject({
     applied: true,
     turn: { state: "frontend_completed", terminal: "completed" },

@@ -69,7 +69,6 @@ export function createTestLifecycleEnvelope({
     sessionId,
     parentSessionId,
     turnScopeId,
-    messageId: `${turnScopeId}:message`,
     presentationMessageId: `${turnScopeId}:presentation`,
     dialogProcessId: `${turnScopeId}:dialog`,
     revision: sequence,
@@ -168,8 +167,9 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         }
         commitInputs.push(structuredClone(input));
         const result = commitTurnLifecycle({
+          parentSessionId: "",
           lifecycle,
-          event: input,
+          event: { ...input, parentSessionId: AUTHORITATIVE_ROOT_PARENT_SESSION_ID },
           eventOutbox,
           createEventId: () => `authority-event-${++eventIdSequence}`,
           materializeTerminal: input.terminalStatus

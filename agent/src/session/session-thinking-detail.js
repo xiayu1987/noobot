@@ -56,7 +56,6 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
     activityTimeline,
     thinkingContentTimeline,
     hasThinkingDetails: thinkingDetailCount > 0 || thinkingContentTimeline.length > 0,
-    thinkingDetailCount,
   };
   return {
     exists: Boolean(rootMessage?.role || scopedMessages.length),

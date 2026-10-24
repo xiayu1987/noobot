@@ -29,8 +29,13 @@ import {
   createParentExecutionScope,
 } from "./detached-subsession-runner.test-helpers.js";
 import { SESSION_CALLER, requireSessionCaller } from "@noobot/shared/session-caller";
-import { createSessionPersistenceScope } from "@noobot/session-protocol";
+import {
+  MESSAGE_REMOVED_FIELD_NAME,
+  createSessionPersistenceScope,
+} from "@noobot/session-protocol";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 test("detached sub-session delegates execution and persistence to the main runner", async () => {
   const { calls, deps } = createDeps();
@@ -568,7 +573,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.match(runConfig.presentationMessageId, /^pm_/);
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message");
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message-from-patch");
-  assert.equal(runConfig.messageId, undefined);
+  assert.equal(runConfig[LEGACY_MESSAGE_ID], undefined);
   assert.equal(runConfig.streaming, true);
   assert.equal(runConfig.workflowRunId, "workflow-run-1");
   assert.equal(runConfig.workflowNodeExecutionId, "node-execution-1");

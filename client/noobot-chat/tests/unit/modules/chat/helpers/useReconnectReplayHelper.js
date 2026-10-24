@@ -34,6 +34,7 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { workflowSequenceDomainForEvent } from "@noobot/event-protocol/workflow-runtime-event";
 import { createSessionMessageView } from "../../../../../src/modules/chat/runtime/session/messageView.js";
+import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 
 function createSession(id) {
   return {
@@ -50,32 +51,29 @@ function createSession(id) {
   };
 }
 
-const normalizeIdentityPart = (value, fallback) => String(value || fallback).trim();
-
 export function createCanonicalAssistant({
-  presentationMessageId,
+  dialogProcessId = "dp-1",
+  presentationMessageId = `message-${dialogProcessId}`,
+  turnScopeId = `turn-${dialogProcessId}`,
   sessionId = "s-1",
-  dialogProcessId,
-  turnScopeId,
   content = "",
   ...extra
 } = {}) {
-  const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
-  return {
-    presentationMessageId: normalizeIdentityPart(
+  return buildViewMessage(
+    {
       presentationMessageId,
-      `message-${normalizedDialogProcessId}`,
-    ),
-    role: RoleEnum.ASSISTANT,
-    sessionId,
-    dialogProcessId: normalizedDialogProcessId,
-    turnScopeId: normalizeIdentityPart(turnScopeId, `turn-${normalizedDialogProcessId}`),
-    content,
-    pending: true,
-    terminalOutcome: "",
-    realtimeLogs: [],
-    ...extra,
-  };
+      role: RoleEnum.ASSISTANT,
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      content,
+      pending: true,
+      terminalOutcome: "",
+      realtimeLogs: [],
+      ...extra,
+    },
+    { sessionId: "s-1" },
+  );
 }
 
 export function createAuthoritativeMessageEnvelope(
@@ -93,15 +91,10 @@ export function createAuthoritativeMessageEnvelope(
   if (Object.hasOwn(eventData, "messageId")) {
     throw new TypeError("messageId is not a message event field");
   }
-  const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
-  const normalizedPresentationMessageId = normalizeIdentityPart(
-    presentationMessageId,
-    `message-${normalizedDialogProcessId}`,
-  );
-  const normalizedTurnScopeId = normalizeIdentityPart(
-    turnScopeId,
-    `turn-${normalizedDialogProcessId}`,
-  );
+  const normalizedDialogProcessId = dialogProcessId ?? "dp-1";
+  const normalizedPresentationMessageId =
+    presentationMessageId ?? `message-${normalizedDialogProcessId}`;
+  const normalizedTurnScopeId = turnScopeId ?? `turn-${normalizedDialogProcessId}`;
 
   const sequence = Number(seq || 0);
   const orderingSequence = isTransientMessageEventType(eventType)
@@ -111,10 +104,7 @@ export function createAuthoritativeMessageEnvelope(
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
     schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
     identity: {
-      eventId: normalizeIdentityPart(
-        eventId,
-        `${normalizedPresentationMessageId}-${eventType}-${sequence}`,
-      ),
+      eventId: eventId ?? `${normalizedPresentationMessageId}-${eventType}-${sequence}`,
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId,
       turnScopeId: normalizedTurnScopeId,
@@ -144,12 +134,12 @@ export function createInteractionEnvelope(
   payload = {},
   { sessionId = "s-1", turnScopeId = "turn-interaction", sequence = 1, eventId } = {},
 ) {
-  const requestId = normalizeIdentityPart(payload.requestId, "request-1");
+  const requestId = payload.requestId ?? "request-1";
   return createEventEnvelope({
     family: EVENT_FAMILY.INTERACTION_REQUEST,
     schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
     identity: {
-      eventId: normalizeIdentityPart(eventId, `${requestId}-event-${sequence}`),
+      eventId: eventId ?? `${requestId}-event-${sequence}`,
       eventType: INTERACTION_EVENT_TYPE.REQUEST,
       sessionId,
       turnScopeId,
@@ -167,12 +157,12 @@ export function createWorkflowEnvelope(
   payload = {},
   { sessionId = "s-1", turnScopeId = "turn-workflow", sequence = 1, eventId, executionId },
 ) {
-  const workflowRunId = normalizeIdentityPart(payload.workflowRunId, "workflow-1");
+  const workflowRunId = payload.workflowRunId ?? "workflow-1";
   return createEventEnvelope({
     family: EVENT_FAMILY.WORKFLOW_RUNTIME,
     schemaVersion: getEventFamily(EVENT_FAMILY.WORKFLOW_RUNTIME).schemaVersion,
     identity: {
-      eventId: normalizeIdentityPart(eventId, `${workflowRunId}-${eventType}-${sequence}`),
+      eventId: eventId ?? `${workflowRunId}-${eventType}-${sequence}`,
       eventType,
       sessionId,
       turnScopeId,
@@ -203,7 +193,9 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   if (currentRun) s1.currentRun = { ...currentRun, sessionId: "s-1" };
   const sessions = ref([s1, s2]);
   const activeSessionId = ref(activeId);
-  const activeSession = ref(sessions.value.find((s) => s.id === activeId));
+  const activeSession = computed(() =>
+    sessions.value.find((sessionItem) => sessionItem.sessionId === activeSessionId.value),
+  );
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
   const runtimeView = computed(() =>
     selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value),
@@ -223,33 +215,18 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   const reduceSubSessionMessageEvent = vi.fn(() => ({ applied: true }));
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
-    fetchSessionDetail: vi.fn(async (id) => ({
-      sessions: [sessions.value.find((sessionItem) => sessionItem.id === id)].filter(Boolean),
+    fetchSessionDetail: vi.fn(async (sessionId) => ({
+      sessionId,
+      sessions: sessions.value.filter((sessionItem) => sessionItem.sessionId === sessionId),
     })),
-    applySessionDetail: vi.fn((detail = {}) => {
-      const sessionDocs = Array.isArray(detail?.sessions) ? detail.sessions : [];
-      const nextSession = sessionDocs[0];
-      if (!nextSession?.id && !nextSession?.sessionId) return;
-      const nextId = nextSession.id || nextSession.sessionId;
+    applySessionDetail: vi.fn((detail) => {
       const index = sessions.value.findIndex(
-        (sessionItem) => sessionItem.id === nextId || sessionItem.sessionId === nextId,
+        (sessionItem) => sessionItem.sessionId === detail.sessionId,
       );
-      if (index >= 0) {
-        sessions.value[index] = { ...sessions.value[index], ...nextSession };
-        if (
-          activeSessionId.value === sessions.value[index].id ||
-          activeSessionId.value === nextId
-        ) {
-          activeSession.value = sessions.value[index];
-        }
-      }
+      sessions.value[index] = { ...sessions.value[index], ...detail.sessions[0] };
     }),
-    selectSession: vi.fn(async (id) => {
-      const found = sessions.value.find((sessionItem) => sessionItem.id === id);
-      if (found) {
-        activeSessionId.value = id;
-        activeSession.value = found;
-      }
+    selectSession: vi.fn(async (sessionId) => {
+      activeSessionId.value = sessionId;
     }),
   };
 
@@ -265,13 +242,12 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   const api = useReconnectReplay({
     sessions,
     activeSession,
-    activeSessionId,
     interactionSubmitting,
     chatList,
     findMessageByViewKey,
     findMessagesByPresentationId: messageView.findMessagesByPresentationId,
     materializeTurnPresentation: messageView.materializeTurnPresentation,
-    makeViewMessage: (message) => ({ ...message }),
+    makeViewMessage: messageView.makeViewMessage,
     clearPendingInteraction,
     setPendingInteractionRequest,
     isInteractionRequestHandled: vi.fn(() => false),

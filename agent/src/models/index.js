@@ -20,11 +20,6 @@ export {
   resolveModelSpecOrConfiguredDefault,
   resolveSkillModelSpec,
 } from "./resolver/index.js";
-export {
-  normalizeToolCallArgs,
-  resolveRawToolCalls,
-  normalizeToolCalls,
-} from "./invoke/tool-call-normalizer.js";
 
 export {
   buildAttachmentContentBlock,

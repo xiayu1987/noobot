@@ -7,6 +7,7 @@ import { reactive } from "vue";
 import {
   buildAppendMessage,
   buildViewMessage,
+  normalizeMessageAttachments,
   findVisibleLastMessage,
   isPluginInjectedMessage,
 } from "../../model/messageModel.js";
@@ -43,14 +44,12 @@ function isInternalControlMessage(messageItem = {}) {
 }
 
 function createSessionMessageLookup(sessions) {
+  function findSession(sessionId) {
+    return sessions.value.find((sessionItem) => sessionItem.sessionId === sessionId) || null;
+  }
+
   function sessionMessages(sessionId) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return [];
-    const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
-    const targetSession = sessionItems.find(
-      (sessionItem) => text(sessionItem?.sessionId) === normalizedSessionId,
-    );
-    return Array.isArray(targetSession?.messages) ? targetSession.messages : [];
+    return findSession(sessionId)?.messages || [];
   }
 
   function findMessageByViewKey(sessionId, viewKey) {
@@ -91,21 +90,32 @@ function createSessionMessageLookup(sessions) {
     );
   }
 
-  return { findMessageByViewKey, findMessagesByPresentationId, findUserMessageForCommit };
+  return {
+    findMessageByViewKey,
+    findMessagesByPresentationId,
+    findSession,
+    findUserMessageForCommit,
+  };
 }
 
-export function createSessionMessageView({
-  sessions,
-  activeSession,
-  activeSessionId,
-  userId,
-  isImageMime,
-}) {
-  const { findMessageByViewKey, findMessagesByPresentationId, findUserMessageForCommit } =
-    createSessionMessageLookup(sessions);
+export function createSessionMessageView({ sessions, activeSession, activeSessionId, userId }) {
+  const {
+    findMessageByViewKey,
+    findMessagesByPresentationId,
+    findSession,
+    findUserMessageForCommit,
+  } = createSessionMessageLookup(sessions);
 
   function appendMessage(role, content = "", attachments = [], options = {}) {
-    const msg = reactive(buildAppendMessage(role, content, attachments, options));
+    const msg = reactive(
+      buildAppendMessage({
+        sessionId: activeSession.value.sessionId,
+        role,
+        content,
+        attachments,
+        options,
+      }),
+    );
     activeSession.value.messages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
     activeSession.value.lastMessage = findVisibleLastMessage(activeSession.value.messages);
@@ -113,18 +123,10 @@ export function createSessionMessageView({
     return msg;
   }
 
-  function upsertCanonicalAssistantMessage(presentationMessageId, identity = {}) {
-    const normalizedPresentationId = text(presentationMessageId);
-    if (!normalizedPresentationId) return null;
-    const sessionId = text(
-      identity?.sessionId || activeSession.value?.sessionId || activeSessionId.value,
-    );
-    const existing = findMessageByViewKey(sessionId, normalizedPresentationId);
+  function upsertCanonicalAssistantMessage(presentationMessageId, identity) {
+    const existing = findMessageByViewKey(identity.sessionId, presentationMessageId);
     if (existing) return existing;
-    return appendMessage(RoleEnum.ASSISTANT, "", [], {
-      ...identity,
-      presentationMessageId: normalizedPresentationId,
-    });
+    return appendMessage(RoleEnum.ASSISTANT, "", [], { ...identity, presentationMessageId });
   }
 
   function materializeTurnPresentation(envelope = {}) {
@@ -143,14 +145,13 @@ export function createSessionMessageView({
     for (const source of [presentation.userMessage, presentation.assistantMessage]) {
       const sourceMessage = {
         ...source,
-        sessionId,
         ts: source.ts || source.createdAt || envelope.occurredAt,
       };
       const existing =
         getMessageRole(sourceMessage) === RoleEnum.USER
           ? findUserMessageForCommit(sessionId, sourceMessage)
           : findMessageByViewKey(sessionId, resolveMessageViewKey(sourceMessage));
-      const canonical = makeViewMessage(sourceMessage);
+      const canonical = makeViewMessage(sourceMessage, { sessionId });
       if (existing) {
         const runtime = Object.fromEntries(
           PRESENTATION_RUNTIME_FIELDS.filter((field) => existing[field] !== undefined).map(
@@ -169,8 +170,12 @@ export function createSessionMessageView({
     return { applied: true, createdCount };
   }
 
-  function makeViewMessage(messageItem = {}) {
-    return reactive(buildViewMessage(messageItem, { userId: userId.value, isImageMime }));
+  function makeViewMessage(messageItem, { sessionId }) {
+    return reactive(buildViewMessage(messageItem, { sessionId, userId: userId.value }));
+  }
+
+  function makeViewAttachments(attachments) {
+    return normalizeMessageAttachments(attachments, { userId: userId.value });
   }
 
   function shouldRenderMessageInChat(messageItem) {
@@ -205,10 +210,12 @@ export function createSessionMessageView({
     appendMessage,
     findMessageByViewKey,
     findMessagesByPresentationId,
+    findSession,
     findUserMessageForCommit,
     materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage,
+    makeViewAttachments,
     shouldRenderMessageInChat,
   };
 }

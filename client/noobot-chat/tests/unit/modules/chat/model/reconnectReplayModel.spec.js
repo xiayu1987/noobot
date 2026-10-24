@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import {
   createEventEnvelope,
@@ -15,15 +14,7 @@ import {
   INTERACTION_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
-import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import {
-  findLatestPendingAssistantAfterLastUser,
-  findRecoverableReconnectSessionId,
-  findReusableMessageObject,
-  isDialogProcessRecoverable,
-  mergeCurrentUserMessagesIntoFoldedMessages,
-  patchMessageObjectPreservingUiState,
-} from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
+import { findRecoverableReconnectSessionId } from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
 
 const producer = { type: "test", id: "reconnect-replay-model" };
 
@@ -65,102 +56,50 @@ const pendingInteraction = (requestId) =>
   });
 
 describe("reconnectReplayModel", () => {
-  it("isDialogProcessRecoverable respects running/pending interaction only", () => {
-    const activeTurn = {
+  const entryWithTurn = (turnScopeId, state) => ({
+    sessionId: "s-1",
+    replayBatch: createReplayBatch({
       sessionId: "s-1",
-      turnScopeId: "turn-1",
-      messageId: "message-1",
-      presentationMessageId: "presentation-1",
-      revision: 1,
-      sequence: 1,
-      state: "processing",
-      startedAt: "2026-01-01T00:00:00.000Z",
-    };
-    const snapshot = createTurnLifecycleSnapshot({
-      commandId: "command-1",
+      snapshot: createTurnLifecycleSnapshot({
+        commandId: `command-${turnScopeId}`,
+        sessionId: "s-1",
+        sequence: 1,
+        activeTurnScopeId: turnScopeId,
+        activeTurn: {
+          sessionId: "s-1",
+          turnScopeId,
+          dialogProcessId: `dp-${turnScopeId}`,
+          presentationMessageId: `presentation-${turnScopeId}`,
+          revision: 1,
+          sequence: 1,
+          state,
+          startedAt: "2026-01-01T00:00:00.000Z",
+        },
+      }),
+      snapshotSequence: 1,
+    }),
+  });
+  const idleEntry = (pendingInteractions) => ({
+    sessionId: "s-1",
+    replayBatch: createReplayBatch({
       sessionId: "s-1",
-      sequence: 1,
-      activeTurnScopeId: "turn-1",
-      activeTurn,
-    });
-    const runningBatch = createReplayBatch({ sessionId: "s-1", snapshot, snapshotSequence: 1 });
-    expect(
-      isDialogProcessRecoverable({ sessionId: "s-1", replayBatch: runningBatch }, [
-        { event: StreamEventEnum.DELTA, data: { text: "x" } },
-      ]),
-    ).toBe(true);
+      snapshot: null,
+      snapshotSequence: 0,
+      pendingInteractions,
+    }),
+  });
 
+  it("findRecoverableReconnectSessionId recovers only running turns or pending interactions", () => {
+    expect(findRecoverableReconnectSessionId([entryWithTurn("turn-1", "processing")], "")).toBe(
+      "s-1",
+    );
     expect(
-      isDialogProcessRecoverable(
-        {
-          sessionId: "s-1",
-          replayBatch: createReplayBatch({
-            sessionId: "s-1",
-            snapshot: createTurnLifecycleSnapshot({
-              commandId: "command-stopped",
-              sessionId: "s-1",
-              sequence: 1,
-              activeTurnScopeId: "turn-stopped",
-              activeTurn: {
-                sessionId: "s-1",
-                turnScopeId: "turn-stopped",
-                messageId: "m-stopped",
-                presentationMessageId: "p-stopped",
-                revision: 1,
-                sequence: 1,
-                state: "stop_completed",
-                startedAt: "2026-01-01T00:00:00.000Z",
-              },
-            }),
-            snapshotSequence: 1,
-          }),
-        },
-        [{ event: StreamEventEnum.DELTA, data: { text: "history" } }],
-      ),
-    ).toBe(false);
-
+      findRecoverableReconnectSessionId([entryWithTurn("turn-stopped", "stop_completed")], ""),
+    ).toBe("");
+    expect(findRecoverableReconnectSessionId([idleEntry([])], "")).toBe("");
     expect(
-      isDialogProcessRecoverable(
-        {
-          sessionId: "s-1",
-          replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }),
-        },
-        [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
-      ),
-    ).toBe(false);
-
-    expect(
-      isDialogProcessRecoverable(
-        {
-          sessionId: "s-1",
-          replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }),
-        },
-        [
-          { event: "message", data: {} },
-          { event: StreamEventEnum.DELTA, data: { text: "history" } },
-        ],
-      ),
-    ).toBe(false);
-
-    expect(
-      isDialogProcessRecoverable(
-        {
-          sessionId: "s-1",
-          replayBatch: createReplayBatch({
-            sessionId: "s-1",
-            snapshot: null,
-            snapshotSequence: 0,
-            pendingInteractions: [pendingInteraction("request-1")],
-          }),
-        },
-        [
-          {
-            event: StreamEventEnum.INTERACTION_REQUEST,
-            data: { __agentProxyPendingInteraction: true },
-          },
-        ],
-      ),
-    ).toBe(true);
+      findRecoverableReconnectSessionId([idleEntry([pendingInteraction("request-1")])], ""),
+    ).toBe("s-1");
   });
 
   it("findRecoverableReconnectSessionId keeps the authoritative current session when present", () => {
@@ -190,7 +129,7 @@ describe("reconnectReplayModel", () => {
           activeTurn: {
             sessionId: "s-other",
             turnScopeId: "turn-other",
-            messageId: "message-other",
+            dialogProcessId: "dp-other",
             presentationMessageId: "presentation-other",
             revision: 1,
             sequence: 2,
@@ -205,316 +144,5 @@ describe("reconnectReplayModel", () => {
     expect(findRecoverableReconnectSessionId([currentIdle, otherRecoverable], "s-current")).toBe(
       "s-current",
     );
-  });
-
-  it("findLatestPendingAssistantAfterLastUser only searches after latest user", () => {
-    const messages = [
-      { role: RoleEnum.USER, content: "q1" },
-      { role: RoleEnum.ASSISTANT, pending: true, content: "old pending" },
-      { role: RoleEnum.USER, content: "q2" },
-      { role: RoleEnum.ASSISTANT, pending: false, content: "done" },
-      { role: RoleEnum.ASSISTANT, pending: true, content: "new pending" },
-    ];
-    expect(findLatestPendingAssistantAfterLastUser(messages)?.content).toBe("new pending");
-  });
-
-  it("patchMessageObjectPreservingUiState does not overwrite runtime state from an unscoped detail patch", () => {
-    const startedAt = "2026-06-22T10:00:00.000Z";
-    const target = {
-      role: "assistant",
-      dialogProcessId: "dp-time",
-      content: "partial",
-      pending: true,
-      channelState: { state: "sending", createdAt: startedAt, createdAtMs: Date.parse(startedAt) },
-      thinkingStartedAt: startedAt,
-    };
-
-    patchMessageObjectPreservingUiState(target, {
-      role: "assistant",
-      dialogProcessId: "dp-time",
-      content: "partial from detail",
-      pending: false,
-    });
-
-    expect(target.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
-    expect(target.thinkingStartedAt).toBe(startedAt);
-    expect(target.pending).toBe(true);
-  });
-
-  it("patchMessageObjectPreservingUiState keeps non-degrading content and transfer fields", () => {
-    const envelope = {
-      protocol: "noobot.semantic-transfer",
-      version: TRANSFER_VERSION,
-      transferId: "transfer-existing",
-      presentationMessageId: "message-existing",
-      identity: {
-        sessionId: "session-transfer",
-        turnScopeId: "turn-existing",
-        runId: "run-existing",
-        producer: { type: "tool", id: "call-existing" },
-      },
-      direction: "output",
-      payload: { mode: "direct", content: "existing transfer" },
-      intent: {
-        source: "tool",
-        reason: "semantic_transfer_tool_result",
-        scenario: "tool",
-        strategy: "tool_result_text",
-      },
-      meta: {},
-    };
-    const target = {
-      content: "existing content",
-      attachments: [{ name: "a.txt" }],
-      modelRuns: [{ id: 1 }],
-      completedToolLogs: [{ id: 1 }],
-      realtimeLogs: [{ id: 1 }],
-      transferEnvelopes: [envelope],
-      thinkingOpenNames: ["thinking-panel"],
-      expandedToolDetailKeys: ["k1"],
-      terminalOutcome: "pending",
-    };
-
-    patchMessageObjectPreservingUiState(target, {
-      content: "   ",
-      attachments: [],
-      modelRuns: [],
-      completedToolLogs: [],
-      realtimeLogs: [],
-      terminalOutcome: "generated",
-    });
-
-    expect(target.content).toBe("existing content");
-    expect(target.attachments).toHaveLength(1);
-    expect(target.modelRuns).toHaveLength(1);
-    expect(target.completedToolLogs).toEqual([{ id: 1 }]);
-    expect(target.realtimeLogs).toEqual([{ id: 1 }]);
-    expect(target.transferEnvelopes).toEqual([envelope]);
-    expect(target.terminalOutcome).toBe("pending");
-  });
-
-  it("patchMessageObjectPreservingUiState merges distinct V2 transfer envelopes", () => {
-    const makeEnvelope = (id) => ({
-      protocol: "noobot.semantic-transfer",
-      version: TRANSFER_VERSION,
-      transferId: `transfer-${id}`,
-      presentationMessageId: "message-1",
-      identity: {
-        sessionId: "session-transfer",
-        turnScopeId: "turn-1",
-        runId: "run-1",
-        producer: { type: "tool", id: `call-${id}` },
-      },
-      direction: "output",
-      payload: { mode: "direct", content: id },
-      intent: {
-        source: "tool",
-        reason: "semantic_transfer_tool_result",
-        scenario: "tool",
-        strategy: "tool_result_text",
-      },
-      meta: {},
-    });
-    const existingTransferEnvelope = makeEnvelope("old");
-    const incomingTransferEnvelope = makeEnvelope("new");
-    const target = { role: RoleEnum.ASSISTANT, transferEnvelopes: [existingTransferEnvelope] };
-    patchMessageObjectPreservingUiState(target, {
-      role: RoleEnum.ASSISTANT,
-      transferEnvelopes: [incomingTransferEnvelope],
-    });
-    expect(target.transferEnvelopes).toEqual([existingTransferEnvelope, incomingTransferEnvelope]);
-  });
-
-  it("findReusableMessageObject does not reuse assistant by dialogProcessId without turnScopeId", () => {
-    const existing = [
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "old" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", content: "other" },
-    ];
-    const reusable = findReusableMessageObject(
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", content: "new" },
-      existing,
-    );
-    expect(reusable).toBeNull();
-  });
-
-  it("findReusableMessageObject reuses assistant only by presentationMessageId", () => {
-    const existing = [
-      {
-        role: RoleEnum.ASSISTANT,
-        presentationMessageId: "presentation-1",
-        dialogProcessId: "dp-1",
-        turnScopeId: "turn-1",
-        content: "old",
-      },
-      {
-        role: RoleEnum.ASSISTANT,
-        presentationMessageId: "presentation-2",
-        dialogProcessId: "dp-2",
-        turnScopeId: "turn-2",
-        content: "other",
-      },
-    ];
-    const reusable = findReusableMessageObject(
-      {
-        role: RoleEnum.ASSISTANT,
-        presentationMessageId: "presentation-2",
-        dialogProcessId: "dp-2",
-        turnScopeId: "turn-2",
-        content: "new",
-      },
-      existing,
-    );
-    expect(reusable).toBe(existing[1]);
-  });
-
-  it("findReusableMessageObject does not guess assistant identity from a shared turn", () => {
-    const existing = [
-      {
-        role: RoleEnum.ASSISTANT,
-        presentationMessageId: "presentation-existing",
-        turnScopeId: "turn-shared",
-        toolTimeline: [{ key: "call:complete", args: { path: "README.md" } }],
-      },
-    ];
-
-    expect(
-      findReusableMessageObject(
-        {
-          role: RoleEnum.ASSISTANT,
-          presentationMessageId: "presentation-next",
-          turnScopeId: "turn-shared",
-          toolCalls: [{ name: "read_file" }],
-        },
-        existing,
-      ),
-    ).toBeNull();
-    expect(existing[0].toolTimeline[0].args).toEqual({ path: "README.md" });
-  });
-
-  it("patchMessageObjectPreservingUiState preserves authoritative thinking when a same-process snapshot omits turnScopeId", () => {
-    const target = {
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-stale",
-      turnScopeId: "turn-old",
-      attachments: [{ name: "old.txt" }],
-      completedToolLogs: [{ id: "old-tool" }],
-      realtimeLogs: [{ id: "workflow-mermaid", text: "```mermaid\ngraph TD\nA-->B\n```" }],
-      processCompletedToolLogs: [{ id: "old-process" }],
-      processRealtimeLogs: [{ id: "old-process-realtime" }],
-      processExecutionLogTotal: 2,
-    };
-
-    patchMessageObjectPreservingUiState(target, {
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-stale",
-      content: "new assistant without turn",
-    });
-
-    expect(target.turnScopeId).toBe("turn-old");
-    expect(target.attachments).toEqual([{ name: "old.txt" }]);
-    expect(target.completedToolLogs).toEqual([{ id: "old-tool" }]);
-    expect(target.realtimeLogs).toEqual([
-      { id: "workflow-mermaid", text: "```mermaid\ngraph TD\nA-->B\n```" },
-    ]);
-    expect(target.processCompletedToolLogs).toEqual([{ id: "old-process" }]);
-    expect(target.processRealtimeLogs).toEqual([{ id: "old-process-realtime" }]);
-    expect(target.processExecutionLogTotal).toBe(2);
-  });
-
-  it("patchMessageObjectPreservingUiState rejects an unscoped snapshot for an already scoped assistant", () => {
-    const target = {
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-old",
-      turnScopeId: "turn-old",
-      realtimeLogs: [{ id: "old-realtime" }],
-      completedToolLogs: [{ id: "old-tool" }],
-    };
-
-    patchMessageObjectPreservingUiState(target, {
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-new",
-      content: "different process snapshot",
-    });
-
-    expect(target.turnScopeId).toBe("turn-old");
-    expect(target.realtimeLogs).toEqual([{ id: "old-realtime" }]);
-    expect(target.completedToolLogs).toEqual([{ id: "old-tool" }]);
-  });
-
-  it("patchMessageObjectPreservingUiState keeps running assistant turnScopeId for stop after refresh", () => {
-    const target = {
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-running",
-      turnScopeId: "turn-running",
-      pending: true,
-      channelState: {
-        state: "sending",
-        dialogProcessId: "dp-running",
-        turnScopeId: "turn-running",
-      },
-      attachments: [{ name: "running.txt" }],
-      completedToolLogs: [{ id: "tool-running" }],
-      realtimeLogs: [{ id: "log-running" }],
-    };
-
-    patchMessageObjectPreservingUiState(target, {
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-running",
-      content: "running assistant from replay without turn",
-    });
-
-    expect(target.turnScopeId).toBe("turn-running");
-    expect(target.channelState).toMatchObject({ state: "sending", turnScopeId: "turn-running" });
-    expect(target.pending).toBe(true);
-  });
-
-  it("findReusableMessageObject rejects dialogProcessId reuse when turn identity conflicts", () => {
-    const existing = [
-      {
-        role: RoleEnum.ASSISTANT,
-        dialogProcessId: "dp-1",
-        turnScopeId: "client-old",
-        content: "old",
-      },
-      {
-        role: RoleEnum.ASSISTANT,
-        dialogProcessId: "dp-2",
-        turnScopeId: "turn-old",
-        content: "other",
-      },
-    ];
-
-    expect(
-      findReusableMessageObject(
-        {
-          role: RoleEnum.ASSISTANT,
-          dialogProcessId: "dp-1",
-          turnScopeId: "client-new",
-          content: "new",
-        },
-        existing,
-      ),
-    ).toBeNull();
-    expect(
-      findReusableMessageObject(
-        {
-          role: RoleEnum.ASSISTANT,
-          dialogProcessId: "dp-2",
-          turnScopeId: "turn-new",
-          content: "new",
-        },
-        existing,
-      ),
-    ).toBeNull();
-  });
-
-  it("mergeCurrentUserMessagesIntoFoldedMessages keeps missing user messages", () => {
-    const currentUser = { role: RoleEnum.USER, content: "local user", ts: 2000 };
-    const merged = mergeCurrentUserMessagesIntoFoldedMessages({
-      foldedMessages: [{ role: RoleEnum.ASSISTANT, content: "server", ts: 3000 }],
-      existingMessages: [currentUser],
-    });
-    expect(merged.some((message) => message === currentUser)).toBe(true);
-    expect(merged.map((message) => message.role)).toEqual([RoleEnum.USER, RoleEnum.ASSISTANT]);
   });
 });

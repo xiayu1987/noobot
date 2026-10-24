@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import {
+  TURN_TERMINAL_FIXED_DESCRIPTION,
+  createEmptyTurnLifecycle,
+} from "@noobot/session-protocol";
 import {
   composeContextProjectionKey,
   readContextMessageValue,
@@ -252,14 +255,14 @@ test("getContextProjection applies the terminal-history protocol before summariz
       {
         status: "user_stopped",
         reason: "user_stop",
-        description: "用户停止了本轮生成",
+        description: TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped,
         dialogProcessId: "dlg_stopped",
         turnScopeId: "turn_stopped",
       },
       {
         status: "completed",
         reason: "run_completed",
-        description: "本轮对话已正常完成",
+        description: "",
         dialogProcessId: "dlg_completed",
         turnScopeId: "turn_completed",
       },
@@ -531,7 +534,7 @@ test("current terminal round is excluded from both authoritative snapshot dimens
       {
         status: "user_stopped",
         reason: "user_stop",
-        description: "用户停止了本轮生成",
+        description: TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped,
         dialogProcessId: "dlg_current",
         turnScopeId: "turn_current",
       },

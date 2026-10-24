@@ -19,7 +19,12 @@ import {
 } from "@noobot/agent-config-protocol";
 import { loadGlobalConfig } from "../src/config/core/global-config-loader.js";
 import { createAgentContextEnvelope } from "@noobot/context-protocol";
+import { createPresentationMessageId } from "@noobot/session-protocol/message-identity";
 import { createAgentExecutionScope } from "../src/context/agent-execution-scope.js";
+import {
+  createMainFlowControlPort,
+  createMainFlowControlState,
+} from "../src/runtime/main-flow-control.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
 import { text, isFunction } from "@noobot/shared/value";
 
@@ -130,12 +135,12 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
   const sessionId = "11111111-1111-4111-8111-111111111111";
   const dialogProcessId = "22222222-2222-4222-8222-222222222222";
   const turnScopeId = "schema-check:turn";
-  const messageId = "33333333-3333-4333-8333-333333333333";
   const runtime = {
     userId,
     globalConfig,
     userConfig,
     sharedTools: {},
+    mainFlowControlState: createMainFlowControlState(),
     systemRuntime: {
       userId,
       sessionId,
@@ -143,6 +148,7 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
       parentSessionId: "",
       caller: "user",
       dialogProcessId,
+      persistenceScope: null,
       config: {
         allowUserInteraction: true,
         selectedConnectorIds: [],
@@ -158,7 +164,7 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
       dialogProcessId,
       turnScopeId,
       runId: "schema-check:run",
-      messageId,
+      presentationMessageId: createPresentationMessageId(),
     },
     environment: {
       os: {
@@ -186,7 +192,12 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
   });
   return createAgentExecutionScope({
     context,
-    bindings: { runtime, tools: [], extensions: {} },
+    bindings: {
+      runtime,
+      mainFlowControl: createMainFlowControlPort(runtime),
+      tools: [],
+      extensions: {},
+    },
   });
 }
 

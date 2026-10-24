@@ -20,7 +20,7 @@ import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 29;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 30;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 function isValidTransferEnvelopeList(value) {
@@ -112,7 +112,7 @@ function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
 export function buildSessionDisplaySummary(session) {
   const context = createDisplaySummaryContext(session);
   const { messages, turnTimings, sessionId, lifecycle } = context;
-  const displayMessages = buildSessionDisplayMessages({ messages, lifecycle, sessionId });
+  const displayMessages = buildSessionDisplayMessages({ messages, lifecycle });
   const toolArtifactStats = attachSessionToolArtifacts(session, displayMessages, sessionId);
   const summary = {
     schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,

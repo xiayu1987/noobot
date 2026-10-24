@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createMessageEventState } from "../model/messageEventState.js";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   isTransientMessageEvent,
@@ -45,34 +46,26 @@ export function findSubSessionMessageIndex(messages, viewKey) {
   return messages.findIndex((message = {}) => resolveMessageViewKey(message) === viewKey);
 }
 
-export function materializeTurnPresentationMessages({
-  messages,
-  turnPresentation,
-  sessionId,
-  occurredAt,
-}) {
+export function materializeTurnPresentationMessages({ messages, turnPresentation, occurredAt }) {
   for (const source of [turnPresentation?.userMessage, turnPresentation?.assistantMessage]) {
     if (!source) continue;
     const sourceIndex = findSubSessionMessageIndex(messages, resolveMessageViewKey(source));
     const materialized = {
       ...source,
-      sessionId,
       createdAt: source.ts || occurredAt,
     };
     if (sourceIndex >= 0) messages[sourceIndex] = { ...messages[sourceIndex], ...materialized };
-    else messages.push(materialized);
+    else messages.push({ ...materialized, messageEventState: createMessageEventState() });
   }
 }
 
 export function applySubSessionMessageIdentity({ targetMessage, envelope }) {
   const { identity, payload, occurredAt } = envelope;
-  targetMessage.sessionId = identity.sessionId;
   targetMessage.parentSessionId = payload.parentSessionId;
   targetMessage.dialogProcessId = payload.dialogProcessId;
   targetMessage.turnScopeId = identity.turnScopeId;
   targetMessage.presentationMessageId = payload.presentationMessageId;
   targetMessage.createdAt ||= occurredAt;
-  if (typeof targetMessage.pending !== "boolean") targetMessage.pending = true;
 }
 
 export function applySubSessionMessageOrdering({ targetMessage, envelope }) {

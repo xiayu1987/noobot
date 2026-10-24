@@ -147,14 +147,12 @@ test("state-committer keeps one canonical assistant presentation per Turn", asyn
   await committer.pushAssistantMessage({
     content: "first",
     messageUid: createMessageUid(),
-    messageId: "message-first",
     presentationMessageId: "presentation-canonical",
     chatPresentation: true,
   });
   await committer.pushAssistantMessage({
     content: "second",
     messageUid: createMessageUid(),
-    messageId: "message-second",
     presentationMessageId: "presentation-canonical",
     chatPresentation: true,
   });
@@ -293,7 +291,6 @@ test("state-committer checkpoints assistant and tool records with presentation i
   await committer.pushAssistantMessage({
     content: "analysis",
     messageUid: createMessageUid(),
-    messageId: "msg_model_checkpoint",
     presentationMessageId: "msg_chat_checkpoint",
     type: "tool_call",
   });

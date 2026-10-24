@@ -14,6 +14,9 @@ import {
   HOOK_POINT,
   createTestAgentExecutionScope,
 } from "./runner-bot-hook.fixtures.js";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   const botHookManager = createTestBotHookManager();
@@ -84,7 +87,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
       ?.activePresentationMessageId,
     beforeDispatchContext?.runConfig?.presentationMessageId,
   );
-  assert.equal(beforeDispatchContext?.runConfig?.messageId, undefined);
+  assert.equal(beforeDispatchContext?.runConfig?.[LEGACY_MESSAGE_ID], undefined);
   assert.match(beforeDispatchContext?.runConfig?.presentationMessageId, /^pm_/);
   assert.equal(beforeDispatchContext?.runtimeAgentContext, undefined);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");

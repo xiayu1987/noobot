@@ -119,8 +119,7 @@ export function useChatSession({
   const pendingTerminalResolutionDiscoveries = new Map();
   let resolveDiscoveredTerminalTurn = null;
   function resolveActiveSessionIdentity() {
-    const sessionId = text(activeSession.value?.sessionId || activeSessionId.value);
-    return sessionId;
+    return activeSessionId.value;
   }
 
   function resolveActiveTurnScopeIdentity() {
@@ -388,8 +387,7 @@ export function useChatSession({
       scope: "session",
       category: "system",
       event,
-      sessionId:
-        payload?.sessionId || String(activeSession.value?.sessionId || activeSessionId.value || ""),
+      sessionId: payload?.sessionId || activeSessionId.value,
       dialogProcessId: payload?.dialogProcessId || "",
       turnScopeId: payload?.turnScopeId || "",
       data: {
@@ -428,12 +426,14 @@ export function useChatSession({
     appendMessage,
     findMessageByViewKey,
     findMessagesByPresentationId,
+    findSession,
     findUserMessageForCommit,
     materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage,
+    makeViewAttachments,
     shouldRenderMessageInChat,
-  } = createSessionMessageView({ sessions, activeSession, activeSessionId, userId, isImageMime });
+  } = createSessionMessageView({ sessions, activeSession, activeSessionId, userId });
 
   const chatList = useChatList({
     userId,
@@ -486,10 +486,12 @@ export function useChatSession({
     serializeAttachments,
     appendMessage,
     findMessagesByPresentationId,
+    findSession,
     findUserMessageForCommit,
     materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage,
+    makeViewAttachments,
     applySessionDetail: chatList.applySessionDetail,
     deleteSessionMessagesFromApi,
     replaceSessionTurnApi,
@@ -525,14 +527,13 @@ export function useChatSession({
   const reconnectReplay = useReconnectReplay({
     sessions,
     activeSession,
-    activeSessionId,
     turnRuntimeRegistry,
     interactionSubmitting,
     chatList,
     findMessageByViewKey,
     findMessagesByPresentationId,
     materializeTurnPresentation,
-    makeViewMessage,
+    makeViewAttachments,
     clearPendingInteraction,
     setPendingInteractionRequest,
     isInteractionRequestHandled,

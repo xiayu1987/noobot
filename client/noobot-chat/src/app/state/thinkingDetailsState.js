@@ -15,15 +15,8 @@ export function getThinkingDetailsCount(messageItem = {}) {
   return selectThinkingDetailCount(messageItem);
 }
 
-function getSummaryThinkingDetailsCount(messageItem = {}) {
-  const count = Number(messageItem?.thinkingDetailCount);
-  return Number.isFinite(count) && count > 0 ? count : 0;
-}
-
 function hasThinkingDetails(messageItem = {}) {
-  return (
-    messageItem?.hasThinkingDetails === true || getSummaryThinkingDetailsCount(messageItem) > 0
-  );
+  return messageItem?.hasThinkingDetails === true || selectThinkingDetailCount(messageItem) > 0;
 }
 
 export function getThinkingDetailsTitle(messageItem = {}, translate) {

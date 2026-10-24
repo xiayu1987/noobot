@@ -15,6 +15,9 @@ import {
   upgradeTransferEnvelopesInDocumentText,
   upgradeTransferEnvelopesInValue,
 } from "../src/index.js";
+import { TRANSFER_ENVELOPE_V2 } from "../src/constants.js";
+
+const V2_FIELD = TRANSFER_ENVELOPE_V2.presentationField;
 
 function currentEnvelope() {
   return directTransfer({
@@ -39,7 +42,7 @@ function currentEnvelope() {
 
 function legacyV2Envelope() {
   const { presentationMessageId, ...rest } = structuredClone(currentEnvelope());
-  return { ...rest, version: 2, messageId: presentationMessageId };
+  return { ...rest, version: 2, [V2_FIELD]: presentationMessageId };
 }
 
 test("upgrades a v2 envelope by renaming messageId to presentationMessageId", () => {
@@ -47,7 +50,7 @@ test("upgrades a v2 envelope by renaming messageId to presentationMessageId", ()
   assert.equal(TRANSFER_VERSION, 3);
   assert.equal(upgraded.version, 3);
   assert.equal(upgraded.presentationMessageId, "msg_presentation-1");
-  assert.equal(Object.hasOwn(upgraded, "messageId"), false);
+  assert.equal(Object.hasOwn(upgraded, V2_FIELD), false);
   assert.deepEqual(upgraded, structuredClone(currentEnvelope()));
   assertTransferEnvelope(upgraded);
 });
@@ -63,7 +66,7 @@ test("rejects a v2 envelope that already carries presentationMessageId", () => {
 });
 
 test("rejects a v2 envelope whose messageId is not a presentation message id", () => {
-  const envelope = { ...legacyV2Envelope(), messageId: "sm_session-uid" };
+  const envelope = { ...legacyV2Envelope(), [V2_FIELD]: "sm_session-uid" };
   assert.throws(() => upgradeTransferEnvelope(envelope), /v2_message_id_not_presentation_id/);
 });
 

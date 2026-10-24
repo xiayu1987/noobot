@@ -299,7 +299,6 @@ test("run transport rebound keeps the stable Run Handle and routes late events o
       event: {
         eventId: "event-after-rebound",
         eventType: "authoritative_final_content",
-        messageId: "message-after-rebound",
         presentationMessageId: "presentation-after-rebound",
       },
     }),

@@ -26,6 +26,7 @@ const event = (sequence, eventId = `event-${sequence}`, overrides = {}) => {
     turnScopeId: "turn-1",
     presentationMessageId: "message-1",
     dialogProcessId: "dialog-1",
+    parentSessionId: "",
     revision: sequence,
     sequence,
     phase: "processing",

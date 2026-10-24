@@ -15,9 +15,9 @@ import {
 test("context diagnostics records compact role and dialog dimensions", () => {
   const summary = summarizeDiagnosticMessages(
     [
-      { role: "user", content: "u1", dialogProcessId: "d1" },
-      { role: "assistant", content: "a1", dialogProcessId: "d1" },
-      { role: "user", content: "u2", dialogId: "d2", summarized: true },
+      { role: "user", content: "u1", additional_kwargs: { dialogProcessId: "d1" } },
+      { role: "assistant", content: "a1", additional_kwargs: { dialogProcessId: "d1" } },
+      { role: "user", content: "u2", additional_kwargs: { summarized: true } },
       { role: "system", content: "system" },
     ],
     { limit: 1 },
@@ -87,7 +87,7 @@ test("message fingerprints exclude runtime metadata that providers never receive
       content: "stable input",
       summarized: false,
       additional_kwargs: {
-        noobotMessageId: "message-1",
+        messageUid: "message-1",
         dialogProcessId: "dialog-1",
         injectedMessageType: "separate_model_relay:phase_acceptance",
       },
@@ -99,7 +99,7 @@ test("message fingerprints exclude runtime metadata that providers never receive
       content: "stable input",
       summarized: true,
       additional_kwargs: {
-        noobotMessageId: "message-1",
+        messageUid: "message-1",
         dialogProcessId: "dialog-1",
         injectedMessageType: "separate_model_relay:phase_acceptance",
         checkpointRevision: 2,

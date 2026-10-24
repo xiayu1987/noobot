@@ -488,7 +488,7 @@ test("executor is the single model context trace authority at each provider atte
   await port.invoke({
     invocation,
     model: { ...model, alias: "primary" },
-    messages: [{ role: "user", content: "hello", additional_kwargs: { noobotMessageId: "m1" } }],
+    messages: [{ role: "user", content: "hello", additional_kwargs: { messageUid: "m1" } }],
     tools: [{ name: "read_file" }],
     metadata: { context: { summaryCheckpointRevision: 3 } },
     policies: { retry: { transport: { maxAttempts: 2, baseDelayMs: 0 } } },
@@ -510,7 +510,7 @@ test("executor is the single model context trace authority at each provider atte
   assert.equal(traces[0].data.context.summaryCheckpointRevision, 3);
   assert.equal(traces[0].data.model.boundToolCount, 1);
   assert.equal(traces[0].data.messages.count, 1);
-  assert.equal(traces[0].data.messages.missingMessageIdCount, 0);
+  assert.equal(traces[0].data.messages.missingMessageUidCount, 0);
   assert.match(traces[0].data.messages.sequenceHash, /^[a-f0-9]{64}$/);
   const invocationEvents = events.filter(({ type }) => type.startsWith("model.invocation."));
   assert.ok(invocationEvents.length > 0);

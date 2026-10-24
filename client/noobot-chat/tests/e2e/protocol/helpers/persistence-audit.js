@@ -231,27 +231,12 @@ export async function auditSessionSummaryArtifacts(
       referencedFiles.add(detailFile);
       const detail = await readJson(detailFile);
       const detailHash = `sha256:${createHash("sha256").update(JSON.stringify(detail)).digest("hex")}`;
-      const presentationMessageId = String(
-        message?.presentationMessageId || message?.messageId || message?.id || "",
-      ).trim();
+      const presentationMessageId = text(message?.presentationMessageId);
       if (
         detailHash !== ref?.contentHash ||
         detail?.presentationMessageId !== presentationMessageId
       ) {
         failSummaryAudit(`session summary detail identity or hash mismatch: ${reference}`, report);
-      }
-      const toolTimeline = Array.isArray(detail?.toolTimeline) ? detail.toolTimeline : [];
-      const activityTimeline = Array.isArray(detail?.activityTimeline)
-        ? detail.activityTimeline
-        : [];
-      const detailEventCount =
-        toolTimeline.reduce(
-          (count, entry = {}) =>
-            count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
-          0,
-        ) + activityTimeline.length;
-      if (detailEventCount !== Number(message?.thinkingDetailCount || 0)) {
-        failSummaryAudit(`session summary detail count mismatch: ${reference}`, report);
       }
       detailBytes += (await fs.stat(detailFile)).size;
       referencedDetailCount += 1;

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isCanonicalText, text } from "@noobot/shared/value";
+import { isCanonicalText } from "@noobot/shared/value";
 import {
   ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
   attachmentLifecycleSequenceScopeId,
@@ -102,13 +102,13 @@ const collectMessageOrderingErrors = (envelope, errors) => {
 };
 
 const collectPresentationIdentityErrors = (envelope, errors) => {
-  const identity = envelope?.identity;
+  const { identity, payload } = envelope;
   for (const role of ["user", "assistant"]) {
-    const message = envelope?.payload?.presentation?.[`${role}Message`];
-    if (text(message?.sessionId) !== text(identity?.sessionId)) {
+    const message = payload.presentation[`${role}Message`];
+    if (message.sessionId !== identity.sessionId) {
       errors.push(`${role}_session_identity_mismatch`);
     }
-    if (text(message?.turnScopeId) !== text(identity?.turnScopeId)) {
+    if (message.turnScopeId !== identity.turnScopeId) {
       errors.push(`${role}_turn_identity_mismatch`);
     }
   }
@@ -116,23 +116,18 @@ const collectPresentationIdentityErrors = (envelope, errors) => {
 
 const collectInterjectionIdentityErrors = (envelope, errors) => {
   const { identity, payload, causality } = envelope;
-  const fact = payload.contentFact || {};
-  const commandId = text(causality?.commandId);
-  const sourceMessageUid = text(fact.sourceMessageUid);
-  if (!commandId) errors.push("missing_interjection_command_id");
-  if (text(causality?.causationId) !== commandId) {
+  const fact = payload.contentFact;
+  if (!isCanonicalText(causality.commandId)) errors.push("missing_interjection_command_id");
+  if (causality.causationId !== causality.commandId) {
     errors.push("interjection_causation_identity_mismatch");
   }
-  if (!sourceMessageUid || text(fact.contentId) !== `message:${sourceMessageUid}`) {
-    errors.push("interjection_content_identity_mismatch");
-  }
   for (const [factField, envelopeValue] of [
-    ["sessionId", identity?.sessionId],
-    ["turnScopeId", identity?.turnScopeId],
+    ["sessionId", identity.sessionId],
+    ["turnScopeId", identity.turnScopeId],
     ["presentationMessageId", payload.presentationMessageId],
     ["dialogProcessId", payload.dialogProcessId],
   ]) {
-    if (text(fact[factField]) !== text(envelopeValue)) {
+    if (fact[factField] !== envelopeValue) {
       errors.push(`interjection_${factField}_mismatch`);
     }
   }

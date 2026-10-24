@@ -10,6 +10,7 @@ import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js
 
 test("turn lifecycle commit rejects events without causationId", () => {
   const result = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: {},
     event: {
       eventType: TURN_EVENT.ACTION_ACCEPTED,
@@ -34,6 +35,7 @@ test("turn lifecycle commit rejects a terminal event without an explicit termina
   for (const eventType of [TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED, TURN_EVENT.FAILED]) {
     const lifecycle = {};
     const result = commitTurnLifecycle({
+      parentSessionId: "",
       lifecycle,
       event: {
         eventType,
@@ -61,6 +63,7 @@ test("turn lifecycle commit rejects terminalStatus on a retryable finalize failu
   for (const phase of [TURN_PHASE.COMPLETION, TURN_PHASE.STOP]) {
     const lifecycle = {};
     const result = commitTurnLifecycle({
+      parentSessionId: "",
       lifecycle,
       event: {
         eventType: TURN_EVENT.FAILED,

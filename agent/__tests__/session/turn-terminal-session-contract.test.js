@@ -33,7 +33,6 @@ function terminalLifecycle({
     turns: {
       [turnScopeId]: {
         turnScopeId,
-        messageId: `${turnScopeId}-event-message`,
         presentationMessageId: `${turnScopeId}-presentation-message`,
         dialogProcessId,
         state,
@@ -46,7 +45,7 @@ function terminalLifecycle({
           dialogProcessId,
           status,
           reason,
-          description: status,
+          description: status === "completed" ? "" : `${status} explanation`,
           updatedAt: now(),
         },
       },
@@ -63,6 +62,7 @@ test("message-local lifecycle fields cannot become authoritative terminal facts"
       messages: [
         {
           messageUid: "sm_noncanonical_terminal_user",
+          sessionId: "s1",
           role: "user",
           content: "noncanonical",
           turnScopeId: "t1",
@@ -94,6 +94,7 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
       messages: [
         {
           messageUid: "sm_lifecycle_assistant",
+          sessionId: "s-lifecycle",
           role: "assistant",
           presentationMessageId: "pm_fx1",
           modelMessageId: "mm_turn_terminal_session_co_1",
@@ -183,7 +184,8 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
   const parentStatus = parent.turnLifecycle.turns["parent-turn"].terminalStatus;
   assert.notEqual(childStatus, parentStatus);
   assert.ok(Object.isFrozen(childStatus));
-  assert.equal(parentStatus.description, "completed");
+  assert.equal(parentStatus.description, "");
+  assert.equal(childStatus.description, "error explanation");
 });
 
 test("synthetic placeholders cannot enter persistence or summary", () => {
@@ -195,6 +197,7 @@ test("synthetic placeholders cannot enter persistence or summary", () => {
       messages: [
         {
           messageUid: "sm_placeholder_assistant",
+          sessionId: "s-placeholder",
           role: "assistant",
           presentationMessageId: "pm_fx2",
           modelMessageId: "mm_turn_terminal_session_co_2",

@@ -11,6 +11,7 @@ import {
   applyMessageEvent,
   applySessionSnapshot,
   assistantMessages,
+  buildSessionSnapshot,
   commitPresentation,
   createSubSessionEvent,
   resetChatStore,
@@ -295,39 +296,28 @@ describe("useChatStore sub session projection", () => {
     expect(normalized.rejected).toEqual({ errors: ["sequence_scope_mismatch"] });
   });
 
-  it("does not treat an unscoped snapshot sequence as message-event ordering", () => {
+  it("rejects snapshot messages that carry message-event ordering fields", () => {
     const store = useChatStore();
-    applySessionSnapshot(store, {
-      nodeSessionId: "sub-session-1",
-      messages: [
-        {
-          messageUid: "sm-msg-assistant-1",
-          presentationMessageId: "msg-assistant-1",
-          role: "assistant",
-          content: "persisted",
-          turnScopeId: "turn-1",
-          sequence: 999,
-          revision: 999,
-        },
-      ],
-    });
-    commitPresentation(store);
-
-    const result = applyMessageEvent(
-      store,
-      createSubSessionEvent({
-        eventId: "event-live-1",
-        eventType: "thinking",
-        sequence: 1,
-        text: " live",
+    const orderedSnapshot = structuredClone(
+      buildSessionSnapshot({
+        nodeSessionId: "sub-session-1",
+        messages: [
+          {
+            messageUid: "sm-msg-assistant-1",
+            presentationMessageId: "msg-assistant-1",
+            role: "assistant",
+            content: "persisted",
+            turnScopeId: "turn-1",
+          },
+        ],
       }),
     );
+    Object.assign(orderedSnapshot.payload.messages[0], { sequence: 999, revision: 999 });
 
-    expect(result.applied).toBe(true);
-    expect(assistantMessages(store)[0]).toMatchObject({
-      sequence: 2,
-      sequenceDomain: "message-event",
-    });
+    const result = store.applyWorkflowRuntimeEvent(orderedSnapshot, { source: "test_snapshot" });
+
+    expect(result).toMatchObject({ applied: false, reason: "missing_snapshot_message_identity" });
+    expect(store.selectSubSessionMessages("sub-session-1")).toBeNull();
   });
 
   it("keeps an independently identified runtime message separate from final content", () => {
@@ -344,9 +334,6 @@ describe("useChatStore sub session projection", () => {
           content: "",
           turnScopeId: "turn-1",
           dialogProcessId: "runtime-node-dialog",
-          sequence: 5,
-          revision: 2,
-          sequenceDomain: "workflow-node-state",
         },
       ],
     });

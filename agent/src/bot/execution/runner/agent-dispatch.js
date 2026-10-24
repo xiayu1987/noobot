@@ -20,7 +20,7 @@ import {
 } from "../../../observability/context-identity-debug.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
 import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
-import { text, isFunction, isPlainObject } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 function messageUidOf(message) {
   return text(message.messageUid);
@@ -42,13 +42,7 @@ function acceptDispatchedTurnMessages(runtime, messages) {
   }
   const accepted = [];
   for (const message of messages) {
-    if (!isPlainObject(message)) {
-      throw new TypeError("dispatched turn message must be a plain object");
-    }
     const identity = messageUidOf(message);
-    if (!identity) {
-      throw new Error("dispatched turn message requires messageUid");
-    }
     const updatedCount = store.updateWhere(
       message,
       (current) => messageUidOf(current) === identity,

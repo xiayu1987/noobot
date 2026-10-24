@@ -51,10 +51,11 @@ function roleIdentityOf(message = {}, index = 0, turnScopeId = "") {
   return {};
 }
 
-export function canonicalMessages(messages = []) {
+export function canonicalMessages(messages, sessionId) {
   return messages.map((message, index) => {
     const turnScopeId = String(message?.turnScopeId || `turn-fixture-${index + 1}`);
     return {
+      sessionId,
       messageUid: String(message?.messageUid || `sm_fixture_${index + 1}`),
       ...roleIdentityOf(message, index, turnScopeId),
       dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
@@ -70,7 +71,10 @@ export async function writeSessionArtifact(options = {}) {
     sessionPayload: applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
       ...options.sessionPayload,
-      messages: canonicalMessages(options.sessionPayload?.messages),
+      messages: canonicalMessages(
+        options.sessionPayload.messages,
+        options.sessionPayload.sessionId,
+      ),
     }),
   });
 }

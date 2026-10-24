@@ -294,3 +294,11 @@ test("only standalone activity events are durable; activity deltas are transport
     false,
   );
 });
+
+test("canonical activity facts require an integer sequence", () => {
+  const fact = projectCanonicalActivityTimelineEvent(activityEnvelope());
+
+  assert.equal(isCanonicalActivityTimelineFact({ ...fact, sequence: "1" }), false);
+  assert.equal(isCanonicalActivityTimelineFact({ ...fact, sequence: 1.5 }), false);
+  assert.deepEqual(mergeCanonicalActivityTimelines([{ ...fact, sequence: "1" }]), []);
+});

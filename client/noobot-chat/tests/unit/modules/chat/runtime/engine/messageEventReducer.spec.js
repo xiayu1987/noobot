@@ -21,23 +21,27 @@ import {
   raiseSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 
 function event(overrides = {}) {
   return canonicalMessageEvent(overrides);
 }
 
 function message(overrides = {}) {
-  return {
-    role: "assistant",
-    presentationMessageId: "message-1",
-    turnScopeId: "turn-1",
-    content: "",
-    realtimeLogs: [],
-    ...overrides,
-  };
+  return buildViewMessage(
+    {
+      role: "assistant",
+      presentationMessageId: "message-1",
+      turnScopeId: "turn-1",
+      content: "",
+      ...overrides,
+    },
+    { sessionId: "session-1" },
+  );
 }
 
-const reduce = (targetMessage, envelope) => reduceMessageEvent({ targetMessage, event: envelope });
+const reduce = (targetMessage, envelope) =>
+  reduceMessageEvent({ targetMessage, state: targetMessage.messageEventState, event: envelope });
 
 describe("reduceMessageEvent", () => {
   it("reduces an authoritative user interjection event into the thinking timeline", () => {
@@ -363,15 +367,12 @@ describe("reduceMessageEvent", () => {
     ]);
   });
 
-  it("returns observable idempotency and sequence outcomes", () => {
+  it("returns observable idempotency and stale outcomes", () => {
     const target = message();
     reduce(target, event());
     expect(reduce(target, event()).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE);
     expect(reduce(target, event({ eventId: "evt-stale", sequence: 1 })).result).toBe(
       MESSAGE_EVENT_REDUCE_RESULT.STALE,
-    );
-    expect(reduce(target, event({ eventId: "evt-gap", sequence: 3 })).result).toBe(
-      MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP,
     );
   });
 
@@ -419,7 +420,15 @@ describe("reduceMessageEvent", () => {
   it("atomically replaces final content, attachments and semantic transfers", () => {
     const target = message({
       content: "draft",
-      attachments: [{ attachmentId: "stale" }],
+      attachments: [
+        {
+          identity: { attachmentId: "att-stale", sessionId: "session-1", attachmentSource: "test" },
+          attachmentId: "att-stale",
+          sessionId: "session-1",
+          attachmentSource: "test",
+          name: "stale.md",
+        },
+      ],
       transferEnvelopes: [],
     });
     const attachments = [
@@ -653,8 +662,7 @@ describe("reduceMessageEvent", () => {
     expect(target.messageEventState.lastSequence).toBe(1);
   });
 
-  it("rejects invalid, missing targets and identity conflicts", () => {
-    expect(reduce(null, event()).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.TARGET_MISSING);
+  it("rejects invalid events and identity conflicts", () => {
     expect(reduce(message(), event({ toolCallId: "" })).result).toBe(
       MESSAGE_EVENT_REDUCE_RESULT.INVALID,
     );

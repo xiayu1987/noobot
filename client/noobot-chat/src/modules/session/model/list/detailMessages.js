@@ -27,12 +27,9 @@ export function buildNormalizedDetailMessages({
   makeViewMessage,
 } = {}) {
   const sourceMessages = Array.isArray(detailMessages) ? detailMessages : [];
-  const normalizedMessages = sourceMessages.map((messageItem) => makeViewMessage(messageItem));
-  for (const messageItem of normalizedMessages) {
-    if (!messageItem.sessionId && rootSessionId) {
-      messageItem.sessionId = rootSessionId;
-    }
-  }
+  const normalizedMessages = sourceMessages.map((messageItem) =>
+    makeViewMessage(messageItem, { sessionId: rootSessionId }),
+  );
   mergeChildTurnAttachmentsIntoRootMessages({
     rootMessages: normalizedMessages,
     sessionDocs,
@@ -65,7 +62,9 @@ export function buildChildAttachmentsByParentDialogProcessId({
     if (!sessionId || sessionId === text(rootSessionId)) continue;
     const messageList = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
     for (const messageItem of messageList) {
-      const normalizedAttachments = getMessageAttachments(makeViewMessage(messageItem));
+      const normalizedAttachments = getMessageAttachments(
+        makeViewMessage(messageItem, { sessionId }),
+      );
       if (!normalizedAttachments.length) continue;
       const parentDialogProcessId = text(messageItem?.parentDialogProcessId);
       if (!parentDialogProcessId) continue;

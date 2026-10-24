@@ -44,7 +44,7 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   expect(messages.preview.length + Number(messages.truncated || 0)).toBe(messages.count);
   expect(Array.isArray(messages.evidence)).toBe(true);
   expect(messages.evidence).toHaveLength(messages.count);
-  expect(Number.isInteger(messages.missingMessageIdCount)).toBe(true);
+  expect(Number.isInteger(messages.missingMessageUidCount)).toBe(true);
   expect(messages.fingerprintProtocolVersion).toBe(2);
   expect(Array.isArray(messages.fingerprints)).toBe(true);
   expect(messages.fingerprints).toHaveLength(messages.count);
@@ -54,17 +54,19 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   }
   expect(Number.isInteger(record.data?.context?.summaryCheckpointRevision)).toBe(true);
   expect(record.data.context.summaryCheckpointRevision).toBeGreaterThanOrEqual(0);
-  const previewMissingMessageIds = messages.preview.filter((message) => !message.messageId).length;
-  expect(messages.missingMessageIdCount).toBeGreaterThanOrEqual(previewMissingMessageIds);
-  expect(messages.missingMessageIdCount).toBeLessThanOrEqual(
-    previewMissingMessageIds + Number(messages.truncated || 0),
+  const previewMissingMessageUids = messages.preview.filter(
+    (message) => !message.messageUid,
+  ).length;
+  expect(messages.missingMessageUidCount).toBeGreaterThanOrEqual(previewMissingMessageUids);
+  expect(messages.missingMessageUidCount).toBeLessThanOrEqual(
+    previewMissingMessageUids + Number(messages.truncated || 0),
   );
   for (const message of messages.preview) {
     expect(typeof message.role).toBe("string");
     expect(message.role.length).toBeGreaterThan(0);
-    if (message.messageId !== undefined) {
-      expect(typeof message.messageId).toBe("string");
-      expect(message.messageId.length).toBeGreaterThan(0);
+    if (message.messageUid !== undefined) {
+      expect(typeof message.messageUid).toBe("string");
+      expect(message.messageUid.length).toBeGreaterThan(0);
     }
     expect(message.contentHash).toMatch(/^[a-f0-9]{16}$/);
     expect(typeof message.contentPreview).toBe("string");

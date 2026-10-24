@@ -6,8 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setTransportDiagnosticsLogSink } from "../../../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import { routeMessageProjectionEvent } from "../../../../../../src/modules/chat/runtime/engine/messageProjectionRouter.js";
-import { hydrateTurnSnapshot } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 
 const finalEvent = (overrides = {}) =>
@@ -63,13 +63,16 @@ describe("live canonical message projection", () => {
 
   it("rejects a split presentation identity without creating a second assistant entity", () => {
     const messages = [
-      {
-        presentationMessageId: "assistant-message-1",
-        sessionId: "session-1",
-        turnScopeId: "turn-1",
-        role: "assistant",
-        content: "",
-      },
+      buildViewMessage(
+        {
+          presentationMessageId: "assistant-message-1",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          role: "assistant",
+          content: "",
+        },
+        { sessionId: "session-1" },
+      ),
     ];
     const logSessionEvent = vi.fn();
     const mismatched = finalEvent({
@@ -105,13 +108,16 @@ describe("live canonical message projection", () => {
 
   it("does not project a child authority message into the root channel Session", () => {
     const messages = [
-      {
-        presentationMessageId: "assistant-message-1",
-        sessionId: "session-1",
-        turnScopeId: "turn-1",
-        role: "assistant",
-        content: "",
-      },
+      buildViewMessage(
+        {
+          presentationMessageId: "assistant-message-1",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          role: "assistant",
+          content: "",
+        },
+        { sessionId: "session-1" },
+      ),
     ];
     const logSessionEvent = vi.fn();
     const childEvent = finalEvent({
@@ -141,15 +147,18 @@ describe("live canonical message projection", () => {
     expect(logSessionEvent).not.toHaveBeenCalled();
   });
 
-  it("keeps the canonical entity set identical after live completion and snapshot hydration", () => {
+  it("keeps a single canonical entity after live completion", () => {
     const messages = [
-      {
-        presentationMessageId: "assistant-message-1",
-        sessionId: "session-1",
-        turnScopeId: "turn-1",
-        role: "assistant",
-        content: "",
-      },
+      buildViewMessage(
+        {
+          presentationMessageId: "assistant-message-1",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          role: "assistant",
+          content: "",
+        },
+        { sessionId: "session-1" },
+      ),
     ];
     const context = contextFor(messages);
 
@@ -180,24 +189,5 @@ describe("live canonical message projection", () => {
         }),
       }),
     );
-
-    const idsBeforeRefresh = messages.map(({ messageId }) => messageId);
-    const hydration = hydrateTurnSnapshot({
-      targetMessage: messages[0],
-      snapshot: {
-        presentationMessageId: "assistant-message-1",
-        sessionId: "session-1",
-        turnScopeId: "turn-1",
-        role: "assistant",
-        content: "final answer",
-        throughSequence: 1,
-      },
-      throughSequence: 1,
-    });
-
-    expect(hydration).toMatchObject({ applied: true, result: "snapshot_accepted" });
-    expect(messages.map(({ messageId }) => messageId)).toEqual(idsBeforeRefresh);
-    expect(messages).toHaveLength(1);
-    expect(messages[0].content).toBe("final answer");
   });
 });

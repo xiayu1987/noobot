@@ -430,12 +430,14 @@ test("runSession drains accepted user interjections before sealing the stopped s
       messageUid: "interjection-uid-interjection-command-1",
       message: "first interjection",
       receivedAt: "2026-05-21T00:00:01.000Z",
+      interjectionSequence: 1,
     },
     {
       commandId: "interjection-command-2",
       messageUid: "interjection-uid-interjection-command-2",
       message: "second interjection",
       receivedAt: "2026-05-21T00:00:02.000Z",
+      interjectionSequence: 2,
     },
   ];
   const runner = createRunner({

@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  TURN_TERMINAL_FIXED_DESCRIPTION,
   createTurnTerminalStatus,
   materializeTurnTerminalMessages,
   normalizeTurnTerminalStatus,
@@ -21,10 +22,30 @@ const committed = createTurnTerminalStatus("completed", {
 test("terminal status normalization keeps only the command contract shape", () => {
   assert.deepEqual(normalizeTurnTerminalStatus(committed), committed);
   assert.deepEqual(normalizeTurnTerminalStatus({ ...committed, extra: "x" }), committed);
-  assert.deepEqual(
-    normalizeTurnTerminalStatus(createTurnTerminalStatus("aborted", { turnScopeId: "t" })),
-    createTurnTerminalStatus("aborted", { turnScopeId: "t" }),
+  const aborted = createTurnTerminalStatus("aborted", {
+    turnScopeId: "t",
+    dialogProcessId: "d",
+    description: "run aborted",
+  });
+  assert.equal(aborted.description, "run aborted");
+  assert.deepEqual(normalizeTurnTerminalStatus(aborted), aborted);
+});
+
+test("terminal status description follows the protocol contract", () => {
+  const identity = { turnScopeId: "t", dialogProcessId: "d" };
+  const stopped = createTurnTerminalStatus("user_stopped", { ...identity, description: "x" });
+  assert.equal(stopped.description, TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped);
+  assert.deepEqual(normalizeTurnTerminalStatus(stopped), stopped);
+  assert.equal(normalizeTurnTerminalStatus({ ...stopped, description: "" }), null);
+  assert.equal(
+    createTurnTerminalStatus("completed", { ...identity, description: "x" }).description,
+    "",
   );
+  assert.equal(normalizeTurnTerminalStatus({ ...committed, description: "x" }), null);
+  for (const command of ["error", "aborted", "timeout"]) {
+    assert.equal(createTurnTerminalStatus(command, identity), null);
+  }
+  assert.equal(createTurnTerminalStatus("error", { turnScopeId: "t", description: "x" }), null);
 });
 
 test("terminal status normalization rejects non-protocol shapes", () => {
@@ -44,14 +65,25 @@ test("terminal status projection reads only protocol-shaped turn.terminalStatus"
       "turn-a": { turnScopeId: "turn-a", state: "completed", terminalStatus: committed },
       "turn-b": { turnScopeId: "turn-b", state: "processing_failed", failure: { code: "x" } },
       "turn-c": { turnScopeId: "turn-c", state: "processing" },
-      "turn-d": {
-        turnScopeId: "turn-d",
-        state: "completed",
-        terminalStatus: { status: "completed" },
-      },
     },
   });
   assert.deepEqual(statuses, [committed]);
+});
+
+test("terminal status projection rejects non-protocol turn.terminalStatus", () => {
+  assert.throws(
+    () =>
+      projectTurnTerminalStatuses({
+        turns: {
+          "turn-d": {
+            turnScopeId: "turn-d",
+            state: "completed",
+            terminalStatus: { status: "completed" },
+          },
+        },
+      }),
+    /Invalid turn terminal status: turn-d/,
+  );
 });
 
 test("terminal materialization rejects non-protocol terminal status", () => {

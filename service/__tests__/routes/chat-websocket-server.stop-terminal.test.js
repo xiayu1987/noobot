@@ -303,7 +303,6 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       parentDialogProcessId: payload.parentDialogProcessId || "",
       status: "user_stopped",
       reason: "user_stop",
-      description: "用户停止了本轮生成",
     };
   };
   for (const event of [
@@ -318,7 +317,6 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       phase: "action",
       action: "send",
       dialogProcessId: "dp-idle-stop",
-      messageId: "msg-event-idle-stop",
       presentationMessageId: "msg-idle-stop",
     },
     {
@@ -351,6 +349,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
               })
             : null;
           const result = commitTurnLifecycle({
+            parentSessionId: "",
             lifecycle,
             event,
             eventOutbox: authorityEventOutbox,
@@ -509,7 +508,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       startedAt: "2026-07-18T00:00:00.000Z",
       phase: "action",
       action: "send",
-      userMessageId: "msg-event-after-idle-stop",
+      dialogProcessId: "dp-after-idle-stop",
       presentationMessageId: "msg-after-idle-stop",
     });
     assert.equal(nextAction.applied, true);

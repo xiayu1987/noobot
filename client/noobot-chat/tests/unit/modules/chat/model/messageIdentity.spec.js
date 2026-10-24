@@ -17,44 +17,23 @@ import {
 } from "../../../../../src/modules/chat/model/messageIdentity.js";
 
 describe("messageIdentity", () => {
-  it("normalizes compatible message identity fields", () => {
+  it("reads top-level message identity fields only", () => {
     expect(getMessageTurnScopeId({ turnScopeId: " c1 " })).toBe("c1");
-    expect(getMessageDialogProcessId({ dialogId: " d1 " })).toBe("d1");
+    expect(getMessageDialogProcessId({ dialogProcessId: "d1" })).toBe("d1");
+    expect(getMessageDialogProcessId({ dialogId: "d1" })).toBe("");
     expect(getMessageExplicitTurnIdentity({ turnScopeId: " c1 " })).toBe("c1");
     expect(getMessageExplicitTurnIdentity({ dialogProcessId: " d1 " })).toBe("");
-  });
-
-  it("infers role and content from serialized LangChain messages", () => {
-    const humanMessage = {
-      lc_id: ["langchain_core", "messages", "human", "HumanMessage"],
-      type: "constructor",
-      kwargs: { content: "hello from human" },
-    };
-    const aiMessage = {
-      lc_id: ["langchain_core", "messages", "ai", "AIMessage"],
-      type: "constructor",
-      lc_kwargs: { content: "hello from ai" },
-    };
-
-    expect(getMessageRole(humanMessage)).toBe("user");
-    expect(getMessageContentIdentity(humanMessage)).toBe("hello from human");
-    expect(getMessageRole(aiMessage)).toBe("assistant");
-    expect(getMessageContentIdentity(aiMessage)).toBe("hello from ai");
-  });
-
-  it("treats frontend user markers as user messages when role is missing", () => {
-    expect(
-      getMessageRole({
-        content: "original user prompt",
-        additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
-      }),
-    ).toBe("user");
   });
 
   it("ignores removed authorRole/senderRole/messageRole aliases", () => {
     expect(getMessageRole({ authorRole: "user" })).toBe("");
     expect(getMessageRole({ senderRole: "assistant" })).toBe("");
     expect(getMessageRole({ messageRole: "assistant" })).toBe("");
+    expect(getMessageRole({ messageOrigin: "natural" })).toBe("");
+    expect(getMessageRole({ lc_id: ["langchain_core", "messages", "human", "HumanMessage"] })).toBe(
+      "",
+    );
+    expect(getMessageContentIdentity({ lc_kwargs: { content: "x" } })).toBe("");
   });
 
   it("normalizes workflow-node turn scope keys for persisted/runtime matching", () => {

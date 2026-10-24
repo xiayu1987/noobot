@@ -8,11 +8,7 @@ import {
   projectSessionMessageRecordIdentity,
 } from "@noobot/session-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
-import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
-import {
-  mergeCanonicalActivityTimelines,
-  selectCanonicalActivityTimeline,
-} from "@noobot/event-protocol/activity-timeline";
+import { selectCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
 import {
   pickLightAttachments,
   pickLightPluginMeta,
@@ -108,45 +104,6 @@ export function buildMessageSummary(message = {}) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
   return compactMessageSummary(summary);
-}
-
-export function buildThinkingDetailCountByMessage(messages = []) {
-  const routeByMessage = new WeakMap();
-  const factsByRoute = new Map();
-  messages.forEach((message, index) => {
-    if (!isPlainObject(message)) return;
-    const turnScopeId = text(message?.turnScopeId);
-    const dialogProcessId = text(message?.dialogProcessId);
-    const route = turnScopeId
-      ? `turn:${turnScopeId}`
-      : dialogProcessId
-        ? `dialog:${dialogProcessId}`
-        : `message:${index}`;
-    routeByMessage.set(message, route);
-    const facts = factsByRoute.get(route) || { activityTimeline: [], toolTimeline: [] };
-    facts.activityTimeline = mergeCanonicalActivityTimelines(
-      facts.activityTimeline,
-      message?.activityTimeline || [],
-    );
-    for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
-      if (!isPlainObject(item)) continue;
-      const key = text(item?.key || item?.toolCallId);
-      const existingIndex = key
-        ? facts.toolTimeline.findIndex((entry) => text(entry?.key || entry?.toolCallId) === key)
-        : -1;
-      if (existingIndex >= 0) {
-        facts.toolTimeline[existingIndex] = { ...facts.toolTimeline[existingIndex], ...item };
-      } else {
-        facts.toolTimeline.push(item);
-      }
-    }
-    factsByRoute.set(route, facts);
-  });
-  return (message = {}) => {
-    const facts = factsByRoute.get(routeByMessage.get(message));
-    if (!facts) return 0;
-    return countCanonicalThinkingDetailEvents(facts);
-  };
 }
 
 const DISPLAY_ROLES = new Set(["user", "assistant"]);

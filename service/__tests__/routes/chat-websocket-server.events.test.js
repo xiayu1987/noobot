@@ -14,11 +14,11 @@ import {
 test("authority outbox publishes child lifecycle under the persisted child session identity", async () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
     eventId: "child-event",
+    parentSessionId: "parent-session",
     event: {
       eventType: "turn.processing_started",
       userId: "u1",
       sessionId: "child-session",
-      parentSessionId: "parent-session",
       turnScopeId: "child-turn",
     },
     turn: {
@@ -26,7 +26,6 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
       sessionId: "child-session",
       parentSessionId: "parent-session",
       turnScopeId: "child-turn",
-      messageId: "child-message",
       presentationMessageId: "child-message",
       dialogProcessId: "child-dialog",
       revision: 2,

@@ -28,7 +28,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     sessionId: "s-recover",
     turnScopeId: "turn-recover",
     ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-recover" }),
-    messageId: "turn-message-recover",
+    dialogProcessId: "dp-recover",
     presentationMessageId: "presentation-recover",
     commandId: "start",
     causationId: "start",

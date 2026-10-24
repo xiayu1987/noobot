@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
   TURN_ORPHAN_RECOVERY,
+  TURN_TERMINAL_FIXED_DESCRIPTION,
   normalizeTurnTerminalStatus,
 } from "@noobot/session-protocol";
 import { migrateSessionDocument } from "../src/index.js";
@@ -97,5 +98,45 @@ test("v10 migration does not run for documents already at the current schema", (
   assert.deepEqual(
     result.document.turnLifecycle.turns[turnScopeId].terminalStatus,
     source.turnLifecycle.turns[turnScopeId].terminalStatus,
+  );
+});
+
+function terminalTurn(terminalStatus) {
+  return { dialogProcessId: "dialog-1", state: "stop_completed", finishedAt, terminalStatus };
+}
+
+function v13Terminal(command, extra = {}) {
+  return {
+    turnScopeId,
+    status: command,
+    reason: command === "user_stopped" ? "user_stop" : "run_error",
+    description: "",
+    updatedAt: finishedAt,
+    dialogProcessId: "dialog-1",
+    ...extra,
+  };
+}
+
+test("v14 migration rebuilds empty user_stopped description from the protocol constant", () => {
+  const result = migrateSessionDocument(sessionWith(terminalTurn(v13Terminal("user_stopped")), 13));
+  const terminalStatus = result.document.turnLifecycle.turns[turnScopeId].terminalStatus;
+  assert.ok(result.migrations.includes("turn-terminal-description-v14"));
+  assert.equal(terminalStatus.description, TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped);
+  assert.deepEqual(normalizeTurnTerminalStatus(terminalStatus), terminalStatus);
+});
+
+test("v14 migration clears a completed terminal description", () => {
+  const status = {
+    ...v13Terminal("completed", { reason: "run_completed" }),
+    description: "done",
+  };
+  const result = migrateSessionDocument(sessionWith(terminalTurn(status), 13));
+  assert.equal(result.document.turnLifecycle.turns[turnScopeId].terminalStatus.description, "");
+});
+
+test("v14 migration rejects an error terminal without its producer description", () => {
+  assert.equal(
+    migrationErrorCode(sessionWith(terminalTurn(v13Terminal("error")), 13)),
+    "SESSION_TURN_TERMINAL_STATUS_UNMIGRATABLE",
   );
 });

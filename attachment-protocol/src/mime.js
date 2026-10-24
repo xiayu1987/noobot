@@ -12,6 +12,7 @@ export const MIME_TYPE = Object.freeze({
   APPLICATION_PDF: "application/pdf",
   TEXT_PLAIN: "text/plain",
   TEXT_MARKDOWN: "text/markdown",
+  TEXT_EVENT_STREAM: "text/event-stream",
   IMAGE_PNG: "image/png",
   IMAGE_JPEG: "image/jpeg",
   IMAGE_WEBP: "image/webp",
@@ -112,4 +113,11 @@ export function resolveMimeTypeFromFileName(fileName = "") {
   const slashIndex = Math.max(name.lastIndexOf("/"), name.lastIndexOf("\\"));
   if (dotIndex <= slashIndex + 1) return DEFAULT_MIME_TYPE;
   return EXTENSION_TO_MIME[name.slice(dotIndex)] || DEFAULT_MIME_TYPE;
+}
+
+export function resolveMediaTypeFromContentType(contentType) {
+  return String(contentType ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
 }

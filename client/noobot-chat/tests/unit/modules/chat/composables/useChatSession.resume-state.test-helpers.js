@@ -56,7 +56,6 @@ export function terminalLifecycleSnapshot({
         sessionId,
         turnScopeId,
         dialogProcessId,
-        messageId: `msg-event-${turnScopeId}`,
         presentationMessageId: `msg-${turnScopeId}`,
         state,
         phase: state === "stop_completed" ? "stop" : "completion",
@@ -98,6 +97,7 @@ export function terminalResolution({
     turn: {
       sessionId,
       turnScopeId,
+      dialogProcessId: `dp-${turnScopeId}`,
       state,
       phase: state === "stop_completed" ? "stop" : "completion",
       revision,
@@ -107,7 +107,10 @@ export function terminalResolution({
       finalizeIntent: state === "stop_completed" ? "stop" : "complete",
       failure: successful ? null : { stage: state.replace("_failed", ""), retryable: false },
       ...(startedAt ? { startedAt } : {}),
-      terminalStatus: terminalStatusFixture(state, turnScopeId),
+      terminalStatus: terminalStatusFixture(state, {
+        turnScopeId,
+        dialogProcessId: `dp-${turnScopeId}`,
+      }),
     },
   };
 }

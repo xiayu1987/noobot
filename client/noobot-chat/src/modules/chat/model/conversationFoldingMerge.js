@@ -49,12 +49,8 @@ function mergeFoldedTimelines(previousMessage, currentMessage) {
   );
   previousMessage.hasThinkingDetails =
     previousMessage.hasThinkingDetails === true || currentMessage.hasThinkingDetails === true;
-  previousMessage.thinkingDetailCount = Math.max(
-    Number(previousMessage?.thinkingDetailCount || 0),
-    Number(currentMessage?.thinkingDetailCount || 0),
-  );
   Object.assign(previousMessage, mergeMessagePresentationFacets(previousMessage, currentMessage));
-  previousMessage.pending = previousMessage.pending === true || currentMessage.pending === true;
+  if (currentMessage.pending === true) previousMessage.pending = true;
 }
 
 function mergeFoldedArtifacts(previousMessage, currentMessage) {

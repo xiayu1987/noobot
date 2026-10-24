@@ -180,13 +180,13 @@ describe("useChatEngine.resend failure rollback", () => {
   it("resendMonotonicMessage rejects a committed snapshot that still materializes the replaced scope", async () => {
     const staleFirst = {
       turnScopeId: "scope-old",
-      dialogId: "dp-reused",
+      dialogProcessId: "dp-reused",
       role: RoleEnum.USER,
       content: "repeat",
     };
     const staleTarget = {
       turnScopeId: "scope-old",
-      dialogId: "dp-reused",
+      dialogProcessId: "dp-reused",
       role: RoleEnum.ASSISTANT,
       content: "old answer",
     };
@@ -303,9 +303,9 @@ describe("useChatEngine.resend failure rollback", () => {
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
         error: expect.any(String),
-        pending: false,
       }),
     );
+    expect(activeSession.value.messages.at(-1)).not.toHaveProperty("pending");
     expect(input.value).toBe("edited retry text");
   });
 });

@@ -10,6 +10,11 @@ import {
 } from "../../../../../src/modules/chat/model/messageModel.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { canonicalActivityFact } from "../helpers/messageEventFixture.js";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
+import {
+  THINKING_DETAIL_CONTENT_KIND,
+  projectThinkingDetailContentTimeline,
+} from "@noobot/event-protocol/thinking-detail-content";
 
 describe("messageModel presentation identity", () => {
   it("projects the canonical persisted model analysis onto the presentation message", () => {
@@ -48,7 +53,7 @@ describe("messageModel presentation identity", () => {
           ts: "2026-07-29T01:01:00.000Z",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -103,7 +108,7 @@ describe("messageModel presentation identity", () => {
           turnScopeId: "client-turn:canonical-presentation",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -137,7 +142,7 @@ describe("messageModel presentation identity", () => {
           turnScopeId: "client-turn:duplicate-presentation",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(2);
@@ -164,7 +169,7 @@ describe("messageModel presentation identity", () => {
           dialogProcessId: "dp-control-1",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -194,7 +199,7 @@ describe("messageModel presentation identity", () => {
           tool_calls: [{ id: "tool-call-1", name: "write_file" }],
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -205,6 +210,37 @@ describe("messageModel presentation identity", () => {
     });
     expect(messages[0].tool_calls).toEqual([
       expect.objectContaining({ id: "tool-call-1", name: "write_file" }),
+    ]);
+  });
+
+  it("keeps hidden user interjection content for the thinking detail timeline", () => {
+    const interjection = buildViewMessage(
+      {
+        messageUid: "sm-interjection-1",
+        role: "user",
+        type: "message",
+        chatPresentation: false,
+        injectedMessage: true,
+        injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+        noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+        content: "please also check the tests",
+        ts: "2026-01-01T00:00:01.000Z",
+        interjectionSequence: 1,
+        sessionId: "s-1",
+        dialogProcessId: "dp-1",
+        turnScopeId: "turn-1",
+      },
+      { sessionId: "s-1" },
+    );
+
+    expect(interjection.content).toBe("please also check the tests");
+    expect(projectThinkingDetailContentTimeline([interjection], [])).toEqual([
+      expect.objectContaining({
+        contentId: "message:sm-interjection-1",
+        contentKind: THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
+        text: "please also check the tests",
+        sequence: 1,
+      }),
     ]);
   });
 });

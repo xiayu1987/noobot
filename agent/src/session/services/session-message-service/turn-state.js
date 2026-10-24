@@ -10,7 +10,6 @@ import { upsertSessionTurnTiming } from "./turn-timing.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   SESSION_ERROR_CODE,
-  TURN_EVENT,
   assertTurnAcceptanceUserMessage,
   decideAggregateConcurrency,
   materializeTurnTerminalMessages,
@@ -34,6 +33,7 @@ import {
 } from "../../authority-outbox-store/outbox-journal.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 async function appendCommittedTurnLifecycleEvent(sessionDir, committedEvent) {
   const eventId = text(committedEvent?.eventId);
@@ -43,29 +43,22 @@ async function appendCommittedTurnLifecycleEvent(sessionDir, committedEvent) {
   );
 }
 
-function validateAcceptedUserMessage(event = {}) {
+function validateAcceptedUserMessage(event) {
   const validation = assertTurnAcceptanceUserMessage(event);
   return validation.materialize ? validation.value : null;
 }
 
-function resolveTurnAcceptance(service, session, event = {}) {
+function resolveTurnAcceptance(service, session, event, sessionCaller) {
+  const acceptedUserMessageInput = validateAcceptedUserMessage({ ...event, sessionCaller });
   const lifecycleEvent = { ...event };
   if (
-    text(lifecycleEvent.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
-    text(lifecycleEvent.action) !== "resend" &&
-    !text(lifecycleEvent.dialogProcessId)
+    acceptedUserMessageInput &&
+    sessionCaller === SESSION_CALLER.USER &&
+    !session.turnLifecycle.turns[lifecycleEvent.turnScopeId]
   ) {
-    const turnScopeId = text(lifecycleEvent.turnScopeId);
-    const existingDialogProcessId = text(
-      session?.turnLifecycle?.turns?.[turnScopeId]?.dialogProcessId,
-    );
-    lifecycleEvent.dialogProcessId =
-      existingDialogProcessId || String(service.allocateDialogProcessId()).trim();
+    lifecycleEvent.dialogProcessId = service.allocateDialogProcessId();
   }
-  return {
-    lifecycleEvent,
-    acceptedUserMessageInput: validateAcceptedUserMessage(lifecycleEvent),
-  };
+  return { lifecycleEvent, acceptedUserMessageInput };
 }
 
 function findTurnScopeUserMessage(session, turnScopeId) {
@@ -110,12 +103,8 @@ async function commitTurnLifecycleWithOutbox({
   const committedEventIds = await readCommittedAuthorityEventIds(outboxSessionDir);
   const result = commitTurnLifecycle({
     lifecycle: session.turnLifecycle,
-    event: {
-      ...lifecycleEvent,
-      userId,
-      sessionId,
-      parentSessionId: scope.resolvedParentSessionId,
-    },
+    event: { ...lifecycleEvent, userId, sessionId },
+    parentSessionId: scope.resolvedParentSessionId,
     isCommittedEventId: (eventId) => committedEventIds.has(eventId),
     ...(materializeTerminal ? { materializeTerminal } : {}),
     createEventId: randomUUID,
@@ -127,6 +116,7 @@ async function commitTurnLifecycleWithOutbox({
 function materializeAcceptedUserMessage({
   session,
   event,
+  turn,
   input,
   userId,
   sessionId,
@@ -146,7 +136,7 @@ function materializeAcceptedUserMessage({
       userName: String(userId),
       sessionId,
       parentSessionId,
-      dialogProcessId: text(event.dialogProcessId),
+      dialogProcessId: turn.dialogProcessId,
       parentDialogProcessId: input.parentDialogProcessId,
       turnScopeId: text(event.turnScopeId),
       messageOrigin: text(input.messageOrigin).toLowerCase(),
@@ -202,6 +192,7 @@ function acceptCommittedTurn({
   const userMessage = materializeAcceptedUserMessage({
     session,
     event: lifecycleEvent,
+    turn: result.turn,
     input: acceptedUserMessageInput,
     userId,
     sessionId,
@@ -268,6 +259,7 @@ export async function applyTurnLifecycleEvent({
         this,
         session,
         event,
+        sessionCaller,
       );
       const { actualVersion, nextAggregateVersion, conflict } = resolveTurnAggregateConcurrency(
         session,
@@ -358,6 +350,7 @@ async function provisionSessionWithInitialTurn({
         this,
         session,
         event,
+        sessionCaller,
       );
       const { actualVersion, nextAggregateVersion, conflict } = resolveTurnAggregateConcurrency(
         session,

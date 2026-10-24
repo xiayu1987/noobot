@@ -44,7 +44,7 @@ function routePostProjectionEvent(event, data, context) {
     botMessage,
     clearMissingInteractionPayloadTimer,
     clearPendingInteraction,
-    makeViewMessage,
+    makeViewAttachments,
     mergeAssistantAttachments,
     navigateOnFirstResponseOnce,
     tryAutoResolveInteraction,
@@ -70,7 +70,7 @@ function routePostProjectionEvent(event, data, context) {
       navigateOnFirstResponseOnce,
       activeSession,
       mergeAssistantAttachments,
-      makeViewMessage,
+      makeViewAttachments,
       logSessionEvent,
     })
   )
@@ -146,6 +146,7 @@ export function createSendStreamEventHandler(context) {
     clearPendingInteraction,
     logSessionEvent,
     makeViewMessage,
+    makeViewAttachments,
     mergeAssistantAttachments,
     navigateOnFirstResponseOnce,
     sessionId,
@@ -153,6 +154,7 @@ export function createSendStreamEventHandler(context) {
     tryAutoResolveInteraction,
     turnScopeId,
     findMessagesByPresentationId,
+    findSession,
     findUserMessageForCommit,
     materializeTurnPresentation,
     reduceSubSessionMessageEvent,
@@ -200,7 +202,6 @@ export function createSendStreamEventHandler(context) {
     }
     if (
       routeForeignTurnLifecycleEvent(event, data, {
-        activeSession,
         applyTurnLifecycleEnvelope,
         logSessionEvent,
         sessionId,
@@ -209,8 +210,8 @@ export function createSendStreamEventHandler(context) {
       return;
     if (
       routeCurrentTurnLifecycleEvent(event, data, {
-        activeSession,
         applyTurnLifecycleEnvelope,
+        findSession,
         findUserMessageForCommit,
         logSessionEvent,
         makeViewMessage,
@@ -244,7 +245,7 @@ export function createSendStreamEventHandler(context) {
       botMessage: botMsg,
       clearMissingInteractionPayloadTimer,
       clearPendingInteraction,
-      makeViewMessage,
+      makeViewAttachments,
       mergeAssistantAttachments,
       navigateOnFirstResponseOnce,
       tryAutoResolveInteraction,

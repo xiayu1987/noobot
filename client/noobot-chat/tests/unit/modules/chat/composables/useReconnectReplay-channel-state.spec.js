@@ -65,7 +65,6 @@ describe("useReconnectReplay channel_state contract", () => {
     const result = await applyTransportState(api, {
       dialogProcessId: "",
       turnScopeId: "",
-      messageId: "",
       state: "sending",
     });
 

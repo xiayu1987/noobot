@@ -33,6 +33,7 @@ const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revi
     commandId: "command-t1",
     userId: "u1",
     sessionId: "s1",
+    parentSessionId: "",
     turnScopeId: "t1",
     presentationMessageId: "msg-t1",
     dialogProcessId: "dp1",

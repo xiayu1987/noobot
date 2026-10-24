@@ -14,9 +14,11 @@ const terminalCommandByTurnState = Object.freeze({
   stop_failed: "error",
 });
 
-export function terminalStatusFixture(state, turnScopeId) {
+export function terminalStatusFixture(state, { turnScopeId, dialogProcessId }) {
   const terminalStatus = createTurnTerminalStatus(terminalCommandByTurnState[state], {
     turnScopeId,
+    dialogProcessId,
+    description: `fixture ${state}`,
   });
   if (!terminalStatus) throw new Error(`terminal status fixture unsupported: ${state}`);
   return terminalStatus;

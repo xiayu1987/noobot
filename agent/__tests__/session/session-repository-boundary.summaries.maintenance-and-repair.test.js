@@ -56,6 +56,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
         { role: "user", content: "1234567890123456789012345" },
         { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
       ],
+      "B",
       "list_b",
     );
     sessionB.currentTaskId = "task-b";
@@ -444,6 +445,7 @@ test("deleting one session does not invalidate another session display summary",
     kept.messages = [
       {
         messageUid: "sm-kept-user",
+        sessionId: "kept",
         role: "user",
         content: "keep me",
         turnScopeId: "turn-kept",

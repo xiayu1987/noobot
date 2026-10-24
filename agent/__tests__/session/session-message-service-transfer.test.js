@@ -334,8 +334,15 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
     parentSessionId: "",
     aggregateVersion: 1,
     messages: [
-      { role: "user", content: "keep", turnScopeId: "turn-keep", dialogProcessId: "dp-keep" },
       {
+        sessionId: "s1",
+        role: "user",
+        content: "keep",
+        turnScopeId: "turn-keep",
+        dialogProcessId: "dp-keep",
+      },
+      {
+        sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx5",
         modelMessageId: "mm_session_message_service__5",

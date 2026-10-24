@@ -216,12 +216,27 @@ function validateSnapshotLifecycle(payload, errors) {
   }
 }
 
+const SNAPSHOT_MESSAGE_FORBIDDEN_FIELDS = Object.freeze([
+  "sessionId",
+  "messageId",
+  "thinking",
+  "toolCall",
+  "toolResult",
+  "rawEvents",
+  "eventId",
+  "sequence",
+  "firstSequence",
+  "revision",
+  "sequenceDomain",
+  "sequenceScopeId",
+]);
+
 function isCanonicalSnapshotMessage(message) {
   return (
     isPlainObject(message) &&
     isCanonicalText(message.messageUid) &&
     isCanonicalText(resolveMessageViewKey(message)) &&
-    !Object.hasOwn(message, "messageId")
+    SNAPSHOT_MESSAGE_FORBIDDEN_FIELDS.every((field) => !Object.hasOwn(message, field))
   );
 }
 

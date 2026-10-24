@@ -389,6 +389,7 @@ test("session artifact persistence should normalize attachment fields before wri
         messages: [
           {
             messageUid: "sm_attachment_user",
+            sessionId: "s-attachments",
             role: "user",
             content: "canonical survives",
             dialogProcessId: "dialog-attachments",
@@ -407,6 +408,7 @@ test("session artifact persistence should normalize attachment fields before wri
           },
           {
             messageUid: "sm_attachment_assistant",
+            sessionId: "s-attachments",
             role: "assistant",
             presentationMessageId: "pm_fx5",
             modelMessageId: "mm_session_repository_bound_3",

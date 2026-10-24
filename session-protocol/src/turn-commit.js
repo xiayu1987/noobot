@@ -14,10 +14,10 @@ const protocol = createTurnUserMessageEventProtocol({
   errorCode: "TURN_COMMITTED_PROTOCOL_INVALID",
 });
 
-export function validateTurnCommittedEventData(data = {}) {
+export function validateTurnCommittedEventData(data) {
   return protocol.validate(data);
 }
 
-export function assertTurnCommittedEventData(data = {}) {
+export function assertTurnCommittedEventData(data) {
   return protocol.assert(data);
 }

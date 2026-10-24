@@ -91,7 +91,7 @@ export function enqueueUserInterjection(handle = {}, interjection = {}, commitAu
   const pendingAcceptance = handle.userInterjectionAcceptanceByCommandId.get(commandId);
   if (pendingAcceptance) return pendingAcceptance.then(() => null);
   if (handle.userInterjectionCommandIds.has(commandId)) return Promise.resolve(null);
-  const receivedAt = String(interjection.receivedAt || new Date().toISOString());
+  const receivedAt = new Date().toISOString();
   handle.userInterjectionCommandIds.add(commandId);
   handle.userInterjectionPendingAcceptanceCount += 1;
   const acceptance = handle.userInterjectionAcceptanceTail.then(async () => {

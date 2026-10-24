@@ -59,11 +59,13 @@ export function useChatEngine({
   clearUploads,
   serializeAttachments,
   appendMessage,
+  findSession,
   findUserMessageForCommit,
   findMessagesByPresentationId,
   materializeTurnPresentation,
   upsertCanonicalAssistantMessage,
   makeViewMessage,
+  makeViewAttachments,
   applySessionDetail,
   deleteSessionMessagesFromApi,
   replaceSessionTurnApi,
@@ -182,15 +184,13 @@ export function useChatEngine({
       })),
     onTrace: (event, details = {}) => logStateMachineDebug(event, details),
   });
-  const applyAuthoritativeTurnLifecycle = (envelope = {}) => {
-    const event = {
+  const applyAuthoritativeTurnLifecycle = async (envelope) => {
+    const lifecycleResult = commitTurnLifecycleEnvelope(envelope);
+    await terminalResolutionCoordinator.observe({
       ...envelope,
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-    };
-    const lifecycleResult = commitTurnLifecycleEnvelope?.(envelope);
-
-    const terminalResolution = terminalResolutionCoordinator.observe(event);
-    return terminalResolution ? terminalResolution.then(() => lifecycleResult) : lifecycleResult;
+    });
+    return lifecycleResult;
   };
   const logSessionStateEvent = (event, name, data) => {
     const sessionId = text(event?.sessionId);
@@ -268,7 +268,7 @@ export function useChatEngine({
   };
   const { applyAssistantFailureState, mergeAssistantAttachments } = createAssistantMessageHelpers({
     translate,
-    makeViewMessage,
+    makeViewAttachments,
   });
 
   const {
@@ -311,11 +311,13 @@ export function useChatEngine({
     applyAssistantFailureState,
     applySessionDetail,
     appendMessage,
+    findSession,
     findUserMessageForCommit,
     findMessagesByPresentationId,
     materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage,
+    makeViewAttachments,
     mergeAssistantAttachments,
   };
   const senderInteractionDeps = {

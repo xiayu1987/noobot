@@ -119,6 +119,7 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
 test("authority dispatcher keeps a failed send pending and reconnect retries the same envelope once", async () => {
   let eventOutbox = [];
   const committed = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: {},
     eventOutbox,
     createEventId: () => "authority-event-send-retry",
@@ -133,7 +134,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
       ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-send-retry" }),
       phase: TURN_PHASE.ACTION,
       action: "send",
-      messageId: "message-send-retry",
+      dialogProcessId: "dp-send-retry",
       presentationMessageId: "presentation-send-retry",
     },
   });
@@ -568,6 +569,7 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
 test("authority dispatcher leaves an event pending when acknowledgement persistence fails", async () => {
   let eventOutbox = [];
   const committed = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: {},
     eventOutbox,
     createEventId: () => "authority-event-ack-retry",
@@ -582,7 +584,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
       ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-ack-retry" }),
       phase: TURN_PHASE.ACTION,
       action: "send",
-      messageId: "message-ack-retry",
+      dialogProcessId: "dp-ack-retry",
       presentationMessageId: "presentation-ack-retry",
     },
   });

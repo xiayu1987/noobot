@@ -32,7 +32,6 @@ import {
 } from "./tool-call-message.js";
 import { prepareToolBinding } from "./tool-binding-preparer.js";
 import { createBoundLlmToolChoiceInvoker } from "./tool-invoke-strategy.js";
-import { normalizeToolTurnAi } from "./tool-turn-normalizer.js";
 import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { applyRequiredToolChoiceUnsupportedRetryDecision } from "./tool-choice-retry-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
@@ -54,7 +53,7 @@ import {
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
-import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { projectToolDefinitionContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   beginAssistantMessageEventStream,
   currentAssistantPresentationMessageId,
@@ -429,13 +428,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  const {
-    rawCalls,
-    calls: normalizedCalls,
-    aiContentText: normalizedAiContentText,
-  } = normalizeToolTurnAi(ai);
-  const calls = normalizedCalls.map((call) =>
-    projectToolContextPolicy(call, toolMap.get(call.name)),
+  const calls = ai.toolCalls.map((call) =>
+    projectToolDefinitionContextPolicy(call, toolMap.get(call.name)),
   );
 
   const controlToolCall =
@@ -476,7 +470,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       agentContext: modelState.agentContext,
     }),
   });
-  const finalAiContentText = normalizedAiContentText;
+  const finalAiContentText = ai.text;
   const assistantMessageUid = createMessageUid();
   appendMessage(
     modelContext,
@@ -537,7 +531,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     toolCallCount: calls.length,
   });
   handleRequiredToolChoiceNotFollowed({
-    rawCalls,
+    toolCalls: ai.toolCalls,
     adaptedBinding,
     runtime,
     eventListener,

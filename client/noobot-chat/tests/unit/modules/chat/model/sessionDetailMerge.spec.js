@@ -90,7 +90,6 @@ describe("mergeCanonicalSessionDetail", () => {
       role: "assistant",
       type: "message",
       content: "final answer",
-      pending: false,
       turnScopeId: "turn-1",
     };
 
@@ -104,8 +103,8 @@ describe("mergeCanonicalSessionDetail", () => {
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
       content: "final answer",
-      pending: false,
     });
+    expect(merged.messages[0]).not.toHaveProperty("pending");
     expect(merged.messages[0].toolTimeline).toEqual([{ eventId: "tool-1" }]);
   });
 
@@ -116,7 +115,6 @@ describe("mergeCanonicalSessionDetail", () => {
       role: "assistant",
       type: "message",
       content: "final answer",
-      pending: false,
       turnScopeId: "turn-1",
     };
     const realtime = {
@@ -137,8 +135,8 @@ describe("mergeCanonicalSessionDetail", () => {
     expect(merged.messages[0]).toMatchObject({
       messageUid: "uid-1",
       content: "final answer",
-      pending: false,
     });
+    expect(merged.messages[0]).not.toHaveProperty("pending");
     expect(merged.messages[0].activityTimeline).toEqual([
       { eventId: "thinking-1", text: "thinking" },
     ]);
@@ -150,7 +148,6 @@ describe("mergeCanonicalSessionDetail", () => {
       role: "assistant",
       type: "message",
       content: "completed child result",
-      pending: false,
       turnScopeId: "workflow-node:node-2",
     };
     const realtime = {
@@ -171,8 +168,8 @@ describe("mergeCanonicalSessionDetail", () => {
     expect(merged.messages[0]).toMatchObject({
       presentationMessageId: "presentation-2",
       content: "completed child result",
-      pending: false,
     });
+    expect(merged.messages[0]).not.toHaveProperty("pending");
     expect(merged.messages[0].toolTimeline).toEqual([{ eventId: "tool-2" }]);
   });
 
@@ -183,7 +180,6 @@ describe("mergeCanonicalSessionDetail", () => {
       presentationMessageId: "presentation-alias",
       type: "message",
       content: messageUid,
-      pending: false,
     });
     const merged = mergeCanonicalSessionDetail(
       { sessionId: "session-1", messages: [message("a1")] },

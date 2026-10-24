@@ -10,9 +10,7 @@ import { createSessionAggregateVersionManager } from "../../../../../../src/modu
 
 describe("sessionAggregateVersionManager stream protocol", () => {
   it("applies the conflict version and retries without replacing local presentations", async () => {
-    const localMessages = [
-      { messageId: "local-user", messageOrigin: "natural", userMetaMaterialized: true },
-    ];
+    const localMessages = [{ messageOrigin: "natural", userMetaMaterialized: true }];
     const activeSession = ref({
       sessionId: "s1",
       aggregateVersion: 2,
@@ -48,7 +46,7 @@ describe("sessionAggregateVersionManager stream protocol", () => {
     ]);
     expect(toRaw(activeSession.value.messages)).toBe(localMessages);
     expect(activeSession.value.messages).toEqual([
-      { messageId: "local-user", messageOrigin: "natural", userMetaMaterialized: true },
+      { messageOrigin: "natural", userMetaMaterialized: true },
     ]);
     expect(result).toMatchObject({ attempt: 2, expectedAggregateVersion: 3 });
   });

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
@@ -68,6 +69,7 @@ test("session save refreshes the display projection with live activity timeline"
         },
       ],
       "live",
+      "live",
     );
     await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
@@ -88,7 +90,8 @@ test("session save refreshes the display projection with live activity timeline"
     );
     assert.equal(display.messages.length, 1);
     assert.equal(display.messages[0].presentationMessageId, "presentation-live");
-    assert.equal(display.messages[0].thinkingDetailCount, 1);
+    assert.equal(Object.hasOwn(display.messages[0], "thinkingDetailCount"), false);
+    assert.equal(countCanonicalThinkingDetailEvents(display.messages[0]), 1);
     assert.equal(display.messages[0].activityTimeline.length, 1);
     assert.equal(display.messages[0].activityTimeline[0].eventId, "guidance-analysis:live");
   });
@@ -120,6 +123,7 @@ test("session save leaves the display summary to the revision-checked projection
     });
     session.messages = canonicalMessages(
       [{ role: "user", content: "one durable update" }],
+      "single-summary-write",
       "single_write",
     );
 
@@ -158,6 +162,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     session.messages = [
       {
         messageUid: "sm_historical",
+        sessionId,
         role: "assistant",
         modelMessageId: "mm_historical",
         presentationMessageId: "pm_turn-old",
@@ -167,6 +172,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       },
       {
         messageUid: "sm_current",
+        sessionId,
         role: "user",
         content: "current request",
         dialogProcessId: "dialog-current",
@@ -180,7 +186,6 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
         "turn-current": {
           turnScopeId: "turn-current",
           dialogProcessId: "dialog-current",
-          messageId: "message-current",
           presentationMessageId: "presentation-current",
           state: "processing",
         },
@@ -275,8 +280,16 @@ test("concurrent saves for different sessions preserve every sessions summary en
         ),
       }),
     ]);
-    sessionA.messages = canonicalMessages([{ role: "user", content: "updated A" }], "concurrent_a");
-    sessionB.messages = canonicalMessages([{ role: "user", content: "updated B" }], "concurrent_b");
+    sessionA.messages = canonicalMessages(
+      [{ role: "user", content: "updated A" }],
+      "A",
+      "concurrent_a",
+    );
+    sessionB.messages = canonicalMessages(
+      [{ role: "user", content: "updated B" }],
+      "B",
+      "concurrent_b",
+    );
 
     await Promise.all([
       runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionA), {

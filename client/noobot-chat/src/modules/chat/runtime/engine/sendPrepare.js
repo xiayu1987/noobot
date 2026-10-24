@@ -71,6 +71,7 @@ export function prepareChatSend({
   activeSession,
   translate,
   navigateToLastMessage,
+  sessionId,
   messageText = "",
   turnScopeId = "",
   userMessageId = "",
@@ -87,7 +88,6 @@ export function prepareChatSend({
   const filesToSend = Array.isArray(attachmentFiles)
     ? [...attachmentFiles]
     : [...uploadFiles.value];
-  const sessionId = String(activeSession.value?.sessionId || "");
   const resolvedUserAttachments = resolveUserAttachments({
     userAttachments,
     filesToSend,
@@ -101,7 +101,6 @@ export function prepareChatSend({
         resolvedUserAttachments,
         {
           userMessageId,
-          sessionId,
           turnScopeId: normalizedTurnScopeId,
           messageOrigin: "natural",
         },

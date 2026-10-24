@@ -47,7 +47,7 @@ function serializedToolCalls(message = {}) {
 }
 
 function toolCallId(call = {}) {
-  return String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
+  return String(call?.id || "").trim();
 }
 
 export function assertSerializedModelMessageSnapshot(snapshot) {
@@ -69,12 +69,9 @@ export function assertSerializedModelMessageSnapshot(snapshot) {
   const declaredToolCallIds = new Set();
   const completedToolCallIds = new Set();
   for (const message of messages) {
-    expect(isPlainObject(message.raw)).toBe(true);
     expect(["system", "human", "ai", "tool"]).toContain(message.type);
     expect(Object.hasOwn(message, "content")).toBe(true);
     expect(isPlainObject(message.additional_kwargs)).toBe(true);
-    expect(isPlainObject(message.lc_kwargs)).toBe(true);
-    expect(typeof message.summarized).toBe("boolean");
 
     if (message.type === "ai") {
       expect(Array.isArray(message.tool_calls)).toBe(true);
@@ -116,10 +113,6 @@ export function assertSnapshotRecoveryInModelInput({ snapshot, continuation, tra
     system: hydrated.messageBlocks.system,
     history: hydrated.messageBlocks.history,
     incremental: projectSnapshotIncrementalToContinuation(hydrated.messageBlocks.incremental, {
-      userName: snapshot.userId,
-      sessionId: snapshot.sessionId,
-      parentSessionId: snapshot.parentSessionId,
-      parentDialogProcessId: "",
       dialogProcessId: text(trace.dialogProcessId),
       turnScopeId: text(trace.turnScopeId),
     }),

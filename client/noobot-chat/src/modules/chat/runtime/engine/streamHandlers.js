@@ -49,7 +49,7 @@ function handleAttachmentsStreamEvent({
 export function handleAttachmentLifecycleStreamEvent({
   data,
   activeSession,
-  makeViewMessage,
+  makeViewAttachments,
   logSessionEvent,
 }) {
   const event = createAttachmentLifecycleEvent(data);
@@ -79,9 +79,7 @@ export function handleAttachmentLifecycleStreamEvent({
         attachmentLifecycle: lifecycle,
         relations: lifecycle.relations,
       };
-      return typeof makeViewMessage === "function"
-        ? makeViewMessage({ attachments: [updated] })?.attachments?.[0] || updated
-        : updated;
+      return makeViewAttachments([updated])[0];
     });
     message.attachments.splice(0, message.attachments.length, ...nextAttachments);
   }

@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TURN_EVENT } from "@noobot/session-protocol";
-import { requireSessionCaller } from "@noobot/shared/session-caller";
+import { SESSION_CALLER, requireSessionCaller } from "@noobot/shared/session-caller";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import {
@@ -66,7 +66,11 @@ function harness(initial = {}) {
     },
   };
   return {
-    service: new SessionMessageService({ sessionRepo: repo, now }),
+    service: new SessionMessageService({
+      sessionRepo: repo,
+      now,
+      allocateDialogProcessId: () => "dp1",
+    }),
     sessionDir,
     outbox: () => readAuthorityOutbox(sessionDir),
     outboxEntry: async (eventId) =>
@@ -129,7 +133,11 @@ function newSessionHarness() {
     },
   };
   return {
-    service: new SessionMessageService({ sessionRepo: repo, now }),
+    service: new SessionMessageService({
+      sessionRepo: repo,
+      now,
+      allocateDialogProcessId: () => "dp1",
+    }),
     sessionDir,
     outbox: () => readAuthorityOutbox(sessionDir),
     reload: () => persisted && normalizeSessionEntity(structuredClone(persisted), { now }),
@@ -138,12 +146,12 @@ function newSessionHarness() {
 
 const event = (eventType, commandId, expectedRevision, extra = {}) => {
   const action = text(extra.action);
+  const userAcceptance = eventType === TURN_EVENT.ACTION_ACCEPTED && action !== "resend";
   return {
     userId: "u1",
     sessionId: "s1",
     turnScopeId: "t1",
-    dialogProcessId: "dp1",
-    messageId: "turn-message-t1",
+    ...(userAcceptance ? { sessionCaller: SESSION_CALLER.USER } : { dialogProcessId: "dp1" }),
     presentationMessageId: "presentation-t1",
     eventType,
     commandId,
@@ -156,7 +164,7 @@ const event = (eventType, commandId, expectedRevision, extra = {}) => {
         }
       : {}),
     ...extra,
-    ...(eventType === TURN_EVENT.ACTION_ACCEPTED && action !== "resend"
+    ...(userAcceptance
       ? {
           userMessage: {
             content: "authoritative user message",

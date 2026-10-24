@@ -25,15 +25,13 @@ describe("messageModel child execution projections", () => {
           turnScopeId: "client-turn:summary-thinking",
           dialogProcessId: "dp-summary-thinking",
           hasThinkingDetails: true,
-          thinkingDetailCount: 3,
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
     expect(messages[0].hasThinkingDetails).toBe(true);
-    expect(messages[0].thinkingDetailCount).toBe(3);
   });
 
   it("keeps child-session thinking and tool facets on view messages", () => {
@@ -56,7 +54,7 @@ describe("messageModel child execution projections", () => {
           rawEvents,
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -84,7 +82,7 @@ describe("messageModel child execution projections", () => {
           workflowNodeRunningPlaceholder: true,
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -114,7 +112,7 @@ describe("messageModel child execution projections", () => {
           projectedStatusStepState: "completing",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -144,7 +142,7 @@ describe("messageModel child execution projections", () => {
           projectedStatusStepState: "completing",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(2);

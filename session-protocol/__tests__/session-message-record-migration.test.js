@@ -30,6 +30,7 @@ function rejects(record, reason) {
 test("assistant messageId is renamed to modelMessageId", () => {
   const { record, changed } = migrateSessionMessageRecordIdentity(
     {
+      sessionId: "s",
       role: "assistant",
       messageUid: "sm_a",
       presentationMessageId: "pm_a",
@@ -40,6 +41,7 @@ test("assistant messageId is renamed to modelMessageId", () => {
   );
   assert.equal(changed, true);
   assert.deepEqual(record, {
+    sessionId: "s",
     role: "assistant",
     messageUid: "sm_a",
     presentationMessageId: "pm_a",

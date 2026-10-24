@@ -87,7 +87,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
         hasThinkingDetails: true,
-        thinkingDetailCount: 1,
       },
       {
         userId: "user-1",
@@ -131,7 +130,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
         hasThinkingDetails: true,
-        thinkingDetailCount: 1,
       },
     });
     await flushAsync();
@@ -146,7 +144,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       sessionId: "session-interjection-detail",
       turnScopeId: "client-turn:interjection-detail",
       hasThinkingDetails: true,
-      thinkingDetailCount: 2,
       toolTimeline: persistedToolTimeline("local-tool", "call-local"),
       thinkingContentTimeline: [
         {
@@ -243,7 +240,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         sessionId: "session-details",
         turnScopeId: "client-turn:details",
         hasThinkingDetails: true,
-        thinkingDetailCount: 1,
       },
       {
         variant: "details",
@@ -266,7 +262,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       sessionId: "session-cached-details",
       turnScopeId: "client-turn:cached-details",
       hasThinkingDetails: true,
-      thinkingDetailCount: 1,
     };
     await loadThinkingDetail({
       sessionId: messageItem.sessionId,
@@ -306,7 +301,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         turnScopeId: "client-turn:running",
         pending: true,
         hasThinkingDetails: true,
-        thinkingDetailCount: 1,
       },
       {
         userId: "user-1",
@@ -326,7 +320,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         sessionId: "session-local",
         turnScopeId: "client-turn:local",
         hasThinkingDetails: true,
-        thinkingDetailCount: 1,
         toolTimeline: persistedToolTimeline("live-tool", "call-live"),
       },
       {

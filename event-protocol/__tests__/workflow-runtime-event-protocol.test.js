@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventEnvelope } from "@noobot/event-protocol/envelope";
 import { getEventFamily } from "@noobot/event-protocol";
-import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { MESSAGE_REMOVED_FIELD_NAME, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import {
   compareWorkflowRuntimeFacts,
   createWorkflowRuntimeEnvelope,
@@ -82,15 +82,36 @@ function snapshotWithMessages(messages) {
 }
 
 test("snapshot messages carry the record key and the role view key, never an alias", () => {
-  const user = { role: "user", messageUid: "sm_user", userMessageId: "um_1" };
-  const assistant = { role: "assistant", messageUid: "sm_ai", presentationMessageId: "pm_1" };
+  const user = {
+    role: "user",
+    messageUid: "sm_user",
+    userMessageId: "um_1",
+  };
+  const assistant = {
+    role: "assistant",
+    messageUid: "sm_ai",
+    presentationMessageId: "pm_1",
+  };
   assert.equal(snapshotWithMessages([user, assistant]).payload.messages.length, 2);
   for (const message of [
     { role: "assistant", messageUid: "sm_ai" },
     { role: "user", userMessageId: "um_1" },
-    { ...user, messageId: "um_1" },
+    { ...user, [MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID]: "um_1" },
+    { ...assistant, rawEvents: [] },
+    { ...assistant, toolResult: {} },
+    { ...assistant, sequenceDomain: "message_event", sequence: 1 },
   ]) {
     assert.throws(() => snapshotWithMessages([message]), /missing_snapshot_message_identity/);
+  }
+});
+
+test("snapshot messages carry no session ownership; the node session container owns it", () => {
+  const base = { role: "user", messageUid: "sm_user", userMessageId: "um_1" };
+  for (const sessionId of ["", "child-session", "other-session"]) {
+    assert.throws(
+      () => snapshotWithMessages([{ ...base, sessionId }]),
+      /missing_snapshot_message_identity/,
+    );
   }
 });
 

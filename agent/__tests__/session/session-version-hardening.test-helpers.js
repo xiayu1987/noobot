@@ -8,6 +8,8 @@ import os from "node:os";
 import path from "node:path";
 import { after } from "node:test";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { isObjectLike } from "@noobot/shared/value";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import {
@@ -38,7 +40,10 @@ export function harness(initial = {}) {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
     async ensureSession() {},
-    async findById() {
+    async findById(_u, _s, options = {}) {
+      if (!isObjectLike(options)) {
+        throw new TypeError("findById options must be { persistenceContext }");
+      }
       return structuredClone(session);
     },
     async findTurnView(_u, _s, { turnScopeIds = [] } = {}) {
@@ -79,6 +84,7 @@ export async function acceptTurn(
     userId: "u1",
     sessionId: "s1",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
+    sessionCaller: SESSION_CALLER.USER,
     startedAt: "2026-07-18T00:00:00.000Z",
     phase: TURN_PHASE.ACTION,
     action: "send",

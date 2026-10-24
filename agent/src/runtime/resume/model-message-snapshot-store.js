@@ -11,6 +11,7 @@ import {
   createModelContextSnapshot,
   hydrateModelContextSnapshot,
   normalizeSnapshotIdentity,
+  SNAPSHOT_REQUIRED_IDENTITY_FIELDS,
 } from "@noobot/context-protocol/policy/snapshot";
 import {
   inspectContextMessageIdentity,
@@ -131,14 +132,9 @@ export async function saveStoppedModelMessageSnapshot({
   turnProgress = {},
 } = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
-  if (
-    !normalizedIdentity.userId ||
-    !normalizedIdentity.sessionId ||
-    !normalizedIdentity.dialogProcessId ||
-    !normalizedIdentity.turnScopeId
-  ) {
+  if (SNAPSHOT_REQUIRED_IDENTITY_FIELDS.some((field) => !normalizedIdentity[field])) {
     throw new TypeError(
-      "model message snapshot requires userId, sessionId, dialogProcessId and turnScopeId",
+      `model message snapshot requires ${SNAPSHOT_REQUIRED_IDENTITY_FIELDS.join(", ")}`,
     );
   }
   const location = await resolveSnapshotLocation(normalizedIdentity, globalConfig);
@@ -166,17 +162,9 @@ export async function saveStoppedModelMessageSnapshotFromRuntime({
     return result;
   }
   const { messageBlocks, userMetaBackwrites } = requireActiveModelContext(runtime);
-  const identity = {
-    userId: text(candidate.userId),
-    sessionId: text(candidate.sessionId),
-    parentSessionId: text(candidate.parentSessionId),
-    dialogProcessId: text(candidate.dialogProcessId),
-    turnScopeId: text(candidate.turnScopeId),
-  };
+  const identity = normalizeSnapshotIdentity(candidate);
   const resultBase = { source, identity, messageBlocks };
-  const missingIdentityFields = ["userId", "sessionId", "dialogProcessId", "turnScopeId"].filter(
-    (key) => !identity[key],
-  );
+  const missingIdentityFields = SNAPSHOT_REQUIRED_IDENTITY_FIELDS.filter((key) => !identity[key]);
   if (missingIdentityFields.length) {
     const result = buildSnapshotPersistenceResult({
       ...resultBase,

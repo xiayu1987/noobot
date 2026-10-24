@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 import { describe, expect, it } from "vitest";
 import {
   applyReconnectEnvelopeBatchToTargetMessage,
@@ -10,7 +11,6 @@ import {
 } from "../../../../../../src/modules/chat/runtime/reconnect/batchReplay.js";
 import {
   dispatchTurnEnvelope,
-  hydrateTurnSnapshot,
   TURN_PROJECTION_SOURCE,
 } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
@@ -70,7 +70,7 @@ describe("reconnect authoritative message event replay", () => {
       messages.filter((message) => message.presentationMessageId === presentationMessageId);
     const materializeTurnPresentation = (envelope) => {
       for (const message of Object.values(envelope.payload.presentation))
-        messages.push({ ...message });
+        messages.push(buildViewMessage(message, { sessionId: "session-1" }));
       return { applied: true };
     };
 
@@ -90,21 +90,29 @@ describe("reconnect authoritative message event replay", () => {
     const canonicalMessages = new Map([
       [
         "message-1",
-        {
-          presentationMessageId: "message-1",
-          sessionId: "session-1",
-          turnScopeId: "turn-1",
-          content: "",
-        },
+        buildViewMessage(
+          {
+            role: "assistant",
+            presentationMessageId: "message-1",
+            sessionId: "session-1",
+            turnScopeId: "turn-1",
+            content: "",
+          },
+          { sessionId: "session-1" },
+        ),
       ],
       [
         "message-2",
-        {
-          presentationMessageId: "message-2",
-          sessionId: "session-1",
-          turnScopeId: "turn-1",
-          content: "",
-        },
+        buildViewMessage(
+          {
+            role: "assistant",
+            presentationMessageId: "message-2",
+            sessionId: "session-1",
+            turnScopeId: "turn-1",
+            content: "",
+          },
+          { sessionId: "session-1" },
+        ),
       ],
     ]);
     const findMessagesByPresentationId = (sessionId, presentationMessageId) =>
@@ -154,12 +162,15 @@ describe("reconnect authoritative message event replay", () => {
   });
 
   it("uses the canonical reducer and consumes no-text tool events idempotently", () => {
-    const targetMessage = {
-      presentationMessageId: "message-1",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      content: "",
-    };
+    const targetMessage = buildViewMessage(
+      {
+        presentationMessageId: "message-1",
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        content: "",
+      },
+      { sessionId: "session-1" },
+    );
     const start = authoritative("tool_call_start", 1, {
       tool: "read_file",
       toolCallId: "call-1",
@@ -203,12 +214,15 @@ describe("reconnect authoritative message event replay", () => {
   });
 
   it("replays an authoritative user interjection through the canonical message reducer", () => {
-    const targetMessage = {
-      presentationMessageId: "message-1",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      content: "",
-    };
+    const targetMessage = buildViewMessage(
+      {
+        presentationMessageId: "message-1",
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        content: "",
+      },
+      { sessionId: "session-1" },
+    );
     const commandId = "interjection-command-1";
     const interjection = authoritative("user_interjection", 1, {
       commandId,
@@ -243,12 +257,15 @@ describe("reconnect authoritative message event replay", () => {
   });
 
   it("continues guidance analysis on the refreshed canonical message", () => {
-    const targetMessage = {
-      presentationMessageId: "message-1",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      content: "",
-    };
+    const targetMessage = buildViewMessage(
+      {
+        presentationMessageId: "message-1",
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        content: "",
+      },
+      { sessionId: "session-1" },
+    );
     const guidance = (sequence, output) =>
       authoritative("thinking", sequence, {
         eventId: `guidance-analysis-${sequence}`,
@@ -305,11 +322,16 @@ describe("reconnect authoritative message event replay", () => {
       }),
       authoritative("llm_delta", 4, { text: "world" }),
     ];
-    const createTarget = () => ({
-      sessionId: "session-1",
-      presentationMessageId: "message-1",
-      turnScopeId: "turn-1",
-    });
+    const createTarget = () =>
+      buildViewMessage(
+        {
+          role: "assistant",
+          sessionId: "session-1",
+          presentationMessageId: "message-1",
+          turnScopeId: "turn-1",
+        },
+        { sessionId: "session-1" },
+      );
     const normalLive = createTarget();
     const reconnectLive = createTarget();
     const historyReplay = createTarget();
@@ -344,7 +366,14 @@ describe("reconnect authoritative message event replay", () => {
   });
 
   it("rejects cross-turn projection even when history target has no session id", () => {
-    const targetMessage = { presentationMessageId: "message-1", turnScopeId: "turn-stopped" };
+    const targetMessage = buildViewMessage(
+      {
+        role: "assistant",
+        presentationMessageId: "message-1",
+        turnScopeId: "turn-stopped",
+      },
+      { sessionId: "session-1" },
+    );
     const result = dispatchTurnEnvelope({
       targetMessage,
       envelope: authoritative("llm_delta", 1, { turnScopeId: "turn-continuation", text: "wrong" }),
@@ -352,33 +381,26 @@ describe("reconnect authoritative message event replay", () => {
     });
 
     expect(result.result).toBe("message_identity_conflict");
-    expect(targetMessage.content).toBeUndefined();
-  });
-
-  it("does not allow an older snapshot boundary to replace newer live projection", () => {
-    const targetMessage = {
-      sessionId: "session-1",
-      presentationMessageId: "message-1",
-      turnScopeId: "turn-1",
-    };
-    for (const sequence of [1, 2]) {
-      dispatchTurnEnvelope({
-        targetMessage,
-        envelope: authoritative("thinking", sequence, { text: String(sequence) }),
-      });
-    }
-    const result = hydrateTurnSnapshot({
-      targetMessage,
-      snapshot: { sessionId: "session-1", turnScopeId: "turn-1", throughSequence: 1 },
-    });
-
-    expect(result).toMatchObject({ applied: false, result: "snapshot_stale", currentSequence: 2 });
-    expect(targetMessage.activityTimeline.map((item) => item.text)).toEqual(["1", "2"]);
+    expect(targetMessage.content).toBe("");
   });
 
   it("buffers sequence gaps so out-of-order replay converges with ordered live state", () => {
-    const ordered = { presentationMessageId: "message-1", turnScopeId: "turn-1" };
-    const reordered = { presentationMessageId: "message-1", turnScopeId: "turn-1" };
+    const ordered = buildViewMessage(
+      {
+        role: "assistant",
+        presentationMessageId: "message-1",
+        turnScopeId: "turn-1",
+      },
+      { sessionId: "session-1" },
+    );
+    const reordered = buildViewMessage(
+      {
+        role: "assistant",
+        presentationMessageId: "message-1",
+        turnScopeId: "turn-1",
+      },
+      { sessionId: "session-1" },
+    );
     const events = [
       authoritative("thinking", 1, { text: "A" }),
       authoritative("tool_call_start", 2, { tool: "read_file", toolCallId: "call-1", args: {} }),
@@ -406,18 +428,26 @@ describe("reconnect authoritative message event replay", () => {
     expect(observable(reordered)).toEqual(observable(ordered));
   });
 
-  it("keeps stopped and continuation turns isolated across refresh replay", () => {
-    const stopped = {
-      sessionId: "session-1",
-      presentationMessageId: "stopped",
-      turnScopeId: "turn-stopped",
-      content: "old",
-    };
-    const continuation = {
-      sessionId: "session-1",
-      presentationMessageId: "message-1",
-      turnScopeId: "turn-1",
-    };
+  it("keeps stopped and continuation turns isolated", () => {
+    const stopped = buildViewMessage(
+      {
+        role: "assistant",
+        sessionId: "session-1",
+        presentationMessageId: "stopped",
+        turnScopeId: "turn-stopped",
+        content: "old",
+      },
+      { sessionId: "session-1" },
+    );
+    const continuation = buildViewMessage(
+      {
+        role: "assistant",
+        sessionId: "session-1",
+        presentationMessageId: "message-1",
+        turnScopeId: "turn-1",
+      },
+      { sessionId: "session-1" },
+    );
     const toolCall = authoritative("tool_call_start", 1, {
       tool: "read_file",
       toolCallId: "call-continue",
@@ -432,22 +462,20 @@ describe("reconnect authoritative message event replay", () => {
       targetMessage: continuation,
       envelope: toolCall,
     });
-    const staleSnapshot = hydrateTurnSnapshot({
-      targetMessage: continuation,
-      snapshot: { sessionId: "session-1", turnScopeId: "turn-1", throughSequence: 0 },
-    });
     expect(conflict.result).toBe("message_identity_conflict");
     expect(stopped.toolTimeline).toBeUndefined();
     expect(selectToolTimelineLogs(continuation)).toHaveLength(1);
-    expect(staleSnapshot.result).toBe("snapshot_stale");
   });
 
   it("projects canonical delta and tool facts once", () => {
-    const targetMessage = {
-      sessionId: "session-1",
-      presentationMessageId: "message-1",
-      turnScopeId: "turn-1",
-    };
+    const targetMessage = buildViewMessage(
+      {
+        sessionId: "session-1",
+        presentationMessageId: "message-1",
+        turnScopeId: "turn-1",
+      },
+      { sessionId: "session-1" },
+    );
     const authoritativeDelta = authoritative("llm_delta", 1, { text: "canonical" });
     const authoritativeTool = authoritative("tool_call_start", 2, {
       tool: "read_file",

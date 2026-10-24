@@ -10,23 +10,16 @@ export function resolveToolLocale(runtime = {}) {
   return resolveLocaleFromRuntime(runtime);
 }
 
-function pickToolText({
-  locale = "zh-CN",
-  dict = {},
-  key = "",
-  fallbackLocale = "zh-CN",
-  params = {},
-} = {}) {
-  return pickLocaleText({ locale, dict, key, fallbackLocale, params });
-}
-
-export function tTool(runtime = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtime);
-  return pickToolText({
+export function tToolForLocale(locale = "", key = "", params = {}) {
+  return pickLocaleText({
     locale,
     dict: BACKEND_I18N,
     key,
     fallbackLocale: "zh-CN",
     params,
   });
+}
+
+export function tTool(runtime = {}, key = "", params = {}) {
+  return tToolForLocale(resolveToolLocale(runtime), key, params);
 }

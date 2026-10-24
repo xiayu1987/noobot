@@ -34,7 +34,6 @@ function stoppedLifecycle({
         sessionId,
         turnScopeId,
         dialogProcessId,
-        messageId: `message-${turnScopeId}`,
         presentationMessageId: `presentation-${turnScopeId}`,
         action: "stop",
         state: "stop_completed",

@@ -32,7 +32,12 @@ import {
   createTurnSnapshotCommand,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
-import { TURN_EVENT, materializeTurnTerminalMessages } from "@noobot/session-protocol";
+import {
+  assertTurnAcceptanceUserMessage,
+  createEmptyTurnLifecycle,
+  materializeTurnTerminalMessages,
+} from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   deriveAgentExecutionId,
   EXECUTION_KIND,
@@ -49,6 +54,20 @@ export function createAcceptedAgentExecutionIdentity({ turnScopeId } = {}) {
     rootExecutionId: executionId,
     origin: {},
     stage: "",
+  };
+}
+
+export function acceptFakeAgentTurnLifecycleEvent(lifecycle, { sessionCaller, ...event }) {
+  const acceptance = assertTurnAcceptanceUserMessage({ ...event, sessionCaller });
+  const allocatesDialogProcess =
+    acceptance.materialize &&
+    sessionCaller === SESSION_CALLER.USER &&
+    !lifecycle.turns[event.turnScopeId];
+  return {
+    lifecycleEvent: allocatesDialogProcess
+      ? { ...event, dialogProcessId: `dialog:${event.turnScopeId}` }
+      : event,
+    acceptedUserMessage: acceptance.value,
   };
 }
 
@@ -211,7 +230,7 @@ export function startAuthoritativeServerWithWs({
 export async function startServerWithWs({
   runSession,
   materializeTerminalMessages = createInMemoryTerminalMaterializer(),
-  initialTurnLifecycle = {},
+  initialTurnLifecycle = createEmptyTurnLifecycle(),
   resolveAuthByApiKey = () => ({ userId: "primary-user" }),
 }) {
   let turnLifecycle = structuredClone(initialTurnLifecycle);
@@ -219,19 +238,23 @@ export async function startServerWithWs({
   let authorityEventSequence = 0;
   const sessionAuthorities = {
     applyTurnLifecycleEvent: async (event = {}) => {
-      const acceptsUserMessage =
-        event.eventType === TURN_EVENT.ACTION_ACCEPTED && event.action !== "resend";
-      if (acceptsUserMessage && !text(event.dialogProcessId)) {
-        event.dialogProcessId = `dialog:${event.turnScopeId}`;
-      }
-      const result = commitTurnLifecycle({
-        lifecycle: turnLifecycle,
+      const { lifecycleEvent, acceptedUserMessage } = acceptFakeAgentTurnLifecycleEvent(
+        turnLifecycle,
         event,
+      );
+      const result = commitTurnLifecycle({
+        parentSessionId: "",
+        lifecycle: turnLifecycle,
+        event: lifecycleEvent,
         eventOutbox: authorityEventOutbox,
         createEventId: () => `test-authority-event-${++authorityEventSequence}`,
         materializeTerminal: event.terminalStatus
           ? ({ terminalStatus, previousSummaryVersion }) =>
-              materializeTerminalMessages({ event, terminalStatus, previousSummaryVersion })
+              materializeTerminalMessages({
+                event: lifecycleEvent,
+                terminalStatus,
+                previousSummaryVersion,
+              })
           : undefined,
       });
       if (result.applied) {
@@ -243,17 +266,17 @@ export async function startServerWithWs({
       return {
         ...result,
         dialogProcessId: text(result.turn?.dialogProcessId),
-        ...(acceptsUserMessage
+        ...(result.applied && acceptedUserMessage
           ? {
               aggregateVersion: 1,
               userMessage: {
                 messageUid: `session-message:${event.turnScopeId}`,
-                userMessageId: event.userMessage.userMessageId,
+                userMessageId: acceptedUserMessage.userMessageId,
                 role: "user",
                 type: "message",
-                content: text(event.userMessage?.content),
+                content: acceptedUserMessage.content,
                 sessionId: event.sessionId,
-                dialogProcessId: event.dialogProcessId,
+                dialogProcessId: result.turn.dialogProcessId,
                 turnScopeId: event.turnScopeId,
                 messageOrigin: "natural",
                 attachments: [],

@@ -3,33 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { projectThinkingTimeline } from "../thinking-timeline-projection.js";
 import {
   buildDisplayMessageSummary,
-  buildThinkingDetailCountByMessage,
   compactThinkingTimeline,
 } from "./message-summary-projection.js";
 import { buildLifecycleTurnPresentations } from "./turn-artifact-projection.js";
 import { text } from "@noobot/shared/value";
 
 function projectPersistedMessages(messages) {
-  const thinkingDetailCountForMessage = buildThinkingDetailCountByMessage(messages);
-  return messages
-    .map((message) => {
-      const summary = buildDisplayMessageSummary(message);
-      if (!summary || text(message?.role) !== "assistant") return summary;
-      const thinkingDetailCount = thinkingDetailCountForMessage(message);
-      if (thinkingDetailCount > 0) {
-        summary.thinkingDetailCount = thinkingDetailCount;
-        summary.hasThinkingDetails = true;
-      } else {
-        delete summary.thinkingDetailCount;
-        delete summary.hasThinkingDetails;
-      }
-      return summary;
-    })
-    .filter(Boolean);
+  return messages.map((message) => buildDisplayMessageSummary(message)).filter(Boolean);
 }
 
 function findPresentation(messages, presentationMessageId) {
@@ -61,13 +44,7 @@ function mergeAssistantPresentation(existing, incoming) {
   if (!existingIsPlaceholder && !incomingIsPlaceholder) {
     throw new TypeError("session summary contains multiple canonical assistant presentations");
   }
-  const presentation = !incomingIsPlaceholder || existingIsPlaceholder ? incoming : existing;
-  presentation.thinkingDetailCount = Math.max(
-    Number(existing?.thinkingDetailCount || 0),
-    Number(incoming?.thinkingDetailCount || 0),
-  );
-  presentation.hasThinkingDetails = presentation.thinkingDetailCount > 0;
-  return presentation;
+  return !incomingIsPlaceholder || existingIsPlaceholder ? incoming : existing;
 }
 
 function dedupeDisplayMessages(messages) {
@@ -97,12 +74,11 @@ function attachThinkingTimeline(messages, displayMessage) {
     delete displayMessage.activityTimeline;
   }
   displayMessage.hasThinkingDetails = true;
-  displayMessage.thinkingDetailCount = countCanonicalThinkingDetailEvents(thinkingTimeline);
 }
 
-export function buildSessionDisplayMessages({ messages, lifecycle, sessionId }) {
+export function buildSessionDisplayMessages({ messages, lifecycle }) {
   const projectedMessages = projectPersistedMessages(messages);
-  for (const presentation of buildLifecycleTurnPresentations(lifecycle, sessionId)) {
+  for (const presentation of buildLifecycleTurnPresentations(lifecycle)) {
     insertLifecyclePresentation(projectedMessages, presentation);
   }
   const displayMessages = dedupeDisplayMessages(projectedMessages);

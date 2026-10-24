@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { parseTaskCheckContent } from "@noobot/context-protocol/task/check";
-import { resolveContextInternalMessageType } from "@noobot/context-protocol/policy/injected-message";
+import { resolveSessionMessageRecordInternalMessageType } from "@noobot/session-protocol";
 import {
   selectPlugins,
   sendMessage,
@@ -31,12 +31,9 @@ import {
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { runOpsWorkdirPath, runOpsWorkdir } from "../helpers/run-ops-workdir.js";
 
-const toolCallName = (call = {}) => String(call.name || call.function?.name || "").trim();
-const toolCallId = (call = {}) => String(call.id || call.tool_call_id || "").trim();
-const toolCallArgs = (call = {}) =>
-  call.args && typeof call.args === "object"
-    ? call.args
-    : JSON.parse(String(call.function?.arguments || "{}"));
+const toolCallName = (call = {}) => String(call.function?.name || "").trim();
+const toolCallId = (call = {}) => String(call.id || "").trim();
+const toolCallArgs = (call = {}) => JSON.parse(String(call.function?.arguments || "{}"));
 
 function toolResultPayload(message = {}) {
   if (message.role !== "tool") return null;
@@ -155,7 +152,8 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
 
   const firstMessages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
   const taskCheckPrompts = firstMessages.filter(
-    (message) => resolveContextInternalMessageType(message) === "noobot.task_check_prompt",
+    (message) =>
+      resolveSessionMessageRecordInternalMessageType(message) === "noobot.task_check_prompt",
   );
   expect(taskCheckPrompts).toHaveLength(taskCheckRequired.length);
   expect(
@@ -197,7 +195,9 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   }
 
   const summaryCallIndex = firstMessages.findLastIndex((message) =>
-    (message.tool_calls || []).some((call) => toolCallName(call) === "task_summary"),
+    (Array.isArray(message.tool_calls) ? message.tool_calls : []).some(
+      (call) => toolCallName(call) === "task_summary",
+    ),
   );
   expect(summaryCallIndex).toBeGreaterThan(0);
   const latestCheckBeforeSummary = [...checks]
@@ -244,7 +244,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   for (const messageUid of preservedCheckpointEvidenceMessageUids) {
     expect(
       postCheckpointInvocations.some((invocation) =>
-        invocation.data.messages.evidence.some((message) => message.messageId === messageUid),
+        invocation.data.messages.evidence.some((message) => message.messageUid === messageUid),
       ),
     ).toBe(true);
   }
@@ -393,7 +393,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   expect(
     secondInvocations.some((invocation) =>
       invocation.data.messages.preview.some(
-        (message) => message.messageId === latestCheckResult.messageUid,
+        (message) => message.messageUid === latestCheckResult.messageUid,
       ),
     ),
   ).toBe(true);

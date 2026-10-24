@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "@noobot/shared/value";
-import { TRANSFER_PROTOCOL, TRANSFER_VERSION } from "./constants.js";
-
-export const TRANSFER_ENVELOPE_LEGACY_VERSION = 2;
+import { TRANSFER_ENVELOPE_V2, TRANSFER_PROTOCOL, TRANSFER_VERSION } from "./constants.js";
 
 function migrationError(code, envelope) {
   const error = new Error(`semantic_transfer_migration:${code}`);
@@ -19,12 +17,14 @@ function upgradeV2ToV3(envelope) {
   if (Object.hasOwn(envelope, "presentationMessageId")) {
     throw migrationError("v2_has_presentation_message_id", envelope);
   }
-  const messageId = envelope.messageId;
-  if (typeof messageId !== "string" || !messageId.startsWith("msg_")) {
+  const { [TRANSFER_ENVELOPE_V2.presentationField]: presentationMessageId, ...rest } = envelope;
+  if (
+    typeof presentationMessageId !== "string" ||
+    !presentationMessageId.startsWith(TRANSFER_ENVELOPE_V2.presentationPrefix)
+  ) {
     throw migrationError("v2_message_id_not_presentation_id", envelope);
   }
-  const { messageId: _legacy, ...rest } = envelope;
-  return { ...rest, version: TRANSFER_VERSION, presentationMessageId: messageId };
+  return { ...rest, version: TRANSFER_VERSION, presentationMessageId };
 }
 
 export function isTransferEnvelopeCandidate(value) {
@@ -36,7 +36,7 @@ export function upgradeTransferEnvelope(envelope) {
     throw migrationError("not_transfer_envelope", envelope);
   }
   if (envelope.version === TRANSFER_VERSION) return envelope;
-  if (envelope.version === TRANSFER_ENVELOPE_LEGACY_VERSION) return upgradeV2ToV3(envelope);
+  if (envelope.version === TRANSFER_ENVELOPE_V2.version) return upgradeV2ToV3(envelope);
   throw migrationError("unsupported_version", envelope);
 }
 

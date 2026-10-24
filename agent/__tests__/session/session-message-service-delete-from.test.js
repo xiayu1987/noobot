@@ -137,7 +137,6 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
         turns: {
           "scope-keep": {
             turnScopeId: "scope-keep",
-            messageId: "message-keep",
             presentationMessageId: "presentation-keep",
             state: "completed",
             revision: 1,
@@ -145,7 +144,6 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
           },
           "scope-delete": {
             turnScopeId: "scope-delete",
-            messageId: "message-delete",
             presentationMessageId: "presentation-delete",
             state: "stop_completed",
             revision: 2,

@@ -6,22 +6,14 @@
 
 import { createSerializedWindowIndex } from "@noobot/timeline-runtime";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { text, isObjectLike } from "@noobot/shared/value";
 
-export function initializeMessageEventState(message = {}) {
-  if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];
-  if (!Array.isArray(message.activityTimeline)) message.activityTimeline = [];
-  if (typeof message.content !== "string") message.content = String(message.content || "");
-  if (!isObjectLike(message.messageEventState)) {
-    message.messageEventState = { lastSequence: 0, consumedEventIds: [] };
-  }
-  if (!Number.isFinite(Number(message.messageEventState.lastSequence))) {
-    message.messageEventState.lastSequence = 0;
-  }
-  if (!Array.isArray(message.messageEventState.consumedEventIds)) {
-    message.messageEventState.consumedEventIds = [];
-  }
-  return message;
+export function createMessageEventState() {
+  return {
+    lastSequence: 0,
+    finalContentSequence: 0,
+    consumedEventIds: [],
+    pendingEnvelopes: {},
+  };
 }
 
 const CONSUMED_EVENT_LIMIT = QUANTITY_THRESHOLDS.client.consumedEventIdsLimit;
@@ -30,13 +22,10 @@ const consumedMessageEvents = createSerializedWindowIndex({
   limit: CONSUMED_EVENT_LIMIT,
 });
 
-export function hasConsumedMessageEvent(state = {}, eventId = "") {
-  const normalizedEventId = text(eventId);
-  return Boolean(normalizedEventId && consumedMessageEvents.has(state, normalizedEventId));
+export function hasConsumedMessageEvent(state, eventId) {
+  return consumedMessageEvents.has(state, eventId);
 }
 
-export function appendConsumedMessageEvent(state = {}, eventId = "") {
-  const normalizedEventId = text(eventId);
-  if (!normalizedEventId) return false;
-  return consumedMessageEvents.append(state, normalizedEventId);
+export function appendConsumedMessageEvent(state, eventId) {
+  return consumedMessageEvents.append(state, eventId);
 }

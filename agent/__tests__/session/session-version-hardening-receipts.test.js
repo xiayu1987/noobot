@@ -131,7 +131,7 @@ test("deleteFromMessage replays a committed receipt without deleting again", asy
 test("replaceTurn replays a committed receipt after the original anchor is gone", async () => {
   const h = harness({
     aggregateVersion: 4,
-    messages: [{ role: "user", content: "old", turnScopeId: "old" }],
+    messages: [{ sessionId: "s1", role: "user", content: "old", turnScopeId: "old" }],
   });
   const input = {
     userId: "u1",
@@ -161,7 +161,7 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
 
 test("replaceTurn idempotency keys reject reuse with a different request", async () => {
   const replace = harness({
-    messages: [{ role: "user", content: "old", turnScopeId: "old" }],
+    messages: [{ sessionId: "s1", role: "user", content: "old", turnScopeId: "old" }],
   });
   await replace.service.replaceTurn({
     userId: "u1",

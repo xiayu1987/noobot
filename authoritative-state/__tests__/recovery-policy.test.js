@@ -131,7 +131,7 @@ test("orphan recovery binds failure to the observed revision", async () => {
   let command = null;
   const result = await recoverActiveTurn({
     turn: staleTurn(),
-    identity: { userId: "u1", sessionId: "s1", parentSessionId: "parent" },
+    identity: { userId: "u1", sessionId: "s1" },
     inspectExecution: dead,
     commitTurnLifecycle: async (input) => {
       command = input;
@@ -143,7 +143,7 @@ test("orphan recovery binds failure to the observed revision", async () => {
   assert.equal(result.action, TURN_RECOVERY_ACTION.ORPHAN);
   assert.equal(result.reason, "turn_revision_conflict");
   assert.equal(command.expectedRevision, 3);
-  assert.equal(command.parentSessionId, "parent");
+  assert.equal(Object.hasOwn(command, "parentSessionId"), false);
   assert.equal(command.commandId, "orphaned:turn-stale:failed:processing:r3");
   assert.equal(command.failure.code, "service_restart_orphaned_turn");
 });

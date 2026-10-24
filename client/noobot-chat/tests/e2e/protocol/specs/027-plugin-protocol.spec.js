@@ -401,14 +401,14 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   expect(helpPrompts).toHaveLength(1);
   expect(helpPrompts[0].data).toMatchObject({ failureCount: 3, threshold: 3 });
 
-  const controlMessageIds = new Set(
+  const controlMessageUids = new Set(
     modelInvocationTraces(failureEvents)
       .filter((record) => record.sessionId === failureChildSessionId)
       .flatMap((record) => record.data?.messages?.evidence || [])
       .filter((message) => message.internalType === "noobot.help_tool_failure_prompt")
-      .map((message) => message.messageId),
+      .map((message) => message.messageUid),
   );
-  expect(controlMessageIds.size).toBe(1);
+  expect(controlMessageUids.size).toBe(1);
 
   const failureNode = noobot.page
     .locator(".workflow-node:not(.is-state-node)")

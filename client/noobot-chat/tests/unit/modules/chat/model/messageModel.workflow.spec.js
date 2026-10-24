@@ -32,11 +32,11 @@ describe("messageModel workflow messages", () => {
           },
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(2);
     expect(messages[1].workflowMessage).toBe(true);
-    expect(messages[1].workflowMeta?.source).toBe("workflow-plugin");
+    expect(messages[1].pluginMeta.source).toBe("workflow-plugin");
   });
 });

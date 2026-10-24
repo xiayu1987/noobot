@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
@@ -134,7 +135,8 @@ test("session display summary materializes stopped Turn details on its stable pr
   );
   assert.equal(stoppedPresentation.role, "assistant");
   assert.equal(stoppedPresentation.turnPlaceholder, true);
-  assert.equal(stoppedPresentation.thinkingDetailCount, 2);
+  assert.equal(Object.hasOwn(stoppedPresentation, "thinkingDetailCount"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(stoppedPresentation), 2);
   assert.equal(stoppedPresentation.toolTimeline.length, 1);
 });
 
@@ -168,6 +170,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
           turnScopeId: "turn-active-full",
         },
       ],
+      sessionId,
       "active_full",
     );
     session.turnLifecycle = {
@@ -307,5 +310,6 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
   assert.equal(activePresentation.toolTimeline.length, 2);
   assert.equal(activePresentation.activityTimeline.length, 2);
   assert.equal(activePresentation.hasThinkingDetails, true);
-  assert.equal(activePresentation.thinkingDetailCount, 4);
+  assert.equal(Object.hasOwn(activePresentation, "thinkingDetailCount"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(activePresentation), 4);
 });

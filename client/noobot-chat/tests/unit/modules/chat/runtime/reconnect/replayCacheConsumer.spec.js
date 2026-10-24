@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 import { describe, expect, it, vi } from "vitest";
 import { consumeReconnectReplayCacheForSession } from "../../../../../../src/modules/chat/runtime/reconnect/replayCacheConsumer.js";
 import { applyReconnectReplayBatchToActiveSession } from "../../../../../../src/modules/chat/runtime/reconnect/batchReplay.js";
@@ -32,14 +33,17 @@ function createActiveReplayFixture(overrides = {}) {
       id: "s-1",
       sessionId: "s-1",
       messages: [
-        {
-          presentationMessageId: "message-1",
-          sessionId: "s-1",
-          role: "assistant",
-          dialogProcessId: "dp-1",
-          turnScopeId: "turn-1",
-          content: "",
-        },
+        buildViewMessage(
+          {
+            presentationMessageId: "message-1",
+            sessionId: "s-1",
+            role: "assistant",
+            dialogProcessId: "dp-1",
+            turnScopeId: "turn-1",
+            content: "",
+          },
+          { sessionId: "s-1" },
+        ),
       ],
     },
   };
@@ -125,29 +129,25 @@ describe("replayCacheConsumer", () => {
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
   });
 
-  it("projects authoritative reconnect thinking without mutating process display mirrors", async () => {
-    const hydratedCompletedLogs = Array.from({ length: 12 }, (_, index) => ({
-      event: "tool_call",
-      text: `old step ${index + 1}`,
-      sequence: index + 1,
-    }));
+  it("projects authoritative reconnect thinking into the activity timeline", async () => {
     const fixture = createActiveReplayFixture({
       activeSession: {
         value: {
           id: "s-1",
           sessionId: "s-1",
           messages: [
-            {
-              role: "assistant",
-              presentationMessageId: "message-1",
-              sessionId: "s-1",
-              dialogProcessId: "dp-1",
-              turnScopeId: "turn-1",
-              content: "",
-              pending: true,
-              executionLogTotal: 12,
-              realtimeLogs: hydratedCompletedLogs.slice(-10),
-            },
+            buildViewMessage(
+              {
+                role: "assistant",
+                presentationMessageId: "message-1",
+                sessionId: "s-1",
+                dialogProcessId: "dp-1",
+                turnScopeId: "turn-1",
+                content: "",
+                pending: true,
+              },
+              { sessionId: "s-1" },
+            ),
           ],
         },
       },
@@ -165,26 +165,30 @@ describe("replayCacheConsumer", () => {
   });
 
   it("projects onto the presentation target when turns share a dialog process", async () => {
-    const stoppedAssistant = {
-      role: "assistant",
-      presentationMessageId: "message-stopped",
-      sessionId: "s-1",
-      dialogProcessId: "dp-shared",
-      turnScopeId: "turn-stopped",
-      content: "stopped",
-      pending: false,
-      realtimeLogs: [],
-    };
-    const continuationAssistant = {
-      role: "assistant",
-      presentationMessageId: "message-continuation",
-      sessionId: "s-1",
-      dialogProcessId: "dp-shared",
-      turnScopeId: "turn-continuation",
-      content: "",
-      pending: true,
-      realtimeLogs: [],
-    };
+    const stoppedAssistant = buildViewMessage(
+      {
+        role: "assistant",
+        presentationMessageId: "message-stopped",
+        sessionId: "s-1",
+        dialogProcessId: "dp-shared",
+        turnScopeId: "turn-stopped",
+        content: "stopped",
+        pending: false,
+      },
+      { sessionId: "s-1" },
+    );
+    const continuationAssistant = buildViewMessage(
+      {
+        role: "assistant",
+        presentationMessageId: "message-continuation",
+        sessionId: "s-1",
+        dialogProcessId: "dp-shared",
+        turnScopeId: "turn-continuation",
+        content: "",
+        pending: true,
+      },
+      { sessionId: "s-1" },
+    );
     const fixture = createActiveReplayFixture({
       activeSession: {
         value: {
@@ -208,7 +212,6 @@ describe("replayCacheConsumer", () => {
       ],
     });
 
-    expect(stoppedAssistant.realtimeLogs).toEqual([]);
     expect(selectToolTimelineLogs(stoppedAssistant)).toEqual([]);
     expect(selectActivityTimelineLogs(stoppedAssistant)).toEqual([]);
     expect(continuationAssistant.turnScopeId).toBe("turn-continuation");

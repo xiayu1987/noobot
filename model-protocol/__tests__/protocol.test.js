@@ -383,6 +383,20 @@ test("model response accepts only the canonical protocol shape", () => {
     () => validateModelResponse({ ...response, output: { text: "ok" } }),
     /reasoning must be a string/,
   );
+  const toolCall = { id: "call_1", name: "read_file", args: { path: "a.txt" } };
+  const withToolCall = (call) => ({ ...response, output: { ...output, toolCalls: [call] } });
+  assert.equal(validateModelResponse(withToolCall(toolCall)).output.toolCalls[0], toolCall);
+  for (const [call, pattern] of [
+    [
+      { ...toolCall, tool_call_id: "call_1" },
+      /toolCalls\[0\] contains unsupported fields: tool_call_id/,
+    ],
+    [{ ...toolCall, id: undefined }, /toolCalls\[0\]\.id must be a string/],
+    [{ ...toolCall, name: "" }, /toolCalls\[0\]\.name is required/],
+    [{ ...toolCall, args: "{}" }, /toolCalls\[0\]\.args must be an object/],
+  ]) {
+    assert.throws(() => validateModelResponse(withToolCall(call)), pattern);
+  }
 
   const responsesOutput = {
     ...output,

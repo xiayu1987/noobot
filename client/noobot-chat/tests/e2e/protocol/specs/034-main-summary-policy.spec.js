@@ -8,11 +8,15 @@ import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import crypto from "node:crypto";
 import {
-  TASK_SUMMARY_STATE,
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
 } from "@noobot/context-protocol/task/summary";
-import { resolveContextInternalMessageType } from "@noobot/context-protocol/policy/injected-message";
+import {
+  resolveContextToolCallDeclarationId,
+  resolveContextToolResultCallId,
+} from "@noobot/context-protocol/message/codec";
+import { renderTaskSummaryReceiptMessage } from "noobot-agent/tools";
+import { resolveSessionMessageRecordInternalMessageType } from "@noobot/session-protocol";
 import {
   selectPlugins,
   sendMessage,
@@ -34,10 +38,6 @@ import {
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
-
-function toolCallId(call = {}) {
-  return String(call.id || call.tool_call_id || "").trim();
-}
 
 function toolResultName(message = {}) {
   if (message.role !== "tool") return "";
@@ -61,13 +61,15 @@ function assertSummarizedToolPairsAreClosed(messages, summarizedIds) {
   const summarized = messages.filter((message) => summarizedIds.has(message.messageUid));
   const assistantCallIds = new Set(
     summarized.flatMap((message) =>
-      Array.isArray(message.tool_calls) ? message.tool_calls.map(toolCallId).filter(Boolean) : [],
+      Array.isArray(message.tool_calls)
+        ? message.tool_calls.map(resolveContextToolCallDeclarationId).filter(Boolean)
+        : [],
     ),
   );
   const toolResultIds = new Set(
     summarized
       .filter((message) => message.role === "tool")
-      .map((message) => String(message.tool_call_id || "").trim())
+      .map((message) => resolveContextToolResultCallId(message))
       .filter(Boolean),
   );
   expect(toolResultIds).toEqual(assistantCallIds);
@@ -112,6 +114,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   expect(send.preferences.summaryPolicy).toEqual({ phaseSummaryLoopTurns: 2 });
   expect(send.preferences.frontendThresholdsEnabled).toBe(true);
   expect(send.preferences.selectedPlugins).toEqual([]);
+  expect(send.preferences.locale).toBeTruthy();
   await waitForNaturalCompletion({
     page: noobot.page,
     capture: protocolCapture,
@@ -162,7 +165,8 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     expect(message.summarized, `first-turn:${message.messageUid}`).toBe(true);
   }
   const phasePrompts = messages.filter(
-    (message) => resolveContextInternalMessageType(message) === "noobot.phase_summary_prompt",
+    (message) =>
+      resolveSessionMessageRecordInternalMessageType(message) === "noobot.phase_summary_prompt",
   );
   expect(phasePrompts.length).toBeGreaterThan(0);
   for (const phasePrompt of phasePrompts) {
@@ -184,7 +188,8 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     const fullSummaryContent = String(toolCallArgs(call).summaryContent || "");
     const parsedSummary = parseTaskSummaryContent(fullSummaryContent);
     const resultMessage = taskSummaryResults.find(
-      (message) => String(message.tool_call_id || "").trim() === toolCallId(call),
+      (message) =>
+        resolveContextToolResultCallId(message) === resolveContextToolCallDeclarationId(call),
     );
     expect(resultMessage).toBeTruthy();
     const result = JSON.parse(resultMessage.content);
@@ -196,17 +201,12 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
       "nextAction",
       "state",
     ]);
-    expect(result.message).toContain("小结回执是后续流程的权威阶段状态");
-    if (result.summary.state === TASK_SUMMARY_STATE.CONTINUE) {
-      expect(result.message).toContain("已完成事项不得重新执行");
-      expect(result.message).toContain("summary.nextAction");
-      expect(result.message).toContain("不再调用 task_summary");
-    } else {
-      expect(result.message).not.toContain("summary.nextAction");
-    }
-    if (result.summary.state === TASK_SUMMARY_STATE.COMPLETE) {
-      expect(result.message).toContain("已核验的执行结果");
-    }
+    expect(result.message).toBe(
+      renderTaskSummaryReceiptMessage({
+        locale: send.preferences.locale,
+        state: result.summary.state,
+      }),
+    );
     expect(resultMessage.content.includes(fullSummaryContent)).toBe(false);
     expect(result.summary.details).toBeUndefined();
     const attachmentRefs = (resultMessage.transferEnvelopes || [])
@@ -281,7 +281,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     expect(
       mainInvocations.some((invocation) =>
         invocation.data.messages.preview.some(
-          (message) => message.messageId === phasePrompt.messageUid,
+          (message) => message.messageUid === phasePrompt.messageUid,
         ),
       ),
     ).toBe(true);
@@ -295,7 +295,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     for (const invocation of afterReceipt) {
       expect(invocation.data.messages.summarizedCount).toBe(0);
       const visibleIds = new Set(
-        invocation.data.messages.preview.map((message) => message.messageId).filter(Boolean),
+        invocation.data.messages.preview.map((message) => message.messageUid).filter(Boolean),
       );
       for (const summarizedId of receipt.summarizedMessageUids) {
         expect(visibleIds.has(summarizedId), `${receipt.checkpointId}:${summarizedId}`).toBe(false);
@@ -307,7 +307,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     const invocationsReceivingReceipt = mainInvocations.filter((invocation) =>
       invocation.data.messages.preview.some(
         (message) =>
-          message.messageId === resultMessage.messageUid && message.contentHash === resultHash,
+          message.messageUid === resultMessage.messageUid && message.contentHash === resultHash,
       ),
     );
     expect(invocationsReceivingReceipt.length).toBeGreaterThan(0);
@@ -320,12 +320,12 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   );
   expect(succeededScriptResults).toHaveLength(3);
   const succeededCallIds = new Set(
-    succeededScriptResults.map((message) => String(message.tool_call_id || "").trim()),
+    succeededScriptResults.map((message) => resolveContextToolResultCallId(message)),
   );
   const succeededCommands = messages
     .filter((message) => message.role === "assistant" && Array.isArray(message.tool_calls))
     .flatMap((message) => message.tool_calls)
-    .filter((call) => succeededCallIds.has(toolCallId(call)))
+    .filter((call) => succeededCallIds.has(resolveContextToolCallDeclarationId(call)))
     .map((call) => String(toolCallArgs(call).command || "").trim());
   expect(succeededCommands).toHaveLength(3);
   expect(new Set(succeededCommands).size).toBe(3);
@@ -366,7 +366,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   for (const invocation of secondInvocations) {
     expect(invocation.data.messages.summarizedCount).toBe(0);
     const visibleIds = new Set(
-      invocation.data.messages.preview.map((message) => message.messageId).filter(Boolean),
+      invocation.data.messages.preview.map((message) => message.messageUid).filter(Boolean),
     );
     for (const messageUid of firstTurnPolicyIds) {
       expect(visibleIds.has(messageUid), `second-turn:${messageUid}`).toBe(false);

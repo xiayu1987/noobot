@@ -5,27 +5,22 @@
  */
 import { resolveAttachmentAccessMeta } from "../../../infrastructure/api/attachments/attachmentAccess.js";
 import { getMessageTransferEnvelopes } from "./transferEnvelopes.js";
-import {
-  getMessageDialogProcessId,
-  getMessageParentDialogProcessId,
-  getMessageRole,
-  getMessageTurnScopeId,
-} from "./messageIdentity.js";
 import { getMessageTimestamp, nowIso, nowMs } from "./timeFields.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { initializeMessageEventState } from "./messageEventState.js";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { findVisibleLastMessage, isPluginInjectedMessage } from "./messageVisibility.js";
 import { foldConversationMessages } from "./conversationFolding.js";
-import { isWorkflowMessageLike, normalizeWorkflowMeta } from "./messageWorkflowMeta.js";
+import { isWorkflowMessageLike } from "./messageWorkflowMeta.js";
+import { createMessageEventState } from "./messageEventState.js";
+import { isCanonicalText } from "@noobot/shared/value";
 import {
   buildMessageContentFacet,
   buildMessageModelRunFacet,
   buildMessageOriginFacet,
   buildMessageStatusFacet,
   buildMessageTimelineFacet,
+  pickOwnFields,
 } from "./messageModelFacets.js";
-import { text } from "@noobot/shared/value";
 
 const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
@@ -34,6 +29,10 @@ const MESSAGE_IDENTITY_FIELDS = Object.freeze([
   "presentationMessageId",
   "userMessageId",
   "modelMessageId",
+  "turnScopeId",
+  "role",
+  "dialogProcessId",
+  "parentDialogProcessId",
 ]);
 
 function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
@@ -53,66 +52,63 @@ function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
   };
 }
 
-function buildMessageIdentityFacet(canonicalMessage = {}) {
-  const identity = Object.fromEntries(
-    MESSAGE_IDENTITY_FIELDS.map((field) => [field, text(canonicalMessage?.[field])]).filter(
-      ([, value]) => value,
-    ),
-  );
-  return {
-    ...identity,
-    turnScopeId: getMessageTurnScopeId(canonicalMessage),
-    sessionId: text(canonicalMessage?.sessionId),
-    role: getMessageRole(canonicalMessage) || "assistant",
-    dialogProcessId: getMessageDialogProcessId(canonicalMessage),
-    parentDialogProcessId: getMessageParentDialogProcessId(canonicalMessage),
-  };
+function buildMessageIdentityFacet(canonicalMessage) {
+  return pickOwnFields(canonicalMessage, MESSAGE_IDENTITY_FIELDS);
 }
 
-function createMessageModel(messageItem = {}) {
-  const canonicalMessage = messageItem;
-  const workflowMeta = normalizeWorkflowMeta(canonicalMessage);
-  return initializeMessageEventState({
+function createMessageModel(canonicalMessage, sessionId) {
+  if (!isCanonicalText(sessionId)) {
+    throw new TypeError("message model invariant failed: session_id_missing");
+  }
+  return {
     ...buildMessageIdentityFacet(canonicalMessage),
+    sessionId,
     ...buildMessageContentFacet(canonicalMessage),
     ...buildMessageModelRunFacet(canonicalMessage),
     ...buildMessageTimelineFacet(canonicalMessage),
     ...buildMessageStatusFacet(canonicalMessage),
-    ...buildMessageOriginFacet(canonicalMessage, { workflowMeta }),
+    ...buildMessageOriginFacet(canonicalMessage),
+    messageEventState: createMessageEventState(),
     attachments: normalizeArray(getMessageAttachments(canonicalMessage)),
     transferEnvelopes: getMessageTransferEnvelopes(canonicalMessage),
     ts: getMessageTimestamp(canonicalMessage) || nowIso(),
     workflowMessage: isWorkflowMessageLike(canonicalMessage),
-  });
+  };
 }
 
-function buildAppendMessage(role, content = "", attachments = [], options = {}) {
-  return createMessageModel({
-    ...options,
-    role,
-    content,
-    type: "message",
-    attachments,
-    ts: nowMs(),
-  });
-}
-
-function buildViewMessage(messageItem = {}, { userId = "" } = {}) {
-  const normalizedAttachments = getMessageAttachments(messageItem).map((attachmentItem) =>
-    normalizeAttachment(attachmentItem, {
-      userId,
-    }),
+function buildAppendMessage({ sessionId, role, content, attachments, options }) {
+  return createMessageModel(
+    {
+      ...options,
+      role,
+      content,
+      type: "message",
+      attachments,
+      ts: nowMs(),
+    },
+    sessionId,
   );
-  return createMessageModel({
-    ...messageItem,
-    attachments: normalizedAttachments,
-  });
+}
+
+function normalizeMessageAttachments(attachments, { userId }) {
+  return attachments.map((attachmentItem) => normalizeAttachment(attachmentItem, { userId }));
+}
+
+function buildViewMessage(messageItem, { sessionId, userId }) {
+  return createMessageModel(
+    {
+      ...messageItem,
+      attachments: normalizeMessageAttachments(getMessageAttachments(messageItem), { userId }),
+    },
+    sessionId,
+  );
 }
 
 export {
   EXECUTION_LOG_DISPLAY_LIMIT,
   buildAppendMessage,
   buildViewMessage,
+  normalizeMessageAttachments,
   foldConversationMessages,
   getMessageAttachments,
   findVisibleLastMessage,

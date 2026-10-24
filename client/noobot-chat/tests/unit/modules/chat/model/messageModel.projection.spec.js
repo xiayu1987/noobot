@@ -7,21 +7,26 @@ import { describe, expect, it } from "vitest";
 import {
   buildViewMessage,
   findVisibleLastMessage,
-  foldConversationMessages,
 } from "../../../../../src/modules/chat/model/messageModel.js";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 describe("messageModel projections", () => {
   it("does not admit workflow running view models into canonical messages", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      type: "message",
-      content: "",
-      pending: true,
-      synthetic: true,
-      placeholder: true,
-      turnPlaceholder: true,
-      workflowNodeRunningPlaceholder: true,
-    });
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        type: "message",
+        content: "",
+        pending: true,
+        synthetic: true,
+        placeholder: true,
+        turnPlaceholder: true,
+        workflowNodeRunningPlaceholder: true,
+      },
+      { sessionId: "session-1" },
+    );
 
     expect(message).toMatchObject({
       pending: true,
@@ -33,11 +38,15 @@ describe("messageModel projections", () => {
   });
 
   it("keeps turn UI state out of message projections", () => {
-    expect(buildViewMessage({ role: "assistant", pending: true })).not.toHaveProperty(
+    expect(
+      buildViewMessage({ role: "assistant", pending: true }, { sessionId: "session-1" }),
+    ).not.toHaveProperty("thinkingOpenNames");
+    expect(buildViewMessage({ role: "assistant" }, { sessionId: "session-1" })).not.toHaveProperty(
+      "expandedToolDetailKeys",
+    );
+    expect(buildViewMessage({ role: "user" }, { sessionId: "session-1" })).not.toHaveProperty(
       "thinkingOpenNames",
     );
-    expect(buildViewMessage({ role: "assistant" })).not.toHaveProperty("expandedToolDetailKeys");
-    expect(buildViewMessage({ role: "user" })).not.toHaveProperty("thinkingOpenNames");
   });
 
   it("finds the last user-visible message and skips harness injected relay messages", () => {
@@ -56,93 +65,78 @@ describe("messageModel projections", () => {
     expect(findVisibleLastMessage([harnessRelay])).toBe(null);
   });
 
-  it("renders serialized LangChain human and ai messages as user and assistant", () => {
-    const messages = foldConversationMessages(
-      [
-        {
-          lc_id: ["langchain_core", "messages", "human", "HumanMessage"],
-          type: "constructor",
-          kwargs: { content: "question from serialized human" },
-        },
-        {
-          lc_id: ["langchain_core", "messages", "ai", "AIMessage"],
-          type: "constructor",
-          kwargs: { content: "answer from serialized ai" },
-        },
-      ],
-      buildViewMessage,
-    );
-
-    expect(messages).toHaveLength(2);
-    expect(messages[0]).toMatchObject({
-      role: "user",
-      content: "question from serialized human",
-      type: "message",
-    });
-    expect(messages[1]).toMatchObject({
-      role: "assistant",
-      content: "answer from serialized ai",
-      type: "message",
-    });
-  });
-
   it("keeps thinking timing fields out of backend view messages after refresh", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "running",
-      thinkingStartedAt: "2026-06-22T10:00:00.000Z",
-      thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
-    });
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        content: "running",
+        thinkingStartedAt: "2026-06-22T10:00:00.000Z",
+        thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
+      },
+      { sessionId: "session-1" },
+    );
 
     expect(message.thinkingStartedAt).toBeUndefined();
     expect(message.thinkingFinishedAt).toBeUndefined();
   });
 
   it("uses backend createdAt as message timestamp so pending thinking elapsed does not reset after refresh", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "running",
-      pending: true,
-      createdAt: "2026-06-22T10:00:00.000Z",
-    });
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        content: "running",
+        pending: true,
+        createdAt: "2026-06-22T10:00:00.000Z",
+      },
+      { sessionId: "session-1" },
+    );
 
     expect(message.ts).toBe("2026-06-22T10:00:00.000Z");
   });
 
   it("does not expose backend turn/message identity aliases", () => {
-    const message = buildViewMessage({
-      role: "user",
-      content: "edit me",
-      userMessageId: "storage-id-1",
-      turnScopeId: "client-turn:backend-scope-1",
-    });
+    const message = buildViewMessage(
+      {
+        role: "user",
+        content: "edit me",
+        userMessageId: "storage-id-1",
+        turnScopeId: "client-turn:backend-scope-1",
+      },
+      { sessionId: "session-1" },
+    );
 
     expect(message.userMessageId).toBe("storage-id-1");
-    expect(message.messageId).toBeUndefined();
+    expect(message[LEGACY_MESSAGE_ID]).toBeUndefined();
     expect(message.id).toBeUndefined();
     expect(message.turnScopeId).toBe("client-turn:backend-scope-1");
   });
 
   it("preserves parent dialog process id for related attachment aggregation", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "done",
-      dialogProcessId: "child-dp",
-      parentDialogProcessId: "root-dp",
-    });
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        content: "done",
+        dialogProcessId: "child-dp",
+        parentDialogProcessId: "root-dp",
+      },
+      { sessionId: "session-1" },
+    );
 
     expect(message.parentDialogProcessId).toBe("root-dp");
   });
 
   it("preserves summary thinking entry fields on view messages", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "done",
-      hasThinkingDetails: true,
-      thinkingDetailCount: 2,
-    });
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        content: "done",
+        hasThinkingDetails: true,
+        thinkingDetailCount: 2,
+      },
+      { sessionId: "session-1" },
+    );
 
     expect(message.hasThinkingDetails).toBe(true);
-    expect(message.thinkingDetailCount).toBe(2);
+    expect(Object.hasOwn(message, "thinkingDetailCount")).toBe(false);
   });
 });

@@ -5,7 +5,6 @@
  */
 import {
   getMessageRole,
-  getMessageSessionId,
   getMessageTurnScopeId,
   normalizeTurnScopeIdKey,
 } from "../../model/messageIdentity.js";
@@ -28,15 +27,6 @@ function sessionIdFromSession(session = {}) {
   return text(session?.sessionId);
 }
 
-function effectiveMessageSessionId(message = {}, fallbackSessionId = "") {
-  return getMessageSessionId(message) || text(fallbackSessionId);
-}
-
-function sessionIdentitySet(session = {}) {
-  const sessionId = sessionIdFromSession(session);
-  return new Set(sessionId ? [sessionId] : []);
-}
-
 function turnKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = text(sessionId);
   const normalizedTurnScopeId = normalizeTurnScopeIdKey(turnScopeId);
@@ -45,11 +35,8 @@ function turnKey(sessionId = "", turnScopeId = "") {
     : "";
 }
 
-function messageTurnKey(message = {}, fallbackSessionId = "") {
-  return turnKey(
-    effectiveMessageSessionId(message, fallbackSessionId),
-    getMessageTurnScopeId(message),
-  );
+function messageTurnKey(message, containerSessionId) {
+  return turnKey(containerSessionId, getMessageTurnScopeId(message));
 }
 
 function workflowPayload(message = {}) {
@@ -127,6 +114,7 @@ function buildTerminalPresentation(status = {}, sessionId = "") {
     presentationMessageId: `turn-status-placeholder:${turnScopeId}`,
     sessionId: text(sessionId),
     role: "assistant",
+    type: "message",
     content: formatTerminalStatusContent(status),
     pending: false,
     synthetic: true,
@@ -142,9 +130,9 @@ function buildTerminalPresentation(status = {}, sessionId = "") {
   };
 }
 
-function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId = "") {
+function buildLiveWorkflowPresentationMessage(workflow) {
   const workflowRunId = text(workflow?.workflowRunId);
-  const sessionId = text(workflow?.sessionId || fallbackSessionId);
+  const sessionId = workflow.sessionId;
   const turnScopeId = text(workflow?.turnScopeId);
   const presentationMessageId = text(workflow?.presentationMessageId);
   const workflowPayload = isPlainObject(workflow?.workflowPayload)
@@ -181,13 +169,12 @@ function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
     ...workflowMessage,
     presentationMessageId: resolveMessageViewKey(shell) || resolveMessageViewKey(workflowMessage),
     ts: shell?.ts || workflowMessage?.ts,
-    sessionId: getMessageSessionId(shell) || getMessageSessionId(workflowMessage),
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(workflowMessage),
     dialogProcessId: shell?.dialogProcessId || workflowMessage?.dialogProcessId || "",
     content,
   };
   logThinkingReplayDebug("frontend.turnPresentation.workflowMerged", () => ({
-    sessionId: getMessageSessionId(merged),
+    sessionId: merged.sessionId,
     dialogProcessId: text(merged?.dialogProcessId),
     turnScopeId: getMessageTurnScopeId(merged),
     shellPresentationMessageId: resolveMessageViewKey(shell),
@@ -215,7 +202,6 @@ function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
     ...terminalPresentation,
     presentationMessageId:
       resolveMessageViewKey(shell) || resolveMessageViewKey(terminalPresentation),
-    sessionId: getMessageSessionId(shell) || getMessageSessionId(terminalPresentation),
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(terminalPresentation),
     dialogProcessId: shell?.dialogProcessId || terminalPresentation?.dialogProcessId || "",
     content,
@@ -260,13 +246,12 @@ export function selectTurnPresentations({
   turnRuntimeRegistry = {},
 } = {}) {
   const activeSessionId = sessionIdFromSession(activeSession);
-  const activeSessionIds = sessionIdentitySet(activeSession);
   const sourceMessages = (
     Array.isArray(activeSession?.messages) ? activeSession.messages : []
   ).filter(
     (message) =>
       !isTurnRuntimeDeleted(turnRuntimeRegistry, {
-        sessionId: getMessageSessionId(message) || activeSessionId,
+        sessionId: activeSessionId,
         turnScopeId: getMessageTurnScopeId(message),
       }),
   );
@@ -295,7 +280,7 @@ export function selectTurnPresentations({
   const terminalStatuses = terminalStatusesFromRuntime(turnRuntimeRegistry, activeSessionId).filter(
     (status) =>
       !isTurnRuntimeDeleted(turnRuntimeRegistry, {
-        sessionId: text(status?.sessionId) || activeSessionId,
+        sessionId: activeSessionId,
         turnScopeId: status?.turnScopeId,
       }),
   );
@@ -358,13 +343,14 @@ export function selectTurnPresentations({
   const liveByTurn = new Map();
 
   for (const workflow of Object.values(workflowRegistry?.workflows || {})) {
-    const projection = buildLiveWorkflowPresentationMessage(workflow, activeSessionId);
+    if (workflow.sessionId !== activeSessionId) continue;
+    const projection = buildLiveWorkflowPresentationMessage(workflow);
     if (!projection) continue;
     const key = messageTurnKey(projection, activeSessionId);
-    if (!key || !activeSessionIds.has(getMessageSessionId(projection))) continue;
+    if (!key) continue;
     if (
       isTurnRuntimeDeleted(turnRuntimeRegistry, {
-        sessionId: getMessageSessionId(projection) || activeSessionId,
+        sessionId: activeSessionId,
         turnScopeId: getMessageTurnScopeId(projection),
       })
     )

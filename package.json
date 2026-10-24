@@ -146,6 +146,7 @@
     "fix:esm-import-extensions": "node ./scripts/fix-esm-relative-import-extensions.mjs",
     "fix:source-license-headers": "node ./scripts/fix-source-license-headers.mjs",
     "check:barrel-star-exports": "node ./scripts/check-barrel-star-exports.mjs",
+    "check:browser-callback-bindings": "node ./scripts/check-browser-callback-bindings.mjs",
     "check:memory-protocol-boundary": "node ./scripts/check-memory-protocol-boundary.mjs",
     "check:workspace-protocol-boundary": "node ./scripts/check-workspace-protocol-boundary.mjs",
     "check:version-chain-coverage": "node ./scripts/check-version-chain-coverage.mjs"

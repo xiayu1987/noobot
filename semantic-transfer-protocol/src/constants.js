@@ -6,6 +6,11 @@
 
 export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
 export const TRANSFER_VERSION = 3;
+export const TRANSFER_ENVELOPE_V2 = Object.freeze({
+  version: 2,
+  presentationField: "messageId",
+  presentationPrefix: "msg_",
+});
 export const TRANSFER_DIRECTION = Object.freeze({
   INPUT: "input",
   OUTPUT: "output",

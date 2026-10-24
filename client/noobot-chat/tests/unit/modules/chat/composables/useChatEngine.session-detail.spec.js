@@ -331,7 +331,10 @@ describe("useChatEngine.session-detail", () => {
           sequence: 5,
           completionCommitId: "commit-stopped-detail",
           summaryVersion: 5,
-          terminalStatus: terminalStatusFixture("stop_completed", freshTurnScopeId),
+          terminalStatus: terminalStatusFixture("stop_completed", {
+            turnScopeId: freshTurnScopeId,
+            dialogProcessId: "dp-stale-stopped",
+          }),
         },
       }),
     );

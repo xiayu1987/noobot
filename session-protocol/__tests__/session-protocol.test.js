@@ -34,7 +34,7 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 13);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 14);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -183,43 +183,58 @@ test("Session artifact schema versions are explicit protocol facts", () => {
 });
 
 test("Turn acceptance owns exactly one authoritative user-message rule", () => {
-  const accepted = validateTurnAcceptanceUserMessage({
+  const userMessage = { content: "hello", userMessageId: "um_1", messageOrigin: "natural" };
+  const send = {
     eventType: "turn.action_accepted",
     action: "send",
     turnScopeId: "turn-1",
-    dialogProcessId: "dialog-1",
-    userMessage: { content: "hello", userMessageId: "um_1", messageOrigin: "natural" },
-  });
+    sessionCaller: SESSION_CALLER.USER,
+    userMessage,
+  };
+  const accepted = validateTurnAcceptanceUserMessage(send);
   assert.equal(accepted.valid, true);
   assert.equal(accepted.materialize, true);
   assert.deepEqual(
     validateTurnAcceptanceUserMessage({
-      eventType: "turn.action_accepted",
-      action: "send",
-      turnScopeId: "turn-1",
-      dialogProcessId: "dialog-1",
+      ...send,
       userMessage: { content: "hello", messageOrigin: "natural" },
     }).errors,
     ["accepted_user_userMessageId_required"],
   );
-  assert.equal(
-    validateTurnAcceptanceUserMessage({
-      eventType: "turn.action_accepted",
-      action: "send",
-      turnScopeId: "turn-1",
-      dialogProcessId: "dialog-1",
-    }).valid,
-    false,
-  );
+  assert.equal(validateTurnAcceptanceUserMessage({ ...send, userMessage: undefined }).valid, false);
   assert.deepEqual(
     validateTurnAcceptanceUserMessage({
       eventType: "turn.action_accepted",
       action: "resend",
       turnScopeId: "turn-1",
-      dialogProcessId: "dialog-1",
     }),
     { valid: true, materialize: false, value: null, errors: [] },
   );
+});
+
+test("Turn acceptance takes dialogProcessId from exactly one source per caller", () => {
+  const base = {
+    eventType: "turn.action_accepted",
+    action: "send",
+    turnScopeId: "turn-1",
+    userMessage: { content: "hello", userMessageId: "um_1", messageOrigin: "natural" },
+  };
+  const errorsOf = (extra) => validateTurnAcceptanceUserMessage({ ...base, ...extra }).errors;
+  assert.deepEqual(errorsOf({ sessionCaller: SESSION_CALLER.USER }), []);
+  for (const dialogProcessId of ["dp-1", "", undefined]) {
+    assert.deepEqual(errorsOf({ sessionCaller: SESSION_CALLER.USER, dialogProcessId }), [
+      "accepted_user_dialog_process_id_forbidden",
+    ]);
+  }
+  assert.deepEqual(errorsOf({ sessionCaller: SESSION_CALLER.BOT, dialogProcessId: "dp-1" }), []);
+  for (const dialogProcessId of [undefined, "", " dp-1 "]) {
+    assert.deepEqual(errorsOf({ sessionCaller: SESSION_CALLER.BOT, dialogProcessId }), [
+      "accepted_bot_dialog_process_id_required",
+    ]);
+  }
+  for (const sessionCaller of [undefined, "", "system"]) {
+    assert.deepEqual(errorsOf({ sessionCaller }), ["accepted_session_caller_required"]);
+  }
 });
 
 test("Turn acceptance receipt keeps transaction facts outside run configuration", () => {

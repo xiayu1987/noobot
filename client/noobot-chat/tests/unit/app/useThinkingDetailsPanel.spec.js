@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { buildViewMessage } from "../../../src/modules/chat/model/messageModel.js";
 import { ref, nextTick } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useThinkingDetailsPanel } from "../../../src/app/composables/useThinkingDetailsPanel.js";
@@ -27,22 +28,26 @@ function createPanel(fetchThinkingDetail = vi.fn(), activeSession = ref({ messag
   });
 }
 
-const workflowMessage = {
-  role: "assistant",
-  presentationMessageId: "workflow-presentation",
-  dialogProcessId: "workflow-node",
-  turnScopeId: "workflow-turn",
-  hasThinkingDetails: true,
-  thinkingDetailCount: 1,
-};
-const normalMessage = {
-  role: "assistant",
-  presentationMessageId: "normal-presentation",
-  dialogProcessId: "normal-message",
-  turnScopeId: "normal-turn",
-  hasThinkingDetails: true,
-  thinkingDetailCount: 1,
-};
+const workflowMessage = buildViewMessage(
+  {
+    role: "assistant",
+    presentationMessageId: "workflow-presentation",
+    dialogProcessId: "workflow-node",
+    turnScopeId: "workflow-turn",
+    hasThinkingDetails: true,
+  },
+  { sessionId: "session-1" },
+);
+const normalMessage = buildViewMessage(
+  {
+    role: "assistant",
+    presentationMessageId: "normal-presentation",
+    dialogProcessId: "normal-message",
+    turnScopeId: "normal-turn",
+    hasThinkingDetails: true,
+  },
+  { sessionId: "session-1" },
+);
 
 function detailFor(message) {
   return { messageItem: { ...message, loaded: true } };
@@ -108,11 +113,14 @@ describe("useThinkingDetailsPanel request isolation", () => {
   });
 
   it("reuses a cached completed detail when the authoritative revision is unchanged", async () => {
-    const message = {
-      ...normalMessage,
-      sessionId: "session-1",
-      thinkingDetailRef: { contentHash: "sha256:detail-seven" },
-    };
+    const message = buildViewMessage(
+      {
+        ...normalMessage,
+        sessionId: "session-1",
+        thinkingDetailRef: { contentHash: "sha256:detail-seven" },
+      },
+      { sessionId: "session-1" },
+    );
     const activeSession = ref({
       sessionId: "session-1",
       aggregateVersion: 7,
@@ -134,15 +142,21 @@ describe("useThinkingDetailsPanel request isolation", () => {
   });
 
   it("does not reuse detail when its authoritative content hash changes", async () => {
-    const firstMessage = {
-      ...normalMessage,
-      sessionId: "session-1",
-      thinkingDetailRef: { contentHash: "sha256:first-detail" },
-    };
-    const secondMessage = {
-      ...firstMessage,
-      thinkingDetailRef: { contentHash: "sha256:second-detail" },
-    };
+    const firstMessage = buildViewMessage(
+      {
+        ...normalMessage,
+        sessionId: "session-1",
+        thinkingDetailRef: { contentHash: "sha256:first-detail" },
+      },
+      { sessionId: "session-1" },
+    );
+    const secondMessage = buildViewMessage(
+      {
+        ...firstMessage,
+        thinkingDetailRef: { contentHash: "sha256:second-detail" },
+      },
+      { sessionId: "session-1" },
+    );
     const activeSession = ref({
       sessionId: "session-1",
       aggregateVersion: 1,
@@ -182,18 +196,21 @@ describe("useThinkingDetailsPanel request isolation", () => {
       turnScopeId: "turn-1",
       hasThinkingDetails: true,
     };
-    const canonicalMessage = {
-      ...staleSummary,
-      pending: true,
-      toolTimeline: [
-        {
-          key: "call:one",
-          toolCallId: "one",
-          status: "running",
-          call: { eventId: "call:one", sequence: 1, log: { event: "tool_call", text: "first" } },
-        },
-      ],
-    };
+    const canonicalMessage = buildViewMessage(
+      {
+        ...staleSummary,
+        pending: true,
+        toolTimeline: [
+          {
+            key: "call:one",
+            toolCallId: "one",
+            status: "running",
+            call: { eventId: "call:one", sequence: 1, log: { event: "tool_call", text: "first" } },
+          },
+        ],
+      },
+      { sessionId: "session-1" },
+    );
     const activeSession = ref({ messages: [canonicalMessage] });
     const fetcher = vi.fn();
     const panel = createPanel(fetcher, activeSession);
@@ -204,20 +221,23 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(1);
     expect(fetcher).not.toHaveBeenCalled();
 
-    const updatedCanonicalMessage = {
-      ...canonicalMessage,
-      toolTimeline: [
-        {
-          ...canonicalMessage.toolTimeline[0],
-          status: "completed",
-          resultEvent: {
-            eventId: "result:one",
-            sequence: 2,
-            log: { event: "tool_result", text: "done" },
+    const updatedCanonicalMessage = buildViewMessage(
+      {
+        ...canonicalMessage,
+        toolTimeline: [
+          {
+            ...canonicalMessage.toolTimeline[0],
+            status: "completed",
+            resultEvent: {
+              eventId: "result:one",
+              sequence: 2,
+              log: { event: "tool_result", text: "done" },
+            },
           },
-        },
-      ],
-    };
+        ],
+      },
+      { sessionId: "session-1" },
+    );
     activeSession.value = { messages: [updatedCanonicalMessage] };
     await nextTick();
     await nextTick();
@@ -233,10 +253,13 @@ describe("useThinkingDetailsPanel request isolation", () => {
       sequenceScopeId: "presentation-1",
       presentationMessageId: "presentation-1",
     });
-    const nextCanonicalMessage = {
-      ...updatedCanonicalMessage,
-      activityTimeline: [thinkingActivity],
-    };
+    const nextCanonicalMessage = buildViewMessage(
+      {
+        ...updatedCanonicalMessage,
+        activityTimeline: [thinkingActivity],
+      },
+      { sessionId: "session-1" },
+    );
     activeSession.value = {
       messages: [nextCanonicalMessage],
     };
@@ -248,17 +271,19 @@ describe("useThinkingDetailsPanel request isolation", () => {
   });
 
   it("keeps the complete detail response authoritative for a completed turn", async () => {
-    const summaryMessage = {
-      role: "assistant",
-      presentationMessageId: "presentation-complete",
-      sessionId: "session-1",
-      dialogProcessId: "process-complete",
-      turnScopeId: "turn-complete",
-      pending: false,
-      hasThinkingDetails: true,
-      thinkingDetailCount: 20,
-      toolTimeline: [{ key: "summary:one", toolCallId: "summary-one", status: "completed" }],
-    };
+    const summaryMessage = buildViewMessage(
+      {
+        role: "assistant",
+        presentationMessageId: "presentation-complete",
+        sessionId: "session-1",
+        dialogProcessId: "process-complete",
+        turnScopeId: "turn-complete",
+        pending: false,
+        hasThinkingDetails: true,
+        toolTimeline: [{ key: "summary:one", toolCallId: "summary-one", status: "completed" }],
+      },
+      { sessionId: "session-1" },
+    );
     const completeMessage = {
       ...summaryMessage,
       toolTimeline: Array.from({ length: 13 }, (_, index) => ({
@@ -281,7 +306,9 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(13);
     expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toHaveLength(7);
-    expect(panel.thinkingDetailsMessageItem.value.thinkingDetailCount).toBe(20);
+    expect(Object.hasOwn(panel.thinkingDetailsMessageItem.value, "thinkingDetailCount")).toBe(
+      false,
+    );
     expect(panel.thinkingDetailsAllMessages.value).toHaveLength(0);
 
     activeSession.value = {
@@ -308,14 +335,17 @@ describe("useThinkingDetailsPanel request isolation", () => {
   });
 
   it("does not bind the drawer to a different presentation in the same turn", async () => {
-    const canonicalMessage = {
-      role: "assistant",
-      presentationMessageId: "presentation-canonical",
-      sessionId: "session-1",
-      dialogProcessId: "process-shared",
-      turnScopeId: "turn-shared",
-      toolTimeline: [{ key: "call:canonical", toolCallId: "canonical" }],
-    };
+    const canonicalMessage = buildViewMessage(
+      {
+        role: "assistant",
+        presentationMessageId: "presentation-canonical",
+        sessionId: "session-1",
+        dialogProcessId: "process-shared",
+        turnScopeId: "turn-shared",
+        toolTimeline: [{ key: "call:canonical", toolCallId: "canonical" }],
+      },
+      { sessionId: "session-1" },
+    );
     const clickedMessage = {
       role: "assistant",
       presentationMessageId: "presentation-clicked",

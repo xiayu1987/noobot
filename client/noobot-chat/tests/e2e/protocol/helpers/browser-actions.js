@@ -6,7 +6,7 @@
 import { expect } from "@playwright/test";
 import { waitForTurnTerminal } from "./scenario-assertions.js";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
-import { text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 async function withComposerOptionsPanel(page, callback) {
   const overlay = page.locator(".more-panel-overlay");
@@ -33,7 +33,7 @@ async function updateAppShellLayoutOptions(page, missingControlSelector, mode, p
     await panel.locator(".composer-options").evaluate(
       (_node, { nextMode, nextPayload }) => {
         const bridge = window.__NOOBOT_E2E_APP_SHELL__;
-        if (!isObjectLike(bridge)) {
+        if (!bridge || typeof bridge !== "object") {
           throw new Error("AppShell E2E bridge is unavailable");
         }
         const requiredMethods = [
@@ -42,7 +42,7 @@ async function updateAppShellLayoutOptions(page, missingControlSelector, mode, p
           nextMode === "runtimeThresholds" ? "updatePluginModelConfig" : "updateSummaryPolicy",
         ];
         for (const methodName of requiredMethods) {
-          if (!isFunction(bridge[methodName])) {
+          if (typeof bridge[methodName] !== "function") {
             throw new Error(`AppShell E2E bridge method is unavailable: ${methodName}`);
           }
         }

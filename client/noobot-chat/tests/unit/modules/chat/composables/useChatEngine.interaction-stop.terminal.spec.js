@@ -50,7 +50,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       parentSessionId,
       turnScopeId,
       dialogProcessId: "workflow-child-dialog",
-      messageId: "workflow-child-assistant",
       presentationMessageId: "workflow-child-assistant",
       userId: "u-1",
       action: "send",
@@ -121,7 +120,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       executionKind: "agent",
       sessionId,
       turnScopeId,
-      messageId: `msg-event-${turnScopeId}`,
       presentationMessageId: `msg-${turnScopeId}`,
       dialogProcessId: "a31a2316-61b9-452b-af1d-4be302fc375d",
       commandId: `${turnScopeId}:completed`,
@@ -379,8 +377,8 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.terminalOutcome).toBe("");
-    expect(assistant?.pending).toBe(false);
+    expect(assistant).not.toHaveProperty("terminalOutcome");
+    expect(assistant).not.toHaveProperty("pending");
     expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-flight").sending).toBe(true);
   });
 
@@ -425,7 +423,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(assistant?.terminalOutcome).not.toBe("generated");
-    expect(assistant?.pending).toBe(false);
+    expect(assistant).not.toHaveProperty("pending");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
     expect(interactionSubmitting.value).toBe(false);
@@ -462,7 +460,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(deps.terminalResolutionFetcher).toHaveBeenCalledTimes(0);
     expect(sending.value).toBe(true);
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.pending).toBe(false);
+    expect(assistant).not.toHaveProperty("pending");
     expect(assistant?.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(assistant?.terminalOutcome || assistant?.terminalOutcome).not.toBe("generated");
   });
@@ -535,7 +533,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     const botMessage = assistantMessage(activeSession);
     expect(botMessage.dialogProcessId).not.toBe("dp-error");
-    expect(botMessage.pending).toBe(false);
+    expect(botMessage).not.toHaveProperty("pending");
     expect(botMessage.error).toBe("invalid tool input");
     expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();

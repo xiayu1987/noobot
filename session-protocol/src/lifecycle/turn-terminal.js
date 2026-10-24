@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text as clean } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text as clean } from "@noobot/shared/value";
 import { isSettledTurn } from "./turn-state.js";
 import { positiveInteger } from "../normalize.js";
 
@@ -51,6 +51,14 @@ const commandContract = Object.freeze({
   [TURN_TERMINAL_COMMAND.ABORTED]: [TURN_TERMINAL_STATUS.ERROR, TURN_TERMINAL_REASON.RUN_ABORTED],
   [TURN_TERMINAL_COMMAND.TIMEOUT]: [TURN_TERMINAL_STATUS.TIMEOUT, TURN_TERMINAL_REASON.RUN_TIMEOUT],
 });
+export const TURN_TERMINAL_FIXED_DESCRIPTION = Object.freeze({
+  [TURN_TERMINAL_STATUS.USER_STOPPED]: "the user stopped this turn before it finished",
+});
+
+function resolveTerminalDescription(status, description) {
+  if (status === TURN_TERMINAL_STATUS.COMPLETED) return "";
+  return TURN_TERMINAL_FIXED_DESCRIPTION[status] || clean(description);
+}
 
 function normalizeError(error = null) {
   if (!error) return null;
@@ -68,12 +76,13 @@ function normalizeError(error = null) {
 
 function buildTurnTerminalStatus(status, reason, payload = {}) {
   const turnScopeId = clean(payload.turnScopeId);
-  if (!turnScopeId) return null;
+  const description = resolveTerminalDescription(status, payload.description);
+  if (!turnScopeId || (status !== TURN_TERMINAL_STATUS.COMPLETED && !description)) return null;
   const terminalStatus = {
     turnScopeId,
     status,
     reason,
-    description: clean(payload.description),
+    description,
     updatedAt: clean(payload.updatedAt),
   };
   const dialogProcessId = clean(payload.dialogProcessId);
@@ -87,7 +96,7 @@ function buildTurnTerminalStatus(status, reason, payload = {}) {
 
 export function createTurnTerminalStatus(command = "", payload = {}) {
   const contract = commandContract[clean(command).toLowerCase()];
-  if (!contract) return null;
+  if (!contract || !isCanonicalText(payload.dialogProcessId)) return null;
   return buildTurnTerminalStatus(contract[0], contract[1], payload);
 }
 
@@ -100,6 +109,9 @@ export function normalizeTurnTerminalStatus(value = null) {
   const status = clean(value.status);
   const reason = clean(value.reason);
   if (!contractPairs.has(`${status}\u0000${reason}`)) return null;
+  if (clean(value.description) !== resolveTerminalDescription(status, value.description)) {
+    return null;
+  }
   return buildTurnTerminalStatus(status, reason, value);
 }
 
@@ -116,7 +128,6 @@ export function materializeTurnTerminalMessages({
   const source = Array.isArray(messages) ? messages : [];
   const scopedMessages = source.filter((message) => clean(message?.turnScopeId) === turnScopeId);
   if (
-    dialogProcessId &&
     scopedMessages.some((message) => {
       const messageDialogProcessId = clean(message?.dialogProcessId);
       return messageDialogProcessId && messageDialogProcessId !== dialogProcessId;
@@ -140,7 +151,12 @@ export function materializeTurnTerminalMessages({
 
 export function projectTurnTerminalStatuses(lifecycle) {
   return Object.values(lifecycle.turns)
-    .filter(isSettledTurn)
-    .map((turn) => normalizeTurnTerminalStatus(turn.terminalStatus))
-    .filter(Boolean);
+    .filter((turn) => isSettledTurn(turn) && turn.terminalStatus !== undefined)
+    .map((turn) => {
+      const status = normalizeTurnTerminalStatus(turn.terminalStatus);
+      if (status === null) {
+        throw new Error(`Invalid turn terminal status: ${clean(turn.turnScopeId)}`);
+      }
+      return status;
+    });
 }

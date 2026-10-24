@@ -124,7 +124,7 @@ export function useThinkingTimeline(
 
   function thinkingReplayScope(messageItem = props.messageItem || {}) {
     return {
-      sessionId: getMessageSessionId(messageItem) || props.messageItem?.sessionId || "",
+      sessionId: getMessageSessionId(messageItem),
       dialogProcessId: getMessageDialogProcessId(messageItem),
       turnScopeId: getMessageTurnScopeId(messageItem),
     };
@@ -137,7 +137,7 @@ export function useThinkingTimeline(
       role: getMessageRole(messageItem),
       pending: messageItem?.pending === true,
       hasThinkingDetails: messageItem?.hasThinkingDetails === true,
-      thinkingDetailCount: Number(messageItem?.thinkingDetailCount || 0),
+      thinkingDetailCount: selectThinkingDetailCount(messageItem),
       realtimeLogCount: allRealtimeLogs.length,
       visibleRealtimeLogCount: visibleRealtimeLogs.length,
       realtimeLogProjection: allRealtimeLogs.slice(-10).map(summarizeRealtimeLog),
@@ -240,14 +240,8 @@ export function useThinkingTimeline(
       .length;
   }
 
-  function getSummaryThinkingDetailCount(messageItem = {}) {
-    return selectThinkingDetailCount(messageItem);
-  }
-
   function hasSummaryThinkingDetails(messageItem = {}) {
-    return (
-      messageItem?.hasThinkingDetails === true || getSummaryThinkingDetailCount(messageItem) > 0
-    );
+    return messageItem?.hasThinkingDetails === true || selectThinkingDetailCount(messageItem) > 0;
   }
 
   function hasLocalThinkingDetails(messageItem = {}) {
@@ -270,7 +264,7 @@ export function useThinkingTimeline(
     )
       return null;
     const loaded = loadedThinkingDetail.value;
-    const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
+    const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
     if (!identity.key) return loaded;
     if (loaded?.__thinkingDetailIdentity?.key === identity.key) return loaded;
     return getCachedThinkingDetail(identity) || null;
@@ -380,7 +374,7 @@ export function useThinkingTimeline(
     const messageItem = props.messageItem || {};
     if (shouldLoadThinkingDetail() !== true) return "";
     if (messageItem?.pending === true) return "";
-    const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
+    const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
     return identity.key || "";
   });
 
@@ -389,10 +383,7 @@ export function useThinkingTimeline(
     async (key) => {
       if (!key) return;
       const messageItem = props.messageItem || {};
-      const identity = resolveThinkingDetailIdentity(
-        messageItem,
-        props.messageItem?.sessionId || "",
-      );
+      const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
       if (!identity.key) return;
       const cached = getCachedThinkingDetail(identity);
       if (cached && hasLocalThinkingDetails(cached.messageItem || {})) {
@@ -550,7 +541,6 @@ export function useThinkingTimeline(
     getExecutionLogCount,
     getThinkingDetailForMessage,
     getCompletedToolLogsForMessage,
-    getSummaryThinkingDetailCount,
     isMessageRuntimeRunning,
   };
 }

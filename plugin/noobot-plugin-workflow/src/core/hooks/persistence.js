@@ -16,7 +16,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
-import { createModelMessageId } from "@noobot/session-protocol/message-identity";
+import { createMessageUid, createModelMessageId } from "@noobot/session-protocol/message-identity";
 
 function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -301,6 +301,16 @@ function findExistingWorkflowMessage(turnMessages = [], dialogProcessId = "") {
   });
 }
 
+function resolveWorkflowMessageIdentity(existing = null) {
+  if (!existing) return { modelMessageId: createModelMessageId(), messageUid: createMessageUid() };
+  const modelMessageId = text(existing.modelMessageId);
+  if (!modelMessageId)
+    throw new Error("Existing workflow message requires a journal modelMessageId");
+  const messageUid = text(existing.messageUid);
+  if (!messageUid) throw new Error("Existing workflow message requires a messageUid");
+  return { modelMessageId, messageUid };
+}
+
 async function resolveWorkflowTransferParts({
   workflowPayload = null,
   baseWorkflowPayload = {},
@@ -399,11 +409,10 @@ async function upsertWorkflowMessage({
   const sessionWorkflowPayload = buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId);
   const existing = findExistingWorkflowMessage(turnMessages, dialogProcessId);
 
-  const modelMessageId = existing ? text(existing.modelMessageId) : createModelMessageId();
-  if (!modelMessageId)
-    throw new Error("Existing workflow message requires a journal modelMessageId");
+  const { modelMessageId, messageUid } = resolveWorkflowMessageIdentity(existing);
   const workflowMessage = {
     role: "assistant",
+    messageUid,
     modelMessageId,
     type: "workflow",
     chatPresentation: true,

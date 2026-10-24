@@ -26,6 +26,9 @@ import {
   validateMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "../src/event-registry.js";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 function payload(overrides = {}) {
   return {
@@ -68,8 +71,8 @@ test("message family validates canonical v3 identity, ordering, and domain paylo
     "durable_event_unsequenced",
   ]);
   assert.throws(
-    () => envelope({}, { identity: { messageId: "message-1" } }),
-    /unknown_envelope_field: identity\.messageId/,
+    () => envelope({}, { identity: { [LEGACY_MESSAGE_ID]: "message-1" } }),
+    new RegExp(`unknown_envelope_field: identity\\.${LEGACY_MESSAGE_ID}`),
   );
   assert.deepEqual(
     validateProtocolEvent(envelope({}, { ordering: { scopeId: "message-2" } })).errors,
@@ -170,6 +173,27 @@ test("user interjection events carry one canonical thinking content fact", () =>
       "missing_user_interjection_fact_dialog_process_id",
     ],
   );
+  assert.deepEqual(
+    validateMessageEventPayload({
+      ...interjection.payload,
+      contentFact: { ...contentFact, sequence: "1" },
+    }).errors,
+    ["invalid_user_interjection_content_fact"],
+  );
+  assert.deepEqual(
+    validateMessageEventPayload({
+      ...interjection.payload,
+      contentFact: { ...contentFact, sessionId: " child-1" },
+    }).errors,
+    ["missing_user_interjection_fact_session_id"],
+  );
+  assert.deepEqual(
+    validateProtocolEvent({
+      ...interjection,
+      causality: { commandId: " command-1", causationId: " command-1" },
+    }).errors,
+    ["missing_interjection_command_id"],
+  );
 });
 
 test("message payload owns presentation identity and content semantics", () => {
@@ -243,7 +267,7 @@ test("turn presentation atomically declares canonical user and assistant entitie
       ...committed,
       presentation: {
         ...presentation,
-        assistantMessage: { ...presentation.assistantMessage, messageId: "split-id" },
+        assistantMessage: { ...presentation.assistantMessage, [LEGACY_MESSAGE_ID]: "split-id" },
       },
     }).errors,
     ["noncanonical_assistant_message_id"],
@@ -382,12 +406,15 @@ test("message view key resolves by role without fallback", () => {
     "presentation-1",
   );
   assert.equal(resolveMessageViewKey({ role: "assistant", messageUid: "sm_a" }), "");
-  assert.equal(resolveMessageViewKey({ role: "assistant", messageId: "stream-1" }), "");
+  assert.equal(resolveMessageViewKey({ role: "assistant", [LEGACY_MESSAGE_ID]: "stream-1" }), "");
   for (const role of ["user", "tool", "system"]) {
     assert.equal(
       resolveMessageViewKey({ role, messageUid: "sm_x", presentationMessageId: "pm_x" }),
       "sm_x",
     );
-    assert.equal(resolveMessageViewKey({ role, userMessageId: "um_x", messageId: "sm_x" }), "");
+    assert.equal(
+      resolveMessageViewKey({ role, userMessageId: "um_x", [LEGACY_MESSAGE_ID]: "sm_x" }),
+      "",
+    );
   }
 });

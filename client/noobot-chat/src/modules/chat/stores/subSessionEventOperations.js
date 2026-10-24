@@ -48,7 +48,6 @@ export function createSubSessionEventOperations({
       materializeTurnPresentationMessages({
         messages,
         turnPresentation: projectTurnPresentation(payload),
-        sessionId: identity.sessionId,
         occurredAt,
       });
     }

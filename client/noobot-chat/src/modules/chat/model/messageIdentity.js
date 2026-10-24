@@ -14,10 +14,6 @@ function trim(value = "") {
   return text(value);
 }
 
-function lower(value = "") {
-  return trim(value).toLowerCase();
-}
-
 function stringifyMessageContent(value) {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -34,110 +30,37 @@ function stringifyMessageContent(value) {
   return JSON.stringify(value);
 }
 
-function hasNaturalUserMarker(messageItem = {}) {
-  return (
-    text(
-      messageItem?.messageOrigin ||
-        messageItem?.additional_kwargs?.messageOrigin ||
-        messageItem?.lc_kwargs?.messageOrigin ||
-        messageItem?.lc_kwargs?.additional_kwargs?.messageOrigin,
-    ).toLowerCase() === "natural"
-  );
-}
-
-function normalizeRoleAlias(value = "") {
-  const normalized = lower(value);
-  if (!normalized) return "";
-  if (["user", "human"].includes(normalized)) return "user";
-  if (["assistant", "ai", "bot"].includes(normalized)) return "assistant";
-  if (["tool", "function"].includes(normalized)) return "tool";
-  return normalized;
-}
-
-function collectLangChainIdParts(messageItem = {}) {
-  const idParts = [];
-  if (Array.isArray(messageItem?.lc_id)) idParts.push(...messageItem.lc_id);
-  if (Array.isArray(messageItem?.id)) idParts.push(...messageItem.id);
-  const serializedName = trim(messageItem?.name || messageItem?.lc_name);
-  if (serializedName) idParts.push(serializedName);
-  const serializedType = trim(messageItem?.type === "constructor" ? "" : messageItem?.type);
-  if (serializedType) idParts.push(serializedType);
-  return idParts;
-}
-
-function getLangChainMessageKind(messageItem = {}) {
-  const haystack = collectLangChainIdParts(messageItem)
-    .map((part) => lower(part))
-    .join("|");
-  if (!haystack) return "";
-  if (haystack.includes("humanmessage") || /\bhuman\b/.test(haystack)) return "user";
-  if (haystack.includes("aimessage") || /\bai\b/.test(haystack)) return "assistant";
-  if (haystack.includes("toolmessage") || /\btool\b/.test(haystack)) return "tool";
-  return "";
-}
-
-function hasTurnOwner(owner = {}) {
-  return Boolean(owner.sessionId || owner.turnScopeId || owner.dialogProcessId || owner.role);
-}
-
-export function getMessageSessionId(messageItem = {}) {
-  return trim(messageItem?.sessionId);
+export function getMessageSessionId(messageItem) {
+  return messageItem.sessionId;
 }
 
 export function getMessageInternalType(messageItem = {}) {
-  return trim(
-    messageItem?.noobotInternalMessageType ||
-      messageItem?.internalType ||
-      messageItem?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.additional_kwargs?.internalType ||
-      messageItem?.metadata?.noobotInternalMessageType ||
-      messageItem?.metadata?.internalType ||
-      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.additional_kwargs?.internalType ||
-      messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.metadata?.internalType,
-  );
-}
-
-function normalizeTurnOwner(raw = {}) {
-  const owner = isPlainObject(raw?.owner) ? raw.owner : {};
-  return {
-    sessionId: getMessageSessionId(owner) || getMessageSessionId(raw),
-    turnScopeId: trim(owner?.turnScopeId),
-    dialogProcessId: trim(owner?.dialogProcessId || raw?.ownerDialogProcessId),
-    role: trim(owner?.role),
-  };
+  return trim(messageItem?.noobotInternalMessageType);
 }
 
 export function normalizeTurnMeta(raw = {}) {
-  const owner = normalizeTurnOwner(raw);
-  const normalized = {
+  return {
     sessionId: getMessageSessionId(raw),
     turnScopeId: trim(raw?.turnScopeId),
-    dialogProcessId: trim(raw?.dialogProcessId || raw?.dialogId),
-    parentDialogProcessId: trim(raw?.parentDialogProcessId || raw?.parentDialogId),
+    dialogProcessId: trim(raw?.dialogProcessId),
+    parentDialogProcessId: trim(raw?.parentDialogProcessId),
   };
-  if (hasTurnOwner(owner)) normalized.owner = owner;
-  return normalized;
 }
 
 export function getMessageRole(messageItem = {}) {
-  const explicitRole = normalizeRoleAlias(messageItem?.role);
-  if (explicitRole) return explicitRole;
-  if (hasNaturalUserMarker(messageItem)) return "user";
-  return getLangChainMessageKind(messageItem);
+  return trim(messageItem?.role);
 }
 
 export function getMessageDialogProcessId(messageItem = {}) {
-  return normalizeTurnMeta(messageItem).dialogProcessId;
+  return trim(messageItem?.dialogProcessId);
 }
 
 export function getMessageParentDialogProcessId(messageItem = {}) {
-  return normalizeTurnMeta(messageItem).parentDialogProcessId;
+  return trim(messageItem?.parentDialogProcessId);
 }
 
 export function getMessageTurnScopeId(messageItem = {}) {
-  return normalizeTurnMeta(messageItem).turnScopeId;
+  return trim(messageItem?.turnScopeId);
 }
 
 export function normalizeTurnScopeIdKey(value = "") {
@@ -173,14 +96,7 @@ export function clearTurnScopedAssets(messageItem = {}) {
 }
 
 export function getMessageContentIdentity(messageItem = {}) {
-  return trim(
-    stringifyMessageContent(
-      messageItem?.content ??
-        messageItem?.text ??
-        messageItem?.lc_kwargs?.content ??
-        messageItem?.kwargs?.content,
-    ),
-  );
+  return trim(stringifyMessageContent(messageItem?.content));
 }
 
 export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {}) {
@@ -193,8 +109,8 @@ export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {})
     !areTurnScopeIdsEquivalent(getMessageTurnScopeId(candidateMessage), targetTurnScopeId)
   )
     return false;
-  const targetRole = lower(getMessageRole(targetMessage));
-  const candidateRole = lower(getMessageRole(candidateMessage));
+  const targetRole = getMessageRole(targetMessage);
+  const candidateRole = getMessageRole(candidateMessage);
   return Boolean(targetRole && candidateRole && targetRole === candidateRole);
 }
 

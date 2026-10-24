@@ -75,14 +75,6 @@ describe("session message view", () => {
     expect(
       view.shouldRenderMessageInChat({
         role: "user",
-        type: "human",
-        internalType: "noobot.help_tool_failure_prompt",
-        content: "工具调用已连续失败 3 次。",
-      }),
-    ).toBe(false);
-    expect(
-      view.shouldRenderMessageInChat({
-        role: "user",
         type: "context_control",
         noobotInternalMessageType: "noobot.help_tool_failure_prompt",
         content: "工具调用已连续失败 3 次。",

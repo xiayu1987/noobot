@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -148,7 +149,8 @@ test("session display summary does not duplicate an active Turn with persisted a
 
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0].presentationMessageId, "presentation-active");
-  assert.equal(summary.messages[0].thinkingDetailCount, 1);
+  assert.equal(Object.hasOwn(summary.messages[0], "thinkingDetailCount"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(summary.messages[0]), 1);
   assert.equal(summary.messages[0].activityTimeline.length, 1);
   assert.notEqual(summary.messages[0].turnPlaceholder, true);
 });
@@ -202,7 +204,8 @@ test("session display summary projects one explicit assistant presentation from 
   });
 
   assert.equal(summary.messages.length, 1);
-  assert.equal(summary.messages[0].thinkingDetailCount, 3);
+  assert.equal(Object.hasOwn(summary.messages[0], "thinkingDetailCount"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(summary.messages[0]), 3);
   assert.equal(summary.messages[0].activityTimeline.length, 1);
   assert.equal(summary.messages[0].toolTimeline.length, 1);
   assert.deepEqual(

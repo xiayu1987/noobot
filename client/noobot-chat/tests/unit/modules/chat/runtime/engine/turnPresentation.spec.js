@@ -307,6 +307,7 @@ describe("selectTurnPresentations", () => {
     });
     const presentation = result.find((message) => message.turnStatusPlaceholder === true);
     expect(presentation).toMatchObject({
+      type: "message",
       turnStatus: expect.objectContaining({ status: testCase.terminal }),
     });
     expect(presentation.content.split("\n")).toHaveLength(testCase.detail ? 2 : 1);

@@ -183,7 +183,6 @@ export async function prepareCurrentUserTurn({
     const attachmentBinding = await bindSessionTurnAttachments({
       userId,
       sessionId,
-      parentSessionId,
       turnScopeId,
       messageUid: text(currentUserMessage?.messageUid),
       attachments: canonicalAttachments,

@@ -3,12 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  MESSAGE_EVENT_SEQUENCE_DOMAIN,
-  resolveMessageViewKey,
-} from "@noobot/event-protocol/message-event";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { text } from "@noobot/shared/value";
+import { createMessageEventState } from "../model/messageEventState.js";
 
 export function summarizeSubSessionMessage(message = {}) {
   return {
@@ -30,36 +28,10 @@ function subSessionMessageIdentityCandidates(message = {}) {
   return identity ? [identity] : [];
 }
 
-function normalizeSubSessionSnapshotMessage(snapshot = {}) {
-  const {
-    thinking: _thinking,
-    toolCall: _toolCall,
-    toolResult: _toolResult,
-    rawEvents: _rawEvents,
-    ...canonicalSnapshot
-  } = snapshot && typeof snapshot === "object" ? snapshot : {};
-  if (text(canonicalSnapshot?.sequenceDomain) === MESSAGE_EVENT_SEQUENCE_DOMAIN) {
-    return canonicalSnapshot;
-  }
-  const {
-    eventId: _eventId,
-    sequence: _sequence,
-    firstSequence: _firstSequence,
-    revision: _revision,
-    sequenceDomain: _sequenceDomain,
-    sequenceScopeId: _sequenceScopeId,
-    ...content
-  } = canonicalSnapshot;
-  return content;
-}
-
 function pickRealtimeFinalContentFacet(realtime = {}) {
-  const realtimeOwnsFinalContent =
-    Number(realtime?.messageEventState?.finalContentSequence || 0) > 0;
-  if (!realtimeOwnsFinalContent) return {};
+  if (!(realtime.messageEventState.finalContentSequence > 0)) return {};
   return {
     content: realtime.content,
-    finalContentSequence: realtime.finalContentSequence,
     eventName: realtime.eventName,
     eventId: realtime.eventId,
     revision: realtime.revision,
@@ -78,8 +50,7 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}) {
     ...pickRealtimeFinalContentFacet(realtime),
   };
   logWorkflowDiagnostics("frontend.workflowSubSession.messageMergeEvaluated", () => ({
-    sessionId: text(snapshot?.sessionId || realtime?.sessionId),
-    turnScopeId: text(snapshot?.turnScopeId || realtime?.turnScopeId),
+    turnScopeId: merged.turnScopeId,
     viewKey: subSessionMessageIdentity(merged),
     snapshotPending: snapshot?.pending,
     realtimePending: realtime?.pending,
@@ -104,17 +75,16 @@ function buildRealtimeIndexByIdentity(realtimeMessages = []) {
   return realtimeIndexByIdentity;
 }
 
-export function mergeSnapshotWithRealtimeMessages(snapshotMessages = [], realtimeMessages = []) {
+export function mergeSnapshotWithRealtimeMessages({ snapshotMessages, realtimeMessages }) {
   const realtimeIndexByIdentity = buildRealtimeIndexByIdentity(realtimeMessages);
   const claimedRealtimeIndexes = new Set();
-  const messages = snapshotMessages.map((rawSnapshot = {}) => {
-    const snapshot = normalizeSubSessionSnapshotMessage(rawSnapshot);
+  const messages = snapshotMessages.map((snapshot) => {
     const realtimeIndex = subSessionMessageIdentityCandidates(snapshot)
       .map((identity) => realtimeIndexByIdentity.get(identity))
       .find((index) => Number.isInteger(index));
     const realtime = Number.isInteger(realtimeIndex) ? realtimeMessages[realtimeIndex] : null;
     if (Number.isInteger(realtimeIndex)) claimedRealtimeIndexes.add(realtimeIndex);
-    if (!realtime) return snapshot;
+    if (!realtime) return { ...snapshot, messageEventState: createMessageEventState() };
     return mergePersistedSubSessionMessage(realtime, snapshot);
   });
   realtimeMessages.forEach((realtime, index) => {

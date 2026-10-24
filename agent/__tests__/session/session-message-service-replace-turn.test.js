@@ -57,16 +57,29 @@ function baseSession(overrides = {}) {
     aggregateVersion: 2,
     turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
     messages: [
-      { turnScopeId: "scope-keep", role: "user", content: "keep", dialogProcessId: "dp-keep" },
-      { role: "user", content: "old", dialogProcessId: "dp-old", turnScopeId: "scope-old" },
       {
+        sessionId: "s1",
+        turnScopeId: "scope-keep",
+        role: "user",
+        content: "keep",
+        dialogProcessId: "dp-keep",
+      },
+      {
+        sessionId: "s1",
+        role: "user",
+        content: "old",
+        dialogProcessId: "dp-old",
+        turnScopeId: "scope-old",
+      },
+      {
+        sessionId: "s1",
         role: "assistant",
         modelMessageId: "mm_session_message_service__1",
         content: "old answer",
         dialogProcessId: "dp-old",
         turnScopeId: "scope-old",
       },
-      { role: "user", content: "tail", turnScopeId: "scope-tail" },
+      { sessionId: "s1", role: "user", content: "tail", turnScopeId: "scope-tail" },
     ],
     ...overrides,
   };
@@ -82,7 +95,6 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
         turns: {
           "scope-keep": {
             turnScopeId: "scope-keep",
-            messageId: "source-keep",
             presentationMessageId: "presentation-keep",
             state: "completed",
             phase: "completion",
@@ -91,7 +103,6 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
           },
           "scope-old": {
             turnScopeId: "scope-old",
-            messageId: "source-old",
             presentationMessageId: "presentation-old",
             state: "stop_completed",
             phase: "stop",
@@ -100,7 +111,6 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
           },
           "scope-tail": {
             turnScopeId: "scope-tail",
-            messageId: "source-tail",
             presentationMessageId: "presentation-tail",
             state: "stop_completed",
             phase: "stop",
@@ -239,7 +249,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
     initialSession: {
       sessionId: "child",
       parentSessionId: "s1",
-      messages: [{ turnScopeId: "child-turn", role: "user", content: "child" }],
+      messages: [{ sessionId: "child", turnScopeId: "child-turn", role: "user", content: "child" }],
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
         turns: {
@@ -283,6 +293,7 @@ test("SessionMessageService.replaceTurn persists only the incoming canonical att
     initialSession: baseSession({
       messages: [
         {
+          sessionId: "s1",
           role: "user",
           content: "old",
           dialogProcessId: "dp-old",
@@ -290,6 +301,7 @@ test("SessionMessageService.replaceTurn persists only the incoming canonical att
           attachments: [richAttachment],
         },
         {
+          sessionId: "s1",
           role: "assistant",
           modelMessageId: "mm_session_message_service__2",
           content: "old answer",

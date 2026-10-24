@@ -6,7 +6,7 @@
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import { text } from "@noobot/shared/value";
 
-export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
+export function createAssistantMessageHelpers({ translate, makeViewAttachments }) {
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
     if (!targetAssistantMessage) return;
     targetAssistantMessage.error = text(errorMessage);
@@ -21,7 +21,7 @@ export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
     if (!targetAssistantMessage || !Array.isArray(attachments) || !attachments.length) {
       return;
     }
-    const normalizedAttachments = makeViewMessage({ attachments })?.attachments || attachments;
+    const normalizedAttachments = makeViewAttachments(attachments);
     targetAssistantMessage.attachments = mergeAttachments(
       Array.isArray(targetAssistantMessage.attachments) ? targetAssistantMessage.attachments : [],
       normalizedAttachments,

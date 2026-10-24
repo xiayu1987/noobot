@@ -13,10 +13,10 @@ const protocol = createTurnUserMessageEventProtocol({
   errorCode: "TURN_ATTACHMENTS_BOUND_PROTOCOL_INVALID",
 });
 
-export function validateTurnAttachmentsBoundEventData(data = {}) {
+export function validateTurnAttachmentsBoundEventData(data) {
   return protocol.validate(data);
 }
 
-export function assertTurnAttachmentsBoundEventData(data = {}) {
+export function assertTurnAttachmentsBoundEventData(data) {
   return protocol.assert(data);
 }

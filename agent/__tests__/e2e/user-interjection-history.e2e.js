@@ -83,7 +83,6 @@ test("session execution preserves every user interjection into the next model hi
       const userMessage = {
         messageUid,
         id: messageUid,
-        messageId: messageUid,
         role: "user",
         type: "message",
         content: "start task",
@@ -156,7 +155,6 @@ test("session execution preserves every user interjection into the next model hi
       });
       runtime.currentTurnMessages.push({
         messageUid: "assistant:e2e:final",
-        messageId: "assistant:e2e:final",
         role: "assistant",
         type: "message",
         content: "completed",

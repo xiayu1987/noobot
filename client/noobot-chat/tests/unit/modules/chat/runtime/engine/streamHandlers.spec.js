@@ -11,7 +11,13 @@ import {
   createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
 import { handleAttachmentLifecycleStreamEvent } from "../../../../../../src/modules/chat/runtime/engine/streamHandlers.js";
-import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
+import {
+  buildViewMessage,
+  normalizeMessageAttachments,
+} from "../../../../../../src/modules/chat/model/messageModel.js";
+
+const makeViewAttachments = (attachments) =>
+  normalizeMessageAttachments(attachments, { userId: "user-1" });
 
 describe("chatEngine streamHandlers transport boundary", () => {
   const identity = {
@@ -52,6 +58,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
     handleAttachmentLifecycleStreamEvent({
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
+      makeViewAttachments,
     });
     expect(userMessage.attachments[0].attachmentLifecycle.status).toBe(ATTACHMENT_LIFECYCLE.PARSED);
     expect(userMessage.attachments[0].relations).toEqual([relation]);
@@ -65,6 +72,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
     handleAttachmentLifecycleStreamEvent({
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
+      makeViewAttachments,
     });
     expect(userMessage.attachments[0].relations).toEqual([relation]);
   });
@@ -77,6 +85,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
     handleAttachmentLifecycleStreamEvent({
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
+      makeViewAttachments,
     });
     expect(userMessage.attachments[0]).toEqual({
       clientAttachmentId: "draft-attachment:1",
@@ -94,7 +103,8 @@ describe("chatEngine streamHandlers transport boundary", () => {
   });
 
   it("uses the same relation projection during a live run and hydration", () => {
-    const makeViewMessage = (message) => buildViewMessage(message, { userId: "user-1" });
+    const makeViewMessage = (message) =>
+      buildViewMessage(message, { sessionId: "session-1", userId: "user-1" });
     const userMessage = makeViewMessage({
       role: "user",
       sessionId: "session-1",
@@ -110,7 +120,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
     handleAttachmentLifecycleStreamEvent({
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
-      makeViewMessage,
+      makeViewAttachments,
     });
 
     expect(userMessage.attachments[0]).toMatchObject({

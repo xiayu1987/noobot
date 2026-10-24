@@ -16,41 +16,10 @@ import {
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import {
   applyTurnRuntimeEvent,
-  applyTurnTerminalResolution,
   resolveSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
-
-function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId }) {
-  const revision = 100;
-  const sequence = 100;
-  const completionCommitId = `commit-${turnScopeId}-${revision}`;
-  return applyTurnTerminalResolution(
-    turnRuntimeRegistry.value,
-    createTurnTerminalResolution({
-      commandId: `resolve-${turnScopeId}-${revision}`,
-      sessionId,
-      turnScopeId,
-      resolved: true,
-      aggregateVersion: 1,
-      turn: {
-        sessionId,
-        turnScopeId,
-        state: "stop_completed",
-        phase: "stop",
-        revision,
-        sequence,
-        completionCommitId,
-        summaryVersion: revision,
-        capabilities: { actionLocked: false, canStop: false },
-        updatedAt: "2026-01-01T00:00:00.000Z",
-        terminalStatus: terminalStatusFixture("stop_completed", turnScopeId),
-      },
-    }),
-  );
-}
+import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
 
 describe("useChatEngine.delete", () => {
   it("cascadeDeleteMessagesFrom resolves assistant target to user message and removes the user turn", () => {
@@ -156,6 +125,7 @@ describe("useChatEngine.delete", () => {
       turnRuntimeRegistry,
       sessionId: "local-delete",
       turnScopeId: target.turnScopeId,
+      dialogProcessId: `dp-${target.turnScopeId}`,
     });
     deps.chatWebSocketClient.requestStop.mockImplementation(() => {
       queueMicrotask(() => {
@@ -168,6 +138,7 @@ describe("useChatEngine.delete", () => {
         settleStoppedTurn(turnRuntimeRegistry, {
           sessionId: "local-delete",
           turnScopeId: target.turnScopeId,
+          dialogProcessId: `dp-${target.turnScopeId}`,
         });
         stopConfirmed = true;
       });
@@ -207,6 +178,7 @@ describe("useChatEngine.delete", () => {
       turnRuntimeRegistry,
       sessionId: "local-resend",
       turnScopeId: target.turnScopeId,
+      dialogProcessId: `dp-${target.turnScopeId}`,
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
@@ -479,6 +451,7 @@ describe("useChatEngine.delete", () => {
       turnRuntimeRegistry,
       sessionId: "local-delete-fail",
       turnScopeId: "turn-delete-fail",
+      dialogProcessId: "dp-turn-delete-fail",
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
     const actionPromise = engine.deleteMonotonicMessage(target, {
@@ -521,6 +494,7 @@ describe("useChatEngine.delete", () => {
       turnRuntimeRegistry,
       sessionId: "local-resend-fail",
       turnScopeId: "turn-resend-fail",
+      dialogProcessId: "dp-turn-resend-fail",
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
     const actionPromise = engine.resendMonotonicMessage(target, "edited", {
@@ -563,10 +537,16 @@ describe("useChatEngine.delete", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activeSession.value.aggregateVersion = 4;
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId, turnScopeId });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId,
+      turnScopeId,
+      dialogProcessId: `dp-${turnScopeId}`,
+    });
     settleStoppedTurn(turnRuntimeRegistry, {
       sessionId,
       turnScopeId,
+      dialogProcessId: `dp-${turnScopeId}`,
     });
     expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)?.terminal).toBe(
       "user_stopped",

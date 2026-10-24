@@ -97,7 +97,6 @@ function logDisplayedAttachmentsSummary({
   freshPendingAssistant = false,
 } = {}) {
   logStateMachineDebug("messageFiles.attachments.displayed", () => ({
-    messageId: messageItem?.messageId || "",
     sessionId: getMessageSessionId(messageItem),
     dialogProcessId: getMessageDialogProcessId(messageItem),
     turnScopeId: getMessageTurnScopeId(messageItem),
@@ -143,7 +142,6 @@ export function useMessageFiles({ getMessageItem = () => ({}), getAllMessages = 
     const result = sourceAttachments;
     logWorkflowDiagnostics("frontend.workflowRender.displayedAttachmentsProjected", () => ({
       ...getMessageScopeIdentity(messageItem),
-      messageId: text(messageItem?.messageId),
       role: getMessageRole(messageItem),
       attachments: result.map((attachment) => ({
         attachmentId: text(attachment?.attachmentId),

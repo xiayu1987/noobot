@@ -31,6 +31,7 @@ import {
   normalizeCommandReceipt,
   resolveSessionArtifactSchemaVersion,
   isTurnCommitAction,
+  MESSAGE_REMOVED_FIELD_NAME,
 } from "@noobot/session-protocol";
 import {
   completedSemanticTransferMigrationNames,
@@ -43,6 +44,7 @@ import { migrateWriteTimeDialogFacts } from "./write-time-dialog-facts.js";
 import { migrateSessionCaller } from "./session-caller-migration.js";
 import { migrateCanonicalCommandReceipts } from "./command-receipt-migration.js";
 import { migrateMessageIdentity } from "./message-identity-migration.js";
+import { migrateTurnTerminalDescription } from "./terminal-description-migration.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
@@ -93,10 +95,12 @@ function migrateTurnCommitMetadata(message) {
   return true;
 }
 
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
+
 function migrateMessageIdField(message, index) {
   if (!Object.hasOwn(message, "id")) return false;
   const legacyId = text(message.id);
-  const messageId = text(message.messageId);
+  const messageId = text(message[LEGACY_MESSAGE_ID]);
   if (legacyId && messageId && legacyId !== messageId) {
     throw migrationError(
       `Session message ${index} has conflicting id and messageId`,
@@ -104,7 +108,7 @@ function migrateMessageIdField(message, index) {
       Error,
     );
   }
-  if (!messageId && legacyId) message.messageId = legacyId;
+  if (!messageId && legacyId) message[LEGACY_MESSAGE_ID] = legacyId;
   delete message.id;
   return true;
 }
@@ -143,8 +147,15 @@ function migrateMessage(
   }
   if (migrateArtifactProtocol) changed = migrateTurnCommitMetadata(next) || changed;
   if (!text(next.messageUid) && next.chatPresentation !== true) {
-    const identitySeed = [sessionId, next.dialogProcessId, next.turnScopeId, next.messageId, index];
-    if (!text(next.dialogProcessId) || !text(next.turnScopeId) || !text(next.messageId)) {
+    const legacyIdentitySeed = next[LEGACY_MESSAGE_ID];
+    const identitySeed = [
+      sessionId,
+      next.dialogProcessId,
+      next.turnScopeId,
+      legacyIdentitySeed,
+      index,
+    ];
+    if (!text(next.dialogProcessId) || !text(next.turnScopeId) || !text(legacyIdentitySeed)) {
       throw Object.assign(
         new Error(`Session message ${index} has no migratable canonical identity`),
         {
@@ -813,6 +824,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateAggregateVersionContract,
   migrateLifecycleCommandReceipts,
   migrateTurnStatuses,
+  migrateTurnTerminalDescription,
   migrateTurnTerminalStatusShape,
   migrateTurnCommitReceipts,
   migrateMutationReceipts,

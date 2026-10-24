@@ -44,6 +44,7 @@ const jsonl = (records) => records.map((record) => `${JSON.stringify(record)}\n`
 async function saveCanonicalSession(sessionRepo) {
   const persistenceContext = sessionRepo.treePersistenceContext("alice", SESSION_ID);
   const message = (messageUid, role, extra) => ({
+    sessionId: SESSION_ID,
     messageUid,
     role,
     content: messageUid,
@@ -332,6 +333,7 @@ test("v9 upgrade quarantines outbox commits whose v3 envelope fails validation",
 async function saveCheckpointedSession(sessionRepo, sessionId) {
   const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
   const message = (messageUid, ts) => ({
+    sessionId,
     messageUid,
     role: messageUid === "m1" ? "user" : "assistant",
     ...(messageUid === "m1"
@@ -452,7 +454,7 @@ test("v9 upgrade moves schema 10 journal snapshot indexes into the manifest", as
 
 async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
   const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
-  const turn = { dialogProcessId: "dialog-done", turnScopeId: "done" };
+  const turn = { sessionId, dialogProcessId: "dialog-done", turnScopeId: "done" };
   const assistant = (messageUid, extra) => ({
     messageUid,
     role: "assistant",

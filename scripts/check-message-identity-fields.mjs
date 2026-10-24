@@ -107,7 +107,7 @@ export const CHECK = defineCheck({
       match: ["session-protocol/src/identity/message-identity-schema.js"],
     },
   ],
-  baseline: { legacyKeyField: 141, unregisteredField: 0, exemptions: 1 },
+  baseline: { legacyKeyField: 0, unregisteredField: 0, exemptions: 1 },
   measure,
 });
 

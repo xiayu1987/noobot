@@ -41,7 +41,7 @@ describe("messageModel attachment normalization", () => {
           },
         ],
       },
-      { userId: "admin" },
+      { sessionId: "session-a", userId: "admin" },
     );
 
     expect(viewMessage.attachments).toHaveLength(1);
@@ -91,7 +91,7 @@ describe("messageModel attachment normalization", () => {
           },
         ],
       },
-      { userId: "admin" },
+      { sessionId: "session-a", userId: "admin" },
     );
 
     expect(viewMessage.attachments).toEqual([

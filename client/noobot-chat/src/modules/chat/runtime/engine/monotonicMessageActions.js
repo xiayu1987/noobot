@@ -42,7 +42,6 @@ const delay = (ms) =>
 function summarizeDeleteMessages(messages = []) {
   return (Array.isArray(messages) ? messages : []).map((message = {}, index) => ({
     index,
-    id: normalizeTrimmedString(message?.messageId),
     role: normalizeTrimmedString(getMessageRole(message)),
     type: normalizeTrimmedString(message?.type),
     sessionId: normalizeTrimmedString(message?.sessionId),

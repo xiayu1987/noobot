@@ -26,7 +26,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async () =>
         createTestModelResponse("1. 检查上下文", {
-          toolCalls: [{ name: "call_service", id: "c1", status: "executed" }],
+          toolCalls: [{ id: "c1", name: "call_service", args: {} }],
         }),
     },
   );
@@ -53,7 +53,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
   assert.equal(typeof record.traceId, "string");
   assert.equal(record.traceId.length > 0, true);
   assert.equal(record.detail.purpose, "planning");
-  assert.equal(record.detail.modelAttempts[0].output.toolCalls[0].status, "executed");
+  assert.equal(record.detail.modelAttempts[0].output.toolCalls[0].name, "call_service");
 
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(manifest.paths.capabilityTraces, traceFile);

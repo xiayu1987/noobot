@@ -124,6 +124,7 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
       turnRuntimeRegistry,
       sessionId: "local-monotonic-timeout",
       turnScopeId: "turn-timeout",
+      dialogProcessId: "dp-turn-timeout",
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 

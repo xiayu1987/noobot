@@ -246,10 +246,10 @@ describe("useChatEngine.resend scoped pruning", () => {
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
         content: "",
-        pending: false,
         turnScopeId: observedMessagesAtStream[2].turnScopeId,
       }),
     );
+    expect(observedMessagesAtStream[3]).not.toHaveProperty("pending");
   });
 
   it("resendMonotonicMessage starts generation from the user-only replace-turn snapshot", async () => {
@@ -305,9 +305,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     expect(activeSession.value.messages[1]).toEqual(
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
-        pending: false,
       }),
     );
+    expect(activeSession.value.messages[1]).not.toHaveProperty("pending");
     expect(input.value).toBe("");
   });
 });

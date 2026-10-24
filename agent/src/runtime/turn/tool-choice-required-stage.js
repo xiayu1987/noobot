@@ -7,14 +7,14 @@ import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accesso
 import { emitEvent } from "../../events/index.js";
 
 export function handleRequiredToolChoiceNotFollowed({
-  rawCalls = [],
+  toolCalls,
   adaptedBinding = null,
   runtime,
   eventListener,
   turn,
   currentModelInfo = {},
 } = {}) {
-  if (rawCalls.length || String(adaptedBinding?.bindOptions?.tool_choice || "") !== "required") {
+  if (toolCalls.length || String(adaptedBinding?.bindOptions?.tool_choice || "") !== "required") {
     return false;
   }
 

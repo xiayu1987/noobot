@@ -37,7 +37,7 @@ export async function installRunningThinkingElapsedCapture(page) {
       for (const node of document.querySelectorAll(
         ".thinking-realtime-shell.is-running .thinking-elapsed",
       )) {
-        const value = text(node.textContent);
+        const value = String(node.textContent ?? "").trim();
         if (value && samples.at(-1) !== value) samples.push(value);
       }
     };

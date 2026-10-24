@@ -9,7 +9,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   normalizeTurnScopeIdKey,
   getMessageDialogProcessId,
-  getMessageSessionId,
   getMessageTurnScopeId,
 } from "./messageIdentity.js";
 import { isFunction, text } from "@noobot/shared/value";
@@ -49,16 +48,15 @@ function thinkingDetailCacheKey({ sessionId = "", turnScopeId = "", dialogProces
   return sid && route ? `${sid}::${route}` : "";
 }
 
-export function resolveThinkingDetailIdentity(messageItem = {}, sessionId = "") {
-  const resolvedSessionId = text(sessionId) || getMessageSessionId(messageItem);
+export function resolveThinkingDetailIdentity(messageItem, sessionId) {
   const turnScopeId = getMessageTurnScopeId(messageItem);
   const dialogProcessId = getMessageDialogProcessId(messageItem);
   return {
-    sessionId: resolvedSessionId,
+    sessionId,
     turnScopeId,
     turnScopeKey: normalizeTurnScopeIdKey(turnScopeId),
     dialogProcessId,
-    key: thinkingDetailCacheKey({ sessionId: resolvedSessionId, turnScopeId, dialogProcessId }),
+    key: thinkingDetailCacheKey({ sessionId, turnScopeId, dialogProcessId }),
   };
 }
 

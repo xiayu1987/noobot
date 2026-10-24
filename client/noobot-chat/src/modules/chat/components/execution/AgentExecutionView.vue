@@ -30,8 +30,6 @@ function openThinkingDetails(payload = {}, messageItem = {}) {
 }
 
 function messageRenderKey(messageItem = {}, messageIndex = 0) {
-  const explicitId = text(messageItem?.messageId);
-  if (explicitId) return `${props.executionId}-message-${explicitId}`;
   const turnScopeKey = normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
   const role = text(messageItem?.role) || "message";
   return `${props.executionId}-${turnScopeKey || "unscoped"}-${role}-${messageIndex}`;

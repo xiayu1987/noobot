@@ -39,7 +39,7 @@ describe("foreign Turn lifecycle routing", () => {
   });
 
   it("commits child Session authority envelopes into the canonical Turn registry", () => {
-    const applyTurnLifecycleEnvelope = vi.fn();
+    const applyTurnLifecycleEnvelope = vi.fn().mockResolvedValue({ applied: true });
     const data = {
       sessionId: "child-session",
       parentSessionId: "root-session",
@@ -52,6 +52,7 @@ describe("foreign Turn lifecycle routing", () => {
       routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
         activeSession: { value: { sessionId: "root-session" } },
         applyTurnLifecycleEnvelope,
+        logSessionEvent: vi.fn(),
         sessionId: "root-session",
       }),
     ).toBe(true);
@@ -152,7 +153,7 @@ describe("committed user Turn routing", () => {
           },
         },
         {
-          activeSession,
+          findSession: viewFor(activeSession).findSession,
           findUserMessageForCommit: viewFor(activeSession).findUserMessageForCommit,
           makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
           logSessionEvent,
@@ -171,7 +172,7 @@ describe("committed user Turn routing", () => {
     expect(logSessionEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         event: "frontend.turnCommit.userMessageApplied",
-        data: expect.objectContaining({ applied: true, attachmentCount: 0 }),
+        data: expect.objectContaining({ applied: true }),
       }),
     );
 
@@ -189,7 +190,7 @@ describe("committed user Turn routing", () => {
           },
         },
         {
-          activeSession,
+          findSession: viewFor(activeSession).findSession,
           findUserMessageForCommit: viewFor(activeSession).findUserMessageForCommit,
           makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
           logSessionEvent,
@@ -203,7 +204,7 @@ describe("committed user Turn routing", () => {
     expect(logSessionEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         event: "frontend.turnAttachmentsBound.userMessageApplied",
-        data: expect.objectContaining({ applied: true, attachmentCount: 1 }),
+        data: expect.objectContaining({ applied: true }),
       }),
     );
   });
@@ -233,7 +234,7 @@ describe("committed user Turn routing", () => {
           },
         },
         {
-          activeSession,
+          findSession: viewFor(activeSession).findSession,
           findUserMessageForCommit: viewFor(activeSession).findUserMessageForCommit,
           logSessionEvent,
           sessionId: "session-1",

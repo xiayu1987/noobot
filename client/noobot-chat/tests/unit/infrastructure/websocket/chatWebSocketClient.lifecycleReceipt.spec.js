@@ -31,7 +31,7 @@ function lifecycle(eventId = "event-receipt") {
     eventId,
     commandId: "command-receipt",
     ...IDENTITY,
-    messageId: "message-receipt",
+    parentSessionId: "",
     presentationMessageId: "assistant-receipt",
     dialogProcessId: "dialog-receipt",
     revision: 2,

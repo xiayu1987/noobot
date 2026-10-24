@@ -39,7 +39,7 @@ test("ignores single-field defaults, constant tables and condition positions", (
 });
 
 test("exempts vendor wire fields and caught error objects", () => {
-  assert.equal(chains("const id = call.id || call.tool_call_id;").length, 0);
+  assert.equal(chains("const id = call.id || call.call_id;").length, 0);
   assert.equal(chains("const r = m?.role || m?.lc_kwargs?.role;").length, 0);
   assert.equal(chains("const v = error?.stack || error?.message;").length, 0);
   assert.equal(chains("const v = error?.code || input.code;").length, 1);
@@ -152,16 +152,26 @@ test("path exemptions are recorded only when they suppress a hit", () => {
   const usage = createExemptionUsage(CHECK);
   findRuleHits(
     "fallbackChain",
-    "const v = a.tool_call_id || b.x;",
+    "const v = a.call_id || b.x;",
     "model-runtime/src/adapters/a.js",
     usage,
   );
-  assert.equal(
-    usage.staleEntries().includes("vendor-wire-fields fallbackChain tool_call_id"),
-    true,
-  );
+  assert.equal(usage.staleEntries().includes("vendor-wire-fields fallbackChain call_id"), true);
   assert.equal(
     usage.staleEntries().includes("vendor-adapters fallbackChain model-runtime/src/adapters/"),
     false,
   );
+});
+
+test("shared-helper rules skip browser-executed callbacks; fallback chains still count", () => {
+  const source = `await page.evaluate((node) => {
+      const ok = typeof node === "object" && !Array.isArray(node);
+      return ok && typeof window.x === "function" && String(node.textContent ?? "").trim();
+    });
+    const outside = typeof value === "object";
+    await page.evaluate((node) => node.a.x || node.b.x);`;
+  assert.equal(findRawTypeofChecks(source).length, 1);
+  assert.equal(findInlineTrimFallbacks(source).length, 0);
+  assert.equal(findInlineTypeChecks(source).length, 0);
+  assert.equal(chains(source).length, 1);
 });

@@ -7,11 +7,8 @@ import { getMessageRole, getMessageTurnScopeId } from "./messageIdentity.js";
 import { text } from "@noobot/shared/value";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 
-function resolveMessageTurnScopeMergeKey(messageItem = {}) {
-  const turnScopeId = getMessageTurnScopeId(messageItem);
-  if (!turnScopeId) return "";
-  const sessionId = text(messageItem?.sessionId);
-  return sessionId ? `${sessionId}::${turnScopeId}` : turnScopeId;
+function resolveMessageTurnScopeMergeKey(messageItem) {
+  return getMessageTurnScopeId(messageItem);
 }
 
 function buildModelRunLabel(messageItem = {}) {
@@ -30,31 +27,22 @@ function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage
 }
 
 function canMergeIntoPreviousAssistantMessage(previousMessage, currentMessage) {
+  if (previousMessage === null) return false;
   const currentRole = getMessageRole(currentMessage);
   const previousRole = getMessageRole(previousMessage);
   const currentTurnScopeKey = resolveMessageTurnScopeMergeKey(currentMessage);
   const previousTurnScopeKey = resolveMessageTurnScopeMergeKey(previousMessage);
   const currentStableMessageIdentity = resolveMessageViewKey(currentMessage);
   const previousStableMessageIdentity = resolveMessageViewKey(previousMessage);
-  const hasDifferentStableMessageIdentity =
-    currentStableMessageIdentity &&
-    previousStableMessageIdentity &&
-    currentStableMessageIdentity !== previousStableMessageIdentity;
-  const hasUnpairedStableMessageIdentity =
-    Boolean(currentStableMessageIdentity || previousStableMessageIdentity) &&
-    currentStableMessageIdentity !== previousStableMessageIdentity;
   return Boolean(
-    previousMessage &&
     currentRole === "assistant" &&
     previousRole === "assistant" &&
-    previousMessage?.workflowMessage !== true &&
-    currentMessage?.workflowMessage !== true &&
+    previousMessage.workflowMessage !== true &&
+    currentMessage.workflowMessage !== true &&
     currentTurnScopeKey &&
-    previousTurnScopeKey &&
     currentTurnScopeKey === previousTurnScopeKey &&
-    !hasDifferentStableMessageIdentity &&
-    !hasUnpairedStableMessageIdentity &&
-    !(previousMessage?.chatPresentation === true && currentMessage?.chatPresentation === true),
+    currentStableMessageIdentity === previousStableMessageIdentity &&
+    !(previousMessage.chatPresentation === true && currentMessage.chatPresentation === true),
   );
 }
 

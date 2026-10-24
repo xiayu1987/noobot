@@ -35,6 +35,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       "mcp.httpError": "MCP HTTP 错误",
       "mcp.inputSchemaTitle": "输入参数 schema",
       "mcp.noToolsAvailable": "MCP 服务器无可用工具。",
+      "mcp.responseMissing": "MCP 响应中缺少对应请求 id 的结果",
       "mcp.rpcError": "MCP RPC 错误",
       "mcp.serverNotFoundOrInactive": "MCP 服务器不存在或未启用",
       "mcp.sseBodyMissing": "MCP SSE 响应体缺失",

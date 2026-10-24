@@ -6,15 +6,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   dispatchTurnEnvelope,
-  hydrateTurnSnapshot,
   TURN_PROJECTION_SOURCE,
 } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { setThinkingReplayDebugLogSink } from "../../../../../../src/modules/debug/loggers/thinkingReplayDebugLogger.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 import { normalizeTurnTransportEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
-const message = () => ({ ...identity, id: "message-1", messageId: "message-1", content: "" });
+const message = () =>
+  buildViewMessage(
+    { ...identity, role: "assistant", presentationMessageId: "message-1" },
+    { sessionId: "session-1" },
+  );
 const envelope = (overrides) =>
   canonicalMessageEvent({
     sessionId: identity.sessionId,
@@ -174,19 +178,10 @@ describe("turnProjectionStore convergence", () => {
     expect(normalized.rejected).toEqual({ errors: ["missing_ordering_scope"] });
   });
 
-  it("converges for live, snapshot plus reconnect increment, and full history replay", () => {
+  it("converges for live and full history replay", () => {
     const live = replay(message(), events, TURN_PROJECTION_SOURCE.NORMAL_LIVE);
-
-    const snapshotBase = replay(message(), events.slice(0, 2), TURN_PROJECTION_SOURCE.NORMAL_LIVE);
-    const snapshot = structuredClone(snapshotBase);
-    snapshot.throughSequence = 2;
-    const reconnected = message();
-    expect(hydrateTurnSnapshot({ targetMessage: reconnected, snapshot }).applied).toBe(true);
-    replay(reconnected, events.slice(2), TURN_PROJECTION_SOURCE.RECONNECT_LIVE);
-
     const history = replay(message(), events, TURN_PROJECTION_SOURCE.HISTORY_REPLAY);
 
-    expect(projection(reconnected)).toEqual(projection(live));
     expect(projection(history)).toEqual(projection(live));
   });
 
@@ -209,127 +204,5 @@ describe("turnProjectionStore convergence", () => {
     expect(target.messageEventState.lastSequence).toBe(3);
     expect(target.toolTimeline).toHaveLength(1);
     expect(target.toolTimeline[0]).toMatchObject({ status: "completed" });
-  });
-
-  it("hydrates idempotently, replays buffered increments, and excludes Turn UI state", () => {
-    const target = message();
-    replay(target, events.slice(0, 1), TURN_PROJECTION_SOURCE.RECONNECT_LIVE);
-    expect(
-      dispatchTurnEnvelope({
-        targetMessage: target,
-        envelope: events[2],
-        source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
-      }).reason,
-    ).toBe("sequence_gap");
-    const snapshotBase = replay(
-      message(),
-      events.slice(0, 2),
-      TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
-    );
-    const snapshot = {
-      ...structuredClone(snapshotBase),
-      throughSequence: 2,
-      thinkingOpenNames: ["must-not-hydrate"],
-      expandedToolDetailKeys: ["must-not-hydrate"],
-    };
-
-    expect(hydrateTurnSnapshot({ targetMessage: target, snapshot })).toMatchObject({
-      applied: true,
-      reason: "snapshot_accepted",
-    });
-    expect(target.messageEventState.lastSequence).toBe(3);
-    expect(target.toolTimeline[0]).toMatchObject({ status: "completed" });
-    expect(target).not.toHaveProperty("thinkingOpenNames");
-    expect(target).not.toHaveProperty("expandedToolDetailKeys");
-
-    const once = projection(structuredClone(target));
-    expect(
-      hydrateTurnSnapshot({
-        targetMessage: target,
-        snapshot: structuredClone(target),
-        throughSequence: 3,
-      }).applied,
-    ).toBe(true);
-    expect(projection(target)).toEqual(once);
-  });
-
-  it("replaces local attachment metadata with the accepted authoritative snapshot", () => {
-    const target = {
-      ...message(),
-      attachments: [
-        {
-          attachmentId: "image-1",
-          sessionId: "test-session",
-          attachmentSource: "test",
-          name: "diagram.png",
-          mimeType: "image/png",
-          size: 123,
-          previewUrl: "blob:http://localhost/image-1",
-        },
-      ],
-    };
-    const snapshot = {
-      ...message(),
-      throughSequence: 1,
-      attachments: [
-        {
-          attachmentId: "image-1",
-          sessionId: "test-session",
-          attachmentSource: "test",
-          name: "diagram.png",
-          mimeType: "image/png",
-          size: 123,
-          relations: [
-            {
-              relationType: "parsed_result",
-              sourceIdentity: {
-                attachmentId: "image-1",
-                sessionId: "test-session",
-                attachmentSource: "test",
-              },
-              targetIdentity: {
-                attachmentId: "parsed-1",
-                sessionId: "test-session",
-                attachmentSource: "test",
-              },
-              mimeType: "text/markdown",
-              createdAt: "2026-08-16T00:00:00.000Z",
-            },
-          ],
-        },
-      ],
-    };
-
-    expect(hydrateTurnSnapshot({ targetMessage: target, snapshot })).toMatchObject({
-      applied: true,
-      reason: "snapshot_accepted",
-    });
-    expect(target.attachments).toEqual([
-      {
-        attachmentId: "image-1",
-        sessionId: "test-session",
-        attachmentSource: "test",
-        name: "diagram.png",
-        mimeType: "image/png",
-        size: 123,
-        relations: [
-          {
-            relationType: "parsed_result",
-            sourceIdentity: {
-              attachmentId: "image-1",
-              sessionId: "test-session",
-              attachmentSource: "test",
-            },
-            targetIdentity: {
-              attachmentId: "parsed-1",
-              sessionId: "test-session",
-              attachmentSource: "test",
-            },
-            mimeType: "text/markdown",
-            createdAt: "2026-08-16T00:00:00.000Z",
-          },
-        ],
-      },
-    ]);
   });
 });

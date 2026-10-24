@@ -3,54 +3,27 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  findSessionByAnyId as findSessionByAnyIdInList,
-  isCurrentActiveSessionId,
-} from "../../model/sessionIdentity.js";
-import { _trimStr } from "./utils.js";
+import { findSessionByAnyId as findSessionByAnyIdInList } from "../../model/sessionIdentity.js";
 
-export function isCurrentActiveSession({
-  sessionId = "",
-  activeSession,
-  activeSessionId,
-  sessions = [],
-}) {
-  return isCurrentActiveSessionId({
-    sessionId,
-    activeSession,
-    activeSessionId,
-    sessionItems: sessions,
-  });
+export function isCurrentActiveSession(activeSession, sessionId) {
+  return activeSession !== undefined && activeSession.sessionId === sessionId;
 }
 
 export async function ensureReconnectSessionActive({
-  sessionId = "",
+  sessionId,
   sessions,
   activeSession,
-  activeSessionId,
   chatList,
 }) {
-  const normalizedSessionId = _trimStr(sessionId);
-  if (
-    !normalizedSessionId ||
-    isCurrentActiveSession({
-      sessionId: normalizedSessionId,
-      activeSession: activeSession?.value,
-      activeSessionId: activeSessionId?.value,
-      sessions: sessions?.value,
-    })
-  ) {
-    return true;
-  }
+  if (isCurrentActiveSession(activeSession.value, sessionId)) return true;
 
-  const targetSession = findSessionByAnyIdInList(sessions?.value, normalizedSessionId);
-  if (!targetSession) {
-    await chatList.fetchSessions(normalizedSessionId, {
+  if (!findSessionByAnyIdInList(sessions.value, sessionId)) {
+    await chatList.fetchSessions(sessionId, {
       silent: true,
     });
   }
 
-  const resolvedTargetSession = findSessionByAnyIdInList(sessions?.value, normalizedSessionId);
+  const resolvedTargetSession = findSessionByAnyIdInList(sessions.value, sessionId);
   if (!resolvedTargetSession) return false;
 
   await chatList.selectSession(resolvedTargetSession.sessionId, {
@@ -58,10 +31,5 @@ export async function ensureReconnectSessionActive({
     silent: true,
   });
 
-  return isCurrentActiveSession({
-    sessionId: normalizedSessionId,
-    activeSession: activeSession?.value,
-    activeSessionId: activeSessionId?.value,
-    sessions: sessions?.value,
-  });
+  return isCurrentActiveSession(activeSession.value, sessionId);
 }

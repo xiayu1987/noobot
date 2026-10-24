@@ -12,16 +12,17 @@ import { isPlainObject, text, isObjectLike } from "./value.js";
 const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
 const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
 
+function readMetadata(message = {}) {
+  const metadata = isObjectLike(message) ? message.additional_kwargs : null;
+  return isObjectLike(metadata) ? metadata : {};
+}
+
 function readField(message = {}, field = "") {
-  const key = text(field);
-  if (!key || !isObjectLike(message)) return "";
-  return String(
-    message?.[key] ??
-      message?.additional_kwargs?.[key] ??
-      message?.lc_kwargs?.[key] ??
-      message?.lc_kwargs?.additional_kwargs?.[key] ??
-      "",
-  ).trim();
+  return text(readMetadata(message)[field]);
+}
+
+function isSummarized(message = {}) {
+  return readMetadata(message).summarized === true;
 }
 
 function resolveContent(message = {}) {
@@ -116,7 +117,7 @@ function summarizeMessageDimensions(messages = []) {
   const dialogGroups = [];
   const dialogById = new Map();
   let missingDialogIdCount = 0;
-  let missingMessageIdCount = 0;
+  let missingMessageUidCount = 0;
   let summarizedCount = 0;
   for (const message of Array.isArray(messages) ? messages : []) {
     incrementCount(roles, resolveDiagnosticRole(message));
@@ -132,20 +133,14 @@ function summarizeMessageDimensions(messages = []) {
       }
       group.count += 1;
     }
-    if (!readField(message, "noobotMessageId")) missingMessageIdCount += 1;
-    if (
-      message?.summarized === true ||
-      message?.lc_kwargs?.summarized === true ||
-      message?.additional_kwargs?.summarized === true ||
-      message?.lc_kwargs?.additional_kwargs?.summarized === true
-    )
-      summarizedCount += 1;
+    if (!readField(message, "messageUid")) missingMessageUidCount += 1;
+    if (isSummarized(message)) summarizedCount += 1;
   }
   return {
     roles,
     dialogGroups,
     missingDialogIdCount,
-    missingMessageIdCount,
+    missingMessageUidCount,
     summarizedCount,
   };
 }
@@ -169,17 +164,13 @@ function messageEvidenceItem(message = {}, index = 0, block = "") {
     index,
     ...(block ? { block } : {}),
     role: resolveDiagnosticRole(message),
-    messageId: readField(message, "noobotMessageId") || undefined,
+    messageUid: readField(message, "messageUid") || undefined,
     type: String(message?.type || message?.lc_kwargs?.type || "").trim() || undefined,
     dialogProcessId: readField(message, "dialogProcessId") || undefined,
     turnScopeId: readField(message, "turnScopeId") || undefined,
     injectedMessageType: readField(message, "injectedMessageType") || undefined,
     internalType: readField(message, "noobotInternalMessageType") || undefined,
-    summarized:
-      message?.summarized === true ||
-      message?.lc_kwargs?.summarized === true ||
-      message?.additional_kwargs?.summarized === true ||
-      undefined,
+    summarized: isSummarized(message) || undefined,
     contentLength: content.length,
     contentHash: textHash(content),
   };

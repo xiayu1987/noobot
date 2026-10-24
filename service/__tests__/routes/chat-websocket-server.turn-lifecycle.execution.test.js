@@ -14,11 +14,14 @@ import {
 } from "@noobot/event-protocol";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import {
+  MESSAGE_REMOVED_FIELD_NAME,
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_PHASE,
   SESSION_ERROR_CODE,
+  createEmptyTurnLifecycle,
 } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import {
   AUTHORITY_EVENT_CONSUMER,
@@ -30,6 +33,7 @@ import {
   publishRunEvent,
 } from "../../ws/chat-websocket/run-registry.js";
 import {
+  acceptFakeAgentTurnLifecycleEvent,
   createAcceptedAgentExecutionIdentity,
   startAuthoritativeServerWithWs,
   closeServer,
@@ -41,6 +45,8 @@ import {
   payload,
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"]);
 
@@ -106,7 +112,7 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     assert.notEqual(authoritativeStartedAt, payload.config.thinkingStartedAt);
     assert.equal(turn.startedAt, authoritativeStartedAt);
     assert.equal(authoritative.lastRunConfig().thinkingStartedAt, authoritativeStartedAt);
-    assert.equal(turn.messageId, authoritative.lastRunConfig().messageId);
+    assert.equal(Object.hasOwn(turn, LEGACY_MESSAGE_ID), false);
     assert.equal(turn.presentationMessageId, authoritative.lastRunConfig().presentationMessageId);
     const completedEnvelope = events.find(
       (item) =>
@@ -252,15 +258,17 @@ test("stale aggregate version is rejected before lifecycle state and Agent execu
 
 test("deduplicated lifecycle commands do not bypass the acknowledged authority outbox", async () => {
   const sent = [];
-  let lifecycle = {};
+  let lifecycle = createEmptyTurnLifecycle();
   let eventOutbox = [];
   let eventIdSequence = 0;
   const bot = {
     session: {
-      applyTurnLifecycleEvent: async (event = {}) => {
+      applyTurnLifecycleEvent: async ({ persistenceScope, ...event }) => {
+        const { lifecycleEvent } = acceptFakeAgentTurnLifecycleEvent(lifecycle, event);
         const result = commitTurnLifecycle({
+          parentSessionId: "",
           lifecycle,
-          event,
+          event: lifecycleEvent,
           eventOutbox,
           createEventId: () => `deduplicated-event-${++eventIdSequence}`,
         });
@@ -334,8 +342,13 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
     ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-deduplicated-ack" }),
     phase: TURN_PHASE.ACTION,
     action: "send",
-    messageId: "message-deduplicated-ack",
     presentationMessageId: "presentation-deduplicated-ack",
+    sessionCaller: SESSION_CALLER.USER,
+    userMessage: {
+      userMessageId: "user-message-deduplicated-ack",
+      content: "hello",
+      messageOrigin: "natural",
+    },
   };
 
   const first = await commit(event);

@@ -28,6 +28,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     const sessionId = "concurrent-turn-journals";
     const keep = {
       messageUid: "keep-message",
+      sessionId,
       role: "user",
       content: "keep",
       dialogProcessId: "dialog-keep",
@@ -35,6 +36,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     };
     const replaced = {
       messageUid: "replaced-message",
+      sessionId,
       role: "assistant",
       presentationMessageId: "pm_replaced",
       modelMessageId: "mm_replaced",
@@ -56,6 +58,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
 
     const replacement = (suffix) => ({
       messageUid: `replacement-${suffix}`,
+      sessionId,
       role: "assistant",
       presentationMessageId: `pm_${suffix}`,
       modelMessageId: `mm_${suffix}`,

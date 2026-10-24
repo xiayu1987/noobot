@@ -5,10 +5,27 @@
  */
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
+import { parseServerSentEvents } from "@noobot/shared/event-stream";
+import { MIME_TYPE, resolveMediaTypeFromContentType } from "@noobot/attachment-protocol/mime";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
+
+async function readJsonRpcResponse({ response, requestId, method, baseUrl }) {
+  const mediaType = resolveMediaTypeFromContentType(response.headers.get("content-type"));
+  if (mediaType !== MIME_TYPE.TEXT_EVENT_STREAM) return response.json();
+  const events = parseServerSentEvents(await response.text());
+  for (const { event, data } of events) {
+    if (event !== "message") continue;
+    const payload = JSON.parse(data);
+    if (payload.id === requestId) return payload;
+  }
+  throw recoverableToolError(`${tSystem("mcp.responseMissing")}(${method}): ${requestId}`, {
+    code: ERROR_CODE.RECOVERABLE_MCP_RESPONSE_MISSING,
+    details: { method, requestId, baseUrl },
+  });
+}
 
 export class StreamableHttpMcpClient extends BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
@@ -29,29 +46,26 @@ export class StreamableHttpMcpClient extends BaseMcpClient {
       body: JSON.stringify(buildJsonRpcRequest(requestId, method, params)),
       signal: this.signal || undefined,
     });
-    const responseSessionId = text(response.headers?.get?.("mcp-session-id"));
+    const responseSessionId = text(response.headers.get("mcp-session-id"));
     if (responseSessionId) this.sessionId = responseSessionId;
     if (!response.ok) {
       const inputText = await response.text().catch(() => "");
-      const reqId = String(
-        response.headers?.get?.("x-request-id") || response.headers?.get?.("request-id") || "",
-      ).trim();
       throw recoverableToolError(
         `${tSystem("mcp.httpError")}(${method}): ${response.status} ${response.statusText} ${inputText}`.trim(),
         {
           code: ERROR_CODE.RECOVERABLE_MCP_HTTP_ERROR,
           details: {
             method,
-            status: Number(response.status || 0),
-            statusText: String(response.statusText || ""),
-            requestId: reqId,
-            body: String(inputText || ""),
+            status: response.status,
+            statusText: response.statusText,
+            requestId: text(response.headers.get("x-request-id")),
+            body: inputText,
             baseUrl: this.baseUrl,
           },
         },
       );
     }
-    return response.json();
+    return readJsonRpcResponse({ response, requestId, method, baseUrl: this.baseUrl });
   }
 
   async _doNotify({ method, params = {} }) {

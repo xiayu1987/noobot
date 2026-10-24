@@ -152,13 +152,7 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
 
   const continuedSnapshotMessages = projectSnapshotIncrementalToContinuation(
     restored.messageBlocks.incremental,
-    {
-      userName: "admin",
-      sessionId: "session",
-      parentSessionId: "",
-      parentDialogProcessId: "",
-      ...secondTurn,
-    },
+    secondTurn,
   );
   const continuedIncremental = [
     ...continuedSnapshotMessages,

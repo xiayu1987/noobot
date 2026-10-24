@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 import {
   createChatSession,
   createSessionFixture,
@@ -131,15 +132,17 @@ describe("useChatSession reconnect replay", () => {
 
   it("projects live tool call and result received after refresh into the restored assistant", async () => {
     const store = useChatStore();
-    const assistant = {
-      presentationMessageId: "msg-live",
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-live",
-      turnScopeId: "turn-live",
-      content: "",
-      pending: true,
-      realtimeLogs: [],
-    };
+    const assistant = buildViewMessage(
+      {
+        presentationMessageId: "msg-live",
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-live",
+        turnScopeId: "turn-live",
+        content: "",
+        pending: true,
+      },
+      { sessionId: "s-1" },
+    );
     store.sessions = [
       {
         id: "s-live",
@@ -196,15 +199,17 @@ describe("useChatSession reconnect replay", () => {
 
   it("keeps projecting message deltas that arrive after reconnect has completed", async () => {
     const store = useChatStore();
-    const assistant = {
-      presentationMessageId: "msg-after-reconnect",
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-after-reconnect",
-      turnScopeId: "turn-after-reconnect",
-      content: "",
-      pending: true,
-      realtimeLogs: [],
-    };
+    const assistant = buildViewMessage(
+      {
+        presentationMessageId: "msg-after-reconnect",
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-after-reconnect",
+        turnScopeId: "turn-after-reconnect",
+        content: "",
+        pending: true,
+      },
+      { sessionId: "s-1" },
+    );
     store.sessions = [
       createSessionFixture({
         id: "s-after-reconnect",
@@ -243,23 +248,27 @@ describe("useChatSession reconnect replay", () => {
 
   it("projects a stopped-turn continuation by turnScopeId when both assistants share a dialogProcessId", async () => {
     const store = useChatStore();
-    const stoppedAssistant = {
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-continued",
-      turnScopeId: "turn-stopped",
-      content: "stopped answer",
-      pending: false,
-      realtimeLogs: [{ type: "thinking", text: "old thinking" }],
-    };
-    const continuedAssistant = {
-      presentationMessageId: "msg-continued",
-      role: RoleEnum.ASSISTANT,
-      dialogProcessId: "dp-continued",
-      turnScopeId: "turn-continued",
-      content: "",
-      pending: true,
-      realtimeLogs: [],
-    };
+    const stoppedAssistant = buildViewMessage(
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-continued",
+        turnScopeId: "turn-stopped",
+        content: "stopped answer",
+        pending: false,
+      },
+      { sessionId: "s-1" },
+    );
+    const continuedAssistant = buildViewMessage(
+      {
+        presentationMessageId: "msg-continued",
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-continued",
+        turnScopeId: "turn-continued",
+        content: "",
+        pending: true,
+      },
+      { sessionId: "s-1" },
+    );
     store.sessions = [
       {
         id: "s-continue",
@@ -300,7 +309,7 @@ describe("useChatSession reconnect replay", () => {
     const session = createChatSession();
     await session.handleReconnect();
 
-    expect(stoppedAssistant.realtimeLogs).toEqual([{ type: "thinking", text: "old thinking" }]);
+    expect(selectActivityTimelineLogs(stoppedAssistant)).toEqual([]);
     expect(selectActivityTimelineLogs(continuedAssistant)).toEqual([
       expect.objectContaining({ text: "new thinking" }),
     ]);
@@ -319,24 +328,29 @@ describe("useChatSession reconnect replay", () => {
         isLocal: false,
         loaded: true,
         messages: [
-          { role: RoleEnum.USER, content: "old q" },
-          {
-            role: RoleEnum.ASSISTANT,
-            presentationMessageId: "msg-old",
-            dialogProcessId: "dp-old",
-            turnScopeId: "turn-old",
-            content: "old keep",
-          },
-          { role: RoleEnum.USER, content: "new q" },
-          {
-            role: RoleEnum.ASSISTANT,
-            presentationMessageId: "msg-new",
-            dialogProcessId: "dp-new",
-            turnScopeId: "turn-new",
-            content: "",
-            pending: true,
-            terminalOutcome: "",
-          },
+          buildViewMessage({ role: RoleEnum.USER, content: "old q" }, { sessionId: "s-1" }),
+          buildViewMessage(
+            {
+              role: RoleEnum.ASSISTANT,
+              presentationMessageId: "msg-old",
+              dialogProcessId: "dp-old",
+              turnScopeId: "turn-old",
+              content: "old keep",
+            },
+            { sessionId: "s-1" },
+          ),
+          buildViewMessage({ role: RoleEnum.USER, content: "new q" }, { sessionId: "s-1" }),
+          buildViewMessage(
+            {
+              role: RoleEnum.ASSISTANT,
+              presentationMessageId: "msg-new",
+              dialogProcessId: "dp-new",
+              turnScopeId: "turn-new",
+              content: "",
+              pending: true,
+            },
+            { sessionId: "s-1" },
+          ),
         ],
         rawMessages: [],
         sessionDocs: [],

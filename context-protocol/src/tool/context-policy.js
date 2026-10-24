@@ -44,6 +44,10 @@ export function resolveToolContextPolicy(value = null) {
   return normalizeToolContextPolicy(value.contextPolicy);
 }
 
+export function resolveToolDefinitionContextPolicy(toolDefinition = null) {
+  return normalizeToolContextPolicy(toolDefinition?.metadata?.contextPolicy);
+}
+
 export function resolveContextMessageContextPolicy(message = {}) {
   return normalizeToolContextPolicy(readContextMessageValue(message, "contextPolicy"));
 }
@@ -59,4 +63,9 @@ export function hasContextMessageFlowControlRole(message = {}, role = "") {
 export function projectToolContextPolicy(target = {}, source = null) {
   const contextPolicy = resolveToolContextPolicy(source);
   return contextPolicy ? { ...target, contextPolicy } : target;
+}
+
+export function projectToolDefinitionContextPolicy(call = {}, toolDefinition = null) {
+  const contextPolicy = resolveToolDefinitionContextPolicy(toolDefinition);
+  return contextPolicy ? { ...call, contextPolicy } : call;
 }

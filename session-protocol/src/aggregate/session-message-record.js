@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
 import {
   MESSAGE_RECORD_REMOVED_FIELDS,
@@ -25,6 +25,7 @@ export function resolveSessionMessageRecordUserMessageId(record = {}) {
 export function validateSessionMessageRecordIdentity(record = {}) {
   const errors = [];
   if (!text(record?.[MESSAGE_IDENTITY_FIELD.SESSION])) errors.push("session_message_uid_missing");
+  if (!isCanonicalText(record?.sessionId)) errors.push("session_message_session_id_missing");
   for (const field of MESSAGE_RECORD_REMOVED_FIELDS) {
     if (Object.hasOwn(record ?? {}, field)) errors.push(`session_message_${field}_removed`);
   }

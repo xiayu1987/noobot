@@ -48,7 +48,7 @@ function normalizeTurn(value, key) {
     rootExecutionId: clean(value.rootExecutionId),
     origin: isPlainObject(value.origin) ? { ...value.origin } : {},
     stage: clean(value.stage),
-    dialogProcessId: clean(value.dialogProcessId),
+    dialogProcessId: value.dialogProcessId,
     commandId: clean(value.commandId),
     action: clean(value.action),
     state: clean(value.state),

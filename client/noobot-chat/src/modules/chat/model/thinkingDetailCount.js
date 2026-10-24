@@ -5,16 +5,9 @@
  */
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 
-function protocolCount(messageItem = {}) {
-  const count = Number(messageItem?.thinkingDetailCount);
-  return Number.isFinite(count) && count > 0 ? count : 0;
-}
-
-export function selectThinkingDetailCount(messageItem = {}) {
-  const explicitCount = protocolCount(messageItem);
-  const timelineCount = countCanonicalThinkingDetailEvents({
-    toolTimeline: messageItem?.toolTimeline,
-    activityTimeline: messageItem?.activityTimeline,
+export function selectThinkingDetailCount(messageItem) {
+  return countCanonicalThinkingDetailEvents({
+    toolTimeline: messageItem.toolTimeline,
+    activityTimeline: messageItem.activityTimeline,
   });
-  return Math.max(explicitCount, timelineCount);
 }

@@ -67,10 +67,6 @@ export function parseTurnKey(key = "") {
   }
 }
 
-export function messageOwnsTurn(message = {}, identity = {}) {
-  const expected = createTurnIdentity(identity);
-  const messageSessionId = text(message?.sessionId);
-  const messageTurnScopeId = text(message?.turnScopeId);
-  if (!expected.turnScopeId || messageTurnScopeId !== expected.turnScopeId) return false;
-  return !expected.sessionId || !messageSessionId || messageSessionId === expected.sessionId;
+export function messageOwnsTurn(message, identity) {
+  return message.turnScopeId === identity.turnScopeId;
 }

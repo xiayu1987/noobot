@@ -25,8 +25,6 @@ function normalizeList(value) {
   return Array.isArray(value) ? value : [];
 }
 
-const UPDATABLE_NATIVE_FIELDS = new Set(["content"]);
-
 const ROUND_IDENTITY_FIELDS = ["dialogProcessId", "turnScopeId"];
 
 function normalizeRoundIdentity(identity = {}) {
@@ -211,30 +209,6 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
     removedCount: removedMessages.length,
     removedMessageKeys: [...new Set(removedMessages.map(resolveContextMessageKey))],
   };
-}
-
-export function updateMessageById(holder = {}, messageId = "", patch = {}) {
-  if (!isObjectLike(holder)) {
-    throw new TypeError("modelContext document is required");
-  }
-  const normalizedId = text(messageId);
-  if (!normalizedId) throw new TypeError("messageId is required");
-  if (!isPlainObject(patch)) {
-    throw new TypeError("message patch must be an object");
-  }
-  for (const key of Object.keys(patch)) {
-    if (!UPDATABLE_NATIVE_FIELDS.has(key)) {
-      throw new TypeError(`message patch field is not updatable by id: ${key}`);
-    }
-  }
-  const store = canonicalizeMessageStore(holder) || resolveStore(holder);
-  const message = store.byId.get(normalizedId);
-  if (!message) throw new Error(`canonical message not found: ${normalizedId}`);
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) delete message[key];
-    else message[key] = value;
-  }
-  return message;
 }
 
 export function resolveMessagesByIds(holder = {}, ids = []) {

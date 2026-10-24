@@ -210,6 +210,7 @@ describe("ThinkingPanel runtime timing", () => {
           pending: true,
           workflowNodeRunningPlaceholder: true,
         }),
+        { sessionId: "session-1" },
       ),
     );
 

@@ -57,11 +57,29 @@ function auditLog(text) {
 const userOnly = [{ role: "user", content: "query" }];
 
 test("chat requests without constructed system fail", () => {
-  for (const operation of ["chat", ""]) {
-    const { failures } = auditLog(requestEntry({ operation, messages: userOnly }));
-    assert.equal(failures.length, 1);
-    assert.match(failures[0], /missing constructed system block/);
+  const { failures } = auditLog(requestEntry({ operation: "chat", messages: userOnly }));
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /missing constructed system block/);
+});
+
+test("missing or unknown x-model-operation fails instead of defaulting to chat", () => {
+  for (const operation of ["", "completion"]) {
+    const { failures, passes } = auditLog(requestEntry({ operation, messages: userOnly }));
+    assert.deepEqual(passes, []);
+    assert.match(failures[0], /unknown x-model-operation/);
   }
+});
+
+test("image_generation audits the gateway prompt and the Responses input shapes", () => {
+  const { failures, passes } = auditLog(
+    requestEntry({ operation: "image_generation", body: { model: "m", prompt: "red square" } }) +
+      requestEntry({ operation: "image_generation", body: { input: userOnly } }),
+  );
+  assert.deepEqual(failures, []);
+  assert.match(passes[0], /\(2 requests\)/);
+
+  const empty = auditLog(requestEntry({ operation: "image_generation", body: { prompt: " " } }));
+  assert.match(empty.failures[0], /no auditable request messages/);
 });
 
 test("provider operations are exempt from the constructed system requirement", () => {

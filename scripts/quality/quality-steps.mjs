@@ -46,6 +46,7 @@ export const QUALITY_STEPS = Object.freeze([
   "check:bare-file-paths",
   "check:esm-import-extensions",
   "check:barrel-star-exports",
+  "check:browser-callback-bindings",
   "check:memory-protocol-boundary",
   "check:workspace-protocol-boundary",
   "check:tool-construction-protocol",

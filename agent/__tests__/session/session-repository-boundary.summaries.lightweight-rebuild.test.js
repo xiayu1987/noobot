@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import test from "node:test";
@@ -308,6 +309,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           content: "tool only result detail should not be in summary",
         },
       ],
+      "B",
       "lightweight_b",
     );
     await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionB), {
@@ -409,7 +411,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(assistantMessage.content.endsWith(assistantContentTail), true);
     assert.equal(assistantMessage.content.includes(`${assistantContentTail}…`), false);
     assert.equal(assistantMessage.hasThinkingDetails, true);
-    assert.equal(assistantMessage.thinkingDetailCount, 3);
+    assert.equal(Object.hasOwn(assistantMessage, "thinkingDetailCount"), false);
+    assert.equal(countCanonicalThinkingDetailEvents(assistantMessage), 3);
     assert.equal("realtimeLogs" in assistantMessage, false);
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
@@ -431,12 +434,18 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("id" in pluginAttachmentAssistant.attachments[0], false);
     assert.equal("type" in pluginAttachmentAssistant.attachments[0], false);
     assert.equal("source" in pluginAttachmentAssistant.attachments[0], false);
-    const toolOnlyAssistantMessage = summary.messages.find(
+    const rawToolOnlyAssistantMessage = summary.messages.find(
+      (item) => item.presentationMessageId === "tool-display-assistant",
+    );
+    assert.equal(Object.hasOwn(rawToolOnlyAssistantMessage, "toolTimeline"), false);
+    assert.equal(typeof rawToolOnlyAssistantMessage.thinkingDetailRef.file, "string");
+    const toolOnlyAssistantMessage = hydratedSummary.messages.find(
       (item) => item.presentationMessageId === "tool-display-assistant",
     );
     assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
     assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
-    assert.equal(toolOnlyAssistantMessage.thinkingDetailCount, 3);
+    assert.equal(Object.hasOwn(toolOnlyAssistantMessage, "thinkingDetailCount"), false);
+    assert.equal(countCanonicalThinkingDetailEvents(toolOnlyAssistantMessage), 3);
     assert.equal("realtimeLogs" in toolOnlyAssistantMessage, false);
     assert.equal("completedToolLogs" in toolOnlyAssistantMessage, false);
     assert.equal(JSON.stringify(summary.messages).includes("tool only result detail"), false);

@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { TURN_TERMINAL_FIXED_DESCRIPTION } from "@noobot/session-protocol";
 
 import { repairOrphanedTerminalTurns } from "../src/application/repair-orphaned-terminal-turns.js";
 
@@ -13,7 +14,7 @@ const terminalStatus = (turnScopeId) => ({
   dialogProcessId: `${turnScopeId}-dialog`,
   status: "user_stopped",
   reason: "user_stop",
-  description: "对话已被用户停止",
+  description: TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped,
 });
 
 test("repair drops terminal lifecycle turns whose canonical messages are gone", () => {

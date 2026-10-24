@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
@@ -261,7 +262,8 @@ test("stopped turn detail uses the persisted presentation identity without a fin
   assert.equal(payload.messageItem.type, "message");
   assert.equal(payload.messageItem.presentationMessageId, "stopped-presentation");
   assert.equal(payload.messageItem.turnScopeId, "stopped-turn");
-  assert.equal(payload.messageItem.thinkingDetailCount, 2);
+  assert.equal(Object.hasOwn(payload.messageItem, "thinkingDetailCount"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(payload.messageItem), 2);
   assert.equal(payload.counts.executionLogCount, 2);
 });
 
@@ -326,11 +328,16 @@ test("session summary references canonical thinking detail without copying its t
     { turnScopeId: "workflow-node:turn-2" },
   );
 
-  assert.equal(summaryMessage.thinkingDetailCount, 4);
+  assert.equal(Object.hasOwn(summaryMessage, "thinkingDetailCount"), false);
+
+  assert.equal(countCanonicalThinkingDetailEvents(summaryMessage), 4);
   assert.equal(summaryMessage.hasThinkingDetails, true);
   assert.equal(summaryMessage.toolTimeline.length, 2);
   assert.equal(summaryMessage.activityTimeline, undefined);
-  assert.equal(detail.messageItem.thinkingDetailCount, summaryMessage.thinkingDetailCount);
+  assert.equal(
+    countCanonicalThinkingDetailEvents(detail.messageItem),
+    countCanonicalThinkingDetailEvents(summaryMessage),
+  );
   assert.equal(detail.messageItem.toolTimeline.length, 2);
 });
 
@@ -372,7 +379,8 @@ test("session summary does not copy large tool payloads retained by thinking det
   );
 
   assert.equal(JSON.stringify(summary).includes(largePayload), false);
-  assert.equal(summary.messages[0].thinkingDetailCount, 2);
+  assert.equal(Object.hasOwn(summary.messages[0], "thinkingDetailCount"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(summary.messages[0]), 2);
   assert.equal(detail.messageItem.toolTimeline[0].call.arguments, largePayload);
   assert.equal(detail.messageItem.toolTimeline[0].resultEvent.output, largePayload);
   assert.equal(Object.hasOwn(detail, "allMessages"), false);
@@ -390,6 +398,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
         messages: [
           {
             messageUid: "sm-one",
+            sessionId: "scoped-session",
             role: "assistant",
             presentationMessageId: "pm_fx11",
             modelMessageId: "mm_session_thinking_detail__9",
@@ -401,6 +410,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
           },
           {
             messageUid: "sm-two",
+            sessionId: "scoped-session",
             role: "assistant",
             presentationMessageId: "pm_fx12",
             modelMessageId: "mm_session_thinking_detail__10",

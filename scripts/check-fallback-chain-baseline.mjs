@@ -16,6 +16,7 @@ import {
   NO_EXEMPTIONS,
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
+import { isBrowserCallback } from "./quality/browser-callbacks.mjs";
 import {
   getFirstPartyCodeFiles,
   isFirstPartyProductionPath,
@@ -32,6 +33,7 @@ const CONDITION_PARENTS = new Set([
 ]);
 const CONSTANT_TABLE_NAME = /^[A-Z][A-Z0-9_]*$/;
 const SKIPPED_KEYS = new Set(["parent", "loc", "range", "tokens", "comments", "templateBody"]);
+const SKIP_SUBTREE = Symbol("skip-subtree");
 
 export const CHECK = defineCheck({
   id: "fallback-chain",
@@ -65,15 +67,7 @@ export const CHECK = defineCheck({
       rules: ["fallbackChain"],
       reason:
         "wire fields owned by LangChain or model vendors; aliases cannot be converged locally",
-      match: [
-        "lc_kwargs",
-        "lc_name",
-        "additional_kwargs",
-        "tool_calls",
-        "tool_call_id",
-        "call_id",
-        "tool_name",
-      ],
+      match: ["lc_kwargs", "additional_kwargs", "call_id"],
     },
     {
       id: "caught-error-objects",
@@ -116,12 +110,12 @@ export const CHECK = defineCheck({
     },
   ],
   baseline: {
-    fallbackChain: 496,
-    inlineTrim: 79,
+    fallbackChain: 468,
+    inlineTrim: 75,
     typeCheck: 0,
-    rawTypeof: 585,
+    rawTypeof: 578,
     textShadow: 0,
-    exemptions: 13,
+    exemptions: 9,
   },
   measure: (usage) => measureRules(usage),
 });
@@ -203,7 +197,7 @@ function isConditionPosition(node, parent) {
 
 function walk(node, parent, visitor) {
   if (!node || typeof node.type !== "string") return;
-  visitor(node, parent);
+  if (visitor(node, parent) === SKIP_SUBTREE) return;
   for (const [key, value] of Object.entries(node)) {
     if (SKIPPED_KEYS.has(key)) continue;
     if (Array.isArray(value)) value.forEach((child) => walk(child, node, visitor));
@@ -256,7 +250,8 @@ export function findInlineTrimFallbacks(
   const isTrimFallback = (node) =>
     isFallbackExpression(node) && !(skipFieldChains && isFieldChain(node));
   const hits = [];
-  walk(parseSource(source, filename), null, (node) => {
+  walk(parseSource(source, filename), null, (node, parent) => {
+    if (isBrowserCallback(node, parent)) return SKIP_SUBTREE;
     if (isSingleArgumentCall(node, "text")) {
       if (isTrimFallback(node.arguments[0])) hits.push(snippet(source, node));
       return;
@@ -327,6 +322,7 @@ function isLocalPlainObjectHelper(node) {
 export function findInlineTypeChecks(source, filename = "source.js") {
   const hits = [];
   walk(parseSource(source, filename), null, (node, parent) => {
+    if (isBrowserCallback(node, parent)) return SKIP_SUBTREE;
     if (isLocalPlainObjectHelper(node)) {
       hits.push(snippet(source, node.type === "VariableDeclarator" ? node.id : node.id));
       return;
@@ -360,7 +356,8 @@ function isRawTypeofTest(node) {
 
 export function findRawTypeofChecks(source, filename = "source.js") {
   const hits = [];
-  walk(parseSource(source, filename), null, (node) => {
+  walk(parseSource(source, filename), null, (node, parent) => {
+    if (isBrowserCallback(node, parent)) return SKIP_SUBTREE;
     if (isRawTypeofTest(node)) hits.push(snippet(source, node));
   });
   return hits;

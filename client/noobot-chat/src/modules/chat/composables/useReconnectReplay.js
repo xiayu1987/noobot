@@ -34,13 +34,12 @@ import { text, isFunction } from "@noobot/shared/value";
 export function useReconnectReplay({
   sessions,
   activeSession,
-  activeSessionId,
   interactionSubmitting,
   chatList,
   findMessageByViewKey,
   findMessagesByPresentationId,
   materializeTurnPresentation,
-  makeViewMessage,
+  makeViewAttachments,
   clearPendingInteraction,
   setPendingInteractionRequest,
   isInteractionRequestHandled,
@@ -74,21 +73,15 @@ export function useReconnectReplay({
     });
   }
 
-  function isCurrentActiveSession(sessionId = "") {
-    return isCurrentActiveSessionWithContext({
-      sessionId,
-      activeSession: activeSession.value,
-      activeSessionId: activeSessionId.value,
-      sessions: sessions.value,
-    });
+  function isCurrentActiveSession(sessionId) {
+    return isCurrentActiveSessionWithContext(activeSession.value, sessionId);
   }
 
-  async function ensureReconnectSessionActive(sessionId = "") {
+  async function ensureReconnectSessionActive(sessionId) {
     return ensureReconnectSessionActiveWithContext({
       sessionId,
       sessions,
       activeSession,
-      activeSessionId,
       chatList,
     });
   }
@@ -281,7 +274,7 @@ export function useReconnectReplay({
         handleAttachmentLifecycleStreamEvent({
           data: payload,
           activeSession,
-          makeViewMessage,
+          makeViewAttachments,
           logSessionEvent: ({ event, sessionId, dialogProcessId, turnScopeId, data: details }) =>
             logWorkflowDiagnostics(event, {
               sessionId,

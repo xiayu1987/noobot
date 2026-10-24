@@ -74,6 +74,8 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
     sessionId: "session-1",
     turnScopeId: "turn-1",
     presentationMessageId: "assistant-1",
+    dialogProcessId: "dialog-1",
+    parentSessionId: "",
     revision: 2,
     sequence: 2,
     phase: TURN_PHASE.PROCESSING,
@@ -96,8 +98,10 @@ test("turn lifecycle envelope does not expose persistence locators", () => {
     commandId: "cmd-scoped",
     causationId: "cmd-scoped",
     sessionId: "child-session",
+    parentSessionId: "root-session",
     turnScopeId: "turn-scoped",
     presentationMessageId: "presentation-scoped",
+    dialogProcessId: "dialog-scoped",
     revision: 2,
     sequence: 2,
     phase: TURN_PHASE.PROCESSING,
@@ -122,11 +126,14 @@ test("durable command receipt returns the original envelope after outbox compact
     sessionId: "session-1",
     turnScopeId: "turn-1",
     presentationMessageId: "presentation-1",
+    dialogProcessId: "dialog-1",
+    parentSessionId: "",
     action: "send",
     phase: TURN_PHASE.ACTION,
     expectedRevision: 0,
   };
   const committed = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: {},
     event,
     createEventId: () => "durable-event-1",
@@ -153,6 +160,7 @@ test("durable command receipt returns the original envelope after outbox compact
 
   const compactedEventIds = new Set(compacted.outbox.map((item) => item.eventId));
   const replay = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: committed.lifecycle,
     event,
     isCommittedEventId: (eventId) => compactedEventIds.has(eventId),
@@ -173,6 +181,7 @@ test("turn lifecycle envelope preserves parent identity without leaking mutation
     parentSessionId: "parent-session",
     turnScopeId: "child-turn",
     presentationMessageId: "child-presentation",
+    dialogProcessId: "dialog-child",
     revision: 1,
     sequence: 1,
     phase: TURN_PHASE.ACTION,
@@ -200,10 +209,33 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
     "missing_session_id",
     "missing_turn_scope_id",
     "missing_presentation_message_id",
+    "missing_dialog_process_id",
+    "invalid_parent_session_id",
     "invalid_revision",
     "event_phase_mismatch",
     "event_state_mismatch",
   ]);
+});
+
+test("lifecycle command input rejects the retired messageId field", () => {
+  const accepted = {
+    ...acceptedAgentExecution("turn-retired-message-id"),
+    turnScopeId: "turn-retired-message-id",
+    commandId: "command-retired-message-id",
+    causationId: "command-retired-message-id",
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: TURN_PHASE.ACTION,
+    action: "send",
+    startedAt: "2026-07-18T00:00:00.000Z",
+    dialogProcessId: "dialog-retired-message-id",
+    presentationMessageId: "presentation-retired-message-id",
+  };
+  const rejected = transitionTurnLifecycle({}, { ...accepted, messageId: "legacy-message" });
+  assert.equal(rejected.applied, false);
+  assert.equal(rejected.reason, "turn_message_id_noncanonical");
+  const admitted = transitionTurnLifecycle({}, accepted);
+  assert.equal(admitted.applied, true);
+  assert.equal(Object.hasOwn(admitted.turn, "messageId"), false);
 });
 
 test("action acceptance enforces one continuation source contract", () => {
@@ -215,6 +247,8 @@ test("action acceptance enforces one continuation source contract", () => {
     sessionId: "continue-contract-session",
     turnScopeId: "continue-contract-turn",
     presentationMessageId: "continue-contract-presentation",
+    dialogProcessId: "dialog-continue-contract",
+    parentSessionId: "",
     revision: 1,
     sequence: 1,
     phase: TURN_PHASE.ACTION,
@@ -306,6 +340,7 @@ test("execution identity is immutable after the first Turn revision", () => {
       phase: TURN_PHASE.ACTION,
       action: "send",
       presentationMessageId: "identity-presentation",
+      dialogProcessId: "identity-dialog",
       executionId: "workflow:identity-turn",
       executionKind: "workflow",
       rootExecutionId: "workflow:identity-turn",
@@ -371,6 +406,7 @@ test("failed transition requires failure code and message", () => {
       phase: TURN_PHASE.ACTION,
       action: "send",
       presentationMessageId: "failure-presentation",
+      dialogProcessId: "failure-dialog",
     },
   );
   assert.equal(accepted.applied, true);
@@ -504,13 +540,13 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
 
 test("committed turn lifecycle envelope projects identity from the committed turn", () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
+    parentSessionId: "parent-1",
     event: {
       eventType: TURN_EVENT.PROCESSING_STARTED,
       commandId: "projection-command",
       causationId: "projection-cause",
       correlationId: "foreign-correlation",
       sessionId: "session-1",
-      parentSessionId: "parent-1",
       turnScopeId: "turn-1",
       executionId: "event-execution",
       stage: "event-stage",
@@ -519,6 +555,7 @@ test("committed turn lifecycle envelope projects identity from the committed tur
       turnScopeId: "turn-1",
       commandId: "projection-command",
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       executionId: "turn-execution",
       executionKind: "agent",
       rootExecutionId: "turn-execution",

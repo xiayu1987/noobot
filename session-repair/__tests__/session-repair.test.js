@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  MESSAGE_REMOVED_FIELD_NAME,
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
@@ -24,6 +25,8 @@ import {
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
 } from "../src/index.js";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 test("session repair demotes older duplicate canonical assistant presentations", () => {
   const result = reconcileDuplicateCanonicalAssistantPresentations({
@@ -194,8 +197,8 @@ test("migrates the legacy message id field into role identity fields", () => {
     aggregateVersion: 3,
     messages: [
       { messageUid: "u1", id: "m1", role: "user" },
-      { messageUid: "u2", id: "m2", messageId: "m2", role: "assistant" },
-      { messageUid: "u3", messageId: "m3", role: "assistant" },
+      { messageUid: "u2", id: "m2", [LEGACY_MESSAGE_ID]: "m2", role: "assistant" },
+      { messageUid: "u3", [LEGACY_MESSAGE_ID]: "m3", role: "assistant" },
     ],
   };
   const result = migrateSessionDocument(source);
@@ -223,7 +226,7 @@ test("rejects messages whose legacy id conflicts with messageId", () => {
         schemaVersion: 7,
         sessionId: "session-1",
         aggregateVersion: 1,
-        messages: [{ messageUid: "u1", id: "provider-1", messageId: "m1" }],
+        messages: [{ messageUid: "u1", id: "provider-1", [LEGACY_MESSAGE_ID]: "m1" }],
       }),
     (error) => error.code === "SESSION_MESSAGE_ID_CONFLICT",
   );
@@ -238,7 +241,7 @@ test("runs every message migration step even after an earlier step changed the m
       {
         messageUid: "u1",
         id: "m1",
-        messageId: "m1",
+        [LEGACY_MESSAGE_ID]: "m1",
         role: "user",
         turnCommit: {
           action: "send",

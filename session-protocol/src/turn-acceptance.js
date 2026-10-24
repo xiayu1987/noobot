@@ -3,12 +3,27 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text, isPlainObject } from "@noobot/shared/value";
+import { text, isPlainObject, isCanonicalText } from "@noobot/shared/value";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TURN_EVENT } from "./lifecycle/turn-event.js";
 import { TURN_ACTION } from "./lifecycle/turn-action.js";
 import { acceptedMessageIdentityFieldsFor } from "./identity/message-identity-schema.js";
 
 const ACCEPTED_USER_IDENTITY_FIELDS = acceptedMessageIdentityFieldsFor("user");
+
+function collectAcceptedDialogProcessErrors(event) {
+  if (event.sessionCaller === SESSION_CALLER.USER) {
+    return Object.hasOwn(event, "dialogProcessId")
+      ? ["accepted_user_dialog_process_id_forbidden"]
+      : [];
+  }
+  if (event.sessionCaller === SESSION_CALLER.BOT) {
+    return isCanonicalText(event.dialogProcessId)
+      ? []
+      : ["accepted_bot_dialog_process_id_required"];
+  }
+  return ["accepted_session_caller_required"];
+}
 
 export function validateTurnAcceptanceUserMessage(event = {}) {
   if (text(event.eventType) !== TURN_EVENT.ACTION_ACCEPTED) {
@@ -19,7 +34,7 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
     return { valid: errors.length === 0, materialize: false, value: null, errors };
   }
   const input = event.userMessage;
-  const errors = [];
+  const errors = collectAcceptedDialogProcessErrors(event);
   if (!isPlainObject(input)) {
     errors.push("accepted_user_message_required");
   } else {
@@ -28,7 +43,6 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
       if (!text(input[field])) errors.push(`accepted_user_${field}_required`);
     }
     if (!text(event.turnScopeId)) errors.push("accepted_user_message_turn_scope_required");
-    if (!text(event.dialogProcessId)) errors.push("accepted_user_message_dialog_required");
     const messageOrigin = text(input.messageOrigin).toLowerCase();
     if (!["natural", "internal"].includes(messageOrigin)) {
       errors.push("accepted_message_origin_required");

@@ -9,6 +9,7 @@ import {
   sendAndStop,
   continueAndStop,
   assertPersistedSnapshots,
+  expectedSnapshotIdentity,
   uniquePrompt,
 } from "../helpers/turn-scenarios.js";
 
@@ -22,7 +23,7 @@ test("@smoke PBE-006 无附件停止、保存快照后继续", async ({ noobot, 
   expect(stop.concurrency.expectedTurnRevision).toBeGreaterThanOrEqual(1);
   expect(stop.identity).toMatchObject(send.identity);
   const firstSnapshots = await assertPersistedSnapshots(noobot.userId, noobot.sessionId, 1);
-  expect(firstSnapshots[0]).toMatchObject(send.identity);
+  expect(firstSnapshots[0]).toMatchObject(expectedSnapshotIdentity(noobot.userId, send.identity));
   const continued = await continueAndStop({
     page: noobot.page,
     capture: protocolCapture,

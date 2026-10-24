@@ -63,7 +63,7 @@ function createBaseMessageEntity(message, now) {
     content: message?.content || "",
     type: text(message?.type),
     userName: text(message?.userName),
-    sessionId: text(message?.sessionId),
+    sessionId: message.sessionId,
     parentSessionId: text(message?.parentSessionId),
     dialogProcessId: resolveSessionMessageRecordDialogProcessId(message),
     parentDialogProcessId: text(message?.parentDialogProcessId),
@@ -93,10 +93,12 @@ function applyMessageInjection(target, message) {
   if (injectedMessageType) target.injectedMessageType = injectedMessageType;
   const relayCorrelationId = text(message?.relayCorrelationId);
   if (relayCorrelationId) target.relayCorrelationId = relayCorrelationId;
-  const interjectionSequence = Number(message?.interjectionSequence || 0);
-  if (Number.isInteger(interjectionSequence) && interjectionSequence > 0) {
-    target.interjectionSequence = interjectionSequence;
+  const { interjectionSequence } = message;
+  if (interjectionSequence === undefined) return;
+  if (!Number.isInteger(interjectionSequence) || interjectionSequence <= 0) {
+    throw new TypeError("interjectionSequence must be a positive integer");
   }
+  target.interjectionSequence = interjectionSequence;
 }
 
 function applyMessageOrigin(target, message) {
@@ -217,12 +219,8 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
       )
     : [];
 
-  const normalizedMessage = createBaseMessageEntity(message, now);
-
-  Object.assign(
-    normalizedMessage,
-    projectSessionMessageRecordIdentity(assertSessionMessageRecordIdentity(message)),
-  );
+  const identity = projectSessionMessageRecordIdentity(assertSessionMessageRecordIdentity(message));
+  const normalizedMessage = Object.assign(createBaseMessageEntity(message, now), identity);
   const turnCommit = normalizeTurnCommitMetadata(message?.turnCommit);
   if (turnCommit) normalizedMessage.turnCommit = turnCommit;
   applyMessageArtifacts(normalizedMessage, message, normalizedAttachments);

@@ -62,7 +62,7 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       content: input.content,
       type: input.type || "",
       userName: resolveUserName(input),
-      sessionId: normalizedString(input.sessionId),
+      sessionId: input.sessionId,
       parentSessionId: normalizedString(resolvedParentSessionId),
       dialogProcessId: normalizeDialogProcessId(input.dialogProcessId || ""),
       parentDialogProcessId: input.parentDialogProcessId || "",
@@ -82,7 +82,9 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       injectedBy: normalizedString(input.injectedBy),
       injectedMessageType: normalizedString(input.injectedMessageType),
       relayCorrelationId: normalizedString(input.relayCorrelationId),
-      interjectionSequence: Number(input.interjectionSequence || 0),
+      ...(input.interjectionSequence === undefined
+        ? {}
+        : { interjectionSequence: input.interjectionSequence }),
       messageOrigin: text(input.messageOrigin).toLowerCase(),
       pluginMessage: input.pluginMessage === true,
       pluginMeta: resolvePluginMeta(input.pluginMeta),

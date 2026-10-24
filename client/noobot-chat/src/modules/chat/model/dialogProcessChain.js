@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageDialogProcessId, getMessageParentDialogProcessId } from "./messageIdentity.js";
-import {
-  assertUniqueAttachmentIdentities,
-  mergeAttachmentsByIdentity,
-} from "@noobot/attachment-protocol";
+import { mergeAttachmentsByIdentity } from "@noobot/attachment-protocol";
 import { text } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
@@ -16,13 +13,6 @@ export function mergeAttachments(existing = [], incoming = []) {
   return mergeAttachmentsByIdentity(existingList, incomingList, {
     onConflict: (_current, authoritativeIncoming) => authoritativeIncoming,
   });
-}
-
-export function mergeAttachmentSnapshot(existing = [], snapshot = []) {
-  if (!Array.isArray(existing)) throw new TypeError("existing attachments must be an array");
-  const snapshotList = Array.isArray(snapshot) ? snapshot : [];
-  assertUniqueAttachmentIdentities(snapshotList);
-  return snapshotList;
 }
 
 export function flattenSessionMessages(sessionDocs = []) {

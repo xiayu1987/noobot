@@ -5,6 +5,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { MODEL_OPERATION_KIND } from "@noobot/model-protocol/protocol";
 import { text } from "@noobot/shared/value";
 
 function sliceJsonObject(inputText = "", start = 0) {
@@ -41,10 +42,10 @@ function extractRequestBodies(inputText = "") {
 
 function requestOperationKind(headerText = "") {
   const match = headerText.match(/"x-model-operation"\s*:\s*"([^"]*)"/i);
-  return (text(match?.[1]) || "chat").toLowerCase();
+  return text(match?.[1]);
 }
 
-function requestMessages(body = {}) {
+function responsesInputMessages(body = {}) {
   if (Array.isArray(body?.messages)) return body.messages;
   const input =
     typeof body?.input === "string"
@@ -56,8 +57,26 @@ function requestMessages(body = {}) {
   return instructions ? [{ role: "system", content: instructions }, ...input] : input;
 }
 
+function imageGenerationMessages(body = {}) {
+  const prompt = text(body?.prompt);
+  return prompt ? [{ role: "user", content: prompt }] : responsesInputMessages(body);
+}
+
+const REQUEST_AUDIT_RULES = Object.freeze({
+  [MODEL_OPERATION_KIND.CHAT]: { messages: responsesInputMessages, requiresSystem: true },
+  [MODEL_OPERATION_KIND.WEB_SEARCH]: { messages: responsesInputMessages, requiresSystem: false },
+  [MODEL_OPERATION_KIND.MULTIMODAL_PARSE]: {
+    messages: responsesInputMessages,
+    requiresSystem: false,
+  },
+  [MODEL_OPERATION_KIND.IMAGE_GENERATION]: {
+    messages: imageGenerationMessages,
+    requiresSystem: false,
+  },
+});
+
 function messageRole(message = {}) {
-  return text(message?.role || message?.lc_kwargs?.role).toLowerCase();
+  return text(message?.role).toLowerCase();
 }
 
 function isSystemLike(message) {
@@ -116,10 +135,18 @@ export function validateRequestLogOrder(logPath = "", { fail, pass }) {
       fail(`request log Body JSON parse failed: ${logPath}`, error?.message || String(error));
       continue;
     }
-    const messages = requestMessages(body);
+    const rule = REQUEST_AUDIT_RULES[operationKind];
+    if (!rule) {
+      fail(
+        `request log has unknown x-model-operation: ${logPath} Body#${bodyIndex + 1}`,
+        `x-model-operation must be one of ${Object.values(MODEL_OPERATION_KIND).join(", ")}, got "${operationKind}"`,
+      );
+      continue;
+    }
+    const messages = rule.messages(body);
     if (!messages.length) continue;
     checked += 1;
-    const requiresConstructedSystem = operationKind === "chat";
+    const requiresConstructedSystem = rule.requiresSystem;
     if (requiresConstructedSystem && !messages.some(isSystemLike)) {
       fail(
         `request log missing constructed system block: ${logPath} Body#${bodyIndex + 1}`,

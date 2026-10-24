@@ -47,7 +47,7 @@ export function createSubSessionSnapshotReducer({
       realtimeMessages: realtimeMessages.map(summarizeSubSessionMessage),
     }));
     const deduplicatedMessages = dedupeSubSessionMessagesByIdentity(
-      mergeSnapshotWithRealtimeMessages(snapshotMessages, realtimeMessages),
+      mergeSnapshotWithRealtimeMessages({ snapshotMessages, realtimeMessages }),
     );
     logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeCommitted", () => ({
       sessionId,

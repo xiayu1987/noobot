@@ -14,6 +14,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { text } from "@noobot/shared/value";
 
 export class SseMcpClient extends BaseMcpClient {
@@ -88,7 +89,7 @@ export class SseMcpClient extends BaseMcpClient {
 
   async _startSseStream() {
     const headers = {
-      accept: "text/event-stream",
+      accept: MIME_TYPE.TEXT_EVENT_STREAM,
       ...this.headers,
     };
     this._streamAbortController = new AbortController();

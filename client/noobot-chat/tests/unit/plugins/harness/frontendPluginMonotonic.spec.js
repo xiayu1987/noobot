@@ -120,72 +120,6 @@ describe("noobot-chat monotonic message action rules", () => {
     ).toBe(false);
   });
 
-  it("restores stopped actions in old sessions when round ids are only in assistant channelState", () => {
-    const action = getMonotonicAction();
-    const deleteMonotonicMessage = vi.fn();
-    const resendMonotonicMessage = vi.fn();
-    const oldSessionId = "18c9be16-a197-4581-b0fb-7eee18cea005";
-    const firstUser = {
-      role: "user",
-      sessionId: oldSessionId,
-      turnScopeId: "client-turn:history-1",
-      dialogProcessId: "dp-history-1",
-      content: "history question",
-    };
-    const firstAssistant = {
-      role: "assistant",
-      sessionId: oldSessionId,
-      turnScopeId: "client-turn:history-1",
-      dialogProcessId: "dp-history-1",
-      content: "history answer",
-    };
-    const targetUser = {
-      role: "user",
-      sessionId: oldSessionId,
-      turnScopeId: "client-turn:mr4cncpk:522h4o4b",
-      content: "全仓回归测试",
-    };
-    const stoppedAssistant = {
-      role: "assistant",
-      type: "message",
-      pending: false,
-      channelState: {
-        state: "user_stopped",
-        sessionId: oldSessionId,
-        dialogProcessId: "3b2a4540-89c6-48bd-9cb2-4cde447ce582",
-        turnScopeId: "client-turn:mr4cncpk:522h4o4b",
-      },
-      content: "",
-    };
-    const allMessages = [firstUser, firstAssistant, targetUser, stoppedAssistant];
-
-    const props = action.resolveProps({
-      messageItem: targetUser,
-      allMessages,
-      deleteMonotonicMessage,
-      resendMonotonicMessage,
-    });
-
-    expect(action.match(stoppedAssistant)).toBe(true);
-    expect(props.visible).toBe(true);
-    expect(props.messageItem).toBe(targetUser);
-    expect(
-      action.resolveProps({
-        messageItem: firstUser,
-        allMessages,
-        deleteMonotonicMessage,
-      }).visible,
-    ).toBe(false);
-    expect(
-      action.resolveProps({
-        messageItem: stoppedAssistant,
-        allMessages,
-        deleteMonotonicMessage,
-        resendMonotonicMessage,
-      }).visible,
-    ).toBe(false);
-  });
-
   it("mounts monotonic actions only on the resolved user message", () => {
     const action = getMonotonicAction();
     const deleteMonotonicMessage = vi.fn();
@@ -193,12 +127,14 @@ describe("noobot-chat monotonic message action rules", () => {
     const userMessage = {
       messageUid: "u1",
       role: "user",
+      turnScopeId: "client-turn:mount-1",
       dialogProcessId: "dp-1",
       content: "original question",
     };
     const messageItem = {
       presentationMessageId: "m1",
       role: "assistant",
+      turnScopeId: "client-turn:mount-1",
       dialogProcessId: "dp-1",
       channelState: { state: "frontend_completed" },
       terminalOutcome: "generated",
@@ -485,23 +421,6 @@ describe("noobot-chat monotonic message action rules", () => {
     ).toBe(true);
   });
 
-  it("falls back to adjacent previous user when persisted round ids are missing", () => {
-    const action = getMonotonicAction();
-    const userMessage = {
-      messageUid: "u-adjacent",
-      role: "user",
-      content: "question",
-    };
-    const assistantMessage = {
-      presentationMessageId: "a-adjacent",
-      role: "assistant",
-      channelState: { state: "user_stopped" },
-    };
-    const allMessages = [userMessage, assistantMessage];
-
-    expectVisibleOnUserOnly(action, { userMessage, sourceMessage: assistantMessage, allMessages });
-  });
-
   it("uses persisted user monotonic markers", () => {
     const action = getMonotonicAction();
     const userMessage = {
@@ -521,5 +440,61 @@ describe("noobot-chat monotonic message action rules", () => {
     });
     expect(props.visible).toBe(true);
     expect(props.messageItem).toBe(userMessage);
+  });
+
+  it("mounts on the user of the same turn when the source shares turnScopeId and role differs", () => {
+    const action = getMonotonicAction();
+    const userMessage = { messageUid: "u-same", role: "user", turnScopeId: "client-turn:same-1" };
+    const sourceMessage = {
+      presentationMessageId: "a-same",
+      role: "assistant",
+      turnScopeId: "client-turn:same-1",
+      channelState: { state: "user_stopped" },
+    };
+    expectVisibleOnUserOnly(action, {
+      userMessage,
+      sourceMessage,
+      allMessages: [userMessage, sourceMessage],
+    });
+  });
+
+  it("does not mount a terminal source from another turn onto the user", () => {
+    const action = getMonotonicAction();
+    const userMessage = { messageUid: "u-cross", role: "user", turnScopeId: "client-turn:cross-1" };
+    const sourceMessage = {
+      presentationMessageId: "a-cross",
+      role: "assistant",
+      turnScopeId: "client-turn:cross-2",
+      channelState: { state: "user_stopped" },
+    };
+    const trailing = {
+      presentationMessageId: "a-cross-own",
+      role: "assistant",
+      turnScopeId: "client-turn:cross-1",
+    };
+    expect(
+      action.resolveProps({
+        messageItem: userMessage,
+        allMessages: [userMessage, trailing, sourceMessage],
+        deleteMonotonicMessage: vi.fn(),
+      }).visible,
+    ).toBe(false);
+  });
+
+  it("does not attribute a terminal source without turnScopeId to any user by position", () => {
+    const action = getMonotonicAction();
+    const userMessage = { messageUid: "u-none", role: "user", content: "question" };
+    const sourceMessage = {
+      presentationMessageId: "a-none",
+      role: "assistant",
+      channelState: { state: "user_stopped" },
+    };
+    expect(
+      action.resolveProps({
+        messageItem: userMessage,
+        allMessages: [userMessage, sourceMessage],
+        deleteMonotonicMessage: vi.fn(),
+      }).visible,
+    ).toBe(false);
   });
 });

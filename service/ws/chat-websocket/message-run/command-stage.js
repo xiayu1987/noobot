@@ -110,7 +110,9 @@ function createActionEvent(command, run, executionIntent, startedAt) {
     userId: run.userId,
     sessionId: run.sessionId,
     turnScopeId: run.turnScopeId,
-    dialogProcessId: run.dialogProcessId,
+    ...(command.commandType === AGENT_COMMAND.RESEND
+      ? { dialogProcessId: run.dialogProcessId }
+      : {}),
     commandId: createTurnLifecycleCommandId({
       commandId,
       eventType: TURN_EVENT.ACTION_ACCEPTED,

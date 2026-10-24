@@ -11,6 +11,7 @@ import {
   activateRuntimeTurn,
   emitChannelState,
   emitAuthorityProcessing,
+  serverTurnSource,
   emitAuthorityCompletionRequested,
   emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
@@ -121,9 +122,9 @@ describe("useChatEngine.send-stream", () => {
       emitChannelState(onEvent, "s-thinking-start", "dp-thinking-start", "completed", {
         turnScopeId: payload.identity.turnScopeId,
       });
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-thinking-start"));
       emitAuthorityTerminal(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-thinking-start"),
         dialogProcessId: "dp-thinking-start",
       });
     });
@@ -151,9 +152,9 @@ describe("useChatEngine.send-stream", () => {
     const thinkingStartedAt = "2026-08-18T13:56:25.940Z";
     const thinkingFinishedAt = "2026-08-18T13:56:29.540Z";
     const stream = vi.fn(async (payload, onEvent) => {
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-server"));
       emitAuthorityTerminal(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-server"),
         sequence: 3,
         revision: 3,
       });
@@ -236,7 +237,7 @@ describe("useChatEngine.send-stream", () => {
         turnScopeId: payload.identity.turnScopeId,
       });
       emitAuthorityProcessing(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-server"),
         sessionId: "local-client-turn",
       });
       emitChannelState(onEvent, "local-client-turn", "", "completed");
@@ -295,6 +296,7 @@ describe("useChatEngine.send-stream", () => {
       turnRuntimeRegistry,
       sessionId: "local-send-state-mismatch",
       turnScopeId: "turn-missing",
+      dialogProcessId: "dp-turn-missing",
     });
 
     await expect(engine.send()).resolves.toBe(false);
@@ -427,7 +429,7 @@ describe("useChatEngine.send-stream", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
-    expect(assistant.dialogProcessId).toBe("");
+    expect(assistant.dialogProcessId).toBeUndefined();
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
@@ -467,7 +469,7 @@ describe("useChatEngine.send-stream", () => {
     await Promise.resolve();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.pending).toBe(false);
+    expect(assistant).not.toHaveProperty("pending");
     expect(assistant?.terminalOutcome).not.toBe("generated");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
@@ -526,8 +528,8 @@ describe("useChatEngine.send-stream", () => {
           ],
         },
       });
-      emitAuthorityProcessing(onEvent, payload);
-      emitAuthorityTerminal(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-new"));
+      emitAuthorityTerminal(onEvent, serverTurnSource(payload, "dp-new"));
     });
     const { engine, activeSession, activeSessionId, sending, activeTurnRuntime } = createHarness({
       sessionId: "local-1",
@@ -571,7 +573,7 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.content).toBe("final answer");
     expect(botMessage.dialogProcessId).toBe("dp-new");
     expect(botMessage.messageEventState.consumedEventIds).toContain("evt-final-answer");
-    expect(botMessage.pending).toBe(false);
+    expect(botMessage).not.toHaveProperty("pending");
     expect(activeTurnRuntime.value).toMatchObject({
       state: FrontendRunState.FRONTEND_COMPLETED,
       terminal: "completed",
@@ -616,7 +618,7 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.DONE,
         data: { sessionId: "local-time", dialogProcessId: "dp-time" },
       });
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-time"));
     });
     const { engine, activeSession, sending, turnRuntimeRegistry } = createHarness({
       sessionId: "local-time",
@@ -671,8 +673,8 @@ describe("useChatEngine.send-stream", () => {
           ],
         },
       });
-      emitAuthorityProcessing(onEvent, payload);
-      emitAuthorityTerminal(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-frontend-complete"));
+      emitAuthorityTerminal(onEvent, serverTurnSource(payload, "dp-frontend-complete"));
     });
     const normalizedAttachment = { id: "att-1", name: "result.txt" };
     const applySessionDetail = vi.fn(async () => {
@@ -703,7 +705,7 @@ describe("useChatEngine.send-stream", () => {
 
     expect(assistant?.attachments).toEqual([]);
     expect(assistant?.completedToolLogs).toBeUndefined();
-    expect(assistant?.pending).toBe(false);
+    expect(assistant).not.toHaveProperty("pending");
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
     expect(sending.value).toBe(false);
@@ -730,13 +732,13 @@ describe("useChatEngine.send-stream", () => {
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed", {
         turnScopeId: payload.identity.turnScopeId,
       });
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-channel-complete"));
       emitAuthorityCompletionRequested(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-channel-complete"),
         dialogProcessId: "dp-channel-complete",
       });
       emitAuthorityTerminal(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-channel-complete"),
         dialogProcessId: "dp-channel-complete",
         sequence: 4,
         revision: 4,
@@ -784,9 +786,9 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-2", dialogProcessId: "dp-state" },
       });
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-state"));
       emitAuthorityTerminal(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-state"),
         dialogProcessId: "dp-state",
         state: "stop_completed",
       });
@@ -834,9 +836,9 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-stop-refresh", dialogProcessId: "dp-stop-refresh" },
       });
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-stop-refresh"));
       emitAuthorityTerminal(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-stop-refresh"),
         dialogProcessId: "dp-stop-refresh",
         state: "stop_completed",
       });

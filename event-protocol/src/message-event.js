@@ -8,9 +8,10 @@ import {
   validateSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
 import {
-  THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
+  validateUserInterjectionFact,
 } from "./thinking-detail-content-fact.js";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
 import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
@@ -93,7 +94,10 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
   REPLACE: "replace",
 });
 
-const PRESENTATION_IDENTITY_ALIASES = Object.freeze({ id: "id", messageId: "message_id" });
+const PRESENTATION_IDENTITY_ALIASES = Object.freeze({
+  id: "id",
+  [MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID]: "message_id",
+});
 
 function validatePresentationMessage(message, expectedRole, value) {
   const errors = [];
@@ -173,14 +177,6 @@ const NONCANONICAL_PAYLOAD_FIELDS = Object.freeze([
   "output",
 ]);
 
-const USER_INTERJECTION_FACT_REQUIREMENTS = Object.freeze([
-  ["timestamp", "missing_user_interjection_fact_timestamp"],
-  ["sessionId", "missing_user_interjection_fact_session_id"],
-  ["dialogProcessId", "missing_user_interjection_fact_dialog_process_id"],
-  ["turnScopeId", "missing_user_interjection_fact_turn_scope_id"],
-  ["presentationMessageId", "missing_user_interjection_fact_presentation_message_id"],
-]);
-
 function validatePayloadEnvelope(value) {
   const errors = NONCANONICAL_PAYLOAD_FIELDS.filter((field) => Object.hasOwn(value, field)).map(
     (field) => `noncanonical_${field}`,
@@ -226,16 +222,6 @@ function validateFinalContentCollections(value) {
   return errors;
 }
 
-function validateUserInterjectionFact(contentFact) {
-  if (!isThinkingDetailContentFact(contentFact)) return ["invalid_user_interjection_content_fact"];
-  if (contentFact.contentKind !== THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION) {
-    return ["invalid_user_interjection_content_kind"];
-  }
-  return USER_INTERJECTION_FACT_REQUIREMENTS.filter(([field]) => !text(contentFact[field])).map(
-    ([, error]) => error,
-  );
-}
-
 function validateToolCallStart(value) {
   const errors = [];
   if (!text(value?.tool)) errors.push("missing_tool");
@@ -267,7 +253,7 @@ function validateEventTypeFields(value, eventType) {
   }
   if (ACTIVITY_EVENT_TYPES.has(eventType)) errors.push(...requireEventText(value));
   if (eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
-    errors.push(...validateUserInterjectionFact(value?.contentFact));
+    errors.push(...validateUserInterjectionFact(value.contentFact));
   }
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START)
     errors.push(...validateToolCallStart(value));

@@ -140,28 +140,21 @@ function toolResultPayload(message = {}) {
 }
 
 function toolCallId(call = {}) {
-  return String(call.id || call.tool_call_id || "").trim();
+  return String(call.id || "").trim();
 }
 
 function toolCallName(call = {}) {
-  return String(call.name || call.function?.name || "").trim();
+  return String(call.function?.name || "").trim();
 }
 
 function toolCallArgs(call = {}) {
-  if (call.args && typeof call.args === "object") return call.args;
   return JSON.parse(String(call.function?.arguments || "{}"));
 }
 
 function toolCallNames(message = {}) {
   if (message.role !== "assistant") return [];
-  const calls = Array.isArray(message.tool_calls)
-    ? message.tool_calls
-    : Array.isArray(message.toolCalls)
-      ? message.toolCalls
-      : [];
-  return calls
-    .map((call) => String(call?.function?.name || call?.name || "").trim())
-    .filter(Boolean);
+  const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  return calls.map(toolCallName).filter(Boolean);
 }
 
 function assertCheckpointMessages(session, messages, turnScopeId, expectedRewriteCount) {

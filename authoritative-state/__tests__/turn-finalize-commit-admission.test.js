@@ -22,6 +22,7 @@ function processing() {
       executionKind: EXECUTION_KIND.AGENT,
       rootExecutionId: executionId,
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       startedAt: "2026-07-18T00:00:00.000Z",
       commandId: "accepted",
@@ -121,6 +122,7 @@ test("non-retryable failure does not write completionCommitId", () => {
 test("finalize request replay with a different completionCommitId is an idempotency conflict", () => {
   const commit = (lifecycle, extra) =>
     commitTurnLifecycle({
+      parentSessionId: "",
       lifecycle,
       event: { turnScopeId, userId: "user-1", sessionId: "session-1", ...finalizeRequest(extra) },
       createEventId: () => "finalize-event-1",
@@ -147,6 +149,7 @@ test("domain transition returns a receipt draft and never writes a placeholder r
 test("an early-returning commit leaves no receipt behind", () => {
   const lifecycle = processing();
   const unavailable = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle,
     event: { turnScopeId, sessionId: "session-1", ...finalizeRequest({ completionCommitId: "c" }) },
     createEventId: () => "",
@@ -155,6 +158,7 @@ test("an early-returning commit leaves no receipt behind", () => {
   assert.equal(unavailable.reason, "event_id_unavailable");
   assert.deepEqual(unavailable.lifecycle.commandReceipts, []);
   const conflict = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle,
     event: { turnScopeId, sessionId: "session-1", ...finalizeRequest({ completionCommitId: "c" }) },
     createEventId: () => "used-event",

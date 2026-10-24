@@ -22,21 +22,44 @@ import { withTemp, writeSessionArtifact } from "./session-artifact-store-v2.test
 const now = () => "2026-10-19T00:00:00.000Z";
 
 const baseMessages = [
-  { messageUid: "sm_a_u", role: "user", content: "a", turnScopeId: "a", dialogProcessId: "dp1" },
+  {
+    sessionId: "s",
+    messageUid: "sm_a_u",
+    role: "user",
+    content: "a",
+    turnScopeId: "a",
+    dialogProcessId: "dp1",
+  },
   {
     messageUid: "sm_a_a",
+    sessionId: "s",
     role: "assistant",
     presentationMessageId: "pm_fx1",
     content: "a1",
     turnScopeId: "a",
     dialogProcessId: "dp1",
   },
-  { messageUid: "sm_b_u", role: "user", content: "b", turnScopeId: "b", dialogProcessId: "dp1" },
-  { messageUid: "sm_c_u", role: "user", content: "c", turnScopeId: "c", dialogProcessId: "dp2" },
+  {
+    sessionId: "s",
+    messageUid: "sm_b_u",
+    role: "user",
+    content: "b",
+    turnScopeId: "b",
+    dialogProcessId: "dp1",
+  },
+  {
+    sessionId: "s",
+    messageUid: "sm_c_u",
+    role: "user",
+    content: "c",
+    turnScopeId: "c",
+    dialogProcessId: "dp2",
+  },
 ];
 
 const appended = {
   messageUid: "sm_a_tool",
+  sessionId: "s",
   role: "tool",
   presentationMessageId: "pm_fx2",
   content: "late",
@@ -112,6 +135,7 @@ test("consecutive turn view appends keep later views scoped and the session comp
       const view = await readSessionTurnView({ sessionDir: root, turnScopeIds: [turnScopeId] });
       const message = {
         messageUid: `sm_${turnScopeId}_u`,
+        sessionId: "s",
         role: "user",
         content: turnScopeId,
         turnScopeId,

@@ -9,6 +9,7 @@ import {
   sendAndStop,
   continueAndStop,
   assertPersistedSnapshots,
+  expectedSnapshotIdentity,
   uniquePrompt,
 } from "../helpers/turn-scenarios.js";
 
@@ -31,11 +32,10 @@ test("@core PBE-007 带附件停止后继续", async ({ noobot, protocolCapture 
   });
   expect(continued.input.attachments).toEqual([]);
   const snapshots = await assertPersistedSnapshots(noobot.userId, noobot.sessionId, 2);
+  const snapshotIdentity = (identity) =>
+    expect.objectContaining(expectedSnapshotIdentity(noobot.userId, identity));
   expect(snapshots).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining(send.identity),
-      expect.objectContaining(continued.identity),
-    ]),
+    expect.arrayContaining([snapshotIdentity(send.identity), snapshotIdentity(continued.identity)]),
   );
   snapshots.forEach((snapshot) => expect(JSON.stringify(snapshot)).toContain(file.name));
 });

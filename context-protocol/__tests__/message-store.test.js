@@ -21,6 +21,9 @@ import {
 } from "../src/message/codec.js";
 import { attachModelContextRuntime } from "../src/assembly/model-runtime.js";
 import { contextMessage } from "./helpers/context-message.js";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 function attachRuntime(holder, options = {}) {
   attachModelContextRuntime(holder, options);
@@ -46,7 +49,7 @@ test("persisted entities use messageUid as their only canonical context identity
   canonicalizeMessageStore(holder);
 
   assert.equal(resolveContextMessageKey(message), "sm_injected");
-  assert.equal(message.additional_kwargs.noobotMessageId, undefined);
+  assert.equal(message.additional_kwargs[MESSAGE_REMOVED_FIELD_NAME.NOOBOT_MESSAGE_ID], undefined);
 });
 
 test("canonical store rejects context messages without identity", () => {
@@ -263,7 +266,7 @@ test("agent message store partial block writes preserve untouched blocks", () =>
 });
 
 test("agent message store ignores provider and business ids for block identity", () => {
-  const fields = { id: "provider-collision", messageId: "business-collision" };
+  const fields = { id: "provider-collision", [LEGACY_MESSAGE_ID]: "business-collision" };
   const holder = {
     messages: [
       msg("sys", { role: "system", content: "sys", ...fields }),

@@ -7,6 +7,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { migrateSessionDocument } from "../src/index.js";
 import { eventEnvelope } from "./helpers/event-envelope.js";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 function aggregateVersionMigrationError(source) {
   try {
@@ -28,7 +31,7 @@ test("aggregate version contract rejects a committed Session without a version",
     aggregateVersionMigrationError({
       schemaVersion: 8,
       sessionId: "session-1",
-      messages: [{ messageUid: "u1", messageId: "m1", role: "user" }],
+      messages: [{ messageUid: "u1", [LEGACY_MESSAGE_ID]: "m1", role: "user" }],
     }),
     "SESSION_AGGREGATE_VERSION_UNMIGRATABLE",
   );

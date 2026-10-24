@@ -13,7 +13,6 @@ import {
   setTurnAssistantContentExpanded,
   toggleTurnDetailKey,
 } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
-import { hydrateTurnSnapshot } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 
 const turn = (sessionId, turnScopeId) => ({ sessionId, turnScopeId });
 
@@ -82,31 +81,5 @@ describe("turnUiStore lifecycle", () => {
     expect(clearSessionTurnUiStates("session-a")).toBe(2);
     expect(getTurnUiState(turn("session-a", "turn-1")).scrollTop).toBe(0);
     expect(getTurnUiState(turn("session-b", "turn-1")).scrollTop).toBe(30);
-  });
-
-  it("keeps UI state outside versioned domain snapshot hydration", () => {
-    const identity = turn("session-a", "turn-1");
-    const targetMessage = { ...identity, content: "live" };
-    const ui = getTurnUiState(identity);
-    ui.thinkingOpenNames = ["activity"];
-    ui.scrollTop = 88;
-
-    expect(
-      hydrateTurnSnapshot({
-        targetMessage,
-        throughSequence: 2,
-        snapshot: {
-          ...identity,
-          content: "snapshot",
-          thinkingOpenNames: ["must-not-enter-ui-store"],
-          scrollTop: 0,
-          messageEventState: { lastSequence: 2, consumedEventIds: [] },
-        },
-      }).applied,
-    ).toBe(true);
-    expect(getTurnUiState(identity)).toMatchObject({
-      thinkingOpenNames: ["activity"],
-      scrollTop: 88,
-    });
   });
 });

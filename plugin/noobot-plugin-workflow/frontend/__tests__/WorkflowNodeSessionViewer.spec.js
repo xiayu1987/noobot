@@ -412,7 +412,6 @@ describe("workflow node session view ownership", () => {
       role: "user",
       type: "message",
       content: "run child task",
-      sessionId: "child-running",
       dialogProcessId: "child-dialog-running",
       turnScopeId: "workflow-node:node-running",
     };

@@ -57,6 +57,7 @@ const terminalResolutionFromUrl = (
     turn: {
       sessionId,
       turnScopeId,
+      dialogProcessId: `dp-${turnScopeId}`,
       state,
       phase: state === "stop_completed" ? "stop" : failure?.stage || "completion",
       revision,
@@ -66,7 +67,10 @@ const terminalResolutionFromUrl = (
       finalizeIntent: state === "stop_completed" ? "stop" : "complete",
       failure,
       ...turnTiming,
-      terminalStatus: terminalStatusFixture(state, turnScopeId),
+      terminalStatus: terminalStatusFixture(state, {
+        turnScopeId,
+        dialogProcessId: `dp-${turnScopeId}`,
+      }),
     },
   };
 };
@@ -337,14 +341,13 @@ export const activateRuntimeTurn = ({
   turnRuntimeRegistry,
   sessionId,
   turnScopeId,
-  dialogProcessId = "",
+  dialogProcessId,
   userId = "u-1",
   commandId = `send:${turnScopeId}`,
-  messageId = `event-message:${turnScopeId}`,
   presentationMessageId = `message:${turnScopeId}`,
   revision = 1,
   sequence = 1,
-} = {}) => {
+}) => {
   const registry = turnRuntimeRegistry.value;
   applyTurnRuntimeEvent(registry, {
     type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
@@ -359,8 +362,8 @@ export const activateRuntimeTurn = ({
       commandId,
       userId,
       sessionId,
+      parentSessionId: "",
       turnScopeId,
-      messageId,
       presentationMessageId,
       dialogProcessId,
       revision,
@@ -380,8 +383,8 @@ export const activateRuntimeTurn = ({
       commandId,
       userId,
       sessionId,
+      parentSessionId: "",
       turnScopeId,
-      messageId,
       presentationMessageId,
       dialogProcessId,
       revision: revision + 1,
@@ -421,27 +424,22 @@ export const emitChannelState = (onEvent, sessionId, dialogProcessId, state, dat
   onEvent({ event: StreamEventEnum.CHANNEL_STATE, data: channelState });
 };
 
-function authorityEventInput(source = {}) {
-  return {
-    ...source,
-    sessionId: source.sessionId ?? source.identity?.sessionId,
-    turnScopeId: source.turnScopeId ?? source.identity?.turnScopeId,
-    dialogProcessId: source.dialogProcessId ?? source.identity?.dialogProcessId,
-    presentationMessageId:
-      source.presentationMessageId ?? source.presentation?.presentationMessageId,
-  };
-}
+export const serverTurnSource = (payload, dialogProcessId) => ({
+  sessionId: payload.identity.sessionId,
+  turnScopeId: payload.identity.turnScopeId,
+  presentationMessageId: payload.presentation.presentationMessageId,
+  dialogProcessId,
+});
 
-export const emitAuthorityProcessing = (onEvent, source = {}) => {
+export const emitAuthorityProcessing = (onEvent, source) => {
   const {
     sessionId,
     turnScopeId,
-    dialogProcessId = "",
+    dialogProcessId,
     userId = "u-1",
     commandId = `send:${turnScopeId}`,
-    messageId = `event-message:${turnScopeId}`,
     presentationMessageId = `message:${turnScopeId}`,
-  } = authorityEventInput(source);
+  } = source;
   const emit = (data) => onEvent({ event: StreamEventEnum.TURN_LIFECYCLE, data });
   emit(
     createTurnLifecycleEnvelope({
@@ -450,8 +448,8 @@ export const emitAuthorityProcessing = (onEvent, source = {}) => {
       commandId,
       userId,
       sessionId,
+      parentSessionId: "",
       turnScopeId,
-      messageId,
       presentationMessageId,
       dialogProcessId,
       revision: 1,
@@ -470,8 +468,8 @@ export const emitAuthorityProcessing = (onEvent, source = {}) => {
       commandId,
       userId,
       sessionId,
+      parentSessionId: "",
       turnScopeId,
-      messageId,
       presentationMessageId,
       dialogProcessId,
       revision: 2,
@@ -485,16 +483,15 @@ export const emitAuthorityProcessing = (onEvent, source = {}) => {
   );
 };
 
-export const emitAuthorityCompletionRequested = (onEvent, source = {}) => {
+export const emitAuthorityCompletionRequested = (onEvent, source) => {
   const {
     sessionId,
     turnScopeId,
-    dialogProcessId = "",
+    dialogProcessId,
     userId = "u-1",
     commandId = `send:${turnScopeId}`,
-    messageId = `event-message:${turnScopeId}`,
     presentationMessageId = `message:${turnScopeId}`,
-  } = authorityEventInput(source);
+  } = source;
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: createTurnLifecycleEnvelope({
@@ -503,8 +500,8 @@ export const emitAuthorityCompletionRequested = (onEvent, source = {}) => {
       commandId,
       userId,
       sessionId,
+      parentSessionId: "",
       turnScopeId,
-      messageId,
       presentationMessageId,
       dialogProcessId,
       revision: 3,
@@ -518,20 +515,19 @@ export const emitAuthorityCompletionRequested = (onEvent, source = {}) => {
   });
 };
 
-export const emitAuthorityTerminal = (onEvent, source = {}) => {
+export const emitAuthorityTerminal = (onEvent, source) => {
   const {
     sessionId,
     turnScopeId,
-    dialogProcessId = "",
+    dialogProcessId,
     userId = "u-1",
     commandId = `send:${turnScopeId}`,
-    messageId = `event-message:${turnScopeId}`,
     presentationMessageId = `message:${turnScopeId}`,
     state = "completed",
     sequence = 3,
     revision = 3,
     failure = null,
-  } = authorityEventInput(source);
+  } = source;
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: createTurnLifecycleEnvelope({
@@ -545,8 +541,8 @@ export const emitAuthorityTerminal = (onEvent, source = {}) => {
       commandId,
       userId,
       sessionId,
+      parentSessionId: "",
       turnScopeId,
-      messageId,
       presentationMessageId,
       dialogProcessId,
       revision,

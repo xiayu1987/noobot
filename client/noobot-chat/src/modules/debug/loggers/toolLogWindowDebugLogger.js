@@ -51,7 +51,7 @@ export function summarizeToolLogWindowItem(item = {}, index = 0) {
     eventType: text(item?.eventType),
     sequence: firstPresent(item, ["sequence", "seq"]) ?? null,
     sequenceDomain: text(item?.sequenceDomain),
-    sequenceScopeId: text(firstTruthy(item, ["sequenceScopeId", "sequenceScope", "messageId"])),
+    sequenceScopeId: text(firstTruthy(item, ["sequenceScopeId", "sequenceScope"])),
     authority: text(item?.authority),
     eventId: text(firstTruthy(item, ["eventId", "id"])),
     toolCallId: text(firstTruthy(item, ["toolCallId", "tool_call_id"])),

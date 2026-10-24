@@ -27,7 +27,7 @@ export function buildJsonRpcRequest(id, method, params = {}) {
 export function buildRequestHeaders(extraHeaders = {}, sessionHeaders = {}) {
   return {
     "content-type": MIME_TYPE.APPLICATION_JSON,
-    accept: `${MIME_TYPE.APPLICATION_JSON}, text/event-stream`,
+    accept: `${MIME_TYPE.APPLICATION_JSON}, ${MIME_TYPE.TEXT_EVENT_STREAM}`,
     ...extraHeaders,
     ...sessionHeaders,
   };

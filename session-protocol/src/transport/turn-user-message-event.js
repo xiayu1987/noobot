@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as trim, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
 import {
   MESSAGE_REMOVED_FIELD_NAME,
@@ -12,17 +12,14 @@ import {
 
 const ACCEPTED_USER_IDENTITY_FIELDS = acceptedMessageIdentityFieldsFor("user");
 
-function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
+function validateTurnUserMessageEventData(data, { attachmentMode }) {
   const errors = [];
-  const sessionId = trim(data?.sessionId);
-  const dialogProcessId = trim(data?.dialogProcessId);
-  const turnScopeId = trim(data?.turnScopeId);
-  const aggregateVersion = Number(data?.aggregateVersion);
-  const userMessage = data?.userMessage;
+  if (!isPlainObject(data)) return { ok: false, errors: ["event_data_invalid"] };
+  const { sessionId, dialogProcessId, turnScopeId, aggregateVersion, userMessage } = data;
 
-  if (!sessionId) errors.push("session_id_missing");
-  if (!dialogProcessId) errors.push("dialog_process_id_missing");
-  if (!turnScopeId) errors.push("turn_scope_id_missing");
+  if (!isCanonicalText(sessionId)) errors.push("session_id_missing");
+  if (!isCanonicalText(dialogProcessId)) errors.push("dialog_process_id_missing");
+  if (!isCanonicalText(turnScopeId)) errors.push("turn_scope_id_missing");
   if (!Number.isInteger(aggregateVersion) || aggregateVersion < 1) {
     errors.push("aggregate_version_invalid");
   }
@@ -30,25 +27,27 @@ function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
     errors.push("user_message_missing");
     return { ok: false, errors };
   }
-  if (trim(userMessage.role) !== "user") errors.push("user_message_role_invalid");
-  if (!trim(userMessage[MESSAGE_IDENTITY_FIELD.SESSION])) errors.push("user_message_uid_missing");
+  if (userMessage.role !== "user") errors.push("user_message_role_invalid");
+  if (!isCanonicalText(userMessage[MESSAGE_IDENTITY_FIELD.SESSION]))
+    errors.push("user_message_uid_missing");
   for (const field of ACCEPTED_USER_IDENTITY_FIELDS) {
-    if (!trim(userMessage[field])) errors.push(`user_message_${field}_missing`);
+    if (!isCanonicalText(userMessage[field])) errors.push(`user_message_${field}_missing`);
   }
   if (Object.hasOwn(userMessage, MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID)) {
     errors.push("user_message_id_noncanonical");
   }
-  if (trim(userMessage.sessionId) !== sessionId) errors.push("user_message_session_mismatch");
-  if (trim(userMessage.dialogProcessId) !== dialogProcessId) {
+  if (userMessage.sessionId !== sessionId) errors.push("user_message_session_mismatch");
+  if (userMessage.dialogProcessId !== dialogProcessId) {
     errors.push("user_message_dialog_mismatch");
   }
-  if (trim(userMessage.turnScopeId) !== turnScopeId) errors.push("user_message_turn_mismatch");
+  if (userMessage.turnScopeId !== turnScopeId) errors.push("user_message_turn_mismatch");
 
-  const attachments = userMessage.attachments;
-  if (attachments !== undefined && !Array.isArray(attachments)) {
+  const hasAttachments = Object.hasOwn(userMessage, "attachments");
+  if (hasAttachments && !Array.isArray(userMessage.attachments)) {
     errors.push("user_message_attachments_invalid");
+    return { ok: false, errors };
   }
-  const attachmentList = Array.isArray(attachments) ? attachments : [];
+  const attachmentList = hasAttachments ? userMessage.attachments : [];
   if (attachmentMode === "forbidden" && attachmentList.length > 0) {
     errors.push("user_message_attachments_forbidden");
   }
@@ -60,19 +59,15 @@ function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
       errors.push("attachment_invalid");
       continue;
     }
-    if (!trim(attachment.attachmentId)) errors.push("attachment_id_missing");
-    if (trim(attachment.sessionId) !== sessionId) errors.push("attachment_session_mismatch");
+    if (!isCanonicalText(attachment.attachmentId)) errors.push("attachment_id_missing");
+    if (attachment.sessionId !== sessionId) errors.push("attachment_session_mismatch");
   }
   return { ok: errors.length === 0, errors };
 }
 
-export function createTurnUserMessageEventProtocol({
-  wireEvent = "",
-  attachmentMode,
-  errorCode = "",
-} = {}) {
-  const validate = (data = {}) => validateTurnUserMessageEventData(data, { attachmentMode });
-  const assert = (data = {}) => {
+export function createTurnUserMessageEventProtocol({ wireEvent, attachmentMode, errorCode }) {
+  const validate = (data) => validateTurnUserMessageEventData(data, { attachmentMode });
+  const assert = (data) => {
     const validation = validate(data);
     if (validation.ok) return data;
     const error = new TypeError(`invalid ${wireEvent} event: ${validation.errors.join(",")}`);

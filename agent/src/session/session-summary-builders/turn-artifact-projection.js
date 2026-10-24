@@ -9,7 +9,7 @@ import { text } from "@noobot/shared/value";
 
 const items = (value) => (Array.isArray(value) ? value : []);
 
-function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
+function buildLifecycleTurnPresentation(turn) {
   const turnScopeId = text(turn?.turnScopeId);
   if (!turnScopeId) throw new TypeError("Turn presentation invariant failed: turn_scope_missing");
   const presentationMessageId = text(turn?.presentationMessageId);
@@ -21,7 +21,6 @@ function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
     role: "assistant",
     type: "message",
     content: "",
-    sessionId,
     turnScopeId,
     dialogProcessId: text(turn.dialogProcessId),
     chatPresentation: true,
@@ -30,10 +29,8 @@ function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
   };
 }
 
-export function buildLifecycleTurnPresentations(lifecycle = null, sessionId = "") {
-  return selectPresentedSessionLifecycleTurns(lifecycle).map((turn) =>
-    buildLifecycleTurnPresentation(turn, sessionId),
-  );
+export function buildLifecycleTurnPresentations(lifecycle) {
+  return selectPresentedSessionLifecycleTurns(lifecycle).map(buildLifecycleTurnPresentation);
 }
 
 function createArtifactProjectionContext(sessionId) {

@@ -95,6 +95,6 @@ export function resolveSendRequest(options, deps) {
     userMessageId: normalized.requestedUserMessageId || createUserMessageId(),
     presentationMessageId:
       normalized.requestedPresentationMessageId || createPresentationMessageId(),
-    sessionId: String(deps.activeSession.value?.sessionId || deps.activeSessionId?.value || ""),
+    sessionId: deps.activeSession.value.sessionId,
   };
 }

@@ -28,6 +28,7 @@ function acceptedAgentExecution(turnScopeId, sessionId = "session-1") {
 
 function acceptedTurn() {
   return commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: {},
     event: {
       ...acceptedAgentExecution("turn-old"),
@@ -39,6 +40,7 @@ function acceptedTurn() {
       turnScopeId: "turn-old",
       dialogProcessId: "dialog-old",
       presentationMessageId: "presentation-old",
+      parentSessionId: "",
       action: "send",
       phase: TURN_PHASE.ACTION,
       expectedRevision: 0,
@@ -290,9 +292,11 @@ test("replaying a follow-up event without identity fields deduplicates and a con
     sessionId: "session-1",
     turnScopeId: "turn-old",
     dialogProcessId: "dialog-old",
+    parentSessionId: "",
     phase: TURN_PHASE.PROCESSING,
   };
   const started = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: accepted.lifecycle,
     event: processing,
     createEventId: () => "event-processing-old",
@@ -300,6 +304,7 @@ test("replaying a follow-up event without identity fields deduplicates and a con
   assert.equal(started.applied, true);
 
   const replay = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: started.lifecycle,
     event: processing,
     createEventId: () => "must-not-be-used",
@@ -307,6 +312,7 @@ test("replaying a follow-up event without identity fields deduplicates and a con
   assert.equal(replay.deduplicated, true);
 
   const conflicting = commitTurnLifecycle({
+    parentSessionId: "",
     lifecycle: started.lifecycle,
     event: { ...processing, executionId: deriveAgentExecutionId({ turnScopeId: "turn-other" }) },
     createEventId: () => "must-not-be-used",

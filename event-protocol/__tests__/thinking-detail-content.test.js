@@ -82,7 +82,6 @@ test("projects user interjections as their own kind in deterministic chronologic
 function message(overrides = {}) {
   return {
     messageUid: "message-uid-1",
-    messageId: "message-1",
     sessionId: "session-1",
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
@@ -228,7 +227,7 @@ test("injected relay message supersedes the thinking activity it was minted from
   assert.equal(timeline.every(isThinkingDetailContentFact), true);
 });
 
-test("activities without relay correlation stay projected for legacy rounds", () => {
+test("activities are superseded only by an explicit relay correlation", () => {
   const timeline = projectThinkingDetailContentTimeline(
     [
       message({
@@ -370,4 +369,31 @@ test("content facts require exactly the source field declared for their kind", (
     }),
     false,
   );
+});
+
+test("content facts require an integer sequence and canonical identities", () => {
+  const fact = {
+    contentId: "message:interjection-uid-1",
+    contentKind: THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
+    sourceMessageUid: "interjection-uid-1",
+    text: "use the accepted constraint",
+    timestamp: "2026-09-05T03:39:01.000Z",
+    sequence: 1,
+    sessionId: "session-1",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    presentationMessageId: "assistant-1",
+  };
+
+  assert.equal(isThinkingDetailContentFact(fact), true);
+  for (const invalid of [
+    { ...fact, sequence: "1" },
+    { ...fact, sequence: 0 },
+    { ...fact, sequence: 1.5 },
+    { ...fact, contentId: " message:interjection-uid-1" },
+    { ...fact, sourceMessageUid: "interjection-uid-1 " },
+  ]) {
+    assert.equal(isThinkingDetailContentFact(invalid), false);
+  }
+  assert.equal(isThinkingDetailContentFact(null), false);
 });

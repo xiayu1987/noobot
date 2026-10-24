@@ -11,6 +11,7 @@ import {
   ModelProtocolError,
   requireModelPort,
   requireModelSpec,
+  validateModelResponse,
 } from "@noobot/model-protocol";
 import { emitEvent } from "../events/index.js";
 import { resolveEffectiveModelSpec } from "./run-config/index.js";
@@ -105,7 +106,7 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
         },
         invocation: buildInvocation(modelState, { invocation }),
       });
-      return response;
+      return validateModelResponse(response);
     },
   };
   return requireModelPort(Object.freeze(port));

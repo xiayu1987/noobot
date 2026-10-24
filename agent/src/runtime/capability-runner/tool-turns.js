@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeToolCalls } from "../../models/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { text } from "@noobot/shared/value";
 
@@ -49,7 +48,7 @@ export async function runCapabilityToolTurns({
   for (let turn = 1; turn <= maxTurns; turn += 1) {
     const step = await invokeStep(messages, binding);
     const { output } = step.response;
-    const { calls } = normalizeToolCalls(output);
+    const calls = output.toolCalls;
     if (!calls.length) return step.complete();
     const turnMessages = [
       { role: "assistant", content: output.text, tool_calls: output.toolCalls },
@@ -57,7 +56,7 @@ export async function runCapabilityToolTurns({
     for (const call of calls) {
       turnMessages.push({
         role: "tool",
-        tool_call_id: call.id || "",
+        tool_call_id: call.id,
         content: await executeCapabilityTool({
           call,
           binding,

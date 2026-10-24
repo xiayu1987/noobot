@@ -110,7 +110,9 @@ describe("drawerPanelsState", () => {
       translate,
       thinkingDetailsMessageItem: {
         turnScopeId: "turn-1",
-        thinkingDetailCount: 2,
+        toolTimeline: [
+          { key: "call:1", call: { eventId: "call-1" }, resultEvent: { eventId: "result-1" } },
+        ],
       },
     });
 

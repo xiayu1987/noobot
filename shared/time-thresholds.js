@@ -28,6 +28,7 @@ const TIME_TIERS = deepFreeze({
   oneHourMs: HOUR_MS,
   threeHoursMs: 3 * HOUR_MS,
   fiveHoursMs: 5 * HOUR_MS,
+  eightHoursMs: 8 * HOUR_MS,
   oneDayMs: DAY_MS,
   thirtyDays: 30,
   micDurationSeconds: 60,
@@ -38,7 +39,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     modelAccessTimeoutMs: 2 * MINUTE_MS,
   },
   agent: {
-    runTimeoutMs: TIME_TIERS.fiveHoursMs,
+    runTimeoutMs: TIME_TIERS.eightHoursMs,
     minRunTimeoutMs: 10000,
     maxRunTimeoutMs: 12 * HOUR_MS,
     hookTimeoutMs: TIME_TIERS.hookMs,

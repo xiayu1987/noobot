@@ -10,6 +10,7 @@ import {
   makeTurnReplacementResponse,
   emitChannelState,
   emitAuthorityProcessing,
+  serverTurnSource,
   emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
 import {
@@ -49,7 +50,10 @@ describe("useChatEngine.resend stopped state", () => {
             sequence: 5,
             completionCommitId: "commit-immediate-stop",
             summaryVersion: 5,
-            terminalStatus: terminalStatusFixture("stop_completed", stoppedTurnScopeId),
+            terminalStatus: terminalStatusFixture("stop_completed", {
+              turnScopeId: stoppedTurnScopeId,
+              dialogProcessId: "dp-immediate-stop",
+            }),
             capabilities: { actionLocked: false, canStop: false },
           },
         }),
@@ -138,7 +142,7 @@ describe("useChatEngine.resend stopped state", () => {
   it("resendMonotonicMessage rejects stale stopped replacement snapshots without the new turnScopeId", async () => {
     const stream = vi.fn(async (payload, onEvent) =>
       emitAuthorityProcessing(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-server"),
         sessionId: "local-resend-repeat-stopped",
       }),
     );
@@ -248,11 +252,11 @@ describe("useChatEngine.resend stopped state", () => {
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
         content: "",
-        pending: false,
         turnScopeId: replacementUser.turnScopeId,
       }),
     );
-    expect(placeholder.terminalOutcome).toBe("");
+    expect(placeholder).not.toHaveProperty("pending");
+    expect(placeholder).not.toHaveProperty("terminalOutcome");
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
@@ -271,7 +275,7 @@ describe("useChatEngine.resend stopped state", () => {
         turnScopeId: payload.identity.turnScopeId,
       });
       emitAuthorityProcessing(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, dialogProcessId),
         sessionId,
         dialogProcessId,
       });
@@ -371,13 +375,17 @@ describe("useChatEngine.resend stopped state", () => {
             turn: {
               sessionId,
               turnScopeId,
+              dialogProcessId: `dp-${turnScopeId}`,
               state: "stop_completed",
               phase: "stop",
               revision,
               sequence: revision,
               completionCommitId,
               summaryVersion: revision,
-              terminalStatus: terminalStatusFixture("stop_completed", turnScopeId),
+              terminalStatus: terminalStatusFixture("stop_completed", {
+                turnScopeId,
+                dialogProcessId: `dp-${turnScopeId}`,
+              }),
             },
           }),
       };
@@ -444,7 +452,7 @@ describe("useChatEngine.resend stopped state", () => {
   it("resendMonotonicMessage keeps the second replacement turn running instead of inheriting stopped state", async () => {
     const stream = vi.fn(async (payload, onEvent) =>
       emitAuthorityProcessing(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-server"),
         sessionId: "local-resend-second-stopped",
       }),
     );
@@ -516,6 +524,7 @@ describe("useChatEngine.resend stopped state", () => {
     settleStoppedTurn(turnRuntimeRegistry, {
       sessionId: "local-resend-second-stopped",
       turnScopeId: firstTurnScopeId,
+      dialogProcessId: "dp-server",
     });
     await expect(engine.resendMonotonicMessage(firstReplacementAssistant, "third")).resolves.toBe(
       true,
@@ -529,11 +538,11 @@ describe("useChatEngine.resend stopped state", () => {
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
         content: "",
-        pending: false,
-        terminalOutcome: "",
         turnScopeId: secondReplacementUser.turnScopeId,
       }),
     );
+    expect(secondPlaceholder).not.toHaveProperty("pending");
+    expect(secondPlaceholder).not.toHaveProperty("terminalOutcome");
     expect(secondPlaceholder.stopState).toBeUndefined();
     expect(secondPlaceholder.channelState?.state).not.toBe("user_stopped");
     expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
@@ -549,7 +558,7 @@ describe("useChatEngine.resend stopped state", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       streamCallCount += 1;
       emitAuthorityProcessing(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-server"),
         sessionId: "local-resend-stale-stop-replay",
       });
       if (streamCallCount === 2) {
@@ -652,6 +661,7 @@ describe("useChatEngine.resend stopped state", () => {
     settleStoppedTurn(turnRuntimeRegistry, {
       sessionId: "local-resend-stale-stop-replay",
       turnScopeId: firstAssistant.turnScopeId,
+      dialogProcessId: "dp-server",
     });
 
     await expect(engine.resendMonotonicMessage(firstAssistant, "third")).resolves.toBe(true);
@@ -666,10 +676,10 @@ describe("useChatEngine.resend stopped state", () => {
     expect(freshPlaceholder).toEqual(
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
-        pending: false,
         turnScopeId: activeTurnRuntime.value.turnScopeId,
       }),
     );
+    expect(freshPlaceholder).not.toHaveProperty("pending");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
   });
@@ -677,7 +687,7 @@ describe("useChatEngine.resend stopped state", () => {
   it("resendMonotonicMessage ignores stale global run state when Registry has no active turn", async () => {
     const stream = vi.fn(async (payload, onEvent) =>
       emitAuthorityProcessing(onEvent, {
-        ...payload,
+        ...serverTurnSource(payload, "dp-server"),
         sessionId: "local-resend-ignore-stale-assistant",
       }),
     );
@@ -794,11 +804,11 @@ describe("useChatEngine.resend stopped state", () => {
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
         content: "",
-        pending: false,
         turnScopeId: replacementUser.turnScopeId,
-        terminalOutcome: "",
       }),
     );
+    expect(latestAssistant).not.toHaveProperty("pending");
+    expect(latestAssistant).not.toHaveProperty("terminalOutcome");
     expect(stream).toHaveBeenCalledTimes(1);
   });
 });

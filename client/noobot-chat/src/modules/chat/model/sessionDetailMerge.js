@@ -16,7 +16,7 @@ function isPersistedFinalAssistant(item = {}) {
     Boolean(resolveMessageViewKey(item)) &&
     text(item?.type).toLowerCase() === "message" &&
     Boolean(text(item?.content)) &&
-    item?.pending === false
+    item?.pending !== true
   );
 }
 
@@ -51,19 +51,20 @@ function entityKey(item = {}, index = 0, kind = "entity") {
   return `${kind}:index:${index}`;
 }
 
+function selectMessageFacts(previous, incoming) {
+  if (isPersistedFinalAssistant(incoming)) return { ...incoming };
+  if (isPersistedFinalAssistant(previous)) return { ...previous };
+  return { ...previous, ...incoming };
+}
+
 function mergeEntity(previous = {}, incoming = {}, kind = "entity") {
   if (kind === "message") {
-    const previousIsFinal = isPersistedFinalAssistant(previous);
-    const incomingIsFinal = isPersistedFinalAssistant(incoming);
-    const authoritative = previousIsFinal && !incomingIsFinal ? previous : incoming;
-    const supplemental = authoritative === previous ? incoming : previous;
-    const merged = { ...supplemental, ...authoritative };
+    const merged = selectMessageFacts(previous, incoming);
     for (const field of ["toolTimeline", "activityTimeline", "rawEvents"]) {
       if (Array.isArray(previous[field]) || Array.isArray(incoming[field])) {
         merged[field] = mergeListByIdentity(previous[field], incoming[field]);
       }
     }
-    if (previousIsFinal || incomingIsFinal) merged.pending = false;
     return merged;
   }
   return { ...previous, ...incoming };

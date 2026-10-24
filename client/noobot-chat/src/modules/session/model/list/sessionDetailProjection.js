@@ -35,7 +35,9 @@ export function buildSessionDetailProjection({
     makeViewMessage,
   });
 
-  const foldedMessages = foldConversationMessages(normalizedMessages, makeViewMessage);
+  const foldedMessages = foldConversationMessages(normalizedMessages, (messageItem) =>
+    makeViewMessage(messageItem, { sessionId }),
+  );
   const projectedMessages = selectTurnPresentations({
     activeSession: {
       sessionId,

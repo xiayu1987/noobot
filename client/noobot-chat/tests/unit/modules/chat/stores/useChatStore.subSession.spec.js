@@ -64,7 +64,6 @@ function commitPresentation(store, identity = {}) {
           turnScopeId,
           content: "",
           attachments: [],
-          pending: true,
         },
       },
     }),
@@ -185,7 +184,6 @@ describe("sub-session realtime message projection", () => {
         eventId: "started",
         sequence: 2,
         status: "sending",
-        pending: true,
         timestamp: "2026-01-01T00:00:00.000Z",
         text: "working",
       }),
@@ -211,7 +209,7 @@ describe("sub-session realtime message projection", () => {
     const session = store.selectSubSessionMessages("child-session");
     expect(session.turnRuntime).toBeNull();
     expect(session.workflowNodeState).toMatchObject({ status: "succeeded" });
-    expect(session.messages[1].pending).toBe(true);
+    expect(session.messages[1]).not.toHaveProperty("pending");
   });
 
   it("clears child message runtime at the authoritative terminal event and applies the terminal resolution", () => {
@@ -231,7 +229,6 @@ describe("sub-session realtime message projection", () => {
         eventId: "thinking-started",
         sequence: 2,
         status: "sending",
-        pending: true,
         text: "working",
       }),
     );
@@ -338,6 +335,7 @@ describe("sub-session realtime message projection", () => {
       const result = store.applyTurnLifecycleEnvelope(
         createTurnLifecycleEnvelope({
           ...identity,
+          parentSessionId: "",
           eventId: `root-lifecycle-${sequence}`,
           commandId: `root-command-${sequence}`,
           userId: "u1",

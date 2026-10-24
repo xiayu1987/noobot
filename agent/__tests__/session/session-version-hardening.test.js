@@ -16,7 +16,6 @@ async function completeTurn(service, turnScopeId) {
     userId: "u1",
     sessionId: "s1",
     turnScopeId,
-    messageId: `turn-${turnScopeId}`,
     presentationMessageId: `presentation-${turnScopeId}`,
   };
   const steps = [
@@ -130,6 +129,7 @@ test("dialog order accepts only canonical dialogOrdinal and messageUid fields", 
       aggregateVersion: 0,
       messages: [
         {
+          sessionId: "s1",
           role: "user",
           content: "legacy",
           dialogProcessId: "d1",
@@ -441,6 +441,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
     messages: [
       {
         messageUid: "sm_summary",
+        sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx6",
         modelMessageId: "mm_session_version_hardenin_5",
@@ -450,6 +451,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
       },
       {
         messageUid: "sm_retained",
+        sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx7",
         modelMessageId: "mm_session_version_hardenin_6",

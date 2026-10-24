@@ -10,7 +10,7 @@ import { buildModelRunLabel } from "../../../../../src/modules/chat/model/conver
 describe("message model name", () => {
   it("reads modelName as the only model name field", () => {
     expect(buildMessageModelRunFacet({ modelName: "m-1", model: "alias" }).modelName).toBe("m-1");
-    expect(buildMessageModelRunFacet({ model: "alias" }).modelName).toBe("");
+    expect(buildMessageModelRunFacet({ model: "alias" })).not.toHaveProperty("modelName");
   });
 
   it("builds the run label from modelAlias and modelName only", () => {

@@ -46,9 +46,10 @@ function applyLifecycle(
       commandId: `${action}:${turnScopeId}`,
       userId: "u-1",
       sessionId,
+      parentSessionId: "",
       turnScopeId,
-      messageId: `event-message:${turnScopeId}`,
       presentationMessageId: `message:${turnScopeId}`,
+      dialogProcessId: `dp-${turnScopeId}`,
       revision,
       sequence: revision,
       phase,
@@ -96,6 +97,7 @@ function settleTurn(store, { sessionId, turnScopeId, state }) {
       turn: {
         sessionId,
         turnScopeId,
+        dialogProcessId: `dp-${turnScopeId}`,
         state,
         phase: state === "stop_completed" ? "stop" : "completion",
         revision,
@@ -103,7 +105,10 @@ function settleTurn(store, { sessionId, turnScopeId, state }) {
         completionCommitId,
         summaryVersion: revision,
         capabilities: { actionLocked: false, canStop: false },
-        terminalStatus: terminalStatusFixture(state, turnScopeId),
+        terminalStatus: terminalStatusFixture(state, {
+          turnScopeId,
+          dialogProcessId: `dp-${turnScopeId}`,
+        }),
       },
     }),
   );

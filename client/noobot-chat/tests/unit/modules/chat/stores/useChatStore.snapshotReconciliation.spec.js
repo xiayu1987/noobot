@@ -30,7 +30,6 @@ describe("useChatStore sub session snapshot reconciliation", () => {
           userMessageId: "msg-user-1",
           role: "user",
           content: "run child task",
-          sessionId: "sub-session-1",
           dialogProcessId: "dialog-1",
           turnScopeId: "turn-1",
         },
@@ -166,14 +165,12 @@ describe("useChatStore sub session snapshot reconciliation", () => {
           presentationMessageId: "msg-assistant-1",
           role: "assistant",
           content: "hello",
-          sequence: 1,
         },
         {
           messageUid: "sm-msg-2",
           presentationMessageId: "msg-2",
           role: "assistant",
           content: "world",
-          sequence: 2,
         },
       ],
     });
@@ -249,7 +246,6 @@ describe("useChatStore sub session snapshot reconciliation", () => {
           content: "answer",
           status: "completed",
           pending: false,
-          thinking: { summary: "done", steps: [] },
           pluginMeta: { interaction: null },
         },
       ],
@@ -310,7 +306,6 @@ describe("useChatStore sub session snapshot reconciliation", () => {
           role: "assistant",
           content: "hello",
           turnScopeId: "turn-1",
-          sequence: 1,
         },
         {
           messageUid: "msg-tool-1",
@@ -318,7 +313,6 @@ describe("useChatStore sub session snapshot reconciliation", () => {
           role: "tool",
           content: "ok",
           toolCallId: "call-1",
-          sequence: 2,
         },
       ],
     });

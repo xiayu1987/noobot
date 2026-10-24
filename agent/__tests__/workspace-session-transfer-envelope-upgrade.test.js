@@ -12,6 +12,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import {
+  TRANSFER_ENVELOPE_V2,
   TRANSFER_VERSION,
   directTransfer,
   TRANSFER_REASON,
@@ -23,6 +24,8 @@ import {
   messageHash,
 } from "../src/session/session-artifact-session/turn-journal-store.js";
 import { createSessionDisplaySourceRevision } from "../src/session/session-display-source-revision.js";
+
+const V2_FIELD = TRANSFER_ENVELOPE_V2.presentationField;
 
 const SESSION = `${WORKSPACE_LAYOUT.SESSION_DIR}/s-1`;
 const TURN = "client-turn:t-1";
@@ -51,7 +54,7 @@ function v2Envelope(id) {
       strategy: "tool_output",
     },
   });
-  return { ...rest, version: 2, messageId: presentationMessageId };
+  return { ...rest, version: 2, [V2_FIELD]: presentationMessageId };
 }
 
 function toolMessage(uid, envelopeId) {
@@ -215,7 +218,7 @@ async function seedSession(fixture, { summaryRevisionCurrent = true } = {}) {
 function assertV3(envelope, id) {
   assert.equal(envelope.version, TRANSFER_VERSION);
   assert.equal(envelope.presentationMessageId, `msg_${id}`);
-  assert.equal(Object.hasOwn(envelope, "messageId"), false);
+  assert.equal(Object.hasOwn(envelope, V2_FIELD), false);
 }
 
 test("v6 rewrites session envelopes and resyncs every derived checksum", async () => {

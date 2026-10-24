@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { directTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -51,12 +51,23 @@ test("tool result transfer envelopes project onto the canonical assistant turn",
     persistCurrentTurnMessages: async () => {},
   };
   initializeCurrentTurnMessageEventProjection(runtime);
-  const transferEnvelope = {
-    protocol: "noobot.semantic-transfer",
-    version: TRANSFER_VERSION,
+  const transferEnvelope = directTransfer({
     transferId: "transfer-1",
     presentationMessageId: "presentation-1",
-  };
+    identity: {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      producer: { type: "tool", id: "call-1" },
+    },
+    direction: "output",
+    content: "done",
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
+  });
 
   await runtime.projectCurrentTurnMessageEvent(
     messageEvent("event-1", "tool_call_end", 1, {

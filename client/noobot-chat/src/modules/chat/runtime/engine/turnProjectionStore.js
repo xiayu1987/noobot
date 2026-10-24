@@ -3,14 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer.js";
 import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity.js";
-import { initializeMessageEventState } from "../../model/messageEventState.js";
-import { mergeToolTimelines } from "./toolTimeline.js";
-import { mergeActivityTimelines } from "./activityTimeline.js";
 import { createTurnObservation } from "./turnObservation.js";
-import { mergeAttachmentSnapshot } from "../../model/dialogProcessChain.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import {
   resolveSessionRunMessageRuntimePatch,
@@ -108,14 +103,6 @@ export function projectTurnRuntimeToMessages({
   };
 }
 
-const TURN_UI_SNAPSHOT_FIELDS = new Set([
-  "thinkingOpenNames",
-  "expandedToolDetailKeys",
-  "selectedToolKey",
-  "scrollTop",
-  "animationKeys",
-]);
-
 export function dispatchTurnEnvelope({ targetMessage, envelope, source }) {
   const reducerObservedAtMs = Date.now();
   const eventTimestamp = envelope.occurredAt;
@@ -174,14 +161,11 @@ export function dispatchTurnEnvelope({ targetMessage, envelope, source }) {
       reason: "turn_identity_conflict",
     });
   }
-  const state = initializeMessageEventState(targetMessage).messageEventState;
+  const state = targetMessage.messageEventState;
   const { sequence } = envelope.ordering;
-  const lastSequence = Number(state.lastSequence || 0);
+  const { lastSequence } = state;
   if (lastSequence && sequence > lastSequence + 1) {
-    state.pendingEnvelopes = {
-      ...(state.pendingEnvelopes || {}),
-      [sequence]: envelope,
-    };
+    state.pendingEnvelopes[sequence] = envelope;
     return observe({
       result: MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP,
       applied: false,
@@ -190,116 +174,17 @@ export function dispatchTurnEnvelope({ targetMessage, envelope, source }) {
       receivedSequence: sequence,
     });
   }
-  const reduced = reduceMessageEvent({ targetMessage, event: envelope });
+  const reduced = reduceMessageEvent({ targetMessage, state, event: envelope });
   if (reduced.applied) {
-    let nextSequence = Number(state.lastSequence || 0) + 1;
-    while (state.pendingEnvelopes?.[nextSequence]) {
+    while (state.pendingEnvelopes[state.lastSequence + 1]) {
+      const nextSequence = state.lastSequence + 1;
       const pendingEnvelope = state.pendingEnvelopes[nextSequence];
       delete state.pendingEnvelopes[nextSequence];
-      reduceMessageEvent({ targetMessage, event: pendingEnvelope });
-      nextSequence = Number(state.lastSequence || 0) + 1;
-    }
-    if (state.pendingEnvelopes && !Object.keys(state.pendingEnvelopes).length) {
-      delete state.pendingEnvelopes;
+      reduceMessageEvent({ targetMessage, state, event: pendingEnvelope });
     }
   }
   return observe({
     ...reduced,
     reason: reduced.result,
-  });
-}
-
-export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence = 0 } = {}) {
-  const identity = resolveTurnIdentity(snapshot);
-  const targetIdentity = resolveTurnIdentity(targetMessage);
-  const turnKey = createTurnKey(identity);
-  const observe = (values = {}) =>
-    createTurnObservation({
-      requestedSessionId: identity.sessionId,
-      canonicalSessionId: targetIdentity.sessionId || identity.sessionId,
-      turnKey,
-      sequence: throughSequence || snapshot?.throughSequence,
-      source: TURN_PROJECTION_SOURCE.SNAPSHOT,
-      authority: snapshot?.authority,
-      ...values,
-    });
-  if (!turnKey || !targetMessage || !messageOwnsTurn(targetMessage, identity)) {
-    return observe({
-      applied: false,
-      result: "snapshot_identity_conflict",
-      reason: "snapshot_identity_conflict",
-    });
-  }
-  const currentSequence = Number(targetMessage?.messageEventState?.lastSequence || 0);
-  const snapshotSequence = Number(throughSequence || snapshot?.throughSequence || 0);
-  if (snapshotSequence < currentSequence) {
-    return observe({
-      applied: false,
-      result: "snapshot_stale",
-      reason: "snapshot_stale",
-      currentSequence,
-      snapshotSequence,
-    });
-  }
-  const pendingEnvelopes = targetMessage?.messageEventState?.pendingEnvelopes || {};
-  const currentToolTimeline = targetMessage?.toolTimeline || [];
-  const currentActivityTimeline = targetMessage?.activityTimeline || [];
-  const currentAttachments = Array.isArray(targetMessage?.attachments)
-    ? targetMessage.attachments
-    : [];
-  const currentTransferEnvelopes = Array.isArray(targetMessage?.transferEnvelopes)
-    ? targetMessage.transferEnvelopes
-    : [];
-  const currentConsumedEventIds = targetMessage?.messageEventState?.consumedEventIds || [];
-  const snapshotState = snapshot?.messageEventState || {};
-  const preservedIdentity = {
-    sessionId: targetMessage.sessionId,
-    turnScopeId: targetMessage.turnScopeId,
-  };
-  Object.entries(snapshot || {}).forEach(([key, value]) => {
-    if (!TURN_UI_SNAPSHOT_FIELDS.has(key)) targetMessage[key] = value;
-  });
-  Object.assign(targetMessage, preservedIdentity);
-  const snapshotTransferEnvelopes = Array.isArray(targetMessage.transferEnvelopes)
-    ? targetMessage.transferEnvelopes
-    : [];
-  targetMessage.transferEnvelopes = mergeTransferEnvelopes(
-    currentTransferEnvelopes,
-    snapshotTransferEnvelopes,
-  );
-  if (Array.isArray(snapshot?.attachments)) {
-    targetMessage.attachments = mergeAttachmentSnapshot(currentAttachments, snapshot.attachments);
-  }
-  targetMessage.toolTimeline = mergeToolTimelines(snapshot?.toolTimeline, currentToolTimeline);
-  targetMessage.activityTimeline = mergeActivityTimelines(
-    snapshot?.activityTimeline,
-    currentActivityTimeline,
-  );
-  targetMessage.messageEventState = {
-    ...snapshotState,
-    lastSequence: Math.max(snapshotSequence, Number(snapshotState.lastSequence || 0)),
-    consumedEventIds: [
-      ...new Set([...(snapshotState.consumedEventIds || []), ...currentConsumedEventIds]),
-    ].slice(-1000),
-    ...(Object.keys(pendingEnvelopes).length ? { pendingEnvelopes } : {}),
-  };
-  let nextSequence = Number(targetMessage.messageEventState.lastSequence || 0) + 1;
-  while (targetMessage.messageEventState.pendingEnvelopes?.[nextSequence]) {
-    const pendingEnvelope = targetMessage.messageEventState.pendingEnvelopes[nextSequence];
-    delete targetMessage.messageEventState.pendingEnvelopes[nextSequence];
-    reduceMessageEvent({ targetMessage, event: pendingEnvelope });
-    nextSequence = Number(targetMessage.messageEventState.lastSequence || 0) + 1;
-  }
-  if (
-    targetMessage.messageEventState.pendingEnvelopes &&
-    !Object.keys(targetMessage.messageEventState.pendingEnvelopes).length
-  )
-    delete targetMessage.messageEventState.pendingEnvelopes;
-  return observe({
-    applied: true,
-    result: "snapshot_accepted",
-    reason: "snapshot_accepted",
-    currentSequence,
-    snapshotSequence,
   });
 }

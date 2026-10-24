@@ -17,6 +17,7 @@ import {
   composeContextProjectionKey,
 } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
+import { TURN_TERMINAL_FIXED_DESCRIPTION } from "@noobot/session-protocol";
 
 function sessionHistory(records) {
   return toConversationMessages(
@@ -41,7 +42,6 @@ function buildAgentContext({
         dialogProcessId,
         parentDialogProcessId: "",
         turnScopeId,
-        messageId: `message:${turnScopeId}`,
       },
       modelContext: createModelContext({
         messageBlocks: {
@@ -108,7 +108,7 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
       {
         status: "user_stopped",
         reason: "user_stop",
-        description: "用户停止了本轮生成",
+        description: TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped,
         dialogProcessId: "dlg-stopped",
         turnScopeId: "turn-stopped",
       },
@@ -123,7 +123,12 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
 
   assert.deepEqual(
     blocks.history.map((item) => item.content),
-    ["停止轮问题", blocks.history[1].content, "最新 guidance", "用户停止了本轮生成"],
+    [
+      "停止轮问题",
+      blocks.history[1].content,
+      "最新 guidance",
+      TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped,
+    ],
   );
   assert.equal(blocks.history[1].content.startsWith("[用户元信息]"), true);
   assert.deepEqual(blocks.history.map(resolveContextMessageKey), [

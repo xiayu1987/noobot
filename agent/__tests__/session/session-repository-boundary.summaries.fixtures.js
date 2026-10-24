@@ -26,7 +26,7 @@ export async function exists(filePath) {
   }
 }
 
-export function canonicalMessages(messages = [], namespace = "summary") {
+export function canonicalMessages(messages, sessionId, namespace = "summary") {
   return messages.map((message, index) => {
     const turnScopeId = String(message?.turnScopeId || `turn-${namespace}-${index + 1}`);
 
@@ -37,6 +37,7 @@ export function canonicalMessages(messages = [], namespace = "summary") {
         : {}),
     };
     return {
+      sessionId,
       messageUid: String(message?.messageUid || `sm_${namespace}_${index + 1}`),
       dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
       turnScopeId,

@@ -59,11 +59,6 @@ function optionalListField(name, value) {
   return Array.isArray(value) && value.length ? { [name]: value } : {};
 }
 
-function positiveIntegerValue(value) {
-  const normalized = Number(value || 0);
-  return Number.isInteger(normalized) && normalized > 0 ? normalized : 0;
-}
-
 function assistantPresentationField(input) {
   return input.role === MESSAGE_ROLE.ASSISTANT ? { chatPresentation: input.chatPresentation } : {};
 }
@@ -116,7 +111,9 @@ function normalizeSessionTurnInput(input = {}) {
     injectedBy: valueOrDefault(input.injectedBy, ""),
     injectedMessageType: valueOrDefault(input.injectedMessageType, ""),
     relayCorrelationId: valueOrDefault(input.relayCorrelationId, ""),
-    interjectionSequence: positiveIntegerValue(input.interjectionSequence),
+    ...(input.interjectionSequence === undefined
+      ? {}
+      : { interjectionSequence: input.interjectionSequence }),
     messageOrigin: text(input.messageOrigin).toLowerCase(),
     pluginMessage: input.pluginMessage === true,
     pluginMeta: valueOrDefault(input.pluginMeta, null),
@@ -166,7 +163,9 @@ function buildFullTurnPayload(input) {
     injectedBy: stringValue(input.injectedBy).trim(),
     injectedMessageType: stringValue(input.injectedMessageType).trim(),
     relayCorrelationId: stringValue(input.relayCorrelationId).trim(),
-    ...optionalValueField("interjectionSequence", input.interjectionSequence),
+    ...(input.interjectionSequence === undefined
+      ? {}
+      : { interjectionSequence: input.interjectionSequence }),
     messageOrigin: input.messageOrigin,
     pluginMessage: input.pluginMessage,
     pluginMeta: normalizedOptionalObject(input.pluginMeta),
@@ -267,7 +266,9 @@ function buildTurnPayload(input) {
     injectedBy: input.injectedBy,
     injectedMessageType: input.injectedMessageType,
     relayCorrelationId: input.relayCorrelationId,
-    interjectionSequence: input.interjectionSequence,
+    ...(input.interjectionSequence === undefined
+      ? {}
+      : { interjectionSequence: input.interjectionSequence }),
     messageOrigin: input.messageOrigin,
     pluginMessage: input.pluginMessage,
     pluginMeta: input.pluginMeta,
@@ -335,7 +336,9 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     injectedBy: text(messageItem?.injectedBy),
     injectedMessageType: text(messageItem?.injectedMessageType),
     relayCorrelationId: text(messageItem?.relayCorrelationId),
-    interjectionSequence: positiveIntegerValue(messageItem.interjectionSequence),
+    ...(messageItem.interjectionSequence === undefined
+      ? {}
+      : { interjectionSequence: messageItem.interjectionSequence }),
     messageOrigin: text(messageItem?.messageOrigin).toLowerCase(),
     pluginMessage: messageItem?.pluginMessage === true,
     pluginMeta: normalizedOptionalObject(messageItem.pluginMeta),

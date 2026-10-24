@@ -32,10 +32,10 @@ function canonicalTurnMessages(runtime) {
 }
 
 function authoritativeFinalMessages(result, runtime) {
-  const messageId = resultModelMessageId(result);
-  if (!messageId) return [];
+  const modelMessageId = resultModelMessageId(result);
+  if (!modelMessageId) return [];
   return canonicalTurnMessages(runtime).filter(
-    (message) => modelMessageIdOf(message) === messageId,
+    (message) => modelMessageIdOf(message) === modelMessageId,
   );
 }
 
@@ -64,14 +64,14 @@ function authoritativeFinalDiagnostics(result, runtime) {
 }
 
 export function commitAuthoritativeFinalOutput({ result, runtime }) {
-  const messageId = resultModelMessageId(result);
-  if (!result.output || !messageId) return false;
+  const modelMessageId = resultModelMessageId(result);
+  if (!result.output || !modelMessageId) return false;
   const store = requireCurrentTurnMessagesStore(runtime.currentTurnMessages);
   const matches = authoritativeFinalMessages(result, runtime);
   if (matches.length !== 1) return false;
   const updatedCount = store.updateWhere(
     { content: result.output, ...finalMessageArtifacts(matches[0]) },
-    (message) => modelMessageIdOf(message) === messageId,
+    (message) => modelMessageIdOf(message) === modelMessageId,
   );
   if (updatedCount !== 1) return false;
   result.turnMessages = store.toArray();
@@ -117,7 +117,7 @@ export async function commitAuthoritativeFinalResult({ result, runtime }) {
     });
     throw new Error(
       messages.length === 0
-        ? "authoritative final result does not match its canonical messageId"
+        ? "authoritative final result does not match its canonical modelMessageId"
         : "authoritative final result matches multiple canonical messages",
     );
   }

@@ -10,6 +10,11 @@ import { createTaskProtocolReceipt } from "./protocol-receipt.js";
 export const TASK_SUMMARY_PROTOCOL_VERSION = 1;
 const TASK_SUMMARY_PROTOCOL_HEADER = "NOOBOT_TASK_SUMMARY/1";
 export const TASK_SUMMARY_STATE = TASK_PROTOCOL_STATE;
+export const TASK_SUMMARY_RECEIPT_TEXT_KEY = Object.freeze({
+  [TASK_SUMMARY_STATE.CONTINUE]: "tools.task_summary.receiptContinue",
+  [TASK_SUMMARY_STATE.COMPLETE]: "tools.task_summary.receiptComplete",
+  [TASK_SUMMARY_STATE.BLOCKED]: "tools.task_summary.receiptBlocked",
+});
 
 function protocolError(message) {
   const error = new TypeError(`invalid ${TASK_SUMMARY_PROTOCOL_HEADER} content: ${message}`);

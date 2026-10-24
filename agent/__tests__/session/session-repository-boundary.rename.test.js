@@ -55,6 +55,7 @@ test("renameSession should persist custom title to full, display summary and ses
     session.messages = [
       {
         messageUid: "sm_rename_user",
+        sessionId: "A",
         role: "user",
         content: "old generated title",
         dialogProcessId: "dialog-rename",

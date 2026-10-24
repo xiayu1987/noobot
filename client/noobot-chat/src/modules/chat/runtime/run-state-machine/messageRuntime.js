@@ -35,7 +35,7 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
 export function isFinalizedAssistantMessage(messageItem) {
   if (getMessageRole(messageItem) !== "assistant") return false;
   return (
-    messageItem.pending === false &&
+    messageItem.pending !== true &&
     isTerminalRunState(getMessageRuntimeChannelState(messageItem).state)
   );
 }
@@ -153,9 +153,6 @@ export function isMessageInFlightAssistant(messageItem = {}) {
 function buildInFlightMessageRuntimePatch(stateItem = {}) {
   const channelState = {
     state: normalizeState(stateItem?.backendState) || normalizeState(stateItem?.state),
-    sessionId: trim(stateItem?.sessionId),
-    dialogProcessId: trim(stateItem?.dialogProcessId),
-    turnScopeId: trim(stateItem?.turnScopeId),
     sourceEvent: trim(stateItem?.sourceEvent),
   };
   return {
@@ -197,10 +194,6 @@ function buildStoppedMessageRuntimePatch({
     pending: false,
     channelState: {
       state: AGENT_CHANNEL_STATE.USER_STOPPED,
-      sessionId: trim(channelState?.sessionId),
-      dialogProcessId:
-        getMessageDialogProcessId(messageItem) || trim(channelState?.dialogProcessId),
-      turnScopeId: getMessageTurnScopeId(messageItem) || trim(channelState?.turnScopeId),
       sourceEvent:
         trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
     },

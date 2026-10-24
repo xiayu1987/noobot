@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
   emitAuthorityProcessing,
+  serverTurnSource,
   makeTurnReplacementResponse,
 } from "../helpers/useChatEngineHarness.js";
 import {
@@ -18,7 +19,7 @@ import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js
 describe("useChatEngine.resend replacement turn state", () => {
   it("ignores a stopped assistant returned with the fresh replacement turn", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-server"));
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, commandId, anchor }) => {
       const replacementUser = {
@@ -81,11 +82,11 @@ describe("useChatEngine.resend replacement turn state", () => {
       expect.objectContaining({
         role: RoleEnum.ASSISTANT,
         content: "",
-        pending: false,
-        terminalOutcome: "",
         turnScopeId: replacementUser.turnScopeId,
       }),
     );
+    expect(placeholder).not.toHaveProperty("pending");
+    expect(placeholder).not.toHaveProperty("terminalOutcome");
     expect(activeSession.value.messages).toHaveLength(2);
     expect(
       activeSession.value.messages.some((message) => message.stopState === "user_stopped"),

@@ -17,7 +17,6 @@ import {
 import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import {
-  initializeMessageEventState,
   appendConsumedMessageEvent,
   hasConsumedMessageEvent,
 } from "../../model/messageEventState.js";
@@ -33,9 +32,6 @@ import {
   mergeTransferEnvelopes,
 } from "../../model/transferEnvelopes.js";
 import { getMessageAttachments } from "../../model/messageModel.js";
-import { text } from "@noobot/shared/value";
-
-export { initializeMessageEventState } from "../../model/messageEventState.js";
 
 export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
   APPLIED: "applied",
@@ -43,21 +39,15 @@ export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
   STALE: "stale",
   SEQUENCE_GAP: "sequence_gap",
   INVALID: "invalid",
-  TARGET_MISSING: "target_missing",
   MESSAGE_IDENTITY_CONFLICT: "message_identity_conflict",
   FINAL_CONTENT_LOCKED: "final_content_locked",
 });
 
 function conflicts(message, event) {
-  const presentationId = text(message.presentationMessageId);
-  const eventPresentationId = resolveMessageEventPresentationId(event.payload);
-  if (presentationId && presentationId !== eventPresentationId) return true;
-  const messageTurn = text(message.turnScopeId);
-  const eventTurn = text(event.identity.turnScopeId);
-  return Boolean(eventTurn && messageTurn !== eventTurn);
+  return message.presentationMessageId !== resolveMessageEventPresentationId(event.payload);
 }
 
-function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap, transient }) {
+function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, transient }) {
   targetMessage.dialogProcessId = event.payload.dialogProcessId;
   Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
   targetMessage.hasFirstStreamEvent = true;
@@ -65,39 +55,29 @@ function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, ga
   if (transient) return { result: MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
   state.lastSequence = sequence;
   appendConsumedMessageEvent(state, event.identity.eventId);
-  return {
-    result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
-    applied: true,
-  };
+  return { result: MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
 }
 
-export function reduceMessageEvent({ targetMessage, event } = {}) {
+export function reduceMessageEvent({ targetMessage, state, event }) {
   const validation = validateProtocolEvent(event);
   if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: validation.errors };
   }
-  if (!targetMessage) return { result: MESSAGE_EVENT_REDUCE_RESULT.TARGET_MISSING };
   if (conflicts(targetMessage, event))
     return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
 
-  const state = initializeMessageEventState(targetMessage).messageEventState;
   if (hasConsumedMessageEvent(state, event.identity.eventId)) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
   const transient = isTransientMessageEvent(event);
-  const sequence = Number(event.ordering.sequence);
-  const lastSequence = Number(state.lastSequence || 0);
-  if (!transient && lastSequence && sequence <= lastSequence)
-    return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
-  const gap = Boolean(!transient && lastSequence && sequence > lastSequence + 1);
+  const { sequence } = event.ordering;
+  const { lastSequence } = state;
+  if (!transient && sequence <= lastSequence) return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
 
   if (event.payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     state.lastSequence = sequence;
     appendConsumedMessageEvent(state, event.identity.eventId);
-    return {
-      result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
-      applied: true,
-    };
+    return { result: MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
   }
 
   if (event.payload.eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
@@ -110,13 +90,13 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
       [contentFact],
     );
     targetMessage.hasThinkingDetails = true;
-    return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap });
+    return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence });
   }
 
   const contentProjection = projectMessageEventContent(event.payload);
   if (
     contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND &&
-    Number(state.finalContentSequence || 0) > 0
+    state.finalContentSequence > 0
   ) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.FINAL_CONTENT_LOCKED };
   }
@@ -156,9 +136,9 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
       )
     ) {
       logToolLogWindowDebug("frontend.toolLogWindow.messageEventClassified", () => ({
-        sessionId: text(event.identity.sessionId || targetMessage.sessionId),
-        dialogProcessId: text(event.payload.dialogProcessId || targetMessage.dialogProcessId),
-        turnScopeId: text(event.identity.turnScopeId || targetMessage.turnScopeId),
+        sessionId: event.identity.sessionId,
+        dialogProcessId: event.payload.dialogProcessId,
+        turnScopeId: event.identity.turnScopeId,
         envelope: summarizeToolLogWindowItem(event),
         previousLastSequence: lastSequence,
       }));
@@ -183,14 +163,14 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
       )
     ) {
       logToolLogWindowDebug("frontend.toolLogWindow.messageEventTimelineReduced", () => ({
-        sessionId: text(event.identity.sessionId || targetMessage.sessionId),
-        dialogProcessId: text(event.payload.dialogProcessId || targetMessage.dialogProcessId),
-        turnScopeId: text(event.identity.turnScopeId || targetMessage.turnScopeId),
+        sessionId: event.identity.sessionId,
+        dialogProcessId: event.payload.dialogProcessId,
+        turnScopeId: event.identity.turnScopeId,
         appliedSequence: sequence,
         timelineEntryCount: targetMessage.toolTimeline?.length || 0,
         timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
       }));
     }
   }
-  return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap, transient });
+  return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, transient });
 }

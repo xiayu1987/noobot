@@ -306,7 +306,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     modelTraces.some(
       (trace) =>
         trace.data?.invocation?.purpose === "guidance" &&
-        trace.data?.invocation?.flow === "plugin.analysis",
+        trace.data?.invocation?.flow === "harness.analysis",
     ),
     "the scenario must execute the real Harness guidance analysis model flow",
   ).toBe(true);
@@ -359,8 +359,8 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
       [
         "严格按顺序且每种只调用一次以下七个工具；即使某个外部服务失败，也必须继续后续步骤，不得调用 switch_model：",
         '1) execute_native_script 不传输入，先 const target = await output.file(\'case036-native.svg\'); 再执行 await files.writeText(target, \'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80"><text x="10" y="45">CASE036-NATIVE</text></svg>\');；',
-        "2) multimodal_parse 解析上一步返回的 case036-native.svg 附件身份，model_name 使用 glm_5_3_dashscope，提示词为 Extract the exact visible text；",
-        "3) multimodal_generate 使用 model_name=glm_5_3_dashscope 生成一张简洁的红色正方形图片，n=1；",
+        "2) multimodal_parse 解析上一步返回的 case036-native.svg 附件身份，model_name 使用 gpt_6_1_sol，提示词为 Extract the exact visible text；",
+        "3) multimodal_generate 不传 model_name，生成一张简洁的红色正方形图片，n=1；",
         "4) call_service 调用 weather_service.get_weather，queryString.city=Shanghai，custom_param=j1；",
         "5) do_search_web 搜索 Noobot GitHub；",
         "6) help 使用 command=--experience；",
@@ -405,6 +405,11 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
     const result = results.find((event) => event.data?.toolCallId === call.data?.toolCallId);
     expect(result, `missing tool result for ${call.data?.tool}`).toBeTruthy();
     expect(result.data?.tool).toBe(call.data?.tool);
-    expect(String(result.data?.result || result.data?.error || "").trim()).toBeTruthy();
+    expect(typeof result.data.success).toBe("boolean");
+    expect(result.data.result.trim()).toBeTruthy();
   }
+  const parseCall = calls.find((event) => event.data.tool === "multimodal_parse");
+  expect(parseCall.data.args.model_name).toBe("gpt_6_1_sol");
+  const parseResult = results.find((event) => event.data.toolCallId === parseCall.data.toolCallId);
+  expect(parseResult.data.success, parseResult.data.result).toBe(true);
 });

@@ -5,7 +5,6 @@
  */
 import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
-import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { compactThinkingTimeline } from "../session-summary-builders/message-summary-projection.js";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
@@ -55,14 +54,9 @@ export async function writeSessionSummaryDetails({ storageService, sessionDir, s
       atomic: true,
     });
     const { toolTimeline: _tool, activityTimeline: _activity, ...light } = message;
-    const thinkingDetailCount = countCanonicalThinkingDetailEvents({
-      toolTimeline,
-      activityTimeline,
-    });
     messages.push({
       ...light,
       hasThinkingDetails: true,
-      thinkingDetailCount,
       thinkingDetailRef: { file: relative, contentHash: summaryDetailHash(detail) },
     });
   }

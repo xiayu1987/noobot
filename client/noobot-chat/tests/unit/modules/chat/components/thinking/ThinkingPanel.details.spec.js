@@ -100,7 +100,7 @@ describe("ThinkingPanel canonical details", () => {
     expect(wrapper.emitted("open-thinking-details")).toHaveLength(1);
   });
 
-  it("uses the protocol detail count instead of the partial rendered timeline count", () => {
+  it("counts the canonical timeline and ignores a stale count field", () => {
     const messageItem = {
       role: "assistant",
       turnScopeId: "turn-count",
@@ -109,14 +109,13 @@ describe("ThinkingPanel canonical details", () => {
     };
     const wrapper = mountThinkingPanel(messageItem);
 
-    expect(wrapper.vm.getThinkingDetailCount(messageItem)).toBe(20);
+    expect(wrapper.vm.getThinkingDetailCount(messageItem)).toBe(2);
   });
 
   it("uses the same rendered event cardinality for the detail button and drawer", () => {
     const messageItem = {
       role: "assistant",
       turnScopeId: "turn-execution-count",
-      thinkingDetailCount: 2,
       toolTimeline: toolTimeline(),
     };
     const wrapper = mountThinkingPanel(messageItem, { variant: "details" });

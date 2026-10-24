@@ -80,6 +80,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
           transferEnvelopes: [canonicalTransferEnvelope(sessionId)],
         },
       ],
+      sessionId,
       "canonical_display",
     );
     await repository.save(userId, applySessionMessageFacts(session), {

@@ -20,9 +20,10 @@ import { createCommittedTurnLifecycleEnvelope } from "../src/application/commit-
 
 test("authority outbox tracks attempts and acknowledges delivery idempotently", () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
+    eventId: "outbox-event-1",
+    parentSessionId: "",
     event: {
       eventType: TURN_EVENT.PROCESSING_STARTED,
-      eventId: "outbox-event-1",
       commandId: "outbox-command-1",
       causationId: "outbox-command-1",
       sessionId: "outbox-session-1",
@@ -32,6 +33,7 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
       turnScopeId: "outbox-turn-1",
       commandId: "outbox-command-1",
       presentationMessageId: "outbox-presentation-1",
+      dialogProcessId: "outbox-dialog-1",
       revision: 1,
       sequence: 1,
       phase: TURN_PHASE.PROCESSING,
@@ -85,9 +87,10 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
 test("outbox compaction reclaims only events every attempting consumer delivered before the cutoff", () => {
   const envelope = (eventId, sequence) =>
     createCommittedTurnLifecycleEnvelope({
+      eventId,
+      parentSessionId: "",
       event: {
         eventType: TURN_EVENT.PROCESSING_STARTED,
-        eventId,
         commandId: `command-${eventId}`,
         causationId: `command-${eventId}`,
         sessionId: "session-1",
@@ -97,6 +100,7 @@ test("outbox compaction reclaims only events every attempting consumer delivered
         turnScopeId: "turn-1",
         commandId: `command-${eventId}`,
         presentationMessageId: "presentation-1",
+        dialogProcessId: "dialog-1",
         revision: sequence,
         sequence,
         phase: TURN_PHASE.PROCESSING,
@@ -153,9 +157,10 @@ test("outbox compaction reclaims only events every attempting consumer delivered
 
 test("authority outbox tracks each consumer independently so one ack never hides events from another", () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
+    eventId: "multi-consumer-event",
+    parentSessionId: "",
     event: {
       eventType: TURN_EVENT.PROCESSING_STARTED,
-      eventId: "multi-consumer-event",
       commandId: "multi-consumer-command",
       causationId: "multi-consumer-command",
       sessionId: "session-1",
@@ -165,6 +170,7 @@ test("authority outbox tracks each consumer independently so one ack never hides
       turnScopeId: "turn-1",
       commandId: "multi-consumer-command",
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       revision: 1,
       sequence: 1,
       phase: TURN_PHASE.PROCESSING,
@@ -222,9 +228,10 @@ test("authority outbox tracks each consumer independently so one ack never hides
 
 test("legacy single-slot outbox delivery migrates to the recorded consumer only", () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
+    eventId: "legacy-event",
+    parentSessionId: "",
     event: {
       eventType: TURN_EVENT.PROCESSING_STARTED,
-      eventId: "legacy-event",
       commandId: "legacy-command",
       causationId: "legacy-command",
       sessionId: "session-1",
@@ -234,6 +241,7 @@ test("legacy single-slot outbox delivery migrates to the recorded consumer only"
       turnScopeId: "turn-1",
       commandId: "legacy-command",
       presentationMessageId: "presentation-1",
+      dialogProcessId: "dialog-1",
       revision: 1,
       sequence: 1,
       phase: TURN_PHASE.PROCESSING,

@@ -29,6 +29,7 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
       turn: {
         sessionId,
         turnScopeId,
+        dialogProcessId: `dp-${turnScopeId}`,
         state: "completed",
         phase: "completion",
         revision,
@@ -37,7 +38,10 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
         summaryVersion: revision,
         updatedAt,
         capabilities: { actionLocked: false, canStop: false },
-        terminalStatus: terminalStatusFixture("completed", turnScopeId),
+        terminalStatus: terminalStatusFixture("completed", {
+          turnScopeId,
+          dialogProcessId: `dp-${turnScopeId}`,
+        }),
       },
     }),
   );

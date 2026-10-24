@@ -50,9 +50,10 @@ describe("terminalResolutionCoordinator", () => {
       ...response(),
       turn: {
         ...response().turn,
+        dialogProcessId: "dp-1",
         state: "completed",
         terminalStatus: {
-          ...terminalStatusFixture("completed", "t-1"),
+          ...terminalStatusFixture("completed", { turnScopeId: "t-1", dialogProcessId: "dp-1" }),
           description: "private terminal body",
         },
       },
@@ -305,8 +306,8 @@ describe("terminalResolutionCoordinator", () => {
         commandId: "command-t-1",
         userId: "u-1",
         sessionId: "s-1",
+        parentSessionId: "",
         turnScopeId: "t-1",
-        messageId: "event-message-t-1",
         presentationMessageId: "message-t-1",
         dialogProcessId: "dp-1",
         revision: 1,
@@ -326,8 +327,8 @@ describe("terminalResolutionCoordinator", () => {
         commandId: "command-t-1",
         userId: "u-1",
         sessionId: "s-1",
+        parentSessionId: "",
         turnScopeId: "t-1",
-        messageId: "event-message-t-1",
         presentationMessageId: "message-t-1",
         dialogProcessId: "dp-1",
         revision: 2,
@@ -361,7 +362,10 @@ describe("terminalResolutionCoordinator", () => {
         completionCommitId: "commit-2",
         summaryVersion: 2,
         capabilities: { actionLocked: false, canStop: false },
-        terminalStatus: terminalStatusFixture("completed", "t-1"),
+        terminalStatus: terminalStatusFixture("completed", {
+          turnScopeId: "t-1",
+          dialogProcessId: "dp-1",
+        }),
       },
     });
     const fetcher = vi.fn(async () => authoritativeResponse);

@@ -14,20 +14,7 @@ import {
 } from "../../../src/app/state/thinkingDetailsState.js";
 
 describe("thinking details state", () => {
-  it("uses the protocol detail count instead of recalculating it from a partial timeline", () => {
-    expect(
-      getThinkingDetailsCount({
-        role: "assistant",
-        turnScopeId: "turn-1",
-        thinkingDetailCount: 20,
-        toolTimeline: [{ key: "call:1" }, { key: "call:2" }],
-        toolCalls: [{ id: 3 }],
-        realtimeLogs: [{ event: "tool_call" }],
-      }),
-    ).toBe(20);
-  });
-
-  it("does not let a stale summary count hide newer canonical timeline events", () => {
+  it("counts only the canonical timeline and ignores a stale count field", () => {
     expect(
       getThinkingDetailsCount({
         role: "assistant",
@@ -70,36 +57,25 @@ describe("thinking details state", () => {
     ).toBe(0);
   });
 
-  it("counts summary thinking details when full log arrays are absent", () => {
+  it("counts zero when a summary message carries no canonical timeline", () => {
     expect(
       getThinkingDetailsCount({
         role: "assistant",
         turnScopeId: "turn-1",
         hasThinkingDetails: true,
-        thinkingDetailCount: 4,
       }),
-    ).toBe(4);
-  });
-
-  it("falls through empty normalized log arrays to summary thinking detail count", () => {
-    expect(
-      getThinkingDetailsCount({
-        role: "assistant",
-        turnScopeId: "turn-1",
-        hasThinkingDetails: true,
-        completedToolLogs: [],
-        realtimeLogs: [],
-        thinkingDetailCount: 4,
-      }),
-    ).toBe(4);
+    ).toBe(0);
   });
 
   it("builds a translated title with the derived count", () => {
     const translate = vi.fn((key, params) => `${key}:${params.count}`);
 
-    expect(getThinkingDetailsTitle({ thinkingDetailCount: 1 }, translate)).toBe(
-      "message.thinkingDetails:1",
-    );
+    expect(
+      getThinkingDetailsTitle(
+        { turnScopeId: "turn-1", toolTimeline: [{ key: "call:1", call: { eventId: "call-1" } }] },
+        translate,
+      ),
+    ).toBe("message.thinkingDetails:1");
     expect(translate).toHaveBeenCalledWith("message.thinkingDetails", { count: 1 });
   });
 
@@ -129,7 +105,6 @@ describe("thinking details state", () => {
       turnScopeId: "turn-1",
       content: "done",
       hasThinkingDetails: true,
-      thinkingDetailCount: 3,
     };
     const messages = [{ role: "user", content: "hi" }, summaryThinkingAssistant];
 
@@ -152,7 +127,6 @@ describe("thinking details state", () => {
       completedToolLogs: [{ id: 1 }],
       realtimeLogs: [{ event: "tool_call" }],
       hasThinkingDetails: true,
-      thinkingDetailCount: 3,
     };
     const messages = [{ role: "user", content: "hi" }, staleAssistant];
 

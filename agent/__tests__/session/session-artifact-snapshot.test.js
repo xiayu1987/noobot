@@ -27,9 +27,10 @@ test("snapshot reads the canonical Session artifact without read-time migration"
         aggregateVersion: 0,
         messages: [
           {
-            ...canonicalMessages([
-              { role: "assistant", presentationMessageId: "pm_fx1", content: "parsed" },
-            ])[0],
+            ...canonicalMessages(
+              [{ role: "assistant", presentationMessageId: "pm_fx1", content: "parsed" }],
+              "legacy-transfer-session",
+            )[0],
             transferEnvelopes: [
               {
                 protocol: "noobot.semantic-transfer",
@@ -83,18 +84,21 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
   withTemp(async (root) => {
     const required = createTestSessionRequiredFields();
     const turn = { dialogProcessId: "dialog-1", turnScopeId: "turn-1" };
-    const messages = canonicalMessages([
-      { role: "user", content: "read it", ...turn },
-      {
-        role: "assistant",
-        content: "",
-        chatPresentation: false,
-        tool_calls: [{ id: "call-1", type: "function", function: { name: "read_file" } }],
-        ...turn,
-      },
-      { role: "tool", content: "file", tool_call_id: "call-1", toolName: "read_file", ...turn },
-      { role: "assistant", content: "done", ...turn },
-    ]).map((message) => ({ ...message, summarized: false }));
+    const messages = canonicalMessages(
+      [
+        { role: "user", content: "read it", ...turn },
+        {
+          role: "assistant",
+          content: "",
+          chatPresentation: false,
+          tool_calls: [{ id: "call-1", type: "function", function: { name: "read_file" } }],
+          ...turn,
+        },
+        { role: "tool", content: "file", tool_call_id: "call-1", toolName: "read_file", ...turn },
+        { role: "assistant", content: "done", ...turn },
+      ],
+      "summary-marks-session",
+    ).map((message) => ({ ...message, summarized: false }));
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: applySessionMessageFacts({

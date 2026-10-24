@@ -24,7 +24,7 @@ function createProjection(messageItem) {
 
 describe("createThinkingAnalysisProjection", () => {
   it("keeps dedicated model analysis visible independently of final content", () => {
-    const message = { messageEventState: { finalContentSequence: 0 } };
+    const message = {};
     expect(createProjection(message).getLatestModelAnalysisLog(message)).toMatchObject({
       eventId: "activity-1",
     });

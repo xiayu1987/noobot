@@ -12,7 +12,7 @@ import {
   CONTEXT_CONTROL_MESSAGE_TYPES,
   CONTEXT_INJECTED_MESSAGE_TYPE,
 } from "@noobot/context-protocol/policy/injected-message";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, text } from "@noobot/shared/value";
 import { requireActiveModelContext } from "../active-model-context.js";
 
 function requireTurnContextStores({
@@ -96,7 +96,7 @@ export function appendUserInterjectionMessage({
   const turnScopeId = text(modelContext?.activeTurnIdentity?.turnScopeId);
   const messageUid = text(interjection?.messageUid);
   const content = text(interjection?.message);
-  const interjectionSequence = Number(interjection?.interjectionSequence || 0);
+  const { interjectionSequence, receivedAt } = interjection;
   requireTurnContextStores({
     turnMessageStore,
     modelContext,
@@ -106,6 +106,9 @@ export function appendUserInterjectionMessage({
   });
   if (!messageUid || !content)
     throw new TypeError("User interjection identity and content are required");
+  if (!Number.isInteger(interjectionSequence) || interjectionSequence <= 0)
+    throw new TypeError("User interjection sequence must be a positive integer");
+  if (!isCanonicalText(receivedAt)) throw new TypeError("User interjection receivedAt is required");
   const existing = turnMessageStore
     .toArray()
     .find((message = {}) => text(message.messageUid) === messageUid);
@@ -119,7 +122,7 @@ export function appendUserInterjectionMessage({
     injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
     noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
     content,
-    ts: String(interjection?.receivedAt || new Date().toISOString()),
+    ts: receivedAt,
     interjectionSequence,
     dialogProcessId,
     turnScopeId,

@@ -133,7 +133,14 @@ test("session turns preserve non-contiguous scopes without reordering and reject
           ...createTestSessionRequiredFields(),
           sessionId: "missing-turn-identity",
           aggregateVersion: 0,
-          messages: [{ messageUid: "sm_missing_turn", role: "user", content: "invalid" }],
+          messages: [
+            {
+              sessionId: "missing-turn-identity",
+              messageUid: "sm_missing_turn",
+              role: "user",
+              content: "invalid",
+            },
+          ],
         },
       }),
       { code: "SESSION_TURN_IDENTITY_REQUIRED" },

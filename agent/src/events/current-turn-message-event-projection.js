@@ -13,6 +13,7 @@ import {
   reduceCanonicalToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
 import { resolveMessageEventModelMessageId } from "@noobot/event-protocol/message-event";
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
@@ -71,16 +72,9 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
           toolTimeline: reduceCanonicalToolTimeline(currentTimeline, envelope),
           ...(transferEnvelopes.length
             ? {
-                transferEnvelopes: [
-                  ...(Array.isArray(owner.transferEnvelopes) ? owner.transferEnvelopes : []),
-                  ...transferEnvelopes,
-                ].filter(
-                  (item, index, all) =>
-                    all.findIndex(
-                      (candidate) =>
-                        text(candidate?.transferId) === text(item?.transferId) &&
-                        text(candidate?.messageId) === text(item?.messageId),
-                    ) === index,
+                transferEnvelopes: mergeTransferEnvelopes(
+                  owner.transferEnvelopes,
+                  transferEnvelopes,
                 ),
               }
             : {}),

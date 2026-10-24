@@ -18,12 +18,13 @@ import {
   isFinalizeRequestTurnEvent,
   isSettlingTurnEvent,
   isTerminalTurnState,
+  MESSAGE_REMOVED_FIELD_NAME,
   normalizeTurnContinuationSource,
   normalizeTurnFailure,
   normalizeTurnTerminalStatus,
   validateExecutionIdentity,
 } from "@noobot/session-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
 const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
@@ -63,7 +64,7 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
   const phase = text(input.phase);
   const executionIdentity = pickExecutionIdentity(identitySource);
   const presentationMessageId = text(identitySource.presentationMessageId);
-  const dialogProcessId = text(identitySource.dialogProcessId);
+  const dialogProcessId = identitySource.dialogProcessId;
   const action = resolveRequestAction(eventType, input, current);
   const continuationSource = normalizeTurnContinuationSource(identitySource.continuationSource);
   return {
@@ -90,7 +91,7 @@ const STORED_IDENTITY_CONFLICTS = Object.freeze([
 function findStoredIdentityConflict(input, current) {
   const conflict = STORED_IDENTITY_CONFLICTS.find(([field]) => {
     const proposed = text(input[field]);
-    return current[field] && proposed && proposed !== current[field];
+    return proposed && proposed !== current[field];
   });
   return conflict ? conflict[1] : "";
 }
@@ -100,8 +101,12 @@ function validateRequestIdentity(request) {
   if (!turnScopeId || !commandId || !text(input.causationId) || !eventType) {
     return "invalid_lifecycle_identity";
   }
+  if (Object.hasOwn(input, MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID)) {
+    return "turn_message_id_noncanonical";
+  }
   if (lifecycle.replacedTurns[turnScopeId]) return "turn_replaced";
   if (!request.presentationMessageId) return "turn_message_identity_incomplete";
+  if (!isCanonicalText(request.dialogProcessId)) return "missing_dialog_process_id";
   if (!current) return text(input.startedAt) ? "" : "turn_started_at_missing";
   return findStoredIdentityConflict(input, current);
 }

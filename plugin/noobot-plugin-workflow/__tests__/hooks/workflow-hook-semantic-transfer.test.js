@@ -17,6 +17,10 @@ import {
   createTestHookInvocation,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
+
+const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 test("workflow hook uses injected sub-session strategy and marks workflow message", async () => {
   const hookManager = createMockBotHookManager();
@@ -196,7 +200,9 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(workflowTurnMessage?.chatPresentation, true);
   assert.equal(workflowTurnMessage?.presentationMessageId, "assistant-presentation-1");
   assert.match(workflowTurnMessage?.modelMessageId, /^mm_[0-9a-f-]{36}$/);
-  assert.equal(workflowTurnMessage?.messageId, undefined);
+  assert.ok(workflowTurnMessage.messageUid);
+  assert.doesNotThrow(() => assertAgentTurnResult(agentResult));
+  assert.equal(workflowTurnMessage?.[LEGACY_MESSAGE_ID], undefined);
   assert.equal(agentResult?.modelMessageId, workflowTurnMessage.modelMessageId);
   assert.equal(workflowTurnMessage?.attachments, undefined);
   assert.equal(

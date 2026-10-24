@@ -27,8 +27,6 @@ describe("messageModel conversation folding", () => {
               name: "previous.md",
             },
           ],
-          realtimeLogs: [{ text: "previous tool log" }],
-          completedToolLogs: [{ text: "previous completed tool" }],
           tool_calls: [{ id: "tool-prev" }],
           executionLogTotal: 1,
         },
@@ -38,21 +36,19 @@ describe("messageModel conversation folding", () => {
           dialogProcessId: "dp-same-until-stream-arrives",
           pending: true,
           attachments: [],
-          realtimeLogs: [],
-          completedToolLogs: [],
           tool_calls: [],
           executionLogTotal: 0,
           terminalOutcome: "",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(2);
     expect(messages[1].pending).toBe(true);
     expect(messages[1].attachments).toEqual([]);
-    expect(messages[1].toolTimeline).toEqual([]);
-    expect(messages[1].activityTimeline).toEqual([]);
+    expect(messages[1]).not.toHaveProperty("toolTimeline");
+    expect(messages[1]).not.toHaveProperty("activityTimeline");
     expect(messages[1].tool_calls).toEqual([]);
     expect(messages[1].terminalOutcome).toBe("");
   });
@@ -99,7 +95,7 @@ describe("messageModel conversation folding", () => {
           executionLogTotal: 2,
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(1);
@@ -135,7 +131,7 @@ describe("messageModel conversation folding", () => {
           turnScopeId: "client-turn:render-1",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
 
     expect(messages).toHaveLength(2);

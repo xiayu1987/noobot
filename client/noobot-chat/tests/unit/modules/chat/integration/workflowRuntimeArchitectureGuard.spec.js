@@ -45,7 +45,6 @@ describe("workflow runtime architecture guard", () => {
     const merge = source("src/modules/chat/model/sessionDetailMerge.js");
     const subSessions = source("src/modules/chat/stores/chatStoreSubSessions.js");
     const reconnectModel = source("src/modules/chat/model/reconnectReplayModel.js");
-    const reconnectReplay = source("src/modules/chat/runtime/reconnect/messageReplay.js");
     const thinkingDetailsPanel = source("src/app/composables/useThinkingDetailsPanel.js");
     const thinkingPresentation = source(
       "src/modules/chat/composables/thinkingPanelPresentation.js",
@@ -65,8 +64,6 @@ describe("workflow runtime architecture guard", () => {
     expect(subSessions).not.toMatch(/findIndex\([^)]*(?:turnScopeId|dialogProcessId|role)/s);
     expect(subSessions).not.toMatch(/message\??\.(?:messageId|id)\b/);
     expect(reconnectModel).not.toMatch(/byTurnScopeId/);
-    expect(reconnectModel).toMatch(/presentationMessageId/);
-    expect(reconnectReplay).not.toMatch(/messageItem\?\.(?:messageId|id)\).*nextMessageId/s);
     expect(thinkingDetailsPanel).not.toMatch(/leftTurnScopeId|leftDialogProcessId/);
     expect(thinkingDetailsPanel).toMatch(/leftPresentationMessageId/);
     expect(thinkingPresentation).not.toMatch(/toolLogIndex.*toolLogItem\?\.ts/s);
@@ -128,9 +125,7 @@ describe("workflow runtime architecture guard", () => {
     expect(violations).toEqual([]);
 
     const hydration = source("src/modules/chat/runtime/reconnect/hydrationReplay.js");
-    expect(hydration).not.toMatch(
-      /findAssistantMessageByDialogProcessId|findLatestPendingAssistantAfterLastUser|getMessageRole/,
-    );
+    expect(hydration).not.toMatch(/findAssistantMessageByDialogProcessId|getMessageRole/);
   });
 
   it("forbids DONE snapshots from becoming a canonical message projection entry", () => {

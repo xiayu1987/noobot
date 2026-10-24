@@ -9,6 +9,7 @@ import {
   makeSession,
   makeTurnReplacementResponse,
   emitAuthorityProcessing,
+  serverTurnSource,
 } from "../helpers/useChatEngineHarness.js";
 import {
   AGENT_CHANNEL_STATE,
@@ -99,7 +100,7 @@ describe("useChatEngine.resend replace turn", () => {
 
   it("resendMonotonicMessage continues generation after atomic replace-turn returns user-only snapshot", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-server"));
     });
     const deleteSessionMessagesFromApi = vi.fn();
     const removeWorkflowOwnersForReplacedTurns = vi.fn(() => ({
@@ -212,13 +213,15 @@ describe("useChatEngine.resend replace turn", () => {
         message.role === RoleEnum.ASSISTANT && /^pm_/.test(message.presentationMessageId),
     );
     expect(canonicalAssistantIndex).toBeGreaterThan(replacementUserIndex);
-    expect(activeSession.value.messages[canonicalAssistantIndex].turnPlaceholder).toBe(false);
+    expect(activeSession.value.messages[canonicalAssistantIndex]).not.toHaveProperty(
+      "turnPlaceholder",
+    );
     expect(input.value).toBe("");
   });
 
   it("resendMonotonicMessage sends edited attachment set to replace-turn and stream payload", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
-      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-server"));
     });
     const keptAttachment = {
       attachmentId: "kept",

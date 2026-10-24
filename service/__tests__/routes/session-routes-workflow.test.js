@@ -91,6 +91,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
       ],
       messages: [
         {
+          sessionId: "node-s",
           messageUid: "workflow-message-1",
           modelMessageId: "workflow-model-message-1",
           presentationMessageId: "pm_wf_node_1",

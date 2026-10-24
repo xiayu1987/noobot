@@ -18,13 +18,19 @@ import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 export const SNAPSHOT_VERSION = 5;
-const IDENTITY_FIELDS = [
+const IDENTITY_FIELDS = Object.freeze([
   "userId",
   "sessionId",
   "parentSessionId",
   "dialogProcessId",
   "turnScopeId",
-];
+]);
+export const SNAPSHOT_REQUIRED_IDENTITY_FIELDS = Object.freeze([
+  "userId",
+  "sessionId",
+  "dialogProcessId",
+  "turnScopeId",
+]);
 
 const NATIVE_TOP_LEVEL_KEYS = new Set(CONTEXT_MESSAGE_NATIVE_FIELDS);
 
@@ -149,7 +155,7 @@ export function createModelContextSnapshot({
 
 function assertModelContextSnapshotIdentity(snapshot = {}, identity = {}) {
   const normalized = normalizeSnapshotIdentity(identity);
-  for (const field of ["userId", "sessionId", "dialogProcessId", "turnScopeId"]) {
+  for (const field of SNAPSHOT_REQUIRED_IDENTITY_FIELDS) {
     if (text(snapshot?.[field]) !== normalized[field]) {
       throw new Error(`Stopped model message snapshot identity mismatch: ${field}`);
     }

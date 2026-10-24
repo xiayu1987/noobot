@@ -316,6 +316,7 @@ test("snapshot query completion cannot close a connection claimed by a concurren
           sessionId,
           turnScopeId,
           presentationMessageId: "presentation-query-run-race",
+          dialogProcessId: "dialog-query-run-race",
           revision: 1,
           sequence: 1,
           state: "processing",

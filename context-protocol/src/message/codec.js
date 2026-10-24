@@ -296,6 +296,9 @@ export function resolveContextInjectedMessageType(message = {}) {
 
 export const CONTEXT_MESSAGE_MODEL_METADATA_FIELDS = Object.freeze([
   ...IDENTITY_FIELDS,
+  "userName",
+  "sessionId",
+  "parentSessionId",
   "dialogProcessId",
   "parentDialogProcessId",
   "turnScopeId",

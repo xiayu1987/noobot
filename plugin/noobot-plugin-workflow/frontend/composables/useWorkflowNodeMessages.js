@@ -31,8 +31,8 @@ export function useWorkflowNodeMessages({
   function buildNodeViewMessage(messageItem = {}) {
     return normalizeNodeMessageForDisplay(
       buildViewMessage(messageItem, {
+        sessionId: selectedNodeSessionId.value,
         userId: props.userId,
-        isImageMime: props.isImageMime,
       }),
     );
   }
@@ -99,10 +99,7 @@ export function useWorkflowNodeMessages({
     (Array.isArray(normalizedNodeSessionMessages.value)
       ? normalizedNodeSessionMessages.value
       : []
-    ).map((messageItem = {}) => ({
-      ...normalizeNodeMessageForDisplay(messageItem),
-      sessionId: text(messageItem?.sessionId || selectedNodeSessionId.value),
-    })),
+    ).map((messageItem) => normalizeNodeMessageForDisplay(messageItem)),
   );
 
   function summarizeMessage(messageItem = {}) {

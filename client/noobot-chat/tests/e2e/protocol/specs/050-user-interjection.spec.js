@@ -342,7 +342,7 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
       persistedInterjections.every((interjection) =>
         invocation.data.messages.preview.some(
           (message) =>
-            message.messageId === interjection.messageUid &&
+            message.messageUid === interjection.messageUid &&
             message.injectedMessageType === INTERJECTION_TYPE &&
             message.contentPreview === interjection.content,
         ),

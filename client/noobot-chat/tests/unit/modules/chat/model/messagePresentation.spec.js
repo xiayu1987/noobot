@@ -113,7 +113,7 @@ describe("message presentation status steps", () => {
           projectedStatusStepState: "completing",
         },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
     expect(refreshedRunningMessages).toHaveLength(1);
     expect(
@@ -127,7 +127,7 @@ describe("message presentation status steps", () => {
         { ...identity, content: "partial", projectedStatusStepState: "completing" },
         { ...identity, content: "done", projectedStatusStepState: "completed" },
       ],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
     expect(continuedMessages).toHaveLength(1);
     expect(continuedMessages[0].content).toContain("partial");
@@ -140,7 +140,7 @@ describe("message presentation status steps", () => {
 
     const lateRunningFragment = foldConversationMessages(
       [continuedMessages[0], { ...identity, content: "", projectedStatusStepState: "completing" }],
-      buildViewMessage,
+      (message) => buildViewMessage(message, { sessionId: "session-1" }),
     );
     expect(lateRunningFragment).toHaveLength(1);
     expect(lateRunningFragment[0].projectedStatusStepState).toBe("completed");

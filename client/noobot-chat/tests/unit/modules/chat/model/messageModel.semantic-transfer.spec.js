@@ -41,19 +41,22 @@ const envelope = {
 
 describe("messageModel attachments and semantic transfer", () => {
   it("preserves the attachment protocol identity independently from its owning message", () => {
-    const message = buildViewMessage({
-      role: "user",
-      sessionId: "session-1",
-      attachments: [
-        {
-          attachmentId: "source-att",
-          sessionId: "session-1",
-          attachmentSource: "user",
-          name: "source.docx",
-          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        },
-      ],
-    });
+    const message = buildViewMessage(
+      {
+        role: "user",
+        sessionId: "session-1",
+        attachments: [
+          {
+            attachmentId: "source-att",
+            sessionId: "session-1",
+            attachmentSource: "user",
+            name: "source.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        ],
+      },
+      { sessionId: "session-1" },
+    );
 
     expect(message.attachments[0]).toMatchObject({
       attachmentId: "source-att",
@@ -63,20 +66,23 @@ describe("messageModel attachments and semantic transfer", () => {
   });
 
   it("projects ordinary attachments independently from semantic transfer envelopes", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "done",
-      attachments: [
-        {
-          attachmentId: "ordinary-1",
-          sessionId: "s1",
-          attachmentSource: "test",
-          name: "input.md",
-          mimeType: "text/plain",
-        },
-      ],
-      transferEnvelopes: [envelope],
-    });
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        content: "done",
+        attachments: [
+          {
+            attachmentId: "ordinary-1",
+            sessionId: "s1",
+            attachmentSource: "test",
+            name: "input.md",
+            mimeType: "text/plain",
+          },
+        ],
+        transferEnvelopes: [envelope],
+      },
+      { sessionId: "s1" },
+    );
     expect(message.transferEnvelopes).toHaveLength(1);
     expect(message.attachments).toEqual(
       expect.arrayContaining([
@@ -87,11 +93,14 @@ describe("messageModel attachments and semantic transfer", () => {
   });
 
   it("restores V2 transfer attachment identity after refresh", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "done after refresh",
-      transferEnvelopes: [envelope],
-    });
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        content: "done after refresh",
+        transferEnvelopes: [envelope],
+      },
+      { sessionId: "s1" },
+    );
     expect(message.attachments).toEqual([
       expect.objectContaining({
         attachmentId: "att-1",
@@ -103,11 +112,14 @@ describe("messageModel attachments and semantic transfer", () => {
 
   it("rejects path-based transfer payloads without rebuilding an attachment", () => {
     expect(() =>
-      buildViewMessage({
-        role: "assistant",
-        content: "done",
-        transferEnvelopes: [{ ...envelope, filePath: "/legacy/result.md" }],
-      }),
+      buildViewMessage(
+        {
+          role: "assistant",
+          content: "done",
+          transferEnvelopes: [{ ...envelope, filePath: "/legacy/result.md" }],
+        },
+        { sessionId: "s1" },
+      ),
     ).toThrow("invalid_transfer_envelope:forbidden_path_field:envelope.filePath");
   });
 
@@ -144,7 +156,7 @@ describe("messageModel attachments and semantic transfer", () => {
           },
         ],
       },
-      { userId: "admin" },
+      { sessionId: "s1", userId: "admin" },
     );
 
     expect(message.attachments).toHaveLength(1);
@@ -173,7 +185,7 @@ describe("messageModel attachments and semantic transfer", () => {
           },
         ],
       },
-      { userId: "admin" },
+      { sessionId: "s1", userId: "admin" },
     );
 
     expect(message.attachments[0]).toMatchObject({
@@ -187,18 +199,21 @@ describe("messageModel attachments and semantic transfer", () => {
   });
 
   it("keeps canonical attachments after refresh", () => {
-    const message = buildViewMessage({
-      role: "user",
-      content: "source",
-      attachments: [
-        {
-          attachmentId: "attachment-1",
-          sessionId: "s1",
-          attachmentSource: "test",
-          name: "source.pdf",
-        },
-      ],
-    });
+    const message = buildViewMessage(
+      {
+        role: "user",
+        content: "source",
+        attachments: [
+          {
+            attachmentId: "attachment-1",
+            sessionId: "s1",
+            attachmentSource: "test",
+            name: "source.pdf",
+          },
+        ],
+      },
+      { sessionId: "s1" },
+    );
 
     expect(message.attachments).toHaveLength(1);
     expect(message.attachments[0]).toMatchObject({
@@ -208,18 +223,21 @@ describe("messageModel attachments and semantic transfer", () => {
   });
 
   it("does not restore attachment metadata from legacy snake_case attachment_metas", () => {
-    const message = buildViewMessage({
-      role: "user",
-      content: "source",
-      attachment_metas: [
-        {
-          attachmentId: "snake-1",
-          sessionId: "s1",
-          attachmentSource: "test",
-          name: "snake.pdf",
-        },
-      ],
-    });
+    const message = buildViewMessage(
+      {
+        role: "user",
+        content: "source",
+        attachment_metas: [
+          {
+            attachmentId: "snake-1",
+            sessionId: "s1",
+            attachmentSource: "test",
+            name: "snake.pdf",
+          },
+        ],
+      },
+      { sessionId: "s1" },
+    );
 
     expect(message.attachments).toEqual([]);
   });

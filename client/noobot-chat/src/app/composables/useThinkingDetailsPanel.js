@@ -15,6 +15,7 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
+  getMessageSessionId,
 } from "../../modules/chat/model/messageIdentity.js";
 import {
   getCachedThinkingDetail,
@@ -22,6 +23,7 @@ import {
   resolveThinkingDetailIdentity,
 } from "../../modules/chat/model/thinkingDetailCache.js";
 import { selectToolTimelineCount } from "../../modules/chat/runtime/engine/toolTimeline.js";
+import { selectThinkingDetailCount } from "../../modules/chat/model/thinkingDetailCount.js";
 import { selectActivityTimelineLogs } from "../../modules/chat/runtime/engine/activityTimeline.js";
 import { selectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
 import { logThinkingReplayDebug } from "../../modules/debug/loggers/thinkingReplayDebugLogger.js";
@@ -53,7 +55,7 @@ function summarizeThinkingTimeline(messageItem = {}) {
     turnScopeId: getMessageTurnScopeId(messageItem),
     pending: messageItem?.pending === true,
     hasThinkingDetails: messageItem?.hasThinkingDetails === true,
-    thinkingDetailCount: Number(messageItem?.thinkingDetailCount || 0),
+    thinkingDetailCount: selectThinkingDetailCount(messageItem),
     activityTimelineCount: selectActivityTimelineLogs(messageItem).length,
     thinkingContentCount: selectThinkingDetailContentTimeline(messageItem).length,
     toolTimelineCount: selectToolTimelineCount(messageItem),
@@ -76,7 +78,7 @@ function timelineRevision(messageItem = {}) {
   const thinkingContents = selectThinkingDetailContentTimeline(messageItem);
   const lastThinkingContent = thinkingContents.at(-1) || {};
   return [
-    Number(messageItem?.messageEventState?.lastSequence || 0),
+    messageItem.messageEventState.lastSequence,
     tools.length,
     lastTool?.resultEvent?.eventId || lastTool?.call?.eventId || "",
     activities.length,
@@ -135,7 +137,7 @@ export function useThinkingDetailsPanel({
     const turnScopeId = text(messageItem?.turnScopeId);
     if (!dialogProcessId && !turnScopeId) return null;
     return loadThinkingDetail({
-      sessionId: activeSessionId?.value,
+      sessionId: getMessageSessionId(messageItem),
       messageItem,
       fetchThinkingDetail: currentFetchDetail,
       expectedRevision: expectedThinkingDetailRevision(messageItem),
@@ -157,14 +159,16 @@ export function useThinkingDetailsPanel({
   function buildDetailWatchKey() {
     if (!thinkingDetailsVisible.value) return "";
     const messageItem = thinkingDetailsMessageItem.value || {};
-    const sourceMessage = findActiveCanonicalMessage(messageItem) || {};
+    const sourceMessage = findActiveCanonicalMessage(messageItem);
+    const sourceKey =
+      sourceMessage === null
+        ? ["detached"]
+        : [sourceMessage.pending === true ? "pending" : "done", timelineRevision(sourceMessage)];
     return [
-      activeSessionId?.value,
+      getMessageSessionId(messageItem),
       normalizeDialogProcessId(messageItem),
       getMessageTurnScopeId(messageItem),
-      sourceMessage?.pending === true ? "pending" : "done",
-      Number(sourceMessage?.thinkingDetailCount || 0),
-      timelineRevision(sourceMessage),
+      ...sourceKey,
     ].join("::");
   }
 
@@ -191,7 +195,7 @@ export function useThinkingDetailsPanel({
     const needsFullDetail = Boolean(initialMessageItem && !usesLiveSession);
     const cachedIdentity = resolveThinkingDetailIdentity(
       initialMessageItem,
-      activeSessionId?.value,
+      getMessageSessionId(initialMessageItem),
     );
     const expectedRevision = expectedThinkingDetailRevision(initialMessageItem);
     const cachedCandidate = getCachedThinkingDetail(cachedIdentity);

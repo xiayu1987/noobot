@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { validateModelResponse } from "@noobot/model-protocol";
 import { requireCapabilityActivity } from "@noobot/plugin-protocol";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
@@ -31,21 +30,19 @@ export function createCapabilityModelStep({
         activityEventType: MESSAGE_EVENT_TYPE.THINKING,
         streaming,
       });
-    const response = validateModelResponse(
-      await modelPort.invoke({
-        model,
-        messages,
-        ...(binding ? { tools: binding.tools } : {}),
-        options: {
-          streaming,
-          signal,
-          headers: identity.headers,
-          ...(binding ? { toolBinding: binding.options } : {}),
-          callbacks: modelActivity ? modelActivity.callbacks : undefined,
-        },
-        invocation: identity.invocation,
-      }),
-    );
+    const response = await modelPort.invoke({
+      model,
+      messages,
+      ...(binding ? { tools: binding.tools } : {}),
+      options: {
+        streaming,
+        signal,
+        headers: identity.headers,
+        ...(binding ? { toolBinding: binding.options } : {}),
+        callbacks: modelActivity ? modelActivity.callbacks : undefined,
+      },
+      invocation: identity.invocation,
+    });
     return {
       response,
       async complete() {

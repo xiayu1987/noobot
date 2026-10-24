@@ -653,6 +653,7 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
       messages: [
         {
           messageUid: "sm_attachment_source",
+          sessionId: rootSessionId,
           role: "user",
           content: "test",
           dialogProcessId: "dialog-attachment-source",

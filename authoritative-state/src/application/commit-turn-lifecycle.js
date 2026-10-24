@@ -14,16 +14,16 @@ import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 import { transitionTurnLifecycle } from "../domain/turn-lifecycle-entity.js";
 import { text as clean } from "@noobot/shared/value";
 
-export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, eventId = "" } = {}) {
+export function createCommittedTurnLifecycleEnvelope({ event, turn, eventId, parentSessionId }) {
   const payload = createTurnLifecycleEnvelope({
     eventType: event.eventType,
-    eventId: clean(eventId || event.eventId),
+    eventId,
     commandId: turn.commandId,
     causationId: event.causationId,
     correlationId: turn.turnScopeId,
     userId: event.userId,
     sessionId: event.sessionId,
-    parentSessionId: event.parentSessionId,
+    parentSessionId,
     turnScopeId: turn.turnScopeId,
     presentationMessageId: turn.presentationMessageId,
     dialogProcessId: turn.dialogProcessId,
@@ -59,6 +59,7 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
 export function commitTurnLifecycle({
   lifecycle = {},
   event = {},
+  parentSessionId,
   isCommittedEventId,
   materializeTerminal,
   createEventId,
@@ -75,10 +76,12 @@ export function commitTurnLifecycle({
     return { applied: false, reason: "unexpected_turn_terminal_status", lifecycle };
 
   if (requestedTerminal) {
+    const settlingTurn = lifecycle.turns[event.turnScopeId];
+    if (!settlingTurn) return { applied: false, reason: "turn_not_found", lifecycle };
     const terminalStatus = createTurnTerminalStatus(requestedTerminal.command, {
       ...requestedTerminal,
       turnScopeId: event.turnScopeId,
-      dialogProcessId: event.dialogProcessId,
+      dialogProcessId: settlingTurn.dialogProcessId,
       updatedAt: clean(event.finishedAt) || now(),
     });
     if (!terminalStatus)
@@ -89,7 +92,7 @@ export function commitTurnLifecycle({
     terminalMaterialization = materializeTerminal({
       event,
       terminalStatus,
-      previousSummaryVersion: Number(lifecycle?.turns?.[event.turnScopeId]?.summaryVersion || 0),
+      previousSummaryVersion: settlingTurn.summaryVersion,
     });
     if (
       !terminalMaterialization?.materialized ||
@@ -129,7 +132,12 @@ export function commitTurnLifecycle({
   if (typeof isCommittedEventId === "function" && isCommittedEventId(eventId) === true) {
     return { applied: false, reason: "event_id_conflict", lifecycle };
   }
-  const envelope = createCommittedTurnLifecycleEnvelope({ event: lifecycleEvent, turn, eventId });
+  const envelope = createCommittedTurnLifecycleEnvelope({
+    event: lifecycleEvent,
+    turn,
+    eventId,
+    parentSessionId,
+  });
   applied.lifecycle.commandReceipts = appendCommandReceipt(applied.lifecycle.commandReceipts, {
     ...receiptDraft,
     eventId,

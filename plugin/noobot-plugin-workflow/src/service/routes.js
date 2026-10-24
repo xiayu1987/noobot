@@ -20,7 +20,7 @@ function mergeSessionSnapshotBody(session, sessionSummary) {
     sessionId: _sessionId,
     parentSessionId: _parentSessionId,
     ...snapshot
-  } = { ...session, ...sessionSummary, messages: session.messages };
+  } = { ...session, ...sessionSummary };
   return snapshot;
 }
 

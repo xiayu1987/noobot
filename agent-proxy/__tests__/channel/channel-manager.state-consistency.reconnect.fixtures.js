@@ -56,7 +56,7 @@ export function authoritativeLifecycle(fields = {}) {
     commandId: fields.commandId || `command-${fields.eventId}`,
     userId: fields.userId || "user-1",
     sessionId: fields.sessionId,
-    parentSessionId: fields.parentSessionId,
+    parentSessionId: fields.parentSessionId ?? "",
     turnScopeId: fields.turnScopeId,
     presentationMessageId: fields.presentationMessageId || `presentation-${fields.eventId}`,
     dialogProcessId: fields.dialogProcessId || `dialog-${fields.eventId}`,

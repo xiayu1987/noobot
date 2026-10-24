@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { normalizeSnapshotIdentity } from "@noobot/context-protocol/policy/snapshot";
 import { assertModelMessageSnapshot } from "./snapshot-assertions.js";
 import {
   addAttachment,
@@ -74,6 +75,10 @@ export async function assertPersistedSnapshots(userId, sessionId, count) {
   expect(snapshots).toHaveLength(count);
   snapshots.forEach(assertModelMessageSnapshot);
   return snapshots;
+}
+
+export function expectedSnapshotIdentity(userId, identity) {
+  return normalizeSnapshotIdentity({ ...identity, userId });
 }
 
 export async function resendAndStop({

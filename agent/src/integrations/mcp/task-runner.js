@@ -121,8 +121,8 @@ export async function executeMcpTask({
     });
     const output = ai.output;
     await modelActivity.complete(output.text);
-    messages.push({ role: "assistant", content: output.text, tool_calls: output.toolCalls || [] });
-    const calls = Array.isArray(output.toolCalls) ? output.toolCalls : [];
+    messages.push({ role: "assistant", content: output.text, tool_calls: output.toolCalls });
+    const calls = output.toolCalls;
     if (!calls.length) {
       return {
         ok: true,
