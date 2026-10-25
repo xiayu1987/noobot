@@ -26,10 +26,6 @@ export const WORKFLOW_HOOKS = Object.freeze({
   AFTER_SESSION_DELETE_LISTENER_ID: "workflow_after_session_delete",
 });
 
-export const WORKFLOW_ACTION = Object.freeze({
-  SUBMIT: "submit",
-});
-
 export const WORKFLOW_PLUGIN_DEFAULTS = Object.freeze({
   MODE_OFF: "off",
   MODE_ON: "on",

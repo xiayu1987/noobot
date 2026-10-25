@@ -23,6 +23,8 @@ import {
 import { projectSessionAttachmentState } from "./session-attachment-projection.js";
 import { text } from "@noobot/shared/value";
 
+function ignoreSummaryProgress() {}
+
 export class SessionCrudService {
   constructor({
     sessionRepo,
@@ -273,12 +275,13 @@ export class SessionCrudService {
     };
   }
 
-  async maintainSessionDisplaySummaries({ userId }) {
+  async maintainSessionDisplaySummaries({ userId, onProgress = ignoreSummaryProgress }) {
     await this.sessionRepo.ensureSessionsSummarySchema(userId);
     const sessionIds = await this.listSessionIds({ userId });
     const rebuiltSessionIds = [];
     const failures = [];
-    for (const sessionId of sessionIds) {
+    for (const [index, sessionId] of sessionIds.entries()) {
+      onProgress({ sessionIndex: index + 1, sessionCount: sessionIds.length });
       try {
         const result = await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, {
           persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),

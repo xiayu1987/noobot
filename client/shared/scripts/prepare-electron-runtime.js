@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { cp, mkdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
@@ -52,6 +52,15 @@ async function copyIfExists(from, to, options = {}) {
   return true;
 }
 
+const UNBUNDLED_WORKSPACE_IMPORT =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:@noobot\/|noobot-)[^"']*["']/;
+
+async function assertWorkspacePackagesBundled(bundlePath) {
+  const source = await readFile(bundlePath, "utf8");
+  const match = source.match(UNBUNDLED_WORKSPACE_IMPORT);
+  if (match) fail(`Bundled Electron main still imports a workspace package: ${match[0]}`);
+}
+
 async function main() {
   await assertExists(entryPoint, "Electron main entry");
   await assertExists(preloadSource, "Electron preload source");
@@ -87,6 +96,7 @@ async function main() {
   if (copiedFallback) log(`Copied startup fallback: ${startupFallbackSource}`);
 
   await assertExists(path.join(outRoot, "main.js"), "Bundled Electron main");
+  await assertWorkspacePackagesBundled(path.join(outRoot, "main.js"));
   await assertExists(path.join(outRoot, "preload.cjs"), "Bundled Electron preload");
   log(`Prepared Electron runtime: ${outRoot}`);
 }

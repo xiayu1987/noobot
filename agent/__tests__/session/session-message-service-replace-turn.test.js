@@ -68,6 +68,7 @@ function baseSession(overrides = {}) {
         sessionId: "s1",
         role: "user",
         content: "old",
+        error: "old failure",
         dialogProcessId: "dp-old",
         turnScopeId: "scope-old",
       },
@@ -190,6 +191,7 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].messages[1].turnId, undefined);
   assert.match(saved[0].messages[1].messageUid, /^sm_/);
   assert.equal(Object.hasOwn(saved[0].messages[1], "messageId"), false);
+  assert.equal(Object.hasOwn(saved[0].messages[1], "error"), false);
   assert.match(saved[0].messages[1].userMessageId, /^um_/);
   assert.equal("id" in saved[0].messages[1], false);
   assert.equal(saved[0].messages[1].turnScopeId, "turn-scope-new");

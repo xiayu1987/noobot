@@ -29,6 +29,7 @@ import { upgradeSessionTransferEnvelopes } from "./session-transfer-envelope-upg
 import { upgradeModelContextSnapshots } from "./model-context-snapshot-upgrade.js";
 import { upgradeSessionMessageIdentity } from "./session-message-identity-upgrade.js";
 import { releaseQuarantinedUnits } from "./migration-quarantine.js";
+import { ignoreSessionProgress } from "./session-directory-walk.js";
 
 const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE]: upgradeSessionStorage,
@@ -88,15 +89,37 @@ async function writeLayoutVersion(base, version) {
   await writeConfigDocumentText(statePath, renderWorkspaceLayoutState({ version }));
 }
 
-export async function upgradeWorkspaceLayout({ base, backupBase, created, scopedSessionRoots }) {
+function createUpgradeProgress(reportProgress, { upgradeId, upgradeIndex, upgradeCount }) {
+  let processedSessions = 0;
+  const report = () => reportProgress({ upgradeId, upgradeIndex, upgradeCount, processedSessions });
+  report();
+  return () => {
+    processedSessions += 1;
+    report();
+  };
+}
+
+export async function upgradeWorkspaceLayout({
+  base,
+  backupBase,
+  created,
+  scopedSessionRoots,
+  reportProgress = ignoreSessionProgress,
+}) {
   const installedVersion = await readInstalledLayoutVersion(base, created);
   const applied = [];
-  for (const upgrade of planWorkspaceLayoutUpgrades({ installedVersion })) {
+  const upgrades = planWorkspaceLayoutUpgrades({ installedVersion });
+  for (const [index, upgrade] of upgrades.entries()) {
     try {
       const result = await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({
         base,
         backupBase,
         scopedSessionRoots,
+        onSessionProcessed: createUpgradeProgress(reportProgress, {
+          upgradeId: upgrade.id,
+          upgradeIndex: index + 1,
+          upgradeCount: upgrades.length,
+        }),
       });
       await writeLayoutVersion(base, upgrade.toVersion);
       applied.push({ id: upgrade.id, toVersion: upgrade.toVersion, result });
@@ -113,11 +136,13 @@ export async function upgradeWorkspaceLayout({ base, backupBase, created, scoped
   if (created || !(await pathExists(statePath))) {
     await writeLayoutVersion(base, WORKSPACE_LAYOUT_VERSION);
   }
-  applied.push(...(await retryQuarantinedUnits({ base, backupBase, scopedSessionRoots })));
+  applied.push(
+    ...(await retryQuarantinedUnits({ base, backupBase, scopedSessionRoots, reportProgress })),
+  );
   return applied;
 }
 
-async function retryQuarantinedUnits({ base, backupBase, scopedSessionRoots }) {
+async function retryQuarantinedUnits({ base, backupBase, scopedSessionRoots, reportProgress }) {
   const retried = [];
   for (const owner of QUARANTINE_RETRY_OWNERS) {
     const key = `${base}\u0000${owner}`;
@@ -127,7 +152,16 @@ async function retryQuarantinedUnits({ base, backupBase, scopedSessionRoots }) {
     try {
       const released = await releaseQuarantinedUnits({ base, kind: owner });
       if (!released.length) continue;
-      const result = await LAYOUT_UPGRADE_HANDLERS[owner]({ base, backupBase, scopedSessionRoots });
+      const result = await LAYOUT_UPGRADE_HANDLERS[owner]({
+        base,
+        backupBase,
+        scopedSessionRoots,
+        onSessionProcessed: createUpgradeProgress(reportProgress, {
+          upgradeId: id,
+          upgradeIndex: 1,
+          upgradeCount: 1,
+        }),
+      });
       retried.push({ id, released, result });
     } catch (error) {
       retried.push({

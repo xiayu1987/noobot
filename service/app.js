@@ -13,8 +13,16 @@ import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
 import { prepareUserWorkspaces } from "./bootstrap/prepare-user-workspaces.js";
 import {
+  createThrottledProgressReporter,
+  startStartupHeartbeat,
+  writeStartupProgressEvent,
+} from "./bootstrap/startup-progress.js";
+import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
+  RUNTIME_EVENT_SCOPES,
+  SERVICE_STARTUP_EVENTS,
+  SERVICE_STARTUP_SOURCE,
   flushJsonLineBatches,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
@@ -87,11 +95,15 @@ async function shutdown(signal) {
 process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
+const stopStartupHeartbeat = startStartupHeartbeat();
 try {
+  const reportProgress = createThrottledProgressReporter({ write: writeStartupProgressEvent });
   const preparation = await prepareUserWorkspaces({
     userIds: await readSessionUserIds(),
     bot: getBot(),
+    reportProgress,
   });
+  reportProgress.flush();
   if (!shuttingDown) {
     httpServer = await startHttpServer({
       app,
@@ -108,25 +120,25 @@ try {
       port: startupContext.service.port,
     });
     await writeRuntimeEvent({
-      scope: "startup",
-      source: "service",
+      scope: RUNTIME_EVENT_SCOPES.STARTUP,
+      source: SERVICE_STARTUP_SOURCE,
       channel: RUNTIME_EVENT_CHANNELS.STARTUP,
       category: RUNTIME_EVENT_CATEGORIES.STATE,
       level: preparation.failures.length ? "error" : "info",
       event: preparation.failures.length
-        ? "service.startup.workspacePreparation.failed"
-        : "service.startup.workspacePreparation.completed",
+        ? SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_FAILED
+        : SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_COMPLETED,
       data: preparation,
     });
   }
 } catch (error) {
   const eventWrite = writeRuntimeEvent({
-    scope: "startup",
-    source: "service",
+    scope: RUNTIME_EVENT_SCOPES.STARTUP,
+    source: SERVICE_STARTUP_SOURCE,
     channel: RUNTIME_EVENT_CHANNELS.STARTUP,
     category: RUNTIME_EVENT_CATEGORIES.STATE,
     level: "error",
-    event: "service.startup.failed",
+    event: SERVICE_STARTUP_EVENTS.FAILED,
     data: {
       code: String(error?.code || ""),
       message: String(error?.message || error || ""),
@@ -135,4 +147,6 @@ try {
   await flushJsonLineBatches();
   await eventWrite;
   throw error;
+} finally {
+  stopStartupHeartbeat();
 }

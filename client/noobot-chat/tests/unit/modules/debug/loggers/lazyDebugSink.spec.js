@@ -8,9 +8,37 @@ import { buildSessionLogRecord } from "@noobot/runtime-events/session-log-protoc
 import {
   buildLazyDebugRecord,
   emitLazyDebug,
+  scopeSessionLogRecord,
 } from "../../../../../src/modules/debug/loggers/lazyDebugSink.js";
 
 describe("lazyDebugSink", () => {
+  it("scopes a hand-built record without an active session as a valid system record", () => {
+    const record = scopeSessionLogRecord({
+      category: "system",
+      event: "reconnect.failed",
+      sessionId: "",
+      dialogProcessId: "",
+      turnScopeId: "",
+      data: { event: "reconnect.failed" },
+    });
+    expect(record.scope).toBe("system");
+    expect(record).not.toHaveProperty("sessionId");
+    expect(record).not.toHaveProperty("dialogProcessId");
+    expect(() => buildSessionLogRecord({ ...record, source: "frontend" })).not.toThrow();
+  });
+
+  it("scopes a hand-built record with a session as a session record", () => {
+    const record = scopeSessionLogRecord({
+      category: "state",
+      event: "conversation.state",
+      sessionId: " s-1 ",
+      turnScopeId: "t-1",
+      data: {},
+    });
+    expect(record).toMatchObject({ scope: "session", sessionId: "s-1", turnScopeId: "t-1" });
+    expect(buildSessionLogRecord({ ...record, source: "frontend" }).sessionId).toBe("s-1");
+  });
+
   it("builds a session record from the payload's own session identity", () => {
     const record = buildLazyDebugRecord("stop", "stop.requested", {
       sessionId: " s-1 ",

@@ -13,6 +13,11 @@ import {
 } from "@noobot/session-protocol";
 import { migrateSessionDocument } from "../src/index.js";
 
+import { releasedSession } from "./helpers/released-session.js";
+
+function migrateReleased(fields) {
+  return migrateSessionDocument(releasedSession(fields));
+}
 const turnScopeId = "turn-orphaned";
 const finishedAt = "2026-10-11T10:22:52.927Z";
 
@@ -40,7 +45,7 @@ function orphanedTurn(extra = {}) {
 
 function migrationErrorCode(source) {
   try {
-    migrateSessionDocument(source);
+    migrateReleased(source);
   } catch (error) {
     return error.code;
   }
@@ -48,7 +53,7 @@ function migrationErrorCode(source) {
 }
 
 test("v10 migration rebuilds an orphan recovery terminalStatus from the protocol constant", () => {
-  const result = migrateSessionDocument(sessionWith(orphanedTurn()));
+  const result = migrateReleased(sessionWith(orphanedTurn()));
   const terminalStatus = result.document.turnLifecycle.turns[turnScopeId].terminalStatus;
   assert.equal(result.document.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
   assert.ok(result.migrations.includes("turn-terminal-status-protocol-v1"));
@@ -71,7 +76,7 @@ test("v10 migration keeps protocol terminal statuses unchanged", () => {
     description: "",
     updatedAt: finishedAt,
   };
-  const result = migrateSessionDocument(
+  const result = migrateReleased(
     sessionWith({ state: "completed", terminalStatus, failure: null }),
   );
   assert.deepEqual(result.document.turnLifecycle.turns[turnScopeId].terminalStatus, terminalStatus);
@@ -94,7 +99,7 @@ test("v10 migration rejects a non-protocol terminalStatus without an orphan reco
 
 test("v10 migration does not run for documents already at the current schema", () => {
   const source = sessionWith(orphanedTurn(), SESSION_ARTIFACT_SCHEMA_VERSION);
-  const result = migrateSessionDocument(source);
+  const result = migrateReleased(source);
   assert.deepEqual(
     result.document.turnLifecycle.turns[turnScopeId].terminalStatus,
     source.turnLifecycle.turns[turnScopeId].terminalStatus,
@@ -118,7 +123,7 @@ function v13Terminal(command, extra = {}) {
 }
 
 test("v14 migration rebuilds empty user_stopped description from the protocol constant", () => {
-  const result = migrateSessionDocument(sessionWith(terminalTurn(v13Terminal("user_stopped")), 13));
+  const result = migrateReleased(sessionWith(terminalTurn(v13Terminal("user_stopped")), 13));
   const terminalStatus = result.document.turnLifecycle.turns[turnScopeId].terminalStatus;
   assert.ok(result.migrations.includes("turn-terminal-description-v14"));
   assert.equal(terminalStatus.description, TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped);
@@ -130,7 +135,7 @@ test("v14 migration clears a completed terminal description", () => {
     ...v13Terminal("completed", { reason: "run_completed" }),
     description: "done",
   };
-  const result = migrateSessionDocument(sessionWith(terminalTurn(status), 13));
+  const result = migrateReleased(sessionWith(terminalTurn(status), 13));
   assert.equal(result.document.turnLifecycle.turns[turnScopeId].terminalStatus.description, "");
 });
 

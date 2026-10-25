@@ -5,7 +5,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
 import {
   advanceWorkflowInstance,
   createWorkflowInstance,
@@ -41,20 +40,6 @@ function resolvePlanningNodeIdentity({ planningNodeSessions, pendingStep }) {
     );
   }
   return matches[0];
-}
-
-function resolveWorkflowExecutionLimits(options = {}) {
-  const maxTransitions = Number.isFinite(Number(options?.maxAutoTransitions))
-    ? Math.max(1, Math.floor(Number(options.maxAutoTransitions)))
-    : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS;
-  const maxParallelNodeAgents = Number.isFinite(Number(options?.maxParallelNodeAgents))
-    ? Math.max(1, Math.floor(Number(options.maxParallelNodeAgents)))
-    : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS;
-  return {
-    maxTransitions,
-    maxParallelNodeAgents,
-    parallelEnabled: options?.parallelNodeExecution === true,
-  };
 }
 
 function resolveStepItemRefs(item) {
@@ -110,16 +95,7 @@ function rememberCompletedStepResult({ completedStepResults, item, semantic, tra
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep: refs.step });
   completedStepResults.set(refs.stepId, {
     transition: transitions,
-    nodeId: refs.step.nodeId,
-    nodeName: refs.step.nodeName,
     nodeTask: semanticNode.task,
-    actionNodeStateId: refs.actionNodeStateId,
-    stepId: refs.stepId,
-    stepIndex: refs.stepIndex,
-    workflowRunId: refs.workflowRunId,
-    nodeExecutionId: refs.nodeExecutionId,
-    commandId: refs.commandId,
-    turnScopeId: refs.turnScopeId,
     nodeSessionId: refs.nodeSessionId,
     transferEnvelopes: refs.transferEnvelopes,
   });
@@ -270,7 +246,6 @@ async function runWaveStep({
       options,
       ctx,
       signal,
-      instanceId,
       pendingStep: step,
       semantic,
       nodeIdentity,
@@ -299,13 +274,13 @@ async function runWaveStep({
 
 export async function runWorkflowExecution({
   hookManager,
-  options = {},
-  ctx = {},
+  options,
+  ctx,
   signal,
-  semantic = {},
-  workflowRunId = "",
+  semantic,
+  workflowRunId,
   nodeStateSnapshot,
-} = {}) {
+}) {
   const instanceId = text(workflowRunId);
   if (!instanceId) throw new Error("workflowRunId is required");
   if (nodeStateSnapshot?.workflowRunId !== instanceId) {
@@ -325,8 +300,11 @@ export async function runWorkflowExecution({
       dialogProcessId: text(ctx?.dialogProcessId),
     },
   });
-  const { maxTransitions, maxParallelNodeAgents, parallelEnabled } =
-    resolveWorkflowExecutionLimits(options);
+  const {
+    maxAutoTransitions: maxTransitions,
+    maxParallelNodeAgents,
+    parallelNodeExecution: parallelEnabled,
+  } = options;
   const nodeAgentRuns = [];
   const completedStepResults = new Map();
   const nodeState = {
@@ -336,10 +314,9 @@ export async function runWorkflowExecution({
   let transitions = 0;
 
   try {
-    while (snapshot && snapshot.completed !== true && transitions < maxTransitions) {
+    while (!snapshot.completed && transitions < maxTransitions) {
       throwIfWorkflowAborted(signal);
-      const pending = Array.isArray(snapshot.pendingSteps) ? snapshot.pendingSteps : [];
-      if (!pending.length) break;
+      const pending = snapshot.pendingSteps;
       const waveSize = parallelEnabled ? Math.min(maxParallelNodeAgents, pending.length) : 1;
       const waveSteps = pending.slice(0, waveSize);
       const settledWaveResults = await Promise.allSettled(
@@ -367,7 +344,7 @@ export async function runWorkflowExecution({
       const actionQueue = waveResults.slice().sort((a, b) => b.step.index - a.step.index);
       for (const item of actionQueue) {
         throwIfWorkflowAborted(signal);
-        if (!snapshot || snapshot.completed === true || transitions >= maxTransitions) break;
+        if (snapshot.completed || transitions >= maxTransitions) break;
         snapshot = advanceWorkflowInstance({
           instanceId,
           action: { type: item.action.type, stepId: item.step.stepId },
@@ -399,14 +376,10 @@ export async function runWorkflowExecution({
       actionRecords: snapshot.actionRecords,
       nodeAgentRuns,
     };
-    if (execution.completed) {
-      releaseWorkflowInstance({ instanceId });
-    }
     return {
       execution,
       nodeAgentRuns,
       nodeStateSnapshot: nodeState.snapshot,
-      instanceId,
     };
   } catch (error) {
     nodeState.snapshot = await settleUnstartedWorkflowNodes({
@@ -418,5 +391,7 @@ export async function runWorkflowExecution({
         : WORKFLOW_NODE_STATUS.SKIPPED,
     });
     throw error;
+  } finally {
+    releaseWorkflowInstance({ instanceId });
   }
 }

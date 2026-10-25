@@ -6,7 +6,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite --host 127.0.0.1",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node ../../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/shared": "file:../../shared",

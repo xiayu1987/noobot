@@ -57,12 +57,7 @@ function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   ].join("\n");
 }
 
-export async function resolveSemanticText({
-  options = {},
-  ctx = {},
-  signal,
-  sourceText = "",
-} = {}) {
+export async function resolveSemanticText({ options, ctx, signal, sourceText }) {
   throwIfWorkflowAborted(signal);
   const userMessage = text(ctx?.userMessage);
   const locale = text(ctx?.runConfig?.locale) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE;

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  assertTransferEnvelope,
   isTransferEnvelopeField,
   TRANSFER_MODE,
   TRANSFER_PROTOCOL,
@@ -100,6 +101,10 @@ export function migrateSemanticTransfers(value, migration) {
   });
   migration.migrated += migrated;
   return migrated > 0;
+}
+
+export function validateTransferCollections(value) {
+  visitTransferCollections(value, assertTransferEnvelope);
 }
 
 export function completedSemanticTransferMigrationNames(migration) {

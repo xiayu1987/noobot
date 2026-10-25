@@ -30,12 +30,13 @@ async function hasSessionManifest(directory) {
   }
 }
 
+export function ignoreSessionProgress() {}
+
 export async function* walkSessionManifestDirectories(directory) {
   for (const entry of await listEntries(directory)) {
     if (!entry.isDirectory()) continue;
     if (SESSION_ARTIFACT_DIRECTORIES.has(entry.name)) continue;
     if (entry.name.endsWith(MUTATION_LOCK_SUFFIX)) continue;
-    // Atomic repair staging/backup copies are not Sessions; never upgrade or quarantine them.
     if (isSessionRepairTempDirectoryName(entry.name)) continue;
     const child = path.join(directory, entry.name);
     if (await hasSessionManifest(child)) yield child;

@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
-import { SESSION_ARTIFACT_SCHEMA_VERSION, SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import {
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ERROR_CODE,
+  assertSessionManifestLayout,
+} from "@noobot/session-protocol";
 import { SESSION_REPAIR_ERROR_CODE, assertTurnJournalBoundary } from "@noobot/session-repair";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
@@ -13,6 +17,19 @@ import { text, isObjectLike } from "@noobot/shared/value";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 export const SUMMARY_SNAPSHOT_SCHEMA_VERSION = 2;
+
+export function turnJournalSchemaRequiredError(operation) {
+  const error = new Error(`${operation} requires the canonical turn journal schema`);
+  error.code = SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED;
+  return error;
+}
+
+export function assertCanonicalSessionManifest(session, operation) {
+  if (session.schemaVersion !== TURN_JOURNAL_SCHEMA_VERSION) {
+    throw turnJournalSchemaRequiredError(operation);
+  }
+  return assertSessionManifestLayout(session);
+}
 
 export function journalPath(sessionDir, turnId) {
   return path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir, `${turnId}.jsonl`);
@@ -86,7 +103,7 @@ export function receiptCheckpoint(receipt, previousCheckpointIds) {
 }
 
 export function turnArtifactRequiresRewrite(session, item) {
-  const snapshots = Array.isArray(item?.summarySnapshots) ? item.summarySnapshots : [];
+  const snapshots = item.summarySnapshots;
   const checkpointIds = new Set(snapshots.map((snapshot) => text(snapshot?.checkpointId)));
   if (
     resolveTurnSummaryReceipts(session, item).some((receipt) =>
@@ -94,7 +111,7 @@ export function turnArtifactRequiresRewrite(session, item) {
     )
   )
     return true;
-  return isTerminalTurn(session, item) && item?.compacted !== true && snapshots.length === 0;
+  return isTerminalTurn(session, item) && item.compacted !== true && snapshots.length === 0;
 }
 
 export function summarySnapshotIndex(receipt = {}, file = "", contentHash = "") {
@@ -117,10 +134,10 @@ export async function writeSummarySnapshot(file, payload) {
   await rename(temp, file);
 }
 
-export async function readSummarySnapshots(sessionDir, indexes = []) {
+export async function readSummarySnapshots(sessionDir, indexes) {
   const snapshots = [];
   let previousCheckpointHash = "";
-  for (const record of Array.isArray(indexes) ? indexes : []) {
+  for (const record of indexes) {
     const file = text(record?.file);
     const payload = await readJsonArtifactFile(resolveSummarySnapshotPath(sessionDir, file), null);
     if (
@@ -180,22 +197,18 @@ export async function readJournalRecords(file, committedBytes) {
   return records;
 }
 
-function materializeJournal(records, order = [], baseMessages = []) {
-  const byUid = new Map(
-    (Array.isArray(baseMessages) ? baseMessages : [])
-      .map((message) => [text(message?.messageUid), message])
-      .filter(([uid]) => uid),
-  );
+function materializeJournal(records, order) {
+  const byUid = new Map();
   for (const record of records) {
     const uid = text(record?.messageUid);
     if (!uid) continue;
     if (record.op === "remove") byUid.delete(uid);
     else if (record.op === "upsert" && isObjectLike(record.message)) byUid.set(uid, record.message);
   }
-  const ordered = (Array.isArray(order) ? order : []).map((uid) => {
-    const message = byUid.get(text(uid));
+  const ordered = order.map((uid) => {
+    const message = byUid.get(uid);
     if (message) return message;
-    const error = new Error(`turn journal is missing an ordered message: ${text(uid)}`);
+    const error = new Error(`turn journal is missing an ordered message: ${uid}`);
     error.code = SESSION_ERROR_CODE.TURN_JOURNAL_MESSAGE_MISSING;
     throw error;
   });

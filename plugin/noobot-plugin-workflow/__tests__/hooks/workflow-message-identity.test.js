@@ -9,6 +9,9 @@ import {
   appendWorkflowPlanningMessage,
   publishWorkflowFinalMessage,
 } from "../../src/core/hooks/persistence.js";
+import { normalizeOptions } from "../../src/core/options.js";
+
+const options = normalizeOptions({});
 
 function createCtx() {
   return {
@@ -29,9 +32,19 @@ function createCtx() {
 test("workflow message assigns messageUid and keeps it across phases", async () => {
   const ctx = createCtx();
   const agentResult = {};
-  const planning = await appendWorkflowPlanningMessage({ ctx, agentResult, semanticText: "plan" });
+  const planning = await appendWorkflowPlanningMessage({
+    options,
+    ctx,
+    agentResult,
+    semanticText: "plan",
+  });
   assert.ok(planning.messageUid);
-  const final = await publishWorkflowFinalMessage({ ctx, agentResult, semanticText: "done" });
+  const final = await publishWorkflowFinalMessage({
+    options,
+    ctx,
+    agentResult,
+    semanticText: "done",
+  });
   assert.equal(final.messageUid, planning.messageUid);
   assert.equal(agentResult.turnMessages.length, 1);
 });
@@ -39,10 +52,15 @@ test("workflow message assigns messageUid and keeps it across phases", async () 
 test("existing workflow message without messageUid is rejected", async () => {
   const ctx = createCtx();
   const agentResult = {};
-  const planning = await appendWorkflowPlanningMessage({ ctx, agentResult, semanticText: "plan" });
+  const planning = await appendWorkflowPlanningMessage({
+    options,
+    ctx,
+    agentResult,
+    semanticText: "plan",
+  });
   delete planning.messageUid;
   await assert.rejects(
-    publishWorkflowFinalMessage({ ctx, agentResult, semanticText: "done" }),
+    publishWorkflowFinalMessage({ options, ctx, agentResult, semanticText: "done" }),
     /Existing workflow message requires a messageUid/,
   );
 });

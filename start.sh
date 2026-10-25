@@ -470,57 +470,6 @@ pm2_recent_logs_have_runtime_error() {
   echo "$logs_text" | is_pm2_runtime_error_text
 }
 
-wait_for_apps_and_ports_ready() {
-  local max_wait_seconds="${START_WAIT_TIMEOUT_SECONDS:-25}"
-  local interval_seconds=1
-  local elapsed=0
-  local apps_json=""
-  local check_cmd=(
-    node -e '
-const fs = require("fs");
-const data = JSON.parse(fs.readFileSync(0, "utf8"));
-const required = process.argv.slice(1);
-const bad = required.filter((name) => !data.find((item) => item.name === name && item.pm2_env && item.pm2_env.status === "online"));
-if (bad.length) {
-  console.error("PM2 apps not online:", bad.join(", "));
-  process.exit(1);
-}
-'
-  "${NOOBOT_PM2_APP_NAMES[@]}")
-
-  while [[ "$elapsed" -lt "$max_wait_seconds" ]]; do
-    if apps_json="$(run_pm2 jlist 2>/dev/null)"; then
-      if echo "$apps_json" | "${check_cmd[@]}" >/dev/null 2>&1; then
-        if ! echo "$apps_json" | node "$ROOT_DIR/scripts/validate-pm2-processes.mjs" "$ROOT_DIR" >/dev/null 2>&1; then
-          continue
-        fi
-        if command -v ss >/dev/null 2>&1; then
-          if noobot_ports_are_listening; then
-            log "Health check passed: apps online and configured ports listening."
-            return 0
-          fi
-        else
-          log "Health check passed: apps online (skip port check, 'ss' not found)."
-          return 0
-        fi
-      fi
-    fi
-    sleep "$interval_seconds"
-    elapsed=$((elapsed + interval_seconds))
-  done
-
-  echo "Startup health check failed after ${max_wait_seconds}s." >&2
-  run_pm2 ls || true
-  if command -v ss >/dev/null 2>&1; then
-    local port
-    while IFS= read -r port; do
-      ss -lntp | grep ":${port} " || true
-    done < <(noobot_runtime_ports)
-  fi
-  run_pm2 logs --lines 80 --nostream || true
-  return 1
-}
-
 main() {
   require_cmd node
   require_cmd npm
@@ -574,15 +523,15 @@ main() {
   log "$(msg step_start)"
   start_or_restart_pm2_apps
 
-  if ! wait_for_apps_and_ports_ready; then
-    if pm2_recent_logs_have_runtime_error; then
-      repair_pm2_runtime "detected PM2 runtime module error in startup logs"
-      log "$(msg step_start) (retry)"
-      start_or_restart_pm2_apps
-      wait_for_apps_and_ports_ready
-    else
+  if ! noobot_wait_runtime_ready "$ROOT_DIR"; then
+    if ! pm2_recent_logs_have_runtime_error; then
+      noobot_report_runtime_failure
       return 1
     fi
+    repair_pm2_runtime "detected PM2 runtime module error in startup logs"
+    log "$(msg step_start) (retry)"
+    start_or_restart_pm2_apps
+    noobot_wait_runtime_ready "$ROOT_DIR" || { noobot_report_runtime_failure; return 1; }
   fi
 
   log "$(msg done_list)"

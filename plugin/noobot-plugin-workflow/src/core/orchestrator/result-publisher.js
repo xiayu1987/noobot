@@ -9,14 +9,14 @@ import { appendWorkflowTrace } from "../hooks/phase.js";
 import { publishWorkflowFinalMessage } from "../hooks/persistence.js";
 
 export async function publishWorkflowResult({
-  options = {},
-  ctx = {},
-  agentResult = {},
-  sourceText = "",
-  semanticText = "",
-  workflowPayload = {},
-  execution = {},
-} = {}) {
+  options,
+  ctx,
+  agentResult,
+  sourceText,
+  semanticText,
+  workflowPayload,
+  execution,
+}) {
   await publishWorkflowFinalMessage({
     options,
     agentResult,

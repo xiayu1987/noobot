@@ -135,6 +135,10 @@ export const TIME_THRESHOLDS = deepFreeze({
     orphanedTurnRecoveryGraceMs: TIME_TIERS.standardCommandMs,
     userInteractionTimeoutMs: 10 * MINUTE_MS,
     sessionLogMinIntervalMs: TIME_TIERS.startupMs,
+    startupProgressIntervalMs: TIME_TIERS.oneSecondMs,
+    startupHeartbeatIntervalMs: 10 * SECOND_MS,
+    startupUnresponsiveTimeoutMs: 2 * MINUTE_MS,
+    startupStallTimeoutMs: TIME_TIERS.fiveMinutesMs,
   },
   cli: {
     healthProbeMs: TIME_TIERS.fastProbeMs,

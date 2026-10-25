@@ -12,6 +12,7 @@ import {
 } from "@noobot/session-protocol";
 import { migrateSessionDocument } from "../src/index.js";
 import { SESSION_MESSAGE_IDENTITY_MIGRATION } from "../src/message-identity-migration.js";
+import { releasedSession } from "./helpers/released-session.js";
 
 const LEGACY_SCHEMA_VERSION = SESSION_ARTIFACT_MESSAGE_IDENTITY_SCHEMA_VERSION - 1;
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
@@ -29,13 +30,28 @@ function message(role, overrides = {}) {
 }
 
 function legacyDocument(messages, turnLifecycle = {}) {
-  return {
+  return releasedSession({
     schemaVersion: LEGACY_SCHEMA_VERSION,
     sessionId: "s1",
     caller: "user",
     aggregateVersion: 1,
     messages,
-    turnLifecycle: { commandReceipts: [], ...turnLifecycle },
+    turnLifecycle,
+  });
+}
+
+function replacementTombstone(overrides = {}) {
+  return {
+    turnScopeId: "t0",
+    replacementDialogProcessId: "d1",
+    replacementTurnScopeId: "t1",
+    requestHash: "rh1",
+    commandId: "cmd_replace",
+    committedAggregateVersion: 1,
+    replacedTurnScopeIds: ["t0"],
+    sequence: 1,
+    committedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -59,9 +75,8 @@ test("schema chain migrates legacy message ids for every role", () => {
         message("tool", { id: "sm_tool", [LEGACY_MESSAGE_ID]: "sm_tool" }),
       ],
       {
-        replacedTurns: {
-          t0: { replacementUserMessageId: "sm_user", replacementDialogProcessId: "d1" },
-        },
+        sequence: 1,
+        replacedTurns: { t0: replacementTombstone({ replacementUserMessageId: "sm_user" }) },
       },
     ),
   );
@@ -92,4 +107,35 @@ test("canonical schema documents skip the message identity step", () => {
     schemaVersion: SESSION_ARTIFACT_MESSAGE_IDENTITY_SCHEMA_VERSION,
   });
   assert.equal(result.migrations.includes(SESSION_MESSAGE_IDENTITY_MIGRATION), false);
+});
+
+test("schema chain rejects replacement tombstones written before requestHash was recorded", () => {
+  const releasedShapes = {
+    "v4.1.5": (({
+      replacementDialogProcessId,
+      requestHash,
+      committedAggregateVersion,
+      ...rest
+    }) => ({
+      ...rest,
+      replacementUserMessageId: "sm_user",
+      committedVersion: 1,
+    }))(replacementTombstone()),
+    "v4.1.6": (({ requestHash, ...rest }) => ({ ...rest, replacementUserMessageId: "sm_user" }))(
+      replacementTombstone(),
+    ),
+  };
+  for (const [release, tombstone] of Object.entries(releasedShapes)) {
+    assert.throws(
+      () =>
+        migrateSessionDocument(
+          legacyDocument([message("user", { messageUid: "sm_user" })], {
+            sequence: 1,
+            replacedTurns: { t0: tombstone },
+          }),
+        ),
+      (error) => error.code === "SESSION_REPLACEMENT_IDENTITY_UNMIGRATABLE",
+      release,
+    );
+  }
 });

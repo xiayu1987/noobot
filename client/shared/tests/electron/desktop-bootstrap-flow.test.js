@@ -160,7 +160,7 @@ test("desktop boot flow reaches system after startup setup, config params, servi
         serviceOrigin: "http://127.0.0.1:10061",
         healthUrl: "http://127.0.0.1:10061/health",
         agentProxyHealthUrl: "http://127.0.0.1:10062/health",
-        startupTimeoutMs: 200,
+        agentProxyStartupTimeoutMs: 200,
         pollIntervalMs: 1,
         sendStatus,
         getLogFilePath: (fileName = "desktop-startup.log") =>
@@ -286,7 +286,7 @@ test("desktop startup offers missing dependencies even when the service is alrea
   const manager = createDesktopServiceManager({
     app: { isPackaged: false, getPath: () => "/user-data" },
     healthUrl: "http://127.0.0.1:10061/health",
-    startupTimeoutMs: 100,
+    agentProxyStartupTimeoutMs: 100,
     pollIntervalMs: 1,
     sendStatus: (status) => statuses.push(status),
     ensureDesktopGlobalConfig: () => ({

@@ -48,7 +48,6 @@ test("mutation coordinator does not treat work escaping a released lock as re-en
     };
     let escaped;
     await coordinator.run(lockPath, async () => {
-      // Scheduled while holding the lock, executes after release with the inherited ALS store.
       escaped = (async () => {
         await sleep(20);
         await coordinator.run(lockPath, critical);

@@ -5,21 +5,13 @@
  */
 import { buildSessionArtifactFileMap, readJsonArtifactFile } from "../session-artifact-files.js";
 import {
-  TURN_JOURNAL_SCHEMA_VERSION,
+  assertCanonicalSessionManifest,
   journalPath,
   materializeTurnJournal,
   readJournalRecords,
   readSummarySnapshots,
 } from "./turn-journal-store.js";
 import { text, isObjectLike } from "@noobot/shared/value";
-
-function assertCanonicalTurnJournal(session, operation) {
-  if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
-    const error = new Error(`${operation} requires the canonical turn journal schema`);
-    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
-    throw error;
-  }
-}
 
 async function materializeTurn(sessionDir, item) {
   const records = await readJournalRecords(
@@ -46,10 +38,10 @@ export async function readRecentSessionTurns({
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, fallback);
   if (!isObjectLike(session)) return [];
-  assertCanonicalTurnJournal(session, "recent Session turns");
+  assertCanonicalSessionManifest(session, "recent Session turns");
   const count = Math.max(0, Number(limit) || 0);
   const turns = [];
-  for (const item of (Array.isArray(session.turnOrder) ? session.turnOrder : []).slice(-count)) {
+  for (const item of session.turnOrder.slice(-count)) {
     turns.push(await materializeTurn(sessionDir, item));
   }
   return turns;
@@ -63,7 +55,7 @@ export async function readSessionTurn({
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, null);
   if (!isObjectLike(session)) return null;
-  assertCanonicalTurnJournal(session, "session turn lookup");
+  assertCanonicalSessionManifest(session, "session turn lookup");
   const normalizedTurnScopeId = text(turnScopeId);
   const normalizedDialogProcessId = text(dialogProcessId);
   if (!normalizedTurnScopeId) {
@@ -71,9 +63,9 @@ export async function readSessionTurn({
     error.code = "SESSION_TURN_IDENTITY_REQUIRED";
     throw error;
   }
-  const matches = (Array.isArray(session.turnOrder) ? session.turnOrder : []).filter((item) => {
-    if (text(item?.turnScopeId) !== normalizedTurnScopeId) return false;
-    return !normalizedDialogProcessId || text(item?.dialogProcessId) === normalizedDialogProcessId;
+  const matches = session.turnOrder.filter((item) => {
+    if (item.turnScopeId !== normalizedTurnScopeId) return false;
+    return !normalizedDialogProcessId || item.dialogProcessId === normalizedDialogProcessId;
   });
   if (matches.length > 1) {
     const error = new Error("session turn identity is ambiguous");
@@ -84,10 +76,6 @@ export async function readSessionTurn({
   return {
     sessionId: text(session.sessionId),
     ...(await materializeTurn(sessionDir, matches[0])),
-    turnId: text(matches[0].turnId),
-    artifactOrdinal: Number(matches[0].artifactOrdinal || 0),
-    turnScopeId: text(matches[0].turnScopeId),
-    dialogProcessId: text(matches[0].dialogProcessId),
   };
 }
 
@@ -95,9 +83,6 @@ export async function readSessionMessageCount({ sessionDir = "" } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, null);
   if (!isObjectLike(session)) return 0;
-  assertCanonicalTurnJournal(session, "session message count");
-  return (Array.isArray(session.turnOrder) ? session.turnOrder : []).reduce(
-    (count, item) => count + Math.max(0, Number(item?.messageCount || 0)),
-    0,
-  );
+  assertCanonicalSessionManifest(session, "session message count");
+  return session.turnOrder.reduce((count, item) => count + item.messageOrder.length, 0);
 }

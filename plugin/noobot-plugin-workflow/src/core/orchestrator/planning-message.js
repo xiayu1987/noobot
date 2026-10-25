@@ -58,18 +58,18 @@ function buildPlanningSourceMessage(workflowMessage, payload, { presentationMess
 }
 
 export async function prepareWorkflowPlanningMessage({
-  options = {},
-  ctx = {},
-  agentResult = {},
-  sourceText = "",
-  semanticText = "",
-  semantic = null,
-  semanticResolution = {},
+  options,
+  ctx,
+  agentResult,
+  sourceText,
+  semanticText,
+  semantic,
+  semanticResolution,
   phaseTracker,
-  retryMeta = {},
-  workflowRunId = "",
-  planningNodeSessions = [],
-} = {}) {
+  retryMeta,
+  workflowRunId,
+  planningNodeSessions,
+}) {
   const planningWorkflowPayload = buildWorkflowOrchestrationPayload({
     workflowRunId,
     ctx,
@@ -91,7 +91,6 @@ export async function prepareWorkflowPlanningMessage({
     sourceText,
     semanticText,
     workflowPayload: planningWorkflowPayload,
-    attachments: [],
   });
   const identity = resolveWorkflowRunIdentity(ctx);
   const { turnScopeId, presentationMessageId, executionId, commandId } = identity;

@@ -220,8 +220,6 @@ export class FileMutationCoordinator {
     const key = path.resolve(lockPath);
     const heldLocks = this.asyncHeldLocks.getStore();
     const held = heldLocks?.get(key);
-    // Reentry only counts while the owning operation is still running. Async work that was
-    // scheduled inside the lock inherits this store, but must not bypass the lock after release.
     if (held && !held.released) {
       held.depth += 1;
       try {

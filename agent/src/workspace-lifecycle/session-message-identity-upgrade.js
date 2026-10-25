@@ -42,6 +42,7 @@ import {
 } from "../session/entities/session-entity.js";
 import { normalizeSessionDocumentForCurrentProtocol } from "../session/session-document-normalization.js";
 import {
+  SESSION_ARTIFACT_PREDECESSOR,
   readSessionArtifact,
   readSessionArtifactForRepair,
   repairSessionArtifacts,
@@ -54,7 +55,7 @@ import {
 } from "../session/authority-outbox-store/outbox-journal.js";
 import { quarantineMigrationUnit } from "./migration-quarantine.js";
 import { PERSISTED_JSON_READ_ERROR_CODE } from "../shared/storage/json-file-reader.js";
-import { walkSessionManifestDirectories } from "./session-directory-walk.js";
+import { ignoreSessionProgress, walkSessionManifestDirectories } from "./session-directory-walk.js";
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_MESSAGE_IDENTITY_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY;
@@ -226,6 +227,7 @@ async function repairStagedSession({ stagingDir, expectScope }) {
     sessionDir: stagingDir,
     sessionPayload: migration.document,
     now: MIGRATION_NOW,
+    predecessor: SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
   });
   const outbox = await migrateOutboxJournal(stagingDir, migration.legacyAuthorityEventOutbox);
   await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
@@ -300,7 +302,12 @@ function scopedScopeResolver() {
   };
 }
 
-export async function upgradeSessionMessageIdentity({ base, backupBase, scopedSessionRoots }) {
+export async function upgradeSessionMessageIdentity({
+  base,
+  backupBase,
+  scopedSessionRoots,
+  onSessionProcessed = ignoreSessionProgress,
+}) {
   if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
     throw new TypeError("session message identity upgrade requires scopedSessionRoots");
   }
@@ -339,6 +346,7 @@ export async function upgradeSessionMessageIdentity({ base, backupBase, scopedSe
           }),
         );
       }
+      onSessionProcessed();
     }
   }
   return { sessions, quarantined };

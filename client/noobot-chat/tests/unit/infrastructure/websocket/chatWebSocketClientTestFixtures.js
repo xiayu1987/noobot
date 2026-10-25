@@ -14,6 +14,15 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 
+export function assertBrowserCloseCode(code) {
+  if (code === 1000 || (code >= 3000 && code <= 4999)) return;
+  const error = new Error(
+    `The close code must be either 1000, or between 3000 and 4999. ${code} is neither.`,
+  );
+  error.name = "InvalidAccessError";
+  throw error;
+}
+
 export class MockWebSocket {
   static CONNECTING = 0;
   static OPEN = 1;
@@ -38,6 +47,12 @@ export class MockWebSocket {
   }
 
   close(code = 1000, reason = "") {
+    assertBrowserCloseCode(code);
+    this.readyState = MockWebSocket.CLOSED;
+    this.onclose?.({ code, reason });
+  }
+
+  closeFromServer(code, reason = "") {
     this.readyState = MockWebSocket.CLOSED;
     this.onclose?.({ code, reason });
   }

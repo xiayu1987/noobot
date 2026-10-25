@@ -6,16 +6,15 @@
 
 import {
   PLUGIN_ID,
-  WORKFLOW_ACTION,
   WORKFLOW_DATA_SCOPE,
   WORKFLOW_PLUGIN_DEFAULTS,
   resolveWorkflowDataRelativePath,
 } from "../constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { WORKFLOW_ACTION_TYPE, isWorkflowActionType } from "workflow";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   mergeAttachmentReferences,
-  normalizeWorkflowTransferPayload,
   resolveNodeInputAttachments,
   resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
@@ -53,16 +52,15 @@ export function resolveSemanticNodeForPendingStep({ semantic, pendingStep }) {
 
 export async function runNodeAgent({
   hookManager,
-  options = {},
-  ctx = {},
+  options,
+  ctx,
   signal,
-  instanceId = "",
-  pendingStep = {},
-  semantic = {},
+  pendingStep,
+  semantic,
   nodeIdentity,
-  transition = 0,
-  upstreamNodeResults = [],
-} = {}) {
+  transition,
+  upstreamNodeResults,
+}) {
   throwIfWorkflowAborted(signal);
   const runIdentity = resolveWorkflowRunIdentity(ctx);
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep });
@@ -78,7 +76,6 @@ export async function runNodeAgent({
   });
   const hookPayload = buildNodeAgentHookPayload({
     ctx,
-    instanceId,
     pendingStep,
     transition,
     semantic,
@@ -92,7 +89,6 @@ export async function runNodeAgent({
     options,
     ctx,
     signal,
-    instanceId,
     pendingStep,
     transition,
     semanticNode,
@@ -115,7 +111,6 @@ export async function runNodeAgent({
 
 function buildNodeAgentHookPayload({
   ctx,
-  instanceId,
   pendingStep,
   transition,
   semantic,
@@ -128,7 +123,6 @@ function buildNodeAgentHookPayload({
   return {
     ...ctx,
     workflow: {
-      instanceId,
       workflowRunId: nodeIdentity.workflowRunId,
       nodeIdentity,
       pendingStep,
@@ -136,7 +130,7 @@ function buildNodeAgentHookPayload({
       semantic,
       semanticNode,
       upstreamNodeResults,
-      upstreamAttachments: collectUpstreamAttachmentReferences(upstreamNodeResults, ctx),
+      upstreamAttachments: collectUpstreamAttachmentReferences(upstreamNodeResults),
       inputAttachments: nodeInputAttachments,
       upstreamAttachmentSystemMessage,
     },
@@ -148,16 +142,15 @@ function buildNodeAgentHookPayload({
   };
 }
 
-function collectUpstreamAttachmentReferences(upstreamNodeResults, ctx) {
-  return upstreamNodeResults.reduce((acc, item = {}) => {
-    const transferPayload = normalizeWorkflowTransferPayload({
-      transferEnvelopes: Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : [],
-    });
-    return mergeAttachmentReferences(
-      acc,
-      resolveWorkflowTransferAttachmentReferences(transferPayload, ctx),
-    );
-  }, []);
+function collectUpstreamAttachmentReferences(upstreamNodeResults) {
+  return upstreamNodeResults.reduce(
+    (acc, item) =>
+      mergeAttachmentReferences(
+        acc,
+        resolveWorkflowTransferAttachmentReferences({ transferEnvelopes: item.transferEnvelopes }),
+      ),
+    [],
+  );
 }
 
 async function runWorkflowNodeSubSession(params) {
@@ -205,7 +198,7 @@ function createWorkflowNodeSubSessionRequest(params) {
     message: params.agentInstruction,
     attachments: params.nodeInputAttachments,
     runConfigPatch: buildWorkflowNodeRunConfigPatch(ctx, identity),
-    systemMessageFactory: ({ attachments = [] } = {}) =>
+    systemMessageFactory: ({ attachments }) =>
       [
         buildWorkflowInputAttachmentSystemMessage({
           ctx,
@@ -270,7 +263,6 @@ function buildWorkflowNodeSubSessionMetadata(params) {
   const { ctx, nodeIdentity: identity, runIdentity } = params;
   return {
     scope: "workflow_node",
-    instanceId: text(params.instanceId),
     workflowRunId: identity.workflowRunId,
     executionId: identity.activeChildExecutionId,
     parentExecutionId: runIdentity.executionId,
@@ -285,7 +277,7 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     dialogProcessId: identity.dialogProcessId,
     nodeId: identity.nodeId,
     nodeName: identity.nodeName,
-    transition: Number(params.transition || 0),
+    transition: params.transition,
     turnScopeId: identity.turnScopeId,
     workflowSessionId: text(ctx?.sessionId),
     upstreamWorkflowNodeResults: params.upstreamNodeResults,
@@ -321,11 +313,36 @@ async function resolveNodeAgentResult({
     signal,
   });
   throwIfWorkflowAborted(signal);
-  const action = emitted.outcomes
-    .map((outcome) => outcome?.value?.action)
-    .find((value) => value && typeof value === "object");
-  return {
-    action: action || { type: WORKFLOW_ACTION.SUBMIT },
-    subSession,
-  };
+  return { action: resolveNodeAgentDecision(emitted.outcomes), subSession };
+}
+
+export const NODE_AGENT_DEFAULT_ACTION = Object.freeze({ type: WORKFLOW_ACTION_TYPE.SUBMIT });
+
+function nodeAgentActionError(message, code, fields) {
+  return Object.assign(new Error(message), { code, ...fields });
+}
+
+function requireNodeAgentDecision(outcome) {
+  if (outcome.value === undefined) return null;
+  const action = outcome.value?.action;
+  if (!isWorkflowActionType(action?.type)) {
+    throw nodeAgentActionError(
+      `workflow node agent decision invalid: ${outcome.handlerId}`,
+      "WORKFLOW_NODE_ACTION_INVALID",
+      { handlerId: outcome.handlerId },
+    );
+  }
+  return { handlerId: outcome.handlerId, action: { type: action.type } };
+}
+
+export function resolveNodeAgentDecision(outcomes) {
+  const decisions = outcomes.map(requireNodeAgentDecision).filter(Boolean);
+  if (decisions.length > 1) {
+    throw nodeAgentActionError(
+      `workflow node agent decision conflict: ${decisions.map((item) => item.handlerId).join(",")}`,
+      "WORKFLOW_NODE_ACTION_CONFLICT",
+      { handlerIds: decisions.map((item) => item.handlerId) },
+    );
+  }
+  return decisions.length ? decisions[0].action : NODE_AGENT_DEFAULT_ACTION;
 }

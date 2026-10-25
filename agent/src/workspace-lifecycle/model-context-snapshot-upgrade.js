@@ -18,7 +18,7 @@ import {
   resolveSessionArtifactMutationLock,
 } from "../session/session-artifact-files.js";
 import { quarantineMigrationUnit } from "./migration-quarantine.js";
-import { walkSessionManifestDirectories } from "./session-directory-walk.js";
+import { ignoreSessionProgress, walkSessionManifestDirectories } from "./session-directory-walk.js";
 
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT;
 
@@ -92,7 +92,12 @@ async function upgradeSessionSnapshots({ base, backupBase, sessionDir, quarantin
   return migrated;
 }
 
-export async function upgradeModelContextSnapshots({ base, backupBase, scopedSessionRoots }) {
+export async function upgradeModelContextSnapshots({
+  base,
+  backupBase,
+  scopedSessionRoots,
+  onSessionProcessed = ignoreSessionProgress,
+}) {
   if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
     throw new TypeError("model context snapshot upgrade requires scopedSessionRoots");
   }
@@ -106,6 +111,7 @@ export async function upgradeModelContextSnapshots({ base, backupBase, scopedSes
           () => upgradeSessionSnapshots({ base, backupBase, sessionDir, quarantined }),
         )),
       );
+      onSessionProcessed();
     }
   }
   return { migrated, quarantined };

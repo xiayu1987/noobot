@@ -51,18 +51,18 @@ function previewText(
 }
 
 export function buildWorkflowOrchestrationPayload({
-  workflowRunId = "",
-  ctx = {},
-  options = {},
-  sourceText = "",
-  semanticText = "",
-  semantic = null,
-  execution = null,
-  semanticResolution = {},
-  phaseTimeline = [],
-  retryMeta = {},
-  error = null,
-} = {}) {
+  workflowRunId,
+  ctx,
+  options,
+  sourceText,
+  semanticText,
+  semantic,
+  execution,
+  semanticResolution,
+  phaseTimeline,
+  retryMeta,
+  error,
+}) {
   const resolvedWorkflowRunId = normalizeMetaValue(workflowRunId);
   if (!resolvedWorkflowRunId) throw new Error("workflowRunId is required");
   const protocolVersion = WORKFLOW_PROTOCOL.ORCHESTRATION_VERSION;

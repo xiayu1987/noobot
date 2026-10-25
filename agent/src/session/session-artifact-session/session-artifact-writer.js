@@ -21,6 +21,7 @@ import {
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
   appendJournal,
+  assertCanonicalSessionManifest,
   isTerminalTurn,
   journalPath,
   messageHash,
@@ -33,6 +34,7 @@ import {
   summarySnapshotIndex,
   turnArtifactRequiresRewrite,
   turnIdOrdinal,
+  turnJournalSchemaRequiredError,
   turnKey,
   writeSummarySnapshot,
 } from "./turn-journal-store.js";
@@ -42,19 +44,30 @@ function ignoreMissingDirectory(error) {
   if (error?.code !== "ENOENT") throw error;
 }
 
-async function readPreviousTurnManifest({ storageService, files }) {
+export const SESSION_ARTIFACT_PREDECESSOR = Object.freeze({
+  CANONICAL: "canonical",
+  LEGACY_REWRITE: "legacy_rewrite",
+});
+
+const TURN_PLACEMENT = Object.freeze({ RETAINED: "retained", REWRITTEN: "rewritten" });
+
+async function readPreviousTurnManifest({ storageService, files, predecessor }) {
   const previousManifest = await readJsonWithStorage({
     storageService,
     artifactPath: files.session,
     fallback: null,
   });
-  return Number(previousManifest?.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION
-    ? previousManifest
-    : null;
+  if (previousManifest === null) return null;
+  if (
+    predecessor === SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE &&
+    previousManifest.schemaVersion !== TURN_JOURNAL_SCHEMA_VERSION
+  )
+    return null;
+  return assertCanonicalSessionManifest(previousManifest, "Session artifact write");
 }
 
-function assignArtifactTurnIds(turns, previousV5) {
-  const previousTurns = Array.isArray(previousV5?.turnOrder) ? previousV5.turnOrder : [];
+function assignArtifactTurnIds(turns, previousManifest) {
+  const previousTurns = previousManifest ? previousManifest.turnOrder : [];
   const previousByKey = new Map();
   for (const item of previousTurns) {
     const key = turnKey(item);
@@ -63,13 +76,13 @@ function assignArtifactTurnIds(turns, previousV5) {
     previousByKey.set(key, matches);
   }
   let turnArtifactSequence = Math.max(
-    Number(previousV5?.turnArtifactSequence) || 0,
-    ...previousTurns.map((item) => turnIdOrdinal(item?.turnId)),
+    previousManifest ? previousManifest.turnArtifactSequence : 0,
+    ...previousTurns.map((item) => turnIdOrdinal(item.turnId)),
   );
   const usedTurnIds = new Set();
   const artifactTurns = turns.map(({ sourceIndices, ...turn }, index) => {
     const previous = previousByKey.get(turnKey(turn))?.shift();
-    let turnId = text(previous?.turnId);
+    let turnId = previous?.turnId;
     if (!turnId || usedTurnIds.has(turnId)) {
       turnArtifactSequence += 1;
       turnId = `turn-${String(turnArtifactSequence).padStart(6, "0")}`;
@@ -141,7 +154,7 @@ async function writeTurnSummarySnapshots({
   previous,
   records,
 }) {
-  const summarySnapshots = [...arrayOrEmpty(previous?.summarySnapshots)];
+  const summarySnapshots = previous ? [...previous.summarySnapshots] : [];
   const previousCheckpointIds = new Set(
     summarySnapshots.map((snapshot) => text(snapshot?.checkpointId)).filter(Boolean),
   );
@@ -197,17 +210,14 @@ async function commitTurnJournal({
   }
   return {
     committedBytes: await appendJournal(file, records, previous ? previous.committedBytes : 0),
-    recordCount: (Number(previous?.recordCount) || 0) + records.length,
+    recordCount: (previous ? previous.recordCount : 0) + records.length,
   };
 }
 
-async function writeTurnArtifact({ sessionDir, sessionPayload, turn, previousV5 }) {
-  const previous = previousV5?.turnOrder?.find((item) => item.turnId === turn.turnId);
+async function writeTurnArtifact({ sessionDir, sessionPayload, turn, previousManifest }) {
+  const previous = previousManifest?.turnOrder.find((item) => item.turnId === turn.turnId);
   const file = journalPath(sessionDir, turn.turnId);
-  const previousHashes =
-    previous?.messageHashes && typeof previous.messageHashes === "object"
-      ? previous.messageHashes
-      : {};
+  const previousHashes = previous ? previous.messageHashes : {};
   const { nextHashes, records } = diffTurnMessages(turn.messages, previousHashes);
   const { summarySnapshots, snapshotCompactedJournal } = await writeTurnSummarySnapshots({
     sessionDir,
@@ -300,6 +310,7 @@ export async function writeSessionArtifact({
   sessionPayload = {},
   atomic = true,
   now = () => new Date().toISOString(),
+  predecessor = SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   await mkdir(sessionDir, { recursive: true });
@@ -308,8 +319,8 @@ export async function writeSessionArtifact({
     normalizedSessionPayload.messages,
     normalizedSessionPayload.dialogOrder,
   );
-  const previousV5 = await readPreviousTurnManifest({ storageService, files });
-  const { artifactTurns, turnArtifactSequence } = assignArtifactTurnIds(turns, previousV5);
+  const previousManifest = await readPreviousTurnManifest({ storageService, files, predecessor });
+  const { artifactTurns, turnArtifactSequence } = assignArtifactTurnIds(turns, previousManifest);
   await mkdir(files.turnsDir, { recursive: true });
   await mkdir(files.turnSnapshotsDir, { recursive: true });
   const turnOrder = [];
@@ -319,7 +330,7 @@ export async function writeSessionArtifact({
         sessionDir,
         sessionPayload: normalizedSessionPayload,
         turn,
-        previousV5,
+        previousManifest,
       }),
     );
   }
@@ -408,11 +419,15 @@ function placeTurnViewTurns({ session, outsideItems, turns, messageOrder }) {
   };
   const candidates = [
     ...outsideItems.map((item) => ({
-      ...item,
+      placement: TURN_PLACEMENT.RETAINED,
+      turn: item,
+      dialogProcessId: item.dialogProcessId,
       firstSourceIndex: firstSourceIndex(item.turnScopeId, item.messageOrder),
     })),
     ...turns.map(({ sourceIndices, ...turn }) => ({
-      ...turn,
+      placement: TURN_PLACEMENT.REWRITTEN,
+      turn,
+      dialogProcessId: turn.dialogProcessId,
       firstSourceIndex: firstSourceIndex(
         turn.turnScopeId,
         turn.messages.map((message) => message.messageUid),
@@ -422,7 +437,7 @@ function placeTurnViewTurns({ session, outsideItems, turns, messageOrder }) {
   return candidates
     .sort((left, right) => left.firstSourceIndex - right.firstSourceIndex)
     .sort(compareTurnPlacement(dialogLogicalOrder(session.dialogOrder)))
-    .map(({ firstSourceIndex: _placement, ...turn }) => turn);
+    .map(({ placement, turn }) => ({ placement, turn }));
 }
 
 export async function writeSessionTurnArtifacts({
@@ -435,12 +450,12 @@ export async function writeSessionTurnArtifacts({
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = normalizeSessionEntity(sessionPayload, { now });
-  const previous = await readPreviousTurnManifest({ storageService, files });
-  if (!previous)
-    throw turnViewError(
-      "turn view write requires the canonical turn journal schema",
-      "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
-    );
+  const previous = await readPreviousTurnManifest({
+    storageService,
+    files,
+    predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
+  });
+  if (!previous) throw turnJournalSchemaRequiredError("Session turn view write");
   const viewScopes = new Set(turnScopeIds.map((turnScopeId) => text(turnScopeId)));
   const { turns } = splitSessionMessages(session.messages, session.dialogOrder);
   const outsideItems = assertTurnViewOwnership({ session, previous, viewScopes, turns });
@@ -450,15 +465,21 @@ export async function writeSessionTurnArtifacts({
     messages: session.messages,
   });
   const placed = placeTurnViewTurns({ session, outsideItems, turns, messageOrder });
-  const { artifactTurns, turnArtifactSequence } = assignArtifactTurnIds(placed, previous);
+  const { artifactTurns, turnArtifactSequence } = assignArtifactTurnIds(
+    placed.map(({ turn }) => turn),
+    previous,
+  );
   const turnOrder = [];
-  for (const turn of artifactTurns) {
-    if (!Array.isArray(turn.messages)) {
-      turnOrder.push(turn);
-      continue;
-    }
+  for (const [index, turn] of artifactTurns.entries()) {
     turnOrder.push(
-      await writeTurnArtifact({ sessionDir, sessionPayload: session, turn, previousV5: previous }),
+      placed[index].placement === TURN_PLACEMENT.RETAINED
+        ? turn
+        : await writeTurnArtifact({
+            sessionDir,
+            sessionPayload: session,
+            turn,
+            previousManifest: previous,
+          }),
     );
   }
   await writeSessionManifest({

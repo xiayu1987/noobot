@@ -101,7 +101,7 @@ async function createFixture({
     serviceOrigin: "http://127.0.0.1:10061",
     healthUrl: "http://127.0.0.1:10061/health",
     agentProxyHealthUrl: "http://127.0.0.1:10062/health",
-    startupTimeoutMs: 200,
+    agentProxyStartupTimeoutMs: 200,
     pollIntervalMs: 1,
     getLogFilePath: (fileName = "desktop-startup.log") => path.join(userDataPath, "logs", fileName),
     ensureDesktopGlobalConfig: () => {
@@ -465,7 +465,7 @@ test("child exit during startup fails startup with the exit reason instead of au
       packaged: false,
       managerOptions: {
         crashRestartDelaysMs: [0, 0],
-        startupTimeoutMs: 5000,
+        agentProxyStartupTimeoutMs: 5000,
         fetchImpl: async () => ({ ok: true, json: async () => ({ ok: false }) }),
       },
     });
@@ -522,6 +522,162 @@ test("crash restart yielded to an in-flight startup does not consume restart bud
       fixture.calls[1].child.emit("exit", 1, null);
       await waitFor(() => fixture.calls.length === 3);
       await settle();
+      assert.equal(fixture.startupEvents.at(-1), "status:ready");
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("service startup reports upgrade progress until healthy and injects the launch id", async () => {
+  await withPlatform("darwin", async () => {
+    let healthy = false;
+    const reads = [];
+    const layout = { userIndex: 1, userCount: 1, stage: "layoutUpgrade", processedSessions: 3 };
+    const progressSteps = [null, layout, layout, { ...layout, processedSessions: 9 }];
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        fetchImpl: async () => ({ ok: true, json: async () => ({ ok: healthy }) }),
+        readStartupState: async (launch) => {
+          reads.push(launch);
+          const progress = progressSteps[reads.length - 1];
+          if (reads.length >= progressSteps.length) healthy = true;
+          return progress ? { state: "pending", progress } : { state: "pending" };
+        },
+      },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      const launchId = fixture.calls[0].options.env.NOOBOT_STARTUP_LAUNCH_ID;
+      assert.match(launchId, /^[0-9a-f-]{36}$/);
+      assert.equal(reads[0].launchId, launchId);
+      assert.equal(
+        reads[0].env.NOOBOT_WORKSPACE_ROOT,
+        path.join(fixture.userDataPath, "workspace"),
+      );
+      const upgrading = fixture.statuses.filter((status) => status.phase === "upgrading");
+      assert.deepEqual(
+        upgrading.map((status) => status.progress.processedSessions),
+        [3, 9],
+      );
+      assert.equal(fixture.startupEvents.at(-1), "status:ready");
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("service startup fails as soon as the startup protocol reports failure", async () => {
+  await withPlatform("darwin", async () => {
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        fetchImpl: async () => ({ ok: true, json: async () => ({ ok: false }) }),
+        readStartupState: async () => ({ state: "failed", event: "service.startup.failed" }),
+      },
+    });
+    try {
+      await assert.rejects(
+        fixture.manager.ensureServiceStarted(),
+        /startup failed \(service\.startup\.failed\)/,
+      );
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("service startup stays pending without startup events and has no wall-clock limit", async () => {
+  await withPlatform("darwin", async () => {
+    let healthChecks = 0;
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        agentProxyStartupTimeoutMs: 1,
+        fetchImpl: async () => {
+          healthChecks += 1;
+          await new Promise((resolve) => setTimeout(resolve, 2));
+          return { ok: true, json: async () => ({ ok: healthChecks > 20 }) };
+        },
+      },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      assert.ok(healthChecks > 20);
+      assert.equal(fixture.startupEvents.at(-1), "status:ready");
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("service startup fails when the startup heartbeat stops", async () => {
+  await withPlatform("darwin", async () => {
+    const clock = Date.parse("2026-10-25T00:10:00.000Z");
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        now: () => clock,
+        fetchImpl: async () => ({ ok: true, json: async () => ({ ok: false }) }),
+        readStartupState: async () => ({
+          state: "pending",
+          progress: { stage: "layoutUpgrade", processedSessions: 1 },
+          progressAt: "2026-10-25T00:06:00.000Z",
+          heartbeatAt: "2026-10-25T00:07:00.000Z",
+        }),
+      },
+    });
+    try {
+      await assert.rejects(
+        fixture.manager.ensureServiceStarted(),
+        /stopped responding during startup \(no heartbeat for 180s\)/,
+      );
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("stalled startup progress warns once per minute and keeps waiting", async () => {
+  await withPlatform("darwin", async () => {
+    const progressAt = Date.parse("2026-10-25T00:00:00.000Z");
+    const progress = { stage: "layoutUpgrade", processedSessions: 4 };
+    const offsetsMs = [60000, 330000, 345000, 365000, 400000];
+    let reads = 0;
+    let clock = progressAt;
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        now: () => clock,
+        fetchImpl: async () => ({
+          ok: true,
+          json: async () => ({ ok: reads >= offsetsMs.length }),
+        }),
+        readStartupState: async () => {
+          clock = progressAt + offsetsMs[reads];
+          reads += 1;
+          return {
+            state: "pending",
+            progress,
+            progressAt: new Date(progressAt).toISOString(),
+            heartbeatAt: new Date(clock - 1000).toISOString(),
+          };
+        },
+      },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      const upgrading = fixture.statuses.filter((status) => status.phase === "upgrading");
+      assert.deepEqual(
+        upgrading.map((status) => status.stalledMinutes),
+        [0, 5, 6],
+      );
       assert.equal(fixture.startupEvents.at(-1), "status:ready");
     } finally {
       fixture.manager.stopManagedService();

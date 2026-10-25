@@ -10,13 +10,10 @@ import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
-import {
-  TRANSFER_ENVELOPE_V2,
-  TRANSFER_VERSION,
-  directTransfer,
-  TRANSFER_REASON,
-} from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_ENVELOPE_V2, TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { legacyV2TransferEnvelope } from "./helpers/legacy-transfer-envelope.js";
 import { upgradeSessionTransferEnvelopes } from "../src/workspace-lifecycle/session-transfer-envelope-upgrade.js";
 import {
   SUMMARY_SNAPSHOT_SCHEMA_VERSION,
@@ -36,25 +33,7 @@ function sha(payload) {
 }
 
 function v2Envelope(id) {
-  const { presentationMessageId, ...rest } = directTransfer({
-    transferId: `transfer:${id}`,
-    presentationMessageId: `msg_${id}`,
-    identity: {
-      sessionId: "s-1",
-      turnScopeId: TURN,
-      runId: "run-1",
-      producer: { type: "tool", id: `call-${id}` },
-    },
-    direction: "output",
-    content: `content ${id}`,
-    intent: {
-      source: "tool",
-      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
-      scenario: "tool",
-      strategy: "tool_output",
-    },
-  });
-  return { ...rest, version: 2, [V2_FIELD]: presentationMessageId };
+  return legacyV2TransferEnvelope(id, { sessionId: "s-1", turnScopeId: TURN });
 }
 
 function toolMessage(uid, envelopeId) {
@@ -129,6 +108,7 @@ async function seedSession(fixture, { summaryRevisionCurrent = true } = {}) {
 
   const manifest = {
     sessionId: "s-1",
+    schemaVersion: SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
     parentSessionId: "",
     caller: "user",
     currentTaskId: "",
@@ -397,6 +377,83 @@ test("v6 requires the scoped session root set", async () => {
       upgradeSessionTransferEnvelopes({ base: fixture.base, backupBase: fixture.backupBase }),
       /requires scopedSessionRoots/,
     );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+async function downgradeToJournalSnapshotIndexes(fixture, seeded, schemaVersion) {
+  const [turn] = seeded.manifest.turnOrder;
+  const { summarySnapshots, ...journalIndexedTurn } = turn;
+  const indexRecords = summarySnapshots.map((index) => ({ op: "summary_snapshot", ...index }));
+  const committed = jsonl([...indexRecords, upsert(seeded.withEnvelope), upsert(seeded.plain)]);
+  await fixture.write("turns/turn-1.jsonl", committed);
+  const manifest = {
+    ...seeded.manifest,
+    schemaVersion,
+    turnOrder: [
+      {
+        ...journalIndexedTurn,
+        committedBytes: Buffer.byteLength(committed, "utf8"),
+        recordCount: indexRecords.length + 2,
+      },
+    ],
+  };
+  await fixture.write("session.json", manifest);
+  return { manifest };
+}
+
+test("v6 upgrades snapshots indexed inside the turn journal before schema 11", async () => {
+  const fixture = await createFixture();
+  try {
+    const seeded = await seedSession(fixture);
+    await downgradeToJournalSnapshotIndexes(fixture, seeded, 7);
+    const result = await upgradeSessionTransferEnvelopes(fixture);
+
+    assert.deepEqual(result.quarantined, []);
+    assert.equal(result.sessions[0].journalEnvelopes, 2);
+    const snapshot = await fixture.readJson(SNAPSHOT_FILE);
+    assertV3(snapshot.records[0].message.transferEnvelopes[0], "c");
+    const journalText = await fixture.readText("turns/turn-1.jsonl");
+    const [indexRecord, ...upserts] = journalText
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(indexRecord.op, "summary_snapshot");
+    assert.equal(indexRecord.contentHash, sha(snapshot));
+    assertV3(upserts[0].message.transferEnvelopes[0], "a");
+
+    const manifest = await fixture.readJson("session.json");
+    const [turn] = manifest.turnOrder;
+    assert.equal(manifest.schemaVersion, 7);
+    assert.equal(Object.hasOwn(turn, "summarySnapshots"), false);
+    assert.equal(turn.committedBytes, Buffer.byteLength(journalText, "utf8"));
+    assert.equal(turn.messageHashes.sm_c, snapshot.records[0].hash);
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("v6 upgrades cumulative message snapshots before schema 6", async () => {
+  const fixture = await createFixture();
+  try {
+    const seeded = await seedSession(fixture);
+    const legacySnapshot = { checkpointId: "cp-1", messages: [toolMessage("sm_c", "c")] };
+    await fixture.write(SNAPSHOT_FILE, `${JSON.stringify(legacySnapshot, null, 2)}\n`);
+    seeded.manifest.turnOrder[0].summarySnapshots[0].contentHash = sha(legacySnapshot);
+    await downgradeToJournalSnapshotIndexes(fixture, seeded, 5);
+
+    const result = await upgradeSessionTransferEnvelopes(fixture);
+
+    assert.deepEqual(result.quarantined, []);
+    const snapshot = await fixture.readJson(SNAPSHOT_FILE);
+    assertV3(snapshot.messages[0].transferEnvelopes[0], "c");
+    const [indexRecord] = (await fixture.readText("turns/turn-1.jsonl"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(indexRecord.op, "summary_snapshot");
+    assert.equal(indexRecord.contentHash, sha(snapshot));
   } finally {
     await fixture.restore();
   }

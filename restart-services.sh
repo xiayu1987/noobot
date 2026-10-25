@@ -49,27 +49,6 @@ ensure_pm2_log_rotation() {
   run_pm2 set pm2-logrotate:rotateModule true
 }
 
-wait_for_runtime_ready() {
-  local apps_json elapsed=0
-  while ((elapsed < 30)); do
-    if apps_json="$(run_pm2 jlist 2>/dev/null)" \
-      && echo "$apps_json" | node "$ROOT_DIR/scripts/validate-pm2-processes.mjs" "$ROOT_DIR" >/dev/null 2>&1 \
-      && noobot_ports_are_listening; then
-      echo "$apps_json" | node "$ROOT_DIR/scripts/validate-pm2-processes.mjs" "$ROOT_DIR"
-      return 0
-    fi
-    sleep 1
-    elapsed=$((elapsed + 1))
-  done
-  echo "Noobot 重启后 30 秒内未就绪" >&2
-  run_pm2 ls >&2 || true
-  local port
-  while IFS= read -r port; do
-    ss -lntp | grep ":${port} " >&2 || true
-  done < <(noobot_runtime_ports)
-  return 1
-}
-
 [[ -d "$CLIENT_DIR" ]] || { echo "前端目录不存在: $CLIENT_DIR" >&2; exit 1; }
 [[ -d "$SERVICE_DIR" ]] || { echo "后端目录不存在: $SERVICE_DIR" >&2; exit 1; }
 [[ -d "$AGENT_PROXY_DIR" ]] || { echo "代理目录不存在: $AGENT_PROXY_DIR" >&2; exit 1; }
@@ -89,6 +68,6 @@ export AGENT_PROXY_PORT AGENT_PROXY_HOST AGENT_PROXY_UPSTREAM_WS_URL AGENT_PROXY
 [[ -f "$PM2_ECOSYSTEM_FILE" ]] || { echo "PM2 ecosystem 配置不存在: $PM2_ECOSYSTEM_FILE" >&2; exit 1; }
 run_pm2 delete "${NOOBOT_PM2_APP_NAMES[@]}" >/dev/null 2>&1 || true
 run_pm2 start "$PM2_ECOSYSTEM_FILE" --update-env
-wait_for_runtime_ready
+noobot_wait_runtime_ready "$ROOT_DIR" || { noobot_report_runtime_failure; exit 1; }
 
 run_pm2 ls

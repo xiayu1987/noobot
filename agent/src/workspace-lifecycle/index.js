@@ -108,6 +108,7 @@ async function runWorkspaceOperation({
   sections,
   created,
   scopedSessionRoots,
+  reportProgress,
 }) {
   const backupBase = resolveWorkspaceBackupBase(base);
   const backup = createSectionBackup(backupBase, base);
@@ -122,6 +123,7 @@ async function runWorkspaceOperation({
     backupBase,
     created,
     scopedSessionRoots,
+    reportProgress,
   });
   await ensureRuntimeDirectories(base);
   report.memory = await repairMemorySection(base);
@@ -160,12 +162,18 @@ async function withWorkspace(options, operation, sections) {
       sections,
       created: !existed,
       scopedSessionRoots: options.scopedSessionRoots,
+      reportProgress: options.onProgress,
     });
     return { base, report };
   });
 }
 
 export async function ensureUserWorkspace(options) {
+  const { base, mutationLockDir } = await resolveWorkspacePaths(options);
+  const existed = await workspaceMutationCoordinator.run(mutationLockDir, () =>
+    requireWorkspaceDirectory(base),
+  );
+  if (existed) return base;
   return (await repairUserWorkspace(options)).base;
 }
 

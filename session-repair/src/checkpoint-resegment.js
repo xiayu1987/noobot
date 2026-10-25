@@ -5,6 +5,7 @@
  */
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { assertSessionManifestLayout } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
 import { checkpointContentHash, resolveRepairArtifactPath } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
@@ -112,10 +113,9 @@ async function rewriteCheckpointChain(checkpoints, buckets) {
 }
 
 async function resegmentTurn(sessionDir, turn) {
-  const turnId = text(turn?.turnId);
-  const journalFile = resolveRepairArtifactPath(sessionDir, turn?.file, "turns", [".jsonl"]);
-  const journal = await readRepairJournal(journalFile, turn?.committedBytes);
-  const indexes = Array.isArray(turn?.summarySnapshots) ? turn.summarySnapshots : [];
+  const { turnId, summarySnapshots: indexes } = turn;
+  const journalFile = resolveRepairArtifactPath(sessionDir, turn.file, "turns", [".jsonl"]);
+  const journal = await readRepairJournal(journalFile, turn.committedBytes);
   if (indexes.length < 2) return null;
   const checkpoints = await readCheckpointChain(sessionDir, indexes, turnId);
   const [baseline, ...following] = checkpoints;
@@ -143,9 +143,9 @@ async function resegmentTurn(sessionDir, turn) {
 
 export async function resegmentMigratedCheckpointBaselines({ sessionDir = "" } = {}) {
   const manifestFile = path.join(sessionDir, "session.json");
-  const manifest = await readRepairJson(manifestFile);
+  const manifest = assertSessionManifestLayout(await readRepairJson(manifestFile));
   const repaired = [];
-  for (const turn of Array.isArray(manifest?.turnOrder) ? manifest.turnOrder : []) {
+  for (const turn of manifest.turnOrder) {
     const result = await resegmentTurn(sessionDir, turn);
     if (result) repaired.push(result);
   }

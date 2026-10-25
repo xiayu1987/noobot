@@ -5,6 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
+import { WEB_SOCKET_CLOSE_CODE } from "../../../../src/infrastructure/websocket/closeWebSocket.js";
 import { setTransportDiagnosticsLogSink } from "../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import {
   emitCommandReceipt,
@@ -228,7 +229,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     client.subscribeTransportClosed(onClosed);
 
     const first = client.connect();
-    first.close(1011, "delivery_receipt_exhausted");
+    first.closeFromServer(1011, "delivery_receipt_exhausted");
     expect(onClosed).toHaveBeenCalledTimes(1);
 
     const second = client.connect();
@@ -563,6 +564,29 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       ),
     ).rejects.toMatchObject({ name: "InvalidStateError" });
     expect(client.getActiveSocket()).toBe(null);
+    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
+  });
+
+  it("closes the stream socket with a browser-valid code when an event handler throws", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const payload = streamCommand({ sessionId: "s-invalid-event", turnScopeId: "turn-invalid" });
+    const handlerError = new Error("invalid_event_payload");
+    const streamPromise = client.stream(payload, () => {
+      throw handlerError;
+    });
+    const socket = MockWebSocket.instances[0];
+    const closeSpy = vi.spyOn(socket, "close");
+
+    socket.emitChannel(payload.identity.sessionId, "runtime_event", {
+      sessionId: payload.identity.sessionId,
+      turnScopeId: "turn-invalid",
+    });
+
+    await expect(streamPromise).rejects.toBe(handlerError);
+    expect(closeSpy).toHaveBeenCalledWith(
+      WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE,
+      "invalid_event",
+    );
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);
   });
 

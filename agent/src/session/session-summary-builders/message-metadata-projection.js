@@ -5,9 +5,8 @@
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
-  NODE_RESULT_FIRST_FIELDS,
-  TRANSFER_FIRST_FIELDS,
-  pickTransferEnvelopeList,
+  TRANSFER_ENVELOPE_FIELD,
+  readTransferEnvelopeList,
 } from "@noobot/semantic-transfer-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 import {
@@ -143,7 +142,7 @@ function pickPayloadNodeRun(item = {}) {
   const stepFailure = pickPayloadStepFailure(item?.stepFailure);
   if (stepFailure) picked.stepFailure = stepFailure;
   const envelopes = pickLightPayloadTransferEnvelopes(
-    pickTransferEnvelopeList(item, NODE_RESULT_FIRST_FIELDS, { skipEmpty: false }),
+    readTransferEnvelopeList(item, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
   );
   if (envelopes.length) picked.nodeResultTransferEnvelopes = envelopes;
   return Object.keys(picked).length ? picked : null;
@@ -176,7 +175,7 @@ function pickPayloadNodeSession(item = {}) {
   const stepFailure = pickPayloadStepFailure(item?.stepFailure);
   if (stepFailure) picked.stepFailure = stepFailure;
   const envelopes = pickLightPayloadTransferEnvelopes(
-    pickTransferEnvelopeList(item, TRANSFER_FIRST_FIELDS, { skipEmpty: false }),
+    readTransferEnvelopeList(item, TRANSFER_ENVELOPE_FIELD.TRANSFER),
   );
   if (envelopes.length) picked.transferEnvelopes = envelopes;
   return Object.keys(picked).length ? picked : null;

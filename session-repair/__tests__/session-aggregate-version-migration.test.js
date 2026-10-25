@@ -6,14 +6,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { migrateSessionDocument } from "../src/index.js";
+import { releasedSession } from "./helpers/released-session.js";
 import { eventEnvelope } from "./helpers/event-envelope.js";
 import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
+function migrateReleased(fields) {
+  return migrateSessionDocument(releasedSession(fields));
+}
+
 function aggregateVersionMigrationError(source) {
   try {
-    migrateSessionDocument(source);
+    migrateReleased(source);
   } catch (error) {
     return error.code;
   }
@@ -21,7 +26,7 @@ function aggregateVersionMigrationError(source) {
 }
 
 test("aggregate version contract writes 0 only for an uncommitted Session", () => {
-  const result = migrateSessionDocument({ schemaVersion: 8, sessionId: "session-1", messages: [] });
+  const result = migrateReleased({ schemaVersion: 8, sessionId: "session-1", messages: [] });
   assert.equal(result.document.aggregateVersion, 0);
   assert.ok(result.migrations.includes("session-aggregate-version-contract-v1"));
 });
@@ -48,7 +53,7 @@ test("aggregate version contract rejects conflicting legacy version fields", () 
     }),
     "SESSION_AGGREGATE_VERSION_UNMIGRATABLE",
   );
-  const result = migrateSessionDocument({
+  const result = migrateReleased({
     schemaVersion: 8,
     sessionId: "session-1",
     aggregateVersion: 3,
@@ -60,7 +65,7 @@ test("aggregate version contract rejects conflicting legacy version fields", () 
 });
 
 test("aggregate version contract removes versions fabricated on lifecycle receipts", () => {
-  const result = migrateSessionDocument({
+  const result = migrateReleased({
     schemaVersion: 8,
     sessionId: "session-1",
     aggregateVersion: 1,

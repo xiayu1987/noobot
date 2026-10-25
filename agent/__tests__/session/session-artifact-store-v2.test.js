@@ -80,7 +80,7 @@ test("session manifest stores ordered turn references and rejects noncanonical s
       "utf8",
     );
     await assert.rejects(readSessionArtifact({ sessionDir: legacy }), {
-      code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
+      code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED,
     });
   }));
 

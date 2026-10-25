@@ -7,6 +7,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   formatStartupMessage,
+  formatUpgradeProgress,
   normalizeStartupLanguage,
   startupMessages,
 } from "../locales/messages.js";
@@ -158,6 +159,16 @@ export function useStartupBridge() {
     if (!status) return;
     if (status.language && !languageSelectedByUser.value) {
       superAdminForm.language = normalizeStartupLanguage(status.language);
+    }
+    if (status.phase === "upgrading") {
+      const progressText = formatUpgradeProgress(
+        messages.value.status,
+        status.progress,
+        status.stalledMinutes,
+      );
+      setMessage("", progressText);
+      appendLogLine(progressText);
+      return;
     }
     if (status.message) {
       const localizedKey = localizedStatusKeys[status.phase];

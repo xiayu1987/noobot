@@ -9,6 +9,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   RUNTIME_EVENT_LEVELS,
   RUNTIME_EVENT_SCOPES,
+  STARTUP_LAUNCH_ID_ENV,
 } from "./constants.js";
 import { safeSegment, sanitizeValue, serializeError } from "./sanitize.js";
 import { normalizeOptionalSessionId } from "./session-id.js";
@@ -21,6 +22,7 @@ const categories = new Set(Object.values(RUNTIME_EVENT_CATEGORIES));
 function buildProcessInfo() {
   return {
     pid: process.pid,
+    launchId: text(process.env[STARTUP_LAUNCH_ID_ENV]),
     platform: process.platform,
     arch: process.arch,
     nodeVersion: process.version,

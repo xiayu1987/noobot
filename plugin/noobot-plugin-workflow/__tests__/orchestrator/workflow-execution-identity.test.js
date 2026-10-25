@@ -10,6 +10,8 @@ import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import { runWorkflowExecution } from "../../src/core/orchestrator/execution-runner.js";
 import { createInMemoryWorkflowNodeStateRepository } from "../../src/core/orchestrator/node-state-repository.js";
 import { buildWorkflowPlanningNodeSessions } from "../../src/core/workflow-run-identity.js";
+import { normalizeOptions } from "../../src/core/options.js";
+import { getWorkflowInstanceSnapshot } from "workflow";
 import {
   createSemanticTransferTool,
   installTurnMessageEventRuntimeFixture,
@@ -65,9 +67,9 @@ function buildCtx() {
   };
 }
 
-function buildOptions({ subSessionRunner } = {}) {
+function buildOptions({ subSessionRunner, maxAutoTransitions = 3 } = {}) {
   return {
-    maxAutoTransitions: 3,
+    ...normalizeOptions({ mode: "on", maxAutoTransitions }),
     workflowNodeStateRepository: createInMemoryWorkflowNodeStateRepository(),
     subSessionRunner:
       subSessionRunner ||
@@ -94,7 +96,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
       subSessionCalls.push(call);
       return {
         lifecycle: {
-          executionId: call?.strategy?.executionId || call?.metadata?.executionId,
+          executionId: call.strategy.executionId,
           executionKind: "agent",
           state: "completed",
           revision: 4,
@@ -469,4 +471,53 @@ test("runWorkflowExecution propagates a terminal commit failure without a second
   assert.equal(commits.includes("failed"), false);
   const snapshot = await repository.getSnapshot({ workflowRunId });
   assert.equal(snapshot.nodes.find((item) => item.nodeId === "a").status, "running");
+});
+
+test("runWorkflowExecution releases the runtime instance when the transition limit is reached", async () => {
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="Start"',
+      'NODE id=a type=action name="A" task="A"',
+      'NODE id=b type=action name="B" task="B"',
+      'NODE id=end type=state stateType=end name="End"',
+      "EDGE from=start to=a",
+      "EDGE from=a to=b",
+      "EDGE from=b to=end",
+      "END",
+    ].join("\n"),
+  );
+  const workflowRunId = "wf_run_limit";
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+  const { ctx } = buildCtx();
+  const result = await runWithPlanning({
+    signal: new AbortController().signal,
+    hookManager: { emit: async () => ({ outcomes: [] }) },
+    options: buildOptions({
+      maxAutoTransitions: 1,
+      subSessionRunner: async (call) => ({
+        lifecycle: {
+          executionId: call.strategy.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
+        sessionId: call.strategy.sessionId,
+        dialogProcessId: call.strategy.dialogProcessId,
+        persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child-limit" },
+        result: { messages: [{ role: "assistant", content: "done" }] },
+      }),
+    }),
+    ctx,
+    semantic,
+    workflowRunId,
+    planningNodeSessions,
+  });
+  assert.equal(result.execution.completed, false);
+  assert.equal(result.execution.autoTransitions, 1);
+  assert.throws(
+    () => getWorkflowInstanceSnapshot({ instanceId: workflowRunId }),
+    /workflow instance not found/,
+  );
 });

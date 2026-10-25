@@ -26,6 +26,7 @@ import {
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
   resolveWorkflowUpstreamActionSteps,
+  getWorkflowInstanceSnapshot,
   startWorkflowInstanceById,
 } from "../src/lib/runtime.js";
 import {
@@ -550,4 +551,34 @@ test("runtime advance by stepId keeps step failure fields out of snapshots", () 
   } finally {
     releaseWorkflowInstance({ instanceId });
   }
+});
+
+test("runtime instance lifecycle is strict: id required, duplicates and unknown ids rejected", () => {
+  const semantic = {
+    nodes: [
+      { id: "start", type: "state", stateType: 0, name: "开始" },
+      { id: "a", type: "action", name: "节点A" },
+      { id: "end", type: "state", stateType: 1, name: "结束" },
+    ],
+    flowtos: [
+      { from: "start", to: "a" },
+      { from: "a", to: "end" },
+    ],
+  };
+  assert.throws(
+    () => startWorkflowInstanceById({ instanceId: "", semantic }),
+    /instanceId is required/,
+  );
+  const instanceId = `test_runtime_lifecycle_${Date.now()}`;
+  startWorkflowInstanceById({ instanceId, semantic });
+  try {
+    assert.throws(
+      () => startWorkflowInstanceById({ instanceId, semantic: {} }),
+      /workflow instance already exists/,
+    );
+  } finally {
+    releaseWorkflowInstance({ instanceId });
+  }
+  assert.throws(() => getWorkflowInstanceSnapshot({ instanceId }), /workflow instance not found/);
+  assert.throws(() => releaseWorkflowInstance({ instanceId }), /workflow instance not found/);
 });

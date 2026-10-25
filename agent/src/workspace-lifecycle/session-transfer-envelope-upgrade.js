@@ -7,7 +7,12 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { assertTurnJournalBoundary } from "@noobot/session-repair";
+import { assertTurnJournalBoundary, splitTurnSnapshotIndexes } from "@noobot/session-repair";
+import {
+  SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
+  resolveSessionArtifactSchemaVersion,
+} from "@noobot/session-protocol";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import { RUNTIME_EVENTS_DIR } from "@noobot/runtime-events";
 import {
@@ -34,7 +39,7 @@ import {
 } from "../session/session-artifact-session/turn-journal-store.js";
 import { createSessionDisplaySourceRevision } from "../session/session-display-source-revision.js";
 import { quarantineMigrationUnit } from "./migration-quarantine.js";
-import { walkSessionManifestDirectories } from "./session-directory-walk.js";
+import { ignoreSessionProgress, walkSessionManifestDirectories } from "./session-directory-walk.js";
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE;
@@ -44,6 +49,16 @@ function upgradeError(code, details) {
   error.code = UPGRADE_INVALID_CODE;
   error.details = { reason: code, ...details };
   return error;
+}
+
+function snapshotIndexFile(sessionDir, index) {
+  if (typeof index?.file !== "string" || !index.file) {
+    throw upgradeError("snapshot_index_file_missing", {
+      sessionDir,
+      checkpointId: index?.checkpointId,
+    });
+  }
+  return path.join(sessionDir, index.file);
 }
 
 function contentHash(payload) {
@@ -149,37 +164,110 @@ function parseJournalLines(text, filePath) {
     .map((line) => parseJson(line, filePath));
 }
 
-async function upgradeTurnJournal({ sessionDir, turn, hashMap, stage }) {
+async function readCommittedJournal(sessionDir, turn) {
   const filePath = journalPath(sessionDir, turn.turnId);
   let raw;
   try {
     raw = await readFile(filePath);
   } catch (error) {
-    if (error?.code === "ENOENT" && turn.committedBytes === 0) return null;
+    if (error?.code === "ENOENT" && turn.committedBytes === 0) {
+      return { filePath, exists: false, records: [], droppedTailBytes: 0 };
+    }
     throw error;
   }
   const committedBytes = assertTurnJournalBoundary(filePath, raw.length, turn.committedBytes);
   const records = parseJournalLines(raw.subarray(0, committedBytes).toString("utf8"), filePath);
-  const result = upgradeJournalRecords(records, filePath, hashMap);
-  if (!result.upgraded) return null;
-  const payload = result.records.map((record) => `${JSON.stringify(record)}\n`).join("");
-  stage(filePath, payload);
+  return { filePath, exists: true, records, droppedTailBytes: raw.length - committedBytes };
+}
+
+function rewriteJournalSnapshotIndexes(records, upgradedIndexes) {
+  let next = 0;
+  return records.map((record) =>
+    record?.op === "summary_snapshot" ? { ...record, ...upgradedIndexes[next++] } : record,
+  );
+}
+
+async function upgradeTurnArtifacts({ sessionDir, turn, schemaVersion, hashMap, stage }) {
+  const journal = await readCommittedJournal(sessionDir, turn);
+  const { indexes } = splitTurnSnapshotIndexes(schemaVersion, turn, journal.records);
+  const snapshots = await upgradeTurnSnapshots({
+    sessionDir,
+    indexes,
+    schemaVersion,
+    hashMap,
+    stage,
+  });
+  const indexesInJournal = schemaVersion < SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION;
+  const nextTurn = indexesInJournal
+    ? { ...turn }
+    : { ...turn, summarySnapshots: snapshots.summarySnapshots };
+  if (!journal.exists) return { turn: nextTurn, upgraded: snapshots.upgraded, droppedTailBytes: 0 };
+  const upserts = upgradeJournalRecords(journal.records, journal.filePath, hashMap);
+  const indexesChanged =
+    indexesInJournal && snapshots.summarySnapshots.some((index, i) => index !== indexes[i]);
+  if (!upserts.upgraded && !indexesChanged) {
+    return { turn: nextTurn, upgraded: snapshots.upgraded, droppedTailBytes: 0 };
+  }
+  const records = indexesInJournal
+    ? rewriteJournalSnapshotIndexes(upserts.records, snapshots.summarySnapshots)
+    : upserts.records;
+  const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
+  stage(journal.filePath, payload);
   return {
-    filePath,
-    upgraded: result.upgraded,
-    committedBytes: Buffer.byteLength(payload, "utf8"),
-    droppedTailBytes: raw.length - committedBytes,
+    turn: { ...nextTurn, committedBytes: Buffer.byteLength(payload, "utf8") },
+    upgraded: upserts.upgraded + snapshots.upgraded,
+    droppedTailBytes: journal.droppedTailBytes,
   };
 }
 
-async function upgradeTurnSnapshots({ sessionDir, turn, hashMap, stage }) {
-  const indexes = Array.isArray(turn.summarySnapshots) ? turn.summarySnapshots : [];
+function upgradeLegacySnapshotMessages(messages, filePath, hashMap) {
+  let upgraded = 0;
+  const next = messages.map((message) => {
+    const result = upgradeJournalRecord(
+      { op: "upsert", messageUid: message?.messageUid, message, hash: messageHash(message) },
+      filePath,
+      hashMap,
+    );
+    upgraded += result.upgraded;
+    return result.record.message;
+  });
+  return { messages: next, upgraded };
+}
+
+async function upgradeCumulativeMessageSnapshots({ sessionDir, indexes, hashMap, stage }) {
+  const nextIndexes = [];
+  let upgraded = 0;
+  for (const index of indexes) {
+    const filePath = snapshotIndexFile(sessionDir, index);
+    const text = await readTextOrNull(filePath);
+    if (text === null) throw upgradeError("snapshot_missing", { filePath });
+    const payload = parseJson(text, filePath);
+    if (!Array.isArray(payload?.messages) || contentHash(payload) !== index.contentHash) {
+      throw upgradeError("snapshot_chain_mismatch", { filePath });
+    }
+    const result = upgradeLegacySnapshotMessages(payload.messages, filePath, hashMap);
+    upgraded += result.upgraded;
+    if (!result.upgraded) {
+      nextIndexes.push(index);
+      continue;
+    }
+    const nextPayload = { ...payload, messages: result.messages };
+    stage(filePath, jsonText(nextPayload));
+    nextIndexes.push({ ...index, contentHash: contentHash(nextPayload) });
+  }
+  return { summarySnapshots: nextIndexes, upgraded };
+}
+
+async function upgradeTurnSnapshots({ sessionDir, indexes, schemaVersion, hashMap, stage }) {
+  if (schemaVersion < SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION) {
+    return upgradeCumulativeMessageSnapshots({ sessionDir, indexes, hashMap, stage });
+  }
   const nextIndexes = [];
   let previousOld = "";
   let previousNew = "";
   let upgraded = 0;
   for (const index of indexes) {
-    const filePath = path.join(sessionDir, String(index?.file || ""));
+    const filePath = snapshotIndexFile(sessionDir, index);
     const text = await readTextOrNull(filePath);
     if (text === null) throw upgradeError("snapshot_missing", { filePath });
     const payload = parseJson(text, filePath);
@@ -204,7 +292,7 @@ async function upgradeTurnSnapshots({ sessionDir, turn, hashMap, stage }) {
     upgraded += records.upgraded;
     previousOld = index.contentHash;
     previousNew = nextHash;
-    nextIndexes.push({ ...index, contentHash: nextHash });
+    nextIndexes.push(nextHash === index.contentHash ? index : { ...index, contentHash: nextHash });
   }
   return { summarySnapshots: nextIndexes, upgraded };
 }
@@ -373,17 +461,12 @@ async function upgradeManifestTurns({ sessionDir, manifest, stage }) {
   const hashMap = Object.assign(new Map(), { seen: new Set(), upgradedUids: new Set() });
   const report = { envelopes: 0, droppedTailBytes: 0 };
   const turnOrder = [];
+  const schemaVersion = resolveSessionArtifactSchemaVersion(manifest.schemaVersion);
   for (const turn of Array.isArray(manifest.turnOrder) ? manifest.turnOrder : []) {
-    const journal = await upgradeTurnJournal({ sessionDir, turn, hashMap, stage });
-    const snapshots = await upgradeTurnSnapshots({ sessionDir, turn, hashMap, stage });
-    report.envelopes += (journal?.upgraded || 0) + snapshots.upgraded;
-    report.droppedTailBytes += journal?.droppedTailBytes || 0;
-    turnOrder.push({
-      ...turn,
-      ...(journal ? { committedBytes: journal.committedBytes } : {}),
-      messageHashes: syncMessageHashes(turn, hashMap),
-      summarySnapshots: snapshots.summarySnapshots,
-    });
+    const result = await upgradeTurnArtifacts({ sessionDir, turn, schemaVersion, hashMap, stage });
+    report.envelopes += result.upgraded;
+    report.droppedTailBytes += result.droppedTailBytes;
+    turnOrder.push({ ...result.turn, messageHashes: syncMessageHashes(turn, hashMap) });
   }
   return { turnOrder, changed: hashMap.size > 0, report };
 }
@@ -424,7 +507,12 @@ async function upgradeSessionDirectory({ base, backupBase, sessionDir }) {
   };
 }
 
-export async function upgradeSessionTransferEnvelopes({ base, backupBase, scopedSessionRoots }) {
+export async function upgradeSessionTransferEnvelopes({
+  base,
+  backupBase,
+  scopedSessionRoots,
+  onSessionProcessed = ignoreSessionProgress,
+}) {
   if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
     throw new TypeError("session transfer envelope upgrade requires scopedSessionRoots");
   }
@@ -449,6 +537,7 @@ export async function upgradeSessionTransferEnvelopes({ base, backupBase, scoped
           }),
         );
       }
+      onSessionProcessed();
     }
   }
   return { sessions, quarantined };

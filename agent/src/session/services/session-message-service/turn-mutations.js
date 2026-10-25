@@ -181,7 +181,6 @@ function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
       turnScopeId: fields.turnScopeId,
       dialogProcessId: fields.dialogProcessId,
       pending: false,
-      error: false,
       done: true,
       ts: nowValue,
       ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),

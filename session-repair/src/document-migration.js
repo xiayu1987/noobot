@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
-import {
-  assertTransferEnvelope,
-  isTransferEnvelopeField,
-  upgradeTransferEnvelopesInValue,
-} from "@noobot/semantic-transfer-protocol";
+import { upgradeTransferEnvelopesInValue } from "@noobot/semantic-transfer-protocol";
 import {
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
@@ -17,11 +13,12 @@ import {
   TURN_STATE,
   TURN_TERMINAL_STATUS,
   SESSION_ARTIFACT_AGGREGATE_VERSION_CONTRACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_LEGACY_AGGREGATE_FIELDS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_LEGACY_MESSAGE_ID_SCHEMA_VERSION,
   SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ARTIFACT_TURN_TERMINAL_STATUS_SCHEMA_VERSION,
   TURN_ORPHAN_RECOVERY,
-  createEmptyTurnLifecycle,
   createTurnCommitFingerprint,
   createTurnTerminalStatus,
   normalizeTurnTerminalStatus,
@@ -33,11 +30,13 @@ import {
   resolveSessionArtifactSchemaVersion,
   isTurnCommitAction,
   MESSAGE_REMOVED_FIELD_NAME,
+  collectTurnReplacementTombstoneErrors,
 } from "@noobot/session-protocol";
 import {
   completedSemanticTransferMigrationNames,
   createSemanticTransferMigration,
   migrateSemanticTransfers,
+  validateTransferCollections,
 } from "./semantic-transfer-migrations.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import { stableId } from "./repair-primitives.js";
@@ -46,25 +45,18 @@ import { migrateSessionCaller } from "./session-caller-migration.js";
 import { migrateCanonicalCommandReceipts } from "./command-receipt-migration.js";
 import { migrateMessageIdentity } from "./message-identity-migration.js";
 import { migrateTurnTerminalDescription } from "./terminal-description-migration.js";
+import { migrateMessageErrorText } from "./message-error-text-migration.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
+import {
+  assertLegacyAuthorityEventOutbox,
+  assertLegacyFieldSchema,
+  materializeAggregateFields,
+  migrateLegacyInjectedMessageType,
+  migrateLegacyTurnCommitKey,
+  requireLegacyArray,
+} from "./legacy-field-migration.js";
 
 const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
-
-function validateTransferCollections(value) {
-  if (!isObjectLike(value)) return false;
-  if (Array.isArray(value)) {
-    for (const item of value) validateTransferCollections(item);
-    return false;
-  }
-  for (const [key, child] of Object.entries(value)) {
-    if (isTransferEnvelopeField(key) && Array.isArray(child)) {
-      for (const envelope of child) assertTransferEnvelope(envelope);
-      continue;
-    }
-    validateTransferCollections(child);
-  }
-  return false;
-}
 
 function migrateArtifactSchema(document, migrations, sourceSchemaVersion) {
   if (sourceSchemaVersion === SESSION_ARTIFACT_SCHEMA_VERSION) return false;
@@ -98,8 +90,9 @@ function migrateTurnCommitMetadata(message) {
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
-function migrateMessageIdField(message, index) {
+function migrateMessageIdField(context, message, index) {
   if (!Object.hasOwn(message, "id")) return false;
+  assertLegacyFieldSchema(context, "message.id", SESSION_ARTIFACT_LEGACY_MESSAGE_ID_SCHEMA_VERSION);
   const legacyId = text(message.id);
   const messageId = text(message[LEGACY_MESSAGE_ID]);
   if (legacyId && messageId && legacyId !== messageId) {
@@ -114,17 +107,12 @@ function migrateMessageIdField(message, index) {
   return true;
 }
 
-function migrateMessage(
-  message = {},
-  sessionId = "",
-  index = 0,
-  transferMigration = null,
-  migrateArtifactProtocol = false,
-) {
+function migrateMessage(context, message, index) {
+  const { sessionId, transferMigration, migrateArtifactProtocol } = context;
   const hadSessionId = Object.hasOwn(message, "sessionId");
   const next = { ...message, sessionId: text(message.sessionId || sessionId) };
   let changed = false;
-  changed = migrateMessageIdField(next, index) || changed;
+  changed = migrateMessageIdField(context, next, index) || changed;
   if (
     next.chatPresentation === true &&
     text(next.presentationMessageId) &&
@@ -134,18 +122,7 @@ function migrateMessage(
     delete next.messageUid;
     changed = true;
   }
-  if (
-    migrateArtifactProtocol &&
-    isPlainObject(next.turnCommit) &&
-    next.turnCommit.idempotencyKey !== undefined
-  ) {
-    next.turnCommit = {
-      ...next.turnCommit,
-      commandId: next.turnCommit.commandId || next.turnCommit.idempotencyKey,
-    };
-    delete next.turnCommit.idempotencyKey;
-    changed = true;
-  }
+  changed = migrateLegacyTurnCommitKey(context, next) || changed;
   if (migrateArtifactProtocol) changed = migrateTurnCommitMetadata(next) || changed;
   if (!text(next.messageUid) && next.chatPresentation !== true) {
     const legacyIdentitySeed = next[LEGACY_MESSAGE_ID];
@@ -167,14 +144,8 @@ function migrateMessage(
     next.messageUid = stableId("sm_migrated", identitySeed);
     changed = true;
   }
-  if (next.injectedMessageType === undefined && next.injected_message_type !== undefined) {
-    next.injectedMessageType = next.injected_message_type;
-    delete next.injected_message_type;
-    changed = true;
-  }
+  changed = migrateLegacyInjectedMessageType(context, next) || changed;
   try {
-    // Legacy sessions may carry v2 envelopes (messageId) that the layout v6 upgrade never
-    // reached; upgrade them in place before reason migration and strict validation.
     const envelopeUpgrade = upgradeTransferEnvelopesInValue(next);
     if (envelopeUpgrade.upgraded) {
       Object.assign(next, envelopeUpgrade.value);
@@ -185,8 +156,6 @@ function migrateMessage(
     }
     validateTransferCollections(next);
   } catch (error) {
-    // Classify as a per-Session data rejection so callers quarantine this Session
-    // instead of aborting the whole workspace upgrade.
     throw Object.assign(
       new Error(`Session message ${index} has unmigratable transfer envelopes: ${error.message}`),
       { code: SESSION_REPAIR_ERROR_CODE.TRANSFER_ENVELOPE_UNMIGRATABLE, cause: error },
@@ -369,11 +338,6 @@ export function reconcileUncommittedAggregateConflictContinuations(document = {}
   return { document: next, changed: true, repaired };
 }
 
-function ensureRecordField(owner, key) {
-  if (!isPlainObject(owner[key])) owner[key] = {};
-  return owner[key];
-}
-
 function migrationError(message, code, ErrorType = TypeError) {
   return Object.assign(new ErrorType(message), { code });
 }
@@ -421,7 +385,7 @@ function remapLifecycleCommandIds(context, commandIdMap) {
     if (completionCommitId) turn.completionCommitId = completionCommitId;
   }
   const { next } = context;
-  if (Array.isArray(next.authorityEventOutbox)) {
+  if (Object.hasOwn(next, "authorityEventOutbox")) {
     next.authorityEventOutbox = next.authorityEventOutbox.map((entry) => {
       const envelope = entry?.envelope;
       const commandId = commandIdMap.get(text(envelope?.commandId));
@@ -462,6 +426,11 @@ function migrateLifecycleCommandReceipts(context) {
     }
     const eventType = text(receipt.eventType);
     if (!eventType) return receipt;
+    assertLegacyFieldSchema(
+      context,
+      "commandReceipts[].eventType",
+      SESSION_ARTIFACT_LEGACY_AGGREGATE_FIELDS_SCHEMA_VERSION,
+    );
     const migrated = migrateEventTypedReceipt(context, receipt, eventType, commandIdMap);
     eventTypedCommandIds.add(migrated.commandId);
     return migrated;
@@ -493,7 +462,13 @@ function terminalStatusMatches(status, turns) {
 
 function migrateTurnStatuses(context) {
   const { next } = context;
-  if (!Array.isArray(next.turnStatuses)) return;
+  if (!Object.hasOwn(next, "turnStatuses")) return;
+  assertLegacyFieldSchema(
+    context,
+    "turnStatuses",
+    SESSION_ARTIFACT_LEGACY_AGGREGATE_FIELDS_SCHEMA_VERSION,
+  );
+  requireLegacyArray(next.turnStatuses, "turnStatuses");
   for (const status of next.turnStatuses) {
     if (!terminalStatusMatches(status, context.turns)) {
       throw migrationError(
@@ -623,7 +598,13 @@ function migrateMutationReceipt(lifecycle, receipt) {
 
 function migrateMutationReceipts(context) {
   const { next } = context;
-  if (!Array.isArray(next.mutationReceipts)) return;
+  if (!Object.hasOwn(next, "mutationReceipts")) return;
+  assertLegacyFieldSchema(
+    context,
+    "mutationReceipts",
+    SESSION_ARTIFACT_LEGACY_AGGREGATE_FIELDS_SCHEMA_VERSION,
+  );
+  requireLegacyArray(next.mutationReceipts, "mutationReceipts");
   for (const receipt of next.mutationReceipts) migrateMutationReceipt(context.lifecycle, receipt);
   delete next.mutationReceipts;
   markMigrated(context, "session-command-receipts-v1");
@@ -698,13 +679,7 @@ function migrateAggregateVersionContract(context) {
 }
 
 function migrateDocumentMessage(context, message, index) {
-  const result = migrateMessage(
-    message,
-    context.sessionId,
-    index,
-    context.transferMigration,
-    context.migrateArtifactProtocol,
-  );
+  const result = migrateMessage(context, message, index);
   context.changed ||= result.changed;
   return result.message;
 }
@@ -740,48 +715,19 @@ function migrateDocumentMessages(context) {
   context.migrations.push(...completedSemanticTransferMigrationNames(context.transferMigration));
 }
 
-function resolveReplacementDialogProcessId(context, replacement) {
-  const { next } = context;
-  const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
-  const replacementUserMessageUid = text(replacement.replacementUserMessageUid);
-  const message = (Array.isArray(next.messages) ? next.messages : []).find(
-    (item) => text(item.messageUid) === replacementUserMessageUid,
+function assertReplacementTombstone(context, replacement) {
+  const errors = collectTurnReplacementTombstoneErrors(replacement, context.lifecycle.sequence);
+  if (!errors.length) return;
+  throw migrationError(
+    `Session ${context.sessionId} replacement tombstone is unmigratable: ${errors.join(",")}`,
+    SESSION_REPAIR_ERROR_CODE.REPLACEMENT_IDENTITY_UNMIGRATABLE,
+    Error,
   );
-  const turn = (Array.isArray(next.turnOrder) ? next.turnOrder : []).find(
-    (item) => text(item.turnScopeId) === replacementTurnScopeId,
-  );
-  const resolved = text(message?.dialogProcessId || turn?.dialogProcessId);
-  if (!resolved) {
-    throw migrationError(
-      `Cannot migrate replacement dialog identity for Session ${context.sessionId}`,
-      SESSION_REPAIR_ERROR_CODE.REPLACEMENT_IDENTITY_UNMIGRATABLE,
-      Error,
-    );
-  }
-  return resolved;
-}
-
-function migrateReplacement(context, replacement) {
-  if (!isPlainObject(replacement)) return;
-  if (
-    replacement.committedVersion === undefined &&
-    replacement.replacementDialogProcessId !== undefined
-  ) {
-    return;
-  }
-  replacement.committedAggregateVersion = Number(
-    replacement.committedAggregateVersion || replacement.committedVersion || 0,
-  );
-  replacement.replacementDialogProcessId =
-    text(replacement.replacementDialogProcessId) ||
-    resolveReplacementDialogProcessId(context, replacement);
-  delete replacement.committedVersion;
-  context.changed = true;
 }
 
 function migrateReplacedTurns(context) {
-  for (const replacement of Object.values(context.next.turnLifecycle?.replacedTurns || {})) {
-    migrateReplacement(context, replacement);
+  for (const replacement of Object.values(context.lifecycle.replacedTurns)) {
+    assertReplacementTombstone(context, replacement);
   }
 }
 
@@ -794,9 +740,7 @@ function dropLegacyTerminalCommits(context) {
 function extractLegacyAuthorityEventOutbox(context) {
   const { next } = context;
   if (!Object.hasOwn(next, "authorityEventOutbox")) return [];
-  const legacyAuthorityEventOutbox = Array.isArray(next.authorityEventOutbox)
-    ? next.authorityEventOutbox
-    : [];
+  const legacyAuthorityEventOutbox = next.authorityEventOutbox;
   delete next.authorityEventOutbox;
   markMigrated(context, "authority-event-outbox-journal-v1");
   return legacyAuthorityEventOutbox;
@@ -815,19 +759,13 @@ function createDocumentMigrationContext(document) {
   const transferMigration = createSemanticTransferMigration(next);
   const migrations = [];
   const changed = migrateArtifactSchema(next, migrations, sourceSchemaVersion);
-  const lifecycle = { ...createEmptyTurnLifecycle(), ...ensureRecordField(next, "turnLifecycle") };
-  next.turnLifecycle = lifecycle;
-  ensureRecordField(lifecycle, "turns");
-  ensureRecordField(lifecycle, "replacedTurns");
-  if (!Array.isArray(lifecycle.commandReceipts)) lifecycle.commandReceipts = [];
-  if (!Array.isArray(next.turnTimings)) next.turnTimings = [];
-  if (!Array.isArray(next.messages)) next.messages = [];
+  const lifecycle = materializeAggregateFields(next, sourceSchemaVersion);
   return {
     next,
     migrations,
     changed,
     lifecycle,
-    turns: ensureRecordField(lifecycle, "turns"),
+    turns: lifecycle.turns,
     sessionId,
     sourceSchemaVersion,
     transferMigration,
@@ -838,6 +776,7 @@ function createDocumentMigrationContext(document) {
 }
 
 const DOCUMENT_MIGRATION_STEPS = Object.freeze([
+  assertLegacyAuthorityEventOutbox,
   migrateAggregateVersionContract,
   migrateLifecycleCommandReceipts,
   migrateTurnStatuses,
@@ -846,6 +785,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateTurnCommitReceipts,
   migrateMutationReceipts,
   migrateDocumentMessages,
+  migrateMessageErrorText,
   migrateMessageIdentity,
   migrateReplacedTurns,
   dropLegacyTerminalCommits,

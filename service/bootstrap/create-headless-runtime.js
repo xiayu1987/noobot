@@ -9,6 +9,8 @@ import { registerBuiltinConnectorInstances } from "@noobot/connector-instances";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
+  RUNTIME_EVENT_SCOPES,
+  SERVICE_STARTUP_EVENTS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { createAppDependencies } from "./create-app-dependencies.js";
@@ -49,12 +51,12 @@ export async function createHeadlessRuntime({
   const startupContext = await loadStartupContext({ argv, cwd, env: process.env });
   applyStartupRuntimeEnv(startupContext, { env: process.env });
   void writeRuntimeEvent({
-    scope: "startup",
+    scope: RUNTIME_EVENT_SCOPES.STARTUP,
     source: startupSource,
     channel: RUNTIME_EVENT_CHANNELS.STARTUP,
     category: RUNTIME_EVENT_CATEGORIES.CONFIG,
     level: "info",
-    event: "service.startup.context.loaded",
+    event: SERVICE_STARTUP_EVENTS.CONTEXT_LOADED,
     data: safeStartupContextForLog(startupContext),
   });
 

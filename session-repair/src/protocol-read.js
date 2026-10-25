@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash } from "node:crypto";
-import path from "node:path";
 import {
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_LOCATION_MESSAGE_ORDER_SCHEMA_VERSION,
   SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_TURN_FILES_SCHEMA_VERSION,
+  SESSION_ARTIFACT_TURN_JOURNAL_LAYOUT_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
@@ -26,7 +28,7 @@ function materializeRepairRecords(records, order, baseMessages = []) {
     if (record.op === "remove") byUid.delete(uid);
     else if (record.op === "upsert" && isObjectLike(record.message)) byUid.set(uid, record.message);
   }
-  const orderedUids = Array.isArray(order) ? order.map(text).filter(Boolean) : [];
+  const orderedUids = order.map(text).filter(Boolean);
   const ordered = orderedUids.map((uid) => byUid.get(uid)).filter(Boolean);
   const selected = new Set(orderedUids);
   return [
@@ -39,12 +41,14 @@ function isJournalSnapshotIndex(record) {
   return record?.op === "summary_snapshot";
 }
 
-function splitTurnSnapshotIndexes(schemaVersion, item, records) {
+export function splitTurnSnapshotIndexes(schemaVersion, item, records) {
   if (schemaVersion >= SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION) {
-    return {
-      indexes: Array.isArray(item?.summarySnapshots) ? item.summarySnapshots : [],
-      journal: records,
-    };
+    if (!Array.isArray(item?.summarySnapshots)) {
+      throw Object.assign(new Error("Session turn manifest entry lacks summarySnapshots"), {
+        code: SESSION_REPAIR_ERROR_CODE.CHECKPOINT_CHAIN_INVALID,
+      });
+    }
+    return { indexes: item.summarySnapshots, journal: records };
   }
   return {
     indexes: records.filter(isJournalSnapshotIndex),
@@ -101,6 +105,57 @@ async function readPreviousCheckpointRecords(sessionDir, indexes) {
   return checkpointRecords;
 }
 
+function requireLayoutArray(owner, field, label) {
+  if (Array.isArray(owner?.[field])) return owner[field];
+  throw Object.assign(new TypeError(`${label} lacks ${field} required by its released schema`), {
+    code: SESSION_REPAIR_ERROR_CODE.ARTIFACT_FIELD_SCHEMA_MISMATCH,
+  });
+}
+
+async function readTurnFileMessages(sessionDir, item) {
+  const artifact = resolveRepairArtifactPath(sessionDir, item?.file, "turns", [".json"]);
+  const turn = await readRepairJson(artifact);
+  if (!Array.isArray(turn?.messages)) {
+    throw Object.assign(new Error(`legacy Session turn is invalid: ${item?.file}`), {
+      code: SESSION_REPAIR_ERROR_CODE.TURN_ARTIFACT_MISSING,
+    });
+  }
+  return turn.messages;
+}
+
+async function readTurnJournalMessages(sessionDir, schemaVersion, item) {
+  const artifact = resolveRepairArtifactPath(sessionDir, item?.file, "turns", [".jsonl"]);
+  const order = requireLayoutArray(item, "messageOrder", "Session turn manifest entry");
+  const records = await readRepairJournal(artifact, item?.committedBytes);
+  const { indexes, journal } = splitTurnSnapshotIndexes(schemaVersion, item, records);
+  if (schemaVersion >= SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION) {
+    const checkpointRecords = await readPreviousCheckpointRecords(sessionDir, indexes);
+    return materializeRepairRecords([...checkpointRecords, ...journal], order);
+  }
+  const baseMessages = await readLegacyCheckpointMessages(sessionDir, indexes);
+  return materializeRepairRecords(journal, order, baseMessages);
+}
+
+function orderByTurnLocation(session, messagesByTurnId) {
+  return requireLayoutArray(session, "messageOrder", "Session manifest")
+    .map(
+      (reference) =>
+        messagesByTurnId.get(text(reference?.turnId))?.[Number(reference?.messageIndex)],
+    )
+    .filter(Boolean);
+}
+
+function orderByMessageUid(session, messages) {
+  const byUid = new Map();
+  for (const message of messages) {
+    const uid = text(message?.messageUid);
+    if (uid && !byUid.has(uid)) byUid.set(uid, message);
+  }
+  return requireLayoutArray(session, "messageOrder", "Session manifest")
+    .map((reference) => byUid.get(text(reference?.messageUid)))
+    .filter(Boolean);
+}
+
 export async function readSessionForProtocolRepair({ sessionDir = "", session = null } = {}) {
   if (!isPlainObject(session)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), {
@@ -113,62 +168,23 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
       code: SESSION_REPAIR_ERROR_CODE.ARTIFACT_SCHEMA_UNSUPPORTED,
     });
   }
-  if (Array.isArray(session.messages)) return session;
+  if (schemaVersion < SESSION_ARTIFACT_TURN_FILES_SCHEMA_VERSION) {
+    requireLayoutArray(session, "messages", "Unversioned Session document");
+    return session;
+  }
+  const journalLayout = schemaVersion >= SESSION_ARTIFACT_TURN_JOURNAL_LAYOUT_SCHEMA_VERSION;
   const messagesByTurnId = new Map();
   const messages = [];
-  for (const item of Array.isArray(session.turnOrder) ? session.turnOrder : []) {
-    const relativeFile = typeof item === "string" ? item : item?.file;
-    if (!relativeFile) continue;
-    const artifact = resolveRepairArtifactPath(sessionDir, relativeFile, "turns", [
-      ".json",
-      ".jsonl",
-    ]);
-    let turnMessages;
-    if (path.extname(artifact) === ".jsonl") {
-      const records = await readRepairJournal(artifact, item?.committedBytes);
-      const { indexes, journal } = splitTurnSnapshotIndexes(schemaVersion, item, records);
-      if (schemaVersion >= SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION) {
-        const checkpointRecords = await readPreviousCheckpointRecords(sessionDir, indexes);
-        turnMessages = materializeRepairRecords(
-          [...checkpointRecords, ...journal],
-          item?.messageOrder,
-        );
-      } else {
-        const baseMessages = await readLegacyCheckpointMessages(sessionDir, indexes);
-        turnMessages = materializeRepairRecords(journal, item?.messageOrder, baseMessages);
-      }
-    } else {
-      const turn = await readRepairJson(artifact);
-      if (!Array.isArray(turn?.messages)) {
-        throw Object.assign(new Error(`legacy Session turn is invalid: ${relativeFile}`), {
-          code: SESSION_REPAIR_ERROR_CODE.TURN_ARTIFACT_MISSING,
-        });
-      }
-      turnMessages = turn.messages;
-    }
-    const turnId = text(item?.turnId);
-    if (turnId) messagesByTurnId.set(turnId, turnMessages);
+  for (const item of requireLayoutArray(session, "turnOrder", "Session manifest")) {
+    const turnMessages = journalLayout
+      ? await readTurnJournalMessages(sessionDir, schemaVersion, item)
+      : await readTurnFileMessages(sessionDir, item);
+    messagesByTurnId.set(text(item?.turnId), turnMessages);
     messages.push(...turnMessages);
   }
-  const order = Array.isArray(session.messageOrder) ? session.messageOrder : [];
-  return {
-    ...session,
-    messages:
-      order.length && order.some((reference) => reference?.turnId)
-        ? order
-            .map(
-              (reference) =>
-                messagesByTurnId.get(text(reference?.turnId))?.[Number(reference?.messageIndex)],
-            )
-            .filter(Boolean)
-        : order.length
-          ? order
-              .map((reference) =>
-                messages.find(
-                  (message) => text(message?.messageUid) === text(reference?.messageUid),
-                ),
-              )
-              .filter(Boolean)
-          : messages,
-  };
+  if (journalLayout) return { ...session, messages: orderByMessageUid(session, messages) };
+  if (schemaVersion >= SESSION_ARTIFACT_LOCATION_MESSAGE_ORDER_SCHEMA_VERSION) {
+    return { ...session, messages: orderByTurnLocation(session, messagesByTurnId) };
+  }
+  return { ...session, messages };
 }

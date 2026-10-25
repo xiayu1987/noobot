@@ -12,6 +12,8 @@ import {
   resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
+  WORKFLOW_ACTION_TYPE,
+  isWorkflowActionType,
 } from "./lib/runtime.js";
 
 export {
@@ -22,6 +24,8 @@ export {
   resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
+  WORKFLOW_ACTION_TYPE,
+  isWorkflowActionType,
 };
 
 export default {
@@ -32,4 +36,6 @@ export default {
   resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
+  WORKFLOW_ACTION_TYPE,
+  isWorkflowActionType,
 };

@@ -40,3 +40,4 @@ export const RUNTIME_EVENT_CHANNELS = Object.freeze({
   AGENT_PROXY_WEB_SOCKET: "agent-proxy-ws",
 });
 export const RUNTIME_EVENTS_DIR = "events";
+export const STARTUP_LAUNCH_ID_ENV = "NOOBOT_STARTUP_LAUNCH_ID";

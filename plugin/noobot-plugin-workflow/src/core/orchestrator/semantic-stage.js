@@ -11,12 +11,12 @@ import { startWorkflowPhase, endWorkflowPhase } from "./phase-events.js";
 import { text } from "@noobot/shared/value";
 
 export async function runSemanticResolutionStage({
-  options = {},
-  ctx = {},
+  options,
+  ctx,
   signal,
-  sourceText = "",
+  sourceText,
   phaseTracker,
-} = {}) {
+}) {
   await startWorkflowPhase({
     phaseTracker,
     phase: WORKFLOW_PHASES.SEMANTIC_RESOLUTION,

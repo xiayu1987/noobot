@@ -30,6 +30,7 @@ import { applyReconnectInteractionRequest } from "../runtime/reconnect/interacti
 import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
 import { text, isFunction } from "@noobot/shared/value";
+import { scopeSessionLogRecord } from "../../debug/loggers/lazyDebugSink.js";
 
 export function useReconnectReplay({
   sessions,
@@ -91,21 +92,22 @@ export function useReconnectReplay({
     for (const messageEvent of messages) {
       if (reduceSubSessionMessageEvent(messageEvent).applied === true) appliedCount += 1;
     }
-    sessionLogWebSocketClient.log({
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      debugType: "workflow-diagnostics",
-      event: "frontend.workflowTransport.subSessionReplayRouted",
-      sessionId: context.rootSessionId,
-      dialogProcessId: context.dialogProcessId,
-      turnScopeId: context.turnScopeId,
-      data: {
-        replayEnvelopeCount: messages.length,
-        appliedCount,
-        rootMessageProjectionSkipped: true,
-      },
-    });
+    sessionLogWebSocketClient.log(
+      scopeSessionLogRecord({
+        category: "debug",
+        level: "debug",
+        debugType: "workflow-diagnostics",
+        event: "frontend.workflowTransport.subSessionReplayRouted",
+        sessionId: context.rootSessionId,
+        dialogProcessId: context.dialogProcessId,
+        turnScopeId: context.turnScopeId,
+        data: {
+          replayEnvelopeCount: messages.length,
+          appliedCount,
+          rootMessageProjectionSkipped: true,
+        },
+      }),
+    );
     return { applied: appliedCount > 0, appliedCount };
   }
 
@@ -213,19 +215,18 @@ export function useReconnectReplay({
   }
 
   function logReconnectReplaySystemEvent(event, payload = {}) {
-    sessionLogWebSocketClient.log({
-      scope: "session",
-      category: "system",
-      event,
-      sessionId: payload.sessionId,
-      dialogProcessId: "",
-      turnScopeId: "",
-      data: {
+    sessionLogWebSocketClient.log(
+      scopeSessionLogRecord({
+        category: "system",
         event,
-        at: new Date().toISOString(),
-        ...payload,
-      },
-    });
+        sessionId: payload.sessionId,
+        data: {
+          event,
+          at: new Date().toISOString(),
+          ...payload,
+        },
+      }),
+    );
   }
 
   async function applyReconnectMessagesToActiveSession(messages, { turnScopeId }) {

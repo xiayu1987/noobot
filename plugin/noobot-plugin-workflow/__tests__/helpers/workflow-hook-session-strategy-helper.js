@@ -36,16 +36,6 @@ export function createMockBotHookManager() {
     },
     async emit(point, payload, invocation) {
       emits.push({ point: text(point), payload });
-      if (text(point) === HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE) {
-        return {
-          outcomes: [
-            {
-              status: "ok",
-              value: { action: { type: "submit" } },
-            },
-          ],
-        };
-      }
       const record = listeners.get(text(point));
       if (!record || typeof record.handler !== "function") {
         return { outcomes: [], failures: [] };

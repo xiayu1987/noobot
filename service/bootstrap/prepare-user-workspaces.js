@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { SERVICE_STARTUP_PROGRESS_STAGES } from "@noobot/runtime-events";
 
 function describeFailure(userId, stage, error) {
   return {
@@ -33,19 +34,36 @@ function collectLayoutUpgradeFailures(userId, layoutUpgrades = []) {
   return failures;
 }
 
-export async function prepareUserWorkspaces({ userIds, bot }) {
+export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
   const results = [];
   const failures = [];
-  for (const userId of userIds) {
+  for (const [index, userId] of userIds.entries()) {
+    const userProgress = { userId, userIndex: index + 1, userCount: userIds.length };
     try {
-      const { report } = await bot.repairUserWorkspace(userId);
+      const { report } = await bot.repairUserWorkspace(userId, {
+        onProgress: (upgrade) =>
+          reportProgress({
+            ...userProgress,
+            stage: SERVICE_STARTUP_PROGRESS_STAGES.LAYOUT_UPGRADE,
+            ...upgrade,
+          }),
+      });
       failures.push(...collectLayoutUpgradeFailures(userId, report?.layoutUpgrades));
     } catch (error) {
       failures.push(describeFailure(userId, "workspace", error));
       continue;
     }
     try {
-      const result = await bot.session.maintainSessionDisplaySummaries({ userId });
+      const result = await bot.session.maintainSessionDisplaySummaries({
+        userId,
+        onProgress: (summary) =>
+          reportProgress({
+            ...userProgress,
+            stage: SERVICE_STARTUP_PROGRESS_STAGES.DISPLAY_SUMMARY,
+            upgradeId: "",
+            ...summary,
+          }),
+      });
       results.push(result);
       failures.push(...(result.failures || []).map((failure) => ({ userId, ...failure })));
     } catch (error) {

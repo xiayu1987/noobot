@@ -12,7 +12,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
-import { SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import {
+  SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
+  SESSION_ERROR_CODE,
+} from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   canonicalMessages,
@@ -396,6 +399,9 @@ test("Session reads reject a previous artifact schema instead of migrating it", 
     });
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
     const manifestFile = path.join(sessionDir, "session.json");
+    const repository = runtime.repositories.sessionRepository;
+    const persistenceContext = repository.treePersistenceContext(userId, sessionId);
+    const canonicalSession = await repository.findById(userId, sessionId, { persistenceContext });
     const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
     const legacyManifest = JSON.stringify({
       ...manifest,
@@ -403,19 +409,19 @@ test("Session reads reject a previous artifact schema instead of migrating it", 
     });
     await writeFile(manifestFile, legacyManifest, "utf8");
 
-    const repository = runtime.repositories.sessionRepository;
-    await assert.rejects(
-      repository.findById(userId, sessionId, {
-        persistenceContext: repository.treePersistenceContext(userId, sessionId),
-      }),
-      { code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED" },
-    );
+    await assert.rejects(repository.findById(userId, sessionId, { persistenceContext }), {
+      code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED,
+    });
+    await assert.rejects(repository.save(userId, canonicalSession, { persistenceContext }), {
+      code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED,
+    });
+    assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
       userId,
     });
     assert.deepEqual(
       maintenance.failures.map(({ sessionId: id, code }) => ({ sessionId: id, code })),
-      [{ sessionId, code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED" }],
+      [{ sessionId, code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED }],
     );
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
     assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);

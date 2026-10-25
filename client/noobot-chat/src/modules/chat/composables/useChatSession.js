@@ -75,6 +75,7 @@ import { createReconnectCoordinator } from "../runtime/session/reconnectCoordina
 import { installSessionLifecycleHydration } from "../runtime/session/sessionLifecycleHydration.js";
 import { createRuntimeEventProjector } from "../runtime/session/runtimeEventProjector.js";
 import { text } from "@noobot/shared/value";
+import { scopeSessionLogRecord } from "../../debug/loggers/lazyDebugSink.js";
 
 export function useChatSession({
   userId,
@@ -214,15 +215,16 @@ export function useChatSession({
       ...conversationStateTimeline.value,
       { ...normalizedEntry, ts: updatedAt },
     ].slice(-80);
-    sessionLogWebSocketClient.log({
-      scope: "session",
-      category: "state",
-      event: "conversation.state",
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-      data: normalizedEntry,
-    });
+    sessionLogWebSocketClient.log(
+      scopeSessionLogRecord({
+        category: "state",
+        event: "conversation.state",
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        data: normalizedEntry,
+      }),
+    );
     submitTurnRuntimeEvent({
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
       state,
@@ -358,44 +360,46 @@ export function useChatSession({
         stopRequesting: state.stopRequesting === true,
         primaryAction: state.primaryAction || "",
       }));
-      sessionLogWebSocketClient.log({
-        scope: "session",
-        category: "debug",
-        level: "debug",
-        debugType: "workflow-diagnostics",
-        event: "frontend.render.composerRuntimeConsumed",
-        sessionId: selectedSessionId,
-        turnScopeId: selectedTurnScopeId,
-        data: {
+      sessionLogWebSocketClient.log(
+        scopeSessionLogRecord({
+          category: "debug",
+          level: "debug",
+          debugType: "workflow-diagnostics",
           event: "frontend.render.composerRuntimeConsumed",
-          selectedSessionId: resolveActiveSessionIdentity(),
-          selectedTurnScopeId: resolveActiveTurnScopeIdentity(),
-          displayState: state.displayState || "",
-          sending: activeSessionSending.value === true,
-          canStop: state.canStop === true,
-          stopButtonVisible: state.canStop === true,
-          stopRequesting: state.stopRequesting === true,
-          primaryAction: state.primaryAction || "",
-        },
-      });
+          sessionId: selectedSessionId,
+          turnScopeId: selectedTurnScopeId,
+          data: {
+            event: "frontend.render.composerRuntimeConsumed",
+            selectedSessionId: resolveActiveSessionIdentity(),
+            selectedTurnScopeId: resolveActiveTurnScopeIdentity(),
+            displayState: state.displayState || "",
+            sending: activeSessionSending.value === true,
+            canStop: state.canStop === true,
+            stopButtonVisible: state.canStop === true,
+            stopRequesting: state.stopRequesting === true,
+            primaryAction: state.primaryAction || "",
+          },
+        }),
+      );
     },
     { immediate: true },
   );
 
   function logSessionSystemEvent(event, payload = {}) {
-    sessionLogWebSocketClient.log({
-      scope: "session",
-      category: "system",
-      event,
-      sessionId: payload?.sessionId || activeSessionId.value,
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: {
+    sessionLogWebSocketClient.log(
+      scopeSessionLogRecord({
+        category: "system",
         event,
-        at: new Date().toISOString(),
-        ...payload,
-      },
-    });
+        sessionId: payload?.sessionId || activeSessionId.value,
+        dialogProcessId: payload?.dialogProcessId || "",
+        turnScopeId: payload?.turnScopeId || "",
+        data: {
+          event,
+          at: new Date().toISOString(),
+          ...payload,
+        },
+      }),
+    );
   }
 
   const {

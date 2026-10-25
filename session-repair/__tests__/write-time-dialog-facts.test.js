@@ -8,6 +8,11 @@ import test from "node:test";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { migrateSessionDocument } from "../src/index.js";
 import { deriveWriteTimeDialogOrder } from "../src/write-time-dialog-facts.js";
+import { releasedSession } from "./helpers/released-session.js";
+
+function migrateReleased(fields) {
+  return migrateSessionDocument(releasedSession(fields));
+}
 
 function checkpointReceipt({ checkpointId, checkpointRevision, uid }) {
   return {
@@ -81,7 +86,7 @@ test("migrates v11 dialog order and summary receipts into write-time facts", () 
     },
   };
 
-  const result = migrateSessionDocument(source);
+  const result = migrateReleased(source);
 
   assert.ok(result.migrations.includes("session-write-time-dialog-facts-v12"));
   assert.deepEqual(
@@ -101,7 +106,7 @@ test("migrates v11 dialog order and summary receipts into write-time facts", () 
     result.document.turnSummaryCheckpoints.t1.receipts.map((item) => item.checkpointId),
     ["live"],
   );
-  const repeated = migrateSessionDocument({
+  const repeated = migrateReleased({
     ...result.document,
     schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
   });
@@ -133,7 +138,7 @@ test("v12 migration rejects checkpoint state missing checkpointRevision", () => 
     },
   };
   assert.throws(
-    () => migrateSessionDocument(source),
+    () => migrateReleased(source),
     (error) => error.code === "INVALID_TURN_SUMMARY_CHECKPOINT_STATE",
   );
 });

@@ -13,7 +13,9 @@ export const SESSION_REPAIR_BACKUP_MARKER = ".repair-backup-";
 
 export function isSessionRepairTempDirectoryName(name = "") {
   const value = String(name);
-  return value.includes(SESSION_REPAIR_STAGING_MARKER) || value.includes(SESSION_REPAIR_BACKUP_MARKER);
+  return (
+    value.includes(SESSION_REPAIR_STAGING_MARKER) || value.includes(SESSION_REPAIR_BACKUP_MARKER)
+  );
 }
 
 function swapFailure(message, details, cause) {
@@ -49,7 +51,6 @@ export async function runAtomicSessionRepair({
     await validate(stagingDir);
     await fs.rename(sessionDir, backupDir);
   } catch (error) {
-    // The original directory has not moved yet; staging is disposable.
     await fs.rm(stagingDir, { recursive: true, force: true });
     throw error;
   }
@@ -59,8 +60,6 @@ export async function runAtomicSessionRepair({
     try {
       await fs.rename(backupDir, sessionDir);
     } catch (rollbackError) {
-      // Something recreated sessionDir between the two renames. Never delete either copy:
-      // backup holds the original data and staging holds the repaired data.
       throw swapFailure(
         "Atomic Session repair could not swap or roll back; both copies were preserved",
         { sessionDir, stagingDir, backupDir, rollbackError: rollbackError?.message },

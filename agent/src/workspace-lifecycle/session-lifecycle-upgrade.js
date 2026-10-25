@@ -11,6 +11,7 @@ import { isMissingPersistencePathError } from "../shared/storage/json-file-reade
 import { text } from "@noobot/shared/value";
 import { parseWorkspaceSessionTombstones } from "@noobot/workspace-protocol/session-store";
 import { quarantineMigrationUnit } from "./migration-quarantine.js";
+import { ignoreSessionProgress } from "./session-directory-walk.js";
 
 const { RETIRED_SESSION_LIFECYCLE_RECORDS_DIR } = WORKSPACE_LAYOUT;
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE;
@@ -123,7 +124,11 @@ async function planRecords({ base, tombstoneSessions }) {
   return { plans, quarantined };
 }
 
-export async function upgradeSessionLifecycle({ base, backupBase }) {
+export async function upgradeSessionLifecycle({
+  base,
+  backupBase,
+  onSessionProcessed = ignoreSessionProgress,
+}) {
   const upgradedAt = new Date().toISOString();
   const tombstoneFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
   const tombstoneSessions = parseWorkspaceSessionTombstones({
@@ -138,7 +143,10 @@ export async function upgradeSessionLifecycle({ base, backupBase }) {
     await writeJson(tombstoneFile, { sessions: tombstoneSessions, updatedAt: upgradedAt });
   }
   const retired = [];
-  for (const plan of plans) retired.push(await retireRecord({ base, backupBase, plan }));
+  for (const plan of plans) {
+    retired.push(await retireRecord({ base, backupBase, plan }));
+    onSessionProcessed();
+  }
   await rm(path.join(base, RETIRED_SESSION_LIFECYCLE_RECORDS_DIR), {
     recursive: true,
     force: true,

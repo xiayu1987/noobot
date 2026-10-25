@@ -67,3 +67,29 @@ export async function releaseQuarantinedUnits({ base, kind }) {
   }
   return released;
 }
+
+export async function listQuarantinedUnits({ base }) {
+  const quarantineRoot = path.join(base, WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR);
+  const units = [];
+  for (const reasonPath of await listReasonFiles(quarantineRoot)) {
+    const reason = JSON.parse(await readFile(reasonPath, "utf8"));
+    const heldPath = reason.moved ? reasonPath.slice(0, -REASON_SUFFIX.length) : reasonPath;
+    units.push({ ...reason, quarantinePath: path.relative(base, heldPath) });
+  }
+  return units;
+}
+
+export async function listWorkspaceBackups({ base }) {
+  try {
+    const entries = await readdir(path.join(base, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR), {
+      withFileTypes: true,
+    });
+    return entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR, entry.name))
+      .sort();
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}

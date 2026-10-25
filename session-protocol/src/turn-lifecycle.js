@@ -174,44 +174,51 @@ export function createTurnLifecycleSnapshot({
   };
 }
 
+export function collectTurnReplacementTombstoneErrors(replacement, lifecycleSequence) {
+  const errors = [];
+  const turnScopeId = canonicalizeTurnScopeId(replacement?.turnScopeId);
+  const replacementTurnScopeId = canonicalizeTurnScopeId(replacement?.replacementTurnScopeId);
+  const replacedTurnScopeIds = Array.isArray(replacement?.replacedTurnScopeIds)
+    ? replacement.replacedTurnScopeIds.map(canonicalizeTurnScopeId).filter(Boolean)
+    : [];
+  if (!turnScopeId) errors.push("missing_replaced_turn_scope_id");
+  else if (!isCanonicalTurnScopeId(replacement.turnScopeId))
+    errors.push("non_canonical_replaced_turn_scope_id");
+  if (!clean(replacement?.replacementDialogProcessId))
+    errors.push("missing_replacement_dialog_process_id");
+  if (!clean(replacement?.requestHash)) errors.push("missing_replacement_request_hash");
+  if (!replacementTurnScopeId) errors.push("missing_replacement_turn_scope_id");
+  else if (!isCanonicalTurnScopeId(replacement.replacementTurnScopeId))
+    errors.push("non_canonical_replacement_turn_scope_id");
+  if (!clean(replacement?.replacementUserMessageUid))
+    errors.push("missing_replacement_user_message_uid");
+  if (!clean(replacement?.commandId)) errors.push("missing_replacement_command_id");
+  if (
+    !Number.isInteger(Number(replacement?.committedAggregateVersion)) ||
+    Number(replacement.committedAggregateVersion) < 1
+  )
+    errors.push("invalid_replacement_committed_version");
+  if (!replacedTurnScopeIds.length || !replacedTurnScopeIds.includes(turnScopeId))
+    errors.push("invalid_replaced_turn_scope_ids");
+  if (replacedTurnScopeIds.includes(replacementTurnScopeId))
+    errors.push("replacement_scope_reuses_replaced_scope");
+  if (
+    !Number.isInteger(Number(replacement?.sequence)) ||
+    Number(replacement.sequence) < 1 ||
+    Number(replacement.sequence) > Number(lifecycleSequence)
+  )
+    errors.push("invalid_replacement_sequence");
+  if (!clean(replacement?.committedAt)) errors.push("missing_replacement_committed_at");
+  return errors;
+}
+
 function collectReplacementErrors(snapshot, errors) {
   const replacementScopes = new Set();
   for (const replacement of Array.isArray(snapshot.replacedTurns) ? snapshot.replacedTurns : []) {
     const turnScopeId = canonicalizeTurnScopeId(replacement?.turnScopeId);
-    const replacementTurnScopeId = canonicalizeTurnScopeId(replacement?.replacementTurnScopeId);
-    const replacedTurnScopeIds = Array.isArray(replacement?.replacedTurnScopeIds)
-      ? replacement.replacedTurnScopeIds.map(canonicalizeTurnScopeId).filter(Boolean)
-      : [];
-    if (!turnScopeId) errors.push("missing_replaced_turn_scope_id");
-    else if (!isCanonicalTurnScopeId(replacement.turnScopeId))
-      errors.push("non_canonical_replaced_turn_scope_id");
     if (replacementScopes.has(turnScopeId)) errors.push("duplicate_replaced_turn_scope_id");
     replacementScopes.add(turnScopeId);
-    if (!clean(replacement?.replacementDialogProcessId))
-      errors.push("missing_replacement_dialog_process_id");
-    if (!clean(replacement?.requestHash)) errors.push("missing_replacement_request_hash");
-    if (!replacementTurnScopeId) errors.push("missing_replacement_turn_scope_id");
-    else if (!isCanonicalTurnScopeId(replacement.replacementTurnScopeId))
-      errors.push("non_canonical_replacement_turn_scope_id");
-    if (!clean(replacement?.replacementUserMessageUid))
-      errors.push("missing_replacement_user_message_uid");
-    if (!clean(replacement?.commandId)) errors.push("missing_replacement_command_id");
-    if (
-      !Number.isInteger(Number(replacement?.committedAggregateVersion)) ||
-      Number(replacement.committedAggregateVersion) < 1
-    )
-      errors.push("invalid_replacement_committed_version");
-    if (!replacedTurnScopeIds.length || !replacedTurnScopeIds.includes(turnScopeId))
-      errors.push("invalid_replaced_turn_scope_ids");
-    if (replacedTurnScopeIds.includes(replacementTurnScopeId))
-      errors.push("replacement_scope_reuses_replaced_scope");
-    if (
-      !Number.isInteger(Number(replacement?.sequence)) ||
-      Number(replacement.sequence) < 1 ||
-      Number(replacement.sequence) > Number(snapshot.sequence)
-    )
-      errors.push("invalid_replacement_sequence");
-    if (!clean(replacement?.committedAt)) errors.push("missing_replacement_committed_at");
+    errors.push(...collectTurnReplacementTombstoneErrors(replacement, snapshot.sequence));
   }
   return replacementScopes;
 }

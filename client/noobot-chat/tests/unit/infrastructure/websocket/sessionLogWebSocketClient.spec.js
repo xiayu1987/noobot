@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WEB_SOCKET_CLOSE_CODE } from "../../../../src/infrastructure/websocket/closeWebSocket.js";
+import { assertBrowserCloseCode } from "./chatWebSocketClientTestFixtures.js";
 
 class MockWebSocket {
   static CONNECTING = 0;
@@ -28,6 +30,7 @@ class MockWebSocket {
   }
 
   close(code = 1000, reason = "") {
+    assertBrowserCloseCode(code);
     this.readyState = MockWebSocket.CLOSED;
     this.closeCall = { code, reason };
   }
@@ -225,7 +228,10 @@ describe("sessionLogWebSocketClient", () => {
     const socket = MockWebSocket.instances[0];
     socket.onerror?.();
 
-    expect(socket.closeCall).toEqual({ code: 1011, reason: "transport_error" });
+    expect(socket.closeCall).toEqual({
+      code: WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE,
+      reason: "transport_error",
+    });
     expect(client.status()).toMatchObject({ hasSocket: false, queueLength: 1 });
   });
 

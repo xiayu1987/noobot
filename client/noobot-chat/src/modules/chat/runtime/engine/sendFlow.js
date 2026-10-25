@@ -9,6 +9,7 @@ import { prepareChatSend } from "./sendPrepare.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { selectSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logResendDebug } from "../../../debug/loggers/resendDebugLogger.js";
+import { scopeSessionLogRecord } from "../../../debug/loggers/lazyDebugSink.js";
 import { createSendFlowDebugLogger } from "./sendFlowDebugLogger.js";
 import { resolveSendRequest } from "./sendRequestResolver.js";
 import { executeSendStream } from "./sendStreamExecutor.js";
@@ -62,7 +63,7 @@ export function createChatEngineSender({
   uploadFiles,
 }) {
   const logSessionEvent = (event = {}) =>
-    sessionLogWebSocketClient?.log?.({ scope: "session", ...event });
+    sessionLogWebSocketClient?.log?.(scopeSessionLogRecord(event));
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     log: logResendDebug,

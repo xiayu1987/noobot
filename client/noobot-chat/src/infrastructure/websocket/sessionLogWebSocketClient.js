@@ -14,7 +14,7 @@ import {
   createWebSocketTransportSupervisor,
   WEB_SOCKET_TRANSPORT_PHASE,
 } from "./webSocketTransportSupervisor.js";
-import { closeWebSocket } from "./closeWebSocket.js";
+import { closeWebSocket, WEB_SOCKET_CLOSE_CODE } from "./closeWebSocket.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
@@ -83,7 +83,11 @@ export function createSessionLogWebSocketClient({
     }
     transport.noteFailure(currentSocket);
     if (closeSocket) {
-      closeWebSocket(currentSocket, 1011, "transport_error");
+      closeWebSocket(
+        currentSocket,
+        WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE,
+        "transport_error",
+      );
     }
     logDiagnostic("disconnected", {
       code: event?.code || 0,
@@ -202,7 +206,7 @@ export function createSessionLogWebSocketClient({
       } catch (error) {
         logDiagnostic("send failed", { errorType: error?.name || "Error" });
         handleDisconnect(socket, { reason: "send_failed" });
-        closeWebSocket(socket, 1011, "send_failed");
+        closeWebSocket(socket, WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE, "send_failed");
         break;
       }
     }

@@ -227,6 +227,11 @@ async function listArchiveFiles(file) {
   return archives.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
 }
 
+export async function listJsonLineFilesNewestFirst(file) {
+  const archives = await listArchiveFiles(file);
+  return [file, ...archives.reverse().map((archive) => archive.file)];
+}
+
 async function cleanupArchives(file, options = {}) {
   const retentionDays = resolveNonNegativeInteger(options.retentionDays);
   const maxArchives = resolveNonNegativeInteger(options.maxArchives);

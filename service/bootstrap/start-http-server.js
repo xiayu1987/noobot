@@ -7,6 +7,9 @@ import { createServer } from "node:http";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
+  RUNTIME_EVENT_SCOPES,
+  SERVICE_STARTUP_EVENTS,
+  SERVICE_STARTUP_SOURCE,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { registerChatWebSocketServer } from "../ws/chat-websocket-server.js";
@@ -59,12 +62,12 @@ export async function startHttpServer({
   const listenHost = typeof address === "object" && address ? address.address : "";
   const listenPort = typeof address === "object" && address ? address.port : port;
   await writeRuntimeEvent({
-    scope: "startup",
-    source: "service",
+    scope: RUNTIME_EVENT_SCOPES.STARTUP,
+    source: SERVICE_STARTUP_SOURCE,
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.STATE,
     level: "info",
-    event: "service.startup.httpServer.listen.started",
+    event: SERVICE_STARTUP_EVENTS.LISTEN_STARTED,
     data: {
       host: String(listenHost || ""),
       port: listenPort,

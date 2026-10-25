@@ -11,48 +11,24 @@ export const TRANSFER_ENVELOPE_FIELD = Object.freeze({
   NODE_RESULT: "nodeResultTransferEnvelopes",
 });
 
-export const TRANSFER_ENVELOPE_FIELDS = Object.freeze([
-  TRANSFER_ENVELOPE_FIELD.TRANSFER,
-  TRANSFER_ENVELOPE_FIELD.NODE_RESULT,
-]);
+export const TRANSFER_ENVELOPE_FIELDS = Object.freeze(Object.values(TRANSFER_ENVELOPE_FIELD));
 
-export const NODE_RESULT_FIRST_FIELDS = Object.freeze([
-  TRANSFER_ENVELOPE_FIELD.NODE_RESULT,
-  TRANSFER_ENVELOPE_FIELD.TRANSFER,
-]);
-
-export const TRANSFER_FIRST_FIELDS = Object.freeze([
-  TRANSFER_ENVELOPE_FIELD.TRANSFER,
-  TRANSFER_ENVELOPE_FIELD.NODE_RESULT,
-]);
-
-export function isTransferEnvelopeField(key = "") {
-  return TRANSFER_ENVELOPE_FIELDS.includes(String(key));
+export function isTransferEnvelopeField(key) {
+  return TRANSFER_ENVELOPE_FIELDS.includes(key);
 }
 
-export function pickTransferEnvelopeList(
-  source = null,
-  fields = NODE_RESULT_FIRST_FIELDS,
-  { skipEmpty = true } = {},
-) {
-  if (!isPlainObject(source)) return [];
-  for (const field of Array.isArray(fields) ? fields : [fields]) {
-    const value = source[field];
-    if (!Array.isArray(value)) continue;
-    if (skipEmpty && !value.length) continue;
-    return value;
+export function readTransferEnvelopeList(carrier, field) {
+  if (!isTransferEnvelopeField(field)) {
+    throw new Error(`transfer_envelope_field_invalid:${String(field)}`);
   }
-  return [];
-}
-
-export function collectTransferEnvelopeLists(
-  sources = [],
-  fields = NODE_RESULT_FIRST_FIELDS,
-  options = undefined,
-) {
-  return (Array.isArray(sources) ? sources : [sources]).flatMap((source) =>
-    pickTransferEnvelopeList(source, fields, options),
-  );
+  if (!isPlainObject(carrier)) {
+    throw new Error(`transfer_envelope_carrier_invalid:${field}`);
+  }
+  const value = carrier[field];
+  if (!Array.isArray(value)) {
+    throw new Error(`transfer_envelope_list_invalid:${field}`);
+  }
+  return value;
 }
 
 export function collectAllTransferEnvelopeLists(sources = [], fields = TRANSFER_ENVELOPE_FIELDS) {

@@ -88,6 +88,7 @@
     "format": "prettier . --write",
     "format:check": "node ./scripts/check-format.mjs",
     "check:quality": "node ./scripts/run-quality-checks.mjs",
+    "list:migration-quarantine": "node ./scripts/list-migration-quarantine.mjs .",
     "test:quality-config": "node --test \"scripts/**/*.test.mjs\"",
     "install:all": "npm install --workspaces",
     "build": "npm run -w client/startup build && npm run -w client/noobot-chat build",

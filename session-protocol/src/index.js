@@ -20,6 +20,7 @@ export {
   createTurnLifecycleReceipt,
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
+  collectTurnReplacementTombstoneErrors,
   isAuthoritativeTurnLifecycleEnvelope,
   validateSessionEvent,
   validateSessionProvisionIntent,
@@ -76,3 +77,4 @@ export * from "./aggregate/session-invariants.js";
 export * from "./aggregate/turn-commit-metadata.js";
 export * from "./aggregate/session-message-record.js";
 export * from "./aggregate/session-document-identity-migration.js";
+export * from "./aggregate/session-manifest-layout.js";

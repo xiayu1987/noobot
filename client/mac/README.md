@@ -87,7 +87,7 @@ Optional environment variables:
 - `NOOBOT_SERVICE_URL` defaults to `http://127.0.0.1:10061`
 - `NOOBOT_SERVICE_PORT` defaults to `10061`
 - `NOOBOT_CLIENT_URL` defaults to `http://127.0.0.1:10060`
-- `NOOBOT_STARTUP_TIMEOUT_MS` defaults to `60000`
+- `NOOBOT_AGENT_PROXY_STARTUP_TIMEOUT_MS` defaults to `60000`; it only bounds the agent proxy health wait. The service wait has no wall-clock limit and follows the startup protocol (progress, failure or exit).
 
 ## Mac build
 

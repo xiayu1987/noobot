@@ -18,6 +18,7 @@ import { WORKSPACE_LAYOUT, WORKSPACE_RUNTIME_DIRECTORIES } from "@noobot/workspa
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import {
   ensureUserWorkspace,
+  repairUserWorkspace,
   resetUserWorkspace,
   syncUserWorkspace,
 } from "../src/workspace-lifecycle/index.js";
@@ -96,7 +97,7 @@ test("ensure creates a new workspace from the protocols and the asset package", 
   }
 });
 
-test("ensure on an existing workspace keeps user config, memory and edited assets", async () => {
+test("repair on an existing workspace keeps user config, memory and edited assets", async () => {
   const fixture = await createFixture();
   try {
     const userConfig = `${JSON.stringify(USER_CONFIG)}\n`;
@@ -105,7 +106,7 @@ test("ensure on an existing workspace keeps user config, memory and edited asset
     await fixture.write("services/built-in.js", "export default 'edited';\n");
     await fixture.write("services/user-defined.js", "export default 'user';\n");
 
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
 
     assert.equal(await fixture.read("config.json"), userConfig);
     assert.equal(await fixture.read("memory/long-memory.md"), USER_LONG_MEMORY_DOCUMENT);
@@ -132,12 +133,12 @@ test("concurrent ensure calls resolve to the same workspace", async () => {
   }
 });
 
-test("ensure backs up and removes the retired user config example once", async () => {
+test("repair backs up and removes the retired user config example once", async () => {
   const fixture = await createFixture();
   try {
     await ensureUserWorkspace(fixture.options);
     await fixture.write("config.example.json", '{"legacy":true}\n');
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     const names = await readdir(fixture.userPath);
     assert.equal(names.includes("config.example.json"), false);
     const { stampDir, stamps } = await listBackupFiles(fixture.userPath);
@@ -145,18 +146,18 @@ test("ensure backs up and removes the retired user config example once", async (
       await readFile(path.join(stampDir, "config.example.json"), "utf8"),
       '{"legacy":true}\n',
     );
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     assert.deepEqual((await listBackupFiles(fixture.userPath)).stamps, stamps);
   } finally {
     await fixture.restore();
   }
 });
 
-test("ensure backs up invalid config JSON and rebuilds it through the config protocol", async () => {
+test("repair backs up invalid config JSON and rebuilds it through the config protocol", async () => {
   const fixture = await createFixture();
   try {
     await fixture.write("config.json", "{broken");
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     assert.deepEqual(JSON.parse(await fixture.read("config.json")), BASE_VALUES);
     const { stampDir } = await listBackupFiles(fixture.userPath);
     assert.equal(await readFile(path.join(stampDir, "config.json"), "utf8"), "{broken");
@@ -170,14 +171,14 @@ test("ensure backs up invalid config JSON and rebuilds it through the config pro
   }
 });
 
-test("ensure backs up and repairs legacy memory documents", async () => {
+test("repair backs up and repairs legacy memory documents", async () => {
   const fixture = await createFixture();
   try {
     await fixture.write("memory/long-memory.md", "1. legacy numbered memory\n");
     await fixture.write("memory/long-memory-model.md", "NOOBOT_LONG_MEMORY_MODEL/1\n");
     await fixture.write("memory/daily_summary/2026-09-01/域.md", "经验：旧\n");
 
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
 
     assert.equal(await fixture.read("memory/long-memory.md"), EMPTY_LONG_MEMORY_DOCUMENT);
     assert.equal(
@@ -301,12 +302,12 @@ test("reset of asset and runtime sections backs up assets and keeps backup roots
   }
 });
 
-test("ensure migrates legacy plugin data into the plugin data root", async () => {
+test("repair migrates legacy plugin data into the plugin data root", async () => {
   const fixture = await createFixture();
   try {
     await fixture.write("runtime/workflow/session/s1/d1/plan.json", "{}\n");
     await fixture.write("runtime/harness/runs/d1/harness-run.json", "{}\n");
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     const backupsRoot = path.join(fixture.userPath, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR);
     const [stamp] = await readdir(backupsRoot);
     assert.equal(
@@ -338,7 +339,7 @@ test("ensure migrates legacy plugin data into the plugin data root", async () =>
       code: "ENOENT",
     });
     await fixture.write("runtime/workflow/planning/x.json", "{}\n");
-    await assert.rejects(ensureUserWorkspace(fixture.options), {
+    await assert.rejects(repairUserWorkspace(fixture.options), {
       code: "WORKSPACE_LAYOUT_MIGRATION_CONFLICT",
     });
   } finally {

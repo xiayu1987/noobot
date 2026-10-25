@@ -12,7 +12,7 @@ import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-pr
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { EXECUTION_REPORT_VERSION } from "@noobot/session-protocol/execution-report";
-import { ensureUserWorkspace } from "../src/workspace-lifecycle/index.js";
+import { ensureUserWorkspace, repairUserWorkspace } from "../src/workspace-lifecycle/index.js";
 import { upgradeSessionStorage } from "../src/workspace-lifecycle/session-storage-upgrade.js";
 
 const SESSION_DIR = "runtime/session/s-1";
@@ -88,7 +88,7 @@ test("unmarked workspace maps the legacy session tree and retires v1 artifacts",
   const fixture = await createFixture();
   try {
     await seedLegacySessionStorage(fixture);
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
 
     assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
       nodes: {
@@ -126,7 +126,7 @@ test("unmarked workspace maps the legacy session tree and retires v1 artifacts",
 test("new workspace is marked current without running session storage upgrades", async () => {
   const fixture = await createFixture();
   try {
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), {
       version: WORKSPACE_LAYOUT_VERSION,
     });
@@ -143,7 +143,7 @@ test("current workspace skips the session storage scan", async () => {
       version: WORKSPACE_LAYOUT_VERSION,
     });
     await fixture.write(`${SESSION_DIR}/execution-events/index.json`, { schemaVersion: 1 });
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     assert.deepEqual(await fixture.readJson(`${SESSION_DIR}/execution-events/index.json`), {
       schemaVersion: 1,
     });
@@ -156,7 +156,7 @@ test("upgrade is applied once and later ensures are no-ops", async () => {
   const fixture = await createFixture();
   try {
     await seedLegacySessionStorage(fixture);
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     const stamp = await readBackupStamp(fixture);
     await ensureUserWorkspace(fixture.options);
     assert.equal(await readBackupStamp(fixture), stamp);
@@ -165,10 +165,28 @@ test("upgrade is applied once and later ensures are no-ops", async () => {
   }
 });
 
+test("ensure on an existing workspace leaves upgrades to startup repair", async () => {
+  const fixture = await createFixture();
+  try {
+    await seedLegacySessionStorage(fixture);
+    assert.equal(await ensureUserWorkspace(fixture.options), fixture.userPath);
+    await assert.rejects(
+      readdir(path.join(fixture.userPath, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR)),
+      { code: "ENOENT" },
+    );
+    await assert.rejects(
+      readFile(path.join(fixture.userPath, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), "utf8"),
+      { code: "ENOENT" },
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
 async function upgradeFromV2(fixture, tree) {
   await fixture.write(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE, { version: 2 });
   await fixture.write(WORKSPACE_LAYOUT.SESSION_TREE_FILE, tree);
-  await ensureUserWorkspace(fixture.options);
+  await repairUserWorkspace(fixture.options);
   return readBackupStamp(fixture);
 }
 
@@ -314,7 +332,7 @@ test("corrupt execution index has no other fact source and is retired", async ()
   const fixture = await createFixture();
   try {
     await fixture.write(`${SESSION_DIR}/execution-events/index.json`, "{not json");
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     const stamp = await readBackupStamp(fixture);
     assert.equal(await fixture.exists(`${SESSION_DIR}/execution-events`), false);
     assert.equal(
@@ -341,7 +359,7 @@ test("v4 workspace fills session tree callers from nested session documents", as
     await fixture.write("runtime/session/root/child/session.json", {
       caller: SESSION_CALLER.BOT,
     });
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
       nodes: {
         root: { sessionId: "root", parentSessionId: "", caller: SESSION_CALLER.USER },
@@ -368,9 +386,12 @@ test("layout upgrade quarantines a corrupted session manifest without blocking t
         broken: { sessionId: "broken", parentSessionId: "root", caller: SESSION_CALLER.USER },
       },
     });
-    await fixture.write("runtime/session/root/session.json", { caller: SESSION_CALLER.USER });
+    await fixture.write("runtime/session/root/session.json", {
+      caller: SESSION_CALLER.USER,
+      messages: [],
+    });
     await fixture.write("runtime/session/root/broken/session.json", "{not json");
-    await ensureUserWorkspace(fixture.options);
+    await repairUserWorkspace(fixture.options);
     assert.equal(
       await readFile(fixture.at("runtime/session/root/broken/session.json"), "utf8"),
       "{not json",

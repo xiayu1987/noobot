@@ -6,9 +6,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { migrateSessionDocument } from "../src/index.js";
+import { releasedSession } from "./helpers/released-session.js";
 
 function legacyCommittedSession(turnCommit) {
-  return {
+  return releasedSession({
     schemaVersion: 6,
     sessionId: "session-1",
     aggregateVersion: 1,
@@ -24,7 +25,7 @@ function legacyCommittedSession(turnCommit) {
         turnCommit,
       },
     ],
-  };
+  });
 }
 
 test("legacy turn commit migration rejects a commit without a protocol action", () => {

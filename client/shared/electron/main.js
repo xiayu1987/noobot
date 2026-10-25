@@ -46,7 +46,10 @@ const agentProxyOrigin = String(
 ).replace(/\/$/, "");
 const agentProxyHealthUrl = `${agentProxyOrigin}/health`;
 const defaultClientUrl = resolveDesktopClientUrl(process.env);
-const startupTimeoutMs = Number.parseInt(process.env.NOOBOT_STARTUP_TIMEOUT_MS || "60000", 10);
+const agentProxyStartupTimeoutMs = Number.parseInt(
+  process.env.NOOBOT_AGENT_PROXY_STARTUP_TIMEOUT_MS || "60000",
+  10,
+);
 const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "1000", 10);
 const startupDebugEnabled = /^(1|true|yes|on)$/i.test(
   String(process.env.NOOBOT_STARTUP_DEBUG || ""),
@@ -169,7 +172,7 @@ const { ensureServiceStarted, stopManagedService, setBackendRecoveredHandler } =
     serviceOrigin,
     healthUrl,
     agentProxyHealthUrl,
-    startupTimeoutMs,
+    agentProxyStartupTimeoutMs,
     pollIntervalMs,
     sendStatus,
     getLogFilePath,

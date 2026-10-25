@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { executeWorkflowText } from "../../workflow/adapter.js";
+import { parseWorkflowSemantic } from "../../workflow/adapter.js";
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { createPhaseTracker } from "../hooks/phase.js";
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
@@ -57,10 +57,7 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       phaseTracker,
     });
     throwIfWorkflowAborted(signal);
-    const { semantic } = executeWorkflowText({
-      semanticText,
-      options,
-    });
+    const semantic = parseWorkflowSemantic({ semanticText, options });
     const initialNodeStateSnapshot = await options.workflowNodeStateRepository.initialize({
       workflowRunId,
       planningNodeSessions: buildWorkflowPlanningNodeSessions({ workflowRunId, semantic }),

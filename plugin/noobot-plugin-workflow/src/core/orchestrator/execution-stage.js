@@ -11,17 +11,17 @@ import { runWorkflowExecution } from "./execution-runner.js";
 
 export async function runWorkflowExecutionStage({
   hookManager,
-  options = {},
-  ctx = {},
+  options,
+  ctx,
   signal,
-  semantic = {},
-  workflowRunId = "",
+  semantic,
+  workflowRunId,
   initialNodeStateSnapshot,
   phaseTracker,
-} = {}) {
+}) {
   phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
   throwIfWorkflowAborted(signal);
-  const { execution, nodeAgentRuns, nodeStateSnapshot, instanceId } = await runWorkflowExecution({
+  const { execution, nodeAgentRuns, nodeStateSnapshot } = await runWorkflowExecution({
     hookManager,
     options,
     ctx,
@@ -33,7 +33,7 @@ export async function runWorkflowExecutionStage({
   const executionMeta = {
     completed: execution.completed,
     pendingStepCount: execution.pendingStepCount,
-    instanceId,
+    workflowRunId,
   };
   await endWorkflowPhase({
     phaseTracker,
@@ -53,6 +53,5 @@ export async function runWorkflowExecutionStage({
     execution,
     nodeAgentRuns,
     nodeStateSnapshot,
-    instanceId,
   };
 }

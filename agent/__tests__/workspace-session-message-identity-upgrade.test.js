@@ -15,6 +15,7 @@ import {
 } from "@noobot/session-protocol";
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import { SESSION_REPAIR_DATA_REJECTION_CODES } from "@noobot/session-repair";
+import { TRANSFER_ENVELOPE_V2 } from "@noobot/semantic-transfer-protocol";
 import { EVENT_FAMILY, createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
@@ -25,6 +26,7 @@ import { messageHash } from "../src/session/session-artifact-session/turn-journa
 import { readSessionArtifact } from "../src/session/session-artifact-store.js";
 import { readSessionArtifactSnapshot } from "../src/session/session-artifact-snapshot.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
+import { legacyV2TransferEnvelope } from "./helpers/legacy-transfer-envelope.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -324,6 +326,89 @@ test("v9 upgrade quarantines outbox commits whose v3 envelope fails validation",
       [path.relative(base, sessionDir)],
     );
     assert.match(JSON.stringify(result.quarantined[0].error), /outbox_envelope_invalid/);
+    assert.equal((await readJson(path.join(sessionDir, "session.json"))).schemaVersion, 12);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+async function injectLegacyTransferEnvelope(sessionDir, shapeEnvelope = (envelope) => envelope) {
+  const manifestFile = path.join(sessionDir, "session.json");
+  const manifest = await readJson(manifestFile);
+  const [turn] = manifest.turnOrder;
+  const journalFile = path.join(sessionDir, turn.file);
+  const records = readJournalLines(await readFile(journalFile, "utf8")).map((record) => {
+    if (record.messageUid !== "m2") return record;
+    const envelope = shapeEnvelope(
+      legacyV2TransferEnvelope("v2", { sessionId: SESSION_ID, turnScopeId: "t1" }),
+    );
+    const message = { ...record.message, transferEnvelopes: [envelope] };
+    return { ...record, message, hash: messageHash(message) };
+  });
+  const journalText = jsonl(records);
+  await writeFile(journalFile, journalText, "utf8");
+  turn.committedBytes = Buffer.byteLength(journalText);
+  turn.messageHashes = Object.fromEntries(
+    records.map((record) => [record.messageUid, record.hash]),
+  );
+  await writeFile(manifestFile, JSON.stringify(manifest, null, 2), "utf8");
+}
+
+function v9Options(root) {
+  return {
+    base: path.join(root, "alice"),
+    backupBase: path.join(root, "layout-backup"),
+    scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+  };
+}
+
+test("v9 upgrade lifts a lingering v2 transfer envelope to v3 in place", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const sessionDir = await saveCanonicalSession(sessionRepo);
+    await downgradeToSchema12(sessionDir);
+    await injectLegacyTransferEnvelope(sessionDir);
+    const options = v9Options(root);
+
+    const first = await upgradeSessionMessageIdentity(options);
+
+    assert.deepEqual(first.quarantined, []);
+    assert.equal(first.sessions.length, 1);
+    const [turn] = (await readJson(path.join(sessionDir, "session.json"))).turnOrder;
+    const records = readJournalLines(await readFile(path.join(sessionDir, turn.file), "utf8"));
+    const [envelope] = records.find((record) => record.messageUid === "m2").message
+      .transferEnvelopes;
+    assert.equal(envelope.version, 3);
+    assert.equal(envelope.presentationMessageId, "msg_v2");
+    const second = await upgradeSessionMessageIdentity(options);
+    assert.deepEqual(second.sessions, []);
+    assert.deepEqual(second.quarantined, []);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("v9 upgrade quarantines a session whose v2 transfer envelope cannot migrate", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const sessionDir = await saveCanonicalSession(sessionRepo);
+    await downgradeToSchema12(sessionDir);
+    await injectLegacyTransferEnvelope(sessionDir, (envelope) => ({
+      ...envelope,
+      [TRANSFER_ENVELOPE_V2.presentationField]: "not-a-presentation-id",
+    }));
+    const options = v9Options(root);
+
+    const result = await upgradeSessionMessageIdentity(options);
+
+    assert.deepEqual(result.sessions, []);
+    assert.deepEqual(
+      result.quarantined.map((item) => item.path),
+      [path.relative(options.base, sessionDir)],
+    );
+    assert.match(JSON.stringify(result.quarantined[0].error), /transfer_envelope_unmigratable/i);
     assert.equal((await readJson(path.join(sessionDir, "session.json"))).schemaVersion, 12);
   } finally {
     await harness.cleanup();

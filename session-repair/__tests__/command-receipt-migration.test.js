@@ -15,6 +15,7 @@ import { migrateSessionDocument } from "../src/index.js";
 import { CANONICAL_COMMAND_RECEIPT_MIGRATION } from "../src/command-receipt-migration.js";
 import { EVENT_PROTOCOL_VERSION } from "@noobot/event-protocol/envelope";
 import { eventEnvelope as protocolEnvelope } from "./helpers/event-envelope.js";
+import { releasedSession } from "./helpers/released-session.js";
 
 const LEGACY_SCHEMA_VERSION = SESSION_ARTIFACT_CANONICAL_COMMAND_RECEIPT_SCHEMA_VERSION - 1;
 
@@ -58,13 +59,14 @@ function turnReceipt(overrides = {}) {
 }
 
 function migrate(commandReceipts, schemaVersion = LEGACY_SCHEMA_VERSION) {
-  return migrateSessionDocument({
-    schemaVersion,
-    sessionId: "s1",
-    aggregateVersion: 4,
-    messages: [],
-    turnLifecycle: { commandReceipts },
-  });
+  return migrateSessionDocument(
+    releasedSession({
+      schemaVersion,
+      sessionId: "s1",
+      aggregateVersion: 4,
+      turnLifecycle: { commandReceipts },
+    }),
+  );
 }
 
 function rejectionReason(commandReceipts) {

@@ -372,14 +372,14 @@ function buildWorkflowPluginMeta({
 }
 
 async function upsertWorkflowMessage({
-  options = {},
-  agentResult = {},
-  ctx = {},
-  sourceText = "",
-  semanticText = "",
-  workflowPayload = null,
-  phase = "",
-} = {}) {
+  options,
+  agentResult,
+  ctx,
+  sourceText,
+  semanticText,
+  workflowPayload,
+  phase,
+}) {
   const normalizedPhase = text(phase);
   if (!WORKFLOW_MESSAGE_PHASES.has(normalizedPhase)) {
     throw new Error("Workflow message requires an explicit planning or completed phase");
@@ -446,14 +446,14 @@ async function upsertWorkflowMessage({
   return workflowMessage;
 }
 
-export function appendWorkflowPlanningMessage(payload = {}) {
+export function appendWorkflowPlanningMessage(payload) {
   return upsertWorkflowMessage({
     ...payload,
     phase: "planning",
   });
 }
 
-export function publishWorkflowFinalMessage(payload = {}) {
+export function publishWorkflowFinalMessage(payload) {
   return upsertWorkflowMessage({
     ...payload,
     phase: "completed",

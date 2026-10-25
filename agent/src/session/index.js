@@ -272,8 +272,8 @@ export function createSessionFacade(runtime) {
       return sessionCrudService.getAllSessionSummaries({ userId });
     },
 
-    async maintainSessionDisplaySummaries({ userId }) {
-      return sessionCrudService.maintainSessionDisplaySummaries({ userId });
+    async maintainSessionDisplaySummaries({ userId, onProgress }) {
+      return sessionCrudService.maintainSessionDisplaySummaries({ userId, onProgress });
     },
 
     async listSessionIds({ userId }) {

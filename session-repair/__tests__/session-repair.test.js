@@ -14,11 +14,9 @@ import {
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { releasedSession } from "./helpers/released-session.js";
+import { historicalMultimodalParseEnvelope } from "./helpers/transfer-envelope.js";
 import {
-  SESSION_REPAIR_DATA_REJECTION_CODES,
-  SESSION_REPAIR_ERROR_CODE,
-  isSessionRepairTempDirectoryName,
   migrateSessionDocument,
   readSessionForProtocolRepair,
   reconcileCompletedTurnSummaryMarks,
@@ -116,50 +114,12 @@ function aggregateConflictContinuationSession({ withCommittedMessage = false } =
   };
 }
 
-function historicalMultimodalParseEnvelope(overrides = {}) {
-  return {
-    protocol: "noobot.semantic-transfer",
-    version: 3,
-    transferId: "transfer:multimodal-parse-1",
-    presentationMessageId: "msg_presentation-1",
-    identity: {
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      runId: "run-1",
-      producer: { type: "tool", id: "call-1" },
-    },
-    direction: "output",
-    payload: {
-      mode: "attachment",
-      attachments: [
-        {
-          identity: {
-            attachmentId: "attachment-1",
-            sessionId: "session-1",
-            attachmentSource: "model",
-          },
-          role: "primary",
-          name: "result.multimodal-parse.multimodal_model.md",
-          mimeType: "text/markdown",
-          size: 10,
-        },
-      ],
-    },
-    intent: {
-      source: "tool",
-      reason: "multimodal_parse_tool",
-      scenario: "tool",
-      strategy: "tool_result_text",
-    },
-    meta: { persisted: true, attributes: { mode: "multimodal_model" } },
-    ...overrides,
-  };
-}
-
 function multimodalParseMigrationSession(envelope = historicalMultimodalParseEnvelope()) {
   return {
+    schemaVersion: 2,
     sessionId: "session-1",
     aggregateVersion: 2,
+    turnTimings: [],
     turnLifecycle: { turns: {}, commandReceipts: [] },
     messages: [
       {
@@ -195,7 +155,7 @@ test("migrates the historical multimodal parse reason from verified tool transfe
 });
 
 test("migrates the legacy message id field into role identity fields", () => {
-  const source = {
+  const source = releasedSession({
     schemaVersion: 7,
     sessionId: "session-1",
     aggregateVersion: 3,
@@ -204,7 +164,7 @@ test("migrates the legacy message id field into role identity fields", () => {
       { messageUid: "u2", id: "m2", [LEGACY_MESSAGE_ID]: "m2", role: "assistant" },
       { messageUid: "u3", [LEGACY_MESSAGE_ID]: "m3", role: "assistant" },
     ],
-  };
+  });
   const result = migrateSessionDocument(source);
   assert.equal(result.document.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
   assert.deepEqual(
@@ -226,18 +186,20 @@ test("migrates the legacy message id field into role identity fields", () => {
 test("rejects messages whose legacy id conflicts with messageId", () => {
   assert.throws(
     () =>
-      migrateSessionDocument({
-        schemaVersion: 7,
-        sessionId: "session-1",
-        aggregateVersion: 1,
-        messages: [{ messageUid: "u1", id: "provider-1", [LEGACY_MESSAGE_ID]: "m1" }],
-      }),
+      migrateSessionDocument(
+        releasedSession({
+          schemaVersion: 7,
+          sessionId: "session-1",
+          aggregateVersion: 1,
+          messages: [{ messageUid: "u1", id: "provider-1", [LEGACY_MESSAGE_ID]: "m1" }],
+        }),
+      ),
     (error) => error.code === "SESSION_MESSAGE_ID_CONFLICT",
   );
 });
 
 test("runs every message migration step even after an earlier step changed the message", () => {
-  const source = {
+  const source = releasedSession({
     schemaVersion: 6,
     sessionId: "session-1",
     aggregateVersion: 1,
@@ -255,7 +217,7 @@ test("runs every message migration step even after an earlier step changed the m
         },
       },
     ],
-  };
+  });
   const result = migrateSessionDocument(source);
   const [message] = result.document.messages;
   assert.equal(Object.hasOwn(message, "id"), false);
@@ -272,7 +234,7 @@ test("runs every message migration step even after an earlier step changed the m
 });
 
 test("drops the legacy runState from a turn commit receipt result", () => {
-  const source = {
+  const source = releasedSession({
     schemaVersion: 6,
     sessionId: "session-1",
     aggregateVersion: 1,
@@ -290,7 +252,7 @@ test("drops the legacy runState from a turn commit receipt result", () => {
       ],
     },
     messages: [],
-  };
+  });
   const result = migrateSessionDocument(source);
   assert.deepEqual(result.document.turnLifecycle.commandReceipts[0].result, {
     messageUid: "message-1",
@@ -300,7 +262,7 @@ test("drops the legacy runState from a turn commit receipt result", () => {
 });
 
 test("does not reinterpret non-canonical fields in the current artifact protocol", () => {
-  const source = {
+  const source = releasedSession({
     schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
     sessionId: "session-1",
     turnLifecycle: {
@@ -323,7 +285,7 @@ test("does not reinterpret non-canonical fields in the current artifact protocol
         },
       },
     ],
-  };
+  });
 
   const result = migrateSessionDocument(source);
 
@@ -395,8 +357,10 @@ test("migrates duplicate terminal and command facts into the canonical lifecycle
     reason: "run_completed",
   };
   const result = migrateSessionDocument({
+    schemaVersion: 5,
     sessionId: "session-1",
     aggregateVersion: 3,
+    turnTimings: [],
     messages: [
       {
         messageUid: "user-1",
@@ -430,6 +394,7 @@ test("migrates duplicate terminal and command facts into the canonical lifecycle
           terminalStatus,
         },
       },
+      replacedTurns: {},
       commandReceipts: [
         {
           commandId: "send-1:completed",
@@ -482,7 +447,10 @@ test("rejects conflicting duplicate terminal facts during explicit migration", (
   assert.throws(
     () =>
       migrateSessionDocument({
+        schemaVersion: 2,
         sessionId: "session-1",
+        messages: [],
+        turnTimings: [],
         turnStatuses: [
           {
             turnScopeId: "turn-1",
@@ -504,6 +472,7 @@ test("rejects conflicting duplicate terminal facts during explicit migration", (
               },
             },
           },
+          commandReceipts: [],
         },
       }),
     (error) => error.code === "SESSION_TERMINAL_FACT_CONFLICT",
@@ -741,8 +710,10 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
             file: "turns/turn-000001.jsonl",
             committedBytes: Buffer.byteLength(journal),
             recordCount: indexes.length,
+            messageOrder: ["m1", "m2", "m3"],
           },
         ],
+        messageOrder: [{ messageUid: "m1" }, { messageUid: "m2" }, { messageUid: "m3" }],
       }),
       "utf8",
     ),
@@ -762,15 +733,23 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
         path.join(root, "session.json"),
         JSON.stringify({
           schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+          turnArtifactSequence: 1,
           turnOrder: [
             {
               turnId: "turn-000001",
+              turnScopeId: "scope-1",
               file: "turns/turn-000001.jsonl",
               committedBytes: 0,
               recordCount: 0,
+              messageOrder: ["m1", "m2", "m3"],
+              messageHashes: Object.fromEntries(
+                records.map((item) => [item.messageUid, item.hash]),
+              ),
               summarySnapshots: indexes.map(({ op, ...index }) => index),
+              compacted: false,
             },
           ],
+          messageOrder: [{ messageUid: "m1" }, { messageUid: "m2" }, { messageUid: "m3" }],
         }),
         "utf8",
       ),
@@ -807,105 +786,6 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
       nextIndexes[1].contentHash,
     );
     assert.deepEqual(await resegmentMigratedCheckpointBaselines({ sessionDir: root }), []);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-function legacyV2Envelope(overrides = {}) {
-  const { presentationMessageId, ...rest } = historicalMultimodalParseEnvelope({
-    intent: {
-      source: "tool",
-      reason: TRANSFER_REASON.MULTIMODAL_PARSE_ARTIFACT,
-      scenario: "tool",
-      strategy: "tool_result_text",
-    },
-  });
-  return { ...rest, version: 2, messageId: presentationMessageId, ...overrides };
-}
-
-function sessionWithEnvelope(envelope) {
-  return {
-    sessionId: "session-1",
-    aggregateVersion: 2,
-    turnLifecycle: { turns: {}, commandReceipts: [] },
-    messages: [{ messageUid: "assistant-1", role: "assistant", transferEnvelopes: [envelope] }],
-  };
-}
-
-test("upgrades legacy v2 transfer envelopes before strict validation", () => {
-  const result = migrateSessionDocument(sessionWithEnvelope(legacyV2Envelope()));
-  const [envelope] = result.document.messages[0].transferEnvelopes;
-  assert.equal(envelope.version, 3);
-  assert.equal(envelope.presentationMessageId, "msg_presentation-1");
-  assert.equal(Object.hasOwn(envelope, "messageId"), false);
-  assert.equal(result.changed, true);
-});
-
-test("rejects unmigratable transfer envelopes with an isolatable data code", () => {
-  const session = sessionWithEnvelope(legacyV2Envelope({ messageId: "not-a-presentation-id" }));
-  assert.throws(
-    () => migrateSessionDocument(session),
-    (error) =>
-      error.code === SESSION_REPAIR_ERROR_CODE.TRANSFER_ENVELOPE_UNMIGRATABLE &&
-      SESSION_REPAIR_DATA_REJECTION_CODES.includes(error.code),
-  );
-});
-
-test("atomic swap failures are not data rejections", () => {
-  assert.equal(
-    SESSION_REPAIR_DATA_REJECTION_CODES.includes(SESSION_REPAIR_ERROR_CODE.ATOMIC_SWAP_FAILED),
-    false,
-  );
-});
-
-test("repair temp directory names are recognized", () => {
-  assert.equal(isSessionRepairTempDirectoryName("s1.repair-backup-abc"), true);
-  assert.equal(isSessionRepairTempDirectoryName("s1.repair-staging-abc"), true);
-  assert.equal(isSessionRepairTempDirectoryName("44d9a0d8-7bfc-4bd6-903d-2a16aca7d793"), false);
-});
-
-test("atomic repair preserves staging and backup when swap and rollback both fail", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "noobot-session-repair-"));
-  const sessionDir = path.join(root, "session-1");
-  await mkdir(sessionDir);
-  await writeFile(path.join(sessionDir, "session.json"), "original", "utf8");
-  const { cp, rename } = await import("node:fs/promises");
-  const removed = [];
-  let renames = 0;
-  const fs = {
-    cp,
-    rm: async (target, options) => {
-      removed.push(target);
-      return rm(target, options);
-    },
-    rename: async (from, to) => {
-      renames += 1;
-      if (renames === 1) return rename(from, to);
-      // A concurrent writer recreated sessionDir: both swap and rollback hit EPERM.
-      throw Object.assign(new Error("EPERM"), { code: "EPERM" });
-    },
-  };
-  try {
-    await assert.rejects(
-      runAtomicSessionRepair({
-        sessionDir,
-        fs,
-        repair: async (stagingDir) =>
-          writeFile(path.join(stagingDir, "session.json"), "changed", "utf8"),
-        validate: async () => {},
-      }),
-      (error) =>
-        error.code === SESSION_REPAIR_ERROR_CODE.ATOMIC_SWAP_FAILED &&
-        Boolean(error.details?.stagingDir && error.details?.backupDir),
-    );
-    assert.deepEqual(removed, []);
-    const { readdir } = await import("node:fs/promises");
-    const names = await readdir(root);
-    const backup = names.find((name) => name.includes(".repair-backup-"));
-    const staging = names.find((name) => name.includes(".repair-staging-"));
-    assert.equal(await readFile(path.join(root, backup, "session.json"), "utf8"), "original");
-    assert.equal(await readFile(path.join(root, staging, "session.json"), "utf8"), "changed");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

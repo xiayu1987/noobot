@@ -67,7 +67,7 @@ export function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-
   ].join("\n");
 }
 
-export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {} } = {}) {
+export function resolveWorkflowSemanticContextMessages({ options, ctx }) {
   const resolved = options.resolveModelMessages({
     ctx,
     purpose: WORKFLOW_SEMANTIC.PURPOSE,

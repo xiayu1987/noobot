@@ -10,6 +10,12 @@ const enUS = {
     checkingService: "Checking local Noobot service...",
     startingService: "Starting Noobot service...",
     serviceReady: "Noobot service is ready.",
+    upgradingLayout:
+      "Upgrading workspace data: user {userIndex}/{userCount}, step {upgradeIndex}/{upgradeCount}, {processedSessions} sessions processed...",
+    upgradingSummaries:
+      "Rebuilding session summaries: user {userIndex}/{userCount}, session {sessionIndex}/{sessionCount}...",
+    upgradingStalled:
+      " No progress for {stalledMinutes}+ min; it may be stalled. Check the service log, keep waiting, or quit.",
     loadingApplication: "Opening Noobot...",
     checkingDependencies: "Checking optional dependencies...",
     setupAlreadyCompleted:
@@ -84,6 +90,11 @@ const zhCN = {
     checkingService: "正在检查本地 Noobot 服务...",
     startingService: "正在启动 Noobot 服务...",
     serviceReady: "Noobot 服务已就绪。",
+    upgradingLayout:
+      "正在升级工作区数据：用户 {userIndex}/{userCount}，步骤 {upgradeIndex}/{upgradeCount}，已处理 {processedSessions} 个会话...",
+    upgradingSummaries:
+      "正在重建会话摘要：用户 {userIndex}/{userCount}，会话 {sessionIndex}/{sessionCount}...",
+    upgradingStalled: "已 {stalledMinutes}+ 分钟无进展，可能停滞。可查看服务日志、继续等待或退出。",
     loadingApplication: "正在打开 Noobot...",
     checkingDependencies: "正在检查可选依赖...",
     setupAlreadyCompleted: "本次启动已完成超级管理员设置，正在继续...",
@@ -154,4 +165,12 @@ export function normalizeStartupLanguage(language) {
 
 export function formatStartupMessage(template, params = {}) {
   return String(template || "").replace(/\{([^}]+)\}/g, (_match, key) => String(params[key] ?? ""));
+}
+
+export function formatUpgradeProgress(status, progress = {}, stalledMinutes = 0) {
+  const template =
+    progress.stage === "displaySummary" ? status.upgradingSummaries : status.upgradingLayout;
+  const text = formatStartupMessage(template, progress);
+  if (!stalledMinutes) return text;
+  return text + formatStartupMessage(status.upgradingStalled, { stalledMinutes });
 }

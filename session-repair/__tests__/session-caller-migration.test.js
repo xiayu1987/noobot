@@ -9,16 +9,16 @@ import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { migrateSessionDocument } from "../src/index.js";
 import { SESSION_CALLER_MIGRATION } from "../src/session-caller-migration.js";
+import { releasedSession } from "./helpers/released-session.js";
 
 function currentDocument(fields) {
-  return {
+  return releasedSession({
     schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
     sessionId: "session-1",
     aggregateVersion: 0,
-    messages: [],
     dialogOrder: [],
     ...fields,
-  };
+  });
 }
 
 test("caller outside the protocol enum is repaired to the explicit user caller", () => {

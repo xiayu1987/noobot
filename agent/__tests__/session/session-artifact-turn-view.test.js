@@ -189,7 +189,7 @@ test("turn view write rejects an outside turn without ordered messages", async (
       (reference) => !target.messageOrder.includes(reference.messageUid),
     );
     target.messageOrder = [];
-    target.messageHashes = [];
+    target.messageHashes = {};
     await writeFile(files.session, JSON.stringify(manifest));
     const view = await readSessionTurnView({ sessionDir: root, turnScopeIds: ["a"] });
     await assert.rejects(

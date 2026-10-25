@@ -11,35 +11,15 @@ import {
   releaseWorkflowInstance as releaseWorkflowInstanceById,
 } from "workflow";
 import { parseWorkflowDslText } from "../protocol/text-protocol.js";
-import { WORKFLOW_PLUGIN_DEFAULTS } from "../core/constants.js";
 import { mountWorkflowExtensions } from "../extensions/workflow/runtime.js";
 
-export function executeWorkflowText({ semanticText = "", options = {} } = {}) {
-  const semantic = parseWorkflowDslText(semanticText, {
-    locale: options?.locale || "zh-CN",
-  });
-  return { semantic };
+export function parseWorkflowSemantic({ semanticText, options }) {
+  return parseWorkflowDslText(semanticText, { locale: options.locale });
 }
 
-export function createWorkflowInstance({
-  instanceId = "",
-  semantic = {},
-  options = {},
-  meta = {},
-} = {}) {
+export function createWorkflowInstance({ instanceId, semantic, options, meta }) {
   mountWorkflowExtensions({ options, meta });
-  return startWorkflowInstanceById({
-    instanceId,
-    semantic,
-    options: {
-      maxAutoTransitions:
-        Number.isFinite(Number(options?.maxAutoTransitions)) &&
-        Number(options.maxAutoTransitions) > 0
-          ? Math.floor(Number(options.maxAutoTransitions))
-          : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS,
-    },
-    meta,
-  });
+  return startWorkflowInstanceById({ instanceId, semantic });
 }
 
 export function resolveWorkflowUpstreamActionSteps({ instanceId, stepId }) {
@@ -50,6 +30,6 @@ export function advanceWorkflowInstance({ instanceId, action }) {
   return advanceWorkflowInstanceById({ instanceId, action });
 }
 
-export function releaseWorkflowInstance({ instanceId = "" } = {}) {
+export function releaseWorkflowInstance({ instanceId }) {
   return releaseWorkflowInstanceById({ instanceId });
 }

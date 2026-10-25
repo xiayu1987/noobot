@@ -5,11 +5,11 @@
 1. 监听 `bot.before_agent_dispatch` hook（固定协议点，不暴露配置）
 2. 通过模型调用把“自然语言工作流语义”转换为文本协议（DSL，非 JSON）
 3. 插件侧完成文本协议解析，生成语义对象
-4. 调用 `workflow` lib facade 按 `instanceId` 启动/推进实例
-5. 每个节点通过 hook `workflow_node_agent_execute` 派发 agent 执行
+4. 调用 `workflow` lib facade 以 `workflowRunId` 作为实例 id 启动/推进实例，运行结束（完成、触顶或失败）即释放
+5. 每个节点子会话结束后 emit hook `workflow.node_agent_execute`，由订阅方裁决推进动作
 6. workflow 侧仅管理实例流转，不负责节点 agent 编排
 
-> 节点执行扩展统一走 `NODE_AGENT_EXECUTE` hook。
+> `workflow.node_agent_execute` 结果协议：订阅方返回 `undefined` 表示弃权，否则必须返回 `{ action: { type } }`，`type` 取自 workflow 包的 `WORKFLOW_ACTION_TYPE`（`submit`/`audit`/`back`/`stop`），非法抛 `WORKFLOW_NODE_ACTION_INVALID`；多个订阅方同时给出动作抛 `WORKFLOW_NODE_ACTION_CONFLICT`；全部弃权时推进默认动作 `submit`；订阅方失败按 `FAIL_FLOW` 中止节点。
 > 动作节点建议始终提供 `task` 字段，插件会把该字段原样作为子模型任务指令（不附加“工作流”描述）；DSL 只识别 `task` 与 `stateType`，不接受别名。
 
 ## DSL 协议（v1）
@@ -19,14 +19,12 @@ WORKFLOW_DSL/1
 NODE id=start type=state stateType=start name="开始"
 NODE id=audit type=action name="审批" task="审核订单并给出审批结论"
 NODE id=end type=state stateType=end name="结束"
-EDGE from=start to=audit name="开始到审批" when="gte(order.amount,100)"
-EDGE from=audit to=end name="审批到结束" when="always"
+EDGE from=start to=audit name="开始到审批"
+EDGE from=audit to=end name="审批到结束"
 END
 ```
 
-`EDGE when` 支持：`always/never/exists(path)/eq/ne/gt/gte/lt/lte/in`。
-
-条件求值上下文可通过 `runConfig.workflowConditionContext` 传入（例如 `{"order":{"amount":120}}`）。
+`EDGE` 不支持条件属性，出现 `when`/`condition` 时解析直接报错。
 
 ## 编排产物（统一 payload）
 

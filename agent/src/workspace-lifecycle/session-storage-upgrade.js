@@ -16,6 +16,7 @@ import {
   rebuildSessionTree,
 } from "@noobot/session-repair";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
+import { ignoreSessionProgress } from "./session-directory-walk.js";
 import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
 import {
   SESSION_ARTIFACT_FILE_NAMES,
@@ -242,13 +243,18 @@ async function* walkSessionDirectories(base, directory) {
   }
 }
 
-export async function upgradeSessionStorage({ base, backupBase }) {
+export async function upgradeSessionStorage({
+  base,
+  backupBase,
+  onSessionProcessed = ignoreSessionProgress,
+}) {
   const retire = createRetirement(base, backupBase);
   const sessionTree = await upgradeSessionTree({ base, retire });
   const retired = [];
   const runtimeRoot = path.join(base, WORKSPACE_LAYOUT.RUNTIME_DIR);
   for await (const sessionDir of walkSessionDirectories(base, runtimeRoot)) {
     retired.push(...(await retireSessionArtifacts({ base, sessionDir, retire })));
+    onSessionProcessed();
   }
   return { sessionTree, retired };
 }

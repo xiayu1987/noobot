@@ -6,8 +6,9 @@
 import { StreamEventEnum } from "../../modules/chat/model/chatConstants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor.js";
-import { closeWebSocket } from "./closeWebSocket.js";
+import { closeWebSocket, WEB_SOCKET_CLOSE_CODE } from "./closeWebSocket.js";
 import { logTransportDiagnostics } from "../../modules/debug/loggers/transportDiagnosticsLogger.js";
+import { scopeSessionLogRecord } from "../../modules/debug/loggers/lazyDebugSink.js";
 import { isEventProcessingTimingEnabled } from "../../modules/debug/loggers/eventProcessingTimingLogger.js";
 import {
   createEventProcessingTimingRecorder,
@@ -75,8 +76,7 @@ export function createChatWebSocketClient({
       if (!sessionLogSink?.isEnabled?.(AGENT_TRANSPORT_DEBUG_TYPE)) return false;
       return sessionLogSink.debug?.(AGENT_TRANSPORT_DEBUG_TYPE, () => {
         const summary = summarizeAgentTransportCommand(command, extra);
-        return {
-          scope: "session",
+        return scopeSessionLogRecord({
           category: "debug",
           level: "debug",
           debugType: AGENT_TRANSPORT_DEBUG_TYPE,
@@ -85,7 +85,7 @@ export function createChatWebSocketClient({
           dialogProcessId: summary.dialogProcessId,
           turnScopeId: summary.turnScopeId,
           data: { event, ...summary },
-        };
+        });
       });
     } catch {
       return false;
@@ -152,7 +152,7 @@ export function createChatWebSocketClient({
 
   function closeFailedSocket(ws, reason = "transport_error") {
     cleanupSocketRef(ws);
-    closeWebSocket(ws, 1011, reason);
+    closeWebSocket(ws, WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE, reason);
   }
 
   function getActiveSocket() {
@@ -544,7 +544,7 @@ export function createChatWebSocketClient({
           });
           cleanupSocketRef(ws);
           finalize(() => reject(error));
-          closeWebSocket(ws, 1011, "stream_send_failed");
+          closeWebSocket(ws, WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE, "stream_send_failed");
           return;
         }
         if (typeof options?.onPayloadSent === "function") {
@@ -580,7 +580,11 @@ export function createChatWebSocketClient({
             }
           } catch (error) {
             finalize(() => reject(error));
-            streamSocket.close(1011, "invalid_event");
+            closeWebSocket(
+              streamSocket,
+              WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE,
+              "invalid_event",
+            );
           }
         };
         unregisterStreamHandlers = registerSocketHandlers(
@@ -671,7 +675,7 @@ export function createChatWebSocketClient({
         reconnectResolve = null;
         if (rejectRequests) commandRequests.rejectAll(error);
         if (closeSocket) {
-          closeWebSocket(ws, 1011, "reconnect_failed");
+          closeWebSocket(ws, WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE, "reconnect_failed");
         }
         rejectFn?.(error);
       };

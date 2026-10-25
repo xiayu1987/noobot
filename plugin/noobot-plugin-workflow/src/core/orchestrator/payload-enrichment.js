@@ -6,8 +6,8 @@
 
 import {
   TRANSFER_ENVELOPE_FIELD,
-  collectTransferEnvelopeLists,
-  pickTransferEnvelopeList,
+  mergeTransferEnvelopes,
+  readTransferEnvelopeList,
 } from "@noobot/semantic-transfer-protocol";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { text } from "@noobot/shared/value";
@@ -74,7 +74,7 @@ function buildNodeSessionRecord({ ctx, item: run, nodeState: state, semanticNode
     dialogProcessId: state.dialogProcessId,
     sessionId: state.nodeSessionId,
     ...buildNodeStateFields(state),
-    transferEnvelopes: pickTransferEnvelopeList(run, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
+    transferEnvelopes: readTransferEnvelopeList(run, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
     parallelWave: count(run.parallelWave),
     waveOrder: count(run.waveOrder),
   };
@@ -93,7 +93,11 @@ function buildWorkflowNodeSessions({ ctx, semantic, nodeAgentRuns, nodeStateSnap
 }
 
 function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns) {
-  return collectTransferEnvelopeLists(nodeAgentRuns, TRANSFER_ENVELOPE_FIELD.NODE_RESULT);
+  return mergeTransferEnvelopes(
+    ...nodeAgentRuns.map((run) =>
+      readTransferEnvelopeList(run, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
+    ),
+  );
 }
 
 export function enrichWorkflowPayload({

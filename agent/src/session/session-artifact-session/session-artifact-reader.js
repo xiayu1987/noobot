@@ -9,6 +9,7 @@ import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
 import { readJsonWithStorage } from "./artifact-json-io.js";
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
+  assertCanonicalSessionManifest,
   journalPath,
   materializeTurnJournal,
   readJournalRecords,
@@ -25,16 +26,7 @@ async function readCanonicalManifest({ storageService, sessionDir }) {
     fallback: null,
   });
   if (!isObjectLike(session)) return null;
-  if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
-    const error = new Error("Session artifact requires the canonical turn journal schema");
-    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
-    throw error;
-  }
-  return session;
-}
-
-function sessionMessageReferences(session) {
-  return Array.isArray(session.messageOrder) ? session.messageOrder : [];
+  return assertCanonicalSessionManifest(session, "Session artifact");
 }
 
 async function materializeOrderedMessages(sessionDir, turnItems, references) {
@@ -49,7 +41,7 @@ async function materializeOrderedMessages(sessionDir, turnItems, references) {
       messagesByUid.set(message.messageUid, message);
   }
   return references.map((reference) => {
-    const messageUid = text(reference?.messageUid);
+    const { messageUid } = reference;
     const message = messagesByUid.get(messageUid);
     if (message) return message;
     const error = new Error(`session message order references a missing message: ${messageUid}`);
@@ -61,14 +53,9 @@ async function materializeOrderedMessages(sessionDir, turnItems, references) {
 export async function readSessionArtifact({ storageService = null, sessionDir = "" } = {}) {
   const session = await readCanonicalManifest({ storageService, sessionDir });
   if (!session) return null;
-  const turnItems = Array.isArray(session.turnOrder) ? session.turnOrder : [];
   return {
     ...session,
-    messages: await materializeOrderedMessages(
-      sessionDir,
-      turnItems,
-      sessionMessageReferences(session),
-    ),
+    messages: await materializeOrderedMessages(sessionDir, session.turnOrder, session.messageOrder),
   };
 }
 
@@ -80,29 +67,24 @@ export async function readSessionTurnView({
   const session = await readCanonicalManifest({ storageService, sessionDir });
   if (!session) return null;
   const scopes = new Set(turnScopeIds.map((turnScopeId) => text(turnScopeId)));
-  const turnOrder = Array.isArray(session.turnOrder) ? session.turnOrder : [];
-  const lastMessageUid = text(session.messageOrder?.at?.(-1)?.messageUid);
-  const turnItems = turnOrder.filter(
+  const lastMessageUid = text(session.messageOrder.at(-1)?.messageUid);
+  const turnItems = session.turnOrder.filter(
     (item) =>
-      scopes.has(text(item?.turnScopeId)) ||
-      (lastMessageUid && item?.messageOrder?.includes(lastMessageUid)) ||
+      scopes.has(item.turnScopeId) ||
+      (lastMessageUid && item.messageOrder.includes(lastMessageUid)) ||
       turnArtifactRequiresRewrite(session, item),
   );
-  const viewMessageUids = new Set(
-    turnItems.flatMap((item) => (Array.isArray(item.messageOrder) ? item.messageOrder : [])),
-  );
+  const viewMessageUids = new Set(turnItems.flatMap((item) => item.messageOrder));
   return {
     session: {
       ...session,
       messages: await materializeOrderedMessages(
         sessionDir,
         turnItems,
-        sessionMessageReferences(session).filter((reference) =>
-          viewMessageUids.has(text(reference?.messageUid)),
-        ),
+        session.messageOrder.filter((reference) => viewMessageUids.has(reference.messageUid)),
       ),
     },
-    turnScopeIds: turnItems.map((item) => text(item.turnScopeId)),
+    turnScopeIds: turnItems.map((item) => item.turnScopeId),
   };
 }
 
@@ -117,7 +99,7 @@ export async function readSessionArtifactForRepair({
     fallback: null,
   });
   if (!isObjectLike(session)) return null;
-  if (Number(session.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION) {
+  if (session.schemaVersion === TURN_JOURNAL_SCHEMA_VERSION) {
     return readSessionArtifact({ storageService, sessionDir });
   }
   return readSessionForProtocolRepair({ sessionDir, session });

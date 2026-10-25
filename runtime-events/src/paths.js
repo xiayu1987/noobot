@@ -11,11 +11,11 @@ import { safeSegment } from "./sanitize.js";
 
 const DEBUG_CATEGORY = "debug";
 
-export function resolveRuntimeEventsConfig({ desktopRoot = "" } = {}) {
+export function resolveRuntimeEventsConfig({ desktopRoot = "", env = process.env } = {}) {
   const resolvedDesktopRoot = desktopRoot ? path.resolve(String(desktopRoot)) : "";
   return {
     desktopRoot: resolvedDesktopRoot,
-    ...resolveDefaultRuntimeEventsConfig(process.env, {
+    ...resolveDefaultRuntimeEventsConfig(env, {
       requireWorkspaceRoot: !resolvedDesktopRoot,
     }),
   };

@@ -15,6 +15,7 @@ export {
   readSessionTurnView,
 } from "./session-artifact-session/session-artifact-reader.js";
 export {
+  SESSION_ARTIFACT_PREDECESSOR,
   writeSessionArtifact,
   writeSessionTurnArtifacts,
 } from "./session-artifact-session/session-artifact-writer.js";

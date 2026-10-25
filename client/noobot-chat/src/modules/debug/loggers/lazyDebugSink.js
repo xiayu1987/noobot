@@ -17,26 +17,40 @@ function text(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+export function scopeSessionLogRecord(record = {}) {
+  const {
+    sessionId: rawSessionId,
+    parentSessionId: rawParentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    ...rest
+  } = record;
+  const sessionId = text(rawSessionId);
+  if (!sessionId) return { ...rest, scope: "system" };
+  const parentSessionId = text(rawParentSessionId);
+  return {
+    ...rest,
+    scope: "session",
+    sessionId,
+    ...(parentSessionId ? { parentSessionId } : {}),
+    dialogProcessId: text(dialogProcessId),
+    turnScopeId: text(turnScopeId),
+  };
+}
+
 export function buildLazyDebugRecord(debugType, event, payload = {}) {
   const data = payload && typeof payload === "object" ? payload : {};
-  const sessionId = text(data.sessionId);
-  const base = {
+  return scopeSessionLogRecord({
     category: "debug",
     level: "debug",
     debugType,
     event,
+    sessionId: data.sessionId,
+    parentSessionId: data.parentSessionId,
+    dialogProcessId: data.dialogProcessId,
+    turnScopeId: data.turnScopeId,
     data: { event, ...data },
-  };
-  if (!sessionId) return { ...base, scope: "system" };
-  const parentSessionId = text(data.parentSessionId);
-  return {
-    ...base,
-    scope: "session",
-    sessionId,
-    ...(parentSessionId ? { parentSessionId } : {}),
-    dialogProcessId: text(data.dialogProcessId),
-    turnScopeId: text(data.turnScopeId),
-  };
+  });
 }
 
 export function emitLazyDebug(sink, debugType, event, payload = {}) {

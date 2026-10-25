@@ -12,10 +12,9 @@ import workflow from "workflow";
 import {
   compileWorkflowSemantic,
   startWorkflowInstance,
-  advanceWorkflowInstance,
-  executeWorkflowSemantic,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
+  resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
 } from "workflow";
@@ -24,13 +23,12 @@ import {
 ## Stable Facade API
 
 - `compileWorkflowSemantic(semantic)`
-- `startWorkflowInstance({ model, conditionContext })`
-- `advanceWorkflowInstance({ bizinst, treeRecord, controlCenter, semantic, options })`
-- `executeWorkflowSemantic({ semantic, options })`
-- `startWorkflowInstanceById({ instanceId, semantic, options, meta })`
-- `getWorkflowInstanceSnapshot({ instanceId })`
+- `startWorkflowInstance({ model })`
+- `startWorkflowInstanceById({ instanceId, semantic })`: `instanceId` is required; an existing id is rejected.
+- `getWorkflowInstanceSnapshot({ instanceId })`: throws for an unknown instance.
+- `resolveWorkflowUpstreamActionSteps({ instanceId, stepId })`
 - `advanceWorkflowInstanceById({ instanceId, action })`
-- `releaseWorkflowInstance({ instanceId })`
+- `releaseWorkflowInstance({ instanceId })`: throws for an unknown instance.
 
 ## Extension API
 
