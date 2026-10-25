@@ -16,7 +16,10 @@ import {
   getPlanningRefinementMarker,
 } from "../workflow/prompts.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "./acceptance-status.js";
+import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+
+const PLAN_MUTATION_KEYS = HARNESS_I18N_KEYSET.PLAN_MUTATION;
 
 function toRefinementTarget(item = {}) {
   return { index: Number(item.id), task: text(item.content) };
@@ -30,13 +33,12 @@ function pickKnownRefinementTargets(indexes, mainPlanMap) {
     .map((item) => mainPlanMap.get(item));
 }
 
-function formatSubPlansText(subPlans = [], targetId = 0) {
-  if (!Array.isArray(subPlans) || !subPlans.length) return "\uff08\u7a7a\uff09";
+function formatSubPlansText(subPlans, targetId, locale) {
   return (
     subPlans
       .filter((item = {}) => Number(item.mainId) === Number(targetId))
       .map((item = {}) => `${item.id} ${text(item.content)}`)
-      .join("\n") || "\uff08\u7a7a\uff09"
+      .join("\n") || translateI18nText(locale, PLAN_MUTATION_KEYS.EMPTY_PLAN_PLACEHOLDER)
   );
 }
 
@@ -257,8 +259,12 @@ export function createPlanRevisionHelpers({
         const existingSubPlans = formatSubPlansText(
           parseSubPlansFromPlanText(bucket.planText, Number(id)),
           Number(id),
+          locale,
         );
-        return `\u4e3b\u8ba1\u5212 ${id}:\n${existingSubPlans}`;
+        const header = translateI18nText(locale, PLAN_MUTATION_KEYS.MAIN_PLAN_SECTION_HEADER, {
+          id,
+        });
+        return `${header}\n${existingSubPlans}`;
       })
       .join("\n\n")
       .trim();
@@ -275,15 +281,14 @@ export function createPlanRevisionHelpers({
 
   function buildNextPhaseRelayContent(bucket = {}, locale = LOCALE?.ZH_CN, stage = "revision") {
     const normalizedStage = normalizePlanMutationStage(stage);
-    const title =
+    const titleKey =
       normalizedStage === "refinement"
-        ? locale === LOCALE?.EN_US
-          ? "Refined plan text:"
-          : "\u7ec6\u5316\u540e\u7684\u8ba1\u5212\u6587\u672c\uff1a"
-        : locale === LOCALE?.EN_US
-          ? "Revised plan text:"
-          : "\u4fee\u6b63\u540e\u7684\u8ba1\u5212\u6587\u672c\uff1a";
-    return `${title}\n${text(bucket?.planText) || (locale === LOCALE?.EN_US ? "N/A" : "\uff08\u7a7a\uff09")}`;
+        ? PLAN_MUTATION_KEYS.REFINED_PLAN_RELAY_TITLE
+        : PLAN_MUTATION_KEYS.REVISED_PLAN_RELAY_TITLE;
+    const planText =
+      text(bucket?.planText) ||
+      translateI18nText(locale, PLAN_MUTATION_KEYS.EMPTY_PLAN_PLACEHOLDER);
+    return `${translateI18nText(locale, titleKey)}\n${planText}`;
   }
 
   return {

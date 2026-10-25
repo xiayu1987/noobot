@@ -300,12 +300,6 @@ test("harness summary without completion marker still triggers planning revision
     ["summary"],
   );
   assert.equal(
-    agentContext.bindings.extensions.harness.logs.guidance.some(
-      (item) => item.event === "summary_completion_marker_missing",
-    ),
-    false,
-  );
-  assert.equal(
     agentContext.bindings.extensions.harness.logs.planning.some(
       (item) => item.event === "planning_checklist_revised_after_summary",
     ),

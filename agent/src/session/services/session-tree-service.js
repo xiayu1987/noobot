@@ -36,31 +36,44 @@ export class SessionTreeService {
       });
     }
 
-    const plannedTree = await this.treeRepo.getTree(userId);
-    const toDelete = this.collectBranchSessionIds(normalizedSessionId, plannedTree);
-
-    const deletedSessionIds = [];
-    await this.sessionRepo.withSessionLifecycleMutations(userId, toDelete, async () => {
-      await this.sessionRepo.markSessionsDeleted(userId, toDelete);
-      for (const id of toDelete) {
-        await this.sessionRepo.delete(userId, id, {
-          persistenceContext: this.sessionRepo.treePersistenceContext(userId, id),
-        });
-        deletedSessionIds.push(id);
-      }
-      await this.treeRepo.withLock(userId, async () => {
-        const sessionTree = await this.treeRepo.getTree(userId);
-        const deleteSet = new Set([
-          ...deletedSessionIds,
-          ...this.collectBranchSessionIds(normalizedSessionId, sessionTree),
-        ]);
-        const nextNodes = {};
-        for (const [id, node] of Object.entries(sessionTree.nodes)) {
-          if (!deleteSet.has(id)) nextNodes[id] = node;
-        }
-        await this.treeRepo.saveTree(userId, { nodes: nextNodes });
-      });
-    });
+    let toDelete = this.collectBranchSessionIds(
+      normalizedSessionId,
+      await this.treeRepo.getTree(userId),
+    );
+    let deletedSessionIds = null;
+    while (!deletedSessionIds) {
+      const planned = toDelete;
+      deletedSessionIds = await this.sessionRepo.withSessionLifecycleMutations(
+        userId,
+        planned,
+        async () => {
+          const lockedBranch = this.collectBranchSessionIds(
+            normalizedSessionId,
+            await this.treeRepo.getTree(userId),
+          );
+          const plannedSet = new Set(planned);
+          if (lockedBranch.some((id) => !plannedSet.has(id))) {
+            toDelete = [...new Set([...planned, ...lockedBranch])];
+            return null;
+          }
+          await this.sessionRepo.markSessionsDeleted(userId, planned);
+          for (const id of planned) {
+            await this.sessionRepo.delete(userId, id, {
+              persistenceContext: this.sessionRepo.treePersistenceContext(userId, id),
+            });
+          }
+          await this.treeRepo.withLock(userId, async () => {
+            const sessionTree = await this.treeRepo.getTree(userId);
+            const nextNodes = {};
+            for (const [id, node] of Object.entries(sessionTree.nodes)) {
+              if (!plannedSet.has(id)) nextNodes[id] = node;
+            }
+            await this.treeRepo.saveTree(userId, { nodes: nextNodes });
+          });
+          return planned;
+        },
+      );
+    }
 
     return {
       ok: true,

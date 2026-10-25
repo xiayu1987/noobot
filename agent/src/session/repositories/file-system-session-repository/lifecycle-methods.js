@@ -59,10 +59,15 @@ class SessionLifecycleMethods {
   }
 
   async withSessionPlacementMutation(userId, placement, operation, { persistenceContext } = {}) {
-    return this._withScopedSessionMutation(userId, placement.sessionId, operation, async () => {
-      await this._assertParentSessionWritable(userId, placement.parentSessionId);
-      return this.placeSessionScope(userId, placement, persistenceContext);
-    });
+    return this.withSessionLifecycleMutations(
+      userId,
+      [placement.sessionId, placement.parentSessionId],
+      () =>
+        this._withScopedSessionMutation(userId, placement.sessionId, operation, async () => {
+          await this._assertParentSessionWritable(userId, placement.parentSessionId);
+          return this.placeSessionScope(userId, placement, persistenceContext);
+        }),
+    );
   }
 
   async _withScopedSessionMutation(userId, sessionId, operation, resolveScope) {

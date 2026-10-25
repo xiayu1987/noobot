@@ -109,13 +109,6 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
   if (!pluginHost) throw new TypeError("session routes require the activated service plugin host");
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
-  function resolveDeletedSessionIds(result = {}, fallbackSessionId = "") {
-    const fromResult = mergeSessionDeletionIds(result?.deletedSessionIds);
-    if (fromResult.length) return fromResult;
-    const fallback = text(fallbackSessionId);
-    return fallback ? [fallback] : [];
-  }
-
   app.get(
     "/internal/plugins",
     jsonRoute(async (req, res) => {
@@ -495,7 +488,10 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
           userId,
           sessionId,
         });
-        const branchSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
+        const branchSessionIds = mergeSessionDeletionIds(result.deletedSessionIds);
+        if (!branchSessionIds.length) {
+          throw new Error("deleteSessionBranch must report deletedSessionIds");
+        }
         const remainingSessionIds = (await bot.session.listSessionIds({ userId }))
           .map((item) => text(item))
           .filter(Boolean);

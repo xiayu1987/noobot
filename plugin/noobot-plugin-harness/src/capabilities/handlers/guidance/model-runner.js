@@ -26,7 +26,6 @@ import {
   resolveCapabilityToolAllowlist,
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
-import { isSummaryCompletionMarked } from "../model-response-parser.js";
 import { runPlanningRefinementBySeparateModel } from "../planning/refinement-runner.js";
 import {
   applyRevisedPlanFromText,
@@ -522,13 +521,12 @@ async function finalizeSummaryGuidance({
   ctx,
   meta,
   state,
-  locale,
   responseText,
   summaryMergeText,
   summaryStartedAt,
 }) {
   recordLatestSummaryFullText(ctx, responseText);
-  const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
+  applySummaryText(ctx, summaryMergeText);
   const checkpointRequestedMessageCount = summaryCheckpointMessageCount(state);
   const checkpointStartedAt = Date.now();
   const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
@@ -549,12 +547,6 @@ async function finalizeSummaryGuidance({
     event: GUIDANCE_EVENTS.summaryMessagesMarked,
     detail: { markedCount },
   });
-  if (!isSummaryCompletionMarked(mergedSummaryText, locale)) {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,
-    });
-  }
 }
 
 function guidanceGeneratedEvent(workflowPurpose) {
@@ -632,7 +624,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       ctx,
       meta,
       state,
-      locale,
       responseText,
       summaryMergeText,
       summaryStartedAt: invocation.summaryStartedAt,

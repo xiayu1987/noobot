@@ -107,13 +107,8 @@ test("createHarnessRegistration returns early when disabled", () => {
   assert.equal(registerHarnessHooksCalled, false);
 });
 
-test("createHarnessRegistration uses injected collaborators on happy path", async () => {
+test("createHarnessRegistration uses injected collaborators on happy path", () => {
   const calls = [];
-  const warnings = [];
-  const originalWarn = console.warn;
-  console.warn = (...args) => {
-    warnings.push(args.map((item) => String(item || "")).join(" "));
-  };
   const hookManager = { on() {} };
   const capabilityRuntime = { hookMap: {} };
   const options = { enabled: true, tracePriority: 20 };
@@ -126,47 +121,20 @@ test("createHarnessRegistration uses injected collaborators on happy path", asyn
     assertHookManager: (hm) => {
       calls.push(["assertHookManager", hm]);
     },
-    extractBasePath: (ctx, inputOptions) => {
-      calls.push(["extractBasePath", ctx, inputOptions]);
-      return "/tmp/noobot";
-    },
-    cleanupOldRuns: async (basePath, inputOptions) => {
-      calls.push(["cleanupOldRuns", basePath, inputOptions]);
-      throw new Error("cleanup failed");
-    },
     registerHarnessHooks: (input) => {
       calls.push(["registerHarnessHooks", input]);
       return [() => {}];
     },
   });
 
-  const api = { hookManager };
-  const userOptions = { enabled: true };
-  let result = null;
-  try {
-    result = registerHarnessCore(api, userOptions);
-    await new Promise((resolve) => setImmediate(resolve));
-  } finally {
-    console.warn = originalWarn;
-  }
+  const result = registerHarnessCore({ hookManager }, { enabled: true });
 
   assert.equal(result.name, PLUGIN_NAME);
   assert.equal(result.version, PLUGIN_VERSION);
-  assert.equal(Array.isArray(result.disposers), true);
   assert.equal(result.disposers.length, 1);
   assert.deepEqual(
     calls.map((item) => item[0]),
-    [
-      "createPluginRuntimeContext",
-      "assertHookManager",
-      "extractBasePath",
-      "cleanupOldRuns",
-      "registerHarnessHooks",
-    ],
-  );
-  assert.equal(
-    warnings.some((item) => /cleanupOldRuns failed during plugin registration/.test(item)),
-    true,
+    ["createPluginRuntimeContext", "assertHookManager", "registerHarnessHooks"],
   );
 });
 
@@ -179,8 +147,6 @@ test("createHarnessRegistration patches denyToolNames via unified policy api", (
       capabilityRuntime: {},
     }),
     assertHookManager: () => {},
-    extractBasePath: () => "",
-    cleanupOldRuns: async () => {},
     registerHarnessHooks: () => [],
   });
 

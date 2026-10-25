@@ -147,3 +147,19 @@ test("refinement targets converge to empty when every main step already has sub 
     [3],
   );
 });
+
+test("english refinement prompt localizes existing sub-plan sections", () => {
+  const { helpers } = createFixture();
+  const bucket = { planText: ["1. Inspect", "1.1 Read config", "2. Ship"].join("\n") };
+  const prompt = helpers.buildPlanningRefinementPrompt(
+    "en-US",
+    bucket,
+    {},
+    {
+      targetMainStepIndexes: [1, 2],
+    },
+  );
+  assert.match(prompt, /Main plan 1:\n1\.1 Read config/);
+  assert.match(prompt, /Main plan 2:\nN\/A/);
+  assert.doesNotMatch(prompt, /[\u4e00-\u9fff\uff08\uff09]/);
+});

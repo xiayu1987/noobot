@@ -7,12 +7,13 @@ import { flushAllManifests, flushAllJsonlBuffers } from "../store/store.js";
 import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
 import { injectPrompt, lockPolicyPromptForMainFlow, traceHook } from "../tracing/buffer-manager.js";
 import { safeError } from "../data/record-builders.js";
-import { emitHarnessHookProgress, extractBasePath, isPrimaryExecutionScope } from "./context.js";
+import { emitHarnessHookProgress, isPrimaryExecutionScope } from "./context.js";
 import { HOOK_POINT, resolveSessionDeletionTargets } from "@noobot/hook-protocol";
 import { applyAgentResolvedModelMessages } from "./model-message-context.js";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 import { migrateHarnessBucket } from "./bucket-migration.js";
 import { invokeCapabilityModelWithinDeadline } from "./capability-model-invocation.js";
+import { text } from "@noobot/shared/value";
 
 const HARNESS_TRACE_POINTS = Object.freeze([
   HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
@@ -92,7 +93,6 @@ export function createRegisterHarnessHooks(deps = {}) {
   const flushAllJsonlBuffersFn = deps.flushAllJsonlBuffers || flushAllJsonlBuffers;
   const sessionCleanupPoints = deps.sessionCleanupPoints || HARNESS_SESSION_CLEANUP_POINTS;
   const cleanupRunsBySessionIdsFn = deps.cleanupRunsBySessionIds || cleanupRunsBySessionIds;
-  const extractBasePathFn = deps.extractBasePath || extractBasePath;
 
   return function registerHarnessHooks({ hookManager, options, capabilityRuntime, plugin }) {
     const disposers = [];
@@ -193,13 +193,12 @@ export function createRegisterHarnessHooks(deps = {}) {
           point,
           async (ctx = {}) => {
             const sessionIds = resolveSessionDeletionTargets(ctx);
-            if (!sessionIds.length) return;
 
             await flushAllManifestsFn();
             await flushAllJsonlBuffersFn();
 
-            const basePath = extractBasePathFn(ctx, options);
-            if (!basePath) return;
+            const basePath = text(ctx.basePath);
+            if (!basePath) throw new TypeError("harness session cleanup requires basePath");
             const cleanup = await cleanupRunsBySessionIdsFn(basePath, sessionIds, options);
             emitHarnessHookProgressFn(ctx, "session_cleanup_done", {
               point,

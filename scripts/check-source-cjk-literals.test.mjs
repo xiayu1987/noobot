@@ -32,6 +32,20 @@ test("reports CJK literals in non-exempt source files with line numbers", () => 
   ]);
 });
 
+test("reports unicode-escaped CJK literals and ignores other escapes", () => {
+  const measured = measureCjkLiterals(
+    CHECK,
+    catalogSources({
+      "agent/src/a.js": 'const label = "\\u4f60\\u597d";',
+      "agent/src/b.js": 'const sep = "\\u00a0\\u3002\\u4dff";',
+    }),
+    createExemptionUsage(CHECK),
+  );
+  assert.deepEqual(measured.cjkLiteral.samples, [
+    "agent/src/a.js:1 CJK literal outside i18n catalogs",
+  ]);
+});
+
 test("exempted catalogs, scripts and listed files pass and use every exemption", () => {
   const usage = createExemptionUsage(CHECK);
   const measured = measureCjkLiterals(CHECK, catalogSources({}), usage);

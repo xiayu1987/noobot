@@ -74,7 +74,7 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
   await assert.rejects(fs.access(runDelete));
   await fs.access(runKeep);
 });
-test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除当前 session 附件", async () => {
+test("session-routes: 删除结果缺失 deletedSessionIds 时拒绝且不执行附件清理", async () => {
   const attachmentDeleteCalls = [];
   const semanticTransferDeleteCalls = [];
   const app = express();
@@ -83,41 +83,27 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
       session: { deleteSessionBranch: async () => ({ deletedSessionIds: [] }) },
       deleteScopedAttachmentsBySessionIds: async (payload = {}) => {
         attachmentDeleteCalls.push(payload);
-        return {
-          deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0,
-          deletedSessionIds: payload?.sessionIds || [],
-        };
+        return { deletedCount: 0, deletedSessionIds: [] };
       },
       deleteSemanticTransferBySessionIds: async (payload = {}) => {
         semanticTransferDeleteCalls.push(payload);
-        return {
-          deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0,
-          deletedSessionIds: payload?.sessionIds || [],
-        };
+        return { deletedCount: 0, deletedSessionIds: [] };
       },
     }),
     translateText: (key) => key,
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/internal/session/u1/s-fallback-delete`, {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s-missing-result`, {
       method: "DELETE",
     });
     const payload = await response.json();
-    assert.equal(response.status, 200);
-    assert.equal(payload.ok, true);
+    assert.equal(response.status, 500);
+    assert.equal(payload.ok, false);
   });
 
-  assert.equal(attachmentDeleteCalls.length, 1);
-  assert.deepEqual(attachmentDeleteCalls[0], {
-    userId: "u1",
-    sessionIds: ["s-fallback-delete"],
-  });
-  assert.equal(semanticTransferDeleteCalls.length, 1);
-  assert.deepEqual(semanticTransferDeleteCalls[0], {
-    userId: "u1",
-    sessionIds: ["s-fallback-delete"],
-  });
+  assert.equal(attachmentDeleteCalls.length, 0);
+  assert.equal(semanticTransferDeleteCalls.length, 0);
 });
 
 test("session-routes: plugin related session identities share the authoritative artifact cleanup", async () => {

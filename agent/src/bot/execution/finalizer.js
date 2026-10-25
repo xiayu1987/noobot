@@ -137,7 +137,6 @@ export class SessionExecutionFinalizer {
       dialogProcessId,
       persistenceScope,
       userConfig,
-      runtimeEventListener,
     };
     if (memoryPostProcessAsyncEnabled) {
       emitEvent(runtimeEventListener, "memory_postprocess_scheduled", {

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { emitEvent } from "../../events/index.js";
+import { createExecutionEventListener, emitEvent } from "../../events/index.js";
+import { createMemoryPostprocessIdentity } from "@noobot/session-protocol/turn-scope-identity";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { resolveTimeMs } from "../../config/index.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants.js";
@@ -68,13 +69,26 @@ export class MemoryPostProcessService {
     }
   }
 
+  createMemoryEventListener({ userId, sessionId, parentSessionId, identity, persistenceScope }) {
+    return createExecutionEventListener({
+      sessionManager: this.session,
+      userId,
+      sessionId,
+      parentSessionId,
+      dialogProcessId: identity.dialogProcessId,
+      turnScopeId: identity.turnScopeId,
+      persistenceScope,
+    });
+  }
+
   async runMemorySummarizeFlow({
     userId,
     sessionId,
     userConfig = {},
-    runtimeEventListener = null,
-    mode = "sync",
-  } = {}) {
+    identity,
+    memoryEventListener,
+    mode,
+  }) {
     const memorySummaryTimeoutMs = this.resolveMemorySummaryTimeoutMs(userConfig);
     let memorySummaryTimedOut = false;
     const memorySummaryAbortController = new AbortController();
@@ -82,52 +96,48 @@ export class MemoryPostProcessService {
       memorySummaryTimedOut = true;
       memorySummaryAbortController.abort();
     }, memorySummaryTimeoutMs);
-    try {
-      await this.memory.maybeSummarize({
+    const recordFailure = (stage, error) =>
+      this.recordMemorySummaryFailure({
         userId,
         sessionId,
-        userConfig,
-        abortSignal: memorySummaryAbortController.signal,
-        eventListener: runtimeEventListener,
-        onStageError: ({ stage, error }) =>
-          this.recordMemorySummaryFailure({
-            userId,
-            sessionId,
-            mode,
-            stage,
-            error,
-            runtimeEventListener,
-          }),
+        mode,
+        stage,
+        error,
+        runtimeEventListener: memoryEventListener,
       });
-    } catch (error) {
-      if (!isAbortError(error) || !memorySummaryTimedOut) {
-        await this.recordMemorySummaryFailure({
+    try {
+      try {
+        await this.memory.maybeSummarize({
           userId,
           sessionId,
-          mode,
-          stage: "",
-          error,
-          runtimeEventListener,
+          userConfig,
+          abortSignal: memorySummaryAbortController.signal,
+          invocationIdentity: identity,
+          eventListener: memoryEventListener,
+          onStageError: ({ stage, error }) => recordFailure(stage, error),
         });
-        throw error;
+      } catch (error) {
+        if (!isAbortError(error) || !memorySummaryTimedOut) {
+          await recordFailure("", error);
+          throw error;
+        }
+      } finally {
+        clearTimeout(memorySummaryTimer);
       }
+      if (memorySummaryTimedOut) {
+        emitEvent(memoryEventListener, "memory_summary_timeout", {
+          sessionId,
+          mode,
+          timeoutMs: memorySummaryTimeoutMs,
+        });
+      }
+      emitEvent(memoryEventListener, "memory_summary_checked", { sessionId, mode });
     } finally {
-      clearTimeout(memorySummaryTimer);
+      await memoryEventListener.flush();
     }
-    if (memorySummaryTimedOut) {
-      emitEvent(runtimeEventListener, "memory_summary_timeout", {
-        sessionId,
-        mode,
-        timeoutMs: memorySummaryTimeoutMs,
-      });
-    }
-    emitEvent(runtimeEventListener, "memory_summary_checked", {
-      sessionId,
-      mode,
-    });
   }
 
-  scheduleMemorySummarizeFlow(payload = {}) {
+  scheduleMemorySummarizeFlow(payload) {
     void runBestEffort(() => this.runMemorySummarizeFlow(payload), {
       operationName: "memoryPostprocess.runScheduledSummary",
       context: { sessionId: payload.sessionId },
@@ -141,9 +151,19 @@ export class MemoryPostProcessService {
     dialogProcessId,
     persistenceScope,
     userConfig,
-    runtimeEventListener,
     mode,
   }) {
+    const identity = createMemoryPostprocessIdentity({
+      sessionId,
+      sourceDialogProcessId: dialogProcessId,
+    });
+    const memoryEventListener = this.createMemoryEventListener({
+      userId,
+      sessionId,
+      parentSessionId,
+      identity,
+      persistenceScope,
+    });
     try {
       const messages = await this.session.getSessionTurns({
         userId,
@@ -157,24 +177,10 @@ export class MemoryPostProcessService {
         dialogProcessId,
         messages,
       });
-      emitEvent(runtimeEventListener, "short_memory_captured", {
-        sessionId,
-        mode,
-      });
-      emitEvent(runtimeEventListener, "memory_summary_scheduled", {
-        sessionId,
-        mode: "async",
-      });
-      this.scheduleMemorySummarizeFlow({
-        userId,
-        sessionId,
-        userConfig,
-        runtimeEventListener,
-        mode: "async",
-      });
-      return;
+      emitEvent(memoryEventListener, "short_memory_captured", { sessionId, mode });
+      emitEvent(memoryEventListener, "memory_summary_scheduled", { sessionId, mode: "async" });
     } catch (error) {
-      emitEvent(runtimeEventListener, "memory_postprocess_failed", {
+      emitEvent(memoryEventListener, "memory_postprocess_failed", {
         sessionId,
         mode,
         error: error?.message || String(error),
@@ -189,7 +195,22 @@ export class MemoryPostProcessService {
           error,
         });
       }
+      try {
+        await memoryEventListener.flush();
+      } catch (flushError) {
+        throw new AggregateError([error, flushError], "memory postprocess failed", {
+          cause: error,
+        });
+      }
       throw error;
     }
+    this.scheduleMemorySummarizeFlow({
+      userId,
+      sessionId,
+      userConfig,
+      identity,
+      memoryEventListener,
+      mode: "async",
+    });
   }
 }

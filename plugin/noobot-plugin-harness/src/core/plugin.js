@@ -3,20 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { cleanupOldRuns } from "../utils/cleanup.js";
-import { assertHookManager, createPluginRuntimeContext, extractBasePath } from "./context.js";
+import { assertHookManager, createPluginRuntimeContext } from "./context.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
 import { registerHarnessHooks } from "./hooks.js";
 import { normalizeOptions } from "./options.js";
-import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 import { text } from "@noobot/shared/value";
 
 export function createHarnessRegistration(deps = {}) {
   const createPluginRuntimeContextFn =
     deps.createPluginRuntimeContext || createPluginRuntimeContext;
   const assertHookManagerFn = deps.assertHookManager || assertHookManager;
-  const extractBasePathFn = deps.extractBasePath || extractBasePath;
-  const cleanupOldRunsFn = deps.cleanupOldRuns || cleanupOldRuns;
   const registerHarnessHooksFn = deps.registerHarnessHooks || registerHarnessHooks;
 
   return function registerHarnessCore(api = {}, userOptions = {}) {
@@ -36,19 +32,6 @@ export function createHarnessRegistration(deps = {}) {
       api.policy.patch({ denyToolNames: options.denyToolNames });
     }
 
-    const basePath = extractBasePathFn({}, options);
-    if (basePath) {
-      cleanupOldRunsFn(basePath, options).catch((error) => {
-        console.warn(
-          formatHarnessCoreError(HARNESS_CORE_ERROR.CLEANUP_OLD_RUNS_FAILED, {
-            locale,
-            params: {
-              message: String(error?.message || error || ""),
-            },
-          }),
-        );
-      });
-    }
     const disposers = registerHarnessHooksFn({
       hookManager,
       options,

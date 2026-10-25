@@ -274,9 +274,8 @@ export function createServicePluginHost({
       remainingSessionIds = [],
     } = {}) {
       if (!activeScope) throw new Error("service plugins must be activated during HTTP startup");
-      const basePath =
-        bot && typeof bot.getWorkspacePath === "function" ? text(bot.getWorkspacePath(userId)) : "";
-      if (!basePath) return collectSessionDeletionHookResult();
+      const basePath = text(bot.getWorkspacePath(userId));
+      if (!basePath) throw new Error("session deletion hook requires a workspace basePath");
       const hookResult = await activeHookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: text(userId),
         sessionId: text(sessionId),

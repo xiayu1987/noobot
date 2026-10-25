@@ -239,6 +239,60 @@ test("ensureSession registers child Sessions in the Session Tree and deleteSessi
   });
 });
 
+test("deleteSessionBranch deletes a child placed between branch planning and locking", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const rootSessionId = "race-root";
+    const childSessionId = "race-child";
+    await initializeUserWorkspace(workspaceRoot, userId);
+
+    const runtime = createTestSessionServices({ workspaceRoot });
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: rootSessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const sessionRepo = runtime.sessionTreeService.sessionRepo;
+    const lockSets = [];
+    const lockMutations = sessionRepo.withSessionLifecycleMutations.bind(sessionRepo);
+    sessionRepo.withSessionLifecycleMutations = async (lockUserId, sessionIds, operation) => {
+      if (lockSets.length === 0 && sessionIds.includes(rootSessionId)) {
+        lockSets.push([...sessionIds]);
+        await provisionTestSession(runtime, {
+          userId,
+          sessionId: childSessionId,
+          parentSessionId: rootSessionId,
+          caller: SESSION_CALLER.BOT,
+        });
+      } else if (sessionIds.includes(rootSessionId)) {
+        lockSets.push([...sessionIds]);
+      }
+      return lockMutations(lockUserId, sessionIds, operation);
+    };
+
+    const result = await runtime.sessionTreeService.deleteSessionBranch({
+      userId,
+      sessionId: rootSessionId,
+    });
+
+    assert.deepEqual(lockSets[0], [rootSessionId]);
+    assert.deepEqual(result.deletedSessionIds.sort(), [childSessionId, rootSessionId]);
+    assert.equal(await sessionRepo.isSessionDeleted(userId, childSessionId), true);
+    const tree = await runtime.sessionTreeService.getSessionTree({ userId });
+    assert.equal(Object.hasOwn(tree.nodes, childSessionId), false);
+    assert.equal(Object.hasOwn(tree.nodes, rootSessionId), false);
+    await assert.rejects(
+      provisionTestSession(runtime, {
+        userId,
+        sessionId: "race-late-child",
+        parentSessionId: rootSessionId,
+        caller: SESSION_CALLER.BOT,
+      }),
+    );
+  });
+});
+
 test("appendTurns should not recreate session after deletion marker is set", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";

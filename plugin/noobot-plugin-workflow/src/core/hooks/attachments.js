@@ -47,8 +47,7 @@ function normalizeAttachmentRefs(input = []) {
 }
 
 function isAllUserAttachmentRef(ref = "") {
-  const normalized = text(ref).toLowerCase();
-  return WORKFLOW_ATTACHMENT_SCOPE.USER_ALL_TOKENS.includes(normalized);
+  return text(ref) === WORKFLOW_ATTACHMENT_SCOPE.USER_ALL;
 }
 
 export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {} } = {}) {

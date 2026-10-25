@@ -16,21 +16,13 @@ import { PLUGIN_NAME, PLUGIN_VERSION, resolveHarnessRunsRelativePath } from "./c
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 import { text, isFunction } from "@noobot/shared/value";
 
-export function extractBasePath(ctx = {}, options = {}) {
-  return text(
-    options.basePath ||
-      ctx.basePath ||
-      ctx?.agentContext?.context?.environment?.workspace?.basePath,
-  );
-}
-
 function extractRunId(ctx = {}) {
   return safeId(resolveDialogProcessIdFromContext(ctx) || ctx.sessionId || "run");
 }
 
 export function createRunPaths(ctx = {}, options = {}) {
-  const basePath = extractBasePath(ctx, options);
-  if (!basePath) return null;
+  const basePath = text(options.basePath);
+  if (!basePath) throw new TypeError("harness run paths require options.basePath");
   const runId = extractRunId(ctx);
   const runDir = path.join(basePath, resolveHarnessRunsRelativePath(), runId);
   return {

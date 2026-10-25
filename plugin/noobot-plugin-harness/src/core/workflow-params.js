@@ -118,7 +118,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
         summaryPromptInjected: "summary_prompt_injected",
         guidancePromptInjected: "guidance_prompt_injected",
         summaryMessagesMarked: "summary_messages_marked",
-        summaryCompletionMarkerMissing: "summary_completion_marker_missing",
         revisionModelFailed: "planning_revision_model_failed",
         revisionNotApplied: "planning_revision_not_applied",
         revisionSkippedByMaxAttempts: "planning_revision_skipped_by_max_attempts",

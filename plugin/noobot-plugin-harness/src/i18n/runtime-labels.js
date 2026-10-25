@@ -225,6 +225,18 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planRefinementTargetMainStepIndexesDescription: "可选：指定要细化的主计划 ID 列表，如 [2,3]。",
     taskAcceptanceForcedReasonOverflowInFlow: "上下文溢出_流程内强制验收",
     taskAcceptanceForcedReasonToolRequested: "工具主动请求强制验收",
+    coreErrorHookManagerRequired:
+      "{pluginName}: 需要提供支持 .on(point, handler, options) 的 hookManager",
+    coreErrorCleanupOldRunsFailed: "[harness] 插件注册期间清理历史运行目录失败: {message}",
+    planMutationReasonEmptyMutationText: "变更文本为空",
+    planMutationReasonInvalidMutationType: "变更类型无效",
+    planMutationReasonEmptyRenderedPlan: "渲染后的计划为空",
+    planMutationReasonRefinementPatchNotApplied: "未应用到任何细化补丁",
+    planMutationReasonRevisionNotApplied: "未应用到任何计划修订",
+    planMutationEmptyPlanPlaceholder: "（空）",
+    planMutationMainPlanSectionHeader: "主计划 {id}:",
+    planMutationRefinedPlanRelayTitle: "细化后的计划文本：",
+    planMutationRevisedPlanRelayTitle: "修正后的计划文本：",
   }),
   [LOCALE.EN_US]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
@@ -451,5 +463,18 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "Optional: target main-plan ID list to refine, e.g. [2,3].",
     taskAcceptanceForcedReasonOverflowInFlow: "Context overflow (in-flow forced acceptance)",
     taskAcceptanceForcedReasonToolRequested: "Tool-requested forced acceptance",
+    coreErrorHookManagerRequired:
+      "{pluginName}: hookManager with .on(point, handler, options) is required",
+    coreErrorCleanupOldRunsFailed:
+      "[harness] cleanupOldRuns failed during plugin registration: {message}",
+    planMutationReasonEmptyMutationText: "Mutation text is empty",
+    planMutationReasonInvalidMutationType: "Invalid mutation type",
+    planMutationReasonEmptyRenderedPlan: "Rendered plan text is empty",
+    planMutationReasonRefinementPatchNotApplied: "No refinement patch was applied",
+    planMutationReasonRevisionNotApplied: "No revision mutation was applied",
+    planMutationEmptyPlanPlaceholder: "N/A",
+    planMutationMainPlanSectionHeader: "Main plan {id}:",
+    planMutationRefinedPlanRelayTitle: "Refined plan text:",
+    planMutationRevisedPlanRelayTitle: "Revised plan text:",
   }),
 });

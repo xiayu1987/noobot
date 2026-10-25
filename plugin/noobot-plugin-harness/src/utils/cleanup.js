@@ -14,11 +14,8 @@ function isMissingPathError(error) {
 }
 
 function normalizeSessionIds(input = []) {
-  if (Array.isArray(input)) {
-    return input.map((item) => text(item)).filter(Boolean);
-  }
-  const single = text(input);
-  return single ? [single] : [];
+  if (!Array.isArray(input)) throw new TypeError("harness run cleanup sessionIds must be an array");
+  return input.map((item) => text(item)).filter(Boolean);
 }
 
 async function resolveRunManifest(manifestPath = "") {
@@ -67,7 +64,7 @@ async function isRunWriteLocked(runDirPath = "", options = {}) {
 }
 
 export async function cleanupOldRuns(basePath, options = {}) {
-  if (!basePath) return { deleted: 0, errors: 0, skippedLocked: 0 };
+  if (!basePath) throw new TypeError("harness run retention cleanup requires basePath");
   const maxRuns = Number.isFinite(Number(options.maxRuns)) ? Number(options.maxRuns) : 100;
   const maxRunAgeDays = Number.isFinite(Number(options.maxRunAgeDays))
     ? Number(options.maxRunAgeDays)
@@ -154,9 +151,9 @@ export async function cleanupOldRuns(basePath, options = {}) {
 }
 
 export async function cleanupRunsBySessionIds(basePath, sessionIds = [], options = {}) {
-  if (!basePath) return { deleted: 0, errors: 0, matchedRuns: 0, skippedLocked: 0 };
+  if (!basePath) throw new TypeError("harness session cleanup requires basePath");
   const normalizedIds = new Set(normalizeSessionIds(sessionIds));
-  if (!normalizedIds.size) return { deleted: 0, errors: 0, matchedRuns: 0, skippedLocked: 0 };
+  if (!normalizedIds.size) throw new TypeError("harness session cleanup requires sessionIds");
 
   const harnessRunsDir = path.join(basePath, resolveHarnessRunsRelativePath());
   let deleted = 0;

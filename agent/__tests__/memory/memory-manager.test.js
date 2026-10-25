@@ -12,6 +12,7 @@ import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experi
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 import { MemoryManager } from "../../src/memory/index.js";
+import { createMemoryPostprocessIdentity } from "@noobot/session-protocol/turn-scope-identity";
 
 function createMemoryConfig(workspaceRoot, alias = "mock-memory-model") {
   return {
@@ -56,6 +57,14 @@ async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
   }
   throw lastError || new Error("waitFor failed");
 }
+
+const MEMORY_RUN_PORTS = Object.freeze({
+  invocationIdentity: createMemoryPostprocessIdentity({
+    sessionId: "memory-test-session",
+    sourceDialogProcessId: "memory-test-turn",
+  }),
+  eventListener: { onEvent() {} },
+});
 
 const EMPTY_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n";
 
@@ -255,6 +264,7 @@ test("maybeSummarize applies the field patch from ModelPort text output", async 
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
     abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
@@ -294,6 +304,7 @@ test("maybeSummarize uses configured memoryModel for long memory and experience 
     ),
   });
   await service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
     abortSignal: new AbortController().signal,
     userId,
     userConfig: { memoryModel: "selected-memory-model" },
@@ -342,6 +353,7 @@ test("maybeSummarize retries an invalid long memory patch once, then continues l
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
     abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
@@ -380,6 +392,7 @@ test("maybeSummarize writes long memory when the correction retry returns a vali
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
     abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
@@ -407,6 +420,7 @@ test("maybeSummarize treats NOOP as a successful no-change long memory stage", a
   });
   const stageErrors = [];
   await service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
     abortSignal: new AbortController().signal,
     userId,
     userConfig: {},
@@ -441,6 +455,7 @@ test("maybeSummarize rethrows abort errors from a stage", async () => {
   const stageErrors = [];
   await assert.rejects(
     service.maybeSummarize({
+      ...MEMORY_RUN_PORTS,
       userId,
       userConfig: {},
       abortSignal: controller.signal,

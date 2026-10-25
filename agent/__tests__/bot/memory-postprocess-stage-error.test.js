@@ -7,23 +7,30 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { MemoryPostProcessService } from "../../src/bot/execution/memory-postprocess.js";
+import { createMemoryPostprocessIdentity } from "@noobot/session-protocol/turn-scope-identity";
 
 function createHarness(maybeSummarize) {
   const events = [];
   const logs = [];
+  let flushCount = 0;
   const service = new MemoryPostProcessService({
     globalConfig: {},
     session: {},
     memory: { maybeSummarize },
     errorLogger: { log: async (entry) => logs.push(entry) },
   });
-  const runtimeEventListener = { onEvent: (packet) => events.push(packet) };
-  return { service, events, logs, runtimeEventListener };
+  const memoryEventListener = {
+    onEvent: (packet) => events.push(packet),
+    flush: async () => {
+      flushCount += 1;
+    },
+  };
+  return { service, events, logs, memoryEventListener, flushCount: () => flushCount };
 }
 
 test("memory-postprocess: stage failure is recorded and summary flow completes", async () => {
   const stageError = Object.assign(new Error("bad patch"), { code: "LONG_MEMORY_PATCH_INVALID" });
-  const { service, events, logs, runtimeEventListener } = createHarness(
+  const { service, events, logs, memoryEventListener, flushCount } = createHarness(
     async ({ onStageError }) => {
       await onStageError({ stage: "long_memory", error: stageError });
     },
@@ -32,7 +39,8 @@ test("memory-postprocess: stage failure is recorded and summary flow completes",
   await service.runMemorySummarizeFlow({
     userId: "u1",
     sessionId: "s1",
-    runtimeEventListener,
+    identity: createMemoryPostprocessIdentity({ sessionId: "s1", sourceDialogProcessId: "d1" }),
+    memoryEventListener,
     mode: "async",
   });
 
@@ -48,4 +56,5 @@ test("memory-postprocess: stage failure is recorded and summary flow completes",
   assert.equal(logs[0].error, stageError);
   assert.deepEqual(logs[0].extra, { stage: "long_memory" });
   assert.ok(events.some((packet) => packet.event === "memory_summary_checked"));
+  assert.equal(flushCount(), 1);
 });

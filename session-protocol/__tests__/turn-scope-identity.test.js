@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   areCanonicalTurnScopeIdsEqual,
   canonicalizeTurnScopeId,
+  createMemoryPostprocessIdentity,
   createWorkflowNodeDialogProcessId,
   createWorkflowNodeTurnScopeId,
   isCanonicalTurnScopeId,
@@ -20,6 +21,38 @@ import {
   canonicalizeTurnScopeId as canonicalizeInternalTurnScopeId,
   turnScopeIdentityKey as internalTurnScopeIdentityKey,
 } from "../src/identity/turn-scope-identity.js";
+import { isDialogProcessKey } from "../src/identity.js";
+
+test("memory postprocess identity is a dialog process key derived from the source turn", () => {
+  const longSession = "s".repeat(200);
+  const longSource = "d".repeat(128);
+  const identity = createMemoryPostprocessIdentity({
+    sessionId: longSession,
+    sourceDialogProcessId: longSource,
+  });
+  assert.match(identity.dialogProcessId, /^mem_[0-9a-f]{32}$/);
+  assert.equal(isDialogProcessKey(identity.dialogProcessId), true);
+  assert.equal(identity.turnScopeId, `memory-postprocess:${longSource}`);
+  assert.equal(identity.runId, identity.turnScopeId);
+  assert.deepEqual(
+    createMemoryPostprocessIdentity({ sessionId: longSession, sourceDialogProcessId: longSource }),
+    identity,
+  );
+  assert.notEqual(
+    createMemoryPostprocessIdentity({ sessionId: longSession, sourceDialogProcessId: "other" })
+      .dialogProcessId,
+    identity.dialogProcessId,
+  );
+});
+
+test("memory postprocess identity rejects missing session or source turn", () => {
+  assert.throws(() => createMemoryPostprocessIdentity({ sessionId: "s1" }), {
+    code: "MEMORY_POSTPROCESS_IDENTITY_INVALID",
+  });
+  assert.throws(() => createMemoryPostprocessIdentity({ sourceDialogProcessId: "d1" }), {
+    code: "MEMORY_POSTPROCESS_IDENTITY_INVALID",
+  });
+});
 
 test("public subpath re-exports the canonical identity implementation", () => {
   assert.equal(canonicalizeTurnScopeId, canonicalizeInternalTurnScopeId);

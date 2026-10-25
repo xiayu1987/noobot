@@ -18,16 +18,8 @@ function normalizeText(value = "") {
 }
 
 function normalizeScenario(value = "") {
-  const inputText = normalizeText(value).toLowerCase();
-  if (VALID_SCENARIOS.has(inputText)) return inputText;
-  if (
-    inputText.includes("program") ||
-    inputText.includes("coding") ||
-    inputText.includes("\u7f16\u7a0b")
-  )
-    return "programming";
-  if (inputText.includes("text") || inputText.includes("\u6587\u672c")) return "text";
-  return "general";
+  const scenario = normalizeText(value).toLowerCase();
+  return VALID_SCENARIOS.has(scenario) ? scenario : "general";
 }
 
 function clipPrompt(inputText = "") {

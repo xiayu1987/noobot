@@ -17,7 +17,6 @@ import {
   readAfterLlmCallText,
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
-import { isSummaryCompletionMarked } from "../model-response-parser.js";
 import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
 import {
   maybeInjectPlanUpdatePrompt,
@@ -369,13 +368,7 @@ async function applyPendingGuidanceSummary(ctx, meta, holder) {
   await relayGuidanceSummary(ctx, { meta, locale, rawSummaryText });
   recordLatestSummaryFullText(ctx, rawSummaryText);
   const { overviewText } = parseSummaryOverviewAndDetailFromText(rawSummaryText);
-  const summaryText = applySummaryText(ctx, overviewText || rawSummaryText);
-  if (!isSummaryCompletionMarked(summaryText, locale)) {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,
-    });
-  }
+  applySummaryText(ctx, overviewText || rawSummaryText);
   return markedCount > 0;
 }
 

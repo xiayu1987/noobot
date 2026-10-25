@@ -49,7 +49,8 @@ export function mergeSessionDeletionIds(...sessionIdGroups) {
 
 export function resolveSessionDeletionTargets(context = {}) {
   const deletedSessionIds = normalizeSessionIds(context?.deletedSessionIds);
-  if (deletedSessionIds.length) return deletedSessionIds;
-  const fallbackSessionId = text(context?.sessionId);
-  return fallbackSessionId ? [fallbackSessionId] : [];
+  if (!deletedSessionIds.length) {
+    throw new TypeError("session deletion hook context requires non-empty deletedSessionIds");
+  }
+  return deletedSessionIds;
 }

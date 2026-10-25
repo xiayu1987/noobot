@@ -27,7 +27,7 @@ import {
   MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
 } from "./constants.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 const MEMORY_PROMPT_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhSystemPromptI18n?.memoryPrompt || {}),
@@ -147,10 +147,17 @@ export class MemoryManager {
     sessionId = "",
     userConfig,
     abortSignal,
-    eventListener = null,
+    invocationIdentity,
+    eventListener,
     onStageError,
   }) {
     assertNotAborted(abortSignal);
+    if (!invocationIdentity?.dialogProcessId || !invocationIdentity?.turnScopeId) {
+      throw new TypeError("maybeSummarize requires an explicit memory invocationIdentity");
+    }
+    if (!isFunction(eventListener?.onEvent)) {
+      throw new TypeError("maybeSummarize requires a memory execution eventListener");
+    }
     const basePath = this.storage.resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
     const promptI18n = resolveMemoryPromptI18n(
@@ -177,9 +184,9 @@ export class MemoryManager {
         invocationIdentity: {
           sessionId,
           parentSessionId: "",
-          dialogProcessId: `memory:${sessionId}`,
-          turnScopeId: `memory-summary:${sessionId}`,
-          runId: `memory-summary:${sessionId}`,
+          dialogProcessId: invocationIdentity.dialogProcessId,
+          turnScopeId: invocationIdentity.turnScopeId,
+          runId: invocationIdentity.runId,
         },
         runtime: {
           eventListener,

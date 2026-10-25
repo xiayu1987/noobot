@@ -74,17 +74,14 @@ test("resolveSessionDeletionTargets normalizes and dedupes deleted ids", () => {
   );
 });
 
-test("resolveSessionDeletionTargets falls back to the single session id", () => {
-  assert.deepEqual(resolveSessionDeletionTargets({ deletedSessionIds: [], sessionId: " s " }), [
-    "s",
-  ]);
-  assert.deepEqual(resolveSessionDeletionTargets({ deletedSessionIds: ["  "], sessionId: "s" }), [
-    "s",
-  ]);
-});
-
-test("resolveSessionDeletionTargets returns empty when nothing is resolvable", () => {
-  assert.deepEqual(resolveSessionDeletionTargets({}), []);
-  assert.deepEqual(resolveSessionDeletionTargets(), []);
-  assert.deepEqual(resolveSessionDeletionTargets({ deletedSessionIds: "not-an-array" }), []);
+test("resolveSessionDeletionTargets rejects contexts without deletedSessionIds", () => {
+  for (const context of [
+    undefined,
+    {},
+    { deletedSessionIds: [], sessionId: "s" },
+    { deletedSessionIds: ["  "], sessionId: "s" },
+    { deletedSessionIds: "not-an-array" },
+  ]) {
+    assert.throws(() => resolveSessionDeletionTargets(context), /non-empty deletedSessionIds/);
+  }
 });

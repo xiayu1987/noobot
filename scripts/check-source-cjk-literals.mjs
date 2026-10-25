@@ -14,7 +14,7 @@ import { readRepositoryText, repositoryRoot } from "./quality/repository-files.m
 import { addExemptablePatternLineHits } from "./quality/boundary-hits.mjs";
 import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 
-const CJK_PATTERN = /[\u4e00-\u9fff]/;
+const CJK_PATTERN = /[\u4e00-\u9fff]|\\u(?:4[e-fE-F]|[5-9][0-9a-fA-F])[0-9a-fA-F]{2}/;
 const SOURCE_EXTENSIONS = Object.freeze([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
 
 function fileExemption(id, file, reason) {

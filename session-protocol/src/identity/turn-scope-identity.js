@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { isCanonicalText, text } from "@noobot/shared/value";
 
 const WORKFLOW_NODE_CANONICAL_PREFIX = "workflow-node:";
@@ -10,6 +12,8 @@ const WORKFLOW_NODE_TRANSPORT_PREFIX = "workflow-node_";
 
 export const WORKFLOW_NODE_TURN_SCOPE_PREFIX = WORKFLOW_NODE_CANONICAL_PREFIX;
 export const WORKFLOW_NODE_DIALOG_PROCESS_PREFIX = "wf_node_";
+export const MEMORY_POSTPROCESS_TURN_SCOPE_PREFIX = "memory-postprocess:";
+export const MEMORY_POSTPROCESS_DIALOG_PROCESS_PREFIX = "mem_";
 
 export function canonicalizeTurnScopeId(value = "") {
   const turnScopeId = text(value);
@@ -68,4 +72,26 @@ export function readWorkflowNodeExecutionId(value = "") {
   return canonical.startsWith(WORKFLOW_NODE_TURN_SCOPE_PREFIX)
     ? canonical.slice(WORKFLOW_NODE_TURN_SCOPE_PREFIX.length)
     : "";
+}
+
+export function createMemoryPostprocessIdentity({
+  sessionId = "",
+  sourceDialogProcessId = "",
+} = {}) {
+  const session = text(sessionId);
+  const source = text(sourceDialogProcessId);
+  if (!session || !source) {
+    const error = new TypeError(
+      "memory postprocess identity requires sessionId and sourceDialogProcessId",
+    );
+    error.code = "MEMORY_POSTPROCESS_IDENTITY_INVALID";
+    throw error;
+  }
+  const digest = bytesToHex(sha256(utf8ToBytes(`${session}\n${source}`))).slice(0, 32);
+  const turnScopeId = `${MEMORY_POSTPROCESS_TURN_SCOPE_PREFIX}${source}`;
+  return Object.freeze({
+    dialogProcessId: `${MEMORY_POSTPROCESS_DIALOG_PROCESS_PREFIX}${digest}`,
+    turnScopeId,
+    runId: turnScopeId,
+  });
 }

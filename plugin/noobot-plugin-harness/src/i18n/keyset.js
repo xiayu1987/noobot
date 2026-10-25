@@ -185,6 +185,21 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     CONVERGED_REASON: "planRefinementConvergedReason",
     FAILED_REASON: "planRefinementFailedReason",
   }),
+  CORE_ERROR: Object.freeze({
+    HOOK_MANAGER_REQUIRED: "coreErrorHookManagerRequired",
+    CLEANUP_OLD_RUNS_FAILED: "coreErrorCleanupOldRunsFailed",
+  }),
+  PLAN_MUTATION: Object.freeze({
+    REASON_EMPTY_MUTATION_TEXT: "planMutationReasonEmptyMutationText",
+    REASON_INVALID_MUTATION_TYPE: "planMutationReasonInvalidMutationType",
+    REASON_EMPTY_RENDERED_PLAN: "planMutationReasonEmptyRenderedPlan",
+    REASON_REFINEMENT_PATCH_NOT_APPLIED: "planMutationReasonRefinementPatchNotApplied",
+    REASON_REVISION_NOT_APPLIED: "planMutationReasonRevisionNotApplied",
+    EMPTY_PLAN_PLACEHOLDER: "planMutationEmptyPlanPlaceholder",
+    MAIN_PLAN_SECTION_HEADER: "planMutationMainPlanSectionHeader",
+    REFINED_PLAN_RELAY_TITLE: "planMutationRefinedPlanRelayTitle",
+    REVISED_PLAN_RELAY_TITLE: "planMutationRevisedPlanRelayTitle",
+  }),
   SYSTEM_PROMPT: Object.freeze({
     POLICY_GENERAL: "harnessPolicyGeneralPrompt",
     POLICY_TEXT: "harnessPolicyTextPrompt",

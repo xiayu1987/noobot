@@ -21,9 +21,8 @@ export function registerWorkflowSessionCleanupHook({ hookManager, options }) {
     HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
     async (ctx = {}) => {
       const sessionIds = resolveSessionDeletionTargets(ctx);
-      if (!sessionIds.length) return createSessionDeletionHookResult();
       const basePath = text(ctx?.basePath);
-      if (!basePath) return createSessionDeletionHookResult();
+      if (!basePath) throw new TypeError("workflow session cleanup requires basePath");
       const cleanup = await cleanupWorkflowBySessionIds(basePath, sessionIds);
       const retainedRelatedSessionIds = await collectWorkflowRelatedSessionIds(
         basePath,
