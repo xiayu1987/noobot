@@ -19,8 +19,7 @@ function createTurnScope() {
     messageBlocks: { system: [], history: [], incremental: [] },
     activeTurnIdentity: { dialogProcessId: "dlg_control", turnScopeId: "turn_control" },
   });
-  const loopState = { dialogProcessId: "dlg_control" };
-  return { runtime, loopState };
+  return { runtime };
 }
 
 for (const internalType of [
@@ -29,10 +28,9 @@ for (const internalType of [
   CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
 ]) {
   test(`context control message ${internalType} is marked injected in turn and model context`, () => {
-    const { runtime, loopState } = createTurnScope();
+    const { runtime } = createTurnScope();
     const persisted = appendTurnContextControlMessage({
       runtime,
-      loopState,
       content: "control prompt",
       internalType,
     });
@@ -45,12 +43,11 @@ for (const internalType of [
 }
 
 test("context control message rejects non-control internal types", () => {
-  const { runtime, loopState } = createTurnScope();
+  const { runtime } = createTurnScope();
   assert.throws(
     () =>
       appendTurnContextControlMessage({
         runtime,
-        loopState,
         content: "user words",
         internalType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
       }),

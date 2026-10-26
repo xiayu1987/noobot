@@ -93,12 +93,49 @@ describe("useChatStore execution projection", () => {
       },
     });
 
-    expect(store.selectExecutionDetail(MAIN_EXECUTION_ID)?.messages[0].content).toBe("main");
-    expect(store.selectExecutionDetail(CHILD_EXECUTION_ID)?.messages[0].content).toBe("child");
+    expect(store.selectExecutionDetail(MAIN_EXECUTION_ID)?.session.messages[0].content).toBe(
+      "main",
+    );
+    expect(store.selectExecutionDetail(CHILD_EXECUTION_ID)?.session.messages[0].content).toBe(
+      "child",
+    );
     expect(
       store.selectExecutionDetail(MAIN_EXECUTION_ID)?.children.map((item) => item.executionId),
     ).toEqual([CHILD_EXECUTION_ID]);
+    expect(store.selectExecutionDetail(MAIN_EXECUTION_ID)).not.toHaveProperty("messages");
     expect(store.selectExecutionDetail("unknown")).toBeNull();
+  });
+
+  function registerMainExecution(store) {
+    applyExecutionTree(store.turnRuntimeRegistry, {
+      rootExecutionId: MAIN_EXECUTION_ID,
+      tree: {
+        executions: {
+          [MAIN_EXECUTION_ID]: {
+            executionId: MAIN_EXECUTION_ID,
+            executionKind: "agent",
+            rootExecutionId: MAIN_EXECUTION_ID,
+            sessionId: "main-session",
+            turnScopeId: "main-turn",
+            revision: 1,
+            sequence: 1,
+          },
+        },
+      },
+    });
+  }
+
+  it("returns no execution detail while the execution session document is not loaded", () => {
+    const store = useChatStore();
+    registerMainExecution(store);
+    expect(store.selectExecutionDetail(MAIN_EXECUTION_ID)).toBeNull();
+  });
+
+  it("rejects an execution session document without a messages array", () => {
+    const store = useChatStore();
+    store.sessions.push({ sessionId: "main-session" });
+    registerMainExecution(store);
+    expect(() => store.selectExecutionDetail(MAIN_EXECUTION_ID)).toThrow(TypeError);
   });
 
   it("returns nested descendants once and remains safe for malformed relation cycles", () => {

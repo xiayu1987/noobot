@@ -77,12 +77,14 @@ function createScope({
     globalConfig,
     runConfig,
     attachmentService,
-    systemRuntime: {
+    identity: {
       userId: identity.userId,
       sessionId: identity.sessionId,
       dialogProcessId: identity.dialogProcessId,
       turnScopeId: identity.turnScopeId,
       caller: SESSION_CALLER.USER,
+    },
+    systemRuntime: {
       now: "2026-01-01T00:00:00.000Z",
       isSuperUser: true,
     },

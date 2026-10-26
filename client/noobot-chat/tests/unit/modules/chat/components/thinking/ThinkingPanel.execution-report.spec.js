@@ -8,10 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
-const getReport = vi.hoisted(() => vi.fn());
-vi.mock("../../../../../../src/infrastructure/api/thinking/executionReportService.js", () => ({
-  executionReportService: { getReport },
-}));
+const getReport = vi.fn();
 
 const drawerStub = {
   "el-drawer": {
@@ -116,7 +113,11 @@ describe("ThinkingPanel execution report", () => {
   it("keeps the drawer width in sync with the viewport while open", async () => {
     const viewport = installMatchMedia(false);
     getReport.mockResolvedValue(null);
-    const wrapper = mountThinkingPanel(finishedMessage, {}, { stubs: drawerStub });
+    const wrapper = mountThinkingPanel(
+      finishedMessage,
+      { fetchExecutionReport: getReport },
+      { stubs: drawerStub },
+    );
 
     await findReportButton(wrapper).trigger("click");
     await flushPromises();
@@ -190,7 +191,11 @@ describe("ThinkingPanel execution report", () => {
         }),
       }),
     );
-    const wrapper = mountThinkingPanel(finishedMessage, { userId: "admin" }, { stubs: drawerStub });
+    const wrapper = mountThinkingPanel(
+      finishedMessage,
+      { userId: "admin", fetchExecutionReport: getReport },
+      { stubs: drawerStub },
+    );
     expect(wrapper.find(".execution-report-drawer").exists()).toBe(false);
 
     await findReportButton(wrapper).trigger("click");
@@ -255,7 +260,11 @@ describe("ThinkingPanel execution report", () => {
         error: { message: "boom" },
       }),
     );
-    const wrapper = mountThinkingPanel(finishedMessage, {}, { stubs: drawerStub });
+    const wrapper = mountThinkingPanel(
+      finishedMessage,
+      { fetchExecutionReport: getReport },
+      { stubs: drawerStub },
+    );
 
     await findReportButton(wrapper).trigger("click");
     await flushPromises();
@@ -274,7 +283,11 @@ describe("ThinkingPanel execution report", () => {
 
   it("shows the empty hint when the report has not been generated", async () => {
     getReport.mockResolvedValue(null);
-    const wrapper = mountThinkingPanel(finishedMessage, {}, { stubs: drawerStub });
+    const wrapper = mountThinkingPanel(
+      finishedMessage,
+      { fetchExecutionReport: getReport },
+      { stubs: drawerStub },
+    );
 
     await findReportButton(wrapper).trigger("click");
     await flushPromises();
@@ -284,7 +297,7 @@ describe("ThinkingPanel execution report", () => {
     expect(dialog.find(".empty-hint").text()).toMatch(/本轮暂无执行报告|No execution report/);
   });
 
-  it("loads the report through the data-owner fetcher instead of the host endpoint", async () => {
+  it("loads the report only through the injected host capability", async () => {
     const fetchExecutionReport = vi.fn(async () =>
       v4Report({ durationMs: 1000, executionSummary: summaryOf() }),
     );
@@ -297,7 +310,6 @@ describe("ThinkingPanel execution report", () => {
     await findReportButton(wrapper).trigger("click");
     await flushPromises();
 
-    expect(getReport).not.toHaveBeenCalled();
     expect(fetchExecutionReport).toHaveBeenCalledWith({
       userId: "user-1",
       sessionId: "session-1",

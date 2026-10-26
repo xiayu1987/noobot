@@ -17,14 +17,18 @@ export {
   applyExecutionTree,
   selectExecution,
   selectExecutionChildren,
+  selectTurnExecution,
 } from "./executionRuntimeProjection.js";
 
 export {
   resolveLatestContinuableStoppedTurn,
   resolveLatestStoppedTurn,
-  resolveSessionTurnRuntime,
+  projectTurnRuntimeView,
   resolveTurnRuntimeByScope,
+  selectCurrentTurnRuntime,
+  selectSessionRuntimeBucket,
   selectSessionTurnRuntime,
+  selectTurnRuntimeByScope,
   selectTurnMessageRuntime,
   turnRuntimeDisplayState,
 } from "./turnRuntimeSelectors.js";
@@ -38,7 +42,7 @@ export {
   removeTurnRuntime,
 } from "./turnRuntimeRetention.js";
 
-export { applyTurnTimingSnapshot, applyTurnTimingUpdate } from "./turnRuntimeTiming.js";
+export { applyTurnTimingSnapshot } from "./turnRuntimeTiming.js";
 
 export {
   applyTurnLifecycleEnvelope,

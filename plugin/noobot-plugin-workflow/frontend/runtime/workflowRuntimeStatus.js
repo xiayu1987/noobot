@@ -4,41 +4,47 @@
  * SPDX-License-Identifier: MIT
  */
 
-function normalizeStatus(value = "") {
-  const status = text(value).toLowerCase();
-  if (status === "error") return "failed";
-  if (status === "done" || status === "completed" || status === "succeeded") return "success";
-  return status;
+import {
+  WORKFLOW_NODE_STATUS,
+  isWorkflowNodeTerminalStatus,
+  normalizeWorkflowNodeStatus,
+} from "@noobot/event-protocol/workflow-runtime-event";
+
+const STATUS_LABEL_KEYS = Object.freeze({
+  [WORKFLOW_NODE_STATUS.PENDING]: "workflow.statusPending",
+  [WORKFLOW_NODE_STATUS.READY]: "workflow.statusReady",
+  [WORKFLOW_NODE_STATUS.RUNNING]: "workflow.statusRunning",
+  [WORKFLOW_NODE_STATUS.SUCCEEDED]: "workflow.statusSucceeded",
+  [WORKFLOW_NODE_STATUS.FAILED]: "workflow.statusFailed",
+  [WORKFLOW_NODE_STATUS.STOPPED]: "workflow.statusStopped",
+  [WORKFLOW_NODE_STATUS.SKIPPED]: "workflow.statusSkipped",
+});
+
+export function resolveWorkflowNodeStatus(item = {}) {
+  return normalizeWorkflowNodeStatus(item?.status) || WORKFLOW_NODE_STATUS.PENDING;
 }
 
-import { text, isObjectLike } from "@noobot/shared/value";
-
-export function createStepStatusResolver() {
-  return function resolveStepStatus(stepItem = {}) {
-    const failure = stepItem?.stepFailure;
-    if (isObjectLike(failure)) {
-      if (text(failure?.message || failure?.error)) return "failed";
-    } else if (text(failure)) {
-      return "failed";
-    }
-
-    const explicit = normalizeStatus(stepItem?.status || stepItem?._status || "");
-    if (explicit) return explicit;
-    return "pending";
-  };
+export function resolveWorkflowNodeStatusLabelKey(item = {}) {
+  return STATUS_LABEL_KEYS[resolveWorkflowNodeStatus(item)];
 }
 
-export function resolveActionRuntimeStatus(actionNodeStates = [], resolveStepStatus) {
-  const steps = [];
+export function isWorkflowNodeFinished(item = {}) {
+  return isWorkflowNodeTerminalStatus(resolveWorkflowNodeStatus(item));
+}
+
+export function resolveActionRuntimeStatus(actionNodeStates = []) {
+  const statuses = [];
   for (const stateBox of Array.isArray(actionNodeStates) ? actionNodeStates : []) {
     for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : [])
-      steps.push(stepItem);
+      statuses.push(resolveWorkflowNodeStatus(stepItem));
   }
-  if (!steps.length) return "pending";
-
-  const statuses = steps.map((stepItem) => resolveStepStatus(stepItem));
-  if (statuses.some((status) => status === "running")) return "running";
-  if (statuses.some((status) => status === "failed" || status === "error")) return "failed";
-  if (statuses.every((status) => status === "success")) return "success";
-  return "pending";
+  if (!statuses.length) return WORKFLOW_NODE_STATUS.PENDING;
+  if (statuses.includes(WORKFLOW_NODE_STATUS.RUNNING)) return WORKFLOW_NODE_STATUS.RUNNING;
+  if (statuses.includes(WORKFLOW_NODE_STATUS.FAILED)) return WORKFLOW_NODE_STATUS.FAILED;
+  if (statuses.includes(WORKFLOW_NODE_STATUS.STOPPED)) return WORKFLOW_NODE_STATUS.STOPPED;
+  if (statuses.every((status) => status === WORKFLOW_NODE_STATUS.SKIPPED))
+    return WORKFLOW_NODE_STATUS.SKIPPED;
+  if (statuses.every(isWorkflowNodeTerminalStatus)) return WORKFLOW_NODE_STATUS.SUCCEEDED;
+  if (statuses.includes(WORKFLOW_NODE_STATUS.READY)) return WORKFLOW_NODE_STATUS.READY;
+  return WORKFLOW_NODE_STATUS.PENDING;
 }

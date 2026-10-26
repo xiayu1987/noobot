@@ -14,11 +14,7 @@ import {
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
-import {
-  createTestModelPort,
-  createLoopTurnIdentity,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 import { MAIN_FLOW_CONTROL_REASON } from "@noobot/context-protocol/policy/main-flow-control";
@@ -29,12 +25,7 @@ import {
 } from "../../../src/runtime/main-flow-control.js";
 
 function runFunctionCallLoop(args = {}) {
-  prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    createLoopTurnIdentity(args.loopState),
-    "presentation-orchestrator-overflow",
-  );
+  prepareTestTurnExecution(args.modelState, args.loopState, "presentation-orchestrator-overflow");
   return runFunctionCallLoopProduction(args);
 }
 
@@ -74,7 +65,6 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     tools: tool ? [tool] : [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
-    dialogProcessId: "dialog-1",
     maxTurns,
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,
@@ -306,12 +296,7 @@ test("post-summary char overflow enters final no-tools before the next with-tool
 
   const modelState = createModelState(llm);
   const loopState = createLoopState({ maxTurns: 3, tool: taskSummaryTool });
-  prepareTestTurnExecution(
-    modelState,
-    loopState,
-    createLoopTurnIdentity(loopState),
-    "presentation-orchestrator-overflow",
-  );
+  prepareTestTurnExecution(modelState, loopState, "presentation-orchestrator-overflow");
   loopState.phaseSummaryMessageCharsThreshold = 10;
   modelState.runtime.activeMessageContext.messages.push(longUserMessage);
   modelState.runtime.activeMessageContext.messageBlocks.incremental.push(longUserMessage);

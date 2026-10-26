@@ -7,7 +7,7 @@ import { getCurrentScope, onScopeDispose } from "vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createAssistantMessageHelpers } from "../runtime/engine/assistantMessage.js";
 import { createChatEngineConversationState } from "../runtime/engine/conversationState.js";
-import { stopSending as requestStopSending } from "../runtime/engine/stop.js";
+import { stopActiveTurn, stopExecution as requestStopExecution } from "../runtime/engine/stop.js";
 import { createMonotonicMessageActions } from "../runtime/engine/monotonicMessageActions.js";
 import { createChatEngineSender } from "../runtime/engine/sendFlow.js";
 import { createPendingMessageOperationStore } from "../runtime/engine/messageOperationStore.js";
@@ -18,8 +18,9 @@ import {
 } from "../../debug/loggers/stateMachineLogger.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
-  resolveSessionTurnRuntime,
-  selectSessionTurnRuntime,
+  projectTurnRuntimeView,
+  selectSessionRuntimeBucket,
+  selectTurnRuntimeByScope,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
@@ -111,18 +112,13 @@ export function useChatEngine({
       return { applied: false, reason: "invalid_terminal_status" };
     }
     try {
-      const result = commitTurnTerminalResolution?.(response) || {
-        applied: false,
-        reason: "terminal_resolution_commit_unavailable",
-      };
-      if (result?.applied !== true) {
-        const current =
-          result?.current ||
-          selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+      const result = commitTurnTerminalResolution(response);
+      if (result.applied !== true) {
+        const current = selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId);
         logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", () => ({
           sessionId,
           turnScopeId,
-          reason: result?.reason || "unknown",
+          reason: result.reason,
           currentRevision: Number(current?.revision || 0),
           currentSequence: Number(current?.lifecycleSeq || 0),
           terminalResolved: current?.terminalResolved === true,
@@ -130,16 +126,15 @@ export function useChatEngine({
           responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),
         }));
       }
-      if (result?.applied) {
-        const targetSession = activeSession?.value;
+      if (result.applied) {
+        const targetSession = activeSession.value;
         if (text(targetSession?.sessionId) === sessionId) {
           applyLatestSessionAggregateVersion(targetSession, response);
           navigateToLastMessageOnTurnTerminalOnce(sessionId, turnScopeId);
         }
-        const projected = selectSessionTurnRuntime(
-          turnRuntimeRegistry?.value,
+        const projected = projectTurnRuntimeView(
           sessionId,
-          turnScopeId,
+          selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId),
         );
         logTerminalResolutionDebug("frontend.terminalResolution.applied", () => ({
           sessionId,
@@ -154,7 +149,8 @@ export function useChatEngine({
           projectedSending: projected?.sending === true,
           projectedTerminal: projected?.terminal || null,
           activeTurnScopeId:
-            turnRuntimeRegistry?.value?.sessions?.[sessionId]?.activeTurnScopeId || "",
+            selectSessionRuntimeBucket(turnRuntimeRegistry.value, sessionId)?.activeTurnScopeId ||
+            "",
         }));
       }
       return result;
@@ -207,27 +203,21 @@ export function useChatEngine({
   };
   const applyRunStateEvent = (event) => {
     const eventSummary = summarizeStateMachineEvent(event);
-    const before = selectSessionTurnRuntime(
-      turnRuntimeRegistry?.value,
-      eventSummary.sessionId,
-      eventSummary.turnScopeId,
-    );
-    const beforeTurn = resolveSessionTurnRuntime(
-      turnRuntimeRegistry?.value,
-      eventSummary.sessionId,
-      eventSummary.turnScopeId,
-    );
+    const beforeTurn = eventSummary.turnScopeId
+      ? selectTurnRuntimeByScope(
+          turnRuntimeRegistry.value,
+          eventSummary.sessionId,
+          eventSummary.turnScopeId,
+        )
+      : null;
+    const before = projectTurnRuntimeView(eventSummary.sessionId, beforeTurn);
     logStateMachineDebug("stateMachine.dispatch", () => ({
       ...eventSummary,
       before: summarizeStateMachineTurn(beforeTurn, before),
-      activeSessionId: activeSessionId?.value || "",
+      activeSessionId: activeSessionId.value,
     }));
     const turnResult = applyTurnRuntimeEvent?.(event);
-    const runtime = selectSessionTurnRuntime(
-      turnRuntimeRegistry?.value,
-      turnResult?.turn?.sessionId || event?.sessionId || "",
-      turnResult?.turn?.turnScopeId || event?.turnScopeId || "",
-    );
+    const runtime = projectTurnRuntimeView(turnResult?.canonicalSessionId, turnResult?.turn);
     logStateMachineDebug("stateMachine.reducer.decision", () => ({
       ...eventSummary,
       applied: turnResult?.applied === true,
@@ -251,7 +241,7 @@ export function useChatEngine({
       toState: runtime.displayState,
       sending: runtime.sending,
       canStop: runtime.canStop,
-      messageCount: Array.isArray(activeSession?.value?.messages)
+      messageCount: Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages.length
         : 0,
     }));
@@ -260,7 +250,7 @@ export function useChatEngine({
       toState: runtime.displayState,
       sending: runtime.sending,
       canStop: runtime.canStop,
-      messageCount: Array.isArray(activeSession?.value?.messages)
+      messageCount: Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages.length
         : 0,
     });
@@ -288,13 +278,21 @@ export function useChatEngine({
     translate,
   });
 
-  function stopSending(executionId = "") {
-    return requestStopSending({
+  function stopSending() {
+    return stopActiveTurn({
       activeSession,
       turnRuntimeRegistry,
       chatWebSocketClient,
       applyRunStateEvent,
+    });
+  }
+
+  function stopExecution(executionId) {
+    return requestStopExecution({
       executionId,
+      turnRuntimeRegistry,
+      chatWebSocketClient,
+      applyRunStateEvent,
     });
   }
 
@@ -371,8 +369,6 @@ export function useChatEngine({
     ...senderModelDeps,
     ...senderTransportDeps,
     ...senderUiDeps,
-    finalizePendingResendOperation: (...args) =>
-      monotonicMessageActions?.finalizePendingResendOperation?.(...args),
   });
 
   const monotonicMessageActions = createMonotonicMessageActions({
@@ -411,13 +407,14 @@ export function useChatEngine({
     onScopeDispose(() => {
       disposeConversationState();
       terminalResolutionCoordinator.dispose();
-      messageOperationStore.clearSession(activeSessionId?.value);
+      messageOperationStore.clearSession(activeSessionId.value);
     });
   }
 
   return {
     send,
     stopSending,
+    stopExecution,
     prepareMonotonicMessageAction,
     resolveMonotonicUserTarget,
     cascadeDeleteMessagesFrom,

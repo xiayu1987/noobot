@@ -13,6 +13,7 @@ import AuditAction from "../engine/bizinst/action/audit-action.js";
 import BackAction from "../engine/bizinst/action/back-action.js";
 import StopAction from "../engine/bizinst/action/stop-action.js";
 import { compileWorkflowSemantic } from "./compiler.js";
+import EStateType from "../design/model/node/enums/state-type.js";
 import { text } from "@noobot/shared/value";
 const WORKFLOW_INSTANCE_STORE = new Map();
 let WORKFLOW_RUNTIME_ID_COUNTER = 0;
@@ -107,7 +108,6 @@ function describeActionStepState(stepState) {
   return {
     nodeId: text(node.workflowNodeId),
     nodeName: text(node.getName()),
-    nodeType: node.getNodeType(),
     actionNodeStateId: ensureActionNodeStateRuntimeId(actionNodeState),
     stepId: ensureStepStateRuntimeId(stepState),
     stepIndex: actionNodeState.getStepStates().indexOf(stepState),
@@ -141,7 +141,7 @@ function collectIncomingStartNodeStates(nodeState) {
   const model = nodeState.getBizinstModel();
   const node = nodeState.getNode();
   const equivalentEndNodeStates = new Set([nodeState]);
-  if (nodeState instanceof StateNodeState && node.getStateType() === 3) {
+  if (nodeState instanceof StateNodeState && node.getStateType() === EStateType.Merge) {
     for (const stateNodeState of model.getStateNodeStates()) {
       if (stateNodeState.getNode() === node) equivalentEndNodeStates.add(stateNodeState);
     }

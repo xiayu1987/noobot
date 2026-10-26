@@ -10,16 +10,3 @@ export const DSL_PROTOCOL = Object.freeze({
   CMD_EDGE: "EDGE",
   CMD_END: "END",
 });
-
-export const DSL_DEFAULTS = Object.freeze({
-  START_NODE_ID: "start",
-  END_NODE_ID: "end",
-  STATE_TYPE_START: 0,
-  STATE_TYPE_END: 1,
-});
-
-export const DSL_TYPES = Object.freeze({
-  NODE_STATE: "state",
-  NODE_ACTION: "action",
-  NODE_COMPOSITE: "composite",
-});

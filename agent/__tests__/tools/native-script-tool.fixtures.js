@@ -25,10 +25,8 @@ export function createRuntime(basePath, patch = {}) {
     basePath,
     globalConfig: { tools: { execute_native_script: { enabled: true } } },
     userConfig: {},
+    identity: { userId: "admin", sessionId: "session-1" },
     systemRuntime: {
-      userId: "admin",
-      sessionId: "session-1",
-      rootSessionId: "session-1",
       persistenceScope: null,
       config: { safeConfirm: false },
     },

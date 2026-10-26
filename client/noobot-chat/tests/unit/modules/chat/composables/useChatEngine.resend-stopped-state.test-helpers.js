@@ -32,6 +32,7 @@ export function settleStoppedTurn(
         sequence,
         completionCommitId,
         summaryVersion: revision,
+        continuedByTurnScopeId: "",
         capabilities: { actionLocked: false, canStop: false },
         updatedAt: "2026-01-01T00:00:00.000Z",
         terminalStatus: terminalStatusFixture("stop_completed", {

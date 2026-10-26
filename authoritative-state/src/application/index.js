@@ -14,6 +14,7 @@ export { assessTurnRecovery, inspectTurnRecovery, recoverActiveTurn } from "./re
 export {
   buildAuthoritativeExecutionReadModel,
   createAuthoritativeTurnSnapshot,
+  selectAuthoritativeActiveTurn,
   projectAuthoritativeExecution,
   queryAuthoritativeExecution,
   queryAuthoritativeExecutionChildren,

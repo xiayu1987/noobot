@@ -8,3 +8,4 @@ export * from "./activation.js";
 export * from "./capability-activity.js";
 export * from "./frontend.js";
 export * from "./manifest.js";
+export * from "./plugin-message-payload.js";

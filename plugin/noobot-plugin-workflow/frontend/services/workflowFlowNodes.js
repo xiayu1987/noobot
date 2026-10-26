@@ -4,84 +4,41 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
+import { WORKFLOW_NODE_TYPE } from "@noobot/event-protocol/workflow-runtime-event";
 import { resolveActionRuntimeStatus } from "../runtime/workflowRuntimeStatus.js";
-import { firstRuntimeStep, stripRuntimeInternal } from "../runtime/workflowRuntimeSteps.js";
-import { text } from "@noobot/shared/value";
+import { firstRuntimeStep } from "../runtime/workflowRuntimeSteps.js";
 
-function buildFlowNodeFromSemantic({
-  nodeItem = {},
-  index = 0,
-  workflowPayload,
-  executionMeta,
-  actionRuntimeBySemanticKey,
-  resolveStepStatus,
-}) {
-  const nodeId = text(nodeItem?.id);
-  const nodeName = text(nodeItem?.name || nodeId);
-  const matchedRuntime =
-    actionRuntimeBySemanticKey.value.get(`id:${nodeId}`) ||
-    actionRuntimeBySemanticKey.value.get(`name:${nodeName}`) ||
-    null;
-  const cleanRuntime = matchedRuntime
-    ? stripRuntimeInternal(matchedRuntime)
-    : { actionNodeStates: [] };
-  const firstStep = firstRuntimeStep(cleanRuntime.actionNodeStates) || {};
-  const completed = executionMeta.value?.completed === true;
-  const nodeType = text(nodeItem?.type).toLowerCase();
-  const isAction = nodeType === "action";
-  const runtimeStatus = resolveActionRuntimeStatus(
-    cleanRuntime.actionNodeStates,
-    resolveStepStatus,
-  );
-  const restoredStatus = isAction
-    ? runtimeStatus !== "pending"
-      ? runtimeStatus
-      : completed
-        ? "success"
-        : "pending"
-    : completed
-      ? "success"
-      : "pending";
+function buildStateFlowNode(nodeItem) {
   return {
-    ...firstStep,
-    nodeId,
-    nodeName,
-    nodeType: isAction ? 2 : 0,
-    type: text(nodeItem?.type),
-    stateType: Number.isFinite(Number(nodeItem?.stateType))
-      ? Number(nodeItem.stateType)
-      : undefined,
-    rootSessionId: text(firstStep?.rootSessionId || workflowPayload.value?.runMeta?.sessionId),
-    actionNodeStates: isAction ? cleanRuntime.actionNodeStates : [],
-    runtimeBoxes: isAction ? cleanRuntime.actionNodeStates : [],
-    status: restoredStatus,
-    _order: Number.isFinite(Number(firstStep?.transition))
-      ? Number(firstStep.transition)
-      : index + 1,
+    nodeId: nodeItem.id,
+    nodeName: nodeItem.name,
+    type: nodeItem.type,
+    stateType: nodeItem.stateType,
+    actionNodeStates: [],
   };
 }
 
-export function createFlowNodes({
-  workflowPayload,
-  executionMeta,
-  actionRuntimeBySemanticKey,
-  resolveStepStatus,
-}) {
+function buildActionFlowNode({ nodeItem, actionRuntimeByNodeId }) {
+  const { actionNodeStates } = actionRuntimeByNodeId.value.get(nodeItem.id);
+  return {
+    ...firstRuntimeStep(actionNodeStates),
+    nodeId: nodeItem.id,
+    nodeName: nodeItem.name,
+    type: nodeItem.type,
+    actionNodeStates,
+    status: resolveActionRuntimeStatus(actionNodeStates),
+  };
+}
+
+export function createFlowNodes({ workflowPayload, actionRuntimeByNodeId }) {
   return computed(() => {
     const semanticNodes = Array.isArray(workflowPayload.value?.semantic?.nodes)
       ? workflowPayload.value.semantic.nodes
       : [];
-    return semanticNodes
-      .map((item, index) =>
-        buildFlowNodeFromSemantic({
-          nodeItem: item,
-          index,
-          workflowPayload,
-          executionMeta,
-          actionRuntimeBySemanticKey,
-          resolveStepStatus,
-        }),
-      )
-      .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0));
+    return semanticNodes.map((nodeItem) =>
+      nodeItem.type === WORKFLOW_NODE_TYPE.ACTION
+        ? buildActionFlowNode({ nodeItem, actionRuntimeByNodeId })
+        : buildStateFlowNode(nodeItem),
+    );
   });
 }

@@ -101,7 +101,14 @@ test("session display summary rejects an active Turn without canonical presentat
         turnLifecycle: {
           ...createEmptyTurnLifecycle(),
           activeTurnScopeId: "turn-active",
-          turns: { "turn-active": { turnScopeId: "turn-active", state: "processing" } },
+          turns: {
+            "turn-active": {
+              revision: 1,
+              sequence: 1,
+              turnScopeId: "turn-active",
+              state: "processing",
+            },
+          },
         },
       }),
     /presentation_message_id_missing/,
@@ -139,9 +146,13 @@ test("session display summary does not duplicate an active Turn with persisted a
       activeTurnScopeId: "turn-active",
       turns: {
         "turn-active": {
+          revision: 1,
+          sequence: 1,
           turnScopeId: "turn-active",
           presentationMessageId: "presentation-active",
+          dialogProcessId: "dialog-active",
           state: "processing",
+          startedAt: "2026-07-31T02:00:00.000Z",
         },
       },
     },

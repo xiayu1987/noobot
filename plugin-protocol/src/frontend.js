@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction, isPlainObject } from "@noobot/shared/value";
 
 export const EXTENSION_POINTS = Object.freeze({
   MESSAGE_CARD_PRE: "message.card.pre",
@@ -57,3 +58,52 @@ export const EXTENSION_POINT_DEFINITIONS = Object.freeze(
     ]),
   ),
 );
+
+export const MESSAGE_CARD_HOST_CAPABILITY = Object.freeze({
+  SELECT_EXECUTION_DETAIL: "selectExecutionDetail",
+  STOP_EXECUTION: "stopExecution",
+  FETCH_EXECUTION_REPORT: "fetchExecutionReport",
+  SELECT_SESSION_MESSAGES: "selectSessionMessages",
+  APPLY_WORKFLOW_RUNTIME_EVENT: "applyWorkflowRuntimeEvent",
+  LOG_WORKFLOW_DIAGNOSTICS: "logWorkflowDiagnostics",
+  RENDER_MARKDOWN: "renderMarkdown",
+  FORMAT_TIME: "formatTime",
+  FORMAT_FILE_SIZE: "formatFileSize",
+  IS_IMAGE_MIME: "isImageMime",
+});
+
+export const MESSAGE_CARD_HOST_CAPABILITIES = Object.freeze(
+  Object.values(MESSAGE_CARD_HOST_CAPABILITY),
+);
+
+export const MESSAGE_CARD_HOST_STATE = Object.freeze({
+  WORKFLOW_NODE_STATE_REGISTRY: "workflowNodeStateRegistry",
+  SUB_SESSION_MESSAGE_REGISTRY: "subSessionMessageRegistry",
+});
+
+export const MESSAGE_CARD_HOST_STATES = Object.freeze(Object.values(MESSAGE_CARD_HOST_STATE));
+
+export const MESSAGE_CARD_HOST_STATE_VERSION = "subSessionMessageRegistryVersion";
+
+export const HOST_CAPABILITY_ERROR_CODE = Object.freeze({
+  MISSING: "PLUGIN_HOST_CAPABILITY_MISSING",
+});
+
+function missingHostCapability(name) {
+  return Object.assign(new TypeError(`message card host capability missing: ${name}`), {
+    code: HOST_CAPABILITY_ERROR_CODE.MISSING,
+  });
+}
+
+export function requireMessageCardHostCapabilities(context) {
+  for (const name of MESSAGE_CARD_HOST_CAPABILITIES) {
+    if (!isFunction(context?.[name])) throw missingHostCapability(name);
+  }
+  for (const name of MESSAGE_CARD_HOST_STATES) {
+    if (!isPlainObject(context[name])) throw missingHostCapability(name);
+  }
+  if (!Number.isInteger(context[MESSAGE_CARD_HOST_STATE_VERSION])) {
+    throw missingHostCapability(MESSAGE_CARD_HOST_STATE_VERSION);
+  }
+  return context;
+}

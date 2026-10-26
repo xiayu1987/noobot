@@ -7,7 +7,6 @@
 import { computed, watch } from "vue";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { useThinkingPanel } from "../../composables/useThinkingPanel.js";
-import { normalizeTurnScopeIdKey } from "../../model/messageIdentity.js";
 import { getTurnUiState, setTurnThinkingOpenNames } from "../../runtime/engine/turnUiStore.js";
 import ThinkingPanelRealtime from "./ThinkingPanelRealtime.vue";
 import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
@@ -19,7 +18,7 @@ const props = defineProps({
   runtime: { type: Object, default: null },
   variant: { type: String, default: "panel" },
   userId: { type: String, default: "" },
-  fetchExecutionReport: { type: Function, default: null },
+  fetchExecutionReport: { type: Function, required: true },
 });
 const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
@@ -36,7 +35,7 @@ const detailMessageItem = computed(
 const thinkingIdentity = computed(() =>
   [
     text(props.messageItem?.sessionId),
-    normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
+    text(props.messageItem?.turnScopeId),
     text(props.messageItem?.dialogProcessId),
   ].join("::"),
 );

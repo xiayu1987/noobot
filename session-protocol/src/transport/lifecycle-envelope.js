@@ -11,7 +11,6 @@ export {
   createTurnLifecycleEnvelope,
   createTurnLifecycleReceipt,
   isAuthoritativeTurnLifecycleEnvelope,
-  validateSessionEvent,
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleReceipt,
 } from "../turn-lifecycle.js";

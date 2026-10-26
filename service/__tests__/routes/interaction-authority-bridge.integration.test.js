@@ -105,3 +105,63 @@ test("child interaction authority commits through the protocol persistence scope
     assert.equal(pending.events[0].envelope.identity.eventId, envelope.identity.eventId);
   });
 });
+
+test("interaction authority bridge leaves identity rejection to the event protocol", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      {
+        attachmentService: new AttachmentService({ workspaceRoot }),
+        scopedSessionRoots: resolveScopedSessionRoots([]),
+      },
+    );
+    const session = createSessionFacade(runtime);
+    await session.createSession({
+      userId: "user-1",
+      sessionId: "root-session",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+      persistenceScope: null,
+    });
+    const dispatched = [];
+    const commitInteractionRequest = createInteractionAuthorityBridge({
+      resolveBot: () => ({ session }),
+      async dispatchAuthorityEvents(identity) {
+        dispatched.push(identity);
+        return { dispatched: true };
+      },
+    });
+    const payload = {
+      interactionId: "interaction-1",
+      requestId: "request-1",
+      content: "provide the required field",
+      fields: [],
+      dialogProcessId: "dialog-1",
+      sessionId: "root-session",
+      turnScopeId: " turn-1",
+      toolName: "user_interaction",
+      lifecycle: "pending",
+      ackMode: "manual",
+    };
+    await assert.rejects(
+      commitInteractionRequest({ userId: "user-1", persistenceScope: null, payload }),
+      /invalid committed authority event: .*missing_turn_scope_id/,
+    );
+    await assert.rejects(
+      commitInteractionRequest({
+        userId: " user-1",
+        persistenceScope: null,
+        payload: { ...payload, turnScopeId: "turn-1" },
+      }),
+      /canonical user and session/,
+    );
+    assert.deepEqual(dispatched, []);
+    const pending = await session.getPendingAuthorityEvents({
+      userId: "user-1",
+      sessionId: "root-session",
+      persistenceScope: null,
+      consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
+    });
+    assert.equal(pending.events.length, 0);
+  });
+});

@@ -29,15 +29,9 @@ export function watchRuntimeNodeRebound({ props, flowNodes, refs }) {
       const current = findCurrentWorkflowRuntimeNode(previous, flowNodes?.value);
       if (!current || current === previous) return;
       refs.selectedRuntimeNode.value = current;
-      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.runtimeNodeRebound", {
+      props.logWorkflowDiagnostics("frontend.workflowNodeDetail.runtimeNodeRebound", {
         ...runtimeIdentity(current),
-        sessionId: text(
-          refs.selectedNodeSessionId.value ||
-            current.sessionId ||
-            current.nodeSessionId ||
-            previous.sessionId ||
-            previous.nodeSessionId,
-        ),
+        nodeSessionId: text(refs.selectedNodeSessionId.value),
         nodeId: text(current.nodeId),
         boxCount: Array.isArray(current.actionNodeStates) ? current.actionNodeStates.length : 0,
         reason: "runtime_projection_updated",
@@ -47,12 +41,11 @@ export function watchRuntimeNodeRebound({ props, flowNodes, refs }) {
       if (!previousStep || !currentStep || currentStep === previousStep) return;
       refs.selectedRuntimeStep.value = currentStep;
       refs.selectedNode.value = currentStep;
-      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.runtimeStepRebound", {
+      props.logWorkflowDiagnostics("frontend.workflowNodeDetail.runtimeStepRebound", {
         ...runtimeIdentity(currentStep),
-        sessionId: text(currentStep.sessionId || currentStep.nodeSessionId),
-        stepId: text(currentStep.stepId),
-        previousStatus: text(previousStep.status || previousStep.state),
-        currentStatus: text(currentStep.status || currentStep.state),
+        nodeSessionId: text(currentStep.nodeSessionId),
+        previousStatus: text(previousStep.status),
+        currentStatus: text(currentStep.status),
         reason: "runtime_projection_updated",
       });
     },

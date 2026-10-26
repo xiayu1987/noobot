@@ -17,10 +17,8 @@ function createRuntime(basePath) {
     basePath,
     globalConfig: { security: { executionIsolation: { mode: "host" } } },
     userConfig: {},
+    identity: { userId: "admin", sessionId: "skill-session" },
     systemRuntime: {
-      userId: "admin",
-      sessionId: "skill-session",
-      rootSessionId: "skill-session",
       config: { safeConfirm: false },
     },
   });

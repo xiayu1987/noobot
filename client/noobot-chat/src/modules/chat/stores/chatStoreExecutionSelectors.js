@@ -45,10 +45,13 @@ export function createChatExecutionSelectors({
     const execution = selectExecution(turnRuntimeRegistry.value, executionId);
     if (!execution) return null;
     const session = selectExecutionSession(execution.executionId);
+    if (!session) return null;
+    if (!Array.isArray(session.messages)) {
+      throw new TypeError(`execution session messages must be an array: ${execution.executionId}`);
+    }
     return {
       execution,
       session,
-      messages: Array.isArray(session?.messages) ? session.messages : [],
       children: selectExecutionChildren(turnRuntimeRegistry.value, execution.executionId),
       descendants: selectExecutionDescendants(execution.executionId),
     };

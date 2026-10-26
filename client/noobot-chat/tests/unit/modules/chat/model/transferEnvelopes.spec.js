@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import {
   getMessageTransferAttachments,
   getMessageTransferEnvelopes,
-  normalizeTransferEnvelopes,
 } from "../../../../../src/modules/chat/model/transferEnvelopes.js";
 
 const attachmentIdentity = {
@@ -53,13 +52,13 @@ const envelope = {
 
 describe("transferEnvelopes", () => {
   it("normalizes only strict V2 envelope collections", () => {
-    expect(normalizeTransferEnvelopes([envelope])).toEqual([envelope]);
-    expect(() => normalizeTransferEnvelopes([{ protocol: "legacy" }])).toThrow(
-      /invalid_transfer_envelope/,
-    );
-    expect(() => normalizeTransferEnvelopes([{ ...envelope, version: 1 }])).toThrow(
-      /invalid_transfer_envelope/,
-    );
+    expect(getMessageTransferEnvelopes({ transferEnvelopes: [envelope] })).toEqual([envelope]);
+    expect(() =>
+      getMessageTransferEnvelopes({ transferEnvelopes: [{ protocol: "legacy" }] }),
+    ).toThrow(/invalid_transfer_envelope/);
+    expect(() =>
+      getMessageTransferEnvelopes({ transferEnvelopes: [{ ...envelope, version: 1 }] }),
+    ).toThrow(/invalid_transfer_envelope/);
   });
 
   it("projects attachment identity without any path fields", () => {
@@ -96,5 +95,20 @@ describe("transferEnvelopes", () => {
     expect(
       getMessageTransferEnvelopes({ transferEnvelopes: [envelope], files: [envelope] }),
     ).toEqual([envelope]);
+  });
+
+  it("never reads envelopes from plugin payload", () => {
+    expect(
+      getMessageTransferEnvelopes({
+        payload: { transferEnvelopes: [envelope] },
+        pluginMeta: {
+          payload: {
+            transferEnvelopes: [envelope],
+            nodeSessions: [{ transferEnvelopes: [envelope] }],
+            execution: { nodeAgentRuns: [{ nodeResultTransferEnvelopes: [envelope] }] },
+          },
+        },
+      }),
+    ).toEqual([]);
   });
 });

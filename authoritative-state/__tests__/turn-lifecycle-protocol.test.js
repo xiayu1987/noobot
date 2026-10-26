@@ -59,7 +59,7 @@ test("turn lifecycle receipt identifies one authoritative delivery without carry
   assert.deepEqual(
     validateTurnLifecycleReceipt({
       ...receipt,
-      turnScopeId: "workflow-node_workflow_client-turn_1",
+      turnScopeId: " workflow-node:workflow_client-turn_1",
     }).errors,
     ["non_canonical_turn_scope_id"],
   );
@@ -196,18 +196,14 @@ test("turn lifecycle envelope preserves parent identity without leaking mutation
 });
 
 test("turn lifecycle envelope rejects missing identity and invalid revision", () => {
+  const input = { eventType: TURN_EVENT.FAILED, eventId: "evt-2", revision: 0, sequence: 1 };
+  assert.throws(() => createTurnLifecycleEnvelope(input), { code: "TURN_SCOPE_ID_INVALID" });
   const result = validateTurnLifecycleEnvelope(
-    createTurnLifecycleEnvelope({
-      eventType: TURN_EVENT.FAILED,
-      eventId: "evt-2",
-      revision: 0,
-      sequence: 1,
-    }),
+    createTurnLifecycleEnvelope({ ...input, turnScopeId: "turn-2" }),
   );
   assert.equal(result.valid, false);
   assert.deepEqual(result.errors, [
     "missing_session_id",
-    "missing_turn_scope_id",
     "missing_presentation_message_id",
     "missing_dialog_process_id",
     "invalid_parent_session_id",
@@ -582,6 +578,8 @@ test("normalizeTurnLifecycleEntity strips legacy failure.phase and keeps the top
         turnScopeId: "turn-legacy",
         state: TURN_STATE.PROCESSING_FAILED,
         phase: TURN_PHASE.PROCESSING,
+        revision: 1,
+        sequence: 1,
         failure: {
           phase: TURN_PHASE.PROCESSING,
           code: "model_failed",

@@ -5,36 +5,27 @@
  */
 
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
+import {
+  resolveWorkflowNodeStatus,
+  resolveWorkflowNodeStatusLabelKey,
+} from "./workflowRuntimeStatus.js";
 import { text } from "@noobot/shared/value";
 
 export function useWorkflowNodeSessionLabels(translate) {
   function resolveStatusLabel(nodeItem = {}) {
-    const status = text(nodeItem?._status || nodeItem?.status).toLowerCase();
-    if (status === "success") return translate("workflow.statusSuccess");
-    if (status === "failed" || status === "error") return translate("workflow.statusFailed");
-    if (status === "running") return translate("workflow.statusRunning");
-    return translate("workflow.statusPending");
+    return translate(resolveWorkflowNodeStatusLabelKey(nodeItem));
   }
 
   function resolveStatusClass(nodeItem = {}) {
-    const status = text(nodeItem?._status || nodeItem?.status).toLowerCase();
-    if (status === "success") return "success";
-    if (status === "failed" || status === "error") return "failed";
-    if (status === "running") return "running";
-    return "pending";
+    return resolveWorkflowNodeStatus(nodeItem);
   }
 
-  function resolveStepLabel(stepItem = {}, stepIndex = 0) {
-    const order = Number.isFinite(Number(stepItem?.stepIndex))
-      ? Number(stepItem.stepIndex) + 1
-      : stepIndex + 1;
-    return translate("workflow.stepBoxLabel", { order });
+  function resolveStepLabel(stepIndex) {
+    return translate("workflow.stepBoxLabel", { order: stepIndex + 1 });
   }
 
-  function resolveStateBoxLabel(stateBox = {}, stateIndex = 0) {
-    const id = text(stateBox?.actionNodeStateId);
-    if (!id) return translate("workflow.nodeBoxLabelFallback", { index: stateIndex + 1 });
-    return translate("workflow.nodeBoxLabel", { id });
+  function resolveStateBoxLabel(stateBox) {
+    return translate("workflow.nodeBoxLabel", { id: stateBox.nodeExecutionId });
   }
 
   function stepHasSession(stepItem = {}) {

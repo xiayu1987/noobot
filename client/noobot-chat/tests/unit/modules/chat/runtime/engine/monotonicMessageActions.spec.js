@@ -41,7 +41,7 @@ function createActions({
   });
   const deleteSessionMessagesFromApi = vi.fn(async () => ({
     ok: true,
-    json: async () => ({ ok: true, session: activeSession.value }),
+    json: async () => ({ ok: true, session: activeSession.value, deletedTurnScopeIds: [] }),
   }));
   const applySessionDetail = vi.fn((detail = {}) => {
     const nextSession = Array.isArray(detail?.sessions) ? detail.sessions[0] : detail?.session;
@@ -167,6 +167,7 @@ describe("monotonicMessageActions stop-window gates", () => {
         json: async () => ({
           ok: true,
           session: { ...activeSession.value, messages: [], rawMessages: [], aggregateVersion: 3 },
+          deletedTurnScopeIds: [],
         }),
       });
 
@@ -188,6 +189,7 @@ describe("monotonicMessageActions stop-window gates", () => {
         sessionId: "s1",
         aggregateVersion: 2,
         session: { ...activeSession.value, messages: [], rawMessages: [] },
+        deletedTurnScopeIds: [],
       }),
     });
 
@@ -207,6 +209,7 @@ describe("monotonicMessageActions stop-window gates", () => {
         sessionId: "s1",
         aggregateVersion: 2,
         session: { ...activeSession.value, messages: [], rawMessages: [] },
+        deletedTurnScopeIds: [],
       }),
     });
 

@@ -13,21 +13,20 @@ import { canonicalActivityFact } from "../../../chat/helpers/messageEventFixture
 const identity = (item) => ({ ...item });
 
 describe("buildSessionDetailProjection", () => {
-  it("projects canonical messages and timings through one entrypoint", () => {
+  it("projects canonical messages through one entrypoint", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: "session-1",
         messages: [
           { role: "user", content: "hello", turnScopeId: "turn-1", dialogProcessId: "dialog-1" },
         ],
-        turnTimings: [{ turnScopeId: "turn-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" }],
       },
       sessionDocs: [{ sessionId: "session-1" }],
       makeViewMessage: identity,
     });
 
     expect(projection.sessionId).toBe("session-1");
-    expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
+    expect(projection).not.toHaveProperty("turnTimings");
     expect(projection.messages.some((item) => item.role === "user")).toBe(true);
   });
 
@@ -36,33 +35,6 @@ describe("buildSessionDetailProjection", () => {
       sessionDetail: {
         sessionId: "session-1",
         messages: [{ role: "assistant", content: "streaming", turnScopeId: "turn-1" }],
-      },
-      makeViewMessage: identity,
-    });
-
-    expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
-  });
-
-  it("indexes workflow node timings by normalized turn scope key", () => {
-    const projection = buildSessionDetailProjection({
-      sessionDetail: {
-        sessionId: "session-1",
-        messages: [
-          {
-            role: "assistant",
-            content: "child agent done",
-            turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
-            dialogProcessId: "dialog-child-1",
-          },
-        ],
-        turnTimings: [
-          {
-            turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1",
-            dialogProcessId: "dialog-child-1",
-            thinkingStartedAt: "2026-07-21T08:29:00.000Z",
-            thinkingFinishedAt: "2026-07-21T08:30:00.000Z",
-          },
-        ],
       },
       makeViewMessage: identity,
     });

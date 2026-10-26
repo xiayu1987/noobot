@@ -10,16 +10,30 @@ import { createSessionPersistenceScope, validateSessionPersistenceScope } from "
 
 test("Session persistence scope is the canonical immutable routing DTO", () => {
   const source = {
-    scopeId: " agent:turn-1 ",
-    parentSessionId: " root-session ",
-    relativeDir: " runtime/agent/session/child-session ",
-    allowedRoot: " runtime/agent/session ",
+    scopeId: "agent:turn-1",
+    parentSessionId: "root-session",
+    relativeDir: "runtime/agent/session/child-session",
+    allowedRoot: "runtime/agent/session",
   };
   const validation = validateSessionPersistenceScope(source);
   assert.equal(validation.valid, true);
   assert.deepEqual(validation.scope, createSessionPersistenceScope(source));
   assert.equal(Object.isFrozen(validation.scope), true);
   assert.equal(validation.scope.scopeId, "agent:turn-1");
+});
+
+test("Session persistence scope rejects non canonical routing values instead of trimming", () => {
+  for (const scopeId of [" agent:turn-1 ", "", 1]) {
+    assert.deepEqual(
+      validateSessionPersistenceScope({
+        scopeId,
+        parentSessionId: "root-session",
+        relativeDir: "runtime/agent/session/child-session",
+        allowedRoot: "runtime/agent/session",
+      }).errors,
+      ["incomplete_persistence_scope"],
+    );
+  }
 });
 
 test("Session persistence scope rejects incomplete and alternate routing shapes", () => {

@@ -9,48 +9,17 @@ import {
   mergeTransferEnvelopes,
   readTransferEnvelopeList,
 } from "@noobot/semantic-transfer-protocol";
-import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
-import { text } from "@noobot/shared/value";
 
-function finiteNumber(value) {
-  return Number.isFinite(Number(value)) ? Number(value) : undefined;
-}
-
-function resolveNodeState(nodeStates, item) {
-  const nodeState = nodeStates.get(item.nodeExecutionId);
-  if (!nodeState) throw new Error(`workflow node state not found: ${item.nodeExecutionId}`);
-  return nodeState;
-}
-
-function count(value) {
-  return Number(value || 0);
-}
-
-function buildRunIdentityFields(state, run) {
+function buildNodeStateFields(state) {
   return {
-    transition: count(run.transition),
     workflowRunId: state.workflowRunId,
     nodeExecutionId: state.nodeExecutionId,
     commandId: state.commandId,
     turnScopeId: state.turnScopeId,
-  };
-}
-
-function buildStepIdentityFields(run, state, node) {
-  return {
-    nodeName: state.nodeName,
     nodeId: state.nodeId,
-    nodeType: finiteNumber(run.step.nodeType),
-    actionNodeStateId: run.actionNodeStateId,
-    stepId: run.stepId,
-    stepIndex: run.stepIndex,
-    type: text(node.type),
-    stateType: finiteNumber(node.stateType),
-  };
-}
-
-function buildNodeStateFields(state) {
-  return {
+    nodeName: state.nodeName,
+    dialogProcessId: state.dialogProcessId,
+    nodeSessionId: state.nodeSessionId,
     activeChildExecutionId: state.activeChildExecutionId,
     attemptExecutionIds: state.attemptExecutionIds,
     status: state.status,
@@ -64,32 +33,36 @@ function buildNodeStateFields(state) {
   };
 }
 
-function buildNodeSessionRecord({ ctx, item: run, nodeState: state, semanticNode }) {
-  const rootSessionId = text(ctx?.sessionId);
+function buildNodeRunFields(run) {
   return {
-    ...buildRunIdentityFields(state, run),
-    parentSessionId: rootSessionId,
-    ...buildStepIdentityFields(run, state, semanticNode),
-    rootSessionId,
-    dialogProcessId: state.dialogProcessId,
-    sessionId: state.nodeSessionId,
-    ...buildNodeStateFields(state),
-    transferEnvelopes: readTransferEnvelopeList(run, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
-    parallelWave: count(run.parallelWave),
-    waveOrder: count(run.waveOrder),
+    transition: run.transition,
+    actionNodeStateId: run.actionNodeStateId,
+    stepId: run.stepId,
+    stepIndex: run.stepIndex,
+    parallelWave: run.parallelWave,
+    waveOrder: run.waveOrder,
   };
 }
 
-function buildWorkflowNodeSessions({ ctx, semantic, nodeAgentRuns, nodeStateSnapshot }) {
-  const nodeStates = new Map(nodeStateSnapshot.nodes.map((node) => [node.nodeExecutionId, node]));
-  return nodeAgentRuns.map((item) =>
-    buildNodeSessionRecord({
-      ctx,
-      item,
-      nodeState: resolveNodeState(nodeStates, item),
-      semanticNode: resolveSemanticNodeForPendingStep({ semantic, pendingStep: item.step }),
-    }),
-  );
+function indexNodeRunsByExecutionId(nodeAgentRuns) {
+  const runs = new Map();
+  for (const run of nodeAgentRuns) {
+    if (runs.has(run.nodeExecutionId)) {
+      throw new Error(`duplicate workflow node run: ${run.nodeExecutionId}`);
+    }
+    runs.set(run.nodeExecutionId, run);
+  }
+  return runs;
+}
+
+function buildWorkflowNodeSessions({ nodeAgentRuns, nodeStateSnapshot }) {
+  const runs = indexNodeRunsByExecutionId(nodeAgentRuns);
+  return nodeStateSnapshot.nodes.map((state) => {
+    const run = runs.get(state.nodeExecutionId);
+    return run
+      ? { ...buildNodeStateFields(state), ...buildNodeRunFields(run) }
+      : buildNodeStateFields(state);
+  });
 }
 
 function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns) {
@@ -100,21 +73,12 @@ function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns) {
   );
 }
 
-export function enrichWorkflowPayload({
-  workflowPayload,
-  ctx,
-  semantic,
-  nodeAgentRuns,
-  nodeStateSnapshot,
-}) {
-  workflowPayload.nodeSessions = buildWorkflowNodeSessions({
-    ctx,
-    semantic,
-    nodeAgentRuns,
-    nodeStateSnapshot,
-  });
-  workflowPayload.transferEnvelopes = resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns);
+export function enrichWorkflowPayload({ workflowPayload, nodeAgentRuns, nodeStateSnapshot }) {
   return {
-    workflowPayload,
+    workflowPayload: {
+      ...workflowPayload,
+      nodeSessions: buildWorkflowNodeSessions({ nodeAgentRuns, nodeStateSnapshot }),
+    },
+    nodeTransferEnvelopes: resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns),
   };
 }

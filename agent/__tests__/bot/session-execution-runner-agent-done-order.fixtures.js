@@ -12,7 +12,7 @@ import path from "node:path";
 
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 import { SessionExecutionRunner } from "../../src/bot/execution/runner.js";
 import { finalizeAgentTurn } from "../../src/bot/execution/runner/result-finalizer.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
@@ -23,6 +23,7 @@ import {
 import { AGENT_RUN_EVENT } from "../../src/events/run-event.js";
 import { loadStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { projectAgentContextIdentity } from "../../src/context/agent-context-envelope-input.js";
 import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
@@ -38,14 +39,13 @@ export function createRunner({
   finalizeRunSession,
   agentRunner,
   runConfig = {},
-  prepareAgentTurnExecution,
+  observePreparedTurn,
   runtime,
   getSessionTurns = async () => [],
   getTurnSummaryCheckpointState = async ({ dialogProcessId, turnScopeId }) =>
     createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }),
   appendAgentMessages = async ({ messages = [] } = {}) => messages,
 }) {
-  const defaultRuntime = runtime || createTestRuntimeContext();
   let authorityEventSequence = 0;
   const sessionManager = {
     async commitMessageEvent({ sessionId, turnScopeId, commandId, correlationId, payload }) {
@@ -74,10 +74,13 @@ export function createRunner({
       };
     },
   };
-  defaultRuntime.sessionManager = defaultRuntime.sessionManager || sessionManager;
-  if (!defaultRuntime.currentTurnMessages) {
-    defaultRuntime.currentTurnMessages = createCurrentTurnMessagesStore([]);
-  }
+
+  const bindTestRuntime = (target) => {
+    target.sessionManager = sessionManager;
+    target.currentTurnMessages = createCurrentTurnMessagesStore([]);
+    return target;
+  };
+  if (runtime) bindTestRuntime(runtime);
   const acceptedUserMessages = new Map();
   const runner = new SessionExecutionRunner({
     agentRunner:
@@ -133,29 +136,19 @@ export function createRunner({
     bindSessionTurnAttachments: async () => {
       throw new Error("attachment binding is not part of this fixture");
     },
+
     prepareAgentTurnExecution: async (payload) => {
-      const prepared = prepareAgentTurnExecution
-        ? await prepareAgentTurnExecution(payload)
-        : await (async () => {
-            const agentContext = createTestAgentExecutionScope(defaultRuntime, {
-              identity: {
-                dialogProcessId: "dialog-1",
-                turnScopeId: "turn-default",
-                userId: "u-test",
-                sessionId: "s-1",
-                rootSessionId: "s-1",
-                parentSessionId: "",
-                runId: "r-1",
-                presentationMessageId: "p-1",
-              },
-            });
-            return { agentContext, userMessageAttachments: [] };
-          })();
-      const preparedRuntime = prepared.agentContext.bindings.runtime;
-      if (isObjectLike(preparedRuntime)) {
-        preparedRuntime.sessionManager = preparedRuntime.sessionManager || sessionManager;
-      }
-      return prepared;
+      await observePreparedTurn?.(payload);
+      const { runtimeIdentity, runConfig: acceptedRunConfig } = payload.buildContextPayload;
+      const preparedRuntime =
+        runtime || bindTestRuntime(createTestRuntimeContext({ identity: runtimeIdentity }));
+      const agentContext = createTestAgentExecutionScope(preparedRuntime, {
+        identity: projectAgentContextIdentity(
+          { ...runtimeIdentity, rootSessionId: runtimeIdentity.sessionId },
+          acceptedRunConfig,
+        ),
+      });
+      return { agentContext, userMessageAttachments: [] };
     },
     assertReusedUserTurnIdentity: async (payload = {}) => {
       callOrder?.push("assertReusedUserTurnIdentity");

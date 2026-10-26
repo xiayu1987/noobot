@@ -18,6 +18,7 @@ import { buildAgentTransportConsumption } from "./agent-transport-consumption.js
 import { bindCurrentTurnPersistence } from "./current-turn-persistence.js";
 import { appendUserInterjectionMessage } from "../../../runtime/turn/turn-context-message-appender.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { projectWorkflowNodeOwnership } from "@noobot/session-protocol/execution-lifecycle";
 
 function projectPresentationAttachments(attachments) {
   return Array.isArray(attachments)
@@ -80,11 +81,7 @@ export async function bindAgentDispatchRuntime({
   }
 
   dispatchRuntime.eventListener = eventListener;
-  const { systemRuntime } = dispatchRuntime;
-  systemRuntime.sessionId = sessionId;
-  systemRuntime.dialogProcessId = dialogProcessId;
-  systemRuntime.turnScopeId = turnScopeId;
-  systemRuntime.sessionDir = text(sessionDir);
+  dispatchRuntime.systemRuntime.sessionDir = text(sessionDir);
   dispatchRuntime.currentUserMessageUid = text(currentUserMessage?.messageUid);
   dispatchRuntime.currentUserMessageOrigin = text(currentUserMessage?.messageOrigin).toLowerCase();
   dispatchRuntime.userInterjectionPort = userInterjectionPort;
@@ -93,11 +90,12 @@ export async function bindAgentDispatchRuntime({
     runtime: dispatchRuntime,
     invocationIdentity: getAgentContextEnvelope(runtimeAgentContext).identity,
   });
+  const workflowNodeOwnership = projectWorkflowNodeOwnership(lifecycle.origin);
   bindAssistantMessageEventStream(dispatchRuntime, {
     presentationMessageId,
     parentSessionId,
-    workflowRunId: text(resolvedRunConfig.workflowRunId),
-    nodeExecutionId: text(resolvedRunConfig.workflowNodeExecutionId),
+    workflowRunId: workflowNodeOwnership?.workflowRunId ?? "",
+    nodeExecutionId: workflowNodeOwnership?.nodeExecutionId ?? "",
   });
   applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
   syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
@@ -128,7 +126,6 @@ export async function bindAgentDispatchRuntime({
           chatPresentation: true,
           content: "",
           attachments: [],
-          thinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
         },
       },
     },

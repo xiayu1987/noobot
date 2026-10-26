@@ -51,7 +51,7 @@ function resolveStepItemRefs(item) {
     nodeExecutionId: nodeIdentity.nodeExecutionId,
     commandId: nodeIdentity.commandId,
     turnScopeId: nodeIdentity.turnScopeId,
-    nodeSessionId: nodeIdentity.sessionId,
+    nodeSessionId: nodeIdentity.nodeSessionId,
     actionNodeStateId: step.actionNodeStateId,
     stepId: step.stepId,
     stepIndex: step.stepIndex,
@@ -106,7 +106,7 @@ function resolveWaveNodeIdentity({ planningNodeSessions, step }) {
     planningNodeSessions,
     pendingStep: step,
   });
-  return { ...planningNodeIdentity, sessionId: randomUUID() };
+  return { ...planningNodeIdentity, nodeSessionId: randomUUID() };
 }
 
 function findNodeStateByExecutionId(snapshot, nodeExecutionId) {
@@ -236,7 +236,7 @@ async function runWaveStep({
     status: WORKFLOW_NODE_STATUS.RUNNING,
     expectedRevision: findNodeStateByExecutionId(nodeState.snapshot, nodeIdentity.nodeExecutionId)
       .revision,
-    nodeSessionId: nodeIdentity.sessionId,
+    nodeSessionId: nodeIdentity.nodeSessionId,
   });
   let action;
   let childTerminal;
@@ -295,9 +295,9 @@ export async function runWorkflowExecution({
     semantic,
     options,
     meta: {
-      userId: text(ctx?.userId),
-      sessionId: text(ctx?.sessionId),
-      dialogProcessId: text(ctx?.dialogProcessId),
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      dialogProcessId: ctx.dialogProcessId,
     },
   });
   const {

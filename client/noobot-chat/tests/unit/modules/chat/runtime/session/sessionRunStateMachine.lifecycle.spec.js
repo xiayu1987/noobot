@@ -80,13 +80,21 @@ describe("sessionRunStateMachine lifecycle", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "running",
       sessionId: " s1 ",
-      turnScopeId: " c1 ",
+      turnScopeId: "c1",
     });
     expect(event).toMatchObject({
       state: AGENT_CHANNEL_STATE.SENDING,
       sessionId: "s1",
       turnScopeId: "c1",
     });
+    expect(() =>
+      normalizeSessionRunEvent({
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: "running",
+        sessionId: "s1",
+        turnScopeId: " c1 ",
+      }),
+    ).toThrow(expect.objectContaining({ code: "TURN_SCOPE_ID_INVALID" }));
     expect(evaluateSessionRunState({ state: FrontendRunState.USER_STOPPING })).toMatchObject({
       sending: true,
       canStop: false,

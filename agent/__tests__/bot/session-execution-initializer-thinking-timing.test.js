@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionInitializer } from "../../src/bot/execution/initializer.js";
 
-test("initializeRunSessionRuntime persists thinking start before execution begins", async () => {
+test("initializeRunSessionRuntime leaves turn start to the lifecycle fact", async () => {
   const calls = [];
   const initializer = new SessionExecutionInitializer({
     session: {
@@ -32,14 +32,8 @@ test("initializeRunSessionRuntime persists thinking start before execution begin
     persistenceScope: null,
     turnScopeId: "turn-1",
     dialogProcessId: "dp-1",
-    thinkingStartedAt: "2026-07-15T14:00:00.000Z",
   });
 
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].userId, "u1");
-  assert.equal(calls[0].sessionId, "s1");
-  assert.equal(calls[0].turnScopeId, "turn-1");
-  assert.equal(calls[0].thinkingStartedAt, "2026-07-15T14:00:00.000Z");
-  assert.equal(calls[0].dialogProcessId, "dp-1");
+  assert.equal(calls.length, 0);
   assert.equal(initialized.sessionDir, "/workspace/u1/runtime/session/s1");
 });

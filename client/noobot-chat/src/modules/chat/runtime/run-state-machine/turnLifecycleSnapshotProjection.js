@@ -3,22 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 import { isFinalTurnState } from "./turnReducer.js";
 import {
   projectAuthoritativeTurnState,
   projectAuthoritativeTurnTerminal,
 } from "./authoritativeTurnProjection.js";
 import { deriveTurnEventType, isTerminalTurnState } from "@noobot/session-protocol";
-import {
-  canonicalTurnScopeId as turnKey,
-  ensureSessionBucket,
-  isTurnRuntimeDeleted,
-  runtimeText as text,
-} from "./turnRuntimeRegistryIdentity.js";
+import { ensureSessionBucket, isTurnRuntimeDeleted } from "./turnRuntimeRegistryIdentity.js";
 import { confirmTurnRuntimeDeletion } from "./turnRuntimeRetention.js";
 
 function snapshotTurnDecision(registry, bucket, source, sessionId, sequence) {
-  const turnScopeId = turnKey(source.turnScopeId);
+  const { turnScopeId } = source;
   const revision = Number(source.revision || 0);
   if (!turnScopeId || !Number.isInteger(revision) || revision < 1) {
     return { reason: "invalid_snapshot_turn" };
@@ -156,9 +152,7 @@ function hydrateSnapshotTurns(registry, bucket, snapshot, sessionId, sequence) {
 }
 
 function commitSnapshotReplacements(registry, snapshot, sessionId) {
-  const replacedTurnScopeIds = [
-    ...new Set(snapshot.replacedTurns.map((item) => turnKey(item.turnScopeId)).filter(Boolean)),
-  ];
+  const replacedTurnScopeIds = [...new Set(snapshot.replacedTurns.map((item) => item.turnScopeId))];
   const replacementDeletion = confirmTurnRuntimeDeletion(registry, replacedTurnScopeIds, {
     sessionId,
   });
@@ -167,7 +161,7 @@ function commitSnapshotReplacements(registry, snapshot, sessionId) {
 
 function commitSnapshotMetadata(registry, bucket, snapshot, sessionId, sequence, fingerprint) {
   const previousActiveTurnScopeId = text(bucket.activeTurnScopeId);
-  const candidateActiveScope = turnKey(snapshot.activeTurnScopeId);
+  const candidateActiveScope = snapshot.activeTurnScopeId;
   const activeScope = isTurnRuntimeDeleted(registry, {
     sessionId,
     turnScopeId: candidateActiveScope,

@@ -54,32 +54,21 @@ function requireAuthenticatedRequest(request) {
 function createWorkflowSessionService(authenticatedRequest) {
   const request = requireAuthenticatedRequest(authenticatedRequest);
   return Object.freeze({
-    getDetail({ userId = "", sessionId = "", dialogProcessId = "", traceId = "" } = {}) {
-      const query = text(traceId) ? `?traceId=${encodeURIComponent(String(traceId).trim())}` : "";
+    getDetail({ userId, sessionId, dialogProcessId, traceId }) {
+      const query = new URLSearchParams({ traceId });
       return request(
-        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogProcessId)}${query}`,
+        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogProcessId)}?${query.toString()}`,
         { method: "GET" },
       );
     },
-    getExecutionReport({
-      userId = "",
-      sessionId = "",
-      routeDialogProcessId = "",
-      dialogProcessId = "",
-    } = {}) {
+    getExecutionReport({ userId, sessionId, routeDialogProcessId, dialogProcessId }) {
       const query = new URLSearchParams({ dialogProcessId });
       return request(
         `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/execution-report?${query.toString()}`,
         { method: "GET" },
       );
     },
-    getThinkingDetail({
-      userId = "",
-      sessionId = "",
-      routeDialogProcessId = "",
-      dialogProcessId = "",
-      turnScopeId = "",
-    } = {}) {
+    getThinkingDetail({ userId, sessionId, routeDialogProcessId, dialogProcessId, turnScopeId }) {
       const query = new URLSearchParams();
       if (dialogProcessId) query.set("dialogProcessId", dialogProcessId);
       if (turnScopeId) query.set("turnScopeId", turnScopeId);
@@ -122,38 +111,28 @@ export async function activate(ctx = {}) {
     priority: 100,
     when: (context = {}) => isWorkflowMessageLike(context?.messageItem),
     resolveProps: (context = {}) => ({
-      messageItem: context?.messageItem || {},
-      userId: String(context?.userId || ""),
+      messageItem: context.messageItem,
+      userId: text(context.userId),
       workflowSessionService: createWorkflowSessionService(authenticatedRequest),
-      renderMarkdown: context?.renderMarkdown,
-      formatTime: context?.formatTime,
-      formatFileSize: context?.formatFileSize,
-      isImageMime: context?.isImageMime,
-      workflowNodeStateRegistry: context?.workflowNodeStateRegistry || null,
-      subSessionMessageRegistry: context?.subSessionMessageRegistry || null,
-      subSessionMessageRegistryVersion: Number(context?.subSessionMessageRegistryVersion || 0),
-      selectExecutionDetail:
-        typeof context?.selectExecutionDetail === "function" ? context.selectExecutionDetail : null,
-      stopExecution: typeof context?.stopExecution === "function" ? context.stopExecution : null,
-      selectSessionMessages:
-        typeof context?.selectSessionMessages === "function" ? context.selectSessionMessages : null,
-      applyWorkflowRuntimeEvent:
-        typeof context?.applyWorkflowRuntimeEvent === "function"
-          ? context.applyWorkflowRuntimeEvent
-          : null,
-
-      logWorkflowDiagnostics:
-        typeof context?.logWorkflowDiagnostics === "function"
-          ? (event, payload = {}) => {
-              const parentSessionId = text(
-                context?.messageItem?.pluginMeta?.payload?.runMeta?.sessionId,
-              );
-              context.logWorkflowDiagnostics(
-                event,
-                routeWorkflowDiagnosticsPayload(parentSessionId, payload),
-              );
-            }
-          : null,
+      renderMarkdown: context.renderMarkdown,
+      formatTime: context.formatTime,
+      formatFileSize: context.formatFileSize,
+      isImageMime: context.isImageMime,
+      workflowNodeStateRegistry: context.workflowNodeStateRegistry,
+      subSessionMessageRegistry: context.subSessionMessageRegistry,
+      subSessionMessageRegistryVersion: context.subSessionMessageRegistryVersion,
+      selectExecutionDetail: context.selectExecutionDetail,
+      stopExecution: context.stopExecution,
+      selectSessionMessages: context.selectSessionMessages,
+      applyWorkflowRuntimeEvent: context.applyWorkflowRuntimeEvent,
+      logWorkflowDiagnostics: (event, payload) =>
+        context.logWorkflowDiagnostics(
+          event,
+          routeWorkflowDiagnosticsPayload(
+            context.messageItem.pluginMeta.payload.runMeta.sessionId,
+            payload,
+          ),
+        ),
     }),
   });
   contribute(points.RUNTIME_STREAM_ROUTE, {

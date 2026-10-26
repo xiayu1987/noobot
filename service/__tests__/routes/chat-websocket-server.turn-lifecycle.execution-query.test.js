@@ -6,11 +6,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
+import {
+  createAuthoritativeTurnSnapshot,
+  selectAuthoritativeActiveTurn,
+} from "@noobot/authoritative-state/application";
 
-import { TURN_EVENT } from "@noobot/session-protocol";
+import { TURN_EVENT, createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { finalizeTurnSnapshot } from "../../ws/chat-websocket/turn-recovery.js";
 
 import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
+import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import {
   createAcceptedAgentExecutionIdentity,
@@ -18,7 +23,7 @@ import {
 } from "./chat-websocket-server.test-helpers.js";
 
 test("finalize recovery is idempotent across repeated service recovery attempts", async () => {
-  let lifecycle = {};
+  let lifecycle = createEmptyTurnLifecycle();
   const apply = (input) => {
     const result = transitionTurnLifecycle(lifecycle, input);
     lifecycle = result.lifecycle;
@@ -54,18 +59,45 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
   });
   const bot = {
     session: {
-      async getTurnLifecycleSnapshot({ commandId }) {
-        const turn = lifecycle.turns["turn-recover"];
+      async getTurnLifecycleSnapshot({
+        sessionId,
+        commandId,
+        knownSequence,
+        terminalLimit,
+        resolveRecovery,
+      }) {
+        const recovery = await resolveRecovery(selectAuthoritativeActiveTurn(lifecycle));
         return {
           found: true,
-          snapshot: { commandId, activeTurn: lifecycle.activeTurnScopeId ? turn : null },
+          snapshot: createAuthoritativeTurnSnapshot({
+            lifecycle,
+            turnTimings: [],
+            terminalTurnScopeIds: Object.keys(lifecycle.turns),
+            commandId,
+            sessionId,
+            knownSequence,
+            terminalLimit,
+            recovery,
+            generatedAt: "2026-07-18T00:00:01.000Z",
+          }),
         };
       },
     },
   };
   const commitTurnLifecycle = async (input) =>
     apply(input.terminalStatus ? { ...input, summaryVersion: 4 } : input);
-  const request = { bot, commitTurnLifecycle, userId: "u1", sessionId: "s1", commandId: "recover" };
+  const inspectExecution = async () => {
+    throw new Error("pending finalize must not inspect execution liveness");
+  };
+  const request = {
+    bot,
+    inspectExecution,
+    commitTurnLifecycle,
+    userId: "u1",
+    sessionId: "s1",
+    commandId: "recover",
+    terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT,
+  };
   const first = await finalizeTurnSnapshot(request);
   const second = await finalizeTurnSnapshot(request);
   assert.equal(first.recovered, true);

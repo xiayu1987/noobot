@@ -7,6 +7,8 @@ import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { useChatList } from "../../../../../src/modules/chat/composables/useChatList.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { createTurnRuntimeRegistryState } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createTurnRuntimeStoreActions } from "../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
@@ -30,7 +32,14 @@ function createUseChatListFixture(overrides = {}) {
   const getSessionsApi = overrides.getSessionsApi || vi.fn();
   const getSessionDetailApi = overrides.getSessionDetailApi || vi.fn();
 
+  const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
+  const chatStore = createTurnRuntimeStoreActions(turnRuntimeRegistry, {
+    onTurnCommitted: vi.fn(() => null),
+    onTurnEvaluated: vi.fn(),
+  });
   const api = useChatList({
+    turnRuntimeRegistry,
+    chatStore,
     userId,
     connected,
     ensureConnected,
@@ -220,6 +229,7 @@ describe("useChatList", () => {
           sessions: [
             {
               sessionId: "session-from-route",
+              turnTimings: [],
               caller: RoleEnum.USER,
               messages: [
                 {
@@ -265,7 +275,7 @@ describe("useChatList", () => {
               ok: true,
               exists: true,
               sessionId,
-              sessions: [{ sessionId, caller: RoleEnum.USER, messages: [] }],
+              sessions: [{ sessionId, caller: RoleEnum.USER, messages: [], turnTimings: [] }],
             },
     }));
     const fixture = createUseChatListFixture({
@@ -329,6 +339,7 @@ describe("useChatList", () => {
           sessions: [
             {
               sessionId: "backend-refresh",
+              turnTimings: [],
               currentTaskId: "",
               createdAt: "2026-05-14T00:00:00.000Z",
               updatedAt: "2026-05-14T00:03:00.000Z",
@@ -484,6 +495,7 @@ describe("useChatList", () => {
       sessions: [
         {
           sessionId: "reload-backend",
+          turnTimings: [],
           currentTaskId: "",
           createdAt: "2026-05-14T00:00:00.000Z",
           updatedAt: "2026-05-14T00:02:00.000Z",

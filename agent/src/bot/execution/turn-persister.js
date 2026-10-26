@@ -83,8 +83,6 @@ function firstTruthyValue(values, fallback = "") {
 }
 
 function normalizeSessionTurnInput(input = {}) {
-  const thinkingStartedAt = valueOrDefault(input.thinkingStartedAt, "");
-  const thinkingFinishedAt = valueOrDefault(input.thinkingFinishedAt, "");
   const dialogProcessId = normalizeDialogProcessId(valueOrDefault(input.dialogProcessId, ""));
   return {
     ...input,
@@ -125,15 +123,7 @@ function normalizeSessionTurnInput(input = {}) {
     pluginMessage: input.pluginMessage === true,
     pluginMeta: valueOrDefault(input.pluginMeta, null),
     transferEnvelopes: filterSessionTransferEnvelopes(valueOrDefault(input.transferEnvelopes, [])),
-    thinkingStartedAt: normalizeIsoTime(thinkingStartedAt),
-    thinkingFinishedAt: normalizeIsoTime(thinkingFinishedAt),
     ts: normalizeIsoTime(valueOrDefault(input.ts, "")),
-    turnTimingThinkingStartedAt: normalizeIsoTime(
-      valueOrDefault(input.turnTimingThinkingStartedAt, thinkingStartedAt),
-    ),
-    turnTimingThinkingFinishedAt: normalizeIsoTime(
-      valueOrDefault(input.turnTimingThinkingFinishedAt, thinkingFinishedAt),
-    ),
     persistenceScope: input.persistenceScope,
   };
 }
@@ -177,29 +167,10 @@ function buildFullTurnPayload(input) {
     pluginMessage: input.pluginMessage,
     pluginMeta: normalizedOptionalObject(input.pluginMeta),
     ...optionalListField("transferEnvelopes", input.transferEnvelopes),
-    ...optionalValueField("thinkingStartedAt", input.thinkingStartedAt),
-    ...optionalValueField("thinkingFinishedAt", input.thinkingFinishedAt),
     ...optionalValueField("ts", input.ts),
     modelResponseMetadata: normalizedOptionalObject(input.modelResponseMetadata),
     ...optionalListField("activityTimeline", input.activityTimeline),
     ...optionalListField("toolTimeline", input.toolTimeline),
-  };
-}
-
-function hasTurnTiming(input) {
-  return Boolean(input.turnTimingThinkingStartedAt || input.turnTimingThinkingFinishedAt);
-}
-
-function buildTurnTimingDiagnostic(input) {
-  return {
-    sessionId: input.sessionId,
-    role: input.role,
-    turnScopeId: input.turnScopeId,
-    dialogProcessId: input.dialogProcessId,
-    messageThinkingStartedAt: input.thinkingStartedAt,
-    messageThinkingFinishedAt: input.thinkingFinishedAt,
-    turnTimingThinkingStartedAt: input.turnTimingThinkingStartedAt,
-    turnTimingThinkingFinishedAt: input.turnTimingThinkingFinishedAt,
   };
 }
 
@@ -213,18 +184,6 @@ async function appendSessionTurnDiagnostics(session, input, fullTurnPayload) {
     category: MESSAGE_ROLE.SYSTEM,
     type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
     data: summarizeSessionTurnPayload(fullTurnPayload),
-    persistenceScope: input.persistenceScope,
-  });
-  if (!hasTurnTiming(input)) return;
-  await session.appendExecutionLog({
-    userId: input.userId,
-    sessionId: input.sessionId,
-    dialogProcessId: input.dialogProcessId,
-    turnScopeId: input.turnScopeId,
-    event: "debug_turn_timing_append",
-    category: MESSAGE_ROLE.SYSTEM,
-    type: "system",
-    data: buildTurnTimingDiagnostic(input),
     persistenceScope: input.persistenceScope,
   });
 }
@@ -280,11 +239,7 @@ function buildTurnPayload(input) {
     pluginMessage: input.pluginMessage,
     pluginMeta: input.pluginMeta,
     ...(input.transferEnvelopes.length ? { transferEnvelopes: input.transferEnvelopes } : {}),
-    thinkingStartedAt: input.thinkingStartedAt,
-    thinkingFinishedAt: input.thinkingFinishedAt,
     ts: input.ts,
-    turnTimingThinkingStartedAt: input.turnTimingThinkingStartedAt,
-    turnTimingThinkingFinishedAt: input.turnTimingThinkingFinishedAt,
   };
 }
 
@@ -297,13 +252,11 @@ function normalizeAgentMessagesInput(input = {}) {
     parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
     turnScopeId: valueOrDefault(input.turnScopeId, ""),
     eventListener: input.eventListener,
-    thinkingStartedAt: normalizeIsoTime(valueOrDefault(input.thinkingStartedAt, "")),
-    thinkingFinishedAt: normalizeIsoTime(valueOrDefault(input.thinkingFinishedAt, "")),
     persistenceScope: input.persistenceScope,
   };
 }
 
-function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
+function buildAgentMessageTurnInput(messageItem, input) {
   const contextPolicy = resolveToolContextPolicy(messageItem);
   return {
     userId: input.userId,
@@ -354,11 +307,7 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     activityTimeline: arrayValue(messageItem.activityTimeline),
     toolTimeline: arrayValue(messageItem.toolTimeline),
     turnScopeId: stringValue(firstTruthyValue([messageItem.turnScopeId, input.turnScopeId])).trim(),
-    thinkingStartedAt: "",
-    thinkingFinishedAt: "",
     ts: stringValue(messageItem.ts).trim(),
-    turnTimingThinkingStartedAt: includeTurnTiming ? input.thinkingStartedAt : "",
-    turnTimingThinkingFinishedAt: includeTurnTiming ? input.thinkingFinishedAt : "",
     eventListener: input.eventListener,
     persistenceScope: input.persistenceScope,
   };
@@ -380,7 +329,7 @@ export class SessionTurnPersister {
     const turnPayloads = [];
     for (const messageItem of input.messages) {
       const turnPayload = await this._prepareTurnPayload(
-        buildAgentMessageTurnInput(messageItem, input, turnPayloads.length === 0),
+        buildAgentMessageTurnInput(messageItem, input),
       );
       turnPayloads.push(turnPayload);
     }

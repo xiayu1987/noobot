@@ -6,17 +6,17 @@
 import { describe, it, expect } from "vitest";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import {
-  createTurnRuntimeRegistryState,
+  applyExecutionSnapshot,
   applyTurnRuntimeEvent,
-  resolveSessionTurnRuntime,
+  createTurnRuntimeRegistryState,
+  executionTurnKey,
   resolveLatestContinuableStoppedTurn,
   resolveLatestStoppedTurn,
   resolveTurnRuntimeByScope,
+  selectCurrentTurnRuntime,
   selectSessionTurnRuntime,
   selectTurnMessageRuntime,
   turnRuntimeDisplayState,
-  applyExecutionSnapshot,
-  executionTurnKey,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   SESSION_RUN_EVENT,
@@ -50,11 +50,11 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       };
     };
     const first = execution("s1", "workflow-node:run-1");
-    const second = execution("s2", "workflow-node_run-2");
+    const second = execution("s2", "workflow-node:run-2");
 
     expect(applyExecutionSnapshot(registry, { execution: first }).applied).toBe(true);
     expect(applyExecutionSnapshot(registry, { execution: second }).applied).toBe(true);
-    expect(registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_run-1")]).toBe(
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node:run-1")]).toBe(
       first.executionId,
     );
     expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node:run-2")]).toBe(
@@ -67,8 +67,8 @@ describe("turnRuntimeRegistry: registration and routing", () => {
   it("creates and activates a session turn", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({ turnScopeId: "t1" });
-    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("requesting");
+    expect(selectCurrentTurnRuntime(registry, "s1")).toMatchObject({ turnScopeId: "t1" });
+    expect(turnRuntimeDisplayState(selectCurrentTurnRuntime(registry, "s1"))).toBe("requesting");
   });
   it("binds backend identity without deriving stop eligibility from transport", () => {
     const registry = createTurnRuntimeRegistryState();
@@ -80,7 +80,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
     });
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+    expect(selectCurrentTurnRuntime(registry, "s1")).toMatchObject({
       dialogProcessId: "dp1",
       canStop: false,
       transportState: "sending",
@@ -103,7 +103,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       canStop: false,
     });
     lifecycle(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1" });
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+    expect(selectCurrentTurnRuntime(registry, "s1")).toMatchObject({
       state: "frontend_processing",
       canStop: true,
       commandPending: false,
@@ -121,7 +121,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
         state,
         seq: 2,
       });
-      const before = { ...resolveSessionTurnRuntime(registry, "s1") };
+      const before = { ...selectCurrentTurnRuntime(registry, "s1") };
 
       expect(selectSessionTurnRuntime(registry, "s1")).toMatchObject({
         sending: true,
@@ -137,7 +137,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       });
 
       expect(stopped).toMatchObject({ applied: false, reason: "stop_not_allowed" });
-      expect(resolveSessionTurnRuntime(registry, "s1")).toEqual(before);
+      expect(selectCurrentTurnRuntime(registry, "s1")).toEqual(before);
     },
   );
   it("routes later events by dialogProcessId", () => {
@@ -277,7 +277,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       canStop: false,
     });
     lifecycle(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1" });
-    const before = JSON.stringify(resolveSessionTurnRuntime(registry, "s1"));
+    const before = JSON.stringify(selectCurrentTurnRuntime(registry, "s1"));
     const dialogMismatch = backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
@@ -289,7 +289,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       applied: false,
       reason: "dialog_process_identity_conflict",
     });
-    expect(JSON.stringify(resolveSessionTurnRuntime(registry, "s1"))).toBe(before);
+    expect(JSON.stringify(selectCurrentTurnRuntime(registry, "s1"))).toBe(before);
   });
   it("rejects phase regression when late events have no usable sequence", () => {
     const registry = createTurnRuntimeRegistryState();
@@ -314,7 +314,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     });
 
     expect(lateSending.applied).toBe(true);
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+    expect(selectCurrentTurnRuntime(registry, "s1")).toMatchObject({
       commandPending: true,
       canStop: false,
     });
@@ -341,8 +341,8 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       state: AGENT_CHANNEL_STATE.COMPLETED,
       seq: 3,
     });
-    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("requesting");
-    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s2"))).toBe("requesting");
+    expect(turnRuntimeDisplayState(selectCurrentTurnRuntime(registry, "s1"))).toBe("requesting");
+    expect(turnRuntimeDisplayState(selectCurrentTurnRuntime(registry, "s2"))).toBe("requesting");
   });
   it("uses canonical workflow Turn scope at the Store boundary", () => {
     const registry = createTurnRuntimeRegistryState();
@@ -369,10 +369,10 @@ describe("turnRuntimeRegistry: registration and routing", () => {
   it("isolates identical canonical Turn scopes by Session", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "workflow-node:shared" });
-    sendStart(registry, { sessionId: "s2", turnScopeId: "workflow-node_shared" });
+    sendStart(registry, { sessionId: "s2", turnScopeId: "workflow-node:shared" });
     backendState(registry, {
       sessionId: "s1",
-      turnScopeId: "workflow-node_shared",
+      turnScopeId: "workflow-node:shared",
       dialogProcessId: "dp1",
       state: AGENT_CHANNEL_STATE.SENDING,
       seq: 2,
@@ -386,7 +386,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     });
     lifecycle(registry, {
       sessionId: "s1",
-      turnScopeId: "workflow-node_shared",
+      turnScopeId: "workflow-node:shared",
       dialogProcessId: "dp1",
       eventType: "turn.action_accepted",
       state: "action_requesting",
@@ -398,7 +398,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     });
     lifecycle(registry, {
       sessionId: "s2",
-      turnScopeId: "workflow-node_shared",
+      turnScopeId: "workflow-node:shared",
       dialogProcessId: "dp2",
       eventType: "turn.action_accepted",
       state: "action_requesting",
@@ -410,14 +410,14 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     });
     lifecycle(registry, {
       sessionId: "s1",
-      turnScopeId: "workflow-node_shared",
+      turnScopeId: "workflow-node:shared",
       dialogProcessId: "dp1",
       revision: 2,
       sequence: 2,
     });
     lifecycle(registry, {
       sessionId: "s2",
-      turnScopeId: "workflow-node_shared",
+      turnScopeId: "workflow-node:shared",
       dialogProcessId: "dp2",
       revision: 2,
       sequence: 2,
@@ -426,13 +426,13 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     expect(
       selectTurnMessageRuntime(registry, {
         sessionId: "s1",
-        turnScopeId: "workflow-node_shared",
+        turnScopeId: "workflow-node:shared",
       })?.dialogProcessId,
     ).toBe("dp1");
     expect(
       selectTurnMessageRuntime(registry, {
         sessionId: "s2",
-        turnScopeId: "workflow-node_shared",
+        turnScopeId: "workflow-node:shared",
       })?.dialogProcessId,
     ).toBe("dp2");
   });

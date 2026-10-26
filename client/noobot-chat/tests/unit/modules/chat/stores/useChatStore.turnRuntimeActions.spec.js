@@ -27,6 +27,7 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
       resolved: true,
       aggregateVersion: 1,
       turn: {
+        continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
         dialogProcessId: `dp-${turnScopeId}`,
@@ -179,7 +180,7 @@ describe("useChatStore turn runtime actions", () => {
 
     const pruneResult = store.pruneTerminalTurns({
       sessionId: "session-1",
-      keepTurnScopeIds: ["client-turn:abc:def"],
+      referencedTurnScopeIds: ["client-turn:abc:def"],
     });
     expect(pruneResult.applied).toBe(false);
     expect(store.turnRuntimeRegistry).toBe(afterCompleted);

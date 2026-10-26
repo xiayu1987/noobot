@@ -35,7 +35,6 @@ async function recordPluginDebug(command, run) {
       requestedSelectedPlugins: command.preferences.selectedPlugins,
       normalizedSelectedPlugins: run.normalizedRunConfig.selectedPlugins,
       normalizedPlugins: summarizePluginConfig(run.normalizedRunConfig.plugins),
-      normalizedThinkingStartedAt: text(run.normalizedRunConfig.thinkingStartedAt),
     },
   });
 }

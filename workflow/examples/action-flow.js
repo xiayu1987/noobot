@@ -12,6 +12,7 @@ import Business from "../src/engine/bizinst/business.js";
 import SubmitAction from "../src/engine/bizinst/action/submit-action.js";
 import BizinstTreeControlCenter from "../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js";
 import { linkFlow } from "./link-flow.js";
+import EStateType from "../src/design/model/node/enums/state-type.js";
 
 function buildActionModel() {
   const model = new Model();
@@ -19,7 +20,7 @@ function buildActionModel() {
   const startNode = new StateNode();
   startNode.setName("开始节点");
   startNode.setNodeType(ENodeType.StateNode);
-  startNode.setStateType(0);
+  startNode.setStateType(EStateType.Start);
   startNode.setModel(model);
 
   const actionNode = new ActionNode();
@@ -30,7 +31,7 @@ function buildActionModel() {
   const endNode = new StateNode();
   endNode.setName("结束节点");
   endNode.setNodeType(ENodeType.StateNode);
-  endNode.setStateType(1);
+  endNode.setStateType(EStateType.End);
   endNode.setModel(model);
 
   const s2a = linkFlow("开始到审核", startNode, actionNode);

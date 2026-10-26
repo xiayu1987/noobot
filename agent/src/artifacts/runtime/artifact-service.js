@@ -119,7 +119,7 @@ function resolveGeneratedArtifactOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const turnScopeId = resolveRuntimeTurnScopeId(runtime);
   const resolvedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
-  const sessionId = text(systemRuntime?.sessionId || systemRuntime?.rootSessionId);
+  const { sessionId } = systemRuntime;
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
 }
 

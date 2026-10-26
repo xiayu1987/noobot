@@ -5,6 +5,7 @@
  */
 import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import test from "node:test";
+import { projectAgentContextIdentity } from "../../src/context/agent-context-envelope-input.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -249,32 +250,13 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     },
   });
 
-  engine._buildContextBuilder = ({
-    runConfig = {},
-    userMessageAttachments = [],
-    attachments = [],
-    sessionId = "",
-    parentSessionId = "",
-    caller = "user",
-  } = {}) => {
-    capturedBuildContextInput = {
-      runConfig,
-      userMessageAttachments,
-      attachments,
-      sessionId,
-      parentSessionId,
-      caller,
-    };
+  engine._buildContextBuilder = ({ runtimeIdentity, runConfig, userMessageAttachments }) => {
+    const { sessionId } = runtimeIdentity;
+    capturedBuildContextInput = { runConfig, userMessageAttachments };
     return {
       attachmentService: engine.attach,
-      async buildNewSessionContext({ dialogProcessId = "" } = {}) {
-        const effectiveAttachments =
-          Array.isArray(userMessageAttachments) && userMessageAttachments.length
-            ? userMessageAttachments
-            : attachments;
-        const firstIncoming = Array.isArray(effectiveAttachments)
-          ? effectiveAttachments[0] || {}
-          : {};
+      async buildNewSessionContext() {
+        const [firstIncoming] = userMessageAttachments;
         return createTestAgentExecutionScope(
           createTestRuntimeContext({
             sessionManager,
@@ -291,21 +273,13 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
                 relativePath: "input.png",
               },
             ],
-            systemRuntime: {
-              dialogProcessId,
-            },
+            identity: runtimeIdentity,
           }),
           {
-            identity: {
-              sessionId,
-              parentSessionId,
-              dialogProcessId,
-              turnScopeId: runConfig.turnScopeId,
-              userId: "u1",
-              rootSessionId: acceptedTurn.sessionId,
-              runId: "r-1",
-              presentationMessageId: "m-1",
-            },
+            identity: projectAgentContextIdentity(
+              { ...runtimeIdentity, rootSessionId: acceptedTurn.sessionId },
+              runConfig,
+            ),
             messageBlocks: {
               system: ["[PROMPT_PATCHED] 你现在处于审计模式"],
               history: [
@@ -324,8 +298,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           },
         );
       },
-      async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
-        return this.buildNewSessionContext({ dialogProcessId });
+      async buildExistingSessionContext() {
+        return this.buildNewSessionContext();
       },
     };
   };
@@ -561,49 +535,37 @@ test("continue mode closed-loop: should build continue context and persist paren
     }),
   });
 
-  engine._buildContextBuilder = ({ sessionId, parentSessionId, runConfig }) => ({
+  engine._buildContextBuilder = ({ runtimeIdentity, runConfig }) => ({
     attachmentService: engine.attach,
-    async buildNewSessionContext({ dialogProcessId = "" } = {}) {
+    async buildNewSessionContext() {
       return createTestAgentExecutionScope(
         createTestRuntimeContext({
           sessionManager,
           runtimeModel: String(runConfig?.runtimeModel || ""),
-          systemRuntime: { dialogProcessId },
+          identity: runtimeIdentity,
         }),
         {
-          identity: {
-            userId: "u1",
-            sessionId,
-            rootSessionId: parentRootSessionId,
-            parentSessionId,
-            dialogProcessId,
-            turnScopeId: runConfig.turnScopeId,
-            runId: "r-1",
-            presentationMessageId: "m-1",
-          },
+          identity: projectAgentContextIdentity(
+            { ...runtimeIdentity, rootSessionId: parentRootSessionId },
+            runConfig,
+          ),
           messageBlocks: { system: ["initial"], history: [], incremental: [] },
         },
       );
     },
-    async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
+    async buildExistingSessionContext() {
       continueContextBuilt = true;
       capturedRunConfig = { ...runConfig };
       return createTestAgentExecutionScope(
         createTestRuntimeContext({
           sessionManager,
-          systemRuntime: { dialogProcessId, sessionId },
+          identity: runtimeIdentity,
         }),
         {
-          identity: {
-            userId: "u1",
-            sessionId,
-            rootSessionId: parentRootSessionId,
-            parentSessionId,
-            dialogProcessId,
-            turnScopeId: runConfig.turnScopeId,
-            runId: "r-1",
-            presentationMessageId: "m-1",
-          },
+          identity: projectAgentContextIdentity(
+            { ...runtimeIdentity, rootSessionId: parentRootSessionId },
+            runConfig,
+          ),
           messageBlocks: {
             system: ["continue prompt"],
             history: [

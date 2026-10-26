@@ -27,12 +27,18 @@ import {
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { applyLatestSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
-import {
-  confirmTurnRuntimeDeletion,
-  isTurnRuntimeDeleted,
-} from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { normalizeSessionDetailApplyMode } from "../../../chat/runtime/engine/messageStateGuards.js";
+import { isTurnRuntimeDeleted } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { text } from "@noobot/shared/value";
+
+function requireAvailableTurnTimings(sessionDoc) {
+  if (sessionDoc.availability === "unavailable") return null;
+  if (!Array.isArray(sessionDoc.turnTimings)) {
+    throw new TypeError(
+      `[session-detail] available session doc ${text(sessionDoc.sessionId)} requires turnTimings array`,
+    );
+  }
+  return sessionDoc.turnTimings;
+}
 
 export function createSessionDetailApplicator({
   sessions,
@@ -47,7 +53,7 @@ export function createSessionDetailApplicator({
   function pruneMessagesFromConfirmedDeletes(messages = [], sessionId = "") {
     const source = Array.isArray(messages) ? messages : [];
     const index = source.findIndex((messageItem) =>
-      isTurnRuntimeDeleted(turnRuntimeRegistry?.value, {
+      isTurnRuntimeDeleted(turnRuntimeRegistry.value, {
         sessionId,
         turnScopeId: getMessageTurnScopeId(messageItem),
       }),
@@ -73,24 +79,11 @@ export function createSessionDetailApplicator({
   function applySessionDetail(detail, options = {}) {
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
     if (!sessionItem) return;
-    const applyMode = normalizeSessionDetailApplyMode(options.mode);
     logResendDebug("detail.apply.begin", () => ({
       sessionId: detail.sessionId,
-      applyMode,
       currentMessages: summarizeDebugMessages(sessionItem.messages),
     }));
     const detailSessionId = text(detail.sessionId);
-    const deletedTurnScopeIds = [
-      ...(Array.isArray(options.deletedTurnScopeIds) ? options.deletedTurnScopeIds : []),
-      options.deleteFromTurnScopeId,
-    ]
-      .map((value) => text(value))
-      .filter(Boolean);
-    if (deletedTurnScopeIds.length) {
-      confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, deletedTurnScopeIds, {
-        sessionId: detailSessionId,
-      });
-    }
     sessionItem.loaded = true;
     const confirmationResult = confirmSessionIdentity({
       sessionItem,
@@ -104,7 +97,6 @@ export function createSessionDetailApplicator({
       sessionDocs.find((doc) => doc.sessionId === detail.sessionId) || sessionDocs[0] || {};
     logWorkflowDiagnostics("frontend.workflowDetail.applySourceSelected", () => ({
       sessionId: detailSessionId,
-      applyMode,
       selectedSessionDocId: String(mainSessionDoc?.sessionId || ""),
       sessionDocCount: sessionDocs.length,
       currentCandidates: summarizeWorkflowMessages(sessionItem.messages),
@@ -128,21 +120,12 @@ export function createSessionDetailApplicator({
       {
         sessionId: detailSessionId,
         messages: sessionItem.detailMessages || [],
-        turnTimings: sessionItem.turnTimings || [],
       },
       {
         sessionId: detailSessionId,
         messages: mainSessionDoc.messages,
-        turnTimings: mainSessionDoc.turnTimings,
       },
-      {
-        replaceFields: [
-          ...(Array.isArray(mainSessionDoc.messages) ? ["messages"] : []),
-          ...(Array.isArray(mainSessionDoc.turnTimings) || Array.isArray(detail?.turnTimings)
-            ? ["turnTimings"]
-            : []),
-        ],
-      },
+      { replaceFields: Array.isArray(mainSessionDoc.messages) ? ["messages"] : [] },
     );
     const detailMessages = pruneMessagesFromConfirmedDeletes(
       canonicalDetail.messages,
@@ -151,15 +134,7 @@ export function createSessionDetailApplicator({
     if (detailMessages !== canonicalDetail.messages) {
       canonicalDetail.messages = detailMessages;
     }
-    const turnTimings = canonicalDetail.turnTimings.filter(
-      (item) =>
-        !isTurnRuntimeDeleted(turnRuntimeRegistry?.value, {
-          sessionId: detailSessionId,
-          turnScopeId: item?.turnScopeId,
-        }),
-    );
-    canonicalDetail.turnTimings = turnTimings;
-    sessionItem.turnTimings = turnTimings.map((item) => ({ ...item }));
+    const turnTimings = requireAvailableTurnTimings(mainSessionDoc);
     if (hasMessageSnapshot) {
       sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
     }
@@ -168,13 +143,11 @@ export function createSessionDetailApplicator({
       sessionDocs,
       makeViewMessage,
     });
-    chatStore?.applyTurnTimingSnapshot?.({
-      sessionId: detailSessionId,
-      turnTimings,
-    });
+    if (turnTimings) {
+      chatStore.applyTurnTimingSnapshot({ sessionId: detailSessionId, turnTimings });
+    }
     logResendDebug("detail.apply.mode", () => ({
       sessionId: detail.sessionId,
-      applyMode,
       authority: "session_detail",
       hasMessageSnapshot,
       detailMessageCount: detailMessages.length,
@@ -191,7 +164,6 @@ export function createSessionDetailApplicator({
       : sessionItem.messages;
     logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailSnapshotReceived", () => ({
       sessionId: detail.sessionId,
-      applyMode,
       detailMode: String(detail?.detailMode || (detail?.summary === true ? "summary" : "")),
       rawMessageCount: Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages.length : 0,
       normalizedMessageCount: normalizedDetailMessages.length,
@@ -226,7 +198,6 @@ export function createSessionDetailApplicator({
 
     logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailApplied", () => ({
       sessionId: detail.sessionId,
-      applyMode,
       renderedMessageCount: sessionItem.messages.length,
       assistantMessages: sessionItem.messages
         .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)

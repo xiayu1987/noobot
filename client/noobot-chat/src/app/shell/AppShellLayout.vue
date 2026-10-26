@@ -41,7 +41,8 @@ const props = defineProps({
   emptyLogoSrc: { type: String, default: "" },
   deleteMonotonicMessage: { type: Function, required: true },
   resendMonotonicMessage: { type: Function, required: true },
-  stopExecution: { type: Function, default: null },
+  stopExecution: { type: Function, required: true },
+  fetchExecutionReport: { type: Function, required: true },
   chatMessageNavItems: { type: Array, default: () => [] },
   chatNavigatorVisible: { type: Boolean, default: true },
   connectorVisible: { type: Boolean, default: false },
@@ -257,6 +258,7 @@ defineExpose({
           :delete-monotonic-message="deleteMonotonicMessage"
           :resend-monotonic-message="resendMonotonicMessage"
           :stop-execution="stopExecution"
+          :fetch-execution-report="fetchExecutionReport"
           @open-thinking-details="emit('open-thinking-details', $event)"
         />
 

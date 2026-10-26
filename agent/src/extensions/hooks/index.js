@@ -5,7 +5,6 @@
  */
 import { emitEvent } from "../../events/index.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { resolveHookClientEmitter } from "./client-channel.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
@@ -13,7 +12,9 @@ import {
   HOOK_CANCELLATION_MODE,
   assertOptionalHookManager,
   createEmptyHookResult,
+  createHookRuntimeIdentity,
   requireHookPointDescriptor,
+  withHookRuntimeIdentity,
 } from "@noobot/hook-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
@@ -87,24 +88,24 @@ const PLUGIN_CAPABILITY_RESPONSE_ALLOWED_KEYS = new Set([
   "toolTurnLimitReached",
 ]);
 
-function resolveHookRuntimeMeta(runtime = {}) {
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  return {
-    userId: text(systemRuntime?.userId),
-    sessionId: text(systemRuntime?.sessionId),
-    parentSessionId: normalizeParentSessionId(systemRuntime?.parentSessionId),
-    dialogProcessId: text(systemRuntime?.dialogProcessId),
-    turnScopeId: text(systemRuntime?.turnScopeId),
-    caller: text(systemRuntime?.caller),
-    resumeFromStoppedSnapshot: runtime?.resumeFromStoppedSnapshot === true,
-  };
+function resolveHookRuntimeIdentity(runtime) {
+  const { userId, sessionId, parentSessionId, dialogProcessId, turnScopeId, caller } =
+    getSystemRuntimeFromRuntime(runtime);
+  return createHookRuntimeIdentity({
+    userId,
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    caller,
+  });
 }
 
 export function withHookRuntimeMeta(runtime, context) {
-  return {
-    ...resolveHookRuntimeMeta(runtime),
+  return withHookRuntimeIdentity(resolveHookRuntimeIdentity(runtime), {
     ...context,
-  };
+    resumeFromStoppedSnapshot: runtime.resumeFromStoppedSnapshot === true,
+  });
 }
 
 function sanitizeForHookClient(value, depth = 0, seen = new WeakSet()) {

@@ -372,9 +372,8 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
         },
       },
       userConfig: {},
+      identity: { userId: "u1", sessionId: "s1" },
       systemRuntime: {
-        userId: "u1",
-        sessionId: "s1",
         config: {},
       },
     });

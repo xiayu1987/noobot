@@ -7,7 +7,7 @@
 import { ContextBuilder } from "../index.js";
 import { emitEvent } from "../../events/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_POINT, withHookRuntimeIdentity } from "@noobot/hook-protocol";
 import { getAgentContextEnvelope, getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
@@ -25,10 +25,7 @@ export class AgentContextFactory {
   }
 
   buildContextBuilder({
-    userId,
-    sessionId,
-    caller,
-    parentSessionId,
+    runtimeIdentity,
     userConfig,
     userMessageAttachments,
     systemMessages,
@@ -54,10 +51,7 @@ export class AgentContextFactory {
         userInteractionBridge,
       },
       sessionContext: {
-        userId,
-        sessionId,
-        caller,
-        parentSessionId,
+        runtimeIdentity,
         userMessageAttachments,
         systemMessages,
         runConfig,
@@ -69,12 +63,8 @@ export class AgentContextFactory {
 
   async buildAgentContextFromBuilder({
     mode,
-    userId,
-    sessionId,
-    caller,
-    parentSessionId,
+    runtimeIdentity,
     eventListener,
-    dialogProcessId,
     runConfig,
     contextBuilder,
   }) {
@@ -88,40 +78,36 @@ export class AgentContextFactory {
       abortSignal: contextBuilder.abortSignal,
     };
 
-    const contextHookBase = { mode, userId, sessionId, caller, parentSessionId, dialogProcessId };
+    const contextHook = (fields) => withHookRuntimeIdentity(runtimeIdentity, { mode, ...fields });
     const buildStartedAtMs = Date.now();
     const buildStartedAt = new Date(buildStartedAtMs).toISOString();
 
     await runAgentRuntimeHook({
       runtime: runtimeHookCarrier,
       point: HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
-      context: {
-        ...contextHookBase,
-        startedAt: buildStartedAt,
-      },
+      context: contextHook({ startedAt: buildStartedAt }),
     });
-    emitEvent(eventListener, "context_building", { sessionId, mode });
+    emitEvent(eventListener, "context_building", { sessionId: runtimeIdentity.sessionId, mode });
     let agentContext = null;
     try {
       if (mode === AGENT_CONTEXT_MODE.NEW_SESSION) {
-        agentContext = await contextBuilder.buildNewSessionContext({ dialogProcessId });
+        agentContext = await contextBuilder.buildNewSessionContext();
       } else {
-        agentContext = await contextBuilder.buildExistingSessionContext({ dialogProcessId });
+        agentContext = await contextBuilder.buildExistingSessionContext();
       }
     } catch (error) {
       const failedAtMs = Date.now();
       await runAgentRuntimeHook({
         runtime: runtimeHookCarrier,
         point: HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
-        context: {
-          ...contextHookBase,
+        context: contextHook({
           startedAt: buildStartedAt,
           endedAt: new Date(failedAtMs).toISOString(),
           durationMs: failedAtMs - buildStartedAtMs,
           status: "error",
           error,
           agentContext: null,
-        },
+        }),
       });
       throw error;
     }
@@ -140,8 +126,7 @@ export class AgentContextFactory {
     await runAgentRuntimeHook({
       runtime,
       point: HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD,
-      context: {
-        ...contextHookBase,
+      context: contextHook({
         startedAt: buildStartedAt,
         endedAt: new Date(completedAtMs).toISOString(),
         durationMs: completedAtMs - buildStartedAtMs,
@@ -149,10 +134,10 @@ export class AgentContextFactory {
         messageCount:
           getAgentContextEnvelope(scopedAgentContext).modelContext.messageBlocks.history.length,
         agentContext: scopedAgentContext,
-      },
+      }),
     });
     emitEvent(eventListener, "context_ready", {
-      sessionId,
+      sessionId: runtimeIdentity.sessionId,
       messageCount:
         getAgentContextEnvelope(scopedAgentContext).modelContext.messageBlocks.history.length,
     });

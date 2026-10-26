@@ -26,8 +26,8 @@ describe("chatEngine message runtime patch isolation", () => {
     };
     const bMessage = { role: "assistant", pending: true, turnScopeId: "tb", dialogProcessId: "db" };
     const sessions = ref([
-      { id: "a", messages: [aMessage, otherTurn] },
-      { id: "b", messages: [bMessage] },
+      { sessionId: "a", messages: [aMessage, otherTurn] },
+      { sessionId: "b", messages: [bMessage] },
     ]);
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     const event = {
@@ -55,7 +55,7 @@ describe("chatEngine message runtime patch isolation", () => {
 
   it("does nothing when event identity conflicts with the owning turn", () => {
     const message = { role: "assistant", pending: true, turnScopeId: "ta", dialogProcessId: "da" };
-    const sessions = ref([{ id: "a", messages: [message] }]);
+    const sessions = ref([{ sessionId: "a", messages: [message] }]);
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,

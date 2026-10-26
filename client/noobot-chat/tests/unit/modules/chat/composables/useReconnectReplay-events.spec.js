@@ -388,12 +388,18 @@ describe("useReconnectReplay", () => {
     });
 
     const snapshot = createTurnLifecycleSnapshot({
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      recentTerminalTurns: [],
+      replacedTurns: [],
+      unchanged: false,
+      recovery: "none",
       commandId: "command-dp-new",
       userId: "admin",
       sessionId: "s-1",
       sequence: 1,
       activeTurnScopeId: "turn-dp-new",
       activeTurn: {
+        continuedByTurnScopeId: "",
         userId: "admin",
         sessionId: "s-1",
         turnScopeId: "turn-dp-new",

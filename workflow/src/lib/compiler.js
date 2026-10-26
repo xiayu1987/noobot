@@ -9,57 +9,57 @@ import Flowto from "../design/model/flowto/flowto.js";
 import NodeLineRLAT from "../design/model/flowto/node-line-rlat.js";
 import StateNode from "../design/model/node/state-node.js";
 import ActionNode from "../design/model/node/action-node.js";
-import CompositeNode from "../design/model/node/composite-node.js";
 import ENodeType from "../design/model/node/enums/node-type.js";
+import EStateType from "../design/model/node/enums/state-type.js";
 import { text } from "@noobot/shared/value";
 
-function toStateType(value = "") {
-  const key = text(value).toLowerCase();
-  if (key === "start") return 0;
-  if (key === "end") return 1;
-  if (key === "branch") return 2;
-  if (key === "merge") return 3;
-  if (key === "normal") return 0;
-  const numeric = Number(value);
-  if (Number.isFinite(numeric) && numeric >= 0) return Math.floor(numeric);
-  return 0;
+const SEMANTIC_NODE_TYPE = Object.freeze({ STATE: "state", ACTION: "action" });
+
+function requireStateType(nodeDef) {
+  const stateType = nodeDef?.stateType;
+  if (!EStateType.isValid(stateType)) {
+    throw new Error(`workflow state node ${text(nodeDef?.id)} has invalid stateType: ${stateType}`);
+  }
+  return stateType;
 }
 
-function ensureNodeDefinitions(input = {}) {
-  const nodes = Array.isArray(input?.nodes) ? input.nodes.slice() : [];
-  const byId = new Map(nodes.map((node) => [text(node.id), node]));
-  if (!byId.has("start")) {
-    nodes.unshift({ id: "start", name: "start", type: "state", stateType: 0 });
-    byId.set("start", nodes[0]);
+function requireNodeName(nodeDef) {
+  const name = text(nodeDef?.name);
+  if (!name) throw new Error(`workflow node ${text(nodeDef?.id)} requires name`);
+  return name;
+}
+
+function createNode(nodeDef) {
+  if (nodeDef?.type === SEMANTIC_NODE_TYPE.ACTION) {
+    const node = new ActionNode();
+    node.setNodeType(ENodeType.ActionNode);
+    return node;
   }
-  if (!byId.has("end")) {
-    nodes.push({ id: "end", name: "end", type: "state", stateType: 1 });
-    byId.set("end", nodes[nodes.length - 1]);
+  if (nodeDef?.type === SEMANTIC_NODE_TYPE.STATE) {
+    const node = new StateNode();
+    node.setNodeType(ENodeType.StateNode);
+    node.setStateType(requireStateType(nodeDef));
+    return node;
   }
-  let flowtos = Array.isArray(input?.flowtos) ? input.flowtos.slice() : [];
-  if (!flowtos.length) {
-    flowtos = [{ from: "start", to: "end", name: "start_to_end" }];
-  }
-  return { nodes, flowtos };
+  throw new Error(`workflow node ${text(nodeDef?.id)} has invalid type: ${nodeDef?.type}`);
+}
+
+function requireNode(nodeMap, nodeId) {
+  const node = nodeMap.get(text(nodeId));
+  if (!node) throw new Error(`workflow flowto references undefined node: ${text(nodeId)}`);
+  return node;
 }
 
 export function compileWorkflowSemantic(semantic = {}) {
-  const { nodes: nodeDefs, flowtos: flowDefs } = ensureNodeDefinitions(semantic);
+  const nodeDefs = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
+  const flowDefs = Array.isArray(semantic?.flowtos) ? semantic.flowtos : [];
   const model = new Model();
   const nodeMap = new Map();
 
   for (const nodeDef of nodeDefs) {
-    const isAction = (text(nodeDef?.type) || "state").toLowerCase() === "action";
-    const isComposite = (text(nodeDef?.type) || "state").toLowerCase() === "composite";
-    const node = isAction ? new ActionNode() : isComposite ? new CompositeNode() : new StateNode();
+    const node = createNode(nodeDef);
     node.workflowNodeId = text(nodeDef?.id);
-    node.setName(String(nodeDef?.name || nodeDef?.id || "node").trim());
-    node.setNodeType(
-      isAction ? ENodeType.ActionNode : isComposite ? ENodeType.CompositeNode : ENodeType.StateNode,
-    );
-    if (!isAction && !isComposite) {
-      node.setStateType(toStateType(nodeDef?.stateType));
-    }
+    node.setName(requireNodeName(nodeDef));
     node.setModel(model);
     nodeMap.set(text(nodeDef?.id), node);
   }
@@ -67,9 +67,8 @@ export function compileWorkflowSemantic(semantic = {}) {
   const flowtos = [];
   const rlats = [];
   for (const [index, flowDef] of flowDefs.entries()) {
-    const startNode = nodeMap.get(text(flowDef?.from));
-    const endNode = nodeMap.get(text(flowDef?.to));
-    if (!startNode || !endNode) continue;
+    const startNode = requireNode(nodeMap, flowDef?.from);
+    const endNode = requireNode(nodeMap, flowDef?.to);
 
     const flowto = new Flowto();
     flowto.setName(text(flowDef?.name) || `flowto_${index + 1}`);

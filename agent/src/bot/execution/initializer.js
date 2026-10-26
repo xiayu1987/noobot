@@ -24,7 +24,6 @@ export class SessionExecutionInitializer {
     eventListener = null,
     dialogProcessId = "",
     turnScopeId = "",
-    thinkingStartedAt = "",
     persistenceScope,
   }) {
     const usedSessionId = sessionId;
@@ -52,15 +51,6 @@ export class SessionExecutionInitializer {
         persistenceScope,
       });
     }
-
-    await this.session.upsertTurnTiming({
-      userId,
-      sessionId: usedSessionId,
-      turnScopeId,
-      dialogProcessId: resolvedDialogProcessId,
-      thinkingStartedAt,
-      persistenceScope,
-    });
 
     const sessionScope = await this.session.locateSessionScope({
       userId,

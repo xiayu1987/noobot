@@ -105,7 +105,7 @@ describe("useChatSession reconnect replay", () => {
       }),
     ];
     store.activeSessionId = "s-deleted";
-    confirmTurnRuntimeDeletion(store.turnRuntimeRegistry, "turn-deleted", {
+    confirmTurnRuntimeDeletion(store.turnRuntimeRegistry, ["turn-deleted"], {
       sessionId: "s-deleted",
     });
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {

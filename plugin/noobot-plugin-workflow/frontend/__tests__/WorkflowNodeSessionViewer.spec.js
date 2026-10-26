@@ -19,6 +19,7 @@ import {
 import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
+  workflowSessionSnapshotEventId,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
@@ -41,7 +42,7 @@ function snapshotEnvelope(sessionId, messages, turnScopeId = `workflow-node:${se
     authoritySessionId: "root-session",
     turnScopeId,
     executionId: deriveAgentExecutionId({ turnScopeId }),
-    eventId: `snapshot:${sessionId}:1`,
+    eventId: workflowSessionSnapshotEventId({ nodeSessionId: sessionId, aggregateVersion: 1 }),
     workflowRunId: `workflow:${sessionId}`,
     sequence: 1,
     aggregateVersion: 1,
@@ -55,6 +56,12 @@ function snapshotEnvelope(sessionId, messages, turnScopeId = `workflow-node:${se
       turnScopeId,
       messages,
       turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+        activeTurnScopeId: "",
+        activeTurn: null,
+        recentTerminalTurns: [],
+        replacedTurns: [],
+        unchanged: false,
+        recovery: "none",
         commandId: `snapshot:${sessionId}:1`,
         sessionId,
         sequence: 1,
@@ -83,8 +90,8 @@ function detailResponse(sessionId, content) {
       workflowSession: {
         aggregateVersion: 1,
         snapshotEnvelope: snapshotEnvelope(sessionId, messages, turnScopeId),
-        session: { sessionId, messages },
-        sessionSummary: { sessionId, messages },
+        sessionSummary: { sessionId, messages, turnTimings: [] },
+        executionLogs: [],
       },
     }),
   };
@@ -95,9 +102,8 @@ function step(id) {
     rootSessionId: "root-session",
     nodeExecutionId: `node-${id}`,
     activeChildExecutionId: `execution-${id}`,
-    sessionId: `session-${id}`,
+    nodeSessionId: `session-${id}`,
     dialogProcessId: `dialog-${id}`,
-    stepId: `step-${id}`,
   };
 }
 
@@ -107,7 +113,7 @@ function mountViewer({
   runtimeNodes = [],
   flowNodeItems = [],
   initialSelectedNode = null,
-  logWorkflowDiagnostics = null,
+  logWorkflowDiagnostics = vi.fn(),
   selectExecutionDetail = null,
 }) {
   const flowNodes = ref(flowNodeItems);
@@ -135,17 +141,15 @@ function mountViewer({
     selectedRuntimeNode: ref(null),
     selectedRuntimeStep: ref(null),
     selectedNodeMessages: ref([]),
-    selectedNodeRawMessages: ref([]),
-    selectedNodeSessionSummary: ref(null),
+    selectedNodeSessionMetadata: ref(null),
+    selectedNodeTurnTimings: ref([]),
     selectedNodeSessionId: ref(""),
     runningPlaceholderViewModel: ref(null),
     selectedGraphDialogProcessId: ref(""),
   };
   const applyWorkflowRuntimeEvent = vi.fn((record = {}) => {
     const sessionId = String(record?.payload?.nodeSessionId || "");
-    const runtimeNode = runtimeNodes.find(
-      (item = {}) => String(item?.sessionId || item?.nodeSessionId || "") === sessionId,
-    );
+    const runtimeNode = runtimeNodes.find((item = {}) => item.nodeSessionId === sessionId);
     const session = {
       ...(record?.payload || {}),
       ...(runtimeNode?.status ? { status: runtimeNode.status } : {}),
@@ -164,7 +168,6 @@ function mountViewer({
           props: viewerProps,
           emit: vi.fn(),
           translate: (key) => key,
-          workflowPayload: ref({ runMeta: { sessionId: "root-session" } }),
           flowNodes,
           runtimeNodeSessions: ref(runtimeNodes),
           applyWorkflowRuntimeEvent,
@@ -180,13 +183,14 @@ function mountViewer({
 describe("workflow node session view ownership", () => {
   it("keeps the canonical node resolver available from the viewer entrypoint", () => {
     expect(
-      resolveCanonicalWorkflowNodeItem({ nodeExecutionId: "node-a", sessionId: "root-session" }, [
-        { nodeExecutionId: "node-a", sessionId: "child-session", rootSessionId: "root-session" },
-      ]),
+      resolveCanonicalWorkflowNodeItem(
+        { nodeExecutionId: "node-a", rootSessionId: "root-session" },
+        { value: [{ nodeExecutionId: "node-a", nodeSessionId: "child-session" }] },
+      ),
     ).toEqual(
       expect.objectContaining({
         nodeExecutionId: "node-a",
-        sessionId: "child-session",
+        nodeSessionId: "child-session",
         rootSessionId: "root-session",
       }),
     );
@@ -293,14 +297,12 @@ describe("workflow node session view ownership", () => {
     const staleStep = {
       rootSessionId: "root-session",
       nodeExecutionId: "node-a",
-      sessionId: "root-session",
       dialogProcessId: "dialog-a",
       turnScopeId: "workflow-node:node-a",
-      stepId: "step-a",
     };
     const committedNode = {
       ...staleStep,
-      sessionId: "child-session",
+      nodeSessionId: "child-session",
       activeChildExecutionId: "execution-a",
       status: "running",
       revision: 2,
@@ -312,9 +314,10 @@ describe("workflow node session view ownership", () => {
       runtimeNodes: [committedNode],
     });
 
-    await viewer.openNodeSession(staleStep);
+    await viewer.openNodeSession(staleStep, { traceId: "trace-1" });
 
-    expect(state.selectedRuntimeStep.value.sessionId).toBe("child-session");
+    expect(state.selectedRuntimeStep.value.nodeSessionId).toBe("child-session");
+    expect(state.selectedRuntimeStep.value).not.toHaveProperty("sessionId");
     expect(state.selectedRuntimeStep.value.activeChildExecutionId).toBe("execution-a");
     expect(state.selectedNodeSessionId.value).toBe("child-session");
     expect(state.selectedNodeMessages.value.map((item) => item.content)).toEqual([
@@ -323,37 +326,29 @@ describe("workflow node session view ownership", () => {
     wrapper.unmount();
   });
 
-  it("resolves a refreshed execution to its child session before applying the REST snapshot", async () => {
+  it("opens a refreshed node through its committed node session before applying the REST snapshot", async () => {
     const restoredStep = {
       rootSessionId: "root-session",
       nodeExecutionId: "node-restored",
       activeChildExecutionId: "execution-restored",
+      nodeSessionId: "child-restored",
       dialogProcessId: "dialog-restored",
       turnScopeId: "workflow-node:node-restored",
-      stepId: "step-restored",
     };
     const fetcher = vi.fn(async () => detailResponse("child-restored", "restored result"));
     const { wrapper, state, viewer, applyWorkflowRuntimeEvent } = mountViewer({
       fetcher,
       sessionDocs: reactive({}),
       runtimeNodes: [restoredStep],
-      selectExecutionDetail: vi.fn(() => ({
-        execution: {
-          executionId: "execution-restored",
-          sessionId: "child-restored",
-          state: "completed",
-          terminal: true,
-        },
-      })),
     });
 
-    await viewer.openNodeSession(restoredStep, { fromHistory: true });
+    await viewer.openNodeSession(restoredStep, { fromHistory: true, traceId: "trace-1" });
 
     expect(fetcher).toHaveBeenCalledWith({
       userId: "user-1",
       sessionId: "root-session",
       dialogProcessId: "dialog-restored",
-      traceId: expect.stringMatching(/^workflow-node-detail-/),
+      traceId: "trace-1",
     });
     expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -373,9 +368,8 @@ describe("workflow node session view ownership", () => {
       rootSessionId: "root-session",
       nodeExecutionId: "node-dual-dialog",
       activeChildExecutionId: "execution-dual-dialog",
-      sessionId: "child-dual-dialog",
+      nodeSessionId: "child-dual-dialog",
       dialogProcessId: "wf_node_dual_dialog",
-      stepId: "step-dual-dialog",
     };
     const fetcher = vi.fn(async () => detailResponse("child-dual-dialog", "child result"));
     const { wrapper, state, viewer } = mountViewer({
@@ -401,10 +395,8 @@ describe("workflow node session view ownership", () => {
     const staleStep = {
       rootSessionId: "root-session",
       nodeExecutionId: "node-running",
-      sessionId: "root-session",
       dialogProcessId: "dialog-running",
       turnScopeId: "workflow-node:node-running",
-      stepId: "step-running",
     };
     const childUser = {
       messageUid: "sm-child-user",
@@ -426,8 +418,7 @@ describe("workflow node session view ownership", () => {
             [childUser],
             "workflow-node:node-running",
           ),
-          session: { sessionId: "child-running", messages: [childUser] },
-          sessionSummary: { sessionId: "child-running", messages: [childUser] },
+          sessionSummary: { sessionId: "child-running", messages: [childUser], turnTimings: [] },
           executionLogs: [
             {
               event: "agent_lifecycle_state_changed",
@@ -461,14 +452,14 @@ describe("workflow node session view ownership", () => {
       runtimeNodes: [
         {
           ...staleStep,
-          sessionId: "child-running",
+          nodeSessionId: "child-running",
           activeChildExecutionId: "execution-running",
           status: "running",
         },
       ],
     });
 
-    await viewer.openNodeSession(staleStep);
+    await viewer.openNodeSession(staleStep, { traceId: "trace-1" });
 
     expect(state.selectedNodeMessages.value.map((item) => item.role)).toEqual(["user"]);
     expect(state.runningPlaceholderViewModel.value).toMatchObject({
@@ -527,7 +518,7 @@ describe("workflow node session view ownership", () => {
       flowNodeItems: [owningNode],
     });
 
-    await viewer.openNodeSession({ ...routedStep }, { fromHistory: true });
+    await viewer.openNodeSession({ ...routedStep }, { fromHistory: true, traceId: "trace-1" });
 
     expect(state.selectedRuntimeNode.value).toMatchObject({ nodeId: "action-routed" });
     expect(state.selectedRuntimeNode.value.actionNodeStates).toHaveLength(1);
@@ -555,14 +546,14 @@ describe("workflow node session view ownership", () => {
       actionNodeStates: [
         {
           actionNodeStateId: "box-live",
-          steps: [{ ...initialStep, status: "success" }],
+          steps: [{ ...initialStep, status: "succeeded" }],
         },
       ],
     };
     flowNodes.value = [completedNode];
     await nextTick();
 
-    expect(state.selectedRuntimeNode.value.actionNodeStates[0].steps[0].status).toBe("success");
+    expect(state.selectedRuntimeNode.value.actionNodeStates[0].steps[0].status).toBe("succeeded");
     wrapper.unmount();
   });
 
@@ -584,7 +575,7 @@ describe("workflow node session view ownership", () => {
       logWorkflowDiagnostics: diagnostics,
     });
 
-    await viewer.openNodeSession(initialStep);
+    await viewer.openNodeSession(initialStep, { traceId: "trace-1" });
     const finalMessage = {
       messageUid: "sm-final-message",
       presentationMessageId: "final-message",
@@ -598,7 +589,7 @@ describe("workflow node session view ownership", () => {
         actionNodeStates: [
           {
             actionNodeStateId: "box-complete-live",
-            steps: [{ ...initialStep, status: "success" }],
+            steps: [{ ...initialStep, status: "succeeded" }],
           },
         ],
       },
@@ -606,7 +597,7 @@ describe("workflow node session view ownership", () => {
     await nextTick();
     await nextTick();
 
-    expect(state.selectedRuntimeStep.value.status).toBe("success");
+    expect(state.selectedRuntimeStep.value.status).toBe("succeeded");
     expect(
       state.selectedNodeMessages.value.filter(
         (message) => message.presentationMessageId === "final-message",
@@ -614,7 +605,10 @@ describe("workflow node session view ownership", () => {
     ).toHaveLength(1);
     expect(diagnostics).toHaveBeenCalledWith(
       "frontend.workflowNodeDetail.runtimeStepRebound",
-      expect.objectContaining({ sessionId: "session-complete-live", currentStatus: "success" }),
+      expect.objectContaining({
+        nodeSessionId: "session-complete-live",
+        currentStatus: "succeeded",
+      }),
     );
     expect(diagnostics).toHaveBeenCalledWith(
       "frontend.workflowNodeDetail.liveProjectionObserved",
@@ -627,29 +621,31 @@ describe("workflow node session view ownership", () => {
     const completedStep = { ...step("terminal"), status: "succeeded" };
     const execution = {
       executionId: completedStep.activeChildExecutionId,
-      sessionId: completedStep.sessionId,
+      sessionId: completedStep.nodeSessionId,
       state: "completed",
       terminal: true,
     };
     const { wrapper, state, viewer } = mountViewer({
-      fetcher: vi.fn(async () => detailResponse(completedStep.sessionId, "final result")),
+      fetcher: vi.fn(async () => detailResponse(completedStep.nodeSessionId, "final result")),
       sessionDocs: reactive({}),
       runtimeNodes: [completedStep],
       selectExecutionDetail: vi.fn(() => ({
         execution,
-        session: { sessionId: completedStep.sessionId },
-        messages: [
-          {
-            presentationMessageId: `${completedStep.sessionId}-message`,
-            role: "assistant",
-            content: "final result",
-            pending: false,
-          },
-        ],
+        session: {
+          sessionId: completedStep.nodeSessionId,
+          messages: [
+            {
+              presentationMessageId: `${completedStep.nodeSessionId}-message`,
+              role: "assistant",
+              content: "final result",
+              pending: false,
+            },
+          ],
+        },
       })),
     });
 
-    await viewer.openNodeSession(completedStep);
+    await viewer.openNodeSession(completedStep, { traceId: "trace-1" });
 
     expect(state.viewerState.value).toBe("ready");
     expect(state.selectedNodeMessages.value).toHaveLength(1);
@@ -677,8 +673,8 @@ describe("workflow node session view ownership", () => {
         json: async () => ({
           ok: true,
           workflowSession: {
-            session: sessionDocs["session-registry-live"],
-            sessionSummary: sessionDocs["session-registry-live"],
+            sessionSummary: { ...sessionDocs["session-registry-live"], turnTimings: [] },
+            executionLogs: [],
           },
         }),
       })),
@@ -686,7 +682,7 @@ describe("workflow node session view ownership", () => {
       runtimeNodes: [selectedStep],
     });
 
-    await viewer.openNodeSession(selectedStep);
+    await viewer.openNodeSession(selectedStep, { traceId: "trace-1" });
     sessionDocs["session-registry-live"] = {
       sessionId: "session-registry-live",
       messages: [
@@ -734,7 +730,7 @@ describe("workflow node session view ownership", () => {
       runtimeNodes: [selectedStep],
     });
 
-    const opening = viewer.openNodeSession(selectedStep);
+    const opening = viewer.openNodeSession(selectedStep, { traceId: "trace-1" });
     await nextTick();
 
     expect(state.viewerLoading.value).toBe(false);
@@ -756,9 +752,13 @@ describe("workflow node session view ownership", () => {
     const fetcher = vi.fn(({ dialogProcessId }) =>
       dialogProcessId === "dialog-a" ? requests.a.promise : requests.b.promise,
     );
-    const { wrapper, state, viewer } = mountViewer({ fetcher, sessionDocs });
     const stepA = step("a");
     const stepB = step("b");
+    const { wrapper, state, viewer } = mountViewer({
+      fetcher,
+      sessionDocs,
+      runtimeNodes: [stepA, stepB],
+    });
 
     const openingA = viewer.handleRuntimeStepClick(stepA);
     expect(state.selectedNodeMessages.value).toEqual([]);
@@ -804,12 +804,14 @@ describe("workflow node session view ownership", () => {
     const sessionDocs = reactive({
       "session-a": { sessionId: "session-a", messages: [] },
     });
+    const stepA = step("a");
     const { wrapper, state, viewer } = mountViewer({
       fetcher: vi.fn(() => request.promise),
       sessionDocs,
+      runtimeNodes: [stepA],
     });
 
-    const opening = viewer.handleRuntimeStepClick(step("a"));
+    const opening = viewer.handleRuntimeStepClick(stepA);
     state.viewerVisible.value = false;
     request.resolve(detailResponse("session-a", "late after close"));
     await opening;

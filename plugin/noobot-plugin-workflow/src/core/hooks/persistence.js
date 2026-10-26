@@ -14,7 +14,12 @@ import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
-import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
+import {
+  TRANSFER_REASON,
+  TRANSFER_SOURCE,
+  mergeTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
+import { requirePluginMessagePayload } from "@noobot/plugin-protocol/plugin-message-payload";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 import { createMessageUid, createModelMessageId } from "@noobot/session-protocol/message-identity";
 
@@ -55,11 +60,9 @@ export function stripHarnessReviewAppendix(inputText = "") {
   return raw.slice(0, markerIndex).trim();
 }
 
-function buildWorkflowTransferReferenceBlock(workflowPayload = null, ctx = {}) {
+function buildWorkflowTransferReferenceBlock(transferPayload, ctx) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
-  const references = resolveWorkflowTransferAttachmentReferences(
-    workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
-  );
+  const references = resolveWorkflowTransferAttachmentReferences(transferPayload);
   const lines = references
     .map((item = {}, index) => {
       const label =
@@ -95,24 +98,6 @@ function composeWorkflowFinalContent({ semanticText = "", attachmentPathBlock = 
     .map((item) => text(item))
     .filter(Boolean)
     .join("\n\n");
-}
-
-function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
-  if (!isObjectLike(workflowPayload)) return null;
-  let payload = null;
-  try {
-    payload = JSON.parse(JSON.stringify(workflowPayload));
-  } catch {
-    return null;
-  }
-  const nodeAgentRuns = Array.isArray(payload?.execution?.nodeAgentRuns)
-    ? payload.execution.nodeAgentRuns
-    : [];
-  for (const item of nodeAgentRuns) {
-    if (!isObjectLike(item)) continue;
-    delete item.nodeResultText;
-  }
-  return payload;
 }
 
 function resolveNodeResultIdentity({ nodeIdentity, transition }) {
@@ -250,7 +235,7 @@ async function transferWorkflowFinalAttachment({
         meta: {
           phase: normalizedPhase,
           dialogProcessId,
-          sessionId: text(ctx?.sessionId),
+          sessionId: ctx.sessionId,
         },
       },
     ],
@@ -267,26 +252,6 @@ async function transferWorkflowFinalAttachment({
     throw new Error("Workflow final attachment transfer produced no V2 envelope");
   }
   return composedTransferPayload;
-}
-
-function mergeWorkflowTransferEnvelopes(baseTransferPayload, composedTransferPayload) {
-  return normalizeWorkflowTransferPayload({
-    transferEnvelopes: [
-      ...(Array.isArray(baseTransferPayload?.transferEnvelopes)
-        ? baseTransferPayload.transferEnvelopes
-        : []),
-      ...(Array.isArray(composedTransferPayload?.transferEnvelopes)
-        ? composedTransferPayload.transferEnvelopes
-        : []),
-    ],
-  });
-}
-
-function buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId) {
-  const sessionWorkflowPayload =
-    sanitizeWorkflowPayloadForSessionMessage(baseWorkflowPayload) || {};
-  sessionWorkflowPayload.workflowRunId = workflowRunId;
-  return sessionWorkflowPayload;
 }
 
 function findExistingWorkflowMessage(turnMessages = [], dialogProcessId = "") {
@@ -312,32 +277,35 @@ function resolveWorkflowMessageIdentity(existing = null) {
 }
 
 async function resolveWorkflowTransferParts({
-  workflowPayload = null,
-  baseWorkflowPayload = {},
-  ctx = {},
-  normalizedPhase = "",
-  dialogProcessId = "",
-} = {}) {
-  const baseTransferPayload = normalizeWorkflowTransferPayload(baseWorkflowPayload);
-  const transferReferenceBlock = buildWorkflowTransferReferenceBlock(workflowPayload, ctx);
-  const composedTransferPayload = transferReferenceBlock
-    ? await transferWorkflowFinalAttachment({
-        transferReferenceBlock,
-        normalizedPhase,
-        dialogProcessId,
-        ctx,
-      })
-    : normalizeWorkflowTransferPayload();
-  const mergedTransferPayload = mergeWorkflowTransferEnvelopes(
-    baseTransferPayload,
-    composedTransferPayload,
-  );
-  const attachmentReferenceBlock =
-    buildWorkflowTransferReferenceBlock(
-      transferReferenceBlock ? composedTransferPayload : mergedTransferPayload,
-      ctx,
-    ) || "";
-  return { mergedTransferPayload, attachmentReferenceBlock };
+  nodeTransferEnvelopes,
+  ctx,
+  normalizedPhase,
+  dialogProcessId,
+}) {
+  if (!Array.isArray(nodeTransferEnvelopes)) {
+    throw new Error("Workflow message requires explicit node transfer envelopes");
+  }
+  const nodeTransferPayload = { transferEnvelopes: mergeTransferEnvelopes(nodeTransferEnvelopes) };
+  const transferReferenceBlock = buildWorkflowTransferReferenceBlock(nodeTransferPayload, ctx);
+  if (!transferReferenceBlock) {
+    return {
+      transferEnvelopes: nodeTransferPayload.transferEnvelopes,
+      attachmentReferenceBlock: "",
+    };
+  }
+  const composedTransferPayload = await transferWorkflowFinalAttachment({
+    transferReferenceBlock,
+    normalizedPhase,
+    dialogProcessId,
+    ctx,
+  });
+  return {
+    transferEnvelopes: mergeTransferEnvelopes(
+      nodeTransferPayload.transferEnvelopes,
+      composedTransferPayload.transferEnvelopes,
+    ),
+    attachmentReferenceBlock: buildWorkflowTransferReferenceBlock(composedTransferPayload, ctx),
+  };
 }
 
 function pickNonEmptyTimelines(messageEventProjection = {}) {
@@ -349,25 +317,12 @@ function pickNonEmptyTimelines(messageEventProjection = {}) {
   return timelines;
 }
 
-function buildWorkflowPluginMeta({
-  normalizedPhase = "",
-  sourceText = "",
-  semanticText = "",
-  sessionWorkflowPayload = {},
-} = {}) {
+function buildWorkflowPluginMeta({ normalizedPhase, workflowPayload }) {
   return {
     source: "workflow-plugin",
     kind: "workflow",
     phase: normalizedPhase,
-    sourceTextPreview: String(sourceText || "").slice(
-      0,
-      LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars,
-    ),
-    semanticTextPreview: String(semanticText || "").slice(
-      0,
-      LENGTH_THRESHOLDS.contextPreview.workflowSemanticTextPreviewChars,
-    ),
-    payload: sessionWorkflowPayload,
+    payload: requirePluginMessagePayload(workflowPayload),
   };
 }
 
@@ -375,9 +330,9 @@ async function upsertWorkflowMessage({
   options,
   agentResult,
   ctx,
-  sourceText,
   semanticText,
   workflowPayload,
+  nodeTransferEnvelopes,
   phase,
 }) {
   const normalizedPhase = text(phase);
@@ -385,12 +340,9 @@ async function upsertWorkflowMessage({
     throw new Error("Workflow message requires an explicit planning or completed phase");
   }
   const turnMessages = ensureTurnMessages(agentResult);
-  const dialogProcessId = text(ctx?.dialogProcessId);
-  const baseWorkflowPayload =
-    workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {};
-  const { mergedTransferPayload, attachmentReferenceBlock } = await resolveWorkflowTransferParts({
-    workflowPayload,
-    baseWorkflowPayload,
+  const dialogProcessId = ctx.dialogProcessId;
+  const { transferEnvelopes, attachmentReferenceBlock } = await resolveWorkflowTransferParts({
+    nodeTransferEnvelopes,
     ctx,
     normalizedPhase,
     dialogProcessId,
@@ -399,14 +351,12 @@ async function upsertWorkflowMessage({
     semanticText,
     attachmentPathBlock: attachmentReferenceBlock,
   });
-  const { presentationMessageId, workflowRunId } = resolveWorkflowRunIdentity(ctx);
+  const { presentationMessageId } = resolveWorkflowRunIdentity(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   if (!isFunction(runtime?.materializeUnownedCurrentTurnMessageEvents)) {
     throw new Error("Turn message event materializer is required");
   }
   const messageEventProjection = runtime.materializeUnownedCurrentTurnMessageEvents();
-  applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
-  const sessionWorkflowPayload = buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId);
   const existing = findExistingWorkflowMessage(turnMessages, dialogProcessId);
 
   const { modelMessageId, messageUid } = resolveWorkflowMessageIdentity(existing);
@@ -423,16 +373,9 @@ async function upsertWorkflowMessage({
     modelAlias: text(options.semanticModel),
     modelName: text(options.semanticModel),
     summarized: false,
-    ...(mergedTransferPayload.transferEnvelopes.length
-      ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
-      : {}),
+    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
     pluginMessage: true,
-    pluginMeta: buildWorkflowPluginMeta({
-      normalizedPhase,
-      sourceText,
-      semanticText,
-      sessionWorkflowPayload,
-    }),
+    pluginMeta: buildWorkflowPluginMeta({ normalizedPhase, workflowPayload }),
   };
   if (content) {
     agentResult.output = content;

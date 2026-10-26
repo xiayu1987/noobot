@@ -16,7 +16,7 @@ import {
 import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
 import { createTestSessionRunPayload } from "../../helpers/session-run-payload.js";
 
-test("SessionExecutionRunner rejects a prepared turnScopeId that diverges from the accepted Turn", async () => {
+test("SessionExecutionRunner rejects a prepared runConfig that carries a runtime identity field", async () => {
   const runner = createRunner({
     prepareRunConfig: (payload = {}) => ({
       ...(payload?.runConfig || {}),
@@ -32,19 +32,21 @@ test("SessionExecutionRunner rejects a prepared turnScopeId that diverges from t
       message: "hello",
       turnScopeId: "client-turn:accepted",
     }),
+
     (error) =>
-      /Turn acceptance receipt does not match the current execution identity/.test(
-        error?.cause?.message || error?.message,
-      ),
+      error.cause.code === "HOOK_RUNTIME_IDENTITY_INVALID" &&
+      /runConfig must not carry identity fields: turnScopeId/.test(error.cause.message),
   );
 });
 
-test("SessionExecutionRunner merges top-level turnScopeId before context building", async () => {
-  let capturedRunConfig = null;
+test("SessionExecutionRunner carries the accepted turnScopeId only in runtimeIdentity", async () => {
+  let capturedPayload = null;
   const runner = createRunner({
-    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
-      capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = createTestAgentExecutionScope(createTestRuntimeContext());
+    prepareAgentTurnExecution: async ({ buildContextPayload }) => {
+      capturedPayload = buildContextPayload;
+      const runtimeAgentContext = createTestAgentExecutionScope(
+        createTestRuntimeContext({ identity: buildContextPayload.runtimeIdentity }),
+      );
       return { agentContext: runtimeAgentContext, userMessageAttachments: [] };
     },
   });
@@ -57,7 +59,8 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
     runConfig: {},
   });
 
-  assert.equal(capturedRunConfig?.turnScopeId, "client-turn:top-level");
+  assert.equal(capturedPayload.runtimeIdentity.turnScopeId, "client-turn:top-level");
+  assert.equal(Object.hasOwn(capturedPayload.runConfig, "turnScopeId"), false);
 });
 
 for (const { name, dialogProcessId, turnScopeId, runConfig, isContinue } of [
@@ -137,10 +140,12 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
         },
       ],
     }),
-    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+    prepareAgentTurnExecution: async ({ buildContextPayload }) => {
       calls.push({ type: "prepare" });
       capturedBuildContextPayload = buildContextPayload;
-      const runtimeAgentContext = createTestAgentExecutionScope(createTestRuntimeContext());
+      const runtimeAgentContext = createTestAgentExecutionScope(
+        createTestRuntimeContext({ identity: buildContextPayload.runtimeIdentity }),
+      );
       return {
         agentContext: runtimeAgentContext,
         userMessageAttachments: [
@@ -192,7 +197,8 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
     ],
     persistenceScope: null,
   });
-  assert.equal(capturedBuildContextPayload?.dialogProcessId, "dp-new");
+  assert.equal(capturedBuildContextPayload.runtimeIdentity.dialogProcessId, "dp-new");
+  assert.equal(Object.hasOwn(capturedBuildContextPayload, "dialogProcessId"), false);
 });
 
 test("SessionExecutionRunner preserves the precommitted reused Turn dialogProcessId", async () => {

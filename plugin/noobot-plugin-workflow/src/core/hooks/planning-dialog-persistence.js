@@ -4,25 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
 import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../constants.js";
 import { text } from "@noobot/shared/value";
 
-export function buildWorkflowDialogRelativeDir({
-  ctx = {},
-  dialogProcessId = "",
-  scope = "auto",
-} = {}) {
-  const sessionId = text(ctx?.sessionId);
-  const resolvedDialogProcessId = text(dialogProcessId || ctx?.dialogProcessId);
-  if (!sessionId || !resolvedDialogProcessId) return "";
-  const normalizedScope = (text(scope) || "auto").toLowerCase();
-  const isNodeDialog =
-    normalizedScope === "node" ||
-    (normalizedScope !== "planning" && isWorkflowNodeDialogProcessId(resolvedDialogProcessId));
+export function buildWorkflowDialogRelativeDir({ ctx = {}, dialogProcessId = "" } = {}) {
+  const sessionId = ctx.sessionId;
+  const nodeDialogProcessId = text(dialogProcessId);
+  if (!sessionId || !nodeDialogProcessId) return "";
   return resolveWorkflowDataRelativePath(
-    isNodeDialog ? WORKFLOW_DATA_SCOPE.SESSION : WORKFLOW_DATA_SCOPE.PLANNING,
+    WORKFLOW_DATA_SCOPE.SESSION,
     sessionId,
-    resolvedDialogProcessId,
+    nodeDialogProcessId,
   );
 }

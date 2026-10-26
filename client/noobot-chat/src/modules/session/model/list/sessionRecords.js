@@ -72,7 +72,6 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
       item.turnLifecycleSnapshot && typeof item.turnLifecycleSnapshot === "object"
         ? item.turnLifecycleSnapshot
         : null,
-    turnTimings: Array.isArray(item.turnTimings) ? item.turnTimings : [],
   };
 }
 
@@ -97,11 +96,6 @@ export function mergeExistingSessionState(
     aggregateVersion,
     turnLifecycleSnapshot:
       mappedSession.turnLifecycleSnapshot || existingSession.turnLifecycleSnapshot || null,
-    turnTimings: mappedSession.turnTimings?.length
-      ? mappedSession.turnTimings
-      : Array.isArray(existingSession.turnTimings)
-        ? existingSession.turnTimings
-        : [],
     loaded: existingSession.loaded === true || mappedSession.loaded === true,
     isLocal: mappedSession.isLocal === false ? false : existingSession.isLocal === true,
     sessionId: mappedSession.sessionId || existingSession.sessionId,

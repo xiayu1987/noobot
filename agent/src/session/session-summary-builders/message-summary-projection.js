@@ -97,8 +97,6 @@ export function buildMessageSummary(message = {}) {
     "tool_call_id",
     "toolName",
     "turnScopeId",
-    "thinkingStartedAt",
-    "thinkingFinishedAt",
     "noobotInternalMessageType",
   ]) {
     if (message?.[key] !== undefined) summary[key] = message[key];

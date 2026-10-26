@@ -7,9 +7,12 @@ import { isFunction } from "@noobot/shared/value";
 import {
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_SNAPSHOT_WIRE_EVENT,
-  validateSessionEvent,
+  validateTurnLifecycleEnvelope,
 } from "@noobot/session-protocol";
-import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
+import {
+  ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+  validateAttachmentLifecycleEvent,
+} from "@noobot/attachment-protocol";
 import { validateEventEnvelope } from "./envelope.js";
 import {
   INTERACTION_EVENT_TYPE,
@@ -18,8 +21,6 @@ import {
 } from "./interaction.js";
 import { MESSAGE_EVENT_WIRE_EVENT, validateMessageEventPayload } from "./message-event.js";
 import {
-  domainResult,
-  validateAttachment,
   validateAttachmentEnvelope,
   validateInteractionEnvelope,
   validateMessageEnvelope,
@@ -106,7 +107,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.PAYLOAD,
       minimumSequence: 1,
       validateEnvelope: validateTurnLifecycleEventEnvelope,
-      validatePayload: (payload) => domainResult(validateSessionEvent(payload)),
+      validatePayload: validateTurnLifecycleEnvelope,
       schemaVersion: 1,
     },
     {
@@ -136,7 +137,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.PAYLOAD,
       minimumSequence: 1,
       validateEnvelope: validateAttachmentEnvelope,
-      validatePayload: validateAttachment,
+      validatePayload: validateAttachmentLifecycleEvent,
       schemaVersion: 1,
     },
     {
@@ -146,7 +147,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
       minimumSequence: 1,
       validateEnvelope: validateInteractionEnvelope,
-      validatePayload: (payload) => domainResult(validateInteractionRequestPayload(payload)),
+      validatePayload: validateInteractionRequestPayload,
       schemaVersion: 1,
     },
     {
@@ -156,7 +157,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
       minimumSequence: 1,
       validateEnvelope: validateInteractionEnvelope,
-      validatePayload: (payload) => domainResult(validateInteractionResponsePayload(payload)),
+      validatePayload: validateInteractionResponsePayload,
       schemaVersion: 1,
     },
     {
@@ -166,7 +167,7 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
       minimumSequence: 0,
       validateEnvelope: validateMessageEnvelope,
-      validatePayload: (payload) => domainResult(validateMessageEventPayload(payload)),
+      validatePayload: validateMessageEventPayload,
       schemaVersion: 1,
     },
     {

@@ -81,7 +81,7 @@ function finalizeCommand(turn, identity) {
     causationId: completionCommitId,
     eventType: isStop ? TURN_EVENT.STOP_COMPLETED : TURN_EVENT.COMPLETED,
     phase: isStop ? TURN_PHASE.STOP : TURN_PHASE.COMPLETION,
-    expectedRevision: Number(turn.revision || 0),
+    expectedRevision: turn.revision,
     terminalStatus: { command: isStop ? "user_stopped" : "completed" },
   };
 }
@@ -89,7 +89,7 @@ function finalizeCommand(turn, identity) {
 function orphanCommand(turn, identity) {
   const turnScopeId = clean(turn.turnScopeId);
   const phase = PHASES.has(turn.phase) ? turn.phase : TURN_PHASE.PROCESSING;
-  const commandId = `orphaned:${turnScopeId}:failed:${phase}:r${Number(turn.revision || 0)}`;
+  const commandId = `orphaned:${turnScopeId}:failed:${phase}:r${turn.revision}`;
   return {
     ...identity,
     turnScopeId,
@@ -98,7 +98,7 @@ function orphanCommand(turn, identity) {
     causationId: commandId,
     eventType: TURN_EVENT.FAILED,
     phase,
-    expectedRevision: Number(turn.revision || 0),
+    expectedRevision: turn.revision,
     failure: { ...TURN_ORPHAN_RECOVERY.failure },
     terminalStatus: {
       command: TURN_ORPHAN_RECOVERY.terminalCommand,

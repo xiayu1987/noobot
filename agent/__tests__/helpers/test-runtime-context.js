@@ -7,6 +7,17 @@ import {
   RUNTIME_CONTEXT_INPUT_FIELDS,
   createRuntimeContext,
 } from "../../src/runtime/runtime-context-factory.js";
+import { HOOK_RUNTIME_IDENTITY_FIELDS } from "@noobot/hook-protocol/runtime-identity";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
+
+export const TEST_RUNTIME_IDENTITY = Object.freeze({
+  userId: "u-test",
+  sessionId: "s-1",
+  parentSessionId: "",
+  dialogProcessId: "d-1",
+  turnScopeId: "t-1",
+  caller: SESSION_CALLER.USER,
+});
 
 function createDefaultRuntimeContextInput() {
   return {
@@ -56,10 +67,18 @@ const RUNTIME_POST_MOUNT_FIELDS = Object.freeze([
 export function createTestRuntimeContext(options = {}) {
   const input = createDefaultRuntimeContextInput();
   const mounted = {};
-  for (const [field, value] of Object.entries(options)) {
+  const { identity: identityOverrides = {}, ...fields } = options;
+  for (const [field, value] of Object.entries(fields)) {
     if (RUNTIME_CONTEXT_INPUT_FIELDS.includes(field)) input[field] = value;
     else if (RUNTIME_POST_MOUNT_FIELDS.includes(field)) mounted[field] = value;
     else throw new TypeError(`createTestRuntimeContext: unknown runtime field ${field}`);
   }
+  const preset = HOOK_RUNTIME_IDENTITY_FIELDS.filter((field) => field in input.systemRuntime);
+  if (preset.length) {
+    throw new TypeError(
+      `createTestRuntimeContext: pass identity via the identity option, not systemRuntime: ${preset.join(",")}`,
+    );
+  }
+  Object.assign(input.systemRuntime, { ...TEST_RUNTIME_IDENTITY, ...identityOverrides });
   return Object.assign(createRuntimeContext(input), mounted);
 }

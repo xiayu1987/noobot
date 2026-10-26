@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as clean, isObjectLike } from "@noobot/shared/value";
-import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
+import { requireCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
 import { snapshotTurn } from "./turn-projection.js";
 import { TURN_FAILED_STATES, TURN_TERMINAL_STATES } from "./turn-state.js";
 import {
@@ -35,7 +35,7 @@ export function createTurnTerminalResolution({
     eventType: TURN_TERMINAL_RESOLVED_EVENT,
     commandId: clean(commandId),
     sessionId: clean(sessionId),
-    turnScopeId: canonicalizeTurnScopeId(turnScopeId),
+    turnScopeId: requireCanonicalTurnScopeId(turnScopeId),
     resolved: resolved === true,
     retryable: retryable === true,
     reason: clean(reason),

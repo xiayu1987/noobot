@@ -16,16 +16,11 @@ import { text } from "@noobot/shared/value";
 
 function emitPreparedTurnDebug({
   eventListener,
-  requestRunConfig,
-  scenarioResolvedRunConfig,
   resolvedRunConfig,
   attachments,
   userMessageAttachments,
 }) {
   emitEvent(eventListener, "debug_resend_runner_received", {
-    requestThinkingStartedAt: text(requestRunConfig?.thinkingStartedAt),
-    scenarioThinkingStartedAt: text(scenarioResolvedRunConfig?.thinkingStartedAt),
-    resolvedThinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
     reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
     attachments: summarizeDebugAttachments(attachments),
     userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
@@ -83,30 +78,19 @@ export async function prepareCurrentUserTurn({
   abortSignal,
   persistenceScope,
   contextMode,
-  userId,
-  sessionId,
-  parentSessionId,
-  dialogProcessId,
-  turnScopeId,
-  caller,
+  runtimeIdentity,
   userConfig,
   resolvedRunConfig,
-  requestRunConfig,
-  scenarioResolvedRunConfig,
   turnAcceptance = null,
 }) {
+  const { userId, sessionId, dialogProcessId, turnScopeId } = runtimeIdentity;
   const buildContextPayload = {
     mode: contextMode,
-    userId,
-    sessionId,
-    caller,
-    parentSessionId,
+    runtimeIdentity,
     userConfig,
     userMessageAttachments: attachments,
     systemMessages,
     eventListener,
-    dialogProcessId,
-    turnScopeId,
     userInteractionBridge,
     runConfig: resolvedRunConfig,
     abortSignal,
@@ -114,8 +98,6 @@ export async function prepareCurrentUserTurn({
   };
   emitPreparedTurnDebug({
     eventListener,
-    requestRunConfig,
-    scenarioResolvedRunConfig,
     resolvedRunConfig,
     attachments,
     userMessageAttachments: buildContextPayload.userMessageAttachments,

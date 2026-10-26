@@ -230,7 +230,6 @@ test("run-event-listener audits workflow planning from the committed envelope pa
     eventId: "workflow_planning:run-1:1",
     workflowRunId: "run-1",
     sequence: 1,
-    revision: 1,
     occurredAt: "2026-08-17T00:00:00.000Z",
     producer: { type: "plugin", id: "workflow" },
     causality: { correlationId: "run-1" },
@@ -261,7 +260,7 @@ test("run-event-listener audits workflow planning from the committed envelope pa
   assert.equal(audits.length, 1);
   assert.equal(audits[0].eventType, WORKFLOW_RUNTIME_EVENT.PLANNING);
   assert.equal(audits[0].workflowRunId, "run-1");
-  assert.equal(audits[0].workflowRevision, 1);
+  assert.equal(Object.hasOwn(audits[0], "workflowRevision"), false);
   assert.equal(audits[0].nodeSessionCount, 1);
   assert.deepEqual(audits[0].sourceMessage, sourceMessage);
   assert.equal(audits[0].sequenceScopeId, "run-1");

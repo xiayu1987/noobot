@@ -228,16 +228,22 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
         ...createEmptyTurnLifecycle(),
         turns: {
           "scope-keep": {
+            revision: 1,
+            sequence: 1,
             turnScopeId: "scope-keep",
             dialogProcessId: "dp-keep",
             state: "completed",
           },
           "scope-old": {
+            revision: 1,
+            sequence: 2,
             turnScopeId: "scope-old",
             dialogProcessId: "dp-old",
             state: "action_failed",
           },
           "scope-tail": {
+            revision: 1,
+            sequence: 3,
             turnScopeId: "scope-tail",
             dialogProcessId: "dp-tail",
             state: "stop_completed",
@@ -256,6 +262,8 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
         ...createEmptyTurnLifecycle(),
         turns: {
           "child-turn": {
+            revision: 1,
+            sequence: 1,
             turnScopeId: "child-turn",
             dialogProcessId: "child-dialog",
             state: "stop_completed",

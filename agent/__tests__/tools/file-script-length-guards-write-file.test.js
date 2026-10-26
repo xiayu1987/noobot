@@ -36,8 +36,9 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
     tool,
     ...toolCallScope(
       buildAgentContext(basePath, "u-test", {
+        identity: { sessionId: "s-write" },
         runtime: {
-          systemRuntime: { persistenceScope: null, sessionId: "s-write", rootSessionId: "s-write" },
+          systemRuntime: { persistenceScope: null },
           globalConfig: {},
           attachmentService: buildAttachmentService(),
         },
@@ -382,12 +383,10 @@ test("write_file: super user can write an absolute file outside workspace root",
   await fs.mkdir(basePath, { recursive: true });
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
         persistenceScope: null,
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },

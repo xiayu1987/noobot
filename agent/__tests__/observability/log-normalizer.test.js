@@ -38,7 +38,8 @@ function runtimeForTurn({
       commandId: "command-1",
       presentationMessageId,
     },
-    systemRuntime: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    systemRuntime: {},
     sessionManager: {
       async commitMessageEvent({ sessionId, turnScopeId, producer, payload }) {
         sequence += 1;
@@ -215,12 +216,13 @@ test("workflow ownership is immutable and emitted by the common message stream",
       workflowRunId: "workflow-run-1",
       workflowNodeExecutionId: "node-execution-1",
     },
-    systemRuntime: {
+    identity: {
       sessionId: "child-session",
       parentSessionId: "root-session",
       turnScopeId: "turn-workflow",
       dialogProcessId: "dialog-workflow",
     },
+    systemRuntime: {},
   });
   let sequence = 0;
   runtime.sessionManager = {

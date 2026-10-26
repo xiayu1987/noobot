@@ -39,16 +39,14 @@ function object(value) {
   return isPlainObject(value) ? value : {};
 }
 
-function entityKey(item = {}, index = 0, kind = "entity") {
-  if (kind === "message") {
-    const viewKey = resolveMessageViewKey(item);
-    return viewKey ? `message:${viewKey}` : "";
+function messageKey(item = {}) {
+  const viewKey = resolveMessageViewKey(item);
+  if (!viewKey) {
+    throw new TypeError(
+      `[session-detail] message without view identity: role=${messageRole(item)}`,
+    );
   }
-  const turnScopeId = text(item?.turnScopeId);
-  if (turnScopeId) return `turn:${turnScopeId}:${kind}`;
-  const dialogProcessId = text(item?.dialogProcessId);
-  if (dialogProcessId) return `dialog:${dialogProcessId}:${kind}`;
-  return `${kind}:index:${index}`;
+  return `message:${viewKey}`;
 }
 
 function selectMessageFacts(previous, incoming) {
@@ -57,92 +55,59 @@ function selectMessageFacts(previous, incoming) {
   return { ...previous, ...incoming };
 }
 
-function mergeEntity(previous = {}, incoming = {}, kind = "entity") {
-  if (kind === "message") {
-    const merged = selectMessageFacts(previous, incoming);
-    for (const field of ["toolTimeline", "activityTimeline", "rawEvents"]) {
-      if (Array.isArray(previous[field]) || Array.isArray(incoming[field])) {
-        merged[field] = mergeListByIdentity(previous[field], incoming[field]);
-      }
+function mergeMessage(previous = {}, incoming = {}) {
+  const merged = selectMessageFacts(previous, incoming);
+  for (const field of ["toolTimeline", "activityTimeline", "rawEvents"]) {
+    if (Array.isArray(previous[field]) || Array.isArray(incoming[field])) {
+      merged[field] = mergeListByIdentity(previous[field], incoming[field]);
     }
-    return merged;
   }
-  return { ...previous, ...incoming };
+  return merged;
 }
 
-function mergeSessionDetailEntities(
-  baseItems = [],
-  incomingItems = [],
-  { kind = "entity", replace = false } = {},
-) {
-  const base = Array.isArray(baseItems) ? baseItems : [];
-  const incoming = Array.isArray(incomingItems) ? incomingItems : [];
-
-  const accepted = (items) => {
-    if (kind !== "message") return items;
-    const unkeyed = items.find((item) => !entityKey(item, 0, kind));
-    if (unkeyed) {
-      throw new TypeError(
-        `[session-detail] message without view identity: role=${messageRole(unkeyed)}`,
-      );
-    }
-    return items;
-  };
-  if (replace) return accepted(incoming).map((item) => ({ ...object(item) }));
+function mergeMessages(baseItems, incomingItems, { replace }) {
+  if (replace) {
+    incomingItems.forEach(messageKey);
+    return incomingItems.map((item) => ({ ...object(item) }));
+  }
   const merged = new Map();
-  accepted(base).forEach((item, index) =>
-    merged.set(entityKey(item, index, kind), { ...object(item) }),
-  );
-  accepted(incoming).forEach((item, index) => {
-    const key = entityKey(item, index, kind);
-    merged.set(key, mergeEntity(merged.get(key), object(item), kind));
+  baseItems.forEach((item) => merged.set(messageKey(item), { ...object(item) }));
+  incomingItems.forEach((item) => {
+    const key = messageKey(item);
+    merged.set(key, mergeMessage(merged.get(key), object(item)));
   });
   return [...merged.values()];
 }
 
+const NON_DETAIL_FIELDS = ["sessionSummary", "turnTimings"];
+
+export function requireTopLevelDetail(value, side) {
+  const detail = object(value);
+  const foreignField = NON_DETAIL_FIELDS.find((field) => Object.hasOwn(detail, field));
+  if (foreignField) {
+    throw new TypeError(
+      `[session-detail] ${side} detail carries ${foreignField}; session detail carries only sessionId/messages at top level, turn timings are applied to the turn runtime registry`,
+    );
+  }
+  return detail;
+}
+
 export function mergeCanonicalSessionDetail(base = {}, incoming = {}, { replaceFields = [] } = {}) {
-  const previous = object(base);
-  const next = object(incoming);
-  const previousSummary = object(previous.sessionSummary);
-  const nextSummary = object(next.sessionSummary);
-  const previousSessionId = text(previous.sessionId || previousSummary.sessionId);
-  const nextSessionId = text(next.sessionId || nextSummary.sessionId);
+  const previous = requireTopLevelDetail(base, "base");
+  const next = requireTopLevelDetail(incoming, "incoming");
+  const previousSessionId = text(previous.sessionId);
+  const nextSessionId = text(next.sessionId);
   const sessionId = nextSessionId || previousSessionId;
   const sameSession = !previousSessionId || !nextSessionId || previousSessionId === nextSessionId;
   const safePrevious = sameSession ? previous : {};
-  const safePreviousSummary = sameSession ? previousSummary : {};
   const replacements = new Set(replaceFields);
-  const pickList = (field) => {
-    const direct = Array.isArray(next[field]) ? next[field] : undefined;
-    const summary = Array.isArray(nextSummary[field]) ? nextSummary[field] : undefined;
-    return direct ?? summary ?? [];
-  };
-  const baseList = (field) => {
-    const direct = Array.isArray(safePrevious[field]) ? safePrevious[field] : undefined;
-    const summary = Array.isArray(safePreviousSummary[field])
-      ? safePreviousSummary[field]
-      : undefined;
-    return direct ?? summary ?? [];
-  };
-  const mergeField = (field, kind = field) =>
-    mergeSessionDetailEntities(baseList(field), pickList(field), {
-      kind,
-      replace: replacements.has(field),
-    });
-  const messages = mergeField("messages", "message");
-  const turnTimings = mergeField("turnTimings", "turnTiming");
+  const listOf = (source) => (Array.isArray(source.messages) ? source.messages : []);
   return {
     ...safePrevious,
     ...next,
     sessionId,
-    messages,
-    turnTimings,
-    sessionSummary: {
-      ...safePreviousSummary,
-      ...nextSummary,
-      sessionId,
-      messages,
-      turnTimings,
-    },
+    messages: mergeMessages(listOf(safePrevious), listOf(next), {
+      replace: replacements.has("messages"),
+    }),
   };
 }

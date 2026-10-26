@@ -68,11 +68,14 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
   const factory = createFactory();
   const result = await factory.buildAgentContextFromBuilder({
     mode: "new_session",
-    userId: "u_ctx_1",
-    sessionId: "s_ctx_1",
-    caller: SESSION_CALLER.USER,
-    parentSessionId: "p_ctx_1",
-    dialogProcessId: "dp_ctx_1",
+    runtimeIdentity: {
+      userId: "u_ctx_1",
+      sessionId: "s_ctx_1",
+      parentSessionId: "p_ctx_1",
+      dialogProcessId: "dp_ctx_1",
+      turnScopeId: "turn_ctx_1",
+      caller: SESSION_CALLER.USER,
+    },
     runConfig: { hookManager },
     contextBuilder,
   });
@@ -131,11 +134,14 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
     () =>
       factory.buildAgentContextFromBuilder({
         mode: "new_session",
-        userId: "u_ctx_2",
-        sessionId: "s_ctx_2",
-        caller: SESSION_CALLER.USER,
-        parentSessionId: "p_ctx_2",
-        dialogProcessId: "dp_ctx_2",
+        runtimeIdentity: {
+          userId: "u_ctx_2",
+          sessionId: "s_ctx_2",
+          parentSessionId: "p_ctx_2",
+          dialogProcessId: "dp_ctx_2",
+          turnScopeId: "turn_ctx_2",
+          caller: SESSION_CALLER.USER,
+        },
         runConfig: { hookManager },
         contextBuilder,
       }),

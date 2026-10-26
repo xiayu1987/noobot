@@ -425,7 +425,7 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
   assert.equal(executionLogs[0]?.data?.workflowMeta, undefined);
 });
 
-test("SessionTurnPersister writes thinking timing to turn timing source when injected user messages precede assistant", async () => {
+test("SessionTurnPersister does not carry thinking timing on persisted turns", async () => {
   const appendedTurns = [];
   const session = {
     appendExecutionLog: async () => {},
@@ -435,9 +435,6 @@ test("SessionTurnPersister writes thinking timing to turn timing source when inj
     },
   };
   const persister = new SessionTurnPersister({ session });
-  const thinkingStartedAt = "2026-07-08T15:45:58.275Z";
-  const thinkingFinishedAt = "2026-07-08T15:47:11.710Z";
-
   await persister.appendAgentMessages({
     userId: "u1",
     sessionId: "s1",
@@ -456,21 +453,22 @@ test("SessionTurnPersister writes thinking timing to turn timing source when inj
       },
     ],
     dialogProcessId: "dp1",
-    thinkingStartedAt,
-    thinkingFinishedAt,
   });
 
   assert.equal(appendedTurns.length, 2);
   assert.equal(appendedTurns[0].role, "user");
-  assert.equal(appendedTurns[0].thinkingStartedAt, "");
-  assert.equal(appendedTurns[0].thinkingFinishedAt, "");
-  assert.equal(appendedTurns[0].turnTimingThinkingStartedAt, thinkingStartedAt);
-  assert.equal(appendedTurns[0].turnTimingThinkingFinishedAt, thinkingFinishedAt);
   assert.equal(appendedTurns[1].role, "assistant");
-  assert.equal(appendedTurns[1].thinkingStartedAt, "");
-  assert.equal(appendedTurns[1].thinkingFinishedAt, "");
-  assert.equal(appendedTurns[1].turnTimingThinkingStartedAt, "");
-  assert.equal(appendedTurns[1].turnTimingThinkingFinishedAt, "");
+  for (const turn of appendedTurns) {
+    for (const key of [
+      "thinkingStartedAt",
+      "thinkingFinishedAt",
+      "turnTimingThinkingStartedAt",
+      "turnTimingThinkingFinishedAt",
+      "turnTimingModelLoopRound",
+    ]) {
+      assert.equal(Object.hasOwn(turn, key), false);
+    }
+  }
 });
 
 test("appendAgentMessages keeps relayCorrelationId on persisted injected turns", async () => {

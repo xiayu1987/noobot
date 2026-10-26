@@ -26,7 +26,6 @@ import { resetPlanAcceptanceStatusForPlanChange } from "../shared/plan/acceptanc
 import { extractChangedMainStepIndexes } from "../shared/plan/revision-helpers.js";
 import { resolveOperationDirectoryContext } from "../shared/operation-directory.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
-import { resolveDialogProcessIdFromContext } from "../shared/runtime/dialog-process-id.js";
 import {
   appendMessage,
   replaceMessages,
@@ -113,7 +112,7 @@ function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
   removeCurrentTaskGoalInjectedMessages(ctx);
   const message = buildHarnessInjectedMessage(buildCurrentTaskGoalSystemContent(normalizedGoal), {
     role: "system",
-    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
+    dialogProcessId: ctx.dialogProcessId,
     injectedMessageType: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE,
   });
   appendMessage(ctx, message, { block: "system" });

@@ -34,13 +34,13 @@ describe("WorkflowCanvasGraph", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("identifies semantic nodes by nodeId and ignores a stray runtime id", () => {
+  const startNode = { nodeId: "start", nodeName: "Start", type: "state", stateType: "start" };
+  const workNode = { nodeId: "work", nodeName: "Work", type: "action", actionNodeStates: [] };
+  const endNode = { nodeId: "end", nodeName: "End", type: "state", stateType: "end" };
+
+  it("lays out declared nodes by topology and ignores a stray runtime id", () => {
     const wrapper = mountGraph({
-      nodes: [
-        { nodeId: "start", stateType: 0, id: "runtime-step" },
-        { nodeId: "work", nodeType: 2, type: "action" },
-        { nodeId: "end", stateType: 1 },
-      ],
+      nodes: [{ ...endNode }, { ...workNode }, { ...startNode, id: "runtime-step" }],
       flowtos: [
         { from: "start", to: "work" },
         { from: "work", to: "end" },
@@ -52,16 +52,31 @@ describe("WorkflowCanvasGraph", () => {
     expect(segments).toHaveLength(2);
   });
 
-  it("adds virtual boundaries when only an alias id names the boundary", () => {
+  it("renders only declared nodes without virtual boundaries", () => {
     const wrapper = mountGraph({
-      nodes: [
-        { id: "start", stateType: 0 },
-        { nodeId: "work", nodeType: 2, type: "action" },
+      nodes: [startNode, workNode, endNode],
+      flowtos: [
+        { from: "start", to: "work" },
+        { from: "work", to: "end" },
       ],
     });
 
-    const ids = renderedNodeIds(wrapper);
-    expect(ids).toHaveLength(4);
-    expect(ids).toEqual(expect.arrayContaining(["__wf_start__", "__wf_end__", "work"]));
+    expect(renderedNodeIds(wrapper)).toEqual(["start", "work", "end"]);
+  });
+
+  it("assigns status to action nodes only", () => {
+    const wrapper = mountGraph({
+      nodes: [startNode, { ...workNode, status: "running" }, endNode],
+      flowtos: [
+        { from: "start", to: "work" },
+        { from: "work", to: "end" },
+      ],
+    });
+
+    const items = wrapper
+      .findAllComponents({ name: "WorkflowGraphNode" })
+      .map((node) => node.props("nodeItem"));
+    expect(items.map((item) => Object.hasOwn(item, "status"))).toEqual([false, true, false]);
+    expect(items[1].status).toBe("running");
   });
 });

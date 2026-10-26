@@ -109,6 +109,7 @@ const EMPTY_TURN_RUNTIME = Object.freeze({
   displayState: "",
   startedAt: "",
   finishedAt: "",
+  thinkingFinishedAt: "",
   modelLoopRound: 0,
 });
 
@@ -134,6 +135,7 @@ export function resolveTurnRuntimeView({ messageItem = {}, runtime = EMPTY_TURN_
     inFlightAssistant,
     startedAt: runtime.startedAt,
     finishedAt: runtime.finishedAt,
+    thinkingFinishedAt: runtime.thinkingFinishedAt,
     modelLoopRound: runtime.modelLoopRound,
   };
 }

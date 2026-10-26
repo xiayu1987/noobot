@@ -15,6 +15,7 @@ import {
   deriveAgentExecutionId,
   isExecutionQueryTargetValid,
   validateExecutionIdentity,
+  validateExecutionRecord,
 } from "@noobot/session-protocol/execution-lifecycle";
 import {
   EXECUTION_ABORT_TYPE,
@@ -94,9 +95,28 @@ test("execution query target validity is derived from the contract", () => {
   assert.equal(isExecutionQueryTargetValid("execution.unknown", { executionId: "e1" }), false);
 });
 
+test("execution records require positive integer revision and sequence", () => {
+  const root = { executionId: "root", executionKind: "workflow", rootExecutionId: "root" };
+  const errorsOf = (source) => validateExecutionRecord(source).errors;
+  assert.deepEqual(errorsOf(root), ["invalid_execution_revision", "invalid_execution_sequence"]);
+  assert.deepEqual(errorsOf({ ...root, revision: 0, sequence: 0 }), [
+    "invalid_execution_revision",
+    "invalid_execution_sequence",
+  ]);
+  assert.deepEqual(errorsOf({ ...root, revision: "1", sequence: 1.5 }), [
+    "invalid_execution_revision",
+    "invalid_execution_sequence",
+  ]);
+  assert.throws(() => buildExecutionTree([root]), {
+    code: "EXECUTION_RECORD_INVALID",
+    executionId: "root",
+  });
+});
+
 test("execution tree supports arbitrary child agent depth", () => {
+  const version = { revision: 1, sequence: 1 };
   const tree = buildExecutionTree([
-    { executionId: "root", executionKind: "workflow", rootExecutionId: "root" },
+    { executionId: "root", executionKind: "workflow", rootExecutionId: "root", ...version },
     {
       executionId: "agent:child",
       executionKind: "agent",
@@ -104,6 +124,7 @@ test("execution tree supports arbitrary child agent depth", () => {
       parentExecutionId: "root",
       sessionId: "s1",
       turnScopeId: "child",
+      ...version,
     },
     {
       executionId: "agent:grandchild",
@@ -112,6 +133,7 @@ test("execution tree supports arbitrary child agent depth", () => {
       parentExecutionId: "agent:child",
       sessionId: "s2",
       turnScopeId: "grandchild",
+      ...version,
     },
   ]);
   assert.deepEqual(tree.rootExecutionIds, ["root"]);

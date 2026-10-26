@@ -5,6 +5,7 @@
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { projectSessionMetadata } from "./workflowUnifiedSessionDetail.js";
 
 function requireSessionMethod(props, method) {
   const service = props?.workflowSessionService;
@@ -12,12 +13,6 @@ function requireSessionMethod(props, method) {
     throw new Error("workflow session service is unavailable");
   }
   return service[method].bind(service);
-}
-
-function sessionSummaryWithoutMutableRuntime(summary = {}) {
-  const { turnRuntime: _turnRuntime, ...content } =
-    summary && typeof summary === "object" ? summary : {};
-  return content;
 }
 
 function createExecutionDetailContext({
@@ -33,13 +28,14 @@ function createExecutionDetailContext({
     userId: props.userId,
     sessionId: text(rootSessionId),
     dialogProcessId: text(dialogProcessId),
-    traceId: text(traceId),
+    traceId,
   };
   if (
     !request.userId ||
     !requestedChildSessionId ||
     !request.sessionId ||
-    !request.dialogProcessId
+    !request.dialogProcessId ||
+    !request.traceId
   ) {
     throw new Error(translate("workflow.nodeSessionMissing"));
   }
@@ -47,7 +43,7 @@ function createExecutionDetailContext({
 }
 
 function logExecutionDetail(context, stage, detail = {}) {
-  context.props.logWorkflowDiagnostics?.(`frontend.workflowNodeDetail.${stage}`, {
+  context.props.logWorkflowDiagnostics(`frontend.workflowNodeDetail.${stage}`, {
     traceId: context.request.traceId,
     ...context.request,
     ...detail,
@@ -101,12 +97,10 @@ function executionDetailPayloadDiagnostics(payload = {}) {
   const sessionSummary = isPlainObject(workflowSession.sessionSummary)
     ? workflowSession.sessionSummary
     : {};
-  const session = isPlainObject(workflowSession.session) ? workflowSession.session : {};
   return {
     payloadOk: payload.ok === true,
-    responseSessionId: String(sessionSummary.sessionId || session.sessionId || ""),
+    responseSessionId: String(sessionSummary.sessionId || ""),
     responseDialogProcessId: String(payload.dialogProcessId || ""),
-    responseDir: String(workflowSession.dir || ""),
     payloadError: String(payload.error || ""),
   };
 }
@@ -125,62 +119,44 @@ function requireWorkflowSession(payload) {
   if (!isPlainObject(workflowSession)) {
     throw new TypeError("workflowSession must be an object");
   }
-  const aggregateVersion = Number(workflowSession.aggregateVersion || 0);
+  const { aggregateVersion, snapshotEnvelope, sessionSummary, executionLogs } = workflowSession;
   if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
     throw new TypeError("workflowSession.aggregateVersion must be a positive integer");
   }
-  return {
-    workflowSession,
-    aggregateVersion,
-    snapshotEnvelope: isPlainObject(workflowSession.snapshotEnvelope)
-      ? workflowSession.snapshotEnvelope
-      : null,
-    session: isPlainObject(workflowSession.session) ? workflowSession.session : {},
-    sessionSummary: isPlainObject(workflowSession.sessionSummary)
-      ? workflowSession.sessionSummary
-      : {},
-  };
-}
-
-function projectExecutionSessionDetail(payload, requestedChildSessionId) {
-  const { workflowSession, aggregateVersion, snapshotEnvelope, session, sessionSummary } =
-    requireWorkflowSession(payload);
-  if (!session.sessionId && !sessionSummary.sessionId) {
-    return {
-      state: "pending",
-      reason: "session_not_materialized",
-      sessionId: requestedChildSessionId,
-    };
-  }
-  if (!snapshotEnvelope) {
+  if (!isPlainObject(snapshotEnvelope)) {
     throw new TypeError("workflowSession.snapshotEnvelope must be an object");
   }
-  const messages = Array.isArray(sessionSummary.messages) ? sessionSummary.messages : [];
-  const rawMessages = Array.isArray(session.messages) ? session.messages : [];
-  const executionLogs = Array.isArray(workflowSession.executionLogs)
-    ? workflowSession.executionLogs
-    : [];
+  if (!isPlainObject(sessionSummary) || !text(sessionSummary.sessionId)) {
+    throw new TypeError("workflowSession.sessionSummary must carry a sessionId");
+  }
+  if (!Array.isArray(sessionSummary.messages)) {
+    throw new TypeError("workflowSession.sessionSummary must carry a messages array");
+  }
+  if (!Array.isArray(executionLogs)) {
+    throw new TypeError("workflowSession.executionLogs must be an array");
+  }
+  return { aggregateVersion, snapshotEnvelope, sessionSummary, executionLogs };
+}
+
+function projectExecutionSessionDetail(payload) {
+  const { aggregateVersion, snapshotEnvelope, sessionSummary, executionLogs } =
+    requireWorkflowSession(payload);
+  const { messages } = sessionSummary;
   return {
     state: messages.length ? "ready" : "empty",
-    sessionId: String(
-      sessionSummary.sessionId || session.sessionId || requestedChildSessionId,
-    ).trim(),
+    sessionId: sessionSummary.sessionId,
     aggregateVersion,
     snapshotEnvelope,
-    sessionSummary: {
-      ...sessionSummaryWithoutMutableRuntime(session),
-      ...sessionSummaryWithoutMutableRuntime(sessionSummary),
-    },
+    sessionMetadata: projectSessionMetadata(sessionSummary),
     messages,
-    rawMessages,
     executionLogs,
   };
 }
 
-function detailCounts(detail = {}) {
+function detailCounts(detail) {
   return {
-    messageCount: Array.isArray(detail.messages) ? detail.messages.length : 0,
-    executionLogCount: Array.isArray(detail.executionLogs) ? detail.executionLogs.length : 0,
+    messageCount: detail.messages.length,
+    executionLogCount: detail.executionLogs.length,
   };
 }
 
@@ -192,7 +168,7 @@ function normalizeExecutionDetail(context, payload) {
       : typeof payload?.workflowSession,
   });
   try {
-    const detail = projectExecutionSessionDetail(payload, context.requestedChildSessionId);
+    const detail = projectExecutionSessionDetail(payload);
     logExecutionDetail(context, "normalizationCompleted", {
       requestedChildSessionId: context.requestedChildSessionId,
       responseState: detail.state,
@@ -211,15 +187,11 @@ function normalizeExecutionDetail(context, payload) {
   }
 }
 
-export function hydrateExecutionSessionDetail(detail = {}, { executionId = "" } = {}) {
-  const messages = Array.isArray(detail?.messages) ? detail.messages : [];
+export function hydrateExecutionSessionDetail(detail, { executionId }) {
   return {
-    ...(detail && typeof detail === "object" ? detail : {}),
-    messages,
-    rawMessages: Array.isArray(detail?.rawMessages) ? detail.rawMessages : [],
-    sessionSummary: {
-      ...sessionSummaryWithoutMutableRuntime(detail?.sessionSummary),
-      messages,
+    ...detail,
+    sessionMetadata: {
+      ...detail.sessionMetadata,
       executionId: text(executionId),
     },
   };
@@ -231,7 +203,7 @@ export async function fetchExecutionSessionDetail({
   sessionId = "",
   rootSessionId = "",
   dialogProcessId = "",
-  traceId = "",
+  traceId,
 }) {
   const context = createExecutionDetailContext({
     props,

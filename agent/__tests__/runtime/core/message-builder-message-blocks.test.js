@@ -44,7 +44,7 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
         runId: "r-1",
         presentationMessageId: "m-1",
       },
-      { systemRuntime: { sessionId: "s1", dialogProcessId: "dlg1" } },
+      { identity: { sessionId: "s1", dialogProcessId: "dlg1" }, systemRuntime: {} },
       {
         system: ["sys-1"],
         history: sessionContextHistory([
@@ -99,12 +99,13 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
             sessionId: "s1",
           },
         ],
-        systemRuntime: {
+        identity: {
           sessionId: "s1",
           parentSessionId: "parent-s1",
           dialogProcessId: "dlg-resume-new",
           turnScopeId: "turn-resume-new",
         },
+        systemRuntime: {},
       },
       {
         system: ["snapshot system"],
@@ -194,11 +195,8 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
             mimeType: "image/png",
           },
         ],
-        systemRuntime: {
-          sessionId: "s1",
-          dialogProcessId: "dlg-current",
-          turnScopeId: "turn-current",
-        },
+        identity: { sessionId: "s1", dialogProcessId: "dlg-current", turnScopeId: "turn-current" },
+        systemRuntime: {},
       },
       {
         system: ["[HARNESS_POLICY_SELECTION]\nsnapshot policy"],
@@ -277,11 +275,8 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
       },
       {
         userMessageAttachments: [],
-        systemRuntime: {
-          sessionId: "s1",
-          dialogProcessId: "dlg-current",
-          turnScopeId: "turn-current",
-        },
+        identity: { sessionId: "s1", dialogProcessId: "dlg-current", turnScopeId: "turn-current" },
+        systemRuntime: {},
       },
       {
         system: ["snapshot system"],
@@ -334,11 +329,12 @@ test("buildContextMessageBlocks removes current turn user residue from history",
         presentationMessageId: "m-1",
       },
       {
-        systemRuntime: {
+        identity: {
           sessionId: "s1",
           dialogProcessId: "dlg-current",
           turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
         },
+        systemRuntime: {},
       },
       {
         system: [],
@@ -408,11 +404,12 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
         presentationMessageId: "m-1",
       },
       {
-        systemRuntime: {
+        identity: {
           sessionId: "s1",
           dialogProcessId: "dlg-current",
           turnScopeId: "client-turn:current",
         },
+        systemRuntime: {},
       },
       {
         system: [],

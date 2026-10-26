@@ -7,7 +7,6 @@ import { isCanonicalText } from "@noobot/shared/value";
 import {
   ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
   attachmentLifecycleSequenceScopeId,
-  createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
 import { INTERACTION_SEQUENCE_DOMAIN } from "./interaction.js";
 import { SESSION_SEQUENCE_DOMAIN } from "./turn-snapshot.js";
@@ -17,26 +16,6 @@ import {
   TRANSIENT_MESSAGE_EVENT_SEQUENCE,
   isTransientMessageEventType,
 } from "./message-event.js";
-
-export const domainResult = (result, fallback = "invalid_domain_payload") => {
-  if (result?.valid === true) return { valid: true, errors: [] };
-  const errors =
-    Array.isArray(result?.errors) && result.errors.length
-      ? result.errors
-      : Array.isArray(result?.missing) && result.missing.length
-        ? result.missing
-        : [result?.reason || fallback];
-  return { valid: false, errors };
-};
-
-export const validateAttachment = (payload) => {
-  try {
-    createAttachmentLifecycleEvent(payload);
-    return { valid: true, errors: [] };
-  } catch (error) {
-    return { valid: false, errors: [error?.message || "invalid_attachment_lifecycle"] };
-  }
-};
 
 export const validateAttachmentEnvelope = (envelope) => {
   const { identity, ordering, payload } = envelope;
@@ -93,8 +72,8 @@ const collectMessageOrderingErrors = (envelope, errors) => {
   for (const field of MESSAGE_FORBIDDEN_ORDERING_FIELDS) {
     if (Object.hasOwn(ordering, field)) errors.push(`message_ordering_${field}_forbidden`);
   }
-  const sequence = ordering?.sequence;
-  if (isTransientMessageEventType(envelope?.payload?.eventType)) {
+  const { sequence } = ordering;
+  if (isTransientMessageEventType(payload.eventType)) {
     if (sequence !== TRANSIENT_MESSAGE_EVENT_SEQUENCE) errors.push("transient_event_sequenced");
   } else if (!(sequence >= 1)) {
     errors.push("durable_event_unsequenced");
@@ -137,7 +116,7 @@ export const validateMessageEnvelope = (envelope) => {
   const errors = [];
   if (!isCanonicalText(envelope.identity.turnScopeId)) errors.push("missing_turn_scope_id");
   collectMessageOrderingErrors(envelope, errors);
-  const eventType = envelope?.payload?.eventType;
+  const { eventType } = envelope.payload;
   if (eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     collectPresentationIdentityErrors(envelope, errors);
   }

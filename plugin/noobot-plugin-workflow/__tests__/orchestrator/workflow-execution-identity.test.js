@@ -45,7 +45,8 @@ function buildCtx() {
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
-    runConfig: { streaming: false, turnScopeId: "turn-workflow-test" },
+    turnScopeId: "turn-workflow-test",
+    runConfig: { streaming: false },
     eventListener: {
       onEvent(event) {
         events.push(event);
@@ -127,7 +128,15 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(subSessionCalls[0].strategy.dialogProcessId, identity.dialogProcessId);
   assert.equal(subSessionCalls[0].strategy.turnScopeId, identity.turnScopeId);
   assert.ok(subSessionCalls[0].strategy.sessionId);
-  assert.equal(subSessionCalls[0].runConfigPatch.workflowNodeExecutionId, identity.nodeExecutionId);
+
+  assert.deepEqual(subSessionCalls[0].metadata.origin, {
+    type: "workflow_node",
+    workflowRunId: identity.workflowRunId,
+    workflowNodeExecutionId: identity.nodeExecutionId,
+  });
+  for (const field of ["turnScopeId", "workflowRunId", "workflowNodeExecutionId"]) {
+    assert.equal(Object.hasOwn(subSessionCalls[0].runConfigPatch, field), false);
+  }
   assert.equal(subSessionCalls[0].metadata.nodeExecutionId, identity.nodeExecutionId);
 
   const run = result.execution.nodeAgentRuns[0];
@@ -270,7 +279,19 @@ test("runWorkflowExecution rejects duplicate planning identities for the same no
 });
 
 test("runWorkflowExecution rejects missing planning identity in new protocol path", async () => {
-  const semantic = buildSemantic();
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="Start"',
+      'NODE id=a type=action name="A" task="A"',
+      'NODE id=b type=action name="B" task="B"',
+      'NODE id=end type=state stateType=end name="End"',
+      "EDGE from=start to=a",
+      "EDGE from=a to=b",
+      "EDGE from=b to=end",
+      "END",
+    ].join("\n"),
+  );
   const workflowRunId = "wf_run_d1";
   const planningNodeSessions = buildWorkflowPlanningNodeSessions({
     workflowRunId,

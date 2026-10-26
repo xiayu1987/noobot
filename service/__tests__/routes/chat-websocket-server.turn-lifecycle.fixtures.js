@@ -7,6 +7,7 @@ import { WebSocket } from "ws";
 import {
   commitTurnLifecycle,
   createAuthoritativeTurnSnapshot,
+  selectAuthoritativeActiveTurn,
 } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
@@ -18,6 +19,7 @@ import {
   getEventFamily,
 } from "@noobot/event-protocol";
 import {
+  createEmptyTurnLifecycle,
   createTurnLifecycleEnvelope,
   TURN_EVENT,
   TURN_COMMAND,
@@ -110,7 +112,7 @@ export function createTestLifecycleEnvelope({
 const AUTHORITATIVE_ROOT_PARENT_SESSION_ID = "";
 
 export function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) {
-  let lifecycle = {};
+  let lifecycle = createEmptyTurnLifecycle();
   let eventOutbox = [];
   let eventIdSequence = 0;
   const committed = [];
@@ -280,23 +282,29 @@ export const payload = {
 
 export function installLifecycleSnapshotReader(authoritative) {
   authoritative.bot.session.getTurnLifecycleSnapshot = async ({
-    userId,
     sessionId,
     commandId,
     knownSequence,
     terminalLimit,
-  } = {}) => ({
-    found: true,
-    snapshot: createAuthoritativeTurnSnapshot({
-      lifecycle: authoritative.lifecycle(),
-      terminalTurnScopeIds: Object.keys(authoritative.lifecycle()?.turns || {}),
-      commandId,
-      userId,
-      sessionId,
-      knownSequence,
-      terminalLimit,
-    }),
-  });
+    resolveRecovery,
+  }) => {
+    const lifecycle = authoritative.lifecycle();
+    const recovery = await resolveRecovery(selectAuthoritativeActiveTurn(lifecycle));
+    return {
+      found: true,
+      snapshot: createAuthoritativeTurnSnapshot({
+        lifecycle,
+        turnTimings: [],
+        terminalTurnScopeIds: Object.keys(lifecycle.turns),
+        commandId,
+        sessionId,
+        knownSequence,
+        terminalLimit,
+        recovery,
+        generatedAt: "2026-07-24T05:42:08.000Z",
+      }),
+    };
+  };
 }
 
 export async function requestTurnSnapshot({

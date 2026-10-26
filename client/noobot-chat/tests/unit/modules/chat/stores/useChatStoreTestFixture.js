@@ -19,7 +19,6 @@ export function applyMessageEvent(store, envelope) {
 
 export function buildSessionSnapshot(sessionDoc) {
   return canonicalWorkflowSessionSnapshot({
-    eventId: "workflow-session-snapshot-1",
     executionId: "agent-execution-sub-session-1",
     aggregateVersion: 1,
     authoritySessionId: "main-session-1",

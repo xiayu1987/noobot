@@ -15,8 +15,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   const viewerError = ref("");
   const viewerState = ref("idle");
   const selectedNodeMessages = ref([]);
-  const selectedNodeRawMessages = ref([]);
-  const selectedNodeSessionSummary = ref(null);
+  const selectedNodeSessionMetadata = ref(null);
   const selectedNodeSessionId = ref("");
   const runningPlaceholderViewModel = ref(null);
   const semanticPreviewExpanded = ref(false);
@@ -50,19 +49,15 @@ export function useWorkflowMessageCardState(props, emit, translate) {
 
   const {
     selectedNodeSessionDocs,
-    rawNodeSessionMessages,
-    selectedNodeToolSessionDocs,
-    normalizedNodeSessionMessages,
     displayNodeMessages,
     nodeSessionAllMessages,
-    selectedRuntimeBoxes,
+    selectedActionNodeStates,
   } = useWorkflowNodeMessages({
     props,
     selectedNode,
     selectedRuntimeNode,
     selectedNodeMessages,
-    selectedNodeRawMessages,
-    selectedNodeSessionSummary,
+    selectedNodeSessionMetadata,
     selectedNodeSessionId,
     runningPlaceholderViewModel,
   });
@@ -83,7 +78,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     props,
     emit,
     translate,
-    workflowPayload,
     flowNodes,
     viewerVisible,
     viewerLoading,
@@ -93,8 +87,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedRuntimeNode,
     selectedRuntimeStep,
     selectedNodeMessages,
-    selectedNodeRawMessages,
-    selectedNodeSessionSummary,
+    selectedNodeSessionMetadata,
     selectedNodeSessionId,
     runningPlaceholderViewModel,
     selectedGraphDialogProcessId,
@@ -115,8 +108,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedRuntimeNode,
     selectedRuntimeStep,
     selectedNodeMessages,
-    selectedNodeRawMessages,
-    selectedNodeSessionSummary,
+    selectedNodeSessionMetadata,
     selectedNodeSessionId,
     selectedGraphDialogProcessId,
     semanticPreviewExpanded,
@@ -129,12 +121,9 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     semanticPreview,
     semanticPreviewLineCount,
     selectedNodeSessionDocs,
-    rawNodeSessionMessages,
-    selectedNodeToolSessionDocs,
-    normalizedNodeSessionMessages,
     displayNodeMessages,
     nodeSessionAllMessages,
-    selectedRuntimeBoxes,
+    selectedActionNodeStates,
     fetchSelectedNodeExecutionReport,
     handleOpenThinkingDetails,
     resolveStatusLabel,

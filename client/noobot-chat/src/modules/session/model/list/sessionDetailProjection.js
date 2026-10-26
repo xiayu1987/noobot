@@ -6,6 +6,9 @@
 import { buildNormalizedDetailMessages } from "./detailMessages.js";
 import { foldConversationMessages } from "../../../chat/model/messageModel.js";
 import { selectTurnPresentations } from "../../../chat/runtime/engine/turnPresentation.js";
+import { createTurnRuntimeRegistryState } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createWorkflowNodeStateRegistry } from "../../../chat/stores/workflowEventOperations.js";
+import { requireTopLevelDetail } from "../../../chat/model/sessionDetailMerge.js";
 import { text } from "@noobot/shared/value";
 
 export function buildSessionDetailProjection({
@@ -13,21 +16,9 @@ export function buildSessionDetailProjection({
   sessionDocs = [],
   makeViewMessage,
 } = {}) {
-  const summary =
-    sessionDetail?.sessionSummary && typeof sessionDetail.sessionSummary === "object"
-      ? sessionDetail.sessionSummary
-      : {};
-  const messages = Array.isArray(sessionDetail?.messages)
-    ? sessionDetail.messages
-    : Array.isArray(summary.messages)
-      ? summary.messages
-      : [];
-  const turnTimings = Array.isArray(sessionDetail?.turnTimings)
-    ? sessionDetail.turnTimings
-    : Array.isArray(summary.turnTimings)
-      ? summary.turnTimings
-      : [];
-  const sessionId = text(sessionDetail?.sessionId || summary.sessionId);
+  requireTopLevelDetail(sessionDetail, "projection");
+  const messages = Array.isArray(sessionDetail.messages) ? sessionDetail.messages : [];
+  const sessionId = text(sessionDetail.sessionId);
   const normalizedMessages = buildNormalizedDetailMessages({
     detailMessages: messages,
     sessionDocs,
@@ -43,10 +34,11 @@ export function buildSessionDetailProjection({
       sessionId,
       messages: foldedMessages,
     },
+    workflowRegistry: createWorkflowNodeStateRegistry(),
+    turnRuntimeRegistry: createTurnRuntimeRegistryState(),
   });
   return {
     sessionId,
     messages: projectedMessages,
-    turnTimings,
   };
 }

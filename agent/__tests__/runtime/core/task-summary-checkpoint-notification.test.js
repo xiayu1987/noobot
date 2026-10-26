@@ -20,7 +20,8 @@ import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
 function createSummaryRuntime(currentTurnMessages, commitSummaryCheckpoint) {
   const runtime = createTestRuntimeContext({
     runConfig: { hookManager: null, turnScopeId: "scope-1" },
-    systemRuntime: { sessionId: "s1", turnScopeId: "scope-1", dialogProcessId: "dialog-1" },
+    identity: { sessionId: "s1", turnScopeId: "scope-1", dialogProcessId: "dialog-1" },
+    systemRuntime: {},
   });
   runtime.currentTurnMessages = currentTurnMessages;
   runtime.commitSummaryCheckpoint = commitSummaryCheckpoint;

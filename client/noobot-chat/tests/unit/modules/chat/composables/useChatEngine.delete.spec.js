@@ -13,10 +13,9 @@ import {
   AGENT_CHANNEL_STATE,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import {
   applyTurnRuntimeEvent,
-  resolveSessionTurnRuntime,
+  selectCurrentTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
@@ -245,10 +244,6 @@ describe("useChatEngine.delete", () => {
           }),
         ],
       }),
-      {
-        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-        deletedTurnScopeIds: ["client-turn:delete-1"],
-      },
     );
     expect(activeSession.value.messages).toHaveLength(1);
   });
@@ -308,10 +303,7 @@ describe("useChatEngine.delete", () => {
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
-    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), {
-      mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-      deletedTurnScopeIds: ["turn-stopped-tail"],
-    });
+    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object));
     expect(activeSession.value.messages).toEqual([]);
   });
 
@@ -344,6 +336,7 @@ describe("useChatEngine.delete", () => {
       session: backendSession,
       deletedCount: 2,
       anchorIndex: 0,
+      deletedTurnScopeIds: [],
       version: 8,
     }));
     const applySessionDetail = vi.fn((detail) => {
@@ -393,7 +386,7 @@ describe("useChatEngine.delete", () => {
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
     expect(
-      resolveSessionTurnRuntime(turnRuntimeRegistry.value, "local-delete-stopped-sending"),
+      selectCurrentTurnRuntime(turnRuntimeRegistry.value, "local-delete-stopped-sending"),
     ).toBe(null);
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -519,6 +512,7 @@ describe("useChatEngine.delete", () => {
     const deleteSessionMessagesFromApi = vi.fn(async () => ({
       ok: true,
       session: backendSession,
+      deletedTurnScopeIds: [turnScopeId],
       version: 5,
     }));
     const applySessionDetail = vi.fn();
@@ -548,13 +542,13 @@ describe("useChatEngine.delete", () => {
       turnScopeId,
       dialogProcessId: `dp-${turnScopeId}`,
     });
-    expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)?.terminal).toBe(
+    expect(selectCurrentTurnRuntime(turnRuntimeRegistry.value, sessionId)?.terminal).toBe(
       "user_stopped",
     );
 
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
-    expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)).toBe(null);
+    expect(selectCurrentTurnRuntime(turnRuntimeRegistry.value, sessionId)).toBe(null);
     expect(turnRuntimeRegistry.value.sessions[sessionId]?.turns?.[turnScopeId]).toBeUndefined();
   });
 });

@@ -11,10 +11,7 @@ import {
   resolveSessionRunMessageRuntimePatch,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
 } from "../sessionRunStateMachine.js";
-import {
-  selectTurnMessageRuntime,
-  sessionRuntimeId,
-} from "../run-state-machine/turnRuntimeRegistry.js";
+import { selectTurnMessageRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
 import { getMessageTurnScopeId, getMessageDialogProcessId } from "../../model/messageIdentity.js";
 import {
   applyRunStateMessagePatch,
@@ -28,44 +25,11 @@ export const TURN_PROJECTION_SOURCE = Object.freeze({
   SNAPSHOT: "snapshot",
 });
 
-export function projectTurnRuntimeToMessages({
-  session = null,
-  sessions = null,
-  activeSession = null,
-  turnRuntimeRegistry = null,
-  turn = null,
-  stateSnapshot = null,
-} = {}) {
-  const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
-  const resolvedState =
-    stateSnapshot ||
-    selectTurnMessageRuntime(registry, {
-      sessionId: turn?.sessionId,
-      turnScopeId: turn?.turnScopeId,
-      dialogProcessId: turn?.dialogProcessId,
-    });
-  if (!resolvedState) {
+export function projectTurnRuntimeToSession({ session, stateSnapshot }) {
+  if (!stateSnapshot) {
     return { applied: false, patchedMessageCount: 0, reason: "turn_identity_conflict" };
   }
-  const sessionItems = Array.isArray(sessions?.value)
-    ? sessions.value
-    : Array.isArray(sessions)
-      ? sessions
-      : [];
-  const activeSessionValue = activeSession?.value || activeSession;
-  const targetSession =
-    session ||
-    sessionItems.find((item) => sessionRuntimeId(item) === resolvedState.sessionId) ||
-    (sessionRuntimeId(activeSessionValue) === resolvedState.sessionId ? activeSessionValue : null);
-  if (!targetSession) {
-    return {
-      applied: false,
-      patchedMessageCount: 0,
-      reason: "session_not_found",
-      stateSnapshot: resolvedState,
-    };
-  }
-  const messages = Array.isArray(targetSession.messages) ? targetSession.messages : [];
+  const { messages } = session;
   if (!messages.length) {
     return { applied: false, patchedMessageCount: 0, reason: "session_has_no_messages" };
   }
@@ -73,18 +37,18 @@ export function projectTurnRuntimeToMessages({
   let matchedMessageCount = 0;
   messages.forEach((message) => {
     const sameTurn =
-      resolvedState.turnScopeId && getMessageTurnScopeId(message) === resolvedState.turnScopeId;
+      stateSnapshot.turnScopeId && getMessageTurnScopeId(message) === stateSnapshot.turnScopeId;
     const sameDialog =
-      resolvedState.dialogProcessId &&
-      getMessageDialogProcessId(message) === resolvedState.dialogProcessId;
-    if (resolvedState.turnScopeId ? !sameTurn : !sameDialog) return;
+      stateSnapshot.dialogProcessId &&
+      getMessageDialogProcessId(message) === stateSnapshot.dialogProcessId;
+    if (stateSnapshot.turnScopeId ? !sameTurn : !sameDialog) return;
     matchedMessageCount += 1;
     const effect = resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: resolvedState,
+      stateSnapshot,
       messageItem: message,
-      activeSession: targetSession,
+      activeSession: session,
     });
-    summarizeMessageRuntimeProjection({ message, stateSnapshot: resolvedState, effect });
+    summarizeMessageRuntimeProjection({ message, stateSnapshot, effect });
     if (effect?.action === SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE) {
       applyRunStateMessagePatch(message, effect.patch);
       patchedMessageCount += 1;
@@ -101,6 +65,22 @@ export function projectTurnRuntimeToMessages({
           ? "matching_message_requires_no_patch"
           : "message_identity_not_found",
   };
+}
+
+export function projectTurnRuntimeToMessages({ sessions, turnRuntimeRegistry, turn }) {
+  const stateSnapshot = selectTurnMessageRuntime(turnRuntimeRegistry.value, {
+    sessionId: turn.sessionId,
+    turnScopeId: turn.turnScopeId,
+    dialogProcessId: turn.dialogProcessId,
+  });
+  if (!stateSnapshot) {
+    return { applied: false, patchedMessageCount: 0, reason: "turn_identity_conflict" };
+  }
+  const session = sessions.value.find((item) => item.sessionId === stateSnapshot.sessionId);
+  if (!session) {
+    return { applied: false, patchedMessageCount: 0, reason: "session_not_found", stateSnapshot };
+  }
+  return projectTurnRuntimeToSession({ session, stateSnapshot });
 }
 
 export function dispatchTurnEnvelope({ targetMessage, envelope, source }) {

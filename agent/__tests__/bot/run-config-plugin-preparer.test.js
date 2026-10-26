@@ -174,7 +174,7 @@ test("configuration mode cannot select a workflow omitted from the turn protocol
   });
   const prepared = instance.prepareRunConfig({
     userId: "u1",
-    runConfig: { selectedPlugins: [], turnScopeId: "turn-plain" },
+    runConfig: { selectedPlugins: [] },
   });
 
   assert.equal(intent.executionId, "agent:turn-plain");
@@ -236,7 +236,8 @@ test("agent lifecycle capability invoker prefixes flow with the plugin id", asyn
   };
   const runtime = createTestRuntimeContext({
     modelHost: createTestModelHost({ modelPort, modelSpec: {} }),
-    systemRuntime: { turnScopeId: "turn-demo" },
+    identity: { turnScopeId: "turn-demo" },
+    systemRuntime: {},
   });
   await assert.rejects(
     prepared.plugins.demo.capabilityModelInvoker({

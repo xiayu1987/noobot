@@ -22,10 +22,9 @@ import {
   TURN_PENDING_COMMAND_TYPE,
   TURN_RUNTIME_TERMINAL,
 } from "../sessionRunStateMachine.js";
-import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import {
   confirmTurnRuntimeDeletion,
-  resolveSessionTurnRuntime,
+  selectCurrentTurnRuntime,
   removeTurnRuntime,
   sessionRuntimeId,
   turnRuntimeDisplayState,
@@ -120,8 +119,8 @@ export function createMonotonicMessageActions({
   invalidateTerminalResolution,
 }) {
   function activeTurnRuntime() {
-    const sessionId = sessionRuntimeId(activeSession?.value || activeSessionId?.value);
-    return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+    const sessionId = normalizeTrimmedString(activeSessionId.value);
+    return selectCurrentTurnRuntime(turnRuntimeRegistry.value, sessionId);
   }
 
   function isActiveTurnInFlight() {
@@ -207,7 +206,7 @@ export function createMonotonicMessageActions({
     if (startIndex < 0) return false;
     const messages = Array.isArray(session.messages) ? session.messages : [];
     const removedMessages = messages.slice(startIndex);
-    const sessionId = sessionRuntimeId(session || activeSessionId?.value);
+    const sessionId = sessionRuntimeId(session);
     for (const removedMessage of removedMessages) {
       chatWebSocketClient?.cancelStreamForTurn?.({
         sessionId,
@@ -219,7 +218,7 @@ export function createMonotonicMessageActions({
     const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
     removedTurnScopeIds.forEach((turnScopeId) => {
       invalidateTerminalResolution?.(sessionId, turnScopeId);
-      removeTurnRuntime(turnRuntimeRegistry?.value, turnScopeId, { sessionId });
+      removeTurnRuntime(turnRuntimeRegistry.value, turnScopeId, { sessionId });
       clearTurnUiState({ sessionId, turnScopeId });
     });
     syncSessionMessageSummary(session);
@@ -289,7 +288,7 @@ export function createMonotonicMessageActions({
         mutate: async ({ expectedAggregateVersion }) => {
           const result = await deleteSessionMessagesFromApi(
             {
-              userId: userId?.value || userId,
+              userId: userId.value,
               sessionId,
               parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
               anchor,
@@ -322,7 +321,7 @@ export function createMonotonicMessageActions({
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;
       const confirmedDeletedTurnScopeIds = payload.deletedTurnScopeIds;
-      confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, {
+      confirmTurnRuntimeDeletion(turnRuntimeRegistry.value, confirmedDeletedTurnScopeIds, {
         sessionId,
       });
       cascadeDeleteMessagesFrom(userTargetMessage);
@@ -333,10 +332,7 @@ export function createMonotonicMessageActions({
         stage: "before-detail-apply",
         messages: summarizeDeleteMessages(activeSession.value?.messages),
       }));
-      applySessionDetail?.(sessionDetail, {
-        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-        deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
-      });
+      applySessionDetail?.(sessionDetail);
       cascadeDeleteMessagesFrom(userTargetMessage);
       logMessageMutationDiagnostics("frontend.messageDelete.completed", () => ({
         sessionId,
@@ -376,6 +372,5 @@ export function createMonotonicMessageActions({
     cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
     resendMonotonicMessage: resendTransaction.resendMonotonicMessage,
-    finalizePendingResendOperation: resendTransaction.finalizePendingResendOperation,
   };
 }

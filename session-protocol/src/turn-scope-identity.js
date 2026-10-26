@@ -6,16 +6,14 @@
 
 export {
   areCanonicalTurnScopeIdsEqual,
-  canonicalizeTurnScopeId,
   createMemoryPostprocessIdentity,
   createWorkflowNodeDialogProcessId,
   createWorkflowNodeTurnScopeId,
   isCanonicalTurnScopeId,
-  isWorkflowNodeDialogProcessId,
+  isOptionalCanonicalTurnScopeId,
   isWorkflowNodeTurnScopeId,
   requireCanonicalTurnScopeId,
-  readWorkflowNodeExecutionId,
-  turnScopeIdentityKey,
+  requireOptionalCanonicalTurnScopeId,
   MEMORY_POSTPROCESS_DIALOG_PROCESS_PREFIX,
   MEMORY_POSTPROCESS_TURN_SCOPE_PREFIX,
   WORKFLOW_NODE_DIALOG_PROCESS_PREFIX,

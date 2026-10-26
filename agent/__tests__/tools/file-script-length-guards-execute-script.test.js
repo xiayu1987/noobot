@@ -21,8 +21,9 @@ import {
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
 
-function buildHostScriptAgentContext(basePath, userId, { runtime }) {
+function buildHostScriptAgentContext(basePath, userId, { identity, runtime }) {
   return buildAgentContext(basePath, userId, {
+    identity,
     runtime: {
       ...runtime,
       systemRuntime: {
@@ -91,8 +92,8 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
     tool,
     ...toolCallScope(
       buildAgentContext(basePath, "u-test", {
+        identity: { sessionId: "s-script" },
         runtime: {
-          systemRuntime: { sessionId: "s-script", rootSessionId: "s-script" },
           globalConfig: {},
           attachmentService: buildAttachmentService(),
         },
@@ -379,11 +380,8 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
     },
   };
   const agentContext = buildHostScriptAgentContext(basePath, "primary-user", {
+    identity: { sessionId: "s-script-large-output", rootSessionId: "s-script-large-output" },
     runtime: {
-      systemRuntime: {
-        sessionId: "s-script-large-output",
-        rootSessionId: "s-script-large-output",
-      },
       globalConfig: { security: { executionIsolation: { mode: "host" } } },
       attachmentService,
     },

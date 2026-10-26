@@ -16,12 +16,7 @@ import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 
 import { invokeWithToolsTurn as invokeWithToolsTurnProduction } from "../../../src/runtime/turn/turn-executor.js";
-import {
-  createLoopTurnIdentity,
-  createTestModelPort,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
-import { overrideTestTurnIdentity } from "../../helpers/test-turn-identity.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
@@ -42,11 +37,10 @@ function contextMessage(native = {}, metadata = {}) {
   );
 }
 
-function invokeWithToolsTurn({ identity, ...turnArgs }) {
+function invokeWithToolsTurn(turnArgs) {
   prepareTestTurnExecution(
     turnArgs.modelState,
     turnArgs.loopState,
-    identity,
     "presentation-message-filter-cases-b",
   );
   return invokeWithToolsTurnProduction(turnArgs);
@@ -107,7 +101,6 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-current",
     maxTurns: 1,
   };
 
@@ -115,7 +108,6 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     modelState,
     loopState,
     turn: 1,
-    identity: createLoopTurnIdentity(loopState),
   });
 
   assert.deepEqual(capturedMessages, [
@@ -147,6 +139,7 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     },
   );
   const runtime = createTestRuntimeContext({
+    identity: { dialogProcessId: "d-resume", turnScopeId: "turn-current" },
     sessionManager: createCanonicalMessageEventSessionManager(),
     runConfig: {
       hookManager: {
@@ -223,7 +216,6 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
   const loopState = {
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-resume",
     maxTurns: 1,
   };
   modelState.runtime.activeMessageContext = createModelContext({
@@ -242,9 +234,6 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     modelState,
     loopState,
     turn: 1,
-    identity: overrideTestTurnIdentity(createLoopTurnIdentity(loopState), {
-      turnScopeId: "turn-current",
-    }),
   });
 
   assert.deepEqual(capturedMessages, [
@@ -356,21 +345,6 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
     eventListener: null,
     abortSignal: null,
     activeModelSpec: TEST_MODEL_SPEC,
-    agentContext: {
-      execution: {
-        dialogProcessId: "d-current",
-        controllers: { runtime },
-      },
-      payload: {
-        messages: {
-          system: ["constructed-system"],
-          history: [
-            { role: "user", content: "history-user", dialogProcessId: "d-old" },
-            { role: "assistant", content: "history-assistant", dialogProcessId: "d-old" },
-          ],
-        },
-      },
-    },
   };
   const loopState = {
     messageBlocks: {
@@ -380,7 +354,6 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-current",
     maxTurns: 1,
   };
 
@@ -388,7 +361,6 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
     modelState,
     loopState,
     turn: 1,
-    identity: createLoopTurnIdentity(loopState),
   });
 
   assert.deepEqual(capturedMessages, [{ role: "user", content: "current-user" }]);
@@ -430,7 +402,6 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-tool-call",
     maxTurns: 1,
   };
 
@@ -438,7 +409,6 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     modelState,
     loopState,
     turn: 1,
-    identity: createLoopTurnIdentity(loopState),
   });
 
   assert.equal(result.calls.length, 1);

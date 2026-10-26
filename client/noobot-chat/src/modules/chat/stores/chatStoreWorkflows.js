@@ -90,7 +90,6 @@ export function createWorkflowStore({
       eventId: canonical.identity.eventId,
       sequenceDomain: canonical.ordering.domain,
       sequence: canonical.ordering.sequence,
-      revision: canonical.ordering.revision,
       aggregateVersion: canonical.ordering.aggregateVersion,
     };
     if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
@@ -98,6 +97,7 @@ export function createWorkflowStore({
     } else if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
       result = upsertWorkflowNodeStateEvent({
         ...data,
+        revision: canonical.ordering.revision,
         nodeExecutionId: canonical.identity.executionId,
       });
     } else {

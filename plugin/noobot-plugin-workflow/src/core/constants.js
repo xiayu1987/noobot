@@ -13,7 +13,6 @@ export const PLUGIN_NAME = "noobot-plugin-workflow";
 export const PLUGIN_VERSION = "4.4.1";
 
 export const WORKFLOW_DATA_SCOPE = Object.freeze({
-  PLANNING: "planning",
   SESSION: "session",
 });
 
@@ -61,15 +60,6 @@ export const WORKFLOW_PHASE_STATUS = Object.freeze({
   SUCCEEDED: "succeeded",
   FAILED: "failed",
   SKIPPED: "skipped",
-});
-
-export const WORKFLOW_RETRY = Object.freeze({
-  POLICY_SINGLE_SHOT: "single_shot",
-  MAX_ATTEMPTS: TURN_THRESHOLDS.workflow.retryMaxAttempts,
-});
-
-export const WORKFLOW_PROTOCOL = Object.freeze({
-  ORCHESTRATION_VERSION: "workflow.orchestration.v2",
 });
 
 export const WORKFLOW_ATTACHMENT_SCOPE = Object.freeze({

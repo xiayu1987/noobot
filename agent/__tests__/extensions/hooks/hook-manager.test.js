@@ -163,25 +163,58 @@ test("withHookRuntimeMeta projects the canonical runtime identity", () => {
   });
 });
 
+const CANONICAL_SYSTEM_RUNTIME = Object.freeze({
+  userId: "u1",
+  sessionId: "s1",
+  parentSessionId: "",
+  dialogProcessId: "d1",
+  turnScopeId: "t1",
+  caller: SESSION_CALLER.USER,
+});
+
 test("withHookRuntimeMeta projects resumeFromStoppedSnapshot from its single runtime writer", () => {
   assert.equal(
-    withHookRuntimeMeta({ systemRuntime: {}, resumeFromStoppedSnapshot: true })
-      .resumeFromStoppedSnapshot,
+    withHookRuntimeMeta(
+      { systemRuntime: { ...CANONICAL_SYSTEM_RUNTIME }, resumeFromStoppedSnapshot: true },
+      {},
+    ).resumeFromStoppedSnapshot,
     true,
   );
   assert.equal(
-    withHookRuntimeMeta({ systemRuntime: { resumeFromStoppedSnapshot: true } })
-      .resumeFromStoppedSnapshot,
+    withHookRuntimeMeta(
+      { systemRuntime: { ...CANONICAL_SYSTEM_RUNTIME, resumeFromStoppedSnapshot: true } },
+      {},
+    ).resumeFromStoppedSnapshot,
     false,
   );
 });
 
 test("withHookRuntimeMeta reads identity only from systemRuntime", () => {
-  const context = withHookRuntimeMeta({
-    userId: "stale-user",
-    sessionId: "stale-session",
-    systemRuntime: {},
+  const context = withHookRuntimeMeta(
+    {
+      userId: "stale-user",
+      sessionId: "stale-session",
+      systemRuntime: { ...CANONICAL_SYSTEM_RUNTIME },
+    },
+    {},
+  );
+  assert.equal(context.userId, "u1");
+  assert.equal(context.sessionId, "s1");
+});
+
+test("withHookRuntimeMeta rejects a runtime without canonical identity", () => {
+  assert.throws(() => withHookRuntimeMeta({ systemRuntime: {} }, {}), {
+    code: "HOOK_RUNTIME_IDENTITY_INVALID",
   });
-  assert.equal(context.userId, "");
-  assert.equal(context.sessionId, "");
+});
+
+test("withHookRuntimeMeta rejects hook context that carries identity fields", () => {
+  assert.throws(
+    () =>
+      withHookRuntimeMeta({ systemRuntime: { ...CANONICAL_SYSTEM_RUNTIME } }, { userId: "raw" }),
+    {
+      code: "HOOK_RUNTIME_IDENTITY_INVALID",
+      message: /hook context must not carry identity fields/,
+    },
+  );
 });

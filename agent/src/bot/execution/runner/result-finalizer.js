@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { emitEvent } from "../../../events/index.js";
 import { text } from "@noobot/shared/value";
 
 export async function finalizeAgentTurn({
@@ -26,10 +25,6 @@ export async function finalizeAgentTurn({
   lifecycle,
   persistenceScope,
 }) {
-  const finalizeThinkingStartedAt = text(resolvedRunConfig?.thinkingStartedAt);
-  emitEvent(runtimeEventListener, "debug_resend_runner_finalize", {
-    resolvedThinkingStartedAt: finalizeThinkingStartedAt,
-  });
   const durableCheckpointState = await getTurnSummaryCheckpointState({
     userId,
     sessionId: usedSessionId,
@@ -67,7 +62,7 @@ export async function finalizeAgentTurn({
     caller,
     dialogProcessId,
     turnScopeId: resolvedTurnScopeId,
-    thinkingStartedAt: finalizeThinkingStartedAt,
+    thinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
     agentResult,
     persistedTurnMessageUids: [
       ...new Set([...checkpointPersistedMessageUids, ...durableTurnMessageUids]),

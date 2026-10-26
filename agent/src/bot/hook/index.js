@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { emitEvent } from "../../events/index.js";
 import {
   assertOptionalHookManager,
@@ -12,30 +11,6 @@ import {
   HOOK_CANCELLATION_MODE,
   requireHookPointDescriptor,
 } from "@noobot/hook-protocol";
-import { text } from "@noobot/shared/value";
-
-function resolveBotHookRuntimeMeta({
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  dialogProcessId = "",
-  caller = "",
-} = {}) {
-  return {
-    userId: text(userId),
-    sessionId: text(sessionId),
-    parentSessionId: normalizeParentSessionId(parentSessionId),
-    dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-    caller: text(caller),
-  };
-}
-
-export function withBotHookRuntimeMeta(meta, context) {
-  return {
-    ...resolveBotHookRuntimeMeta(meta),
-    ...context,
-  };
-}
 
 export async function runBotRuntimeHook({ runtime, point, context = {} }) {
   const descriptor = requireHookPointDescriptor(point);

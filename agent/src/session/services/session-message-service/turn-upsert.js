@@ -14,7 +14,6 @@ import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
-import { upsertSessionTurnTiming } from "./turn-timing.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizedString(value) {
@@ -89,8 +88,6 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       pluginMessage: input.pluginMessage === true,
       pluginMeta: resolvePluginMeta(input.pluginMeta),
       transferEnvelopes: Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : [],
-      ...optionalStringField("thinkingStartedAt", input.thinkingStartedAt),
-      ...optionalStringField("thinkingFinishedAt", input.thinkingFinishedAt),
       ts: normalizedString(input.ts) || service.now(),
     },
     service.now,
@@ -191,26 +188,7 @@ function persistTurn(service, messages, turn) {
   return persisted;
 }
 
-function resolveTimingField(input, field, fallbackField) {
-  return input[field] === undefined ? input[fallbackField] : input[field];
-}
-
-function updateSessionMetadata(service, session, turn, input) {
-  upsertSessionTurnTiming(session, {
-    turnScopeId: turn.turnScopeId,
-    dialogProcessId: normalizeDialogProcessId(turn?.dialogProcessId),
-    thinkingStartedAt: resolveTimingField(
-      input,
-      "turnTimingThinkingStartedAt",
-      "thinkingStartedAt",
-    ),
-    thinkingFinishedAt: resolveTimingField(
-      input,
-      "turnTimingThinkingFinishedAt",
-      "thinkingFinishedAt",
-    ),
-    modelLoopRound: resolveTimingField(input, "turnTimingModelLoopRound", "modelLoopRound"),
-  });
+function updateSessionMetadata(service, session) {
   session.updatedAt = service.now();
 }
 
@@ -220,6 +198,6 @@ export function upsertTurnInSession(service, session, resolvedParentSessionId, i
   applyAttachments(turn, input);
   const persistedTurn = persistTurn(service, session.messages, turn);
   registerSessionMessageFacts(session, persistedTurn);
-  updateSessionMetadata(service, session, turn, input);
+  updateSessionMetadata(service, session);
   return persistedTurn;
 }

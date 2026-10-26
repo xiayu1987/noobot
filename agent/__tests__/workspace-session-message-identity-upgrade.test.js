@@ -586,6 +586,8 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
         ...createTestSessionRequiredFields().turnLifecycle,
         turns: {
           done: {
+            revision: 1,
+            sequence: 1,
             ...turn,
             terminalStatus: { ...turn, status: "completed", reason: "run_completed" },
           },
@@ -630,6 +632,63 @@ test("v11 upgrade removes rejected-batch tool_calls of completed turns, backs up
     const relativeDir = path.relative(base, sessionDir);
     const backedUp = await readJson(path.join(backupBase, relativeDir, "session.json"));
     assert.ok(backedUp.messageOrder.some((entry) => entry.messageUid === "m4"));
+
+    const second = await upgradeSessionMessageIdentity(options);
+    assert.deepEqual(second.sessions, []);
+    assert.deepEqual(second.quarantined, []);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("v14 upgrade drops schema 15 turn timing starts and timing shells, backs up and is idempotent", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const base = path.join(root, "alice");
+    const backupBase = path.join(root, "layout-backup");
+    const sessionDir = await saveCanonicalSession(sessionRepo);
+    const manifestFile = path.join(sessionDir, "session.json");
+    const manifest = await readJson(manifestFile);
+    manifest.schemaVersion = 15;
+    manifest.turnTimings = [
+      {
+        turnScopeId: "t1",
+        dialogProcessId: "d1",
+        thinkingStartedAt: "2026-01-01T00:00:01.000Z",
+        thinkingFinishedAt: "2026-01-01T00:00:09.000Z",
+      },
+      { turnScopeId: "t0", dialogProcessId: "d0", thinkingStartedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+    await writeFile(manifestFile, JSON.stringify(manifest, null, 2), "utf8");
+    await assert.rejects(
+      readSessionArtifactSnapshot({ outputDir: sessionDir, includeExecutionLogs: false }),
+      { code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED },
+    );
+    const options = { base, backupBase, scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS };
+
+    const first = await upgradeSessionMessageIdentity(options);
+
+    assert.deepEqual(first.quarantined, []);
+    assert.deepEqual(
+      first.sessions.map((item) => item.sessionId),
+      [SESSION_ID],
+    );
+    assert.ok(first.sessions[0].migrations.includes("turn-timing-lifecycle-start-v16"));
+    const upgraded = await readJson(manifestFile);
+    assert.equal(upgraded.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
+    assert.deepEqual(upgraded.turnTimings, [
+      { turnScopeId: "t1", dialogProcessId: "d1", thinkingFinishedAt: "2026-01-01T00:00:09.000Z" },
+    ]);
+    const { session: restored } = await readSessionArtifactSnapshot({
+      outputDir: sessionDir,
+      includeExecutionLogs: false,
+    });
+    assert.deepEqual(restored.turnTimings, upgraded.turnTimings);
+    const relativeDir = path.relative(base, sessionDir);
+    const backedUp = await readJson(path.join(backupBase, relativeDir, "session.json"));
+    assert.equal(backedUp.schemaVersion, 15);
+    assert.equal(backedUp.turnTimings.length, 2);
 
     const second = await upgradeSessionMessageIdentity(options);
     assert.deepEqual(second.sessions, []);

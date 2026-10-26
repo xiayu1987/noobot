@@ -6,11 +6,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeToolCall } from "./tool-runner.test-helpers.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 test("executeToolCall task_summary preserves recovery diagnostics", async () => {
   const summaryContent = "NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE";
   const runtime = createTestRuntimeContext({
+    identity: {
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "",
+      dialogProcessId: "dialog-call_task_summary_invalid",
+      turnScopeId: "turn-call_task_summary_invalid",
+      caller: SESSION_CALLER.USER,
+    },
     attachmentService: {
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact, index) => ({

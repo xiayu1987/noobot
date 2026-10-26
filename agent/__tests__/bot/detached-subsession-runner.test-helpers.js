@@ -110,11 +110,12 @@ export function createDeps(overrides = {}) {
 export function createParentExecutionScope(runtimePatch = {}) {
   return createTestAgentExecutionScope(
     createTestRuntimeContext({
-      systemRuntime: {
+      identity: {
         sessionId: "parent1",
         dialogProcessId: "parent-dialog",
         turnScopeId: "parent-turn",
       },
+      systemRuntime: {},
       runConfig: { hookManager: null, base: true },
       ...runtimePatch,
     }),

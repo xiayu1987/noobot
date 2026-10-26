@@ -16,6 +16,7 @@ test("workspace asset port writes immutable content and reads the exact version"
   t.after(() => fs.rm(workspace, { recursive: true, force: true }));
   const port = createPluginServicePorts({
     bot: { getWorkspacePath: () => workspace },
+    translateText: (key) => key,
   }).workspaceAssets.forPlugin("character");
   const content = Buffer.from("immutable-glb-content");
 
@@ -44,6 +45,7 @@ test("workspace asset port writes immutable content and reads the exact version"
 test("workspace asset port rejects invalid identity before filesystem access", async () => {
   const port = createPluginServicePorts({
     bot: { getWorkspacePath: () => "/tmp/unreachable" },
+    translateText: (key) => key,
   }).workspaceAssets.forPlugin("character");
   await assert.rejects(
     () =>
@@ -58,7 +60,10 @@ test("workspace asset port rejects invalid identity before filesystem access", a
 });
 
 test("workspace asset port treats an invalid plugin ID as a server contract error", () => {
-  const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => "/tmp/unreachable" } });
+  const ports = createPluginServicePorts({
+    bot: { getWorkspacePath: () => "/tmp/unreachable" },
+    translateText: (key) => key,
+  });
   assert.throws(
     () => ports.workspaceAssets.forPlugin("../bad"),
     (error) => /invalid workspace asset plugin ID/.test(error.message) && !error.statusCode,
@@ -70,6 +75,7 @@ test("workspace asset metadata catalog is user-scoped and deletion removes binar
   t.after(() => fs.rm(workspace, { recursive: true, force: true }));
   const port = createPluginServicePorts({
     bot: { getWorkspacePath: () => workspace },
+    translateText: (key) => key,
   }).workspaceAssets.forPlugin("character");
   const content = Buffer.from("catalog-glb");
   const written = await port.write({

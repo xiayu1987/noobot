@@ -23,8 +23,9 @@ function buildEnvelope() {
         parentSessionId: "p1",
         rootSessionId: "r1",
         dialogProcessId: "dp1",
+        turnScopeId: "turn1",
       },
-      runConfig: { turnScopeId: "turn1", executionId: "run1", presentationMessageId: "message1" },
+      runConfig: { executionId: "run1", presentationMessageId: "message1" },
       staticInfo: {
         cwd: "/workspace",
         basePath: "/workspace/u1",

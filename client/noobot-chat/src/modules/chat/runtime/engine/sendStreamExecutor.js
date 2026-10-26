@@ -35,7 +35,7 @@ export async function executeSendStream({
 
   if (!explicitAttachmentFiles) clearUploads();
   const attachments = explicitTransportAttachments || (await serializeAttachments(filesToSend));
-  const requestedTextStreaming = streamOutput?.value === true;
+  const requestedTextStreaming = streamOutput.value === true;
 
   const buildPayloadForCurrentVersion = createTurnPayloadBuilder({
     preferences: payloadPreferences,

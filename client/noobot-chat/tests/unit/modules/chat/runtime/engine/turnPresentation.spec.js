@@ -9,6 +9,7 @@ import {
   confirmTurnRuntimeDeletion,
   createTurnRuntimeRegistryState,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createWorkflowNodeStateRegistry } from "../../../../../../src/modules/chat/stores/workflowEventOperations.js";
 
 function workflow({
   workflowRunId = "workflow-a",
@@ -79,6 +80,7 @@ describe("selectTurnPresentations", () => {
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-a", messages: [user] },
       workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(2);
@@ -114,6 +116,7 @@ describe("selectTurnPresentations", () => {
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-a", messages: [shell] },
       workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(1);
@@ -139,6 +142,7 @@ describe("selectTurnPresentations", () => {
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-a", messages: [canonical] },
       workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(1);
@@ -156,6 +160,7 @@ describe("selectTurnPresentations", () => {
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-a", messages: [persisted] },
       workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(1);
@@ -179,6 +184,7 @@ describe("selectTurnPresentations", () => {
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-a", messages: [placeholder, persistedWorkflow()] },
       workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(1);
@@ -204,7 +210,9 @@ describe("selectTurnPresentations", () => {
     };
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-a", messages: [canonicalAssistant] },
+      workflowRegistry: createWorkflowNodeStateRegistry(),
       turnRuntimeRegistry: {
+        ...createTurnRuntimeRegistryState(),
         sessions: {
           "session-a": {
             turns: {
@@ -247,7 +255,9 @@ describe("selectTurnPresentations", () => {
     };
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-runtime-stop", messages: [user, assistant] },
+      workflowRegistry: createWorkflowNodeStateRegistry(),
       turnRuntimeRegistry: {
+        ...createTurnRuntimeRegistryState(),
         sessions: {
           "session-runtime-stop": {
             turns: {
@@ -290,7 +300,9 @@ describe("selectTurnPresentations", () => {
           },
         ],
       },
+      workflowRegistry: createWorkflowNodeStateRegistry(),
       turnRuntimeRegistry: {
+        ...createTurnRuntimeRegistryState(),
         sessions: {
           [sessionId]: {
             turns: {
@@ -324,7 +336,9 @@ describe("selectTurnPresentations", () => {
     };
     const result = selectTurnPresentations({
       activeSession: { sessionId: "session-a", messages: [canonicalAssistant] },
+      workflowRegistry: createWorkflowNodeStateRegistry(),
       turnRuntimeRegistry: {
+        ...createTurnRuntimeRegistryState(),
         sessions: {
           "session-a": {
             turns: {
@@ -370,6 +384,8 @@ describe("selectTurnPresentations", () => {
           },
         ],
       },
+      workflowRegistry: createWorkflowNodeStateRegistry(),
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(2);
@@ -453,6 +469,8 @@ describe("selectTurnPresentations", () => {
             },
           ],
         },
+        workflowRegistry: createWorkflowNodeStateRegistry(),
+        turnRuntimeRegistry: createTurnRuntimeRegistryState(),
       }),
     ).toThrow(
       "[turn-presentation] multiple canonical assistant presentations for session-a::turn-a",
@@ -473,6 +491,7 @@ describe("selectTurnPresentations", () => {
           otherTurn: workflow({ workflowRunId: "other-turn", turnScopeId: "turn-b" }),
         },
       },
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(2);
@@ -499,6 +518,7 @@ describe("selectTurnPresentations", () => {
         ],
       },
       workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry: createTurnRuntimeRegistryState(),
     });
 
     expect(result).toHaveLength(1);
@@ -511,7 +531,7 @@ describe("selectTurnPresentations", () => {
 
   it("does not resurrect a deleted workflow Turn from the live registry", () => {
     const turnRuntimeRegistry = createTurnRuntimeRegistryState();
-    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-a", { sessionId: "session-a" });
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, ["turn-a"], { sessionId: "session-a" });
 
     expect(
       selectTurnPresentations({
@@ -524,8 +544,8 @@ describe("selectTurnPresentations", () => {
 
   it("does not suppress a workflow owned by another Session or Turn", () => {
     const turnRuntimeRegistry = createTurnRuntimeRegistryState();
-    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-b", { sessionId: "session-a" });
-    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-a", { sessionId: "session-b" });
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, ["turn-b"], { sessionId: "session-a" });
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, ["turn-a"], { sessionId: "session-b" });
 
     expect(
       selectTurnPresentations({

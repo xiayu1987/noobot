@@ -6,10 +6,14 @@
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
 import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
-import { createStepStatusResolver } from "../runtime/workflowRuntimeStatus.js";
+import {
+  resolveActionRuntimeStatus,
+  resolveWorkflowNodeStatus,
+  resolveWorkflowNodeStatusLabelKey,
+} from "../runtime/workflowRuntimeStatus.js";
 
 describe("workflow runtime identity projection", () => {
-  it("merges a committed node fact into a sparse final node by dialog identity", () => {
+  it("merges a committed node fact into the planned node by nodeExecutionId", () => {
     const workflowPayload = ref({
       workflowRunId: "client-turn:main",
       runMeta: { sessionId: "root-session" },
@@ -18,10 +22,11 @@ describe("workflow runtime identity projection", () => {
       workflowPayload,
       nodeSessions: ref([
         {
+          nodeExecutionId: "node-execution-1",
           nodeId: "write-file",
-          sessionId: "child-session",
+          nodeSessionId: "child-session",
           dialogProcessId: "wf_node_write_file_1",
-          stepId: "persisted-step",
+          status: "pending",
         },
       ]),
       workflowNodeStateRegistry: {
@@ -32,7 +37,7 @@ describe("workflow runtime identity projection", () => {
                 workflowRunId: "client-turn:main",
                 nodeExecutionId: "node-execution-1",
                 nodeId: "write-file",
-                sessionId: "child-session",
+                nodeSessionId: "child-session",
                 dialogProcessId: "wf_node_write_file_1",
                 turnScopeId: "workflow-node:node-execution-1",
                 activeChildExecutionId: "agent:node-execution-1",
@@ -52,8 +57,9 @@ describe("workflow runtime identity projection", () => {
       turnScopeId: "workflow-node:node-execution-1",
       activeChildExecutionId: "agent:node-execution-1",
       status: "succeeded",
-      sessionId: "child-session",
+      nodeSessionId: "child-session",
     });
+    expect(runtimeNodeSessions.value[0]).not.toHaveProperty("sessionId");
   });
 
   it("preserves canonical status at the runtime input boundary", () => {
@@ -75,14 +81,31 @@ describe("workflow runtime identity projection", () => {
     });
   });
 
-  it("resolves the authoritative status for nodes with a stable execution identity", () => {
-    const resolveStepStatus = createStepStatusResolver();
-
-    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "running" })).toBe(
+  it("resolves node status only from the protocol vocabulary", () => {
+    for (const status of [
+      "pending",
+      "ready",
       "running",
-    );
-    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "succeeded" })).toBe(
-      "success",
-    );
+      "succeeded",
+      "failed",
+      "stopped",
+      "skipped",
+    ])
+      expect(resolveWorkflowNodeStatus({ status })).toBe(status);
+    for (const status of ["success", "error", "done", "completed"])
+      expect(resolveWorkflowNodeStatus({ status })).toBe("pending");
+    expect(resolveWorkflowNodeStatus({ _status: "running" })).toBe("pending");
+    expect(resolveWorkflowNodeStatusLabelKey({ status: "stopped" })).toBe("workflow.statusStopped");
+  });
+
+  it("aggregates action status from protocol step statuses", () => {
+    const boxes = (...statuses) => [{ steps: statuses.map((status) => ({ status })) }];
+    expect(resolveActionRuntimeStatus([])).toBe("pending");
+    expect(resolveActionRuntimeStatus(boxes("succeeded", "running"))).toBe("running");
+    expect(resolveActionRuntimeStatus(boxes("succeeded", "failed"))).toBe("failed");
+    expect(resolveActionRuntimeStatus(boxes("succeeded", "stopped"))).toBe("stopped");
+    expect(resolveActionRuntimeStatus(boxes("skipped", "skipped"))).toBe("skipped");
+    expect(resolveActionRuntimeStatus(boxes("succeeded", "skipped"))).toBe("succeeded");
+    expect(resolveActionRuntimeStatus(boxes("succeeded", "ready"))).toBe("ready");
   });
 });

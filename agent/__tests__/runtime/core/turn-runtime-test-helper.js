@@ -13,9 +13,8 @@ import { createModelContext } from "@noobot/context-protocol";
 import { normalizeSystemRuntimeCounters } from "@noobot/agent-config-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import {
-  applyTestIdentityToRuntime,
-  createTestTurnIdentity,
-  overrideTestTurnIdentity,
+  bindTestIdentityToRuntime,
+  deriveTestTurnIdentity,
 } from "../../helpers/test-turn-identity.js";
 import { isFunction, isObjectLike } from "@noobot/shared/value";
 
@@ -73,14 +72,6 @@ export function createTestModelPort(providerModel = {}) {
   };
 }
 
-export function createLoopTurnIdentity(loopState) {
-  const { dialogProcessId } = loopState;
-  if (typeof dialogProcessId !== "string" || !dialogProcessId) {
-    throw new TypeError("test loopState requires dialogProcessId");
-  }
-  return overrideTestTurnIdentity(createTestTurnIdentity(dialogProcessId), { dialogProcessId });
-}
-
 function bindActiveTurnIdentity(modelContext, identity) {
   const expected = { dialogProcessId: identity.dialogProcessId, turnScopeId: identity.turnScopeId };
   const current = modelContext.activeTurnIdentity;
@@ -105,18 +96,9 @@ const LOOP_STATE_RUNTIME_FIELDS = Object.freeze([
   "toolConsecutiveFailureCount",
 ]);
 
-export function prepareTestTurnExecution(
-  modelState,
-  loopState,
-  turnIdentity,
-  presentationMessageId,
-) {
+export function prepareTestTurnExecution(modelState, loopState, presentationMessageId) {
   if (typeof presentationMessageId !== "string" || !presentationMessageId) {
     throw new TypeError("test turn execution requires explicit presentationMessageId");
-  }
-  const identity = overrideTestTurnIdentity(turnIdentity, { presentationMessageId });
-  if (identity.dialogProcessId !== loopState.dialogProcessId) {
-    throw new TypeError("test turn identity dialogProcessId must equal loopState.dialogProcessId");
   }
   const runtime = modelState?.runtime;
   if (!isObjectLike(runtime)) {
@@ -149,7 +131,13 @@ export function prepareTestTurnExecution(
   if (runtime.sessionManager === null) {
     throw new TypeError("test turn execution requires an explicit runtime.sessionManager");
   }
-  applyTestIdentityToRuntime(runtime, identity);
+  const identity = bindTestIdentityToRuntime(
+    runtime,
+    deriveTestTurnIdentity(runtime, {
+      runId: `run-${presentationMessageId}`,
+      presentationMessageId,
+    }),
+  );
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,

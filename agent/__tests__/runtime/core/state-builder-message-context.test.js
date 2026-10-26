@@ -11,19 +11,21 @@ import assert from "node:assert/strict";
 import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
 
 import { createStateBuilder } from "../../../src/runtime/state-builder.js";
-import { createMessageEventStreamState } from "../../../src/events/message-event-stream.js";
 
 function createRuntime({ eventListener }) {
   return createTestRuntimeContext({
     eventListener,
     globalConfig: {},
     userConfig: {},
-    runConfig: { hookManager: null, turnScopeId: "turn-1" },
-    systemRuntime: {
+    runConfig: { hookManager: null },
+    identity: {
       userId: "admin",
       sessionId: "s1",
       parentSessionId: "parent-s1",
       dialogProcessId: "dlg-1",
+      turnScopeId: "turn-1",
+    },
+    systemRuntime: {
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
     },
@@ -127,20 +129,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     parentSessionId: "parent-s1",
     dialogProcessId: "dlg-1",
     turnScopeId: "turn-1",
-    systemRuntime: {
-      userId: "admin",
-      sessionId: "s1",
-      parentSessionId: "parent-s1",
-      dialogProcessId: "dlg-1",
-      phaseSummaryLoopCount: 0,
-      toolConsecutiveFailureCount: 0,
-      messageEventStream: createMessageEventStreamState(),
-    },
   });
-  assert.equal(
-    agentContext.bindings.runtime.stoppedModelMessageSnapshotCandidate.systemRuntime,
-    agentContext.bindings.runtime.systemRuntime,
-  );
   const contextIdentityEvents = identityEvents.filter((event) =>
     event.event.startsWith("agent.contextIdentity."),
   );

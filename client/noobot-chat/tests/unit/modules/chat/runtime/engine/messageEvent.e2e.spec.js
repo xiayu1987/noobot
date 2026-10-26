@@ -21,7 +21,6 @@ import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeE
 function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent(
     canonicalWorkflowSessionSnapshot({
-      eventId: "workflow-session-snapshot-1",
       executionId: "agent-execution-child-session",
       aggregateVersion: 1,
       authoritySessionId: "parent-session",
@@ -64,8 +63,10 @@ describe("authoritative message event end-to-end fidelity", () => {
       systemRuntime: {
         userId: "user-1",
         sessionId: "child-session",
+        parentSessionId: "parent-session",
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
+        caller: "bot",
         persistenceScope: null,
       },
       runConfig: {

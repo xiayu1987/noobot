@@ -41,12 +41,12 @@ function createRuntime(abortSignal = new AbortController().signal) {
       turnScopeId: "turn-tool-batch",
       presentationMessageId: "presentation-tool-batch",
     },
-    systemRuntime: {
+    identity: {
       userId: "admin",
       sessionId: "session-tool-batch",
-      rootSessionId: "session-tool-batch",
       dialogProcessId: "dialog-tool-batch",
     },
+    systemRuntime: {},
   });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-tool-batch",

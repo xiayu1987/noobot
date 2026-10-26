@@ -79,9 +79,8 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
         };
       },
     },
+    identity: { sessionId: "parent-session", dialogProcessId: "dp_parent" },
     systemRuntime: {
-      sessionId: "parent-session",
-      dialogProcessId: "dp_parent",
       config: {
         allowUserInteraction: true,
         streaming: false,
@@ -140,9 +139,8 @@ test("call_mcp_task: 未配置的 mcp 服务以可恢复错误失败且不启动
         runCalls.push(payload);
       },
     },
+    identity: { sessionId: "parent-session", dialogProcessId: "dp_parent" },
     systemRuntime: {
-      sessionId: "parent-session",
-      dialogProcessId: "dp_parent",
       config: { allowUserInteraction: true, selectedConnectorIds: [] },
     },
     globalConfig: { mcpServers: {} },

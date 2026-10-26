@@ -8,7 +8,6 @@ import {
   normalizeContextSectionSelection,
 } from "@noobot/agent-config-protocol/enums";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "../formatters/system-prompt-formatter.js";
 import { resolveConnectorStatusSection } from "../providers/connector-status-provider.js";
@@ -20,60 +19,35 @@ import {
 import { resolveAvailableMcpServers } from "../providers/mcp-provider.js";
 import { resolveModelSection } from "../providers/model-provider.js";
 import { resolveServices } from "../providers/service-provider.js";
-import { resolveRootSessionId } from "../providers/session-tree-resolver.js";
 import { resolveSkills } from "../providers/skills-resolver.js";
 import { loadSystemPrompt } from "../providers/system-prompt-loader.js";
-import { text } from "@noobot/shared/value";
 
 export function buildSystemRuntime({
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  caller = "user",
-  dialogProcessId = "",
-  rootSessionId = "",
-  runConfig = {},
+  identity,
+  runConfig,
   botManager,
   staticInfo = null,
   isSuperUser,
-  now = new Date().toISOString(),
-} = {}) {
+  now,
+}) {
   if (typeof isSuperUser !== "boolean") {
     throw new TypeError("buildSystemRuntime requires boolean isSuperUser");
   }
-  const dynamicInfo = buildDynamicInfo({
-    userId,
-    sessionId,
-    caller,
-    dialogProcessId,
-    runConfig,
-    now,
-    rootSessionId,
-    parentSessionId,
-  });
+  const dynamicInfo = buildDynamicInfo({ identity, runConfig, now });
   const startupDependencies = botManager.startupContext.runtime.dependencies;
   const runtimeWithStartup =
     startupDependencies === null
       ? dynamicInfo
       : { ...dynamicInfo, desktopDependencySources: startupDependencies.sourceSummary };
-  const protectedDialogProcessId = text(dynamicInfo?.dialogProcessId);
   return {
     ...runtimeWithStartup,
     ...(staticInfo && typeof staticInfo === "object" ? { staticInfo } : {}),
-    ...(protectedDialogProcessId
-      ? {
-          dialogProcessId: protectedDialogProcessId,
-          currentDialogProcessId: protectedDialogProcessId,
-        }
-      : {}),
     isSuperUser,
-    parentSessionId: normalizeParentSessionId(runtimeWithStartup?.parentSessionId),
   };
 }
 
 export async function buildSystemContext({
-  identity = {},
-  caller = "user",
+  identity,
   globalConfig = {},
   userConfig = {},
   runConfig = {},
@@ -81,7 +55,6 @@ export async function buildSystemContext({
   effectiveConfig = {},
   runtimeBasePath,
   longMemory = null,
-  sessionManager = null,
   skillService = null,
   botManager = null,
   userMessageAttachments = [],
@@ -95,12 +68,6 @@ export async function buildSystemContext({
   const locale = runConfig?.locale || "zh-CN";
   const scenarioProfile = resolveScenarioProfile({ runConfig });
 
-  const rootSessionId = await resolveRootSessionId({
-    sessionManager,
-    userId: identity.userId,
-    sessionId: identity.sessionId,
-    parentSessionId: identity.parentSessionId,
-  });
   const attachmentsAvailableToRuntime = contextPolicy.runtimeCapabilities.attachments;
   const [systemPrompt, skills, attachments, workspaceDirectories, connectorStatusSection] =
     await Promise.all([
@@ -139,11 +106,9 @@ export async function buildSystemContext({
     : { identity: identityInfo };
   const dynamicInfo = enabled("system_runtime")
     ? buildSystemRuntime({
-        ...identity,
-        caller,
+        identity,
         runConfig,
         botManager,
-        rootSessionId,
         isSuperUser: identityInfo.isSuperUser,
         now: now(),
       })

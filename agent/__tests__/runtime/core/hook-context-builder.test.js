@@ -62,17 +62,11 @@ test("non-model hook context uses the canonical runtime turn identity and diagno
       ],
     },
   });
-  const runtime = {
+  const runtime = createTestRuntimeContext({
+    identity: { userId: "u1", sessionId: "s1", dialogProcessId: "d1", turnScopeId: "t1" },
     activeMessageContext: modelContext,
-    systemRuntime: {
-      userId: "u1",
-      sessionId: "s1",
-      parentSessionId: "",
-      dialogProcessId: "d1",
-      turnScopeId: "t1",
-    },
     eventListener: { onEvent: (event) => events.push(event) },
-  };
+  });
 
   const context = buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
     call: { name: "read_file", args: {} },

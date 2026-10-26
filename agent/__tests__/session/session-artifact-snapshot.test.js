@@ -109,6 +109,8 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
           ...required.turnLifecycle,
           turns: {
             "turn-1": {
+              revision: 1,
+              sequence: 1,
               ...turn,
               terminalStatus: { ...turn, status: "completed", reason: "run_completed" },
             },

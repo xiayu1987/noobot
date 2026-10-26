@@ -7,7 +7,7 @@ import {
   EXECUTION_CHILDREN_WIRE_EVENT,
   EXECUTION_SNAPSHOT_WIRE_EVENT,
   EXECUTION_TREE_WIRE_EVENT,
-  validateExecutionIdentity,
+  validateExecutionRecord,
 } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { createEventEnvelope } from "./envelope.js";
@@ -44,15 +44,15 @@ export const EXECUTION_QUERY_WIRE_EVENT_BY_FAMILY = Object.freeze(
   ),
 );
 
-function identityErrors(execution, path) {
+function recordErrors(execution, path) {
   if (!isPlainObject(execution)) return [`${path}_not_object`];
-  return validateExecutionIdentity(execution).errors.map((error) => `${path}:${error}`);
+  return validateExecutionRecord(execution).errors.map((error) => `${path}:${error}`);
 }
 
 function childrenErrors({ execution, children }) {
   if (!Array.isArray(children)) return ["children_not_array"];
   return children.flatMap((child, index) => [
-    ...identityErrors(child, `children.${index}`),
+    ...recordErrors(child, `children.${index}`),
     ...(child?.parentExecutionId === execution?.executionId
       ? []
       : [`child_parent_mismatch:${index}`]),
@@ -63,7 +63,7 @@ function treeErrors({ rootExecutionId, tree }) {
   if (!text(rootExecutionId)) return ["missing_root_execution_id"];
   if (!isPlainObject(tree) || !isPlainObject(tree.executions)) return ["tree_not_object"];
   return Object.entries(tree.executions).flatMap(([id, item]) => [
-    ...identityErrors(item, `tree.${id}`),
+    ...recordErrors(item, `tree.${id}`),
     ...(item?.executionId === id ? [] : [`tree_key_mismatch:${id}`]),
     ...(item?.executionId === rootExecutionId || item?.rootExecutionId === rootExecutionId
       ? []
@@ -81,7 +81,7 @@ export function validateExecutionQueryPayload(wireEvent, payload) {
   if (wireEvent === EXECUTION_TREE_WIRE_EVENT) {
     errors.push(...treeErrors(payload));
   } else {
-    errors.push(...identityErrors(payload.execution, "execution"));
+    errors.push(...recordErrors(payload.execution, "execution"));
   }
   if (wireEvent === EXECUTION_CHILDREN_WIRE_EVENT) {
     errors.push(...childrenErrors(payload));
@@ -117,10 +117,7 @@ export function validateExecutionQueryEnvelope(envelope) {
     errors.push("execution_session_mismatch");
   if (envelope.ordering.scopeId !== execution.rootExecutionId)
     errors.push("sequence_scope_mismatch");
-  if (!Number.isInteger(execution.sequence) || execution.sequence < 1)
-    errors.push("invalid_execution_sequence");
-  if (Number(envelope.ordering.sequence) !== Number(execution.sequence))
-    errors.push("execution_sequence_mismatch");
+  if (envelope.ordering.sequence !== execution.sequence) errors.push("execution_sequence_mismatch");
   return { valid: errors.length === 0, errors };
 }
 

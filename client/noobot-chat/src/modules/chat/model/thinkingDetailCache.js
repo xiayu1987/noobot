@@ -6,11 +6,7 @@
 import { reactive } from "vue";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import {
-  normalizeTurnScopeIdKey,
-  getMessageDialogProcessId,
-  getMessageTurnScopeId,
-} from "./messageIdentity.js";
+import { getMessageDialogProcessId, getMessageTurnScopeId } from "./messageIdentity.js";
 import { isFunction, text } from "@noobot/shared/value";
 
 const cache = reactive({ entries: {} });
@@ -43,7 +39,7 @@ async function fetchWithMissingDetailRetry(runFetch, identity, { retryLimit, ret
 
 function thinkingDetailCacheKey({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
   const sid = text(sessionId);
-  const turnKey = normalizeTurnScopeIdKey(turnScopeId);
+  const turnKey = text(turnScopeId);
   const route = turnKey || text(dialogProcessId);
   return sid && route ? `${sid}::${route}` : "";
 }
@@ -54,7 +50,7 @@ export function resolveThinkingDetailIdentity(messageItem, sessionId) {
   return {
     sessionId,
     turnScopeId,
-    turnScopeKey: normalizeTurnScopeIdKey(turnScopeId),
+    turnScopeKey: turnScopeId,
     dialogProcessId,
     key: thinkingDetailCacheKey({ sessionId, turnScopeId, dialogProcessId }),
   };

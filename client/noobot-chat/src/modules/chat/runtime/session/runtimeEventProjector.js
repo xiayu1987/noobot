@@ -5,6 +5,7 @@
  */
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { text } from "@noobot/shared/value";
+import { selectSessionRuntimeBucket } from "../run-state-machine/turnRuntimeRegistry.js";
 
 export function createRuntimeEventProjector({
   turnRuntimeRegistry,
@@ -16,7 +17,7 @@ export function createRuntimeEventProjector({
 
     const result = chatStore.applyTurnRuntimeEvent(event);
     const selectedSessionId = resolveActiveSessionIdentity();
-    const activeBucket = turnRuntimeRegistry.value?.sessions?.[selectedSessionId] || null;
+    const activeBucket = selectSessionRuntimeBucket(turnRuntimeRegistry.value, selectedSessionId);
     logThinkingReplayDebug("frontend.lifecycle.runtimeConsumed", () => ({
       sessionId: requestedSessionId || selectedSessionId,
       requestedSessionId,

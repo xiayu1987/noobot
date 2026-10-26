@@ -18,10 +18,7 @@ import {
 
 import { registerWorkflowAgentHooks } from "../../src/core/orchestrator.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
-import {
-  collectWorkflowDialogProcessIds,
-  resolveWorkflowDialogProcessId,
-} from "../../frontend/utils/workflowDialogProcessId.js";
+import { resolveWorkflowDialogProcessId } from "../../frontend/utils/workflowDialogProcessId.js";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 
 export function createMockBotHookManager() {
@@ -271,12 +268,17 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
       : (target.runConfig = {});
   const sessionId = text(target.sessionId) || "test-session";
   const dialogProcessId = text(target.dialogProcessId) || "test-dialog";
-  if (!text(runConfig.turnScopeId)) {
-    runConfig.turnScopeId = `test-turn:${sessionId}:${dialogProcessId}`;
+  if (Object.hasOwn(runConfig, "turnScopeId")) {
+    throw new TypeError(
+      "fixture runConfig must not carry turnScopeId; inject it on the hook context",
+    );
   }
-  runConfig.commandId = deriveTurnCommandId(runConfig.turnScopeId);
+  if (!text(target.turnScopeId)) {
+    target.turnScopeId = `test-turn:${sessionId}:${dialogProcessId}`;
+  }
+  runConfig.commandId = deriveTurnCommandId(target.turnScopeId);
   if (!text(runConfig.executionId)) {
-    runConfig.executionId = deriveAgentExecutionId({ turnScopeId: runConfig.turnScopeId });
+    runConfig.executionId = deriveAgentExecutionId({ turnScopeId: target.turnScopeId });
   }
   if (!text(runConfig.rootExecutionId)) {
     runConfig.rootExecutionId = runConfig.executionId;
@@ -401,9 +403,4 @@ export function workflowTurn(agentResult) {
   );
 }
 
-export {
-  registerWorkflowAgentHooks,
-  WORKFLOW_PLUGIN_DEFAULTS,
-  collectWorkflowDialogProcessIds,
-  resolveWorkflowDialogProcessId,
-};
+export { registerWorkflowAgentHooks, WORKFLOW_PLUGIN_DEFAULTS, resolveWorkflowDialogProcessId };

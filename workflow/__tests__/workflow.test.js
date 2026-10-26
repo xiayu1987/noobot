@@ -29,6 +29,8 @@ import {
   getWorkflowInstanceSnapshot,
   startWorkflowInstanceById,
 } from "../src/lib/runtime.js";
+import { compileWorkflowSemantic } from "../src/lib/compiler.js";
+import EStateType from "../src/design/model/node/enums/state-type.js";
 import {
   buildSimpleModel,
   buildActionModel,
@@ -371,16 +373,16 @@ test("composite flow: parent starts child bizinst and child sub-flow reaches its
 test("runtime relation API resolves upstream action steps from actual runtime merge state", () => {
   const semantic = {
     nodes: [
-      { id: "start", type: "state", stateType: 0, name: "开始" },
+      { id: "start", type: "state", stateType: EStateType.Start, name: "开始" },
       { id: "a", type: "action", name: "节点A" },
-      { id: "branch", type: "state", stateType: 2, name: "并发分叉" },
+      { id: "branch", type: "state", stateType: EStateType.Branch, name: "并发分叉" },
       { id: "b", type: "action", name: "节点B" },
       { id: "c", type: "action", name: "节点C" },
-      { id: "merge", type: "state", stateType: 3, name: "汇聚" },
-      { id: "branch2", type: "state", stateType: 2, name: "汇聚后并发分叉" },
+      { id: "merge", type: "state", stateType: EStateType.Merge, name: "汇聚" },
+      { id: "branch2", type: "state", stateType: EStateType.Branch, name: "汇聚后并发分叉" },
       { id: "d", type: "action", name: "节点D" },
       { id: "e", type: "action", name: "节点E" },
-      { id: "end", type: "state", stateType: 1, name: "结束" },
+      { id: "end", type: "state", stateType: EStateType.End, name: "结束" },
     ],
     flowtos: [
       { from: "start", to: "a" },
@@ -506,10 +508,10 @@ test("other enums: provide readable name and description", () => {
 test("runtime advance by stepId keeps step failure fields out of snapshots", () => {
   const semantic = {
     nodes: [
-      { id: "start", type: "state", stateType: 0, name: "开始" },
+      { id: "start", type: "state", stateType: EStateType.Start, name: "开始" },
       { id: "a", type: "action", name: "节点A" },
       { id: "b", type: "action", name: "节点B" },
-      { id: "end", type: "state", stateType: 1, name: "结束" },
+      { id: "end", type: "state", stateType: EStateType.End, name: "结束" },
     ],
     flowtos: [
       { from: "start", to: "a" },
@@ -556,9 +558,9 @@ test("runtime advance by stepId keeps step failure fields out of snapshots", () 
 test("runtime instance lifecycle is strict: id required, duplicates and unknown ids rejected", () => {
   const semantic = {
     nodes: [
-      { id: "start", type: "state", stateType: 0, name: "开始" },
+      { id: "start", type: "state", stateType: EStateType.Start, name: "开始" },
       { id: "a", type: "action", name: "节点A" },
-      { id: "end", type: "state", stateType: 1, name: "结束" },
+      { id: "end", type: "state", stateType: EStateType.End, name: "结束" },
     ],
     flowtos: [
       { from: "start", to: "a" },
@@ -581,4 +583,32 @@ test("runtime instance lifecycle is strict: id required, duplicates and unknown 
   }
   assert.throws(() => getWorkflowInstanceSnapshot({ instanceId }), /workflow instance not found/);
   assert.throws(() => releaseWorkflowInstance({ instanceId }), /workflow instance not found/);
+});
+
+test("compiler rejects invalid stateType and dangling flowtos instead of guessing", () => {
+  const nodesWith = (stateType) => [
+    { id: "start", type: "state", stateType, name: "开始" },
+    { id: "end", type: "state", stateType: EStateType.End, name: "结束" },
+  ];
+  const flowtos = [{ from: "start", to: "end" }];
+  for (const invalid of ["start", 5, -1, 1.5, undefined, null]) {
+    assert.throws(
+      () => compileWorkflowSemantic({ nodes: nodesWith(invalid), flowtos }),
+      /has invalid stateType/,
+    );
+  }
+  assert.throws(
+    () =>
+      compileWorkflowSemantic({
+        nodes: nodesWith(EStateType.Start),
+        flowtos: [{ from: "start", to: "missing" }],
+      }),
+    /references undefined node: missing/,
+  );
+});
+
+test("state type enum: provides readable name and strict validity", () => {
+  assert.equal(EStateType.getName(EStateType.Merge), "Merge");
+  assert.equal(EStateType.isValid(EStateType.Branch), true);
+  assert.equal(EStateType.isValid("2"), false);
 });

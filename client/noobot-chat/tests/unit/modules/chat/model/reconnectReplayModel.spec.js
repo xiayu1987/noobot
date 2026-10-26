@@ -61,11 +61,17 @@ describe("reconnectReplayModel", () => {
     replayBatch: createReplayBatch({
       sessionId: "s-1",
       snapshot: createTurnLifecycleSnapshot({
+        generatedAt: "2026-01-01T00:00:00.000Z",
+        recentTerminalTurns: [],
+        replacedTurns: [],
+        unchanged: false,
+        recovery: "none",
         commandId: `command-${turnScopeId}`,
         sessionId: "s-1",
         sequence: 1,
         activeTurnScopeId: turnScopeId,
         activeTurn: {
+          continuedByTurnScopeId: "",
           sessionId: "s-1",
           turnScopeId,
           dialogProcessId: `dp-${turnScopeId}`,
@@ -108,6 +114,11 @@ describe("reconnectReplayModel", () => {
       replayBatch: createReplayBatch({
         sessionId: "s-current",
         snapshot: createTurnLifecycleSnapshot({
+          generatedAt: "2026-01-01T00:00:00.000Z",
+          recentTerminalTurns: [],
+          replacedTurns: [],
+          unchanged: false,
+          recovery: "none",
           commandId: "command-current",
           sessionId: "s-current",
           sequence: 1,
@@ -122,11 +133,17 @@ describe("reconnectReplayModel", () => {
       replayBatch: createReplayBatch({
         sessionId: "s-other",
         snapshot: createTurnLifecycleSnapshot({
+          generatedAt: "2026-01-01T00:00:00.000Z",
+          recentTerminalTurns: [],
+          replacedTurns: [],
+          unchanged: false,
+          recovery: "none",
           commandId: "command-other",
           sessionId: "s-other",
           sequence: 2,
           activeTurnScopeId: "turn-other",
           activeTurn: {
+            continuedByTurnScopeId: "",
             sessionId: "s-other",
             turnScopeId: "turn-other",
             dialogProcessId: "dp-other",

@@ -72,3 +72,13 @@ export function createAttachmentLifecycleEvent(value) {
     error,
   });
 }
+
+export function validateAttachmentLifecycleEvent(value) {
+  try {
+    createAttachmentLifecycleEvent(value);
+    return Object.freeze({ valid: true, errors: Object.freeze([]) });
+  } catch (error) {
+    if (!(error instanceof AttachmentProtocolError)) throw error;
+    return Object.freeze({ valid: false, errors: Object.freeze([error.code]) });
+  }
+}

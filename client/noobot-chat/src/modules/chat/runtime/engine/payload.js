@@ -12,20 +12,13 @@ import {
 import { isPlainObject } from "@noobot/shared/value";
 
 function normalizeSelectedPluginKeys(selectedPlugins) {
-  const source = Array.isArray(selectedPlugins?.value)
-    ? selectedPlugins.value
-    : Array.isArray(selectedPlugins)
-      ? selectedPlugins
-      : [];
-  return source.map((pluginKey) => normalizeTrimmedString(pluginKey)).filter(Boolean);
+  return selectedPlugins.value
+    .map((pluginKey) => normalizeTrimmedString(pluginKey))
+    .filter(Boolean);
 }
 
-const unwrap = (source) => source?.value ?? source;
-const trueUnlessFalse = (source) => unwrap(source) !== false;
-const plainObjectOrNull = (source) => {
-  const value = unwrap(source);
-  return isPlainObject(value) ? value : null;
-};
+const trueUnlessFalse = (source) => source.value !== false;
+const plainObjectOrNull = (source) => (isPlainObject(source.value) ? source.value : null);
 
 function resolveCommandType({ continueFromStopped, reuseExistingUserTurn }) {
   if (continueFromStopped) return AGENT_COMMAND.CONTINUE;
@@ -34,9 +27,9 @@ function resolveCommandType({ continueFromStopped, reuseExistingUserTurn }) {
 }
 
 function buildPreferences(options) {
-  const scenario = normalizeTrimmedString(unwrap(options.botScenario));
-  const selectedModel = normalizeTrimmedString(unwrap(options.selectedModel));
-  const memoryModel = normalizeTrimmedString(unwrap(options.memoryModel));
+  const scenario = normalizeTrimmedString(options.botScenario.value);
+  const selectedModel = normalizeTrimmedString(options.selectedModel.value);
+  const memoryModel = normalizeTrimmedString(options.memoryModel.value);
   const pluginModelConfig = plainObjectOrNull(options.pluginModelConfig);
   const summaryPolicy = plainObjectOrNull(options.summaryPolicy);
   return {
@@ -44,17 +37,17 @@ function buildPreferences(options) {
     safeConfirm: trueUnlessFalse(options.safeConfirm),
     sanitizeOutput: trueUnlessFalse(options.sanitizeOutput),
     confirmationLevel: normalizeSecurityRiskLevel(
-      unwrap(options.safeConfirmLevel),
+      options.safeConfirmLevel.value,
       SECURITY_RISK_LEVEL.LOW,
     ),
     streaming: options.requestedTextStreaming,
-    frontendThresholdsEnabled: unwrap(options.frontendThresholdsEnabled) === true,
+    frontendThresholdsEnabled: options.frontendThresholdsEnabled.value === true,
     ...(scenario ? { scenario } : {}),
     ...(selectedModel ? { selectedModel } : {}),
     ...(memoryModel ? { memoryModel } : {}),
     ...(pluginModelConfig ? { pluginModelConfig } : {}),
     ...(summaryPolicy ? { summaryPolicy } : {}),
-    locale: normalizeTrimmedString(unwrap(options.locale)),
+    locale: normalizeTrimmedString(options.locale.value),
     selectedPlugins: normalizeSelectedPluginKeys(options.selectedPlugins),
   };
 }
@@ -93,7 +86,7 @@ export function buildChatPayload({
   selectedModel,
   memoryModel,
   pluginModelConfig,
-  frontendThresholdsEnabled = false,
+  frontendThresholdsEnabled,
   summaryPolicy,
   locale,
   selectedPlugins,

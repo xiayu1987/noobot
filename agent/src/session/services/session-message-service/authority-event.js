@@ -36,7 +36,7 @@ import {
   writeAuthorityOutboxCheckpoint,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { locateOutboxSessionDir } from "./outbox-scope.js";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, isObjectLike, text } from "@noobot/shared/value";
 import {
   SESSION_NOT_FOUND_REASON,
   createSessionNotFoundError,
@@ -60,19 +60,21 @@ export async function commitAuthorityEvent({
   payload,
   persistenceContext,
 }) {
-  const owner = {
-    userId: text(userId),
-    sessionId: text(sessionId),
-  };
+  if (!isCanonicalText(userId) || !isCanonicalText(sessionId)) {
+    throw new TypeError("authority event commit requires canonical user and session");
+  }
   const descriptor = getEventFamily(family);
-  if (!owner.userId || !owner.sessionId || !descriptor) {
-    throw new TypeError("authority event commit requires user, session and family");
+  if (!descriptor) throw new TypeError(`authority event family not registered: ${family}`);
+  if (
+    !isObjectLike(ordering) ||
+    !isCanonicalText(ordering.domain) ||
+    !isCanonicalText(ordering.scopeId)
+  ) {
+    throw new TypeError("authority event commit requires canonical ordering domain and scope");
   }
-  const orderingDomain = text(ordering.domain);
-  const orderingScopeId = text(ordering.scopeId);
-  if (!orderingDomain || !orderingScopeId) {
-    throw new TypeError("authority event commit requires ordering domain and scope");
-  }
+  const owner = { userId, sessionId };
+  const orderingDomain = ordering.domain;
+  const orderingScopeId = ordering.scopeId;
   const mutation = this.sessionRepo.withSessionMutation(
     owner.userId,
     owner.sessionId,

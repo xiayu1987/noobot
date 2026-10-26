@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { resolveBoundToolModelRequestOverrides } from "../../../src/runtime/turn/tool-choice-strategy.js";
 import { createBoundLlmToolChoiceInvoker } from "../../../src/runtime/turn/tool-invoke-strategy.js";
-import { createLoopTurnIdentity, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
+import { prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
@@ -17,7 +17,6 @@ function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(
     args.modelState,
     args.loopState,
-    createLoopTurnIdentity(args.loopState),
     "presentation-orchestrator-model-overrides",
   );
   return runFunctionCallLoopProduction(args);
@@ -54,7 +53,6 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     tools: tool ? [tool] : [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
-    dialogProcessId: "dialog-1",
     maxTurns,
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,

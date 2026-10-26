@@ -24,13 +24,19 @@ const noopTurnRunner = async () => ({ ok: true });
 test("AgentRuntimeFacade prepareTurnExecution builds context from the payload contextBuilder", async () => {
   const calls = [];
   const contextBuilder = { kind: "context-builder" };
+  const runtimeIdentity = {
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    turnScopeId: "t1",
+  };
   const facade = new AgentRuntimeFacade({
     contextFactory: createContextFactory({ calls }),
     turnRunner: noopTurnRunner,
   });
 
   const result = await facade.prepareTurnExecution({
-    buildContextPayload: { mode: "conversation", sessionId: "s1", contextBuilder },
+    buildContextPayload: { mode: "conversation", runtimeIdentity, contextBuilder },
   });
 
   assert.deepEqual(Object.keys(result), ["agentContext"]);
@@ -38,7 +44,8 @@ test("AgentRuntimeFacade prepareTurnExecution builds context from the payload co
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], "buildAgentContextFromBuilder");
   assert.equal(calls[0][1].contextBuilder, contextBuilder);
-  assert.equal(calls[0][1].sessionId, "s1");
+  assert.equal(calls[0][1].runtimeIdentity, runtimeIdentity);
+  assert.equal(Object.hasOwn(calls[0][1], "sessionId"), false);
 });
 
 test("AgentRuntimeFacade prepareTurnExecution forwards context build error", async () => {
@@ -54,7 +61,7 @@ test("AgentRuntimeFacade prepareTurnExecution forwards context build error", asy
   await assert.rejects(
     () =>
       facade.prepareTurnExecution({
-        buildContextPayload: { sessionId: "s1", contextBuilder: {} },
+        buildContextPayload: { contextBuilder: {} },
       }),
     /context build failed/,
   );

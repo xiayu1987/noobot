@@ -12,25 +12,24 @@ export async function publishWorkflowResult({
   options,
   ctx,
   agentResult,
-  sourceText,
   semanticText,
   workflowPayload,
+  nodeTransferEnvelopes,
   execution,
 }) {
   await publishWorkflowFinalMessage({
     options,
     agentResult,
     ctx,
-    sourceText,
     semanticText,
     workflowPayload,
+    nodeTransferEnvelopes,
   });
   appendWorkflowTrace(agentResult, {
     stage: WORKFLOW_TRACE.STAGE_EXECUTED,
-    interactionId: workflowPayload.interactionId,
-    protocolVersion: workflowPayload.protocolVersion,
-    completed: execution?.completed === true,
-    pendingStepCount: execution?.pendingStepCount ?? 0,
-    autoTransitions: execution?.autoTransitions ?? 0,
+    workflowRunId: workflowPayload.workflowRunId,
+    completed: execution.completed,
+    pendingStepCount: execution.pendingStepCount,
+    autoTransitions: execution.autoTransitions,
   });
 }

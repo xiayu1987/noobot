@@ -7,20 +7,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   areCanonicalTurnScopeIdsEqual,
-  canonicalizeTurnScopeId,
   createMemoryPostprocessIdentity,
   createWorkflowNodeDialogProcessId,
   createWorkflowNodeTurnScopeId,
   isCanonicalTurnScopeId,
-  isWorkflowNodeDialogProcessId,
+  isOptionalCanonicalTurnScopeId,
   isWorkflowNodeTurnScopeId,
-  readWorkflowNodeExecutionId,
-  turnScopeIdentityKey,
+  requireCanonicalTurnScopeId,
+  requireOptionalCanonicalTurnScopeId,
 } from "@noobot/session-protocol/turn-scope-identity";
-import {
-  canonicalizeTurnScopeId as canonicalizeInternalTurnScopeId,
-  turnScopeIdentityKey as internalTurnScopeIdentityKey,
-} from "../src/identity/turn-scope-identity.js";
+import { requireCanonicalTurnScopeId as requireInternalTurnScopeId } from "../src/identity/turn-scope-identity.js";
 import { isDialogProcessKey } from "../src/identity.js";
 
 test("memory postprocess identity is a dialog process key derived from the source turn", () => {
@@ -55,42 +51,56 @@ test("memory postprocess identity rejects missing session or source turn", () =>
 });
 
 test("public subpath re-exports the canonical identity implementation", () => {
-  assert.equal(canonicalizeTurnScopeId, canonicalizeInternalTurnScopeId);
-  assert.equal(turnScopeIdentityKey, internalTurnScopeIdentityKey);
+  assert.equal(requireCanonicalTurnScopeId, requireInternalTurnScopeId);
 });
 
-test("canonicalizes workflow node transport identities at the protocol boundary", () => {
-  assert.equal(canonicalizeTurnScopeId("workflow-node_node-1"), "workflow-node:node-1");
-  assert.equal(canonicalizeTurnScopeId("workflow-node:node-1"), "workflow-node:node-1");
-  assert.equal(turnScopeIdentityKey("workflow-node:node-1"), "workflow-node_node-1");
-  assert.equal(areCanonicalTurnScopeIdsEqual("workflow-node_node-1", "workflow-node:node-1"), true);
+test("workflow node turn scope has a single encoding and is never rewritten", () => {
+  assert.equal(requireCanonicalTurnScopeId("workflow-node:node-1"), "workflow-node:node-1");
+  assert.equal(areCanonicalTurnScopeIdsEqual("workflow-node:node-1", "workflow-node:node-1"), true);
+  assert.equal(
+    areCanonicalTurnScopeIdsEqual("workflow-node_node-1", "workflow-node:node-1"),
+    false,
+  );
+  assert.equal(isWorkflowNodeTurnScopeId("workflow-node_node-1"), false);
 });
 
-test("does not rewrite ordinary turn identities", () => {
-  assert.equal(canonicalizeTurnScopeId("client-turn:one:two"), "client-turn:one:two");
-  assert.equal(turnScopeIdentityKey("client-turn:one:two"), "client-turn:one:two");
-});
-
-test("canonical identity validation rejects transport encoding", () => {
+test("canonical identity validation rejects non canonical text instead of trimming", () => {
   assert.equal(isCanonicalTurnScopeId("workflow-node:node-1"), true);
-  assert.equal(isCanonicalTurnScopeId("workflow-node_node-1"), false);
+  assert.equal(isCanonicalTurnScopeId(" workflow-node:node-1"), false);
+  assert.equal(isCanonicalTurnScopeId(""), false);
+  assert.equal(areCanonicalTurnScopeIdsEqual(" turn-a", " turn-a"), false);
+  for (const value of [undefined, null, "", " turn-a", "turn-a ", 1]) {
+    assert.throws(() => requireCanonicalTurnScopeId(value), { code: "TURN_SCOPE_ID_INVALID" });
+  }
+});
+
+test("optional turn scope accepts only the explicit empty value or canonical text", () => {
+  assert.equal(isOptionalCanonicalTurnScopeId(""), true);
+  assert.equal(requireOptionalCanonicalTurnScopeId(""), "");
+  assert.equal(requireOptionalCanonicalTurnScopeId("turn-a"), "turn-a");
+  for (const value of [undefined, null, " ", " turn-a", 0]) {
+    assert.throws(() => requireOptionalCanonicalTurnScopeId(value), {
+      code: "TURN_SCOPE_ID_INVALID",
+    });
+  }
 });
 
 test("builds workflow node identities from a single node execution id", () => {
   assert.equal(createWorkflowNodeTurnScopeId("run_n1_1"), "workflow-node:run_n1_1");
   assert.equal(createWorkflowNodeDialogProcessId("run_n1_1"), "wf_node_run_n1_1");
-  assert.equal(readWorkflowNodeExecutionId("workflow-node:run_n1_1"), "run_n1_1");
-  assert.equal(readWorkflowNodeExecutionId("workflow-node_run_n1_1"), "run_n1_1");
-  assert.equal(createWorkflowNodeTurnScopeId(""), "");
-  assert.equal(createWorkflowNodeDialogProcessId(" "), "");
-  assert.equal(readWorkflowNodeExecutionId("client-turn:one"), "");
+  for (const value of [undefined, "", " ", " run_n1_1"]) {
+    assert.throws(() => createWorkflowNodeTurnScopeId(value), {
+      code: "WORKFLOW_NODE_IDENTITY_INVALID",
+    });
+    assert.throws(() => createWorkflowNodeDialogProcessId(value), {
+      code: "WORKFLOW_NODE_IDENTITY_INVALID",
+    });
+  }
 });
 
-test("detects workflow node identities in both canonical and transport encodings", () => {
+test("detects workflow node identities only in the single canonical encoding", () => {
   assert.equal(isWorkflowNodeTurnScopeId("workflow-node:run_n1_1"), true);
-  assert.equal(isWorkflowNodeTurnScopeId("workflow-node_run_n1_1"), true);
+  assert.equal(isWorkflowNodeTurnScopeId("workflow-node_run_n1_1"), false);
   assert.equal(isWorkflowNodeTurnScopeId("client-turn:one"), false);
   assert.equal(isWorkflowNodeTurnScopeId(""), false);
-  assert.equal(isWorkflowNodeDialogProcessId("wf_node_run_n1_1"), true);
-  assert.equal(isWorkflowNodeDialogProcessId("dialog-1"), false);
 });

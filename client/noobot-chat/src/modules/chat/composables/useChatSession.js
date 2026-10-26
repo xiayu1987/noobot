@@ -61,8 +61,7 @@ import { setTurnRuntimeDiagnosticsLogSink } from "../../debug/loggers/turnRuntim
 import { setMessageMutationDiagnosticsLogSink } from "../../debug/loggers/messageMutationDiagnosticsLogger.js";
 import { setEventProcessingTimingLogSink } from "../../debug/loggers/eventProcessingTimingLogger.js";
 import {
-  resolveSessionTurnRuntime,
-  resolveLatestContinuableStoppedTurn,
+  selectCurrentTurnRuntime,
   isTurnRuntimeDeleted,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
@@ -123,13 +122,8 @@ export function useChatSession({
     return activeSessionId.value;
   }
 
-  function resolveActiveTurnScopeIdentity() {
-    const sessionId = resolveActiveSessionIdentity();
-    const activeTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
-    const continuableStoppedTurn = !activeTurn
-      ? resolveLatestContinuableStoppedTurn(turnRuntimeRegistry.value, sessionId)
-      : null;
-    return text(activeTurn?.turnScopeId || continuableStoppedTurn?.turnScopeId);
+  function resolveActiveTurn() {
+    return selectCurrentTurnRuntime(turnRuntimeRegistry.value, resolveActiveSessionIdentity());
   }
 
   function scheduleTerminalResolution(sessionId, turnScopeId, metadata = {}) {
@@ -174,9 +168,8 @@ export function useChatSession({
 
   const { composerActionState, activeSessionSending, activeSessionCanStop } =
     createComposerRuntimeState({
-      turnRuntimeRegistry,
       resolveActiveSessionIdentity,
-      resolveActiveTurnScopeIdentity,
+      resolveActiveTurn,
     });
 
   const submitTurnRuntimeEvent = createRuntimeEventProjector({
@@ -242,11 +235,7 @@ export function useChatSession({
 
     if (state === AGENT_CHANNEL_STATE.USER_STOPPED && turnScopeId) {
       const currentSessionId = resolveActiveSessionIdentity();
-      const currentTurn = resolveSessionTurnRuntime(
-        turnRuntimeRegistry.value,
-        currentSessionId,
-        resolveActiveTurnScopeIdentity(),
-      );
+      const currentTurn = resolveActiveTurn();
       const reconciliationKey = `${sessionId}::${turnScopeId}`;
       if (
         sessionId === currentSessionId &&
@@ -331,7 +320,7 @@ export function useChatSession({
       const state = composerActionState.value || {};
       return [
         resolveActiveSessionIdentity(),
-        resolveActiveTurnScopeIdentity(),
+        text(resolveActiveTurn()?.turnScopeId),
         state.displayState || "",
         activeSessionSending.value === true,
         state.canStop === true,
@@ -343,12 +332,8 @@ export function useChatSession({
       lastComposerRenderSignature = signature;
       const state = composerActionState.value || {};
       const selectedSessionId = resolveActiveSessionIdentity();
-      const selectedTurnScopeId = resolveActiveTurnScopeIdentity();
-      const selectedTurn = resolveSessionTurnRuntime(
-        turnRuntimeRegistry.value,
-        selectedSessionId,
-        selectedTurnScopeId,
-      );
+      const selectedTurn = resolveActiveTurn();
+      const selectedTurnScopeId = text(selectedTurn?.turnScopeId);
       logStateMachineDebug("stateMachine.composer.consumed", () => ({
         sessionId: selectedSessionId,
         turnScopeId: selectedTurnScopeId,
@@ -371,7 +356,7 @@ export function useChatSession({
           data: {
             event: "frontend.render.composerRuntimeConsumed",
             selectedSessionId: resolveActiveSessionIdentity(),
-            selectedTurnScopeId: resolveActiveTurnScopeIdentity(),
+            selectedTurnScopeId,
             displayState: state.displayState || "",
             sending: activeSessionSending.value === true,
             canStop: state.canStop === true,
@@ -557,7 +542,7 @@ export function useChatSession({
       input,
       turnRuntimeRegistry,
       resolveActiveSessionIdentity,
-      resolveActiveTurnScopeIdentity,
+      resolveActiveTurn,
       submitTurnRuntimeEvent,
       waitForSessionConnectorState: connectorPanel.waitForSessionConnectorState,
       send: chatEngine.send,
@@ -573,7 +558,7 @@ export function useChatSession({
     turnRuntimeRegistry,
     chatWebSocketClient,
     reconnectReplay,
-    resolveActiveTurnScopeIdentity,
+    resolveActiveTurn,
     logSessionSystemEvent,
     notify,
     translate,
@@ -598,6 +583,7 @@ export function useChatSession({
     selectSession: chatList.selectSession,
     send: sendWithComposerActionState,
     stopSending: stopSendingWithComposerActionState,
+    stopExecution: chatEngine.stopExecution,
     prepareMonotonicMessageAction: chatEngine.prepareMonotonicMessageAction,
     cascadeDeleteMessagesFrom: chatEngine.cascadeDeleteMessagesFrom,
     deleteMonotonicMessage: chatEngine.deleteMonotonicMessage,

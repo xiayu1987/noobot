@@ -95,6 +95,7 @@ function settleTurn(store, { sessionId, turnScopeId, state }) {
       resolved: true,
       aggregateVersion: 1,
       turn: {
+        continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
         dialogProcessId: `dp-${turnScopeId}`,

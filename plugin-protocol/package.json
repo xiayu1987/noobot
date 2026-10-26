@@ -9,12 +9,14 @@
     "./manifest": "./src/manifest.js",
     "./activation": "./src/activation.js",
     "./frontend": "./src/frontend.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./plugin-message-payload": "./src/plugin-message-payload.js"
   },
   "dependencies": {
     "@noobot/hook-protocol": "file:../hook-protocol",
-    "zod": "^4.6.7",
-    "@noobot/shared": "file:../shared"
+    "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
+    "@noobot/shared": "file:../shared",
+    "zod": "^4.6.7"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

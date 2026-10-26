@@ -15,27 +15,52 @@ import {
 
 test("workflow run and node identities are stable and attempt-scoped", () => {
   const runConfig = {
-    turnScopeId: "turn-1",
     commandId: "command-1",
     executionId: "run-explicit",
     rootExecutionId: "root-1",
     presentationMessageId: "pres-1",
   };
-  const ctx = { sessionId: "s1", dialogProcessId: "d1", runConfig };
+  const ctx = { sessionId: "s1", dialogProcessId: "d1", turnScopeId: "turn-1", runConfig };
   const keysBefore = Object.keys(ctx);
+
   assert.deepEqual(resolveWorkflowRunIdentity(ctx), {
+    turnScopeId: "turn-1",
     ...runConfig,
     workflowRunId: "run-explicit",
   });
   assert.deepEqual(Object.keys(ctx), keysBefore);
+  for (const turnScopeId of [undefined, "", " turn-1", 7]) {
+    assert.throws(
+      () => resolveWorkflowRunIdentity({ ...ctx, turnScopeId }),
+      /workflow hook turnScopeId is required/,
+    );
+  }
+
+  assert.throws(
+    () =>
+      resolveWorkflowRunIdentity({
+        ...ctx,
+        turnScopeId: undefined,
+        runConfig: { ...runConfig, turnScopeId: "turn-1" },
+      }),
+    /workflow hook turnScopeId is required/,
+  );
   for (const field of Object.keys(runConfig)) {
     assert.throws(
       () => resolveWorkflowRunIdentity({ ...ctx, runConfig: { ...runConfig, [field]: "" } }),
       new RegExp(`runConfig\\.${field} is required`),
     );
   }
-  const first = createWorkflowNodeIdentity({ workflowRunId: "run-explicit", node: { id: "a" } });
-  const again = createWorkflowNodeIdentity({ workflowRunId: "run-explicit", node: { id: "a" } });
+  const first = createWorkflowNodeIdentity({
+    workflowRunId: "run-explicit",
+    node: { id: "a" },
+    attempt: 1,
+  });
+  const again = createWorkflowNodeIdentity({
+    workflowRunId: "run-explicit",
+    node: { id: "a" },
+    attempt: 1,
+  });
   const retry = createWorkflowNodeIdentity({
     workflowRunId: "run-explicit",
     node: { id: "a" },
@@ -47,6 +72,21 @@ test("workflow run and node identities are stable and attempt-scoped", () => {
   assert.throws(
     () => createWorkflowNodeIdentity({ node: { id: "a" } }),
     /workflow run id is required/,
+  );
+  for (const workflowRunId of [" run-explicit", "run-explicit ", 7]) {
+    assert.throws(
+      () => createWorkflowNodeIdentity({ workflowRunId, node: { id: "a" }, attempt: 1 }),
+      /workflow run id is required/,
+    );
+  }
+  assert.throws(
+    () =>
+      createWorkflowNodeIdentity({ workflowRunId: "run-explicit", node: { id: " a" }, attempt: 1 }),
+    /workflow node id is required/,
+  );
+  assert.throws(
+    () => resolveWorkflowRunIdentity({ ...ctx, runConfig: { ...runConfig, executionId: " exec" } }),
+    /runConfig.executionId is required/,
   );
   for (const attempt of [0, 1.5, "2"]) {
     assert.throws(
@@ -72,6 +112,10 @@ test("planning projection follows parsed flowtos and only action dependencies", 
     ].join("\n"),
   );
   const sessions = buildWorkflowPlanningNodeSessions({ workflowRunId: "run-1", semantic });
+  assert.deepEqual(
+    sessions.map((item) => item.nodeId),
+    ["a", "b"],
+  );
   const a = sessions.find((item) => item.nodeId === "a");
   const b = sessions.find((item) => item.nodeId === "b");
   assert.equal(a.status, "ready");

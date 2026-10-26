@@ -40,7 +40,7 @@ test("createRuntimeNodeSessions merges committed node facts by workflowRunId and
         nodeId: "node-a",
         nodeName: "Plan A",
         commandId: "old-command",
-        sessionId: "old-session",
+        nodeSessionId: "old-session",
         dialogProcessId: "old-dialog",
         turnScopeId: "old-turn",
         status: "pending",
@@ -69,7 +69,8 @@ test("createRuntimeNodeSessions merges committed node facts by workflowRunId and
   assert.equal(sessions[0].nodeId, "node-a");
   assert.equal(sessions[0].nodeName, "Plan A");
   assert.equal(sessions[0].commandId, "command-1");
-  assert.equal(sessions[0].sessionId, "session-1");
+  assert.equal(sessions[0].nodeSessionId, "session-1");
+  assert.equal(Object.hasOwn(sessions[0], "sessionId"), false);
   assert.equal(sessions[0].parentSessionId, "parent-1");
   assert.equal(sessions[0].dialogProcessId, "dialog-1");
   assert.equal(sessions[0].turnScopeId, "turn-1");
@@ -87,7 +88,7 @@ test("createRuntimeNodeSessions isolates committed facts by workflowRunId", () =
         workflowRunId: "run-current",
         nodeExecutionId: "node-exec-1",
         commandId: "planned-command",
-        sessionId: "planned-session",
+        nodeSessionId: "planned-session",
         status: "pending",
       },
     ],
@@ -104,7 +105,7 @@ test("createRuntimeNodeSessions isolates committed facts by workflowRunId", () =
 
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].commandId, "planned-command");
-  assert.equal(sessions[0].sessionId, "planned-session");
+  assert.equal(sessions[0].nodeSessionId, "planned-session");
   assert.equal(sessions[0].status, "pending");
 });
 
@@ -124,7 +125,7 @@ test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
         turnScopeId: "turn-orphan",
         status: "failed",
         activeChildExecutionId: "child-exec-orphan",
-        failure: { message: "boom" },
+        failure: { source: "workflow", code: "WORKFLOW_NODE_EXECUTION_FAILED", message: "boom" },
         revision: 3,
         sequence: 7,
         eventId: "event-orphan",
@@ -135,11 +136,16 @@ test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].nodeExecutionId, "node-exec-orphan");
   assert.equal(sessions[0].status, "failed");
-  assert.deepEqual(sessions[0].stepFailure, { message: "boom" });
-  assert.equal(sessions[0].sessionId, "session-orphan");
+  assert.deepEqual(sessions[0].failure, {
+    source: "workflow",
+    code: "WORKFLOW_NODE_EXECUTION_FAILED",
+    message: "boom",
+  });
+  assert.equal(Object.hasOwn(sessions[0], "stepFailure"), false);
+  assert.equal(sessions[0].nodeSessionId, "session-orphan");
   assert.equal(sessions[0].nodeId, "node-orphan");
   assert.equal(sessions[0].nodeName, "Orphan Node");
-  assert.equal(sessions[0].stepId, "node-exec-orphan");
+  assert.equal(Object.hasOwn(sessions[0], "stepId"), false);
   assert.equal(sessions[0].activeChildExecutionId, "child-exec-orphan");
 });
 
@@ -162,6 +168,6 @@ test("createRuntimeNodeSessions preserves enough identity to render a running re
 
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].nodeId, "node-live");
-  assert.equal(sessions[0].stepId, "node-exec-live");
+  assert.equal(Object.hasOwn(sessions[0], "stepId"), false);
   assert.equal(sessions[0].activeChildExecutionId, "agent-exec-live");
 });

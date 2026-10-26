@@ -50,6 +50,11 @@ function snapshot({
   state = TURN_STATE.PROCESSING,
 } = {}) {
   return createTurnLifecycleSnapshot({
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    recentTerminalTurns: [],
+    replacedTurns: [],
+    unchanged: false,
+    recovery: "none",
     commandId: `snapshot-${turnScopeId}`,
     sessionId,
     sequence,
@@ -66,6 +71,7 @@ function snapshot({
       executionState: state === TURN_STATE.PROCESSING ? "sending" : "completed",
       revision: 2,
       sequence,
+      continuedByTurnScopeId: "",
       startedAt: "2026-01-01T00:00:00.000Z",
     },
   });

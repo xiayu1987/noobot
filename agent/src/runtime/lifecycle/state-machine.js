@@ -192,5 +192,9 @@ export function createAgentLifecycleMachine({
     get snapshot() {
       return latestSnapshot ? { ...latestSnapshot } : null;
     },
+
+    get origin() {
+      return { ...executionOrigin };
+    },
   };
 }

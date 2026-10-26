@@ -26,7 +26,8 @@ test("an interjection accepted during the final model call is consumed before co
   let consumeCount = 0;
   let queueSealed = false;
   const runtime = createTestRuntimeContext({
-    systemRuntime: { sessionId: "session-1", turnScopeId: "scope-1" },
+    identity: { sessionId: "session-1", turnScopeId: "scope-1" },
+    systemRuntime: {},
     sealUserInterjectionQueueIfEmpty() {
       if (pendingInterjections.length) return false;
       queueSealed = true;

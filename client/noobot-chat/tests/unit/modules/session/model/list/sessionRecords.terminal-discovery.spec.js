@@ -43,14 +43,6 @@ function summaryWithTerminalSnapshot(overrides = {}) {
         },
       ],
     },
-    turnTimings: [
-      {
-        turnScopeId: "t-refresh",
-        dialogProcessId: "dp-refresh",
-        thinkingStartedAt: "2026-07-10T00:00:10.000Z",
-        thinkingFinishedAt: "2026-07-10T00:00:45.000Z",
-      },
-    ],
     ...overrides,
   };
 }
@@ -59,13 +51,7 @@ describe("sessionRecords terminal discovery metadata", () => {
   it("preserves terminal discovery fields through summary mapping", () => {
     const mapped = mapSummaryToSession(summaryWithTerminalSnapshot(), helpers);
     expect(mapped.turnLifecycleSnapshot?.recentTerminalTurns?.[0]?.state).toBe("completed");
-    expect(mapped.turnTimings).toEqual([
-      expect.objectContaining({
-        turnScopeId: "t-refresh",
-        thinkingStartedAt: "2026-07-10T00:00:10.000Z",
-        thinkingFinishedAt: "2026-07-10T00:00:45.000Z",
-      }),
-    ]);
+    expect(mapped).not.toHaveProperty("turnTimings");
   });
 
   it("uses neutral discovery defaults when a summary omits the fields", () => {
@@ -74,7 +60,6 @@ describe("sessionRecords terminal discovery metadata", () => {
       helpers,
     );
     expect(mapped.turnLifecycleSnapshot).toBeNull();
-    expect(mapped.turnTimings).toEqual([]);
   });
 
   it("prefers fresh discovery metadata and retains existing metadata for a partial summary", () => {
@@ -95,7 +80,6 @@ describe("sessionRecords terminal discovery metadata", () => {
 
     const retained = mergeExistingSessionState(partial, discovered, helpers);
     expect(retained.turnLifecycleSnapshot?.recentTerminalTurns?.[0]?.state).toBe("completed");
-    expect(retained.turnTimings).toHaveLength(1);
   });
 
   it("keeps terminal discovery metadata during in-place reconciliation", () => {
@@ -108,7 +92,6 @@ describe("sessionRecords terminal discovery metadata", () => {
 
     expect(reconciled).toBe(existing);
     expect(reconciled.turnLifecycleSnapshot?.recentTerminalTurns?.[0]?.state).toBe("completed");
-    expect(reconciled.turnTimings).toHaveLength(1);
   });
 
   it("does not let an earlier list snapshot roll back a realtime aggregate version", () => {

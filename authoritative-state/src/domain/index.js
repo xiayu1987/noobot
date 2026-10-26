@@ -3,9 +3,4 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export {
-  isTerminalTurnLifecycleState,
-  normalizeTurnLifecycleEntity,
-  projectTurnLifecycleTiming,
-  transitionTurnLifecycle,
-} from "./turn-lifecycle-entity.js";
+export { normalizeTurnLifecycleEntity, transitionTurnLifecycle } from "./turn-lifecycle-entity.js";

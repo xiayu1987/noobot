@@ -5,8 +5,7 @@
  */
 import {
   areCanonicalTurnScopeIdsEqual,
-  canonicalizeTurnScopeId,
-  turnScopeIdentityKey,
+  requireOptionalCanonicalTurnScopeId,
 } from "@noobot/session-protocol/turn-scope-identity";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
@@ -41,7 +40,9 @@ export function getMessageInternalType(messageItem = {}) {
 export function normalizeTurnMeta(raw = {}) {
   return {
     sessionId: getMessageSessionId(raw),
-    turnScopeId: trim(raw?.turnScopeId),
+    turnScopeId: Object.hasOwn(raw, "turnScopeId")
+      ? requireOptionalCanonicalTurnScopeId(raw.turnScopeId)
+      : "",
     dialogProcessId: trim(raw?.dialogProcessId),
     parentDialogProcessId: trim(raw?.parentDialogProcessId),
   };
@@ -63,23 +64,13 @@ export function getMessageTurnScopeId(messageItem = {}) {
   return trim(messageItem?.turnScopeId);
 }
 
-export function normalizeTurnScopeIdKey(value = "") {
-  return turnScopeIdentityKey(value);
-}
-
-export { canonicalizeTurnScopeId };
-
-export function getMessageTurnScopeIdKey(messageItem = {}) {
-  return normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
-}
-
 export function areTurnScopeIdsEquivalent(left = "", right = "") {
   return areCanonicalTurnScopeIdsEqual(left, right);
 }
 
 export function getMessageTurnScopeKey(messageItem = {}) {
   const sessionId = getMessageSessionId(messageItem);
-  const turnScopeId = getMessageTurnScopeIdKey(messageItem);
+  const turnScopeId = getMessageTurnScopeId(messageItem);
   return sessionId && turnScopeId ? `${sessionId}::${turnScopeId}` : "";
 }
 

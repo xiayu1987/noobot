@@ -308,7 +308,7 @@ describe("detailMessages", () => {
     });
   });
 
-  it("normalizes plugin and node transfer envelope attachments before UI reads messages", () => {
+  it("projects workflow attachments from message-level transfer envelopes only", () => {
     const normalizedMessages = buildNormalizedDetailMessages({
       detailMessages: [
         {
@@ -317,124 +317,118 @@ describe("detailMessages", () => {
           dialogProcessId: "root-dp",
           turnScopeId: "client-turn:root",
           sessionId: "root-session",
-          pluginMeta: {
-            payload: {
-              transferEnvelopes: [
-                {
-                  protocol: "noobot.semantic-transfer",
-                  version: TRANSFER_VERSION,
-                  transferId: "plugin",
-                  presentationMessageId: "message-plugin",
-                  identity: {
-                    sessionId: "root-session",
-                    turnScopeId: "turn-plugin",
-                    runId: "run-plugin",
-                    producer: { type: "plugin", id: "producer-plugin" },
-                  },
-                  direction: "output",
-                  payload: {
-                    mode: "attachment",
-                    attachments: [
-                      {
-                        identity: {
-                          attachmentId: "plugin-transfer-1",
-                          sessionId: "root-session",
-                          attachmentSource: "test",
-                        },
-                        role: "primary",
-                        name: "plugin.md",
-                        mimeType: "text/markdown",
-                      },
-                    ],
-                  },
-                  intent: {
-                    source: "plugin",
-                    reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
-                    scenario: "workflow",
-                    strategy: "workflow_subagent",
-                  },
-                  meta: {},
-                },
-              ],
-              nodeResultTransferEnvelopes: [
-                {
-                  protocol: "noobot.semantic-transfer",
-                  version: TRANSFER_VERSION,
-                  transferId: "node-result",
-                  presentationMessageId: "message-node-result",
-                  identity: {
-                    sessionId: "root-session",
-                    turnScopeId: "turn-node-result",
-                    runId: "run-node-result",
-                    producer: { type: "plugin", id: "producer-node-result" },
-                  },
-                  direction: "output",
-                  payload: {
-                    mode: "attachment",
-                    attachments: [
-                      {
-                        identity: {
-                          attachmentId: "node-result-1",
-                          sessionId: "root-session",
-                          attachmentSource: "test",
-                        },
-                        role: "primary",
-                        name: "node-result.md",
-                        mimeType: "text/markdown",
-                      },
-                    ],
-                  },
-                  intent: {
-                    source: "plugin",
-                    reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
-                    scenario: "workflow",
-                    strategy: "workflow_subagent",
-                  },
-                  meta: {},
-                },
-              ],
-              nodeSessions: [
-                {
-                  transferEnvelopes: [
-                    {
-                      protocol: "noobot.semantic-transfer",
-                      version: TRANSFER_VERSION,
-                      transferId: "node-session",
-                      presentationMessageId: "message-node-session",
-                      identity: {
-                        sessionId: "root-session",
-                        turnScopeId: "turn-node-session",
-                        runId: "run-node-session",
-                        producer: { type: "plugin", id: "producer-node-session" },
-                      },
-                      direction: "output",
-                      payload: {
-                        mode: "attachment",
-                        attachments: [
-                          {
-                            identity: {
-                              attachmentId: "node-session-1",
-                              sessionId: "root-session",
-                              attachmentSource: "test",
-                            },
-                            role: "primary",
-                            name: "node-session.md",
-                            mimeType: "text/markdown",
-                          },
-                        ],
-                      },
-                      intent: {
-                        source: "plugin",
-                        reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
-                        scenario: "workflow",
-                        strategy: "workflow_subagent",
-                      },
-                      meta: {},
+          transferEnvelopes: [
+            {
+              protocol: "noobot.semantic-transfer",
+              version: TRANSFER_VERSION,
+              transferId: "plugin",
+              presentationMessageId: "message-plugin",
+              identity: {
+                sessionId: "root-session",
+                turnScopeId: "turn-plugin",
+                runId: "run-plugin",
+                producer: { type: "plugin", id: "producer-plugin" },
+              },
+              direction: "output",
+              payload: {
+                mode: "attachment",
+                attachments: [
+                  {
+                    identity: {
+                      attachmentId: "plugin-transfer-1",
+                      sessionId: "root-session",
+                      attachmentSource: "test",
                     },
-                  ],
-                },
-              ],
+                    role: "primary",
+                    name: "plugin.md",
+                    mimeType: "text/markdown",
+                  },
+                ],
+              },
+              intent: {
+                source: "plugin",
+                reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
+                scenario: "workflow",
+                strategy: "workflow_subagent",
+              },
+              meta: {},
             },
+            {
+              protocol: "noobot.semantic-transfer",
+              version: TRANSFER_VERSION,
+              transferId: "node-result",
+              presentationMessageId: "message-node-result",
+              identity: {
+                sessionId: "root-session",
+                turnScopeId: "turn-node-result",
+                runId: "run-node-result",
+                producer: { type: "plugin", id: "producer-node-result" },
+              },
+              direction: "output",
+              payload: {
+                mode: "attachment",
+                attachments: [
+                  {
+                    identity: {
+                      attachmentId: "node-result-1",
+                      sessionId: "root-session",
+                      attachmentSource: "test",
+                    },
+                    role: "primary",
+                    name: "node-result.md",
+                    mimeType: "text/markdown",
+                  },
+                ],
+              },
+              intent: {
+                source: "plugin",
+                reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
+                scenario: "workflow",
+                strategy: "workflow_subagent",
+              },
+              meta: {},
+            },
+            {
+              protocol: "noobot.semantic-transfer",
+              version: TRANSFER_VERSION,
+              transferId: "node-session",
+              presentationMessageId: "message-node-session",
+              identity: {
+                sessionId: "root-session",
+                turnScopeId: "turn-node-session",
+                runId: "run-node-session",
+                producer: { type: "plugin", id: "producer-node-session" },
+              },
+              direction: "output",
+              payload: {
+                mode: "attachment",
+                attachments: [
+                  {
+                    identity: {
+                      attachmentId: "node-session-1",
+                      sessionId: "root-session",
+                      attachmentSource: "test",
+                    },
+                    role: "primary",
+                    name: "node-session.md",
+                    mimeType: "text/markdown",
+                  },
+                ],
+              },
+              intent: {
+                source: "plugin",
+                reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
+                scenario: "workflow",
+                strategy: "workflow_subagent",
+              },
+              meta: {},
+            },
+          ],
+          pluginMeta: {
+            source: "workflow-plugin",
+            kind: "workflow",
+            phase: "final",
+            payload: { workflowRunId: "run-1", nodeSessions: [{ nodeId: "node-1" }] },
           },
           toolTimeline: [
             {

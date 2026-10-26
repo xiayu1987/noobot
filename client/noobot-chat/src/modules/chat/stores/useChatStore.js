@@ -61,7 +61,6 @@ export const useChatStore = defineStore("chat", () => {
     turnRuntimeRegistry,
     createTurnRuntimeStoreCallbacks({
       sessions,
-      activeSession,
       turnRuntimeRegistry,
       getSubSessions: () => subSessions,
       closePendingInteractionsForTerminalTurn,

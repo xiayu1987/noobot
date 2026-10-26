@@ -10,6 +10,8 @@ import { BaseZoomControls } from "noobot-chat/plugin-api/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
+import { WORKFLOW_NODE_TYPE } from "@noobot/event-protocol/workflow-runtime-event";
+import { resolveWorkflowNodeStatus } from "../../runtime/workflowRuntimeStatus.js";
 import { text } from "@noobot/shared/value";
 
 const props = defineProps({
@@ -58,16 +60,10 @@ const nodeWidth = computed(() => {
 });
 
 const normalizedNodes = computed(() => {
-  const baseNodes = (Array.isArray(props.nodes) ? props.nodes : []).map((nodeItem = {}, index) => {
-    const status = text(nodeItem?.status || nodeItem?._status).toLowerCase();
-    const resolvedStatus = status || "pending";
+  return (Array.isArray(props.nodes) ? props.nodes : []).map((nodeItem = {}) => {
     const dialogProcessId = resolveDialogProcessId(nodeItem);
-    const sessionId = text(nodeItem?.sessionId);
-    const actionNodeStates = Array.isArray(nodeItem?.actionNodeStates)
-      ? nodeItem.actionNodeStates
-      : Array.isArray(nodeItem?.runtimeBoxes)
-        ? nodeItem.runtimeBoxes
-        : [];
+    const nodeSessionId = text(nodeItem?.nodeSessionId);
+    const actionNodeStates = resolveActionNodeStates(nodeItem);
     const stepDialogProcessIds = [];
     for (const stateBox of actionNodeStates) {
       for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
@@ -75,75 +71,16 @@ const normalizedNodes = computed(() => {
         if (stepDialogProcessId) stepDialogProcessIds.push(stepDialogProcessId);
       }
     }
-    const hasSessionRef = Boolean(dialogProcessId || sessionId || stepDialogProcessIds.length);
+    const hasSessionRef = Boolean(dialogProcessId || nodeSessionId || stepDialogProcessIds.length);
     return {
       ...nodeItem,
       dialogProcessId,
       actionNodeStates,
-      runtimeBoxes: actionNodeStates,
-      _index: index,
-      _status: resolvedStatus,
+      ...(isActionNode(nodeItem) ? { status: resolveWorkflowNodeStatus(nodeItem) } : {}),
       _hasSession: hasSessionRef,
-      _hasRuntimeBoxes: actionNodeStates.length > 0,
       _stepDialogProcessIds: stepDialogProcessIds,
     };
   });
-  if (!baseNodes.length) return [];
-
-  const hasStartBoundary = baseNodes.some((item) => {
-    const nodeId = text(item?.nodeId).toLowerCase();
-    return Number(item?.stateType) === 0 && nodeId === "start";
-  });
-  const hasEndBoundary = baseNodes.some((item) => {
-    const nodeId = text(item?.nodeId).toLowerCase();
-    return Number(item?.stateType) === 1 && nodeId === "end";
-  });
-
-  const maxTransition = baseNodes.reduce((acc, item) => {
-    const t = Number(item?.transition || 0);
-    return Number.isFinite(t) ? Math.max(acc, t) : acc;
-  }, 0);
-
-  const allFinished = baseNodes.every((item) => {
-    const status = text(item?._status).toLowerCase();
-    return status === "success" || status === "failed" || status === "error";
-  });
-
-  const startNode = {
-    dialogProcessId: "__wf_start__",
-    nodeId: "__wf_start__",
-    nodeName: translate("workflow.stateStart"),
-    type: "state",
-    nodeType: 0,
-    stateType: 0,
-    transition: -1,
-    parallelWave: 0,
-    waveOrder: 0,
-    _index: -1,
-    _status: "success",
-    _hasSession: true,
-    _virtualBoundary: "start",
-  };
-  const endNode = {
-    dialogProcessId: "__wf_end__",
-    nodeId: "__wf_end__",
-    nodeName: translate("workflow.stateEnd"),
-    type: "state",
-    nodeType: 0,
-    stateType: 1,
-    transition: maxTransition + 1,
-    parallelWave: 0,
-    waveOrder: 0,
-    _index: baseNodes.length,
-    _status: allFinished ? "success" : "pending",
-    _hasSession: allFinished,
-    _virtualBoundary: "end",
-  };
-  return [
-    ...(hasStartBoundary ? [] : [startNode]),
-    ...baseNodes,
-    ...(hasEndBoundary ? [] : [endNode]),
-  ];
 });
 
 function resolveSemanticNodeId(nodeItem = {}) {
@@ -243,48 +180,7 @@ function buildTopologyRows(nodes = [], flowtos = []) {
     }));
 }
 
-const layoutRows = computed(() => {
-  const topologyRows = buildTopologyRows(normalizedNodes.value, props.flowtos);
-  if (topologyRows.length) return topologyRows;
-
-  const sorted = normalizedNodes.value.slice().sort((left, right) => {
-    const lt = Number(left?.transition);
-    const rt = Number(right?.transition);
-    const hasLt = Number.isFinite(lt);
-    const hasRt = Number.isFinite(rt);
-    if (hasLt && hasRt && lt !== rt) return lt - rt;
-    if (hasLt && !hasRt) return -1;
-    if (!hasLt && hasRt) return 1;
-    return Number(left?._index || 0) - Number(right?._index || 0);
-  });
-  const rows = [];
-  const waveMap = new Map();
-  for (const nodeItem of sorted) {
-    const parallelWave = Number(nodeItem?.parallelWave || 0);
-    if (parallelWave > 0) {
-      const key = `wave_${parallelWave}`;
-      if (!waveMap.has(key)) {
-        const row = { key, nodes: [] };
-        waveMap.set(key, row);
-        rows.push(row);
-      }
-      waveMap.get(key).nodes.push(nodeItem);
-      continue;
-    }
-    rows.push({
-      key: `serial_${String(resolveDialogProcessId(nodeItem) || nodeItem?.nodeId || nodeItem?._index || rows.length)}`,
-      nodes: [nodeItem],
-    });
-  }
-  for (const row of rows) {
-    row.nodes.sort(
-      (left, right) =>
-        Number(left?.waveOrder || 0) - Number(right?.waveOrder || 0) ||
-        Number(left?.transition || 0) - Number(right?.transition || 0),
-    );
-  }
-  return rows;
-});
+const layoutRows = computed(() => buildTopologyRows(normalizedNodes.value, props.flowtos));
 
 const flattenedNodes = computed(() => {
   const result = [];
@@ -295,12 +191,8 @@ const flattenedNodes = computed(() => {
   return result;
 });
 
-function resolveRuntimeBoxes(nodeItem = {}) {
-  return Array.isArray(nodeItem?.actionNodeStates)
-    ? nodeItem.actionNodeStates
-    : Array.isArray(nodeItem?.runtimeBoxes)
-      ? nodeItem.runtimeBoxes
-      : [];
+function resolveActionNodeStates(nodeItem = {}) {
+  return Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : [];
 }
 
 function nodeContainsDialogProcessId(nodeItem = {}, dialogProcessId = "") {
@@ -312,7 +204,7 @@ function nodeContainsDialogProcessId(nodeItem = {}, dialogProcessId = "") {
     nodeItem._stepDialogProcessIds.includes(selected)
   )
     return true;
-  for (const stateBox of resolveRuntimeBoxes(nodeItem)) {
+  for (const stateBox of resolveActionNodeStates(nodeItem)) {
     for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
       if (resolveDialogProcessId(stepItem) === selected) return true;
     }
@@ -393,18 +285,8 @@ function getNodeStyle(nodeItem = {}) {
   };
 }
 
-function resolveStatusClass(nodeItem = {}) {
-  const status = text(nodeItem?._status);
-  if (status === "success") return "success";
-  if (status === "failed" || status === "error") return "failed";
-  if (status === "running") return "running";
-  return "pending";
-}
-
 function isActionNode(nodeItem = {}) {
-  const type = text(nodeItem?.type).toLowerCase();
-  if (type) return type === "action";
-  return Number(nodeItem?.nodeType) === 2;
+  return nodeItem?.type === WORKFLOW_NODE_TYPE.ACTION;
 }
 
 function buildCenterSegment({ fromNode = {}, toNode = {}, highlighted = false } = {}) {
@@ -459,44 +341,20 @@ function buildWorkflowEdgeSegment({ fromNode = {}, toNode = {}, highlighted = fa
 
 const edgeSegments = computed(() => {
   const segments = [];
-  if (positionedNodes.value.length <= 1) return segments;
-  const flowtos = Array.isArray(props.flowtos) ? props.flowtos : [];
   const selectedRowIndex = Number(selectedNode.value?._rowIndex ?? -1);
-  if (flowtos.length) {
-    const nodeBySemanticId = new Map();
-    for (const nodeItem of positionedNodes.value) {
-      const semanticId = text(nodeItem?.nodeId);
-      if (!semanticId) continue;
-      nodeBySemanticId.set(semanticId, nodeItem);
-    }
-    for (const flowto of flowtos) {
-      const fromId = text(flowto?.from);
-      const toId = text(flowto?.to);
-      const fromNode = nodeBySemanticId.get(fromId);
-      const toNode = nodeBySemanticId.get(toId);
-      if (!fromNode || !toNode) continue;
-      const fromRow = Number(fromNode?._rowIndex ?? -1);
-      const toRow = Number(toNode?._rowIndex ?? -1);
-      const minRow = Math.min(fromRow, toRow);
-      segments.push(
-        buildWorkflowEdgeSegment({
-          fromNode,
-          toNode,
-          highlighted: selectedRowIndex >= 0 && minRow >= 0 && minRow < selectedRowIndex,
-        }),
-      );
-    }
-    return segments;
-  }
-
-  for (let rowIndex = 0; rowIndex < positionedNodes.value.length - 1; rowIndex += 1) {
-    const fromNode = positionedNodes.value[rowIndex];
-    const toNode = positionedNodes.value[rowIndex + 1];
+  const nodeBySemanticId = new Map(
+    positionedNodes.value.map((nodeItem) => [resolveSemanticNodeId(nodeItem), nodeItem]),
+  );
+  for (const flowto of props.flowtos) {
+    const fromNode = nodeBySemanticId.get(text(flowto?.from));
+    const toNode = nodeBySemanticId.get(text(flowto?.to));
+    if (!fromNode || !toNode) continue;
+    const minRow = Math.min(fromNode._rowIndex, toNode._rowIndex);
     segments.push(
       buildWorkflowEdgeSegment({
         fromNode,
         toNode,
-        highlighted: selectedRowIndex >= 0 && rowIndex < selectedRowIndex,
+        highlighted: selectedRowIndex >= 0 && minRow < selectedRowIndex,
       }),
     );
   }
@@ -548,7 +406,6 @@ function zoomReset() {
 }
 
 function handleNodeClick(nodeItem = {}) {
-  if (nodeItem?._virtualBoundary) return;
   if (!isActionNode(nodeItem)) return;
   emit("node-click", nodeItem);
 }
@@ -574,12 +431,11 @@ function handleNodeClick(nodeItem = {}) {
 
         <WorkflowGraphNode
           v-for="(nodeItem, nodeIndex) in positionedNodes"
-          :key="`${String(nodeItem?.nodeId || resolveDialogProcessId(nodeItem) || nodeItem?.sessionId || '')}-${nodeIndex}`"
+          :key="nodeItem.nodeId"
           :node-item="nodeItem"
           :node-index="nodeIndex"
           :style-obj="getNodeStyle(nodeItem)"
-          :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem)"
-          :boundary-type="String(nodeItem?._virtualBoundary || '')"
+          :clickable="isActionNode(nodeItem)"
           :selected="nodeContainsDialogProcessId(nodeItem, effectiveSelectedDialogProcessId)"
           :expanded="false"
           @click="handleNodeClick"
@@ -594,9 +450,9 @@ function handleNodeClick(nodeItem = {}) {
             >
               <span
                 v-for="(nodeItem, colIndex) in row.nodes"
-                :key="`${String(resolveDialogProcessId(nodeItem))}-${colIndex}`"
+                :key="nodeItem.nodeId"
                 class="workflow-minimap-node"
-                :class="resolveStatusClass(nodeItem)"
+                :class="nodeItem.status"
               />
             </div>
           </div>
@@ -657,11 +513,12 @@ function handleNodeClick(nodeItem = {}) {
   background: color-mix(in srgb, var(--noobot-text-muted) 35%, transparent);
 }
 
-.workflow-minimap-node.success {
+.workflow-minimap-node.succeeded {
   background: color-mix(in srgb, var(--noobot-status-success) 65%, transparent);
 }
 
-.workflow-minimap-node.failed {
+.workflow-minimap-node.failed,
+.workflow-minimap-node.stopped {
   background: color-mix(in srgb, var(--noobot-status-error) 72%, transparent);
 }
 

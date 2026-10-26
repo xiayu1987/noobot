@@ -264,10 +264,7 @@ export class SessionExecutionEngine {
   }
 
   _buildContextBuilder({
-    userId,
-    sessionId,
-    caller,
-    parentSessionId,
+    runtimeIdentity,
     userConfig,
     userMessageAttachments,
     systemMessages,
@@ -278,10 +275,7 @@ export class SessionExecutionEngine {
     persistenceScope,
   }) {
     return this.agentContextFactory.buildContextBuilder({
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
+      runtimeIdentity,
       userConfig,
       userMessageAttachments,
       systemMessages,

@@ -592,7 +592,8 @@ test("harness records tool call and state commit hook artifacts", async () => {
       turnScopeId: "turn-tool-state-smoke",
       ...createAcceptedRunIdentity("turn-tool-state-smoke"),
     },
-    systemRuntime: { userId: "u1", sessionId, dialogProcessId },
+    identity: { userId: "u1", sessionId, dialogProcessId },
+    systemRuntime: {},
   });
   const agentContext = createTestAgentExecutionScope(runtime);
 

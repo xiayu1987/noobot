@@ -24,7 +24,7 @@ async function withTempWorkspace(fn) {
   }
 }
 
-test("session save persists thinking timing fields to full session and display summary", async () => {
+test("session save keeps thinking timing out of messages and projects finish from turnTimings", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-thinking";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -64,7 +64,6 @@ test("session save persists thinking timing fields to full session and display s
         content: "first assistant chunk",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
-        thinkingStartedAt: "2026-07-08T10:00:00.000Z",
       },
       {
         messageUid: "sm_thinking_assistant_2",
@@ -73,6 +72,12 @@ test("session save persists thinking timing fields to full session and display s
         presentationMessageId: "pm_fx2",
         modelMessageId: "mm_session_repository_bound_2",
         content: "final assistant chunk",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+      },
+    ];
+    session.turnTimings = [
+      {
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
         thinkingFinishedAt: "2026-07-08T10:00:04.000Z",
@@ -101,17 +106,19 @@ test("session save persists thinking timing fields to full session and display s
       await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
     );
 
-    const fullAssistant = full.messages.filter((item) => item.role === "assistant");
-    assert.equal(fullAssistant[0].thinkingStartedAt, "2026-07-08T10:00:00.000Z");
-    assert.equal(fullAssistant[0].thinkingFinishedAt, undefined);
-    assert.equal(fullAssistant[1].thinkingStartedAt, undefined);
-    assert.equal(fullAssistant[1].thinkingFinishedAt, "2026-07-08T10:00:04.000Z");
-
-    const summaryAssistant = displaySummary.messages.filter((item) => item.role === "assistant");
-    assert.equal(summaryAssistant[0].thinkingStartedAt, "2026-07-08T10:00:00.000Z");
-    assert.equal(summaryAssistant[0].thinkingFinishedAt, undefined);
-    assert.equal(summaryAssistant[1].thinkingStartedAt, undefined);
-    assert.equal(summaryAssistant[1].thinkingFinishedAt, "2026-07-08T10:00:04.000Z");
+    for (const message of [...full.messages, ...displaySummary.messages]) {
+      assert.equal(Object.hasOwn(message, "thinkingStartedAt"), false);
+      assert.equal(Object.hasOwn(message, "thinkingFinishedAt"), false);
+    }
+    const expectedTiming = [
+      {
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+        thinkingFinishedAt: "2026-07-08T10:00:04.000Z",
+      },
+    ];
+    assert.deepEqual(full.turnTimings, expectedTiming);
+    assert.deepEqual(displaySummary.turnTimings, expectedTiming);
   });
 });
 
@@ -161,7 +168,6 @@ test("session save keeps the model loop round on persisted turn timings", async 
       {
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
-        thinkingStartedAt: "2026-07-08T10:00:00.000Z",
         thinkingFinishedAt: "2026-07-08T10:00:04.000Z",
         modelLoopRound: 6,
       },

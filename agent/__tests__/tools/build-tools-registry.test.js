@@ -32,9 +32,8 @@ function createContext({
         basePath: "/tmp/noobot-test-workspace",
         globalConfig,
         userConfig,
+        identity: { sessionId: "s-1" },
         systemRuntime: {
-          sessionId: "s-1",
-          rootSessionId: "s-1",
           persistenceScope: null,
           config: { allowUserInteraction: true },
         },

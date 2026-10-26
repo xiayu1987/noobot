@@ -13,7 +13,7 @@ import {
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyExecutionSnapshot,
-  resolveSessionTurnRuntime,
+  selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 const CHILD_EXECUTION_ID = deriveAgentExecutionId({ turnScopeId: "child-turn" });
@@ -54,10 +54,10 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     const { engine, deps, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "backend-stop-payload",
     });
-    activeSession.value.parentSessionId = "parent-session";
     activateRuntimeTurn({
       turnRuntimeRegistry,
       sessionId: "backend-stop-payload",
+      parentSessionId: "parent-session",
       turnScopeId: "turn-stop-payload",
       dialogProcessId: "dp-stop-payload",
     });
@@ -67,7 +67,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       pending: true,
       dialogProcessId: "dp-stop-payload",
       turnScopeId: "turn-stop-payload",
-      parentDialogProcessId: "parent-dp",
       modelAlias: "alias-a",
       modelName: "model-a",
     });
@@ -86,13 +85,13 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         dialogProcessId: "dp-stop-payload",
         turnScopeId: "turn-stop-payload",
         parentSessionId: "parent-session",
-        parentDialogProcessId: "parent-dp",
+        parentDialogProcessId: "",
       },
       concurrency: { expectedTurnRevision: 2 },
       stop: {},
     });
     expect(
-      resolveSessionTurnRuntime(
+      selectTurnRuntimeByScope(
         turnRuntimeRegistry.value,
         "backend-stop-payload",
         "turn-stop-payload",
@@ -228,7 +227,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     });
   });
 
-  it("stopSending targets a child Agent by executionId with authoritative identity and revision", () => {
+  it("stopExecution targets a child Agent by executionId with authoritative identity and revision", () => {
     const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
     applyExecutionSnapshot(turnRuntimeRegistry.value, {
       execution: {
@@ -241,15 +240,14 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
         state: "processing",
-        terminal: false,
+        executionState: "sending",
         revision: 7,
         sequence: 9,
-        capabilities: { canStop: true },
       },
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
-    expect(engine.stopSending(CHILD_EXECUTION_ID)).toBe(true);
+    expect(engine.stopExecution(CHILD_EXECUTION_ID)).toBe(true);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:child-turn",
@@ -265,7 +263,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     );
   });
 
-  it("stopSending rejects unknown, terminal, and non-stoppable executions", () => {
+  it("stopExecution rejects unknown, terminal, and non-stoppable executions", () => {
     const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
     const add = (executionId, overrides = {}) =>
       applyExecutionSnapshot(turnRuntimeRegistry.value, {
@@ -276,19 +274,18 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           sessionId: `${executionId}-session`,
           turnScopeId: `${executionId}-turn`,
           state: "processing",
-          terminal: false,
+          executionState: "sending",
           revision: 1,
           sequence: 1,
-          capabilities: { canStop: true },
           ...overrides,
         },
       });
-    add("terminal-execution", { state: "completed", terminal: true });
-    add("locked-execution", { capabilities: { canStop: false } });
+    add("terminal-execution", { state: "completed", executionState: "completed" });
+    add("locked-execution", { executionState: "completed" });
 
-    expect(engine.stopSending("missing-execution")).toBe(false);
-    expect(engine.stopSending("terminal-execution")).toBe(false);
-    expect(engine.stopSending("locked-execution")).toBe(false);
+    expect(engine.stopExecution("missing-execution")).toBe(false);
+    expect(engine.stopExecution("terminal-execution")).toBe(false);
+    expect(engine.stopExecution("locked-execution")).toBe(false);
     expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
   });
 });

@@ -7,11 +7,7 @@ import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { invokeWithToolsTurn } from "../../../src/runtime/turn/turn-executor.js";
-import {
-  createTestModelPort,
-  createLoopTurnIdentity,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
@@ -76,15 +72,9 @@ test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () =
       incremental: [current],
     },
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d2",
     maxTurns: 1,
   };
-  prepareTestTurnExecution(
-    modelState,
-    loopState,
-    createLoopTurnIdentity(loopState),
-    "presentation-message-block-normalization",
-  );
+  prepareTestTurnExecution(modelState, loopState, "presentation-message-block-normalization");
   await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
   assert.deepEqual(
     captured.map((item) => `${item.role}:${item.content}`),

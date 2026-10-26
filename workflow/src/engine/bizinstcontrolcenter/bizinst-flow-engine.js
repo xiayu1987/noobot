@@ -9,6 +9,7 @@ import BizinstBox from "../bizinst/box/bizinstbox/bizinst-box.js";
 import ModelBoxFactory from "../bizinst/box/modelbox/model-box-factory.js";
 import ModelStateBoxFactory from "../bizinst/box/modelstatebox/model-state-box-factory.js";
 import ENodeType from "../../design/model/node/enums/node-type.js";
+import EStateType from "../../design/model/node/enums/state-type.js";
 import CantFlowException from "../exception/cant-flow-exception.js";
 import FlowPolicyException from "../exception/flow-policy-exception.js";
 import { isFunction } from "@noobot/shared/value";
@@ -100,7 +101,7 @@ class BizinstFlowEngine {
       const currentStateType = currentNode?.getStateType?.();
       const currentNodeType = currentNode?.getNodeType?.();
       const currentNodeAllowsParallelOutgoing =
-        currentStateType === 2 || currentNodeType === ENodeType.ActionNode;
+        currentStateType === EStateType.Branch || currentNodeType === ENodeType.ActionNode;
       if (!currentNodeAllowsParallelOutgoing && canFlowtoCount > 1) {
         throw new FlowPolicyException("Multiple flowtos match the conditions.");
       }
@@ -170,7 +171,10 @@ class BizinstFlowEngine {
           this.getModelBoxFactory()
             .getStateNodeBox(nextStateNodeState.getNode())
             .getNodeStartFlowtos().length > 0;
-        if (stateType === 1 || (stateType === 3 && !hasOutgoingFlowto)) {
+        if (
+          stateType === EStateType.End ||
+          (stateType === EStateType.Merge && !hasOutgoingFlowto)
+        ) {
           flowListener.end(bizinst, nextStateNodeState);
         } else {
           this._goNextFromNodeState(bizinst, nextStateNodeState, flowListener);
@@ -208,7 +212,7 @@ class BizinstFlowEngine {
     const preStateNodeStateBox = this.getModelStateBoxFactory().getStateNodeStateBox(preNodeState);
     if (preStateNodeStateBox.canBackwardChange(bizinst)) {
       const stateType = preNodeState.getNode().getStateType();
-      if (stateType === 0 || stateType === 2) {
+      if (stateType === EStateType.Start || stateType === EStateType.Branch) {
         flowListener.close(bizinst, preNodeState);
       } else {
         flowListener.backwardStateNodeStateChange(bizinst, preNodeState);

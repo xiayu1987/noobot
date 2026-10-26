@@ -107,11 +107,9 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
       },
     },
     userConfig: {},
+    identity: { userId: "admin", sessionId: "session-1" },
     systemRuntime: {
       persistenceScope: null,
-      userId: "admin",
-      sessionId: "session-1",
-      rootSessionId: "session-1",
     },
     userMessageAttachments: [
       {
@@ -320,11 +318,9 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
         },
       },
       userConfig: {},
+      identity: { userId: "admin", sessionId: "session-1" },
       systemRuntime: {
         persistenceScope: null,
-        userId: "admin",
-        sessionId: "session-1",
-        rootSessionId: "session-1",
       },
       userMessageAttachments: [],
       modelHost: createTestModelHost({
@@ -379,7 +375,8 @@ test("multimodal_parse rejects directly readable text before invoking a model", 
   const agentContext = createTestAgentExecutionScope(
     createTestRuntimeContext({
       basePath,
-      systemRuntime: { persistenceScope: null, userId: "admin" },
+      identity: { userId: "admin" },
+      systemRuntime: { persistenceScope: null },
       userMessageAttachments: [],
       modelHost: createTestModelHost({
         modelPort: {
@@ -424,11 +421,9 @@ test("multimodal_parse passes audio and video files to the configured model", as
         },
       },
       userConfig: {},
+      identity: { userId: "admin", sessionId: "session-1" },
       systemRuntime: {
         persistenceScope: null,
-        userId: "admin",
-        sessionId: "session-1",
-        rootSessionId: "session-1",
       },
       userMessageAttachments: [],
       modelHost: createTestModelHost({
@@ -495,7 +490,8 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
   const agentContext = createTestAgentExecutionScope(
     createTestRuntimeContext({
       basePath,
-      systemRuntime: { persistenceScope: null, userId: "admin" },
+      identity: { userId: "admin" },
+      systemRuntime: { persistenceScope: null },
       userMessageAttachments: [],
       modelHost: createTestModelHost({
         modelPort: {
@@ -522,7 +518,8 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
   const agentContext = createTestAgentExecutionScope(
     createTestRuntimeContext({
       basePath,
-      systemRuntime: { persistenceScope: null, userId: "admin" },
+      identity: { userId: "admin" },
+      systemRuntime: { persistenceScope: null },
       runtimeModel: "parse-model",
       globalConfig: {
         multimodal: { parsing: { default_models: { document: "parse-model" } } },
@@ -564,7 +561,8 @@ test("multimodal_parse uses the configured modality default instead of the runti
   const agentContext = createTestAgentExecutionScope(
     createTestRuntimeContext({
       basePath,
-      systemRuntime: { persistenceScope: null, userId: "admin" },
+      identity: { userId: "admin" },
+      systemRuntime: { persistenceScope: null },
       runtimeModel: "conversation-model",
       globalConfig: {
         multimodal: { parsing: { default_models: { document: "parse-model" } } },

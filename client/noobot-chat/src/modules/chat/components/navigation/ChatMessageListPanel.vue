@@ -48,7 +48,6 @@ const presentedMessages = computed(() => {
     activeSession: props.activeSession,
     workflowRegistry: chatStore.workflowNodeStateRegistry,
     turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
-    subSessionMessageRegistry: chatStore.subSessionMessageRegistry,
   });
 });
 const presentationDiagnosticsSignature = computed(() =>
@@ -88,6 +87,7 @@ const messageItemSharedProps = computed(() => ({
   deleteMonotonicMessage: props.deleteMonotonicMessage,
   resendMonotonicMessage: props.resendMonotonicMessage,
   stopExecution: props.stopExecution,
+  fetchExecutionReport: props.fetchExecutionReport,
 }));
 const currentAssistantMessage = computed(() => {
   for (let index = presentedMessages.value.length - 1; index >= 0; index -= 1) {

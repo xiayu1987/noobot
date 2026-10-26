@@ -7,7 +7,10 @@ import { createSessionAggregateVersionManager } from "./sessionAggregateVersionM
 import { applySendErrorState, finalizeSendCleanup } from "./sendFinalize.js";
 import { prepareChatSend } from "./sendPrepare.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
-import { selectSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import {
+  projectTurnRuntimeView,
+  selectTurnRuntimeByScope,
+} from "../run-state-machine/turnRuntimeRegistry.js";
 import { logResendDebug } from "../../../debug/loggers/resendDebugLogger.js";
 import { scopeSessionLogRecord } from "../../../debug/loggers/lazyDebugSink.js";
 import { createSendFlowDebugLogger } from "./sendFlowDebugLogger.js";
@@ -123,7 +126,10 @@ export function createChatEngineSender({
       sessionId,
     } = request;
     const runtimeView = () =>
-      selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+      projectTurnRuntimeView(
+        sessionId,
+        selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId),
+      );
     const debugLogger = createSendFlowDebugLogger({
       activeSession,
       logSessionEvent,

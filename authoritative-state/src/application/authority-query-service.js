@@ -5,34 +5,38 @@
  */
 import {
   buildExecutionTree,
-  normalizeExecutionIdentity,
+  compareExecutionVersion,
+  projectExecutionRecord,
 } from "@noobot/session-protocol/execution-lifecycle";
 import {
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
-  deriveAuthoritativeTurnCapabilities,
   isTurnSnapshotKnownSequence,
   isTurnSnapshotTerminalLimit,
 } from "@noobot/session-protocol/turn-lifecycle";
-import {
-  isTerminalTurnLifecycleState,
-  normalizeTurnLifecycleEntity,
-  projectTurnLifecycleTiming,
-} from "../domain/turn-lifecycle-entity.js";
+import { isTerminalTurnState, projectTurnTiming } from "@noobot/session-protocol";
+import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 import { text as clean, isObjectLike } from "@noobot/shared/value";
 
+function selectLifecycleActiveTurn(lifecycle) {
+  return lifecycle.turns[lifecycle.activeTurnScopeId] ?? null;
+}
+
+export function selectAuthoritativeActiveTurn(lifecycleSource) {
+  return selectLifecycleActiveTurn(normalizeTurnLifecycleEntity(lifecycleSource));
+}
+
 export function createAuthoritativeTurnSnapshot({
-  lifecycle: lifecycleSource = {},
-  turnTimings = [],
-  commandId = "",
-  userId = "",
-  sessionId = "",
+  lifecycle: lifecycleSource,
+  turnTimings,
+  commandId,
+  sessionId,
   knownSequence,
   terminalLimit,
-  terminalTurnScopeIds = [],
+  terminalTurnScopeIds,
   recovery,
-  generatedAt = new Date().toISOString(),
-} = {}) {
+  generatedAt,
+}) {
   if (!isTurnSnapshotKnownSequence(knownSequence)) {
     throw new TypeError("turn_snapshot_requires_known_sequence");
   }
@@ -40,29 +44,18 @@ export function createAuthoritativeTurnSnapshot({
     throw new TypeError("turn_snapshot_requires_terminal_limit");
   }
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
-  const terminalTurnScopes = new Set(
-    (Array.isArray(terminalTurnScopeIds) ? terminalTurnScopeIds : []).map(clean).filter(Boolean),
-  );
-  const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId]
-    ? {
-        ...projectTurnLifecycleTiming(lifecycle.turns[lifecycle.activeTurnScopeId], turnTimings),
-        sessionId: clean(sessionId),
-      }
+  const terminalTurnScopes = new Set(terminalTurnScopeIds);
+  const lifecycleActiveTurn = selectLifecycleActiveTurn(lifecycle);
+  const activeTurn = lifecycleActiveTurn
+    ? { ...projectTurnTiming(lifecycleActiveTurn, turnTimings), sessionId }
     : null;
   const recentTerminalTurns = Object.values(lifecycle.turns)
-    .filter(
-      (turn) =>
-        terminalTurnScopes.has(turn.turnScopeId) && isTerminalTurnLifecycleState(turn.state),
-    )
+    .filter((turn) => terminalTurnScopes.has(turn.turnScopeId) && isTerminalTurnState(turn.state))
     .sort((left, right) => Number(right.sequence) - Number(left.sequence))
     .slice(0, terminalLimit)
-    .map((turn) => ({
-      ...projectTurnLifecycleTiming(turn, turnTimings),
-      sessionId: clean(sessionId),
-    }));
+    .map((turn) => ({ ...projectTurnTiming(turn, turnTimings), sessionId }));
   return createTurnLifecycleSnapshot({
     commandId,
-    userId,
     sessionId,
     sequence: lifecycle.sequence,
     activeTurnScopeId: lifecycle.activeTurnScopeId,
@@ -99,7 +92,7 @@ export function resolveAuthoritativeTurnTerminal({
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
   const lifecycleTurn = lifecycle.turns[normalizedTurnScopeId] || null;
   const turn = lifecycleTurn
-    ? { ...projectTurnLifecycleTiming(lifecycleTurn, turnTimings), sessionId: normalizedSessionId }
+    ? { ...projectTurnTiming(lifecycleTurn, turnTimings), sessionId: normalizedSessionId }
     : null;
   if (!turn) {
     return createTurnTerminalResolution({
@@ -109,7 +102,7 @@ export function resolveAuthoritativeTurnTerminal({
       retryAfterMs,
     });
   }
-  if (!isTerminalTurnLifecycleState(turn.state)) {
+  if (!isTerminalTurnState(turn.state)) {
     return createTurnTerminalResolution({
       ...base,
       reason: "turn_not_terminal",
@@ -130,53 +123,12 @@ export function resolveAuthoritativeTurnTerminal({
   return createTurnTerminalResolution({ ...base, resolved: true, turn });
 }
 
-export function projectAuthoritativeExecution(turn = {}, session = {}) {
-  const timedTurn = {
-    ...projectTurnLifecycleTiming(turn, session.turnTimings),
-    sessionId: clean(session.sessionId),
-  };
-  const identity = normalizeExecutionIdentity({
-    ...timedTurn,
+export function projectAuthoritativeExecution(turn, session) {
+  return projectExecutionRecord({
+    ...turn,
     sessionId: session.sessionId,
     parentSessionId: session.parentSessionId,
   });
-  return {
-    ...identity,
-    commandId: clean(timedTurn.commandId),
-    action: clean(timedTurn.action),
-    state: clean(timedTurn.state),
-    phase: clean(timedTurn.phase),
-    executionState: clean(timedTurn.executionState).toLowerCase(),
-    revision: Number(timedTurn.revision || 0),
-    sequence: Number(timedTurn.sequence || 0),
-    summaryVersion: Number(timedTurn.summaryVersion || 0),
-    capabilities: deriveAuthoritativeTurnCapabilities(timedTurn),
-    failure:
-      timedTurn.failure && typeof timedTurn.failure === "object" ? { ...timedTurn.failure } : null,
-    continuationSource: timedTurn.continuationSource || null,
-    continuedByTurnScopeId: clean(timedTurn.continuedByTurnScopeId),
-    startedAt: clean(timedTurn.startedAt),
-    finishedAt: clean(timedTurn.finishedAt),
-    thinkingStartedAt: clean(timedTurn.thinkingStartedAt),
-    thinkingFinishedAt: clean(timedTurn.thinkingFinishedAt),
-    createdAt: clean(timedTurn.createdAt),
-    updatedAt: clean(timedTurn.updatedAt),
-  };
-}
-
-function versionKey(record) {
-  return [
-    Date.parse(record?.updatedAt || "") || 0,
-    Number(record?.revision || 0),
-    Number(record?.sequence || 0),
-  ];
-}
-
-function isNewer(left, right) {
-  const leftKey = versionKey(left);
-  const rightKey = versionKey(right);
-  const index = leftKey.findIndex((value, position) => value !== rightKey[position]);
-  return index >= 0 && leftKey[index] > rightKey[index];
 }
 
 function stableObject(value) {
@@ -233,7 +185,7 @@ export function buildAuthoritativeExecutionReadModel(sessions = []) {
         byId.delete(execution.executionId);
         continue;
       }
-      if (!conflicts.has(execution.executionId) && isNewer(execution, current))
+      if (!conflicts.has(execution.executionId) && compareExecutionVersion(execution, current) > 0)
         byId.set(execution.executionId, execution);
     }
   }

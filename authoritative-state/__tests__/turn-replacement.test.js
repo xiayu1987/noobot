@@ -93,9 +93,14 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
   });
   const snapshot = createAuthoritativeTurnSnapshot({
     lifecycle: committed.lifecycle,
+    turnTimings: [],
+    commandId: "snapshot-replaced",
     sessionId: "session-1",
     knownSequence: 0,
     terminalLimit: 10,
+    terminalTurnScopeIds: [],
+    recovery: "none",
+    generatedAt: "2026-07-31T00:00:02.000Z",
   });
   assert.equal(snapshot.activeTurn, null);
   assert.deepEqual(snapshot.recentTerminalTurns, []);
@@ -262,11 +267,15 @@ test("turn replacement rejects removing a Continue source while its target survi
         turnScopeId: "turn-old",
         state: "stop_completed",
         executionState: "user_stopped",
+        revision: 1,
+        sequence: 1,
         continuedByTurnScopeId: "turn-target",
       },
       "turn-target": {
         turnScopeId: "turn-target",
         state: "processing",
+        revision: 1,
+        sequence: 2,
         action: "continue",
         continuationSource: { turnScopeId: "turn-old", dialogProcessId: "dialog-old" },
       },

@@ -14,17 +14,23 @@ import { createCanonicalMessageEventSessionManager } from "../../helpers/canonic
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import {
-  applyTestIdentityToRuntime,
-  createTestTurnIdentity,
+  bindTestIdentityToRuntime,
+  deriveTestTurnIdentity,
 } from "../../helpers/test-turn-identity.js";
 
 export function executeToolCall({
   call,
   runtime = createTestRuntimeContext(),
-  identity = createTestTurnIdentity(call.id),
+  identity: givenIdentity,
   ...options
 }) {
-  applyTestIdentityToRuntime(runtime, identity);
+  const identity =
+    givenIdentity ??
+    deriveTestTurnIdentity(runtime, {
+      runId: `run-${call.id}`,
+      presentationMessageId: `presentation-${call.id}`,
+    });
+  bindTestIdentityToRuntime(runtime, identity);
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,

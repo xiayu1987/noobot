@@ -63,6 +63,12 @@ test("createRuntimeContext rejects missing or mistyped inputs", () => {
     /userMessageAttachments must be an array/,
   );
   assert.throws(() => createTestRuntimeContext({ basePath: null }), /basePath must be a string/);
+  for (const field of ["rootSessionId", "runId", "presentationMessageId"]) {
+    assert.throws(
+      () => createTestRuntimeContext({ systemRuntime: { [field]: "x" } }),
+      new RegExp(`systemRuntime must not carry envelope identity: ${field}`),
+    );
+  }
 });
 
 test("buildStaticInfo exposes host default directories", () => {
@@ -118,10 +124,8 @@ test("initializeRuntimeEnvironment wires shared tools without connector implemen
       },
     },
     runConfig: { hookManager: null },
+    identity: { sessionId: "s1", dialogProcessId: "dp1" },
     systemRuntime: {
-      sessionId: "s1",
-      rootSessionId: "r1",
-      dialogProcessId: "dp1",
       config: { allowUserInteraction: true },
     },
   });
@@ -167,7 +171,8 @@ test("initializeRuntimeEnvironment provides fetch independently of the Node glob
     const runtime = createTestRuntimeContext({
       basePath: "/host/users/u1",
       runConfig: { hookManager: null },
-      systemRuntime: { sessionId: "s1", rootSessionId: "s1" },
+      identity: { sessionId: "s1" },
+      systemRuntime: {},
     });
 
     await initializeRuntimeEnvironment(runtime);
@@ -216,10 +221,8 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
       turnScopeId: "turn-runtime-context-basepath",
       executionId: "run-runtime-context-basepath",
     },
+    identity: { userId: "primary-user", sessionId: "s1" },
     systemRuntime: {
-      userId: "primary-user",
-      sessionId: "s1",
-      rootSessionId: "r1",
       config: { allowUserInteraction: true },
     },
   });
@@ -259,9 +262,8 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
 
 test("initializeRuntimeEnvironment exposes only transfer entry points on semantic-transfer tools", async () => {
   const runtime = createTestRuntimeContext({
+    identity: { sessionId: "s1" },
     systemRuntime: {
-      sessionId: "s1",
-      rootSessionId: "r1",
       config: { allowUserInteraction: false },
     },
   });
@@ -283,9 +285,8 @@ test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encr
         };
       },
     },
+    identity: { sessionId: "s1" },
     systemRuntime: {
-      sessionId: "s1",
-      rootSessionId: "r1",
       config: { allowUserInteraction: true },
     },
   });
@@ -309,9 +310,8 @@ test("initializeRuntimeEnvironment encrypted response invalid should throw", asy
         };
       },
     },
+    identity: { sessionId: "s1" },
     systemRuntime: {
-      sessionId: "s1",
-      rootSessionId: "r1",
       config: { allowUserInteraction: true },
     },
   });

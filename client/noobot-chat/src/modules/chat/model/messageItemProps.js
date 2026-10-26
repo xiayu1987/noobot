@@ -16,8 +16,8 @@ export const sharedMessageRenderProps = {
   currentTurn: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
-  stopExecution: { type: Function, default: null },
-  fetchExecutionReport: { type: Function, default: null },
+  stopExecution: { type: Function, required: true },
+  fetchExecutionReport: { type: Function, required: true },
   hideHeader: { type: Boolean, default: false },
   attachmentPreviewDialogClass: {
     type: String,

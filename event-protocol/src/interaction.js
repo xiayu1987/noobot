@@ -93,21 +93,30 @@ export const INTERACTION_EVENT_TYPE = Object.freeze({
 
 export const INTERACTION_SEQUENCE_DOMAIN = "interaction";
 
-export function validateInteractionRequestPayload(data = {}) {
-  if (!isPlainObject(data)) {
-    return { valid: false, reason: "payload_not_object", missing: [] };
-  }
-  const required = ["requestId", "dialogProcessId"];
-  const missing = required.filter((key) => !text(data[key]));
+const INTERACTION_IDENTITY_ERRORS = Object.freeze([
+  ["requestId", "missing_request_id"],
+  ["dialogProcessId", "missing_dialog_process_id"],
+]);
+const VALID_INTERACTION_PAYLOAD = Object.freeze({ valid: true, errors: Object.freeze([]) });
+const invalidInteractionPayload = (errors) =>
+  Object.freeze({ valid: false, errors: Object.freeze(errors) });
+
+function collectInteractionIdentityErrors(data) {
+  return INTERACTION_IDENTITY_ERRORS.filter(([key]) => !text(data[key])).map(([, code]) => code);
+}
+
+export function validateInteractionRequestPayload(data) {
+  if (!isPlainObject(data)) return invalidInteractionPayload(["payload_not_object"]);
+  const identityErrors = collectInteractionIdentityErrors(data);
+  if (identityErrors.length) return invalidInteractionPayload(identityErrors);
   const hasPayload =
     typeof data.content === "string" ||
     Array.isArray(data.fields) ||
     Boolean(text(data.interactionType)) ||
     isPlainObject(data.interactionData);
-  if (missing.length) return { valid: false, reason: "missing_identity", missing };
-  if (!hasPayload) return { valid: false, reason: "missing_payload", missing: [] };
+  if (!hasPayload) return invalidInteractionPayload(["missing_payload"]);
   if (data.timeoutMs !== undefined && (!Number.isInteger(data.timeoutMs) || data.timeoutMs <= 0)) {
-    return { valid: false, reason: "invalid_timeout_ms", missing: [] };
+    return invalidInteractionPayload(["invalid_timeout_ms"]);
   }
   const interactionData = data.interactionData;
   if (
@@ -116,7 +125,7 @@ export function validateInteractionRequestPayload(data = {}) {
       Object.hasOwn(interactionData, key),
     )
   ) {
-    return { valid: false, reason: "noncanonical_interaction_control", missing: [] };
+    return invalidInteractionPayload(["noncanonical_interaction_control"]);
   }
   const lifecycle = normalizeInteractionLifecycle(data.lifecycle);
   if (
@@ -124,18 +133,19 @@ export function validateInteractionRequestPayload(data = {}) {
     lifecycle === INTERACTION_LIFECYCLE.PENDING &&
     text(data.lifecycle).toLowerCase() !== lifecycle
   ) {
-    return { valid: false, reason: "invalid_lifecycle", missing: [] };
+    return invalidInteractionPayload(["invalid_lifecycle"]);
   }
   const resolvedBy = normalizeInteractionResolvedBy(data.resolvedBy);
   if (isTerminalInteractionLifecycle(lifecycle) && !resolvedBy) {
-    return { valid: false, reason: "missing_terminal_resolved_by", missing: ["resolvedBy"] };
+    return invalidInteractionPayload(["missing_terminal_resolved_by"]);
   }
-  return { valid: true, reason: "", missing: [] };
+  return VALID_INTERACTION_PAYLOAD;
 }
 
-export function validateInteractionResponsePayload(data = {}) {
-  const missing = ["requestId", "dialogProcessId"].filter((key) => !text(data?.[key]));
-  return missing.length
-    ? { valid: false, reason: "missing_identity", missing }
-    : { valid: true, reason: "", missing: [] };
+export function validateInteractionResponsePayload(data) {
+  if (!isPlainObject(data)) return invalidInteractionPayload(["payload_not_object"]);
+  const identityErrors = collectInteractionIdentityErrors(data);
+  return identityErrors.length
+    ? invalidInteractionPayload(identityErrors)
+    : VALID_INTERACTION_PAYLOAD;
 }

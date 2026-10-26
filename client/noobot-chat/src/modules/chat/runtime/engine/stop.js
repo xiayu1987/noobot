@@ -3,178 +3,77 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { FrontendRunState, SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
-import {
-  getMessageParentDialogProcessId,
-  getMessageRole,
-  getMessageTurnScopeId,
-} from "../../model/messageIdentity.js";
 import { nowMs } from "../../model/timeFields.js";
 import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
-import {
-  logResendDebug,
-  summarizeDebugMessage,
-  summarizeDebugMessages,
-} from "../../../debug/loggers/resendDebugLogger.js";
 import { logStopDebug } from "../../../debug/loggers/stopDebugLogger.js";
 import {
-  resolveSessionTurnRuntime,
+  selectCurrentTurnRuntime,
   selectExecution,
-  sessionRuntimeId,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 
-function resolveStopTurnScopeId({ session, turnRuntimeRegistry, preferredTurnScopeId = "" } = {}) {
-  const preferred = normalizeTrimmedString(preferredTurnScopeId);
-  if (preferred) return preferred;
-  const sessionId = sessionRuntimeId(session);
-  const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
-  return normalizeTrimmedString(resolveSessionTurnRuntime(registry, sessionId)?.turnScopeId);
-}
-
-function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "" } = {}) {
-  const requestedExecutionId = normalizeTrimmedString(executionId);
-  if (requestedExecutionId) {
-    const execution = selectExecution(turnRuntimeRegistry?.value, requestedExecutionId);
-    if (!execution) return { execution: null, turnRuntime: null, session: null };
-    const sessionId = normalizeTrimmedString(execution.sessionId);
-    const active = activeSession?.value || null;
-    const session =
-      sessionRuntimeId(active) === sessionId
-        ? active
-        : {
-            sessionId,
-            parentSessionId: execution.parentSessionId || "",
-            parentDialogProcessId: execution.parentDialogProcessId || "",
-            messages: [],
-          };
-    return { execution, turnRuntime: execution, session };
-  }
-  const session = activeSession?.value || null;
-  const sessionId = sessionRuntimeId(session);
-  const turnScopeId = resolveStopTurnScopeId({ session, turnRuntimeRegistry });
-  return {
-    execution: null,
-    turnRuntime: resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId),
-    session,
-  };
-}
-
-function buildStopPayload({
-  activeSession,
-  session: targetSession,
-  pendingAssistantMessage,
-  turnRuntime,
-} = {}) {
-  const session = targetSession || activeSession?.value || {};
-  const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
-  const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
+function buildStopCommand(target, executionId) {
   return createTurnStopCommand({
     identity: {
-      sessionId: String(session.sessionId || ""),
-      parentSessionId: String(
-        session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
-      ),
-      dialogProcessId,
-      parentDialogProcessId: String(
-        getMessageParentDialogProcessId(pendingAssistantMessage) ||
-          session.parentDialogProcessId ||
-          "",
-      ),
-      turnScopeId,
+      sessionId: normalizeTrimmedString(target.sessionId),
+      parentSessionId: normalizeTrimmedString(target.parentSessionId),
+      dialogProcessId: normalizeTrimmedString(target.dialogProcessId),
+      turnScopeId: normalizeTrimmedString(target.turnScopeId),
     },
-    concurrency: {
-      expectedTurnRevision: turnRuntime.revision,
-    },
-    stop: { executionId: normalizeTrimmedString(turnRuntime.executionId) },
+    concurrency: { expectedTurnRevision: target.revision },
+    stop: { executionId },
   });
 }
 
-export function stopSending({
-  activeSession,
-  turnRuntimeRegistry,
-  chatWebSocketClient,
-  applyRunStateEvent,
-  executionId = "",
-} = {}) {
-  const target = resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId });
-  const { execution, turnRuntime, session } = target;
-  const sessionId = normalizeTrimmedString(turnRuntime?.sessionId) || sessionRuntimeId(session);
-  const canStop = execution
-    ? execution?.capabilities?.canStop === true || execution?.canStop === true
-    : turnRuntime?.canStop === true;
-  const commandPending = turnRuntime?.commandPending === true;
-  if (!turnRuntime || !canStop || commandPending || turnRuntime?.terminal) {
-    logStopDebug("stop.skip.turnNotStoppable", () => ({
-      sessionId,
-      turnScopeId: turnRuntime?.turnScopeId || "",
-      dialogProcessId: turnRuntime?.dialogProcessId || "",
-      state: turnRuntime?.state || "",
-      commandPending,
-      pendingCommandType: turnRuntime?.pendingCommandType || "",
-      terminal: turnRuntime?.terminal || null,
-    }));
-    return false;
-  }
-  const expectedTurnScopeId = normalizeTrimmedString(turnRuntime.turnScopeId);
-  const pendingAssistantMessage = (session?.messages || []).find(
-    (messageItem) =>
-      getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-      getMessageTurnScopeId(messageItem) === expectedTurnScopeId,
-  );
-  logResendDebug("stop.request", () => ({
-    pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
-    turnRuntime,
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
+function isStoppable(target, canStop) {
+  return Boolean(target) && canStop && target.commandPending !== true && !target.terminal;
+}
+
+function logStopSkipped(target) {
+  logStopDebug("stop.skip.turnNotStoppable", () => ({
+    sessionId: target?.sessionId || "",
+    turnScopeId: target?.turnScopeId || "",
+    dialogProcessId: target?.dialogProcessId || "",
+    state: target?.state || "",
+    commandPending: target?.commandPending === true,
+    pendingCommandType: target?.pendingCommandType || "",
+    terminal: target?.terminal || null,
   }));
-  const stopPayload = buildStopPayload({
-    activeSession,
-    session,
-    pendingAssistantMessage,
-    turnRuntime,
-  });
+}
+
+function requestStop({ stopPayload, chatWebSocketClient, applyRunStateEvent }) {
   logStopDebug("stop.payload", () => ({
     sessionId: stopPayload.identity.sessionId,
     dialogProcessId: stopPayload.identity.dialogProcessId,
     turnScopeId: stopPayload.identity.turnScopeId,
     commandId: stopPayload.commandId,
     stopPayload,
-    pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
   }));
-  logResendDebug("stop.payload", () => ({
-    stopPayload,
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
-  }));
-  const stopEvent = {
-    type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
-    state: FrontendRunState.USER_STOPPING,
+  const identity = {
     sessionId: stopPayload.identity.sessionId,
     dialogProcessId: stopPayload.identity.dialogProcessId,
     turnScopeId: stopPayload.identity.turnScopeId,
+  };
+  applyRunStateEvent({
+    type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOPPING,
+    ...identity,
     commandId: stopPayload.commandId,
     createdAtMs: nowMs(),
     source: "stop_sending",
-  };
-  if (applyRunStateEvent) {
-    applyRunStateEvent(stopEvent);
-  }
+  });
   const applyStopRequestFailure = (error) => {
-    if (applyRunStateEvent) {
-      applyRunStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_RESET,
-        sessionId: stopPayload.identity.sessionId,
-        dialogProcessId: stopPayload.identity.dialogProcessId,
-        turnScopeId: stopPayload.identity.turnScopeId,
-        source: "stop_sending_request_failed",
-        error,
-      });
-    }
+    applyRunStateEvent({
+      type: SESSION_RUN_EVENT.LOCAL_RESET,
+      ...identity,
+      source: "stop_sending_request_failed",
+      error,
+    });
     return false;
   };
   try {
-    const requestResult = chatWebSocketClient?.requestStop?.(stopPayload);
+    const requestResult = chatWebSocketClient.requestStop(stopPayload);
     if (requestResult && typeof requestResult.catch === "function") {
       return requestResult.catch(applyStopRequestFailure);
     }
@@ -184,4 +83,43 @@ export function stopSending({
   } catch (error) {
     return applyStopRequestFailure(error);
   }
+}
+
+export function stopActiveTurn({
+  activeSession,
+  turnRuntimeRegistry,
+  chatWebSocketClient,
+  applyRunStateEvent,
+}) {
+  const turnRuntime = selectCurrentTurnRuntime(
+    turnRuntimeRegistry.value,
+    normalizeTrimmedString(activeSession.value?.sessionId),
+  );
+  if (!isStoppable(turnRuntime, turnRuntime?.canStop === true)) {
+    logStopSkipped(turnRuntime);
+    return false;
+  }
+  return requestStop({
+    stopPayload: buildStopCommand(turnRuntime, ""),
+    chatWebSocketClient,
+    applyRunStateEvent,
+  });
+}
+
+export function stopExecution({
+  executionId,
+  turnRuntimeRegistry,
+  chatWebSocketClient,
+  applyRunStateEvent,
+}) {
+  const execution = selectExecution(turnRuntimeRegistry.value, executionId);
+  if (!execution?.capabilities.canStop) {
+    logStopSkipped(execution);
+    return false;
+  }
+  return requestStop({
+    stopPayload: buildStopCommand(execution, execution.executionId),
+    chatWebSocketClient,
+    applyRunStateEvent,
+  });
 }

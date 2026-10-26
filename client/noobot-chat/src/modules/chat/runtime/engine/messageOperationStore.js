@@ -75,16 +75,6 @@ export function createPendingMessageOperationStore() {
     return operation;
   }
 
-  function getLatestOperation(type = "") {
-    const normalizedType = normalizeOperationId(type);
-    const operations = [...operationsById.values()]
-      .filter((operation) => !normalizedType || operation.type === normalizedType)
-      .sort((left, right) =>
-        String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")),
-      );
-    return operations[0] || null;
-  }
-
   function completeOperation(opId = "") {
     const normalizedOpId = normalizeOperationId(opId);
     const operation = operationsById.get(normalizedOpId);
@@ -107,7 +97,6 @@ export function createPendingMessageOperationStore() {
     updateOperation,
     getOperation,
     getActiveOperation,
-    getLatestOperation,
     completeOperation,
     clearSession,
   };

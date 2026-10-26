@@ -248,7 +248,13 @@ export class SessionCrudService {
           persistenceContext: this.sessionRepo.treePersistenceContext(userId, currentSessionId),
         });
       } catch (error) {
-        summary = await this.sessionRepo.buildUnavailableSessionSummary(userId, currentNode, error);
+        const unavailable = await this.sessionRepo.buildUnavailableSessionSummary(
+          userId,
+          currentNode,
+          error,
+        );
+        sessions.push({ ...unavailable, depth });
+        continue;
       }
       if (!summary) continue;
       sessions.push(

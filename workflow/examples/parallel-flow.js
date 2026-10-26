@@ -12,6 +12,7 @@ import Business from "../src/engine/bizinst/business.js";
 import SubmitAction from "../src/engine/bizinst/action/submit-action.js";
 import BizinstTreeControlCenter from "../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js";
 import { linkFlow } from "./link-flow.js";
+import EStateType from "../src/design/model/node/enums/state-type.js";
 
 function createStateNode(name, stateType, model) {
   const node = new StateNode();
@@ -24,8 +25,8 @@ function createStateNode(name, stateType, model) {
 
 function buildParallelModel() {
   const model = new Model();
-  const startParallelNode = createStateNode("并发开始节点", 2, model);
-  const endParallelNode = createStateNode("并发结束节点", 3, model);
+  const startParallelNode = createStateNode("并发开始节点", EStateType.Branch, model);
+  const endParallelNode = createStateNode("并发结束节点", EStateType.Merge, model);
 
   const actionA = new ActionNode();
   actionA.setName("并发审核A");

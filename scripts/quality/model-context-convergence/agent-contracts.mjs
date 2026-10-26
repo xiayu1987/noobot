@@ -101,7 +101,7 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       [
         "terminal recovery cannot append messages",
-        /isTerminalTurnLifecycleState\(lifecycleTurn\.state\)[\s\S]*?request\.persistedMessageUids\.length[\s\S]*?TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE/,
+        /isTerminalTurnState\(lifecycleTurn\.state\)[\s\S]*?request\.persistedMessageUids\.length[\s\S]*?TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE/,
       ],
     ],
   },
@@ -234,7 +234,7 @@ export const AGENT_CONTRACTS = Object.freeze([
       ],
       [
         "context passes current turnScopeId to session history",
-        /currentTurnScopeId:\s*text\(this\.runConfig\.turnScopeId\)/,
+        /currentTurnScopeId:\s*this\.runtimeIdentity\.turnScopeId/,
       ],
     ],
   },

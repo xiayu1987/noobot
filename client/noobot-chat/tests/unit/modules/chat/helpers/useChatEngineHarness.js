@@ -23,7 +23,7 @@ import {
   applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
-  resolveSessionTurnRuntime,
+  selectCurrentTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
@@ -181,7 +181,7 @@ export const createHarness = ({
   const sending = computed(() => runtimeView.value.sending);
   const canStop = computed(() => runtimeView.value.canStop);
   const activeTurnRuntime = computed(() => {
-    return resolveSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value);
+    return selectCurrentTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value);
   });
   const input = ref("hello");
   const uploadFiles = ref([]);
@@ -194,7 +194,6 @@ export const createHarness = ({
       turnRuntimeRegistry.value = { ...registry };
       projectTurnRuntimeToMessages({
         sessions,
-        activeSession,
         turnRuntimeRegistry,
         turn: result?.turn || event,
       });
@@ -216,7 +215,6 @@ export const createHarness = ({
       turnRuntimeRegistry.value = { ...registry };
       projectTurnRuntimeToMessages({
         sessions,
-        activeSession,
         turnRuntimeRegistry,
         turn: result?.turn || response?.turn || response,
       });
@@ -249,7 +247,16 @@ export const createHarness = ({
     userId: ref("u-1"),
     allowUserInteraction: ref(true),
     safeConfirm: ref(true),
+    safeConfirmLevel: ref("low"),
+    sanitizeOutput: ref(true),
+    streamOutput: ref(false),
     botScenario: ref(""),
+    selectedModel: ref(""),
+    memoryModel: ref(""),
+    pluginModelConfig: ref({}),
+    frontendThresholdsEnabled: ref(false),
+    summaryPolicy: ref({}),
+    selectedPlugins: ref([]),
     isImageMime: () => false,
     scrollBottom: vi.fn(),
     activeSession,
@@ -342,6 +349,7 @@ export const activateRuntimeTurn = ({
   sessionId,
   turnScopeId,
   dialogProcessId,
+  parentSessionId = "",
   userId = "u-1",
   commandId = `send:${turnScopeId}`,
   presentationMessageId = `message:${turnScopeId}`,
@@ -362,7 +370,7 @@ export const activateRuntimeTurn = ({
       commandId,
       userId,
       sessionId,
-      parentSessionId: "",
+      parentSessionId,
       turnScopeId,
       presentationMessageId,
       dialogProcessId,
@@ -383,7 +391,7 @@ export const activateRuntimeTurn = ({
       commandId,
       userId,
       sessionId,
-      parentSessionId: "",
+      parentSessionId,
       turnScopeId,
       presentationMessageId,
       dialogProcessId,

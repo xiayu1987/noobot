@@ -27,7 +27,7 @@ export function createSessionListActions({
   activeSessionId,
   loadingSessions,
   loadingSessionDetail,
-  turnRuntimeRegistry = null,
+  turnRuntimeRegistry,
   userId,
   authFetch,
   ensureConnected,
@@ -278,7 +278,7 @@ export function createSessionListActions({
     if (targetSession?.isLocal) {
       revokeMessagePreviewUrls(targetSession.messages || []);
       sessions.value.splice(index, 1);
-      removeSessionRuntime(turnRuntimeRegistry?.value || turnRuntimeRegistry, runtimeSessionId);
+      removeSessionRuntime(turnRuntimeRegistry.value, runtimeSessionId);
       clearSessionTurnUiStates(runtimeSessionId);
       if (!sessions.value.length) {
         createLocalSession();
@@ -303,7 +303,7 @@ export function createSessionListActions({
       throw new Error(data.error || translate("chat.deleteSessionFailed"));
     }
 
-    removeSessionRuntime(turnRuntimeRegistry?.value || turnRuntimeRegistry, runtimeSessionId);
+    removeSessionRuntime(turnRuntimeRegistry.value, runtimeSessionId);
     clearSessionTurnUiStates(runtimeSessionId);
 
     await fetchSessions(fallbackNextSessionId);

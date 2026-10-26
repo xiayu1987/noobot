@@ -3,21 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+import {
+  requireCanonicalTurnScopeId,
+  requireOptionalCanonicalTurnScopeId,
+} from "@noobot/session-protocol/turn-scope-identity";
 import { AGENT_CHANNEL_STATE, FrontendRunState, STATUS_STEP_STAGE } from "./constants.js";
 import { isStageStatusStepState, resolvePendingCommandStatusStep } from "./statusStep.js";
-import {
-  canonicalSessionId,
-  canonicalTurnScopeId,
-  findTurnByScope,
-  resolveTurnRoute,
-  runtimeText,
-} from "./turnRuntimeRegistryIdentity.js";
+import { findTurnByScope, resolveTurnRoute } from "./turnRuntimeRegistryIdentity.js";
 
 export function turnRuntimeDisplayState(turn = null) {
   if (!turn || turn.terminal) return "";
   if (turn.commandPending === true)
     return resolvePendingCommandStatusStep(turn.pendingCommandType) || STATUS_STEP_STAGE.REQUESTING;
-  const state = runtimeText(turn.state).toLowerCase();
+  const state = text(turn.state).toLowerCase();
   if ([FrontendRunState.ACTION_REQUESTING, FrontendRunState.CONTINUE_REQUESTING].includes(state)) {
     return STATUS_STEP_STAGE.REQUESTING;
   }
@@ -37,55 +36,64 @@ export function turnRuntimeDisplayState(turn = null) {
   return "";
 }
 
-export function resolveSessionTurnRuntime(registry, sessionId, turnScopeId = "") {
-  const bucket = registry?.sessions?.[canonicalSessionId(sessionId)];
-  const latestTurn =
-    !turnScopeId && !bucket?.activeTurnScopeId
-      ? Object.values(bucket?.turns || {})
-          .filter((turn) => Boolean(turn?.state || turn?.terminal || turn?.commandPending))
-          .sort((left, right) => {
-            const sequenceDelta =
-              Number(right?.lifecycleSeq || 0) - Number(left?.lifecycleSeq || 0);
-            if (sequenceDelta) return sequenceDelta;
-            return (
-              Number(right?.updatedAtMs || right?.finishedAtMs || 0) -
-              Number(left?.updatedAtMs || left?.finishedAtMs || 0)
-            );
-          })[0]
-      : null;
-  const scope =
-    canonicalTurnScopeId(turnScopeId) ||
-    canonicalTurnScopeId(bucket?.activeTurnScopeId) ||
-    canonicalTurnScopeId(latestTurn?.turnScopeId);
-  return scope ? bucket?.turns?.[scope] || null : null;
+export function selectSessionRuntimeBucket(registry, sessionId) {
+  return registry.sessions[text(sessionId)] || null;
+}
+
+function latestObservedTurn(bucket) {
+  return Object.values(bucket.turns)
+    .filter((turn) => Boolean(turn?.state || turn?.terminal || turn?.commandPending))
+    .sort((left, right) => {
+      const sequenceDelta = Number(right?.lifecycleSeq || 0) - Number(left?.lifecycleSeq || 0);
+      if (sequenceDelta) return sequenceDelta;
+      return (
+        Number(right?.updatedAtMs || right?.finishedAtMs || 0) -
+        Number(left?.updatedAtMs || left?.finishedAtMs || 0)
+      );
+    })[0];
+}
+
+export function selectCurrentTurnRuntime(registry, sessionId) {
+  const bucket = selectSessionRuntimeBucket(registry, sessionId);
+  if (!bucket) return null;
+  if (bucket.activeTurnScopeId) return bucket.turns[bucket.activeTurnScopeId] ?? null;
+  return latestObservedTurn(bucket) ?? null;
+}
+
+export function selectTurnRuntimeByScope(registry, sessionId, turnScopeId) {
+  const scope = requireCanonicalTurnScopeId(turnScopeId);
+  return selectSessionRuntimeBucket(registry, sessionId)?.turns[scope] ?? null;
 }
 
 export function resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId = "" } = {}) {
-  const scope = canonicalTurnScopeId(turnScopeId);
-  const id = canonicalSessionId(sessionId);
+  const scope = requireOptionalCanonicalTurnScopeId(turnScopeId);
+  const id = text(sessionId);
   if (!scope) return null;
   return findTurnByScope(registry, scope, { sessionId: id });
 }
 
-export function selectSessionTurnRuntime(registry, sessionId, turnScopeId = "") {
-  const normalizedSessionId = runtimeText(sessionId);
-  const turn = resolveSessionTurnRuntime(registry, normalizedSessionId, turnScopeId);
+export function selectSessionTurnRuntime(registry, sessionId) {
+  return projectTurnRuntimeView(sessionId, selectCurrentTurnRuntime(registry, sessionId));
+}
+
+export function projectTurnRuntimeView(sessionId, turn) {
+  const normalizedSessionId = text(sessionId);
   const displayState = turnRuntimeDisplayState(turn);
   return {
     sessionId: normalizedSessionId,
-    parentSessionId: runtimeText(turn?.parentSessionId),
-    turnScopeId: runtimeText(turn?.turnScopeId),
-    dialogProcessId: runtimeText(turn?.dialogProcessId),
-    action: runtimeText(turn?.action),
-    commandId: runtimeText(turn?.commandId),
-    lifecycleEventType: runtimeText(turn?.lifecycleEventType),
+    parentSessionId: text(turn?.parentSessionId),
+    turnScopeId: text(turn?.turnScopeId),
+    dialogProcessId: text(turn?.dialogProcessId),
+    action: text(turn?.action),
+    commandId: text(turn?.commandId),
+    lifecycleEventType: text(turn?.lifecycleEventType),
     lifecycleObserved: turn?.lifecycleObserved === true,
     commandPending: turn?.commandPending === true,
-    pendingCommandId: runtimeText(turn?.pendingCommandId),
-    pendingCommandType: runtimeText(turn?.pendingCommandType),
-    transportState: runtimeText(turn?.transportState),
+    pendingCommandId: text(turn?.pendingCommandId),
+    pendingCommandType: text(turn?.pendingCommandType),
+    transportState: text(turn?.transportState),
     reconnecting: turn?.reconnecting === true,
-    lastTransportError: runtimeText(turn?.lastTransportError),
+    lastTransportError: text(turn?.lastTransportError),
     displayState,
     sending: isStageStatusStepState(displayState),
     canStop: displayState === STATUS_STEP_STAGE.SENDING && turn?.canStop === true,
@@ -97,14 +105,14 @@ export function selectTurnMessageRuntime(
   registry,
   { sessionId = "", turnScopeId = "", dialogProcessId = "" } = {},
 ) {
-  const normalizedSessionId = runtimeText(sessionId);
-  const normalizedDialogProcessId = runtimeText(dialogProcessId);
+  const normalizedSessionId = text(sessionId);
+  const normalizedDialogProcessId = text(dialogProcessId);
   const defaultRuntimeView = {
     state: "",
     backendState: "",
     displayState: "",
     sessionId: normalizedSessionId,
-    turnScopeId: canonicalTurnScopeId(turnScopeId),
+    turnScopeId: requireOptionalCanonicalTurnScopeId(turnScopeId),
     dialogProcessId: normalizedDialogProcessId,
     source: "",
     sourceEvent: "",
@@ -115,14 +123,15 @@ export function selectTurnMessageRuntime(
     running: false,
     startedAt: "",
     finishedAt: "",
+    thinkingFinishedAt: "",
     modelLoopRound: 0,
   };
-  let normalizedTurnScopeId = canonicalTurnScopeId(turnScopeId);
+  let normalizedTurnScopeId = requireOptionalCanonicalTurnScopeId(turnScopeId);
   let routeSessionId = "";
   if (!normalizedTurnScopeId && normalizedDialogProcessId) {
     const route = resolveTurnRoute(registry, normalizedDialogProcessId);
-    normalizedTurnScopeId = canonicalTurnScopeId(route?.turnScopeId);
-    routeSessionId = runtimeText(route?.sessionId);
+    normalizedTurnScopeId = route?.turnScopeId || "";
+    routeSessionId = text(route?.sessionId);
   }
   const turn = normalizedTurnScopeId
     ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId, {
@@ -167,14 +176,15 @@ export function selectTurnMessageRuntime(
           AGENT_CHANNEL_STATE.RECONNECTING,
           AGENT_CHANNEL_STATE.INTERACTION_PENDING,
         ].includes(turn.state)),
-    startedAt: turn.startedAt || "",
-    finishedAt: turn.finishedAt || "",
-    modelLoopRound: Number(turn.modelLoopRound || 0),
+    startedAt: text(turn.startedAt),
+    finishedAt: text(turn.finishedAt),
+    thinkingFinishedAt: text(turn.timing?.thinkingFinishedAt),
+    modelLoopRound: turn.timing?.modelLoopRound ?? 0,
   };
 }
 
 export function resolveLatestStoppedTurn(registry, sessionId) {
-  const bucket = registry?.sessions?.[runtimeText(sessionId)];
+  const bucket = registry?.sessions?.[text(sessionId)];
   return (
     Object.values(bucket?.turns || {})
       .filter((turn) => turn.terminal === "user_stopped")
@@ -187,22 +197,17 @@ export function resolveLatestStoppedTurn(registry, sessionId) {
 }
 
 export function resolveLatestContinuableStoppedTurn(registry, sessionId) {
-  const id = canonicalSessionId(sessionId);
+  const id = text(sessionId);
   const bucket = registry?.sessions?.[id];
   const consumedScopes = new Set(
     Object.values(bucket?.turns || {})
       .map((turn) => turn?.continuationSource?.turnScopeId)
-      .filter(Boolean)
-      .map(canonicalTurnScopeId),
+      .filter(Boolean),
   );
   return (
     Object.values(bucket?.turns || {})
       .filter((turn) => turn.terminal === "user_stopped")
-      .filter(
-        (turn) =>
-          !turn.continuedByTurnScopeId &&
-          !consumedScopes.has(canonicalTurnScopeId(turn.turnScopeId)),
-      )
+      .filter((turn) => !turn.continuedByTurnScopeId && !consumedScopes.has(turn.turnScopeId))
       .sort((left, right) => {
         const sequenceDelta = Number(right.lifecycleSeq || 0) - Number(left.lifecycleSeq || 0);
         if (sequenceDelta) return sequenceDelta;

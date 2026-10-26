@@ -12,32 +12,28 @@ function comparableSnapshot({ refs, sessionId = "", detail = null }) {
   if (detail) {
     return {
       sessionId: detail.sessionId || "",
-      sessionSummary: detail.sessionSummary || null,
+      sessionMetadata: detail.sessionMetadata || null,
       messages: detail.messages,
-      rawMessages: detail.rawMessages,
     };
   }
   return {
     sessionId,
-    sessionSummary: refs.selectedNodeSessionSummary.value || null,
+    sessionMetadata: refs.selectedNodeSessionMetadata.value || null,
     messages: refs.selectedNodeMessages.value,
-    rawMessages: refs.selectedNodeRawMessages.value,
   };
 }
 
 function assignSnapshot(refs, detail = {}) {
-  refs.selectedNodeSessionSummary.value = detail.sessionSummary || null;
+  refs.selectedNodeSessionMetadata.value = detail.sessionMetadata || null;
   refs.selectedNodeSessionId.value = detail.sessionId || "";
   refs.selectedNodeMessages.value = detail.messages;
-  refs.selectedNodeRawMessages.value = detail.rawMessages;
   refs.runningPlaceholderViewModel.value = detail.runningPlaceholderViewModel || null;
 }
 
 export function createSessionSnapshotController({ props, refs, buildWorkflowDrawerRoute }) {
   function reset() {
     refs.selectedNodeMessages.value = [];
-    refs.selectedNodeRawMessages.value = [];
-    refs.selectedNodeSessionSummary.value = null;
+    refs.selectedNodeSessionMetadata.value = null;
     refs.selectedNodeSessionId.value = "";
     refs.runningPlaceholderViewModel.value = null;
     refs.selectedExecutionId.value = "";
@@ -48,7 +44,7 @@ export function createSessionSnapshotController({ props, refs, buildWorkflowDraw
 
   function logSnapshot(event, data = {}) {
     const node = refs.selectedNode.value || {};
-    props.logWorkflowDiagnostics?.(event, {
+    props.logWorkflowDiagnostics(event, {
       sessionId: refs.selectedNodeSessionId.value,
       dialogProcessId: resolveWorkflowDialogProcessId(node),
       turnScopeId: text(node.turnScopeId),
@@ -64,10 +60,8 @@ export function createSessionSnapshotController({ props, refs, buildWorkflowDraw
   }
 
   function merge(detail = {}) {
-    const currentSessionId = text(
-      refs.selectedNodeSessionId.value || refs.selectedNodeSessionSummary.value?.sessionId,
-    );
-    const incomingSessionId = text(detail.sessionId || detail.sessionSummary?.sessionId);
+    const currentSessionId = text(refs.selectedNodeSessionId.value);
+    const incomingSessionId = text(detail.sessionId);
     const rootSessionId = text(
       buildWorkflowDrawerRoute(refs.selectedNode.value || {}).rootSessionId,
     );

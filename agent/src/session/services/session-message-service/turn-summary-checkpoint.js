@@ -6,6 +6,7 @@
 import {
   SESSION_ERROR_CODE,
   createSessionNotFoundError,
+  isTerminalTurnState,
   normalizeDialogProcessId,
   requireDialogProcessKey,
   resolveSessionMessageRecordDialogProcessId,
@@ -22,7 +23,6 @@ import {
   writeTurnSummaryCheckpoints,
 } from "@noobot/context-protocol/policy/summary";
 import { createHash } from "node:crypto";
-import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
 import { text } from "@noobot/shared/value";
 
 function invalidCheckpointRequest(detail) {
@@ -152,7 +152,7 @@ function assertCheckpointTargetsTurn(session, request) {
         SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT,
       );
     }
-    if (isTerminalTurnLifecycleState(lifecycleTurn.state) && request.persistedMessageUids.length) {
+    if (isTerminalTurnState(lifecycleTurn.state) && request.persistedMessageUids.length) {
       throw checkpointConflict(
         "terminal checkpoint cannot persist additional messages",
         SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE,

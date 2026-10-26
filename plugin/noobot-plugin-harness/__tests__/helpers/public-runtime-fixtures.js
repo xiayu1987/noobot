@@ -10,7 +10,12 @@ import {
   assertMainFlowControlPort,
   createSummaryCheckpointInstruction,
 } from "@noobot/context-protocol/policy/main-flow-control";
-import { createHookManager, HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
+import {
+  createHookManager,
+  createHookRuntimeIdentity,
+  HOOK_PROTOCOL_VERSION,
+} from "@noobot/hook-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   attachmentTransfer,
   directTransfer,
@@ -192,20 +197,29 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
   if (!isObjectLike(agentContext.context)) {
     testScopeSequence += 1;
     const scopeSuffix = String(testScopeSequence);
-    const dialogProcessId = text(ctx.dialogProcessId) || `test-dialog-${scopeSuffix}`;
-    const turnScopeId = text(ctx.turnScopeId) || `test-turn:${dialogProcessId}`;
-    const sessionId = text(ctx.sessionId) || `test-session-${scopeSuffix}`;
+
+    const sources = [ctx, ctx.activeTurnIdentity, systemRuntime];
+    const dialogProcessId = resolveTestIdentityField(
+      sources,
+      "dialogProcessId",
+      `test-dialog-${scopeSuffix}`,
+    );
+    const sessionId = resolveTestIdentityField(sources, "sessionId", `test-session-${scopeSuffix}`);
     agentContext.context = {
       kind: "noobot.agent-context",
       protocolVersion: 1,
       identity: {
-        userId: text(systemRuntime.userId) || `test-user-${scopeSuffix}`,
+        userId: resolveTestIdentityField(sources, "userId", `test-user-${scopeSuffix}`),
         sessionId,
-        rootSessionId: String(ctx.rootSessionId || sessionId).trim(),
-        parentSessionId: text(ctx.parentSessionId),
+        rootSessionId: resolveTestIdentityField([ctx], "rootSessionId", sessionId),
+        parentSessionId: resolveTestIdentityField(sources, "parentSessionId", ""),
         dialogProcessId,
-        turnScopeId,
-        runId: text(ctx.runId) || `test-run-${scopeSuffix}`,
+        turnScopeId: resolveTestIdentityField(
+          sources,
+          "turnScopeId",
+          `test-turn:${dialogProcessId}`,
+        ),
+        runId: resolveTestIdentityField([ctx], "runId", `test-run-${scopeSuffix}`),
       },
       environment: {},
       execution: {},
@@ -248,10 +262,17 @@ export function ensureTestHookContext(ctx = {}) {
     ctx.activeTurnIdentity && typeof ctx.activeTurnIdentity === "object"
       ? ctx.activeTurnIdentity
       : null;
-  const dialogProcessId =
-    text(ctx.dialogProcessId) || text(explicitIdentity?.dialogProcessId) || "test-dialog";
-  const turnScopeId =
-    text(ctx.turnScopeId) || text(explicitIdentity?.turnScopeId) || `test-turn:${dialogProcessId}`;
+  const identitySources = [ctx, explicitIdentity, ctx.agentContext?.context?.identity];
+  const dialogProcessId = resolveTestIdentityField(
+    identitySources,
+    "dialogProcessId",
+    "test-dialog",
+  );
+  const turnScopeId = resolveTestIdentityField(
+    identitySources,
+    "turnScopeId",
+    `test-turn:${dialogProcessId}`,
+  );
   const activeTurnIdentity = { dialogProcessId, turnScopeId };
   const stampRoundIdentity = (messages = []) => {
     for (const message of Array.isArray(messages) ? messages : []) {
@@ -281,8 +302,37 @@ export function ensureTestHookContext(ctx = {}) {
   }
   delete ctx.messageBlocks;
   delete ctx.activeTurnIdentity;
+  injectTestHookRuntimeIdentity(ctx, identitySources, activeTurnIdentity);
   migrateHarnessBucket(ctx);
   return ctx;
+}
+
+function resolveTestIdentityField(sources, field, hostDefault) {
+  const declared = [
+    ...new Set(
+      sources
+        .filter((source) => source && source[field] !== undefined)
+        .map((source) => source[field]),
+    ),
+  ];
+  if (declared.length > 1) {
+    throw new Error(
+      `test hook identity ${field} is declared inconsistently: ${declared.join(" | ")}`,
+    );
+  }
+  return declared.length ? declared[0] : hostDefault;
+}
+
+function injectTestHookRuntimeIdentity(ctx, sources, activeTurnIdentity) {
+  const identity = createHookRuntimeIdentity({
+    userId: resolveTestIdentityField(sources, "userId", "test-user"),
+    sessionId: resolveTestIdentityField(sources, "sessionId", "test-session"),
+    parentSessionId: resolveTestIdentityField(sources, "parentSessionId", ""),
+    dialogProcessId: activeTurnIdentity.dialogProcessId,
+    turnScopeId: activeTurnIdentity.turnScopeId,
+    caller: resolveTestIdentityField([ctx], "caller", SESSION_CALLER.USER),
+  });
+  Object.assign(ctx, identity);
 }
 
 export function createTestHookContext(ctx = {}, context = {}) {

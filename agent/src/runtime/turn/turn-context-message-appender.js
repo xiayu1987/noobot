@@ -34,14 +34,12 @@ function requireTurnContextStores({
 
 export function appendTurnContextControlMessage({
   runtime = null,
-  loopState = null,
   content = "",
   internalType = "",
 } = {}) {
   const turnMessageStore = runtime?.currentTurnMessages;
   const modelContext = requireActiveModelContext(runtime);
-  const dialogProcessId = text(loopState?.dialogProcessId);
-  const turnScopeId = text(modelContext?.activeTurnIdentity?.turnScopeId);
+  const { dialogProcessId, turnScopeId } = modelContext.activeTurnIdentity;
   const normalizedInternalType = text(internalType);
   if (!CONTEXT_CONTROL_MESSAGE_TYPES.includes(normalizedInternalType)) {
     throw new TypeError(
@@ -83,17 +81,10 @@ export function appendTurnContextControlMessage({
   return persistedMessage;
 }
 
-export function appendUserInterjectionMessage({
-  runtime = null,
-  loopState = null,
-  interjection = {},
-} = {}) {
+export function appendUserInterjectionMessage({ runtime = null, interjection = {} } = {}) {
   const turnMessageStore = runtime?.currentTurnMessages;
   const modelContext = requireActiveModelContext(runtime);
-  const dialogProcessId = text(
-    loopState?.dialogProcessId || modelContext?.activeTurnIdentity?.dialogProcessId,
-  );
-  const turnScopeId = text(modelContext?.activeTurnIdentity?.turnScopeId);
+  const { dialogProcessId, turnScopeId } = modelContext.activeTurnIdentity;
   const messageUid = text(interjection?.messageUid);
   const content = text(interjection?.message);
   const { interjectionSequence, receivedAt } = interjection;

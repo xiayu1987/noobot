@@ -5,7 +5,7 @@
  */
 import { createSecureId } from "@noobot/shared/secure-identity";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
-import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import { selectSessionRuntimeBucket } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { createTurnInterjectionCommand } from "@noobot/agent-transport-protocol";
 import { text } from "@noobot/shared/value";
@@ -15,7 +15,7 @@ export function createComposerActions({
   input,
   turnRuntimeRegistry,
   resolveActiveSessionIdentity,
-  resolveActiveTurnScopeIdentity,
+  resolveActiveTurn,
   submitTurnRuntimeEvent,
   waitForSessionConnectorState,
   send,
@@ -56,11 +56,7 @@ export function createComposerActions({
     const sessionRuntimeIdValue = resolveActiveSessionIdentity();
     const connectorStateTask = waitForSessionConnectorState?.(sessionRuntimeIdValue);
     if (connectorStateTask) await connectorStateTask;
-    const currentTurn = resolveSessionTurnRuntime(
-      turnRuntimeRegistry.value,
-      sessionRuntimeIdValue,
-      resolveActiveTurnScopeIdentity(),
-    );
+    const currentTurn = resolveActiveTurn();
     if (composerActionState.value.canInterject === true) {
       return sendInterjection(currentTurn);
     }
@@ -77,7 +73,9 @@ export function createComposerActions({
       selectedDialogProcessId: resumeDialogProcessId,
       selectedSequence: Number(stoppedTurn?.lifecycleSeq || 0),
       selectedContinuedByTurnScopeId: text(stoppedTurn?.continuedByTurnScopeId),
-      candidates: Object.values(turnRuntimeRegistry.value?.sessions?.[resumeSessionId]?.turns || {})
+      candidates: Object.values(
+        selectSessionRuntimeBucket(turnRuntimeRegistry.value, resumeSessionId)?.turns || {},
+      )
         .filter((turn) => turn?.terminal === "user_stopped")
         .map((turn) => ({
           turnScopeId: text(turn?.turnScopeId),
@@ -103,18 +101,20 @@ export function createComposerActions({
       ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED
       : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED;
     const continuingTurnScopeId = isContinueFromUserStopped ? createTurnScopeId() : "";
-    submitTurnRuntimeEvent({
-      type: composerEventType,
-      sessionId: isContinueFromUserStopped ? resumeSessionId : undefined,
-      turnScopeId: continuingTurnScopeId || undefined,
-      continuationSource: isContinueFromUserStopped
+    submitTurnRuntimeEvent(
+      isContinueFromUserStopped
         ? {
-            dialogProcessId: resumeDialogProcessId,
-            turnScopeId: resumeTurnScopeId,
+            type: composerEventType,
+            sessionId: resumeSessionId,
+            turnScopeId: continuingTurnScopeId,
+            continuationSource: {
+              dialogProcessId: resumeDialogProcessId,
+              turnScopeId: resumeTurnScopeId,
+            },
+            source: "use_chat_session",
           }
-        : null,
-      source: "use_chat_session",
-    });
+        : { type: composerEventType, continuationSource: null, source: "use_chat_session" },
+    );
     try {
       const [options = {}, ...restArgs] = args;
       const sendOptions = isContinueFromUserStopped
@@ -139,11 +139,9 @@ export function createComposerActions({
     }
   }
 
-  function stopSendingWithComposerActionState(...args) {
-    const explicitExecutionId = text(args[0]);
-    if (!explicitExecutionId && !composerActionState.value.canStop) return false;
-    const requested = stopSending(...args);
-    return requested;
+  function stopSendingWithComposerActionState() {
+    if (!composerActionState.value.canStop) return false;
+    return stopSending();
   }
 
   return { sendWithComposerActionState, stopSendingWithComposerActionState };

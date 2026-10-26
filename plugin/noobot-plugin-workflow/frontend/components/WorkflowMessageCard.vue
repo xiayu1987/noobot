@@ -5,49 +5,47 @@
 -->
 <script setup>
 import { onMounted, watch } from "vue";
+import { text } from "@noobot/shared/value";
 import { useWorkflowLocale } from "../i18n/index.js";
 import WorkflowCardPreview from "./workflow-message-card/WorkflowCardPreview.vue";
 import WorkflowNodeSessionDrawer from "./workflow-message-card/WorkflowNodeSessionDrawer.vue";
 import { useWorkflowMessageCardState } from "../composables/useWorkflowMessageCardState.js";
 
 const props = defineProps({
-  messageItem: { type: Object, default: () => ({}) },
+  messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
   workflowSessionService: { type: Object, required: true },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
-  formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
-  isImageMime: {
-    type: Function,
-    default: (mimeType = "") => String(mimeType || "").startsWith("image/"),
-  },
-  workflowNodeStateRegistry: { type: Object, default: null },
-  subSessionMessageRegistry: { type: Object, default: null },
-  subSessionMessageRegistryVersion: { type: Number, default: 0 },
-  selectExecutionDetail: { type: Function, default: null },
-  stopExecution: { type: Function, default: null },
-  selectSessionMessages: { type: Function, default: null },
-  applyWorkflowRuntimeEvent: { type: Function, default: null },
-  logWorkflowDiagnostics: { type: Function, default: null },
+  formatFileSize: { type: Function, required: true },
+  isImageMime: { type: Function, required: true },
+  workflowNodeStateRegistry: { type: Object, required: true },
+  subSessionMessageRegistry: { type: Object, required: true },
+  subSessionMessageRegistryVersion: { type: Number, required: true },
+  selectExecutionDetail: { type: Function, required: true },
+  stopExecution: { type: Function, required: true },
+  selectSessionMessages: { type: Function, required: true },
+  applyWorkflowRuntimeEvent: { type: Function, required: true },
+  logWorkflowDiagnostics: { type: Function, required: true },
 });
 const emit = defineEmits(["open-thinking-details"]);
 const { translate } = useWorkflowLocale();
 
 function logCardRender(stage) {
-  const payload = props.messageItem?.pluginMeta?.payload || {};
-  const content = String(props.messageItem?.content || "");
-  props.logWorkflowDiagnostics?.(`frontend.workflowRender.card${stage}`, {
-    sessionId: String(payload?.runMeta?.sessionId || ""),
-    dialogProcessId: String(payload?.runMeta?.dialogProcessId || ""),
-    turnScopeId: String(props.messageItem?.turnScopeId || ""),
-    workflowRunId: String(payload?.workflowRunId || ""),
-    liveProjection: props.messageItem?.__workflowLiveProjection === true,
-    pluginPhase: String(props.messageItem?.pluginMeta?.phase || ""),
+  const { payload } = props.messageItem.pluginMeta;
+  const content = text(props.messageItem.content);
+  props.logWorkflowDiagnostics(`frontend.workflowRender.card${stage}`, {
+    sessionId: payload.runMeta.sessionId,
+    dialogProcessId: payload.runMeta.dialogProcessId,
+    turnScopeId: props.messageItem.turnScopeId,
+    workflowRunId: payload.workflowRunId,
+    liveProjection: props.messageItem.__workflowLiveProjection === true,
+    pluginPhase: props.messageItem.pluginMeta.phase,
     contentLength: content.length,
     assistantBodyPresent: Boolean(content.trim()),
-    nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
-    presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
-    registryWorkflowCount: Object.keys(props.workflowNodeStateRegistry?.workflows || {}).length,
+    nodeSessionCount: payload.nodeSessions.length,
+    presentationMessageId: text(props.messageItem.presentationMessageId),
+    registryWorkflowCount: Object.keys(props.workflowNodeStateRegistry.workflows).length,
   });
 }
 
@@ -59,23 +57,20 @@ watch(
 watch(
   () => props.subSessionMessageRegistryVersion,
   (version, previousVersion) => {
-    const sessions = props.subSessionMessageRegistry?.sessions || {};
-    props.logWorkflowDiagnostics?.("frontend.workflowRender.cardRegistryVersionReceived", {
-      sessionId: String(props.messageItem?.sessionId || ""),
-      dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
-      turnScopeId: String(props.messageItem?.turnScopeId || ""),
-      previousVersion: Number(previousVersion || 0),
-      subSessionMessageRegistryVersion: Number(version || 0),
-      subSessions: Object.values(sessions).map((session = {}) => ({
-        sessionId: String(session?.sessionId || ""),
-        messages: (Array.isArray(session?.messages) ? session.messages : []).map(
-          (message = {}) => ({
-            messageUid: String(message?.messageUid || ""),
-            presentationMessageId: String(message?.presentationMessageId || ""),
-            role: String(message?.role || ""),
-            contentLength: String(message?.content || "").length,
-          }),
-        ),
+    props.logWorkflowDiagnostics("frontend.workflowRender.cardRegistryVersionReceived", {
+      sessionId: text(props.messageItem.sessionId),
+      dialogProcessId: text(props.messageItem.dialogProcessId),
+      turnScopeId: text(props.messageItem.turnScopeId),
+      previousVersion,
+      subSessionMessageRegistryVersion: version,
+      subSessions: Object.values(props.subSessionMessageRegistry.sessions).map((session) => ({
+        sessionId: session.sessionId,
+        messages: session.messages.map((message) => ({
+          messageUid: text(message.messageUid),
+          presentationMessageId: text(message.presentationMessageId),
+          role: text(message.role),
+          contentLength: text(message.content).length,
+        })),
       })),
     });
   },
@@ -104,7 +99,7 @@ const {
   selectedNodeSessionDocs,
   displayNodeMessages,
   nodeSessionAllMessages,
-  selectedRuntimeBoxes,
+  selectedActionNodeStates,
   fetchSelectedNodeExecutionReport,
   handleOpenThinkingDetails,
   resolveStatusLabel,
@@ -148,7 +143,7 @@ const {
     :fetch-execution-report="fetchSelectedNodeExecutionReport"
     :selected-runtime-node="selectedRuntimeNode"
     :selected-runtime-step="selectedRuntimeStep"
-    :selected-runtime-boxes="selectedRuntimeBoxes"
+    :selected-action-node-states="selectedActionNodeStates"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     :display-node-messages="displayNodeMessages"
     :node-session-all-messages="nodeSessionAllMessages"

@@ -148,6 +148,7 @@ const {
 attachmentService.configure({ fetcher: authFetch });
 thinkingDetailService.configure({ fetcher: authFetch });
 executionReportService.configure({ fetcher: authFetch });
+const fetchExecutionReport = executionReportService.getReport;
 fileMutationPreviewService.configure({ fetcher: authFetch });
 authenticatedHttpService.configure({ fetcher: authFetch });
 bindScenarioConfig(scenarioConfig);
@@ -181,6 +182,7 @@ const {
   renameSession,
   send,
   stopSending,
+  stopExecution,
   deleteMonotonicMessage,
   resendMonotonicMessage,
   refreshSessionConnectorsAsync,
@@ -537,7 +539,8 @@ const drawerPanels = computed(() =>
       :empty-logo-src="noobotLogo"
       :delete-monotonic-message="deleteMonotonicMessage"
       :resend-monotonic-message="resendMonotonicMessage"
-      :stop-execution="stopSending"
+      :stop-execution="stopExecution"
+      :fetch-execution-report="fetchExecutionReport"
       :chat-message-nav-items="chatMessageNavItems"
       :chat-navigator-visible="chatNavigatorVisible"
       :connector-visible="connectorVisible"

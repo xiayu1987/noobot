@@ -4,58 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
-import { text } from "@noobot/shared/value";
-
-export function makeActionStateKey(item = {}, index = 0) {
-  return String(
-    item?.actionNodeStateId ||
-      item?.dialogProcessId ||
-      item?.sessionId ||
-      resolveWorkflowDialogProcessId(item) ||
-      `node_box_${index + 1}`,
-  ).trim();
+export function makeRuntimeStep({ item, workflowPayload }) {
+  return { ...item, rootSessionId: workflowPayload.value.runMeta.sessionId };
 }
 
-export function makeRuntimeStep({ item = {}, index = 0, workflowPayload, resolveStepStatus }) {
-  const dialogProcessId = resolveWorkflowDialogProcessId(item);
-  const stepId = String(
-    item?.stepId || dialogProcessId || item?.sessionId || `step_${index + 1}`,
-  ).trim();
-  const stepIndex = Number.isFinite(Number(item?.stepIndex)) ? Number(item.stepIndex) : index;
-  const merged = {
-    ...item,
-    dialogProcessId,
-    stepId,
-    stepIndex,
-    rootSessionId: text(item?.rootSessionId || workflowPayload.value?.runMeta?.sessionId),
-  };
-  return {
-    ...merged,
-    _boxType: "step",
-    _status: resolveStepStatus(merged),
-  };
-}
-
-export function stripRuntimeInternal(runtime = {}) {
-  return {
-    nodeId: text(runtime?.nodeId),
-    nodeName: text(runtime?.nodeName),
-    actionNodeStates: Array.isArray(runtime?.actionNodeStates)
-      ? runtime.actionNodeStates.map((stateBox = {}, stateIndex) => ({
-          actionNodeStateId: text(stateBox?.actionNodeStateId) || `node_box_${stateIndex + 1}`,
-          nodeId: text(stateBox?.nodeId || runtime?.nodeId),
-          nodeName: text(stateBox?.nodeName || runtime?.nodeName),
-          steps: Array.isArray(stateBox?.steps) ? stateBox.steps : [],
-        }))
-      : [],
-  };
-}
-
-export function firstRuntimeStep(actionNodeStates = []) {
-  for (const stateBox of Array.isArray(actionNodeStates) ? actionNodeStates : []) {
-    const stepItem = Array.isArray(stateBox?.steps) ? stateBox.steps[0] : null;
-    if (stepItem) return stepItem;
-  }
-  return null;
+export function firstRuntimeStep(actionNodeStates) {
+  return actionNodeStates[0].steps[0];
 }

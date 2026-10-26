@@ -34,10 +34,14 @@ test("prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapsh
       prepareStoppedSnapshotResumeTurnExecution(engine, {
         payload: {
           contextBuilder,
-          userId: "u1",
-          sessionId: "s1",
-          dialogProcessId: "dialog-current",
-          turnScopeId: "turn-current",
+          runtimeIdentity: {
+            userId: "u1",
+            sessionId: "s1",
+            parentSessionId: "",
+            dialogProcessId: "dialog-current",
+            turnScopeId: "turn-current",
+            caller: SESSION_CALLER.USER,
+          },
           runConfig: {
             resumeFromStoppedSnapshot: true,
             resumeTurnScopeId: "turn-stopped",
@@ -68,10 +72,14 @@ test("stopped snapshot resume degrades to a normal turn when the optional snapsh
     const result = await prepareStoppedSnapshotResumeTurnExecution(engine, {
       payload: {
         contextBuilder,
-        userId: "u1",
-        sessionId: "workflow-session",
-        dialogProcessId: "dialog-current",
-        turnScopeId: "turn-current",
+        runtimeIdentity: {
+          userId: "u1",
+          sessionId: "workflow-session",
+          parentSessionId: "",
+          dialogProcessId: "dialog-current",
+          turnScopeId: "turn-current",
+          caller: SESSION_CALLER.USER,
+        },
         runConfig: {
           resumeFromStoppedSnapshot: true,
           resumeDialogProcessId: "dialog-stopped",
@@ -200,10 +208,14 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     await prepareStoppedSnapshotResumeTurnExecution(engine, {
       payload: {
         contextBuilder,
-        userId: "u1",
-        sessionId: "s1",
-        dialogProcessId: "dialog-current",
-        turnScopeId: "turn-current",
+        runtimeIdentity: {
+          userId: "u1",
+          sessionId: "s1",
+          parentSessionId: "",
+          dialogProcessId: "dialog-current",
+          turnScopeId: "turn-current",
+          caller: SESSION_CALLER.USER,
+        },
         runConfig: {
           resumeFromStoppedSnapshot: true,
           resumeDialogProcessId: stoppedIdentity.dialogProcessId,
@@ -226,7 +238,11 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
       ["incremental"],
     );
     assert.deepEqual(sourceCalls, [{ userId: "u1", sessionId: "s1", persistenceScope: null }]);
-    assert.equal(captured[0].options.dialogProcessId, "dialog-current");
+    assert.deepEqual(Object.keys(captured[0].options).sort(), [
+      "attachments",
+      "incrementalMessages",
+      "userMetaBackwrites",
+    ]);
     const [restoredHistory] = captured[0].history;
     const [restoredIncremental] = captured[0].options.incrementalMessages;
     assert.equal(readContextMessageValue(restoredHistory, "dialogProcessId"), "dialog-history");
@@ -268,8 +284,14 @@ test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-
   const { userMessageAttachments: attachments } = await prepareTurnInput({
     attachmentService,
     buildContextPayload: {
-      userId: "u1",
-      sessionId: "s1",
+      runtimeIdentity: {
+        userId: "u1",
+        sessionId: "s1",
+        parentSessionId: "",
+        dialogProcessId: "dialog-test",
+        turnScopeId: "turn-test",
+        caller: SESSION_CALLER.USER,
+      },
       userMessageAttachments: [{ name: "resume.docx", type: "application/octet-stream" }],
     },
   });
@@ -281,7 +303,17 @@ test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-
 
   const { userMessageAttachments: again } = await prepareTurnInput({
     attachmentService,
-    buildContextPayload: { userId: "u1", sessionId: "s1", userMessageAttachments: attachments },
+    buildContextPayload: {
+      runtimeIdentity: {
+        userId: "u1",
+        sessionId: "s1",
+        parentSessionId: "",
+        dialogProcessId: "dialog-test",
+        turnScopeId: "turn-test",
+        caller: SESSION_CALLER.USER,
+      },
+      userMessageAttachments: attachments,
+    },
   });
   assert.equal(ingestCalls.length, 1, "canonical attachments must not be re-ingested");
   assert.equal(again[0].attachmentId, "att-1");
@@ -339,10 +371,14 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
     await prepareStoppedSnapshotResumeTurnExecution(engine, {
       payload: {
         contextBuilder,
-        userId: "u1",
-        sessionId: "s1",
-        dialogProcessId: "dialog-current",
-        turnScopeId: "turn-current",
+        runtimeIdentity: {
+          userId: "u1",
+          sessionId: "s1",
+          parentSessionId: "",
+          dialogProcessId: "dialog-current",
+          turnScopeId: "turn-current",
+          caller: SESSION_CALLER.USER,
+        },
         runConfig: {
           resumeFromStoppedSnapshot: true,
           resumeDialogProcessId: stoppedIdentity.dialogProcessId,

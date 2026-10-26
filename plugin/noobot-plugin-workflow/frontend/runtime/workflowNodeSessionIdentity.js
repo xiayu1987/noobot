@@ -16,12 +16,11 @@ export function shouldRejectRootSessionProjection({
   return Boolean(current && incoming && root && current !== root && incoming === root);
 }
 
-export function resolveCanonicalWorkflowNodeItem(nodeItem = {}, runtimeNodeSessions = []) {
-  const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+export function resolveCanonicalWorkflowNodeItem(nodeItem, runtimeNodeSessions) {
   return {
-    ...(nodeItem && typeof nodeItem === "object" ? nodeItem : {}),
-    ...(runtimeNode && typeof runtimeNode === "object" ? runtimeNode : {}),
-    rootSessionId: text(runtimeNode?.rootSessionId || nodeItem?.rootSessionId),
+    ...nodeItem,
+    ...resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions),
+    rootSessionId: nodeItem.rootSessionId,
   };
 }
 

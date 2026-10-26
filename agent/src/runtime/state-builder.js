@@ -69,17 +69,9 @@ function resolveInvocationIdentity(identity) {
   };
 }
 
-function assertRuntimeIdentityConsistent(runtime, sys, invocationIdentity) {
-  const runtimeIdentitySources = {
-    sessionId: sys?.sessionId,
-    parentSessionId: sys?.parentSessionId,
-    dialogProcessId: sys?.dialogProcessId,
-    turnScopeId: sys?.turnScopeId,
-    runId: runtime?.runId,
-  };
-  for (const [field, rawValue] of Object.entries(runtimeIdentitySources)) {
-    const runtimeValue = text(rawValue);
-    if (runtimeValue && runtimeValue !== invocationIdentity[field]) {
+function assertRuntimeIdentityConsistent(sys, invocationIdentity) {
+  for (const field of ["sessionId", "parentSessionId", "dialogProcessId", "turnScopeId"]) {
+    if (sys[field] !== invocationIdentity[field]) {
       throw new Error(`runtime ${field} conflicts with agent context identity`);
     }
   }
@@ -138,13 +130,12 @@ function createAgentModelContext({
   return modelContext;
 }
 
-function buildLoopState({ tools, runtime, sys, activeTurnIdentity, loopConfig, errorLogger }) {
+function buildLoopState({ tools, runtime, sys, loopConfig, errorLogger }) {
   return {
     tools,
     traces: [],
     currentTurnMessages: runtime.currentTurnMessages,
     currentTurnTasks: runtime.currentTurnTasks,
-    dialogProcessId: activeTurnIdentity.dialogProcessId,
     maxTurns: loopConfig.maxToolLoopTurns,
     phaseSummaryLoopTurns: loopConfig.phaseSummaryLoopTurns,
     taskCheckLoopTurns: loopConfig.taskCheckLoopTurns,
@@ -157,14 +148,13 @@ function buildLoopState({ tools, runtime, sys, activeTurnIdentity, loopConfig, e
   };
 }
 
-function recordModelContextOnRuntime(runtime, context, sys, activeTurnIdentity, modelContext) {
+function recordModelContextOnRuntime(runtime, context, activeTurnIdentity, modelContext) {
   runtime.activeMessageContext = modelContext;
   runtime.stoppedModelMessageSnapshotCandidate = {
     userId: context.identity.userId,
     sessionId: context.identity.sessionId,
     parentSessionId: context.identity.parentSessionId,
     ...activeTurnIdentity,
-    systemRuntime: sys,
   };
   return runtime.stoppedModelMessageSnapshotCandidate;
 }
@@ -232,7 +222,7 @@ export function createStateBuilder({
 
     const activeTurnIdentity = resolveActiveTurnIdentity(currentUserMessage, context.identity);
     const invocationIdentity = resolveInvocationIdentity(context.identity);
-    assertRuntimeIdentityConsistent(runtime, sys, invocationIdentity);
+    assertRuntimeIdentityConsistent(sys, invocationIdentity);
 
     const modelHost = initializeAgentModelHost({
       runtime,
@@ -253,11 +243,10 @@ export function createStateBuilder({
       tools,
       runtime,
       sys,
-      activeTurnIdentity,
       loopConfig,
       errorLogger,
     });
-    recordModelContextOnRuntime(runtime, context, sys, activeTurnIdentity, modelContext);
+    recordModelContextOnRuntime(runtime, context, activeTurnIdentity, modelContext);
     emitAgentStateDiagnostics({
       runtime,
       context,

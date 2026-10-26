@@ -11,6 +11,7 @@ import {
   resolveWorkflowDataRelativePath,
 } from "../constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { createWorkflowNodeOrigin } from "@noobot/session-protocol/execution-lifecycle";
 import { WORKFLOW_ACTION_TYPE, isWorkflowActionType } from "workflow";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
@@ -190,14 +191,13 @@ function createWorkflowNodeSubSessionRequest(params) {
   const relativeDir = buildWorkflowDialogRelativeDir({
     ctx,
     dialogProcessId: identity.dialogProcessId,
-    scope: "node",
   });
   return {
     parentExecutionScope: ctx?.agentContext || null,
     abortSignal: params.signal,
     message: params.agentInstruction,
     attachments: params.nodeInputAttachments,
-    runConfigPatch: buildWorkflowNodeRunConfigPatch(ctx, identity),
+    runConfigPatch: buildWorkflowNodeRunConfigPatch(ctx),
     systemMessageFactory: ({ attachments }) =>
       [
         buildWorkflowInputAttachmentSystemMessage({
@@ -213,7 +213,7 @@ function createWorkflowNodeSubSessionRequest(params) {
   };
 }
 
-function buildWorkflowNodeRunConfigPatch(ctx, identity) {
+function buildWorkflowNodeRunConfigPatch(ctx) {
   const parentRunConfig = ctx.runConfig;
   const selectedPlugins = Array.isArray(parentRunConfig.selectedPlugins)
     ? parentRunConfig.selectedPlugins.map((item) => text(item)).filter(Boolean)
@@ -230,9 +230,6 @@ function buildWorkflowNodeRunConfigPatch(ctx, identity) {
     ...(hasOwnObjectKey(parentRunConfig, "streaming")
       ? { streaming: parentRunConfig.streaming }
       : {}),
-    turnScopeId: identity.turnScopeId,
-    workflowRunId: identity.workflowRunId,
-    workflowNodeExecutionId: identity.nodeExecutionId,
   };
   if (!harnessEnabled) return patch;
   return {
@@ -244,10 +241,10 @@ function buildWorkflowNodeRunConfigPatch(ctx, identity) {
 
 function buildWorkflowNodeSubSessionStrategy({ ctx, identity, runIdentity, relativeDir }) {
   return {
-    userId: text(ctx?.userId),
-    sessionId: identity.sessionId,
-    parentSessionId: text(ctx?.sessionId),
-    parentDialogProcessId: text(ctx?.dialogProcessId),
+    userId: ctx.userId,
+    sessionId: identity.nodeSessionId,
+    parentSessionId: ctx.sessionId,
+    parentDialogProcessId: ctx.dialogProcessId,
     dialogProcessId: identity.dialogProcessId,
     turnScopeId: identity.turnScopeId,
     executionId: identity.activeChildExecutionId,
@@ -267,11 +264,10 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     executionId: identity.activeChildExecutionId,
     parentExecutionId: runIdentity.executionId,
     rootExecutionId: runIdentity.rootExecutionId,
-    origin: {
-      type: "workflow_node",
+    origin: createWorkflowNodeOrigin({
       workflowRunId: identity.workflowRunId,
       workflowNodeExecutionId: identity.nodeExecutionId,
-    },
+    }),
     nodeExecutionId: identity.nodeExecutionId,
     commandId: identity.commandId,
     dialogProcessId: identity.dialogProcessId,
@@ -279,7 +275,7 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     nodeName: identity.nodeName,
     transition: params.transition,
     turnScopeId: identity.turnScopeId,
-    workflowSessionId: text(ctx?.sessionId),
+    workflowSessionId: ctx.sessionId,
     upstreamWorkflowNodeResults: params.upstreamNodeResults,
   };
 }

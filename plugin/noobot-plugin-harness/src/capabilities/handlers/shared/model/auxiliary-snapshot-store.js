@@ -17,7 +17,7 @@ const snapshots = new Map();
 const maxEntries = QUANTITY_THRESHOLDS.harness.incrementalMessageCacheEntries;
 
 function snapshotKey(ctx = {}, purpose = "") {
-  const sessionId = text(ctx?.sessionId);
+  const sessionId = ctx.sessionId;
   const normalizedPurpose = text(purpose);
   return sessionId && normalizedPurpose ? `${sessionId}::${normalizedPurpose}` : "";
 }
@@ -59,7 +59,7 @@ export function resolveAuxiliarySnapshotMessages({ ctx = {}, purpose = "", messa
 }
 
 export function clearAuxiliarySnapshotsForContext(ctx = {}) {
-  const sessionId = text(ctx?.sessionId);
+  const sessionId = ctx.sessionId;
   if (!sessionId) return 0;
   let deleted = 0;
   for (const key of snapshots.keys()) {

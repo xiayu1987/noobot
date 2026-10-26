@@ -58,10 +58,11 @@ describe("Workflow frontend registration", () => {
       userId: "admin",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
+      traceId: "trace-1",
     });
 
     expect(request).toHaveBeenCalledWith(
-      "/api/internal/workflow/session/admin/session-1/dialog-1",
+      "/api/internal/workflow/session/admin/session-1/dialog-1?traceId=trace-1",
       { method: "GET" },
     );
   });

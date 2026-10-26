@@ -23,12 +23,8 @@ function createFinalStreamRuntime(eventListener) {
   return createTestRuntimeContext({
     eventListener,
     runConfig: { hookManager: null, executionId: "execution-1", commandId: "command-1" },
-    systemRuntime: {
-      userId: "user-1",
-      sessionId: "s1",
-      dialogProcessId: "dp1",
-      turnScopeId: "turn-1",
-    },
+    identity: { userId: "user-1", sessionId: "s1", dialogProcessId: "dp1", turnScopeId: "turn-1" },
+    systemRuntime: {},
   });
 }
 

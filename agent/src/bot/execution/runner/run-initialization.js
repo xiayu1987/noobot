@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../../events/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
-import { runBotRuntimeHook, withBotHookRuntimeMeta } from "../../hook/index.js";
+import {
+  HOOK_POINT,
+  assertNoHookRuntimeIdentityFields,
+  createHookRuntimeIdentity,
+  withHookRuntimeIdentity,
+} from "@noobot/hook-protocol";
+import { runBotRuntimeHook } from "../../hook/index.js";
 import {
   createAgentLifecycleMachine,
   resolveInitialLifecycleState,
@@ -22,7 +27,7 @@ const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
   "commandId",
 ]);
 
-function requireAcceptedRunIdentity(runConfig = {}) {
+function requireAcceptedRunIdentity(runConfig) {
   const missing = REQUIRED_RUN_IDENTITY_FIELDS.filter((field) => !text(runConfig?.[field]));
   if (missing.length > 0) {
     const error = new Error(`session run requires accepted identity: ${missing.join(",")}`);
@@ -30,10 +35,7 @@ function requireAcceptedRunIdentity(runConfig = {}) {
     error.code = "MISSING_ACCEPTED_RUN_IDENTITY";
     throw error;
   }
-  return {
-    turnScopeId: text(runConfig.turnScopeId),
-    presentationMessageId: text(runConfig.presentationMessageId),
-  };
+  return { presentationMessageId: runConfig.presentationMessageId };
 }
 
 export async function initializeSessionRun({
@@ -91,7 +93,6 @@ export async function initializeSessionRun({
     eventListener,
     dialogProcessId: requestedDialogProcessId,
     turnScopeId: normalizedRequestTurnScopeId,
-    thinkingStartedAt: text(runConfig?.thinkingStartedAt),
     persistenceScope,
   });
   const {
@@ -104,19 +105,16 @@ export async function initializeSessionRun({
     sessionDir,
     runtimeEventListener,
   } = initialized;
-  const requestRunConfig = {
-    ...(isPlainObject(runConfig) ? runConfig : {}),
-    turnScopeId: normalizedRequestTurnScopeId,
-    sessionId: usedSessionId,
-    dialogProcessId,
-  };
-  const scenarioResolvedRunConfig = resolveScenarioRunConfig(requestRunConfig, userConfig);
+  const scenarioResolvedRunConfig = resolveScenarioRunConfig(runConfig, userConfig);
   const resolvedRunConfig = prepareRunConfig({
     userId,
     runConfig: scenarioResolvedRunConfig,
     userConfig,
   });
-  const { turnScopeId, presentationMessageId } = requireAcceptedRunIdentity(resolvedRunConfig);
+
+  assertNoHookRuntimeIdentityFields(resolvedRunConfig, "runConfig");
+  const turnScopeId = normalizedRequestTurnScopeId;
+  const { presentationMessageId } = requireAcceptedRunIdentity(resolvedRunConfig);
   const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
   const lifecycle = createAgentLifecycleMachine({
     eventListener: runtimeEventListener,
@@ -147,16 +145,15 @@ export async function initializeSessionRun({
     abortSignal,
     botHookManager: resolvedRunConfig.botHookManager,
   };
-  const botHookBase = withBotHookRuntimeMeta(
-    {
-      userId,
-      sessionId: usedSessionId,
-      parentSessionId: resolvedParentSessionId,
-      dialogProcessId,
-      caller,
-    },
-    { runConfig: resolvedRunConfig },
-  );
+  const botHookIdentity = createHookRuntimeIdentity({
+    userId,
+    sessionId: usedSessionId,
+    parentSessionId: resolvedParentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    caller,
+  });
+  const botHookBase = withHookRuntimeIdentity(botHookIdentity, { runConfig: resolvedRunConfig });
   for (const record of resolvedRunConfig.pluginLifecycleEvents || []) {
     emitEvent(runtimeEventListener, record.event, {
       ...record,
@@ -192,8 +189,6 @@ export async function initializeSessionRun({
     userConfig,
     sessionDir,
     runtimeEventListener,
-    requestRunConfig,
-    scenarioResolvedRunConfig,
     resolvedRunConfig,
     turnScopeId,
     presentationMessageId,
@@ -204,6 +199,7 @@ export async function initializeSessionRun({
         : AGENT_CONTEXT_MODE.NEW_SESSION,
     lifecycle,
     botHookRuntime,
+    botHookIdentity,
     botHookBase,
   };
 }

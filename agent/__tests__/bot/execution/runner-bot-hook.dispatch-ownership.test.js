@@ -18,6 +18,7 @@ import {
 import { createModelResponse } from "@noobot/model-protocol";
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 import { BOT_DISPATCH_ROOT_OWNER } from "@noobot/agent-transport-protocol/bot-dispatch";
+import { projectAgentContextIdentity } from "../../../src/context/agent-context-envelope-input.js";
 
 function workflowRunIdentity(workflowRunId) {
   const executionId = `workflow:${workflowRunId}`;
@@ -84,24 +85,19 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const runner = createRunner({
     botHookManager,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
-      const turnScopeId = buildContextPayload.runConfig.turnScopeId;
-      const invocationIdentity = {
-        userId: buildContextPayload.userId,
-        sessionId: buildContextPayload.sessionId,
-        rootSessionId: "s1",
-        parentSessionId: buildContextPayload.parentSessionId,
-        dialogProcessId: buildContextPayload.dialogProcessId,
-        turnScopeId,
-        runId: `agent:${turnScopeId}`,
-        presentationMessageId: buildContextPayload.runConfig.presentationMessageId,
-      };
+      const { runtimeIdentity, runConfig: acceptedRunConfig } = buildContextPayload;
+
+      const invocationIdentity = projectAgentContextIdentity(
+        { ...runtimeIdentity, rootSessionId: runtimeIdentity.sessionId },
+        acceptedRunConfig,
+      );
       const modelPort = {
         async invoke(request) {
           return createCompletedModelResponse(request, "WORKFLOW_DSL/1\nEND");
         },
       };
       const runtimeAgentContext = createTestAgentExecutionScope(
-        Object.assign(createTestRuntimeContext(), {
+        Object.assign(createTestRuntimeContext({ identity: runtimeIdentity }), {
           eventListener: buildContextPayload.eventListener,
           modelHost: {
             modelSpec: { alias: "test", model: "test", format: "openai_compatible" },

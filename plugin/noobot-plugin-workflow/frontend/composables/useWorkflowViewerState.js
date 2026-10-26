@@ -6,12 +6,9 @@
 import { computed, ref, watch } from "vue";
 import { text } from "@noobot/shared/value";
 
-export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistry = null) {
+export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistry) {
   const workflowRunId = computed(() => text(workflowPayload.value?.workflowRunId));
-  const initialState =
-    workflowRunId.value && workflowNodeStateRegistry?.viewerStates?.[workflowRunId.value]
-      ? workflowNodeStateRegistry.viewerStates[workflowRunId.value]
-      : {};
+  const initialState = workflowNodeStateRegistry.viewerStates[workflowRunId.value] || {};
 
   const viewerVisible = ref(false);
   const selectedNode = ref(initialState.selectedNode || null);
@@ -28,10 +25,8 @@ export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistr
       selectedGraphDialogProcessId,
     ],
     ([key, node, runtimeNode, runtimeStep, dialogProcessId]) => {
-      const target = workflowNodeStateRegistry;
-      if (!key || !target) return;
-      target.viewerStates ||= {};
-      target.viewerStates[key] = {
+      if (!key) return;
+      workflowNodeStateRegistry.viewerStates[key] = {
         selectedNode: node,
         selectedRuntimeNode: runtimeNode,
         selectedRuntimeStep: runtimeStep,

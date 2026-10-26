@@ -9,6 +9,11 @@ import {
   createCurrentTurnTasksStore,
 } from "./turn/current-turn-ledger.js";
 import { assertOptionalHookManager } from "@noobot/hook-protocol/runtime";
+import {
+  HOOK_RUNTIME_IDENTITY_FIELDS,
+  createHookRuntimeIdentity,
+} from "@noobot/hook-protocol/runtime-identity";
+import { AGENT_CONTEXT_IDENTITY_SHAPE } from "@noobot/context-protocol/agent-context/schema";
 import { isPlainObject } from "@noobot/shared/value";
 import { createMainFlowControlState } from "./main-flow-control.js";
 import { createMessageEventStreamState } from "../events/message-event-stream.js";
@@ -30,6 +35,12 @@ export const RUNTIME_CONTEXT_INPUT_FIELDS = Object.freeze([
   "userMessageAttachments",
   "sharedTools",
 ]);
+
+const ENVELOPE_ONLY_IDENTITY_FIELDS = Object.freeze(
+  Object.keys(AGENT_CONTEXT_IDENTITY_SHAPE).filter(
+    (field) => !HOOK_RUNTIME_IDENTITY_FIELDS.includes(field),
+  ),
+);
 const RUNTIME_CONTEXT_PLAIN_OBJECT_FIELDS = Object.freeze([
   "globalConfig",
   "allEnabledProviders",
@@ -57,9 +68,23 @@ function assertRuntimeContextInput(input) {
   if (!Array.isArray(input.userMessageAttachments)) {
     throw new TypeError("createRuntimeContext userMessageAttachments must be an array");
   }
+  const envelopeOnly = ENVELOPE_ONLY_IDENTITY_FIELDS.filter((field) =>
+    Object.hasOwn(input.systemRuntime, field),
+  );
+  if (envelopeOnly.length) {
+    throw new TypeError(
+      `createRuntimeContext systemRuntime must not carry envelope identity: ${envelopeOnly.join(",")}`,
+    );
+  }
   if (Object.hasOwn(input.systemRuntime, "messageEventStream")) {
     throw new TypeError("createRuntimeContext owns systemRuntime.messageEventStream");
   }
+
+  createHookRuntimeIdentity(
+    Object.fromEntries(
+      HOOK_RUNTIME_IDENTITY_FIELDS.map((field) => [field, input.systemRuntime[field]]),
+    ),
+  );
 }
 
 export function createRuntimeContext(input) {

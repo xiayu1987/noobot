@@ -25,7 +25,6 @@ import {
 } from "./event-builder.js";
 import { normalizeFsmState } from "../fsm/transitions.js";
 import { readHarnessBucket } from "../capabilities/handlers/shared/bucket-utils.js";
-import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import {
   HARNESS_I18N_KEYSET,
   resolveLocale as resolveHarnessLocale,
@@ -40,19 +39,15 @@ import { text } from "@noobot/shared/value";
 
 export { resolvePolicyPromptSelection } from "./policy-prompt-matrix.js";
 
-function resolvePolicyPromptScopeId(ctx = {}) {
-  return text(ctx?.turnScopeId);
-}
-
-function resolvePolicyPromptState(ctx = {}) {
+function resolvePolicyPromptState(ctx) {
   const bucket = readHarnessBucket(ctx);
   if (!bucket) return null;
-  const scopeId = resolvePolicyPromptScopeId(ctx);
+  const scopeId = ctx.turnScopeId;
   const current =
     bucket.policyPromptState && typeof bucket.policyPromptState === "object"
       ? bucket.policyPromptState
       : null;
-  if (!current || String(current.scopeId || "") !== scopeId) {
+  if (!current || current.scopeId !== scopeId) {
     bucket.policyPromptState = {
       scopeId,
       phase: "open",
@@ -63,7 +58,7 @@ function resolvePolicyPromptState(ctx = {}) {
   return bucket.policyPromptState;
 }
 
-function shouldRefreshPolicyPromptForDynamicChange(ctx = {}, activeDynamicPolicyPrompt = null) {
+function shouldRefreshPolicyPromptForDynamicChange(ctx, activeDynamicPolicyPrompt) {
   const state = resolvePolicyPromptState(ctx);
   if (!state || state.phase === "locked" || !activeDynamicPolicyPrompt) return false;
   const signature = buildDynamicPolicyPromptSignature(activeDynamicPolicyPrompt);
@@ -71,14 +66,14 @@ function shouldRefreshPolicyPromptForDynamicChange(ctx = {}, activeDynamicPolicy
   return String(state.injectedDynamicSignature || "") !== signature;
 }
 
-function markPolicyPromptRefreshed(ctx = {}, activeDynamicPolicyPrompt = null) {
+function markPolicyPromptRefreshed(ctx, activeDynamicPolicyPrompt) {
   const state = resolvePolicyPromptState(ctx);
   if (!state || !activeDynamicPolicyPrompt) return;
   const signature = buildDynamicPolicyPromptSignature(activeDynamicPolicyPrompt);
   if (signature) state.injectedDynamicSignature = signature;
 }
 
-export function lockPolicyPromptForMainFlow(ctx = {}) {
+export function lockPolicyPromptForMainFlow(ctx) {
   const state = resolvePolicyPromptState(ctx);
   if (!state || state.phase === "locked") return false;
   state.phase = "locked";
@@ -112,10 +107,10 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths, p
   const next = {
     plugin: plugin.name,
     version: plugin.version,
-    userId: text(ctx.userId),
-    sessionId: text(ctx.sessionId),
-    parentSessionId: text(ctx.parentSessionId),
-    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
+    userId: ctx.userId,
+    sessionId: ctx.sessionId,
+    parentSessionId: ctx.parentSessionId,
+    dialogProcessId: ctx.dialogProcessId,
     caller: text(ctx.caller),
     status: HARNESS_RUN_STATUS.RUNNING,
     fsmStatus: normalizeFsmState(current.fsmStatus),
@@ -258,9 +253,7 @@ export async function traceHook(point, ctx, options, plugin = {}) {
         timestamp: event.timestamp,
         userId: ctx.userId,
         sessionId: ctx.sessionId,
-        dialogProcessId: resolveDialogProcessIdFromContext({
-          dialogProcessId: ctx.dialogProcessId,
-        }),
+        dialogProcessId: ctx.dialogProcessId,
         ...log,
       },
       options.jsonlFlushStrategy,

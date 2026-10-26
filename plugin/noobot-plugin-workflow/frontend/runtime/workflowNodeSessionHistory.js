@@ -6,6 +6,7 @@
 import { onMounted, watch } from "vue";
 import { useOverlayHistory } from "noobot-chat/plugin-api/ui";
 import { isSameWorkflowDrawerRoute } from "./workflowNodeSessionIdentity.js";
+import { createWorkflowNodeDetailTraceId } from "./workflowNodeSessionDiagnostics.js";
 import {
   readWorkflowDrawerQuery,
   writeWorkflowDrawerQuery,
@@ -53,7 +54,7 @@ export function useWorkflowNodeSessionHistory({
     if (!initialRoute.dialogProcessId || !initialRoute.rootSessionId) return;
     const selectedRoute = selectedNode.value ? buildWorkflowDrawerRoute(selectedNode.value) : null;
     if (selectedRoute && isSameWorkflowDrawerRoute(initialRoute, selectedRoute)) {
-      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.initialRouteConsumed", {
+      props.logWorkflowDiagnostics("frontend.workflowNodeDetail.initialRouteConsumed", {
         sessionId: text(initialRoute.rootSessionId),
         dialogProcessId: text(initialRoute.dialogProcessId),
         turnScopeId: text(selectedNode.value?.turnScopeId),
@@ -68,12 +69,9 @@ export function useWorkflowNodeSessionHistory({
     writeWorkflowDrawerQuery({});
     if (!target) return;
     selectedRuntimeNode.value =
-      flowNodes.value.find((nodeItem = {}) =>
-        (Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : []).some(
-          (stateBox = {}) =>
-            (Array.isArray(stateBox?.steps) ? stateBox.steps : []).includes(target),
-        ),
+      flowNodes.value.find((nodeItem) =>
+        nodeItem.actionNodeStates.some((stateBox) => stateBox.steps.includes(target)),
       ) || selectedRuntimeNode.value;
-    openNodeSession(target);
+    openNodeSession(target, { traceId: createWorkflowNodeDetailTraceId() });
   });
 }

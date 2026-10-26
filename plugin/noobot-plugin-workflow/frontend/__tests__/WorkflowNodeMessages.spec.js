@@ -9,13 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { useWorkflowNodeMessages } from "../composables/useWorkflowNodeMessages.js";
 
 describe("workflow node message projection", () => {
-  it("renders the canonical live messages instead of stale summary messages", async () => {
-    const stale = {
-      messageUid: "sm-final",
-      presentationMessageId: "final",
-      role: "assistant",
-      content: "final resultfinal result",
-    };
+  it("renders the canonical live messages from the top-level detail", async () => {
     const final = {
       messageUid: "sm-final",
       presentationMessageId: "final",
@@ -23,10 +17,8 @@ describe("workflow node message projection", () => {
       content: "final result",
     };
     const selectedNodeMessages = ref([]);
-    const selectedNodeSessionSummary = ref({
-      sessionId: "child-session",
-      messages: [stale],
-    });
+    const selectedNodeSessionMetadata = ref({});
+    const selectedNodeTurnTimings = ref([]);
     let messages;
     const wrapper = mount(
       defineComponent({
@@ -40,8 +32,8 @@ describe("workflow node message projection", () => {
             selectedNode: ref({ sessionId: "child-session" }),
             selectedRuntimeNode: ref(null),
             selectedNodeMessages,
-            selectedNodeRawMessages: ref([]),
-            selectedNodeSessionSummary,
+            selectedNodeSessionMetadata,
+            selectedNodeTurnTimings,
             selectedNodeSessionId: ref("child-session"),
           });
           return () => h("div");
@@ -113,8 +105,8 @@ describe("workflow node message projection", () => {
             selectedNode: ref({ sessionId: "child-session" }),
             selectedRuntimeNode: ref(null),
             selectedNodeMessages,
-            selectedNodeRawMessages: ref([]),
-            selectedNodeSessionSummary: ref({ sessionId: "child-session" }),
+            selectedNodeSessionMetadata: ref({}),
+            selectedNodeTurnTimings: ref([]),
             selectedNodeSessionId: ref("child-session"),
           });
           return () => h("div");
@@ -174,8 +166,8 @@ describe("workflow node message projection", () => {
             selectedNode: ref({ sessionId: "child-session" }),
             selectedRuntimeNode: ref(null),
             selectedNodeMessages,
-            selectedNodeRawMessages: ref([]),
-            selectedNodeSessionSummary: ref({ sessionId: "child-session" }),
+            selectedNodeSessionMetadata: ref({}),
+            selectedNodeTurnTimings: ref([]),
             selectedNodeSessionId: ref("child-session"),
           });
           return () => h("div");

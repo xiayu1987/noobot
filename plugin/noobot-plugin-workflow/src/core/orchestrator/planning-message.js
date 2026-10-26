@@ -12,19 +12,6 @@ import {
   WORKFLOW_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
-import { text } from "@noobot/shared/value";
-
-function createPlanningExecutionStub({ nodeSessions = [] } = {}) {
-  return {
-    started: false,
-    autoTransitions: 0,
-    completed: false,
-    pendingStepCount: nodeSessions.filter((item) => ["pending", "ready"].includes(item?.status))
-      .length,
-    actionRecords: [],
-    nodeAgentRuns: [],
-  };
-}
 
 function countArray(value) {
   return Array.isArray(value) ? value.length : 0;
@@ -61,42 +48,28 @@ export async function prepareWorkflowPlanningMessage({
   options,
   ctx,
   agentResult,
-  sourceText,
   semanticText,
   semantic,
-  semanticResolution,
-  phaseTracker,
-  retryMeta,
   workflowRunId,
   planningNodeSessions,
 }) {
-  const planningWorkflowPayload = buildWorkflowOrchestrationPayload({
-    workflowRunId,
-    ctx,
-    options,
-    sourceText,
-    semanticText,
-    semantic,
-    execution: createPlanningExecutionStub({ nodeSessions: planningNodeSessions }),
-    semanticResolution,
-    phaseTimeline: phaseTracker.list(),
-    retryMeta,
-  });
-  planningWorkflowPayload.nodeSessions = planningNodeSessions;
-  planningWorkflowPayload.attachments = [];
+  const planningWorkflowPayload = {
+    ...buildWorkflowOrchestrationPayload({ workflowRunId, ctx, semanticText, semantic }),
+    nodeSessions: planningNodeSessions,
+  };
   const workflowMessage = await appendWorkflowPlanningMessage({
     options,
     agentResult,
     ctx,
-    sourceText,
     semanticText,
     workflowPayload: planningWorkflowPayload,
+    nodeTransferEnvelopes: [],
   });
   const identity = resolveWorkflowRunIdentity(ctx);
   const { turnScopeId, presentationMessageId, executionId, commandId } = identity;
   const runtimeData = {
-    sessionId: text(ctx?.sessionId),
-    dialogProcessId: text(ctx?.dialogProcessId),
+    sessionId: ctx.sessionId,
+    dialogProcessId: ctx.dialogProcessId,
     turnScopeId,
     presentationMessageId,
     workflowRunId,
@@ -111,7 +84,6 @@ export async function prepareWorkflowPlanningMessage({
     payload: runtimeData,
     orderingDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
     orderingScopeId: workflowRunId,
-    revision: 1,
     executionId,
   });
 }

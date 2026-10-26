@@ -142,13 +142,6 @@ function applyMessagePresentation(target, message) {
   applyMessageMonotonicity(target, message);
 }
 
-function applyMessageThinkingTiming(target, message) {
-  const thinkingStartedAt = text(message?.thinkingStartedAt);
-  const thinkingFinishedAt = text(message?.thinkingFinishedAt);
-  if (thinkingStartedAt) target.thinkingStartedAt = thinkingStartedAt;
-  if (thinkingFinishedAt) target.thinkingFinishedAt = thinkingFinishedAt;
-}
-
 function applyMessagePluginFields(target, message) {
   if (message?.pluginMessage === true) target.pluginMessage = true;
   if (isPlainObject(message?.pluginMeta)) {
@@ -194,7 +187,6 @@ function applyMessageCompletionFields(target, message) {
 }
 
 function applyMessageRuntimeFields(target, message) {
-  applyMessageThinkingTiming(target, message);
   applyMessagePluginFields(target, message);
   applyAnthropicMessageContent(target, message);
   applyOpenAiMessageMetadata(target, message);

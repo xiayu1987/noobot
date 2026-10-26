@@ -150,7 +150,7 @@ const RuntimeRenderer = defineComponent({
   name: "SharedMessageRuntimeProbe",
   props: {
     startedAt: { type: String, default: "" },
-    finishedAt: { type: String, default: "" },
+    thinkingFinishedAt: { type: String, default: "" },
     running: { type: Boolean, default: false },
   },
   setup(props) {
@@ -158,7 +158,7 @@ const RuntimeRenderer = defineComponent({
       h("div", {
         class: "runtime-probe",
         "data-started-at": props.startedAt,
-        "data-finished-at": props.finishedAt,
+        "data-thinking-finished-at": props.thinkingFinishedAt,
         "data-running": String(props.running),
       });
   },
@@ -192,6 +192,8 @@ function mountItem(props = {}) {
       formatTime: (value = "") => String(value || ""),
       formatFileSize: (value = 0) => String(value || 0),
       isImageMime: () => false,
+      stopExecution: async () => true,
+      fetchExecutionReport: async () => null,
       ...componentProps,
     },
     global: {
@@ -589,8 +591,8 @@ describe("SharedChatMessageItem", () => {
       component: RuntimeRenderer,
       when: (context = {}) => resolveMessageViewKey(context?.messageItem) === "msg-child-timing",
       resolveProps: (context = {}) => ({
-        startedAt: context?.messageRuntime?.startedAt || "",
-        finishedAt: context?.messageRuntime?.finishedAt || "",
+        startedAt: context?.messageRuntime?.startedAt,
+        thinkingFinishedAt: context?.messageRuntime?.thinkingFinishedAt,
         running: context?.messageRuntime?.running === true,
       }),
     });
@@ -599,7 +601,6 @@ describe("SharedChatMessageItem", () => {
       storeSetup: (store) =>
         store.applyWorkflowRuntimeEvent(
           canonicalWorkflowSessionSnapshot({
-            eventId: "child-session:snapshot-1",
             executionId: "agent-execution-child-session",
             nodeSessionId: "child-session",
             authoritySessionId: "parent-session",
@@ -611,7 +612,6 @@ describe("SharedChatMessageItem", () => {
               {
                 dialogProcessId: "child-dialog",
                 turnScopeId: "child-turn",
-                thinkingStartedAt: "2026-07-29T09:44:50.000Z",
                 thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
               },
             ],
@@ -633,7 +633,6 @@ describe("SharedChatMessageItem", () => {
             {
               dialogProcessId: "child-dialog",
               turnScopeId: "child-turn",
-              thinkingStartedAt: "2026-07-29T09:44:50.000Z",
               thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
             },
           ],
@@ -643,8 +642,8 @@ describe("SharedChatMessageItem", () => {
     const probe = wrapper.find(".runtime-probe");
 
     expect(probe.exists()).toBe(true);
-    expect(probe.attributes("data-started-at")).toBe("2026-07-29T09:44:50.000Z");
-    expect(probe.attributes("data-finished-at")).toBe("2026-07-29T09:44:56.296Z");
+    expect(probe.attributes("data-started-at")).toBe("");
+    expect(probe.attributes("data-thinking-finished-at")).toBe("2026-07-29T09:44:56.296Z");
   });
 
   it("lets persisted child terminal facts close stale realtime sending state", () => {
@@ -655,8 +654,8 @@ describe("SharedChatMessageItem", () => {
       component: RuntimeRenderer,
       when: (context = {}) => resolveMessageViewKey(context?.messageItem) === "msg-child-terminal",
       resolveProps: (context = {}) => ({
-        startedAt: context?.messageRuntime?.startedAt || "",
-        finishedAt: context?.messageRuntime?.finishedAt || "",
+        startedAt: context?.messageRuntime?.startedAt,
+        thinkingFinishedAt: context?.messageRuntime?.thinkingFinishedAt,
         running: context?.messageRuntime?.running === true,
       }),
     });
@@ -673,7 +672,6 @@ describe("SharedChatMessageItem", () => {
         });
         store.applyWorkflowRuntimeEvent(
           canonicalWorkflowSessionSnapshot({
-            eventId: "child-session-terminal:snapshot-1",
             executionId: "agent-execution-child-session-terminal",
             nodeSessionId: "child-session-terminal",
             authoritySessionId: "parent-session",
@@ -685,7 +683,6 @@ describe("SharedChatMessageItem", () => {
               {
                 dialogProcessId: "child-dialog-terminal",
                 turnScopeId: "workflow-node:terminal",
-                thinkingStartedAt: "2026-07-29T09:44:50.000Z",
                 thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
               },
             ],
@@ -708,7 +705,6 @@ describe("SharedChatMessageItem", () => {
             {
               dialogProcessId: "child-dialog-terminal",
               turnScopeId: "workflow-node:terminal",
-              thinkingStartedAt: "2026-07-29T09:44:50.000Z",
               thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
             },
           ],
@@ -717,7 +713,7 @@ describe("SharedChatMessageItem", () => {
     });
     const probe = wrapper.find(".runtime-probe");
 
-    expect(probe.attributes("data-finished-at")).toBe("2026-07-29T09:44:56.296Z");
+    expect(probe.attributes("data-thinking-finished-at")).toBe("2026-07-29T09:44:56.296Z");
     expect(probe.attributes("data-running")).toBe("false");
   });
 

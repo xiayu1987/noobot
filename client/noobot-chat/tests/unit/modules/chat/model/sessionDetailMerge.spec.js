@@ -21,9 +21,6 @@ describe("mergeCanonicalSessionDetail", () => {
           turnScopeId: "turn-1",
         },
       ],
-      turnTimings: [
-        { turnScopeId: "turn-1", thinkingStartedAt: "start", thinkingFinishedAt: "end" },
-      ],
     };
 
     const merged = mergeCanonicalSessionDetail(persisted, {
@@ -42,7 +39,33 @@ describe("mergeCanonicalSessionDetail", () => {
     expect(merged.messages).toHaveLength(2);
     expect(merged.messages.find((item) => item.messageUid === "u1")?.content).toBe("question");
     expect(merged.messages.find((item) => item.messageUid === "a1")?.content).toBe("final");
-    expect(merged.turnTimings[0].thinkingFinishedAt).toBe("end");
+    expect(merged).not.toHaveProperty("turnTimings");
+  });
+
+  it("rejects turn timings carried through the session detail", () => {
+    expect(() =>
+      mergeCanonicalSessionDetail(
+        { sessionId: "session-1", messages: [] },
+        { sessionId: "session-1", messages: [], turnTimings: [] },
+      ),
+    ).toThrow(/carries turnTimings/);
+  });
+
+  it("rejects a message without view identity on both merge and replace", () => {
+    const anonymous = { role: "assistant", content: "no identity" };
+    expect(() =>
+      mergeCanonicalSessionDetail(
+        { sessionId: "session-1", messages: [] },
+        { sessionId: "session-1", messages: [anonymous] },
+      ),
+    ).toThrow(/message without view identity: role=assistant/);
+    expect(() =>
+      mergeCanonicalSessionDetail(
+        { sessionId: "session-1", messages: [] },
+        { sessionId: "session-1", messages: [anonymous] },
+        { replaceFields: ["messages"] },
+      ),
+    ).toThrow(/message without view identity/);
   });
 
   it("does not mix different sessions", () => {

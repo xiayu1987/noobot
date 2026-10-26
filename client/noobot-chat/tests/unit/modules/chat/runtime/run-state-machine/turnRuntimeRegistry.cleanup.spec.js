@@ -5,15 +5,15 @@
  */
 import { it, expect } from "vitest";
 import {
-  createTurnRuntimeRegistryState,
-  confirmTurnRuntimeDeletion,
   applyTurnRuntimeEvent,
-  resolveSessionTurnRuntime,
-  resolveTurnRuntimeByScope,
-  removeTurnRuntime,
-  removeSessionRuntime,
-  pruneTerminalTurns,
+  confirmTurnRuntimeDeletion,
+  createTurnRuntimeRegistryState,
   isTurnRuntimeDeleted,
+  pruneTerminalTurns,
+  removeSessionRuntime,
+  removeTurnRuntime,
+  resolveTurnRuntimeByScope,
+  selectCurrentTurnRuntime,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   SESSION_RUN_EVENT,
@@ -43,7 +43,7 @@ it("tombstones a confirmed deletion and rejects late replay for the same Session
   const registry = createTurnRuntimeRegistryState();
   sendStart(registry, { sessionId: "s1", turnScopeId: "deleted-turn" });
 
-  expect(confirmTurnRuntimeDeletion(registry, "deleted-turn", { sessionId: "s1" }).applied).toBe(
+  expect(confirmTurnRuntimeDeletion(registry, ["deleted-turn"], { sessionId: "s1" }).applied).toBe(
     true,
   );
   expect(
@@ -118,7 +118,7 @@ it("prunes old or excess terminal turns per session while protecting continuable
 
   expect(result.removedTurnScopeIds).toEqual(["old"]);
   expect(resolveTurnRuntimeByScope(registry, "referenced", { sessionId: "s1" })).not.toBeNull();
-  expect(resolveSessionTurnRuntime(registry, "s1")?.turnScopeId).toBe("active");
+  expect(selectCurrentTurnRuntime(registry, "s1")?.turnScopeId).toBe("active");
   expect(resolveTurnRuntimeByScope(registry, "other-session", { sessionId: "s2" })).not.toBeNull();
   expect(registry.routeIndex["dp-old"]).toBeUndefined();
 });
@@ -145,6 +145,6 @@ it("removes a session bucket and only its route index entries", () => {
   expect(removeSessionRuntime(registry, "s1")).toBe(true);
   expect(registry.sessions.s1).toBeUndefined();
   expect(registry.routeIndex.dp1).toBeUndefined();
-  expect(resolveSessionTurnRuntime(registry, "s2")?.turnScopeId).toBe("t2");
+  expect(selectCurrentTurnRuntime(registry, "s2")?.turnScopeId).toBe("t2");
   expect(registry.routeIndex.dp2).toEqual({ sessionId: "s2", turnScopeId: "t2" });
 });

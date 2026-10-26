@@ -64,30 +64,6 @@ async function collectWorkflowNodeSessionIds(workflowRoot = "", rootSessionId = 
   return [...relatedSessionIds];
 }
 
-async function collectPlannedNodeSessionIds(workflowRoot = "", rootSessionId = "") {
-  const relatedSessionIds = new Set();
-  const planningSessionDir = path.resolve(
-    workflowRoot,
-    WORKFLOW_DATA_SCOPE.PLANNING,
-    rootSessionId,
-  );
-  if (!isSafePathInside(workflowRoot, planningSessionDir)) return [];
-  let entries = [];
-  try {
-    entries = await fs.readdir(planningSessionDir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const planning = await readJson(path.join(planningSessionDir, entry.name, "planning.json"));
-    for (const nodeSession of Array.isArray(planning?.nodeSessions) ? planning.nodeSessions : []) {
-      addSessionId(relatedSessionIds, nodeSession?.sessionId);
-    }
-  }
-  return [...relatedSessionIds];
-}
-
 export async function collectWorkflowRelatedSessionIds(basePath = "", rootSessionIds = []) {
   const rootBasePath = text(basePath);
   const normalizedRootSessionIds = normalizeSessionIds(rootSessionIds);
@@ -97,9 +73,6 @@ export async function collectWorkflowRelatedSessionIds(basePath = "", rootSessio
   for (const rootSessionId of normalizedRootSessionIds) {
     if (!rootSessionId || hasPathSeparator(rootSessionId)) continue;
     for (const sessionId of await collectWorkflowNodeSessionIds(workflowRoot, rootSessionId)) {
-      relatedSessionIds.add(sessionId);
-    }
-    for (const sessionId of await collectPlannedNodeSessionIds(workflowRoot, rootSessionId)) {
       relatedSessionIds.add(sessionId);
     }
   }
@@ -129,25 +102,19 @@ export async function cleanupWorkflowBySessionIds(basePath = "", sessionIds = []
     ])) {
       relatedSessionIds.add(relatedSessionId);
     }
-    const targets = [
-      path.resolve(workflowRoot, WORKFLOW_DATA_SCOPE.PLANNING, sessionId),
-      path.resolve(workflowRoot, WORKFLOW_DATA_SCOPE.SESSION, sessionId),
-    ];
-
-    for (const targetPath of targets) {
-      if (!isSafePathInside(workflowRoot, targetPath)) continue;
-      try {
-        await fs.stat(targetPath);
-      } catch {
-        continue;
-      }
-      matchedDirs += 1;
-      try {
-        await fs.rm(targetPath, { recursive: true, force: true });
-        deleted += 1;
-      } catch {
-        errors += 1;
-      }
+    const targetPath = path.resolve(workflowRoot, WORKFLOW_DATA_SCOPE.SESSION, sessionId);
+    if (!isSafePathInside(workflowRoot, targetPath)) continue;
+    try {
+      await fs.stat(targetPath);
+    } catch {
+      continue;
+    }
+    matchedDirs += 1;
+    try {
+      await fs.rm(targetPath, { recursive: true, force: true });
+      deleted += 1;
+    } catch {
+      errors += 1;
     }
   }
 

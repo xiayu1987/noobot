@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  getMessageRole,
-  getMessageTurnScopeId,
-  normalizeTurnScopeIdKey,
-} from "../../model/messageIdentity.js";
+import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { isTurnRuntimeDeleted } from "../run-state-machine/turnRuntimeRegistry.js";
 import {
   isTurnTerminalNotice,
@@ -16,10 +12,8 @@ import {
 } from "../sessionRunStateMachine.js";
 import { translateStoredLocaleMessageKey } from "../../../../shared/i18n/messageCatalog.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import {
-  getMessageTransferEnvelopes,
-  mergeTransferEnvelopes,
-} from "../../model/transferEnvelopes.js";
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 
@@ -29,7 +23,7 @@ function sessionIdFromSession(session = {}) {
 
 function turnKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = text(sessionId);
-  const normalizedTurnScopeId = normalizeTurnScopeIdKey(turnScopeId);
+  const normalizedTurnScopeId = text(turnScopeId);
   return normalizedSessionId && normalizedTurnScopeId
     ? `${normalizedSessionId}::${normalizedTurnScopeId}`
     : "";
@@ -73,10 +67,9 @@ function terminalStatusKey(status = {}, sessionId = "") {
   return turnKey(sessionId, status?.turnScopeId);
 }
 
-function terminalStatusesFromRuntime(turnRuntimeRegistry = {}, sessionId = "") {
-  const bucket = turnRuntimeRegistry?.sessions?.[sessionId];
-  const turns = bucket?.turns && typeof bucket.turns === "object" ? bucket.turns : {};
-  return Object.values(turns)
+function terminalStatusesFromRuntime(turnRuntimeRegistry, sessionId) {
+  const bucket = turnRuntimeRegistry.sessions[sessionId];
+  return Object.values(bucket ? bucket.turns : {})
     .filter((turn = {}) => isTurnTerminalNotice(turn?.terminal))
     .map((turn = {}) => ({
       sessionId,
@@ -89,11 +82,10 @@ function terminalStatusesFromRuntime(turnRuntimeRegistry = {}, sessionId = "") {
     .filter((status) => Boolean(status.turnScopeId));
 }
 
-function authoritativeTurnSequence(turnRuntimeRegistry = {}, sessionId = "", turnScopeId = "") {
+function authoritativeTurnSequence(turnRuntimeRegistry, sessionId, turnScopeId) {
   const normalizedSessionId = text(sessionId);
   const normalizedTurnScopeId = text(turnScopeId);
-  const bucket = turnRuntimeRegistry?.sessions?.[normalizedSessionId];
-  const turn = bucket?.turns?.[normalizedTurnScopeId];
+  const turn = turnRuntimeRegistry.sessions[normalizedSessionId]?.turns[normalizedTurnScopeId];
   return Number(turn?.lifecycleSeq || 0);
 }
 
@@ -242,9 +234,9 @@ function coalescePersistedAssistantPresentations(messages = [], activeSessionId 
 
 export function selectTurnPresentations({
   activeSession = {},
-  workflowRegistry = {},
-  turnRuntimeRegistry = {},
-} = {}) {
+  workflowRegistry,
+  turnRuntimeRegistry,
+}) {
   const activeSessionId = sessionIdFromSession(activeSession);
   const sourceMessages = (
     Array.isArray(activeSession?.messages) ? activeSession.messages : []
@@ -342,7 +334,7 @@ export function selectTurnPresentations({
   );
   const liveByTurn = new Map();
 
-  for (const workflow of Object.values(workflowRegistry?.workflows || {})) {
+  for (const workflow of Object.values(workflowRegistry.workflows)) {
     if (workflow.sessionId !== activeSessionId) continue;
     const projection = buildLiveWorkflowPresentationMessage(workflow);
     if (!projection) continue;

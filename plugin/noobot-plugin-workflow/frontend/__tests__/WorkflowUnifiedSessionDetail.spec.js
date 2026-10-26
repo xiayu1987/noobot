@@ -16,6 +16,21 @@ const childIdentity = {
   dialogProcessId: "child-dialog",
 };
 
+function runtimeNodeSessions(status) {
+  return {
+    value: [
+      {
+        nodeExecutionId: "node-a",
+        nodeSessionId: childIdentity.sessionId,
+        turnScopeId: childIdentity.turnScopeId,
+        dialogProcessId: childIdentity.dialogProcessId,
+        activeChildExecutionId: "execution-a",
+        status,
+      },
+    ],
+  };
+}
+
 function childAssistant(overrides = {}) {
   return {
     presentationMessageId: "assistant-a",
@@ -29,22 +44,18 @@ function childAssistant(overrides = {}) {
 describe("workflow child unified session detail", () => {
   it("keeps node execution status out of canonical child messages", () => {
     const detail = buildUnifiedSessionDetail({
-      nodeItem: {
-        ...childIdentity,
-        activeChildExecutionId: "execution-a",
-        status: "succeeded",
-      },
+      nodeItem: { nodeExecutionId: "node-a" },
+      runtimeNodeSessions: runtimeNodeSessions("succeeded"),
       selectExecutionDetail: () => ({
         execution: {
           executionId: "execution-a",
           ...childIdentity,
-          state: "succeeded",
+          state: "completed",
         },
         session: {
           sessionId: childIdentity.sessionId,
           messages: [childAssistant()],
         },
-        messages: [childAssistant()],
       }),
     });
 
@@ -57,24 +68,19 @@ describe("workflow child unified session detail", () => {
   it("keeps the running placeholder outside canonical messages", () => {
     const user = { messageUid: "user-a", role: "user", content: "run", ...childIdentity };
     const detail = buildUnifiedSessionDetail({
-      nodeItem: {
-        ...childIdentity,
-        activeChildExecutionId: "execution-a",
-        status: "running",
-      },
+      nodeItem: { nodeExecutionId: "node-a" },
+      runtimeNodeSessions: runtimeNodeSessions("running"),
       selectExecutionDetail: () => ({
         execution: {
           executionId: "execution-a",
           ...childIdentity,
-          state: "running",
+          state: "processing",
         },
         session: { sessionId: childIdentity.sessionId, messages: [user] },
-        messages: [user],
       }),
     });
 
     expect(detail.messages).toEqual([user]);
-    expect(detail.rawMessages).toEqual([user]);
     expect(detail.runningPlaceholderViewModel).toMatchObject({
       viewKey: `workflow-node-running:${childIdentity.turnScopeId}`,
       sessionId: childIdentity.sessionId,
@@ -95,8 +101,8 @@ describe("workflow child unified session detail", () => {
     };
 
     const detail = mergeUnifiedSessionDetail(
-      { state: "running", messages: [user], runningPlaceholderViewModel: { viewKey: "view-only" } },
-      { state: "succeeded", messages: [finalAssistant] },
+      { messages: [user], runningPlaceholderViewModel: { viewKey: "view-only" } },
+      { messages: [finalAssistant] },
     );
 
     expect(detail.messages).toEqual([user, finalAssistant]);
@@ -119,11 +125,10 @@ describe("workflow child unified session detail", () => {
     };
 
     const detail = mergeUnifiedSessionDetail(
-      { state: "running", messages: [liveAssistant], rawMessages: [liveAssistant] },
-      { state: "succeeded", messages: [finalAssistant], rawMessages: [finalAssistant] },
+      { messages: [liveAssistant] },
+      { messages: [finalAssistant] },
     );
 
     expect(detail.messages).toEqual([liveAssistant, finalAssistant]);
-    expect(detail.rawMessages).toEqual([liveAssistant, finalAssistant]);
   });
 });

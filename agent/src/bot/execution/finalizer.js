@@ -106,8 +106,6 @@ export class SessionExecutionFinalizer {
       dialogProcessId,
       parentDialogProcessId,
       turnScopeId: text(turnScopeId),
-      thinkingStartedAt,
-      thinkingFinishedAt,
       eventListener: runtimeEventListener,
       persistenceScope,
     });

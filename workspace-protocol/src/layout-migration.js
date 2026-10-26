@@ -81,6 +81,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     toVersion: 13,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
   }),
+  Object.freeze({
+    id: "session-turn-timing-lifecycle-start-v14",
+    toVersion: 14,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
 ]);
 
 function layoutStateError(message) {

@@ -10,8 +10,22 @@ import { ContextBuilder } from "../../src/context/index.js";
 import { buildSystemRuntime } from "../../src/context/application/build-system-context.js";
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
-import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createTestBotManager, testHeadlessStartupContext } from "../helpers/test-bot-manager.js";
+import { TEST_RUNTIME_IDENTITY } from "../helpers/test-runtime-context.js";
+
+function systemRuntimeIdentity(overrides) {
+  return { ...TEST_RUNTIME_IDENTITY, ...overrides };
+}
+
+function attachmentRuntimeIdentity(dialogProcessId, overrides) {
+  return systemRuntimeIdentity({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId,
+    turnScopeId: "turn-1",
+    ...overrides,
+  });
+}
 
 function createContextSessionManager() {
   return {
@@ -27,7 +41,6 @@ function createContextSessionManager() {
 function executionRunConfig(turnScopeId, extra = {}) {
   return {
     hookManager: null,
-    turnScopeId,
     executionId: `run:${turnScopeId}`,
     presentationMessageId: `message:${turnScopeId}`,
     ...extra,
@@ -43,7 +56,7 @@ function createBuilderForAttachmentRuntimeTest({
   selectedConnectorIds,
   userInteractionBridge,
   persistenceScope,
-  parentSessionId,
+  runtimeIdentity,
 }) {
   return new ContextBuilder({
     config: {
@@ -68,10 +81,7 @@ function createBuilderForAttachmentRuntimeTest({
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
-      userId: "u1",
-      sessionId: "s1",
-      caller: SESSION_CALLER.USER,
-      parentSessionId,
+      runtimeIdentity,
       userMessageAttachments,
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
@@ -89,14 +99,14 @@ function createBuilderForAttachmentRuntimeTest({
 test("ContextBuilder binds Session persistence authority before constructing tools", async () => {
   const requests = [];
   const persistenceScope = {
-    scopeId: " agent:turn-child ",
+    scopeId: "agent:turn-child",
     parentSessionId: "root-session",
     relativeDir: "runtime/agent/session/s1",
     allowedRoot: "runtime/agent/session",
   };
   const builder = createBuilderForAttachmentRuntimeTest({
+    runtimeIdentity: attachmentRuntimeIdentity("dp-child", { parentSessionId: "root-session" }),
     persistenceScope,
-    parentSessionId: "root-session",
     userInteractionBridge: {
       async requestUserInteraction(payload) {
         requests.push(payload);
@@ -111,7 +121,7 @@ test("ContextBuilder binds Session persistence authority before constructing too
     selectedConnectorIds: [],
   });
 
-  const executionScope = await builder.buildNewSessionContext({ dialogProcessId: "dp-child" });
+  const executionScope = await builder.buildNewSessionContext();
   const tool = executionScope.bindings.tools.find((item) => item.name === "user_interaction");
   assert.ok(tool);
   await tool.invoke({
@@ -130,6 +140,7 @@ test("ContextBuilder binds Session persistence authority before constructing too
 
 test("buildNewSessionContext always projects explicitly selected connectors", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
+    runtimeIdentity: attachmentRuntimeIdentity("dp-connectors", { parentSessionId: "" }),
     promptSections: ["base_prompt", "system_runtime"],
     selectedConnectorIds: ["con_db"],
     botManager: createTestBotManager({
@@ -155,10 +166,9 @@ test("buildNewSessionContext always projects explicitly selected connectors", as
     eventListener: null,
     userInteractionBridge: null,
     persistenceScope: null,
-    parentSessionId: "",
   });
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp-connectors" });
+  const context = await builder.buildNewSessionContext();
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
   assert.equal(systemText.includes('"connector_id": "con_db"'), true);
   assert.equal(systemText.includes('"connector_name": "primary"'), true);
@@ -167,6 +177,7 @@ test("buildNewSessionContext always projects explicitly selected connectors", as
 test("buildNewSessionContext emits the default agent context debug structure", async () => {
   const events = [];
   const builder = createBuilderForAttachmentRuntimeTest({
+    runtimeIdentity: attachmentRuntimeIdentity("dp-debug", { parentSessionId: "" }),
     promptSections: ["base_prompt", "system_runtime", "scenario"],
     eventListener: {
       onEvent(event = {}) {
@@ -179,10 +190,9 @@ test("buildNewSessionContext emits the default agent context debug structure", a
     selectedConnectorIds: [],
     userInteractionBridge: null,
     persistenceScope: null,
-    parentSessionId: "",
   });
 
-  await builder.buildNewSessionContext({ dialogProcessId: "dp-debug" });
+  await builder.buildNewSessionContext();
 
   const event = events.find((item = {}) => item.event === "agent.context.executionScopeCreated");
   assert.ok(event);
@@ -198,6 +208,7 @@ test("buildNewSessionContext emits the default agent context debug structure", a
 
 test("buildNewSessionContext binds userMessageAttachments into runtime", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
+    runtimeIdentity: attachmentRuntimeIdentity("dp_1", { parentSessionId: "" }),
     userMessageAttachments: [
       {
         attachmentId: "att_input",
@@ -216,10 +227,9 @@ test("buildNewSessionContext binds userMessageAttachments into runtime", async (
     selectedConnectorIds: [],
     userInteractionBridge: null,
     persistenceScope: null,
-    parentSessionId: "",
   });
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext();
   assert.equal(context?.bindings?.runtime?.userMessageAttachments?.[0]?.attachmentId, "att_input");
   assert.deepEqual(context?.bindings?.runtime?.attachments, []);
 });
@@ -250,10 +260,12 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
-      userId: configuredSuperUserId,
-      sessionId: "s1",
-      caller: SESSION_CALLER.USER,
-      parentSessionId: "",
+      runtimeIdentity: systemRuntimeIdentity({
+        userId: configuredSuperUserId,
+        sessionId: "s1",
+        dialogProcessId: "dp_1",
+        turnScopeId: "turn-1",
+      }),
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           promptSections: ["base_prompt", "system_runtime", "scenario"],
@@ -265,7 +277,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
     },
   });
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext();
   assert.equal(context?.bindings?.runtime?.systemRuntime?.isSuperUser, true);
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(
@@ -299,10 +311,12 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
-      userId: "u1",
-      sessionId: "s1",
-      caller: SESSION_CALLER.USER,
-      parentSessionId: "",
+      runtimeIdentity: systemRuntimeIdentity({
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dialog-runtime-only",
+        turnScopeId: "turn-runtime-only",
+      }),
       userMessageAttachments: [],
       runConfig: executionRunConfig("turn-runtime-only"),
       persistenceScope: null,
@@ -310,7 +324,7 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
     },
   });
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dialog-runtime-only" });
+  const context = await builder.buildNewSessionContext();
   const runtime = context.bindings.runtime.systemRuntime;
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
 
@@ -348,10 +362,12 @@ test("buildNewSessionContext keeps super user identity in system message when sy
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
-      userId: configuredSuperUserId,
-      sessionId: "s1",
-      caller: SESSION_CALLER.USER,
-      parentSessionId: "",
+      runtimeIdentity: systemRuntimeIdentity({
+        userId: configuredSuperUserId,
+        sessionId: "s1",
+        dialogProcessId: "dp_1",
+        turnScopeId: "turn-1",
+      }),
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           promptSections: ["base_prompt"],
@@ -363,7 +379,7 @@ test("buildNewSessionContext keeps super user identity in system message when sy
     },
   });
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext();
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(systemText.includes('"identity"'), true);
@@ -428,6 +444,7 @@ test("buildContextMessageBlocks prefers runtime userMessageAttachments for user 
 
 test("buildNewSessionContext keeps user message attachments separate from runtime generated attachments when attachments section is excluded", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
+    runtimeIdentity: attachmentRuntimeIdentity("dp_1", { parentSessionId: "" }),
     userMessageAttachments: [
       {
         attachmentId: "att_1",
@@ -446,10 +463,9 @@ test("buildNewSessionContext keeps user message attachments separate from runtim
     selectedConnectorIds: [],
     userInteractionBridge: null,
     persistenceScope: null,
-    parentSessionId: "",
   });
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext();
   const runtime = context?.bindings?.runtime || {};
   assert.equal(Array.isArray(runtime.userMessageAttachments), true);
   assert.equal(runtime.userMessageAttachments.length, 1);
@@ -505,10 +521,12 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
     },
     sessionContext: {
       abortSignal: new AbortController().signal,
-      userId: "u1",
-      sessionId: "s1",
-      caller: SESSION_CALLER.USER,
-      parentSessionId: "",
+      runtimeIdentity: systemRuntimeIdentity({
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dp-current",
+        turnScopeId: "client-turn:edited",
+      }),
       runConfig: executionRunConfig("client-turn:edited", {
         contextPolicy: { promptSections: ["base_prompt", "system_runtime"] },
       }),
@@ -518,7 +536,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
     },
   });
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp-current" });
+  const context = await builder.buildNewSessionContext();
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.currentDialogProcessId, "dp-current");
@@ -532,8 +550,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
 
 test("buildSystemRuntime projects the explicit isSuperUser identity fact", () => {
   const runtime = buildSystemRuntime({
-    userId: "super-root-user",
-    dialogProcessId: "dp-super",
+    identity: systemRuntimeIdentity({ userId: "super-root-user", dialogProcessId: "dp-super" }),
     botManager: createTestBotManager(),
     isSuperUser: true,
   });
@@ -558,9 +575,7 @@ test("buildSystemRuntime injects redacted desktop dependency source summary", ()
     ],
   };
   const runtime = buildSystemRuntime({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "dp-deps",
+    identity: systemRuntimeIdentity({ userId: "u1", sessionId: "s1", dialogProcessId: "dp-deps" }),
     isSuperUser: false,
     botManager: {
       startupContext: {
@@ -590,15 +605,21 @@ test("buildSystemRuntime injects redacted desktop dependency source summary", ()
 
 test("buildSystemRuntime requires an explicit boolean isSuperUser", () => {
   assert.throws(
-    () => buildSystemRuntime({ userId: "super-root-user", dialogProcessId: "dp-regular" }),
+    () =>
+      buildSystemRuntime({
+        identity: systemRuntimeIdentity({
+          userId: "super-root-user",
+          dialogProcessId: "dp-regular",
+        }),
+        botManager: createTestBotManager(),
+      }),
     /requires boolean isSuperUser/,
   );
 });
 
 test("buildSystemRuntime ignores runConfig identity overrides", () => {
   const runtime = buildSystemRuntime({
-    userId: "regular-user",
-    dialogProcessId: "dp-guard",
+    identity: systemRuntimeIdentity({ userId: "regular-user", dialogProcessId: "dp-guard" }),
     botManager: createTestBotManager(),
     isSuperUser: false,
     runConfig: {
@@ -648,10 +669,12 @@ function createBuilderForLongMemoryTest(
       userInteractionBridge: null,
     },
     sessionContext: {
-      userId: "u1",
-      sessionId: "s1",
-      caller: SESSION_CALLER.USER,
-      parentSessionId: "",
+      runtimeIdentity: systemRuntimeIdentity({
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dp-long-memory",
+        turnScopeId: "client-turn:long-memory",
+      }),
       runConfig: executionRunConfig("client-turn:long-memory", {
         contextPolicy: { promptSections: ["base_prompt", "long_memory"] },
       }),
@@ -667,7 +690,7 @@ test("buildNewSessionContext resolves user level long memory on the first turn",
   const readLongMemoryCalls = [];
   const builder = createBuilderForLongMemoryTest(readLongMemoryCalls);
 
-  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp-new-memory" });
+  const context = await builder.buildNewSessionContext();
 
   assert.deepEqual(readLongMemoryCalls, [{ userId: "u1" }]);
   assert.equal(
@@ -681,12 +704,10 @@ test("buildNewSessionContext resolves user level long memory on the first turn",
 test("buildExistingSessionContext resolves the same long memory as a new session", async () => {
   const newSessionCalls = [];
   const existingSessionCalls = [];
-  const newSessionContext = await createBuilderForLongMemoryTest(
-    newSessionCalls,
-  ).buildNewSessionContext({ dialogProcessId: "dp-parity" });
-  const existingSessionContext = await createBuilderForLongMemoryTest(
-    existingSessionCalls,
-  ).buildExistingSessionContext({ dialogProcessId: "dp-parity" });
+  const newSessionContext =
+    await createBuilderForLongMemoryTest(newSessionCalls).buildNewSessionContext();
+  const existingSessionContext =
+    await createBuilderForLongMemoryTest(existingSessionCalls).buildExistingSessionContext();
 
   assert.deepEqual(existingSessionCalls, newSessionCalls);
   assert.deepEqual(
@@ -707,7 +728,7 @@ test("a long memory read failure is recorded and the turn continues without long
     },
     errorLogs,
     events,
-  }).buildNewSessionContext({ dialogProcessId: "dp-memory-failure" });
+  }).buildNewSessionContext();
 
   assert.deepEqual(
     errorLogs.map((entry) => [entry.event, entry.error, entry.extra.stage]),
@@ -732,7 +753,7 @@ test("an aborted long memory read is rethrown and not recorded", async () => {
       },
       errorLogs,
       abortSignal: controller.signal,
-    }).buildNewSessionContext({ dialogProcessId: "dp-memory-abort" }),
+    }).buildNewSessionContext(),
     { name: "AbortError" },
   );
   assert.deepEqual(errorLogs, []);
@@ -754,10 +775,12 @@ test("a builder with memoryService requires an error logger", () => {
           userInteractionBridge: null,
         },
         sessionContext: {
-          userId: "u1",
-          sessionId: "s1",
-          caller: SESSION_CALLER.USER,
-          parentSessionId: "",
+          runtimeIdentity: systemRuntimeIdentity({
+            userId: "u1",
+            sessionId: "s1",
+            dialogProcessId: "dp-no-logger",
+            turnScopeId: "client-turn:no-logger",
+          }),
           userMessageAttachments: [],
           systemMessages: [],
           runConfig: executionRunConfig("client-turn:no-logger"),

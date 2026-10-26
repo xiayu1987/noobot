@@ -96,7 +96,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
   assert.equal(result.tree.executions["agent:root"].capabilities.canStop, true);
 });
 
-test("execution recovery keeps lifecycle and thinking timing as separate authoritative facts", async () => {
+test("execution record excludes turn timing facts", async () => {
   const reader = service([
     {
       sessionId: "timed-session",
@@ -114,10 +114,10 @@ test("execution recovery keeps lifecycle and thinking timing as separate authori
   ]);
 
   const result = await reader.getExecution({ userId: "u1", executionId: "agent:root" });
-  assert.equal(result.execution.startedAt, "");
-  assert.equal(result.execution.finishedAt, "");
-  assert.equal(result.execution.thinkingStartedAt, "2026-07-20T00:00:01.000Z");
-  assert.equal(result.execution.thinkingFinishedAt, "");
+  assert.equal(result.found, true);
+  for (const field of ["startedAt", "finishedAt", "thinkingStartedAt", "thinkingFinishedAt"]) {
+    assert.equal(Object.hasOwn(result.execution, field), false, field);
+  }
 });
 
 test("children query returns direct children only and preserves historical attempts", async () => {

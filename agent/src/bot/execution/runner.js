@@ -22,7 +22,7 @@ import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { text, isFunction, isPlainObject } from "@noobot/shared/value";
+import { isFunction, isPlainObject } from "@noobot/shared/value";
 
 const SESSION_RUN_PAYLOAD_FIELDS = Object.freeze([
   "userId",
@@ -161,9 +161,8 @@ export class SessionExecutionRunner {
       );
     }
     let resolvedRunConfig = runConfig;
-    let preparedBotHookManager = null;
-    let resolvedUsedSessionId = sessionId;
-    let resolvedDialogProcessId = "";
+    let preparedBotHook = null;
+    let initializedSession = null;
     let failureTurnScopeId = turnScopeId;
     let resolvedRuntimeEventListener = eventListener;
     let executionEventListener = null;
@@ -185,8 +184,10 @@ export class SessionExecutionRunner {
           const initialized = await this.initializeRunSessionRuntime(payload);
           executionEventListener = initialized.runtimeEventListener;
           resolvedRuntimeEventListener = initialized.runtimeEventListener;
-          resolvedUsedSessionId = initialized.usedSessionId;
-          resolvedDialogProcessId = initialized.dialogProcessId;
+          initializedSession = {
+            sessionId: initialized.usedSessionId,
+            dialogProcessId: initialized.dialogProcessId,
+          };
           return initialized;
         },
         resolveScenarioRunConfig: this.resolveScenarioRunConfig,
@@ -213,8 +214,6 @@ export class SessionExecutionRunner {
         userConfig,
         sessionDir,
         runtimeEventListener,
-        requestRunConfig,
-        scenarioResolvedRunConfig,
         resolvedRunConfig: initializedRunConfig,
         turnScopeId: resolvedTurnScopeId,
         presentationMessageId,
@@ -222,14 +221,16 @@ export class SessionExecutionRunner {
         contextMode,
         lifecycle: initializedLifecycle,
         botHookRuntime,
+        botHookIdentity,
         botHookBase,
       } = initializedRun;
       resolvedRunConfig = initializedRunConfig;
-      preparedBotHookManager = initializedRunConfig.botHookManager;
+      preparedBotHook = {
+        manager: initializedRunConfig.botHookManager,
+        identity: botHookIdentity,
+      };
       pluginActivationScope = initializedRunConfig?.pluginActivationScope || null;
       delete initializedRunConfig.pluginActivationScope;
-      resolvedUsedSessionId = usedSessionId;
-      resolvedDialogProcessId = dialogProcessId;
       failureTurnScopeId = resolvedTurnScopeId;
       resolvedRuntimeEventListener = runtimeEventListener;
       lifecycle = initializedLifecycle;
@@ -247,16 +248,9 @@ export class SessionExecutionRunner {
           abortSignal,
           persistenceScope: persistenceScopeValidation.scope,
           contextMode,
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId: resolvedParentSessionId,
-          dialogProcessId,
-          turnScopeId: resolvedTurnScopeId,
-          caller,
+          runtimeIdentity: botHookIdentity,
           userConfig,
           resolvedRunConfig,
-          requestRunConfig,
-          scenarioResolvedRunConfig,
           turnAcceptance,
         });
       if (!isFunction(this.prepareAgentTurnExecution)) {
@@ -293,7 +287,6 @@ export class SessionExecutionRunner {
       });
       lifecycleRuntime = dispatchRuntime;
       emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {
-        resolvedThinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
         requestAttachments: summarizeDebugAttachments(attachments),
         userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
@@ -374,9 +367,8 @@ export class SessionExecutionRunner {
         persistStoppedSnapshotFromRuntime,
         resolvedRuntimeEventListener,
         resolvedRunConfig,
-        preparedBotHookManager,
-        resolvedUsedSessionId,
-        resolvedDialogProcessId,
+        preparedBotHook,
+        initializedSession,
         saveExecutionReport: this.saveExecutionReport,
         getExecutionTurnLogs: this.getExecutionTurnLogs,
         persistenceScope,

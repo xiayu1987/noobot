@@ -26,7 +26,7 @@ import {
 } from "@noobot/session-protocol";
 import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
-const integer = (value, fallback = 0) =>
+export const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
 
 function normalizeOrigin(origin) {
@@ -163,7 +163,7 @@ function validateCurrentIdentity(request) {
   if (identityFailure) return identityFailure;
   if (
     input.expectedRevision !== undefined &&
-    Number(input.expectedRevision) !== Number(current?.revision || 0)
+    input.expectedRevision !== (current ? current.revision : 0)
   ) {
     return "turn_revision_conflict";
   }
@@ -293,7 +293,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
   const { input, current, turnScopeId, commandId, eventType, phase } = request;
   const currentValue = current || {};
   const state = transition.nextState;
-  const revision = Number(currentValue.revision || 0) + 1;
+  const revision = current ? current.revision + 1 : 1;
   const sequence = request.lifecycle.sequence + 1;
   const settling = isSettlingTurnEvent({ eventType, phase, failure: input.failure });
   const turn = {

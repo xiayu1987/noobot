@@ -23,10 +23,8 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
       basePath,
       globalConfig: {},
       userConfig: {},
+      identity: { userId, sessionId: "s-1" },
       systemRuntime: {
-        userId,
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         config: {},
       },
       ...runtimeOverrides,

@@ -9,8 +9,11 @@ import { createReconnectControl, createReconnectData } from "@noobot/agent-trans
 import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { createReconnectCoordinator } from "../../../../../../src/modules/chat/runtime/session/reconnectCoordinator.js";
-import { createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { executionTurnKey } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistryIdentity.js";
+import {
+  createTurnRuntimeRegistryState,
+  selectTurnRuntimeByScope,
+} from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { applyExecutionProjection } from "../../../../../../src/modules/chat/runtime/run-state-machine/executionRuntimeProjection.js";
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("createReconnectCoordinator", () => {
@@ -21,7 +24,7 @@ describe("createReconnectCoordinator", () => {
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       chatWebSocketClient,
       reconnectReplay: {},
-      resolveActiveTurnScopeIdentity: () => "",
+      resolveActiveTurn: () => null,
     });
 
     await expect(coordinator.handleReconnect()).resolves.toBe(false);
@@ -40,7 +43,7 @@ describe("createReconnectCoordinator", () => {
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       chatWebSocketClient,
       reconnectReplay: {},
-      resolveActiveTurnScopeIdentity: () => "",
+      resolveActiveTurn: () => null,
       logSessionSystemEvent: vi.fn(),
       notify: vi.fn(),
       translate: (key) => key,
@@ -96,7 +99,7 @@ describe("createReconnectCoordinator", () => {
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       chatWebSocketClient,
       reconnectReplay,
-      resolveActiveTurnScopeIdentity: () => "",
+      resolveActiveTurn: () => null,
       logSessionSystemEvent,
       notify,
       translate: (key) => key,
@@ -118,7 +121,6 @@ describe("createReconnectCoordinator", () => {
       turns: { "turn-1": { sessionId: "s-1", turnScopeId: "turn-1", state: "processing" } },
     };
     const executionId = deriveAgentExecutionId({ turnScopeId: "turn-1" });
-    registry.executionIdByTurnScopeId[executionTurnKey("s-1", "turn-1")] = executionId;
     const execution = {
       executionId,
       executionKind: "agent",
@@ -129,6 +131,7 @@ describe("createReconnectCoordinator", () => {
       sequence: 1,
       state: "processing",
     };
+    expect(applyExecutionProjection(registry, execution).applied).toBe(true);
     let liveSubscriber = null;
     const reconnectReplay = {
       applyReconnectData: vi.fn(),
@@ -166,7 +169,7 @@ describe("createReconnectCoordinator", () => {
       turnRuntimeRegistry: ref(registry),
       chatWebSocketClient,
       reconnectReplay,
-      resolveActiveTurnScopeIdentity: () => "turn-1",
+      resolveActiveTurn: () => selectTurnRuntimeByScope(registry, "s-1", "turn-1"),
       logSessionSystemEvent: vi.fn(),
       notify: vi.fn(),
       translate: (key) => key,

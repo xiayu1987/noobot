@@ -5,13 +5,15 @@
  */
 import { it, expect } from "vitest";
 import {
-  createTurnRuntimeRegistryState,
-  applyTurnRuntimeEvent,
-  resolveSessionTurnRuntime,
-  resolveTurnRuntimeByScope,
-  selectSessionTurnRuntime,
-  turnRuntimeDisplayState,
   applyTurnLifecycleSnapshot,
+  applyTurnRuntimeEvent,
+  createTurnRuntimeRegistryState,
+  projectTurnRuntimeView,
+  resolveTurnRuntimeByScope,
+  selectCurrentTurnRuntime,
+  selectSessionTurnRuntime,
+  selectTurnRuntimeByScope,
+  turnRuntimeDisplayState,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   SESSION_RUN_EVENT,
@@ -111,7 +113,12 @@ it("settles a same-revision terminal snapshot even when its execution state is s
       canStop: false,
     },
   });
-  expect(selectSessionTurnRuntime(registry, "s-refresh", terminalTurn.turnScopeId)).toMatchObject({
+  expect(
+    projectTurnRuntimeView(
+      "s-refresh",
+      selectTurnRuntimeByScope(registry, "s-refresh", terminalTurn.turnScopeId),
+    ),
+  ).toMatchObject({
     sending: false,
     canStop: false,
     terminal: "completed",
@@ -271,7 +278,7 @@ it("rejects stale or conflicting real-time user_stopped events", () => {
       seq: 7,
     }).applied,
   ).toBe(false);
-  expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+  expect(selectCurrentTurnRuntime(registry, "s1")).toMatchObject({
     terminal: null,
     canStop: true,
   });

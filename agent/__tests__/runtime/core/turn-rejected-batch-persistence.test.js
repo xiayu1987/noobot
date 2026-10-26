@@ -15,11 +15,7 @@ import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.j
 import { materializeStoppedAssistantDraft } from "../../../src/runtime/tool-execution/stopped-assistant-draft.js";
 import { currentAssistantDraft } from "../../../src/events/message-event-stream.js";
 import { DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS } from "../../../src/runtime/constants/index.js";
-import {
-  createLoopTurnIdentity,
-  createTestModelPort,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
@@ -64,15 +60,9 @@ async function invokeMixedControlBatch({ hookManager = null } = {}) {
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
     tools: [{ name: "task_check" }, { name: "execute_script" }],
-    dialogProcessId: "d-rejected",
     maxTurns: 10,
   };
-  prepareTestTurnExecution(
-    modelState,
-    loopState,
-    createLoopTurnIdentity(loopState),
-    "presentation-rejected-batch",
-  );
+  prepareTestTurnExecution(modelState, loopState, "presentation-rejected-batch");
   runtime.persistCurrentTurnMessages = async () => {
     persisted += 1;
   };
@@ -117,7 +107,8 @@ test("a stop after a rejected batch does not materialize the discarded draft", a
 
 function createOrchestratorHarness() {
   const runtime = createTestRuntimeContext({
-    systemRuntime: { sessionId: "session-1", turnScopeId: "scope-1" },
+    identity: { sessionId: "session-1", turnScopeId: "scope-1" },
+    systemRuntime: {},
     sealUserInterjectionQueueIfEmpty: () => true,
     consumeUserInterjections: async () => [],
   });

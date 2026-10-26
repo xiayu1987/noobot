@@ -62,7 +62,7 @@ export function createSessionAggregateVersionManager({ activeSession, log = null
     logContext = {},
   } = {}) {
     const currentVersion = conflict?.currentVersion;
-    const changed = applyLatestSessionAggregateVersion(activeSession?.value || activeSession, {
+    const changed = applyLatestSessionAggregateVersion(activeSession.value, {
       aggregateVersion: currentVersion,
     });
     log?.("versionConflict.version.apply", {

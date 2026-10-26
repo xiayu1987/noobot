@@ -10,7 +10,7 @@ import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js
 import {
   applyTurnLifecycleSnapshot,
   createTurnRuntimeRegistryState,
-  resolveSessionTurnRuntime,
+  selectCurrentTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
@@ -273,7 +273,7 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
       sending: computed(() => runtimeView.value.sending),
       canStop: computed(() => runtimeView.value.canStop),
       activeTurnRuntime: computed(() => {
-        return resolveSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value);
+        return selectCurrentTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value);
       }),
       interactionSubmitting,
       pendingInteractionRequest,

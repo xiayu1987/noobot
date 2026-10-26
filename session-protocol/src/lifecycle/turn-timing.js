@@ -4,39 +4,95 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as clean, isPlainObject } from "@noobot/shared/value";
+import { SESSION_ERROR_CODE } from "../errors.js";
+import { normalizeDialogProcessId } from "../identity.js";
 
-function normalizeTurnTiming(timing = {}) {
-  if (!isPlainObject(timing)) return null;
-  const turnScopeId = clean(timing.turnScopeId);
-  if (!turnScopeId) return null;
-  const normalized = { turnScopeId, dialogProcessId: clean(timing.dialogProcessId) };
-  if (clean(timing.thinkingStartedAt))
-    normalized.thinkingStartedAt = clean(timing.thinkingStartedAt);
-  if (clean(timing.thinkingFinishedAt))
-    normalized.thinkingFinishedAt = clean(timing.thinkingFinishedAt);
-  return normalized;
+const TURN_TIMING_FACT_FIELDS = Object.freeze(["thinkingFinishedAt", "modelLoopRound"]);
+const TURN_TIMING_RECORD_FIELDS = Object.freeze([
+  "turnScopeId",
+  "dialogProcessId",
+  ...TURN_TIMING_FACT_FIELDS,
+]);
+
+function timingError(code, message) {
+  return Object.assign(new TypeError(message), { code });
 }
 
-function normalizeTurnTimings(timings = []) {
-  const byTurnScopeId = new Map();
-  for (const item of Array.isArray(timings) ? timings : []) {
-    const timing = normalizeTurnTiming(item);
-    if (timing)
-      byTurnScopeId.set(timing.turnScopeId, {
-        ...(byTurnScopeId.get(timing.turnScopeId) || {}),
-        ...timing,
-      });
+function normalizeModelLoopRound(value) {
+  if (value === undefined || value === null || value === 0) return 0;
+  if (Number.isInteger(value) && value > 0) return value;
+  throw timingError(SESSION_ERROR_CODE.TURN_TIMING_INVALID, "turn timing modelLoopRound invalid");
+}
+
+export function normalizeTurnTimingRecord(record) {
+  if (!isPlainObject(record)) {
+    throw timingError(SESSION_ERROR_CODE.TURN_TIMING_INVALID, "turn timing must be an object");
   }
-  return [...byTurnScopeId.values()];
+  const unknownField = Object.keys(record).find(
+    (field) => !TURN_TIMING_RECORD_FIELDS.includes(field),
+  );
+  if (unknownField) {
+    throw timingError(
+      SESSION_ERROR_CODE.TURN_TIMING_INVALID,
+      `turn timing field not allowed: ${unknownField}`,
+    );
+  }
+  const turnScopeId = clean(record.turnScopeId);
+  if (!turnScopeId) {
+    throw timingError(SESSION_ERROR_CODE.TURN_TIMING_INVALID, "turn timing turnScopeId required");
+  }
+  const dialogProcessId = normalizeDialogProcessId(record.dialogProcessId);
+  if (!dialogProcessId) {
+    throw timingError(
+      SESSION_ERROR_CODE.TURN_TIMING_INVALID,
+      `turn timing dialogProcessId required: ${turnScopeId}`,
+    );
+  }
+  const thinkingFinishedAt = clean(record.thinkingFinishedAt);
+  const modelLoopRound = normalizeModelLoopRound(record.modelLoopRound);
+  if (!thinkingFinishedAt && !modelLoopRound) {
+    throw timingError(
+      SESSION_ERROR_CODE.TURN_TIMING_INVALID,
+      `turn timing has no timing fact: ${turnScopeId}`,
+    );
+  }
+  return {
+    turnScopeId,
+    dialogProcessId,
+    ...(thinkingFinishedAt ? { thinkingFinishedAt } : {}),
+    ...(modelLoopRound ? { modelLoopRound } : {}),
+  };
+}
+
+export function mergeTurnTimingRecord(existing, incoming) {
+  const current = normalizeTurnTimingRecord(existing);
+  const next = normalizeTurnTimingRecord(incoming);
+  const conflict =
+    current.turnScopeId !== next.turnScopeId ||
+    current.dialogProcessId !== next.dialogProcessId ||
+    TURN_TIMING_FACT_FIELDS.some(
+      (field) =>
+        Object.hasOwn(current, field) &&
+        Object.hasOwn(next, field) &&
+        current[field] !== next[field],
+    );
+  if (conflict) {
+    throw timingError(
+      SESSION_ERROR_CODE.TURN_TIMING_CONFLICT,
+      `turn timing conflicts with recorded fact: ${current.turnScopeId}`,
+    );
+  }
+  return { ...current, ...next };
+}
+
+function findTurnTiming(turnScopeId, timings) {
+  return timings.find((item) => isPlainObject(item) && clean(item.turnScopeId) === turnScopeId);
 }
 
 export function projectTurnTiming(turn = {}, timings = []) {
-  const timing = normalizeTurnTimings(timings).find(
-    (item) => item.turnScopeId === clean(turn.turnScopeId),
-  );
+  const timing = findTurnTiming(clean(turn.turnScopeId), timings);
   return {
     ...turn,
-    thinkingStartedAt: clean(timing?.thinkingStartedAt),
     thinkingFinishedAt: clean(timing?.thinkingFinishedAt),
   };
 }

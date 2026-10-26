@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
-import { canonicalizeTurnScopeId } from "./turn-scope-identity.js";
+import { isCanonicalText, isPlainObject, text as clean } from "@noobot/shared/value";
+import { isCanonicalTurnScopeId } from "./turn-scope-identity.js";
+import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
+import { normalizeTurnExecutionState } from "./lifecycle/turn-execution-state.js";
 
 export const EXECUTION_KIND = Object.freeze({
   AGENT: "agent",
@@ -47,14 +49,40 @@ export function isExecutionQueryTargetValid(
     : Boolean(executionId || rootExecutionId);
 }
 
-export function deriveAgentExecutionId({ turnScopeId = "" } = {}) {
-  const canonicalTurnScopeId = canonicalizeTurnScopeId(turnScopeId);
-  if (!canonicalTurnScopeId) {
+export const WORKFLOW_NODE_ORIGIN_TYPE = "workflow_node";
+
+export function createWorkflowNodeOrigin({ workflowRunId, workflowNodeExecutionId }) {
+  const origin = { type: WORKFLOW_NODE_ORIGIN_TYPE, workflowRunId, workflowNodeExecutionId };
+  projectWorkflowNodeOwnership(origin);
+  return origin;
+}
+
+export function projectWorkflowNodeOwnership(origin) {
+  if (!isPlainObject(origin)) {
+    throw Object.assign(new TypeError("execution origin must be a plain object"), {
+      code: "EXECUTION_ORIGIN_INVALID",
+    });
+  }
+  if (origin.type !== WORKFLOW_NODE_ORIGIN_TYPE) return null;
+  const { workflowRunId, workflowNodeExecutionId } = origin;
+  if (!isCanonicalText(workflowRunId) || !isCanonicalText(workflowNodeExecutionId)) {
+    throw Object.assign(
+      new TypeError(
+        "workflow node origin requires canonical workflowRunId and workflowNodeExecutionId",
+      ),
+      { code: "EXECUTION_ORIGIN_INVALID" },
+    );
+  }
+  return { workflowRunId, nodeExecutionId: workflowNodeExecutionId };
+}
+
+export function deriveAgentExecutionId({ turnScopeId }) {
+  if (!isCanonicalTurnScopeId(turnScopeId)) {
     throw Object.assign(new TypeError("agent execution id requires turnScopeId"), {
       code: "EXECUTION_TURN_SCOPE_REQUIRED",
     });
   }
-  return `agent:${canonicalTurnScopeId}`;
+  return `agent:${turnScopeId}`;
 }
 
 export function normalizeExecutionIdentity(source = {}) {
@@ -65,7 +93,7 @@ export function normalizeExecutionIdentity(source = {}) {
     rootExecutionId: clean(source.rootExecutionId),
     sessionId: clean(source.sessionId),
     parentSessionId: clean(source.parentSessionId),
-    turnScopeId: canonicalizeTurnScopeId(source.turnScopeId),
+    turnScopeId: source.turnScopeId,
     dialogProcessId: clean(source.dialogProcessId),
     stage: clean(source.stage),
     origin: source.origin && typeof source.origin === "object" ? { ...source.origin } : {},
@@ -75,7 +103,7 @@ export function normalizeExecutionIdentity(source = {}) {
 function collectAgentExecutionIdErrors(identity) {
   if (identity.executionKind !== EXECUTION_KIND.AGENT) return [];
   if (!identity.sessionId) return ["missing_session_id"];
-  if (!identity.turnScopeId) return ["missing_turn_scope_id"];
+  if (!isCanonicalTurnScopeId(identity.turnScopeId)) return ["missing_turn_scope_id"];
   return identity.executionId === deriveAgentExecutionId(identity)
     ? []
     : ["agent_execution_id_not_derived"];
@@ -96,11 +124,42 @@ export function validateExecutionIdentity(source = {}) {
   return { valid: errors.length === 0, errors, identity };
 }
 
+const isExecutionVersion = (value) => Number.isInteger(value) && value >= 1;
+
+export function validateExecutionRecord(source) {
+  const validation = validateExecutionIdentity(source);
+  const errors = [...validation.errors];
+  if (!isExecutionVersion(source.revision)) errors.push("invalid_execution_revision");
+  if (!isExecutionVersion(source.sequence)) errors.push("invalid_execution_sequence");
+  return { valid: errors.length === 0, errors, identity: validation.identity };
+}
+
+export function projectExecutionRecord(turn) {
+  return {
+    ...normalizeExecutionIdentity(turn),
+    state: clean(turn.state),
+    executionState: normalizeTurnExecutionState(turn.executionState),
+    capabilities: deriveAuthoritativeTurnCapabilities(turn),
+    revision: turn.revision,
+    sequence: turn.sequence,
+  };
+}
+
+export function compareExecutionVersion(left, right) {
+  return left.revision - right.revision || left.sequence - right.sequence;
+}
+
 export function buildExecutionTree(executions = []) {
   const byId = new Map();
-  for (const source of Array.isArray(executions) ? executions : []) {
-    const validation = validateExecutionIdentity(source);
-    if (!validation.valid) continue;
+  for (const source of executions) {
+    const validation = validateExecutionRecord(source);
+    if (!validation.valid) {
+      throw Object.assign(new TypeError("execution tree requires valid execution records"), {
+        code: "EXECUTION_RECORD_INVALID",
+        executionId: validation.identity.executionId,
+        errors: validation.errors,
+      });
+    }
     byId.set(validation.identity.executionId, {
       ...source,
       ...validation.identity,

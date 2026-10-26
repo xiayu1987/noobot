@@ -15,12 +15,10 @@ describe("sessionLifecycleHydration", () => {
         messages: [
           { role: "assistant", turnScopeId: "turn-1", content: "a", activityTimeline: [] },
         ],
-        turnTimings: [],
         turnLifecycleSnapshot: { sessionId: "session-1", sequence: 1 },
       },
     ]);
     const chatStore = {
-      applyTurnTimingSnapshot: vi.fn(() => ({ applied: true })),
       applyTurnLifecycleSnapshot: vi.fn(() => ({ applied: true })),
       pruneTerminalTurns: vi.fn(),
     };
@@ -31,7 +29,6 @@ describe("sessionLifecycleHydration", () => {
       scheduleTerminalResolution: vi.fn(),
     });
     chatStore.applyTurnLifecycleSnapshot.mockClear();
-    chatStore.applyTurnTimingSnapshot.mockClear();
     chatStore.pruneTerminalTurns.mockClear();
     return { sessions, chatStore };
   }
@@ -45,23 +42,18 @@ describe("sessionLifecycleHydration", () => {
       await nextTick();
     }
     expect(chatStore.applyTurnLifecycleSnapshot).not.toHaveBeenCalled();
-    expect(chatStore.applyTurnTimingSnapshot).not.toHaveBeenCalled();
     expect(chatStore.pruneTerminalTurns).not.toHaveBeenCalled();
   });
 
-  it("re-hydrates when the authoritative snapshot, timings or turn references change", async () => {
+  it("re-hydrates when the authoritative snapshot or turn references change", async () => {
     const { sessions, chatStore } = setup();
     sessions.value[0].turnLifecycleSnapshot = { sessionId: "session-1", sequence: 2 };
     await nextTick();
     expect(chatStore.applyTurnLifecycleSnapshot).toHaveBeenCalledTimes(1);
 
-    sessions.value[0].turnTimings = [{ turnScopeId: "turn-1" }];
-    await nextTick();
-    expect(chatStore.applyTurnTimingSnapshot).toHaveBeenCalledTimes(2);
-
     sessions.value[0].messages.push({ role: "user", turnScopeId: "turn-2", content: "b" });
     await nextTick();
-    expect(chatStore.pruneTerminalTurns).toHaveBeenCalledTimes(3);
+    expect(chatStore.pruneTerminalTurns).toHaveBeenCalledTimes(2);
     expect(chatStore.pruneTerminalTurns).toHaveBeenLastCalledWith({
       sessionId: "session-1",
       referencedTurnScopeIds: ["turn-1", "turn-2"],
@@ -69,7 +61,7 @@ describe("sessionLifecycleHydration", () => {
 
     sessions.value = [...sessions.value, { sessionId: "session-2", messages: [] }];
     await nextTick();
-    expect(chatStore.pruneTerminalTurns).toHaveBeenCalledTimes(5);
+    expect(chatStore.pruneTerminalTurns).toHaveBeenCalledTimes(4);
   });
 
   it("does not manufacture an Agent persistence scope during active-turn discovery", () => {
@@ -78,7 +70,6 @@ describe("sessionLifecycleHydration", () => {
       sessionId: "session-1",
       parentSessionId: "parent-1",
       messages: [],
-      turnTimings: [],
       turnLifecycleSnapshot: {
         sessionId: "session-1",
         sequence: 2,
@@ -96,7 +87,6 @@ describe("sessionLifecycleHydration", () => {
       },
     };
     const chatStore = {
-      applyTurnTimingSnapshot: vi.fn(() => ({ applied: true })),
       applyTurnLifecycleSnapshot: vi.fn(() => ({ applied: true })),
       pruneTerminalTurns: vi.fn(),
     };
@@ -128,7 +118,6 @@ describe("sessionLifecycleHydration", () => {
         {
           sessionId: "session-1",
           messages: [],
-          turnTimings: [],
           turnLifecycleSnapshot: {
             sessionId: "session-1",
             sequence: 2,
@@ -141,7 +130,6 @@ describe("sessionLifecycleHydration", () => {
       ]),
       activeSessionId: ref("session-1"),
       chatStore: {
-        applyTurnTimingSnapshot: vi.fn(() => ({ applied: true })),
         applyTurnLifecycleSnapshot: vi.fn(() => ({ applied })),
         pruneTerminalTurns: vi.fn(),
       },

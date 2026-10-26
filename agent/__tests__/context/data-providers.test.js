@@ -15,6 +15,7 @@ import {
   resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
+import { TEST_RUNTIME_IDENTITY } from "../helpers/test-runtime-context.js";
 
 test("resolveRootSessionId rejects a missing session authority", async () => {
   await assert.rejects(
@@ -240,14 +241,12 @@ test("resolveLongMemory only reads static long memory payload from memoryService
 
 test("buildDynamicInfo exposes safeConfirm in config", () => {
   const dynamic = buildDynamicInfo({
-    sessionTree: {
-      nodes: { "unrelated-session": { sessionId: "unrelated-session" } },
-    },
+    identity: TEST_RUNTIME_IDENTITY,
     runConfig: {
       safeConfirm: true,
     },
   });
   assert.equal(dynamic.config.safeConfirm, true);
   assert.equal("forceTool" in dynamic.config, false);
-  assert.equal("sessionTree" in dynamic, false);
+  assert.equal("rootSessionId" in dynamic, false);
 });

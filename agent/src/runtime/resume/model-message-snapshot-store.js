@@ -20,6 +20,7 @@ import {
 import { MESSAGE_BLOCK_LANES } from "@noobot/context-protocol/agent-context/schema";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { requireActiveModelContext } from "../active-model-context.js";
+import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { emitEvent } from "../../events/emitter.js";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../../session/session-artifact-files.js";
 
@@ -181,7 +182,7 @@ export async function saveStoppedModelMessageSnapshotFromRuntime({
       identity,
       messageBlocks,
       userMetaBackwrites,
-      turnProgress: projectSystemRuntimeTurnProgress(candidate.systemRuntime),
+      turnProgress: projectSystemRuntimeTurnProgress(getSystemRuntimeFromRuntime(runtime)),
     });
     const result = saveResult.saved
       ? buildSnapshotPersistenceResult({ ...resultBase, status: "saved" })

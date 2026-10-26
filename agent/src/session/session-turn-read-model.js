@@ -45,10 +45,10 @@ function collectSessionPresentationTurnScopeIds(session = {}) {
 
 export function createSessionTurnLifecycleSnapshot({
   session,
-  commandId = "",
-  userId = "",
+  commandId,
   knownSequence,
   terminalLimit,
+  recovery,
   generatedAt,
 }) {
   return createAuthoritativeTurnSnapshot({
@@ -56,10 +56,10 @@ export function createSessionTurnLifecycleSnapshot({
     turnTimings: session.turnTimings,
     terminalTurnScopeIds: collectSessionPresentationTurnScopeIds(session),
     commandId,
-    userId,
-    sessionId: text(session.sessionId),
+    sessionId: session.sessionId,
     knownSequence,
     terminalLimit,
-    ...(generatedAt ? { generatedAt } : {}),
+    recovery,
+    generatedAt,
   });
 }

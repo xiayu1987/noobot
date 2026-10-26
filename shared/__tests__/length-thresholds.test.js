@@ -44,14 +44,7 @@ test("preview truncation groups stay converged on display and contextPreview", (
 
 test("session summary truncation keys are resolvable from the display group", () => {
   const display = LENGTH_THRESHOLDS.display;
-  for (const key of [
-    "sessionSummaryTextChars",
-    "sessionSummaryArrayItemChars",
-    "sessionSummaryObjectFieldChars",
-    "sessionSummaryDefaultJsonStringChars",
-    "sessionSummarySmallJsonStringChars",
-    "attachmentExtensionChars",
-  ]) {
+  for (const key of ["sessionSummaryArrayItemChars", "attachmentExtensionChars"]) {
     assert.equal(typeof display[key], "number", `display.${key} must be defined`);
   }
 });
@@ -68,7 +61,6 @@ test("context preview group only carries model context payload budgets", () => {
     "planningCompactTextChars",
     "planningContextGoalChars",
     "workflowCompactTextChars",
-    "workflowPayloadPreviewChars",
     "workflowResultTextChars",
     "workflowSemanticTextPreviewChars",
   ]);

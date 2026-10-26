@@ -5,11 +5,11 @@
  */
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
-  resolveSessionTurnRuntime,
-  selectSessionTurnRuntime,
+  projectTurnRuntimeView,
+  selectTurnRuntimeByScope,
   selectTurnMessageRuntime,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
-import { projectTurnRuntimeToMessages } from "../runtime/engine/turnProjectionStore.js";
+import { projectTurnRuntimeToSession } from "../runtime/engine/turnProjectionStore.js";
 import { createSubSessionEventOperations } from "./subSessionEventOperations.js";
 import { createEmptySubSession } from "./subSessionRegistry.js";
 
@@ -75,7 +75,7 @@ export function createSubSessionStore({
       turnScopeId: turn.turnScopeId,
       dialogProcessId: turn.dialogProcessId,
     });
-    const result = projectTurnRuntimeToMessages({ session, stateSnapshot, turn });
+    const result = projectTurnRuntimeToSession({ session, stateSnapshot });
     if (result.applied) {
       const registry = subSessionMessageRegistry.value;
       subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
@@ -94,13 +94,8 @@ export function createSubSessionStore({
   function selectSubSessionMessages(id) {
     const session = subSessionMessageRegistry.value.sessions[id];
     if (!session) return null;
-    const turnRuntime = resolveSessionTurnRuntime(
-      turnRuntimeRegistry.value,
-      id,
-      session.turnScopeId,
-    )
-      ? selectSessionTurnRuntime(turnRuntimeRegistry.value, id, session.turnScopeId)
-      : null;
+    const turn = selectTurnRuntimeByScope(turnRuntimeRegistry.value, id, session.turnScopeId);
+    const turnRuntime = turn ? projectTurnRuntimeView(id, turn) : null;
     const workflowNodeState = selectWorkflowNodeState(id, session.turnScopeId);
     const projection = buildSubSessionProjection({ session, turnRuntime, workflowNodeState });
     logSubSessionProjection({ id, session, projection, turnRuntime, workflowNodeState });

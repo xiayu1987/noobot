@@ -308,3 +308,39 @@ test("plugin artifact replacement increments revision and rejects a stale base r
   assert.equal(stale.committed, false);
   assert.equal(stale.code, "ARTIFACT_REVISION_CONFLICT");
 });
+
+test("authority event commit rejects non-canonical owner, ordering and unknown family before mutation", async () => {
+  let mutations = 0;
+  const service = new SessionMessageService({
+    sessionRepo: {
+      async withSessionMutation() {
+        mutations += 1;
+        throw new Error("mutation must not start");
+      },
+    },
+    now: () => "2026-08-29T00:00:00.000Z",
+  });
+  const base = {
+    userId: "admin",
+    sessionId: "session-1",
+    family: EVENT_FAMILY.PLUGIN_ARTIFACT,
+    identity: {},
+    causality: {},
+    ordering: { domain: "plugin-artifact", scopeId: "artifact-1" },
+    producer: { type: "plugin", id: "workflow" },
+    payload: {},
+  };
+  const cases = [
+    [{ userId: " admin" }, /canonical user and session/],
+    [{ sessionId: "session-1 " }, /canonical user and session/],
+    [{ sessionId: "" }, /canonical user and session/],
+    [{ family: "unknown.family" }, /family not registered: unknown\.family/],
+    [{ ordering: undefined }, /canonical ordering domain and scope/],
+    [{ ordering: { domain: " plugin-artifact", scopeId: "artifact-1" } }, /canonical ordering/],
+    [{ ordering: { domain: "plugin-artifact", scopeId: "" } }, /canonical ordering/],
+  ];
+  for (const [override, message] of cases) {
+    await assert.rejects(service.commitAuthorityEvent({ ...base, ...override }), message);
+  }
+  assert.equal(mutations, 0);
+});

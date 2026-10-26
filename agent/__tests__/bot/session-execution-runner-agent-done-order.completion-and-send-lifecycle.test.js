@@ -4,14 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
-import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import {
   assert,
   createRunner,
   AGENT_LIFECYCLE_STATE,
   collectLifecycleStates,
-  createCurrentTurnMessagesStore,
-  createTestAgentExecutionScope,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 
 test("runSession completes only after finalizeRunSession resolves", async () => {
@@ -171,13 +168,8 @@ test("runSession keeps resume snapshot identity separate from current run identi
       resumeDialogProcessId: "dialog-stopped",
       resumeTurnScopeId: "turn-stopped",
     },
-    prepareAgentTurnExecution: async ({ buildContextPayload }) => {
+    observePreparedTurn: ({ buildContextPayload }) => {
       captured.buildContextPayload = buildContextPayload;
-      const runtime = Object.assign(createTestRuntimeContext(), {
-        currentTurnMessages: createCurrentTurnMessagesStore([]),
-      });
-      const agentContext = createTestAgentExecutionScope(runtime);
-      return { agentContext, userMessageAttachments: [] };
     },
     finalizeRunSession: async ({ dialogProcessId, turnScopeId, lifecycle }) => {
       captured.finalize = { dialogProcessId, turnScopeId };
@@ -194,10 +186,12 @@ test("runSession keeps resume snapshot identity separate from current run identi
     turnScopeId: "turn-current",
   });
 
-  assert.equal(captured.buildContextPayload.dialogProcessId, "dialog-1");
+  assert.equal(captured.buildContextPayload.runtimeIdentity.dialogProcessId, "dialog-1");
+  assert.equal(captured.buildContextPayload.runtimeIdentity.turnScopeId, "turn-current");
   assert.equal(captured.buildContextPayload.runConfig.resumeDialogProcessId, "dialog-stopped");
   assert.equal(captured.buildContextPayload.runConfig.resumeTurnScopeId, "turn-stopped");
-  assert.equal(captured.buildContextPayload.runConfig.turnScopeId, "turn-current");
+  assert.equal(Object.hasOwn(captured.buildContextPayload.runConfig, "turnScopeId"), false);
+  assert.equal(Object.hasOwn(captured.buildContextPayload, "dialogProcessId"), false);
   assert.deepEqual(captured.finalize, {
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-current",

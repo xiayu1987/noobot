@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { HOOK_POINT } from "@noobot/hook-protocol";
-import { runBotRuntimeHook, withBotHookRuntimeMeta } from "../../hook/index.js";
+import { isPlainObject } from "@noobot/shared/value";
+import { HOOK_POINT, withHookRuntimeIdentity } from "@noobot/hook-protocol";
+import { runBotRuntimeHook } from "../../hook/index.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../../config/constants.js";
 import { isAbortError, isUserStopAbort } from "../../../shared/utils/error-utils.js";
 import {
@@ -38,9 +39,8 @@ async function readFailureSummary(context, persistence, dialogProcessId) {
 }
 
 async function saveFailureReport(context, failure) {
-  const dialogProcessId = context.resolvedDialogProcessId;
-  if (!dialogProcessId) return;
-  const sessionId = context.resolvedUsedSessionId || context.sessionId;
+  if (context.initializedSession === null) return;
+  const { sessionId, dialogProcessId } = context.initializedSession;
   const persistence = {
     userId: context.userId,
     sessionId,
@@ -77,14 +77,11 @@ async function recordSessionRunFailure({
   persistStoppedSnapshotFromRuntime,
   resolvedRuntimeEventListener,
   resolvedRunConfig,
-  preparedBotHookManager,
-  resolvedUsedSessionId,
-  resolvedDialogProcessId,
+  preparedBotHook,
   errorLogger,
   userId,
   sessionId,
   parentSessionId,
-  caller,
   message,
 }) {
   const aborted = isAbortError(error, abortSignal);
@@ -124,24 +121,22 @@ async function recordSessionRunFailure({
   }
   syncLifecycleRuntimeState(lifecycleRuntime, lifecycle);
   const executionFailure = createExecutionFailure(error, lifecycle?.snapshot || null);
-  await runBotRuntimeHook({
-    runtime: {
-      eventListener: resolvedRuntimeEventListener,
-      botHookManager: preparedBotHookManager,
-      abortSignal,
-    },
-    point: HOOK_POINT.BOT.SESSION_RUN_ERROR,
-    context: withBotHookRuntimeMeta(
-      {
-        userId,
-        sessionId: resolvedUsedSessionId,
-        parentSessionId,
-        dialogProcessId: resolvedDialogProcessId,
-        caller,
+
+  if (preparedBotHook !== null) {
+    await runBotRuntimeHook({
+      runtime: {
+        eventListener: resolvedRuntimeEventListener,
+        botHookManager: preparedBotHook.manager,
+        abortSignal,
       },
-      { message, runConfig: resolvedRunConfig, error: executionFailure },
-    ),
-  });
+      point: HOOK_POINT.BOT.SESSION_RUN_ERROR,
+      context: withHookRuntimeIdentity(preparedBotHook.identity, {
+        message,
+        runConfig: resolvedRunConfig,
+        error: executionFailure,
+      }),
+    });
+  }
   if (!aborted) {
     await errorLogger.log({
       userId,
@@ -155,7 +150,28 @@ async function recordSessionRunFailure({
   return executionFailure;
 }
 
+function assertFailureInitializationState({ preparedBotHook, initializedSession }) {
+  if (preparedBotHook !== null && !(isPlainObject(preparedBotHook) && preparedBotHook.identity)) {
+    throw new TypeError(
+      "handleSessionRunFailure preparedBotHook must be null or { manager, identity }",
+    );
+  }
+  if (
+    initializedSession !== null &&
+    !(
+      isPlainObject(initializedSession) &&
+      initializedSession.sessionId &&
+      initializedSession.dialogProcessId
+    )
+  ) {
+    throw new TypeError(
+      "handleSessionRunFailure initializedSession must be null or { sessionId, dialogProcessId }",
+    );
+  }
+}
+
 export async function handleSessionRunFailure({ executionEventListener, ...context }) {
+  assertFailureInitializationState(context);
   let failure;
   try {
     failure = await recordSessionRunFailure(context);

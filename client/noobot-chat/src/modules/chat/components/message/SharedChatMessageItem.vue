@@ -45,7 +45,10 @@ import {
   BaseMessageTypeTag,
   BasePreviewContent,
 } from "../../../../shared/public-api/ui.js";
-import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import {
+  EXTENSION_POINTS,
+  requireMessageCardHostCapabilities,
+} from "@noobot/plugin-protocol/frontend";
 import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
 import {
@@ -358,7 +361,7 @@ const defaultMonotonicMessageActionProps = computed(() =>
 
 function resolveRendererContext() {
   const selectSessionMessages = (sessionId) => chatStore.selectSubSessionMessages(sessionId);
-  return {
+  return requireMessageCardHostCapabilities({
     messageItem: props.messageItem,
     allMessages: props.allMessages,
     messageRuntime: messageRuntime.value,
@@ -397,7 +400,7 @@ function resolveRendererContext() {
     onOpenResolvedAttachmentPreview: openResolvedAttachmentPreview,
     onDownloadAttachment,
     onOpenThinkingDetails: handleOpenThinkingDetails,
-  };
+  });
 }
 
 const extensionRendererContext = computed(() => {

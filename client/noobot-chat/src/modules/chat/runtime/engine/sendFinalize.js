@@ -21,8 +21,8 @@ export function applySendErrorState({
   notify?.({ type: "error", message: error?.message || translate("chat.sendFailed") });
 }
 
-export function finalizeSendCleanup({ pendingInteractionRequest, interactionSubmitting } = {}) {
-  if (!pendingInteractionRequest?.value && interactionSubmitting) {
+export function finalizeSendCleanup({ pendingInteractionRequest, interactionSubmitting }) {
+  if (!pendingInteractionRequest.value) {
     interactionSubmitting.value = false;
   }
 }

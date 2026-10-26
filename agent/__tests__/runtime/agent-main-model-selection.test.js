@@ -130,11 +130,12 @@ function buildStateWithRunConfig(runConfig) {
         globalConfig,
         userConfig: {},
         runConfig,
-        systemRuntime: {
+        identity: {
           sessionId: "s1",
           dialogProcessId: "dialog-model-selection",
           turnScopeId: "turn-model-selection",
         },
+        systemRuntime: {},
       }),
       {
         identity: {

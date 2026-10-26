@@ -35,11 +35,11 @@ export function createReplaceTurnRequester({
       attempt,
       commandId,
       attachments: summarizeDebugAttachments(attachments),
-      messages: summarizeDebugMessages(activeSession?.value?.messages),
+      messages: summarizeDebugMessages(activeSession.value?.messages),
     }));
     const result = await replaceSessionTurnApi(
       {
-        userId: userId?.value || userId,
+        userId: userId.value,
         sessionId,
         parentSessionId: normalizeTrimmedString(originalSession?.parentSessionId),
         anchor,

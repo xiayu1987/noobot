@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { isPlainObject } from "@noobot/shared/value";
-import { createActionRuntimeBySemanticKey } from "../runtime/workflowActionRuntimeMap.js";
+import { createActionRuntimeByNodeId } from "../runtime/workflowActionRuntimeMap.js";
 import { createFlowNodes } from "../services/workflowFlowNodes.js";
 import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
-import { createStepStatusResolver } from "../runtime/workflowRuntimeStatus.js";
 
 export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {}) {
   const nodeSessions = computed(() => {
@@ -18,29 +16,20 @@ export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {})
     return fromPayload;
   });
 
-  const executionMeta = computed(() =>
-    isPlainObject(workflowPayload.value?.execution) ? workflowPayload.value.execution : {},
-  );
-
   const runtimeNodeSessions = createRuntimeNodeSessions({
     workflowPayload,
     nodeSessions,
     workflowNodeStateRegistry: runtimeRegistries.workflowNodeStateRegistry,
   });
 
-  const resolveStepStatus = createStepStatusResolver();
-
-  const actionRuntimeBySemanticKey = createActionRuntimeBySemanticKey({
+  const actionRuntimeByNodeId = createActionRuntimeByNodeId({
     runtimeNodeSessions,
     workflowPayload,
-    resolveStepStatus,
   });
 
   const flowNodes = createFlowNodes({
     workflowPayload,
-    executionMeta,
-    actionRuntimeBySemanticKey,
-    resolveStepStatus,
+    actionRuntimeByNodeId,
   });
 
   return {

@@ -15,6 +15,7 @@ import {
   sealUserInterjectionQueueIfEmpty,
 } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
+import { selectAuthoritativeActiveTurn } from "@noobot/authoritative-state/application";
 import { recoverPersistedTurn } from "./turn-recovery.js";
 import {
   acceptRunCommand,
@@ -29,10 +30,9 @@ import { finalizeRunResult } from "./message-run/terminal-stage.js";
 import { text } from "@noobot/shared/value";
 
 function createConflictTurnRecovery(context) {
-  return async ({ accepted = null, userId = "", sessionId = "" } = {}) => {
-    if (accepted?.reason !== "session_action_conflict") return false;
-    const lifecycle = accepted.lifecycle || {};
-    const turn = lifecycle.turns?.[text(lifecycle.activeTurnScopeId)] || null;
+  return async ({ accepted, userId, sessionId }) => {
+    if (accepted.reason !== "session_action_conflict") return false;
+    const turn = selectAuthoritativeActiveTurn(accepted.lifecycle);
     const result = await recoverPersistedTurn({
       turn,
       userId,

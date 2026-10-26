@@ -22,19 +22,27 @@ import {
   TEST_AGENT_ENVIRONMENT,
   createTestAgentExecutionScope,
 } from "../../helpers/agent-execution-scope.js";
-import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import {
+  TEST_RUNTIME_IDENTITY,
+  createTestRuntimeContext,
+} from "../../helpers/test-runtime-context.js";
 
 const TEST_RUN_IDENTITY = Object.freeze({
-  turnScopeId: "t-1",
   executionId: "r-1",
   presentationMessageId: "p-1",
 });
 
 function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
-  const { runtime: runtimeOverrides = {}, environment = TEST_AGENT_ENVIRONMENT } = overrides;
-  const { turnScopeId, executionId, presentationMessageId } = TEST_RUN_IDENTITY;
+  const {
+    runtime: runtimeOverrides = {},
+    identity: identityOverrides = {},
+    environment = TEST_AGENT_ENVIRONMENT,
+  } = overrides;
+  const { executionId, presentationMessageId } = TEST_RUN_IDENTITY;
+  const { rootSessionId: rootSessionOverride, ...runtimeIdentityOverrides } = identityOverrides;
+  const identity = { ...TEST_RUNTIME_IDENTITY, userId, ...runtimeIdentityOverrides };
+  const rootSessionId = rootSessionOverride ?? identity.sessionId;
   const { systemRuntime: systemRuntimeOverrides = {} } = runtimeOverrides;
-  const { sessionId = "s-1", rootSessionId = "s-1" } = systemRuntimeOverrides;
   const runtime = createTestRuntimeContext({
     basePath,
     globalConfig: {
@@ -48,26 +56,24 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
     userConfig: {},
     sharedTools: {},
     ...runtimeOverrides,
-    runConfig: { hookManager: null, turnScopeId, executionId, presentationMessageId },
+    runConfig: { hookManager: null, executionId, presentationMessageId },
+    identity,
     systemRuntime: {
-      userId,
       config: {},
       isSuperUser: false,
-      sessionDir: path.join(basePath, "runtime", "session", sessionId),
+      sessionDir: path.join(basePath, "runtime", "session", identity.sessionId),
       persistenceScope: null,
       ...systemRuntimeOverrides,
-      sessionId,
-      rootSessionId,
     },
   });
   return createTestAgentExecutionScope(runtime, {
     identity: {
-      userId,
-      sessionId,
+      userId: identity.userId,
+      sessionId: identity.sessionId,
       rootSessionId,
-      parentSessionId: "",
-      dialogProcessId: "d-1",
-      turnScopeId,
+      parentSessionId: identity.parentSessionId,
+      dialogProcessId: identity.dialogProcessId,
+      turnScopeId: identity.turnScopeId,
       runId: executionId,
       presentationMessageId,
     },

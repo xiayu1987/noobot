@@ -184,6 +184,8 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       activeTurnScopeId: "turn-current",
       turns: {
         "turn-current": {
+          revision: 1,
+          sequence: 1,
           turnScopeId: "turn-current",
           dialogProcessId: "dialog-current",
           presentationMessageId: "presentation-current",

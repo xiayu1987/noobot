@@ -61,7 +61,10 @@ test("workflow service reads child execution events only from the workflow scope
     },
     taskPayload: { sessionId: "child-s", tasks: [] },
   });
-  const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => workspaceRoot } });
+  const ports = createPluginServicePorts({
+    bot: { getWorkspacePath: () => workspaceRoot },
+    translateText: (key) => key,
+  });
   const { executionLogs: logs } = await ports.sessions.forPlugin("workflow").readSnapshot({
     userId: "u1",
     segments: ["session", "root-s", "wf_node_1"],
@@ -140,8 +143,10 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     const payload = await response.json();
     assert.equal(response.status, 200, JSON.stringify(payload));
     assert.equal(payload.ok, true);
-    assert.equal(payload.workflowSession.session.sessionId, "node-s");
     assert.equal(payload.workflowSession.sessionSummary.sessionId, "node-s");
+    for (const field of ["session", "task", "files", "childSessionId", "dir"]) {
+      assert.equal(field in payload.workflowSession, false, field);
+    }
     assert.equal(payload.workflowSession.aggregateVersion, 1);
     assert.equal(
       payload.workflowSession.snapshotEnvelope.identity.eventType,
@@ -152,7 +157,6 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     assert.deepEqual(payload.workflowSession.executionLogs, [
       { event: "x", dialogProcessId: "wf_node_1" },
     ]);
-    assert.equal("dir" in payload.workflowSession, false);
   });
 });
 

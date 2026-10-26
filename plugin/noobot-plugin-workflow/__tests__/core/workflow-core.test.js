@@ -146,7 +146,7 @@ test("parseWorkflowDslText reads only task and stateType attributes", () => {
     [
       "WORKFLOW_DSL/1",
       'NODE id=start type=state stateType=start name="开始"',
-      'NODE id=split type=state state=branch name="分叉"',
+      'NODE id=split type=state stateType=branch name="分叉"',
       'NODE id=act type=action name="节点A" taskText="别名" instruction="别名" mission="别名"',
       'NODE id=end type=state stateType=end name="结束"',
       "EDGE from=start to=split",
@@ -159,7 +159,32 @@ test("parseWorkflowDslText reads only task and stateType attributes", () => {
   const splitNode = nodes.find((item) => item?.id === "split");
   const actionNode = nodes.find((item) => item?.id === "act");
   assert.equal(Object.hasOwn(actionNode, "task"), false);
-  assert.equal(splitNode?.stateType, 0);
+  assert.equal(Object.hasOwn(actionNode, "stateType"), false);
+  assert.equal(splitNode?.stateType, "branch");
+});
+
+test("parseWorkflowDslText rejects missing or non-protocol type, stateType and name", () => {
+  const build = (line) =>
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="开始"',
+      line,
+      'NODE id=end type=state stateType=end name="结束"',
+      "EDGE from=start to=x",
+      "EDGE from=x to=end",
+      "END",
+    ].join("\n");
+  for (const line of [
+    'NODE id=x type=state state=branch name="别名"',
+    'NODE id=x type=state stateType=normal name="普通"',
+    'NODE id=x type=state stateType=0 name="数字"',
+    'NODE id=x type=action stateType=start name="动作"',
+  ]) {
+    assert.throws(() => parseWorkflowDslText(build(line)), /stateType/);
+  }
+  assert.throws(() => parseWorkflowDslText(build('NODE id=x name="缺类型"')), /type/);
+  assert.throws(() => parseWorkflowDslText(build('NODE id=x type=Action name="大写"')), /type/);
+  assert.throws(() => parseWorkflowDslText(build("NODE id=x type=action")), /name/);
 });
 
 test("parseWorkflowDslText keeps quoted task when value contains spaces", () => {
@@ -289,7 +314,7 @@ test("parseWorkflowDslText returns en-US error message by default", () => {
   );
 });
 
-test("parseWorkflowDslText normalizes multi-outgoing start as branch", () => {
+test("parseWorkflowDslText keeps declared stateType without topology promotion", () => {
   const semantic = parseWorkflowDslText(
     [
       "WORKFLOW_DSL/1",
@@ -297,32 +322,42 @@ test("parseWorkflowDslText normalizes multi-outgoing start as branch", () => {
       'NODE id=a type=action name="节点A" task="执行A"',
       'NODE id=b type=action name="节点B" task="执行B"',
       'NODE id=merge type=state stateType=merge name="汇聚"',
+      'NODE id=end type=state stateType=end name="结束"',
       "EDGE from=start to=a",
       "EDGE from=start to=b",
       "EDGE from=a to=merge",
       "EDGE from=b to=merge",
+      "EDGE from=merge to=end",
       "END",
     ].join("\n"),
   );
   const start = (semantic?.nodes || []).find((item) => String(item?.id || "") === "start");
-  assert.equal(start?.stateType, 2);
+  assert.equal(start?.stateType, "start");
 });
 
-test("parseWorkflowDslText injects locale-aware default start/end names", () => {
-  const semantic = parseWorkflowDslText(
-    [
-      "WORKFLOW_DSL/1",
-      'NODE id=act_a type=action name="TaskA" task="do task A"',
-      'NODE id=act_b type=action name="TaskB" task="do task B"',
-      "EDGE from=act_a to=act_b",
-      "END",
-    ].join("\n"),
-    { locale: "en-US" },
+test("parseWorkflowDslText rejects undeclared or duplicated start boundary", () => {
+  const parse = (lines) =>
+    parseWorkflowDslText(["WORKFLOW_DSL/1", ...lines, "END"].join("\n"), { locale: "en-US" });
+  assert.throws(
+    () =>
+      parse([
+        'NODE id=act_a type=action name="TaskA" task="do task A"',
+        'NODE id=act_b type=action name="TaskB" task="do task B"',
+        "EDGE from=act_a to=act_b",
+      ]),
+    /exactly one stateType=start/,
   );
-  const start = (semantic?.nodes || []).find((item) => String(item?.id || "") === "start");
-  const end = (semantic?.nodes || []).find((item) => String(item?.id || "") === "end");
-  assert.equal(start?.name, "Start");
-  assert.equal(end?.name, "End");
+  assert.throws(
+    () =>
+      parse([
+        'NODE id=s1 type=state stateType=start name="S1"',
+        'NODE id=s2 type=state stateType=start name="S2"',
+        'NODE id=end type=state stateType=end name="End"',
+        "EDGE from=s1 to=end",
+        "EDGE from=s2 to=end",
+      ]),
+    /exactly one stateType=start/,
+  );
 });
 
 const hostCapabilities = Object.freeze({
@@ -503,21 +538,13 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
   assert.ok(cleanupHook?.handler);
 
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-plugin-cleanup-"));
-  const planningDir = path.join(
-    tempRoot,
-    "runtime/plugin-data/workflow/planning/s-delete/dialog-1",
-  );
   const sessionDir = path.join(tempRoot, "runtime/plugin-data/workflow/session/s-delete/wf_node_1");
   const retainedSessionDir = path.join(
     tempRoot,
     "runtime/plugin-data/workflow/session/s-keep/wf_node_2",
   );
-  const untouchedDir = path.join(tempRoot, "runtime/plugin-data/workflow/planning/s-keep/dialog-2");
-  await fs.mkdir(planningDir, { recursive: true });
   await fs.mkdir(sessionDir, { recursive: true });
   await fs.mkdir(retainedSessionDir, { recursive: true });
-  await fs.mkdir(untouchedDir, { recursive: true });
-  await fs.writeFile(path.join(planningDir, "planning.json"), '{"ok":true}\n', "utf8");
   await fs.writeFile(path.join(sessionDir, "events.jsonl"), '{"event":"ok"}\n', "utf8");
   await fs.writeFile(
     path.join(sessionDir, "meta.json"),
@@ -529,8 +556,6 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
     JSON.stringify({ sessionId: "retained-workflow-node-session" }),
     "utf8",
   );
-  await fs.writeFile(path.join(untouchedDir, "planning.json"), '{"keep":true}\n', "utf8");
-
   try {
     const cleanupResult = await cleanupHook.handler({
       sessionId: "s-delete",
@@ -542,12 +567,9 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
     assert.deepEqual(cleanupResult.deletedRelatedSessionIds, ["workflow-node-session"]);
     assert.deepEqual(cleanupResult.retainedRelatedSessionIds, ["retained-workflow-node-session"]);
     await assert.rejects(
-      fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/planning/s-delete")),
-    );
-    await assert.rejects(
       fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/session/s-delete")),
     );
-    await fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/planning/s-keep"));
+    await fs.stat(retainedSessionDir);
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }

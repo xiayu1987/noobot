@@ -17,6 +17,7 @@ const now = "2026-07-30T00:00:00.000Z";
 const turn = (overrides = {}) => ({
   turnScopeId: "turn-1",
   presentationMessageId: "message-1",
+  dialogProcessId: "dialog-1",
   executionId: "agent:turn-1",
   executionKind: "agent",
   rootExecutionId: "agent:turn-1",
@@ -25,6 +26,7 @@ const turn = (overrides = {}) => ({
   executionState: "sending",
   revision: 2,
   sequence: 2,
+  startedAt: now,
   createdAt: now,
   updatedAt: now,
   ...overrides,
@@ -47,17 +49,24 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
         }),
       },
     },
-    turnTimings: [{ turnScopeId: "turn-1", thinkingStartedAt: "2026-07-29T23:59:00.000Z" }],
+    turnTimings: [
+      {
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+        thinkingFinishedAt: "2026-07-29T23:59:00.000Z",
+      },
+    ],
     commandId: "snapshot-1",
-    userId: "u1",
     sessionId: "s1",
     terminalTurnScopeIds: ["turn-0"],
     knownSequence: 3,
     terminalLimit: 10,
+    recovery: "none",
     generatedAt: now,
   });
-  assert.equal(snapshot.activeTurn.startedAt, "");
-  assert.equal(snapshot.activeTurn.thinkingStartedAt, "2026-07-29T23:59:00.000Z");
+  assert.equal(snapshot.activeTurn.startedAt, now);
+  assert.equal(snapshot.activeTurn.thinkingFinishedAt, "2026-07-29T23:59:00.000Z");
+  assert.equal(Object.hasOwn(snapshot.activeTurn, "thinkingStartedAt"), false);
   assert.deepEqual(
     snapshot.recentTerminalTurns.map((item) => item.turnScopeId),
     ["turn-0"],
@@ -70,8 +79,8 @@ test("authority snapshot carries the read-side recovery annotation verbatim", ()
   const snapshot = createAuthoritativeTurnSnapshot({
     lifecycle: { activeTurnScopeId: "turn-1", sequence: 2, turns: { active: turn() } },
     commandId: "snapshot-recovery",
-    userId: "u1",
     sessionId: "s1",
+    terminalTurnScopeIds: [],
     recovery: "finalize",
     knownSequence: 0,
     terminalLimit: 10,
@@ -91,8 +100,8 @@ test("authority snapshots only terminal Turns represented by canonical messages"
       },
     },
     terminalTurnScopeIds: ["turn-retained"],
+    recovery: "none",
     commandId: "snapshot-message-projection",
-    userId: "u1",
     sessionId: "s1",
     knownSequence: 0,
     terminalLimit: 10,

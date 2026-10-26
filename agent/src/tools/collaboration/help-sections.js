@@ -24,6 +24,7 @@ import { getAgentContextEnvelope } from "../../context/agent-execution-scope.js"
 import { mergeConfig } from "../../config/index.js";
 import { resolveModelSection } from "../../context/providers/model-provider.js";
 import { text } from "@noobot/shared/value";
+import { AGENT_CONTEXT_IDENTITY_SHAPE } from "@noobot/context-protocol/agent-context/schema";
 
 export const TOOL_SOURCE = Object.freeze({
   RUNTIME_BINDINGS: "runtime_bindings",
@@ -47,14 +48,12 @@ export const MEMORY_PATH_FIELDS = Object.freeze({
   yearlySummaryDir: MEMORY_RELATIVE_PATHS.YEARLY_SUMMARY_DIR,
 });
 
-const CONTEXT_IDENTITY_FIELDS = Object.freeze([
-  "userId",
-  "sessionId",
-  "rootSessionId",
-  "parentSessionId",
-  "dialogProcessId",
-  "turnScopeId",
-]);
+const RUN_INSTANCE_IDENTITY_FIELDS = Object.freeze(["runId", "presentationMessageId"]);
+const CONTEXT_IDENTITY_FIELDS = Object.freeze(
+  Object.keys(AGENT_CONTEXT_IDENTITY_SHAPE).filter(
+    (field) => !RUN_INSTANCE_IDENTITY_FIELDS.includes(field),
+  ),
+);
 
 const RUNTIME_DIRECTORY_FIELDS = Object.freeze(["currentDirectory", "rootDirectory", "opsWorkdir"]);
 

@@ -11,7 +11,8 @@ import {
   assertSessionAggregateInvariants,
   assertSessionAggregateShape,
   requireSessionAggregateVersion,
-  normalizeDialogProcessId,
+  mergeTurnTimingRecord,
+  normalizeTurnTimingRecord,
 } from "@noobot/session-protocol";
 import {
   assertDialogOrderCoversMessages,
@@ -21,7 +22,7 @@ import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
-import { firstText, text, isPlainObject } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 
 function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   const events = [];
@@ -46,30 +47,15 @@ function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   return events;
 }
 
-function normalizeTurnTimingEntity(timing = {}) {
-  if (!isPlainObject(timing)) return null;
-  const turnScopeId = text(timing?.turnScopeId);
-  const dialogProcessId = normalizeDialogProcessId(timing?.dialogProcessId);
-  if (!turnScopeId) return null;
-  const thinkingStartedAt = text(timing?.thinkingStartedAt);
-  const thinkingFinishedAt = text(timing?.thinkingFinishedAt);
-  const modelLoopRoundValue = Number(timing?.modelLoopRound || 0);
-  const modelLoopRound =
-    Number.isFinite(modelLoopRoundValue) && modelLoopRoundValue > 0 ? modelLoopRoundValue : 0;
-  const normalized = { turnScopeId, dialogProcessId };
-  if (thinkingStartedAt) normalized.thinkingStartedAt = thinkingStartedAt;
-  if (thinkingFinishedAt) normalized.thinkingFinishedAt = thinkingFinishedAt;
-  if (modelLoopRound) normalized.modelLoopRound = modelLoopRound;
-  return normalized;
-}
-
 function normalizeTurnTimingsEntity(turnTimings) {
   const byKey = new Map();
   for (const item of turnTimings) {
-    const normalized = normalizeTurnTimingEntity(item);
-    if (!normalized) continue;
-    const key = normalized.turnScopeId;
-    byKey.set(key, { ...(byKey.get(key) || {}), ...normalized });
+    const normalized = normalizeTurnTimingRecord(item);
+    const existing = byKey.get(normalized.turnScopeId);
+    byKey.set(
+      normalized.turnScopeId,
+      existing ? mergeTurnTimingRecord(existing, normalized) : normalized,
+    );
   }
   return [...byKey.values()];
 }

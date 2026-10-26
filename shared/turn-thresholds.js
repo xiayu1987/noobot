@@ -97,8 +97,6 @@ export const TURN_THRESHOLDS = deepFreeze({
 
   workflow: {
     miniRunnerMaxTurns: 3,
-
-    retryMaxAttempts: 1,
   },
 
   transport: {

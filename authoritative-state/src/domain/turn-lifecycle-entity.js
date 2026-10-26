@@ -11,18 +11,24 @@ import {
   normalizeTurnFailure,
   normalizeCommandReceipts,
   normalizeTurnTerminalStatus,
-  projectTurnTiming,
 } from "@noobot/session-protocol";
 import {
   commitLifecycleTransition,
   decideLifecycleTransitionRequest,
+  integer,
   projectLifecycleTransition,
   resolveLifecycleTransitionRequest,
 } from "./turn-lifecycle-transition.js";
 import { isPlainObject, text as clean } from "@noobot/shared/value";
 
-const integer = (value, fallback = 0) =>
-  Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
+function turnVersion(value, field, turnScopeId) {
+  if (Number.isInteger(value) && value >= 1) return value;
+  throw Object.assign(new TypeError(`turn ${field} must be a positive integer`), {
+    code: "TURN_LIFECYCLE_VERSION_INVALID",
+    turnScopeId,
+    field,
+  });
+}
 
 function normalizeFinalizeIntent(value) {
   if (!isPlainObject(value)) return null;
@@ -54,8 +60,8 @@ function normalizeTurn(value, key) {
     state: clean(value.state),
     phase: clean(value.phase),
     executionState: clean(value.executionState).toLowerCase(),
-    revision: integer(value.revision),
-    sequence: integer(value.sequence),
+    revision: turnVersion(value.revision, "revision", turnScopeId),
+    sequence: turnVersion(value.sequence, "sequence", turnScopeId),
     summaryVersion: integer(value.summaryVersion),
     completionCommitId: clean(value.completionCommitId),
     terminalStatus: normalizeTurnTerminalStatus(value.terminalStatus),
@@ -138,7 +144,7 @@ function rejectionResult(request, decision) {
     result.replacement = request.lifecycle.replacedTurns[request.turnScopeId];
   }
   if (decision.reason === "turn_revision_conflict") {
-    result.currentRevision = Number(request.current?.revision || 0);
+    result.currentRevision = request.current ? request.current.revision : 0;
   }
   if (decision.deduplicated) {
     result.deduplicated = true;
@@ -168,12 +174,4 @@ export function transitionTurnLifecycle(
   const nowValue = now();
   const projection = projectLifecycleTransition(request, transition, nowValue);
   return commitLifecycleTransition(request, projection, decision.requestHash, nowValue);
-}
-
-export function isTerminalTurnLifecycleState(state) {
-  return isTerminalTurnState(state);
-}
-
-export function projectTurnLifecycleTiming(turn = {}, turnTimings = []) {
-  return projectTurnTiming(turn, turnTimings);
 }

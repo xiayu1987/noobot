@@ -30,11 +30,3 @@ export function readTransferEnvelopeList(carrier, field) {
   }
   return value;
 }
-
-export function collectAllTransferEnvelopeLists(sources = [], fields = TRANSFER_ENVELOPE_FIELDS) {
-  const fieldList = Array.isArray(fields) ? fields : [fields];
-  return (Array.isArray(sources) ? sources : [sources]).flatMap((source) => {
-    if (!isPlainObject(source)) return [];
-    return fieldList.flatMap((field) => (Array.isArray(source[field]) ? source[field] : []));
-  });
-}

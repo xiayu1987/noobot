@@ -22,6 +22,7 @@ import { watchRuntimeNodeRebound } from "./workflow-node-session-viewer/runtime-
 import { createLiveProjectionController } from "./workflow-node-session-viewer/live-projection-controller.js";
 import { createNodeSessionOpeningController } from "./workflow-node-session-viewer/node-session-opening.js";
 import { text } from "@noobot/shared/value";
+import { projectSessionMetadata } from "../runtime/workflowUnifiedSessionDetail.js";
 
 export {
   isSameWorkflowDrawerRoute,
@@ -39,39 +40,19 @@ function createViewerRefs(input) {
 }
 
 function createExecutionController({ props, refs, nodeViewTransaction }) {
-  function resolveLocalExecution(executionId = "", sessionIdHint = "") {
-    const detail =
-      typeof props.selectExecutionDetail === "function"
-        ? props.selectExecutionDetail(executionId)
-        : null;
-    return {
-      detail,
-      sessionId: text(detail?.execution?.sessionId || detail?.session?.sessionId || sessionIdHint),
-    };
-  }
-
   function applyExecutionDetail(executionId = "") {
     const id = text(executionId);
-    if (!id || typeof props.selectExecutionDetail !== "function") return false;
+    if (!id) return false;
     const detail = props.selectExecutionDetail(id);
     if (!detail) return false;
-    const execution = detail.execution || {};
-    const session = detail.session || {};
-    const messages = Array.isArray(detail.messages) ? detail.messages : [];
+    const { session } = detail;
     refs.selectedExecutionId.value = id;
     nodeViewTransaction.replace(nodeViewTransaction.ticket(), {
-      sessionId: text(execution.sessionId || session.sessionId),
-      messages,
-      rawMessages: messages,
-      sessionSummary: { ...session, executionId: id, messages },
+      sessionId: session.sessionId,
+      messages: session.messages,
+      sessionMetadata: { ...projectSessionMetadata(session), executionId: id },
     });
     return true;
-  }
-
-  function resolveExecutionSessionId(executionId = "", sessionIdHint = "") {
-    const id = text(executionId);
-    if (!id) return text(sessionIdHint);
-    return resolveLocalExecution(id, sessionIdHint).sessionId;
   }
 
   function selectExecution(executionId = "") {
@@ -81,7 +62,7 @@ function createExecutionController({ props, refs, nodeViewTransaction }) {
     return false;
   }
 
-  return { resolveExecutionSessionId, selectExecution };
+  return { selectExecution };
 }
 
 function createViewerCommands(context) {
@@ -117,7 +98,7 @@ function createViewerCommands(context) {
     });
   }
 
-  function openWorkflowNodePanel(nodeItem = {}) {
+  function openWorkflowNodePanel(nodeItem) {
     refs.selectedRuntimeNode.value = nodeItem;
     refs.selectedRuntimeStep.value = null;
     refs.selectedNode.value = nodeItem;
@@ -126,8 +107,8 @@ function createViewerCommands(context) {
     refs.viewerError.value = "";
     refs.viewerState.value = "idle";
     refs.viewerVisible.value = true;
-    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.nodePanelOpened", {
-      sessionId: text(nodeItem.sessionId || nodeItem.nodeSessionId),
+    props.logWorkflowDiagnostics("frontend.workflowNodeDetail.nodePanelOpened", {
+      nodeSessionId: text(nodeItem.nodeSessionId),
       dialogProcessId: resolveWorkflowDialogProcessId(nodeItem),
       turnScopeId: text(nodeItem.turnScopeId),
       workflowRunId: text(nodeItem.workflowRunId),
@@ -137,9 +118,9 @@ function createViewerCommands(context) {
 
   async function handleRuntimeStepClick(stepItem = {}) {
     const traceId = createWorkflowNodeDetailTraceId();
-    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.stepClicked", {
+    props.logWorkflowDiagnostics("frontend.workflowNodeDetail.stepClicked", {
       traceId,
-      sessionId: text(stepItem.sessionId || stepItem.nodeSessionId),
+      nodeSessionId: text(stepItem.nodeSessionId),
       dialogProcessId: resolveWorkflowDialogProcessId(stepItem),
       turnScopeId: text(stepItem.turnScopeId),
       workflowRunId: text(stepItem.workflowRunId),
@@ -164,18 +145,11 @@ function createViewerCommands(context) {
 }
 
 export function useWorkflowNodeSessionViewer(input) {
-  const {
-    props,
-    emit,
-    translate,
-    workflowPayload,
-    flowNodes,
-    runtimeNodeSessions,
-    applyWorkflowRuntimeEvent,
-  } = input;
+  const { props, emit, translate, flowNodes, runtimeNodeSessions, applyWorkflowRuntimeEvent } =
+    input;
   const refs = createViewerRefs(input);
   const labels = useWorkflowNodeSessionLabels(translate);
-  const history = useWorkflowDrawerHistory({ workflowPayload, flowNodes });
+  const history = useWorkflowDrawerHistory({ flowNodes });
   const snapshotCallbacks = { controller: null };
   const nodeViewTransaction = createWorkflowNodeViewTransaction({
     clearSnapshot: () => snapshotCallbacks.controller.reset(),
@@ -202,7 +176,6 @@ export function useWorkflowNodeSessionViewer(input) {
   });
   const liveProjection = createLiveProjectionController({
     props,
-    workflowPayload,
     runtimeNodeSessions,
     nodeViewTransaction,
     refs,
@@ -211,14 +184,12 @@ export function useWorkflowNodeSessionViewer(input) {
     props,
     emit,
     translate,
-    workflowPayload,
     flowNodes,
     runtimeNodeSessions,
     applyWorkflowRuntimeEvent,
     refs,
     nodeViewTransaction,
     buildWorkflowDrawerRoute: history.buildWorkflowDrawerRoute,
-    resolveExecutionSessionId: execution.resolveExecutionSessionId,
     applyUnifiedSessionDetailIfAvailable: liveProjection.applyAvailable,
     stepHasSession: labels.stepHasSession,
   };

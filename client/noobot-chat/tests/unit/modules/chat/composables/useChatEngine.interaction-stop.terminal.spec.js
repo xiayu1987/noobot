@@ -19,10 +19,12 @@ import {
   TURN_STATE,
 } from "@noobot/session-protocol";
 import {
-  applyTurnRuntimeEvent,
   applyTurnLifecycleSnapshot,
+  applyTurnRuntimeEvent,
+  projectTurnRuntimeView,
   selectSessionTurnRuntime,
   selectTurnMessageRuntime,
+  selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
@@ -189,7 +191,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
     expect(sessions.value[0]).toMatchObject({ sessionId });
     expect(
-      selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId),
+      projectTurnRuntimeView(
+        sessionId,
+        selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId),
+      ),
     ).toMatchObject({
       terminal: "completed",
       sending: false,
@@ -244,7 +249,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       isLocal: true,
     });
     expect(
-      selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId),
+      projectTurnRuntimeView(
+        sessionId,
+        selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId),
+      ),
     ).toMatchObject({
       terminal: "completed",
       sending: false,
@@ -351,7 +359,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       terminalResolved: true,
     });
     expect(
-      selectSessionTurnRuntime(harness.turnRuntimeRegistry.value, sessionId, turnScopeId),
+      projectTurnRuntimeView(
+        sessionId,
+        selectTurnRuntimeByScope(harness.turnRuntimeRegistry.value, sessionId, turnScopeId),
+      ),
     ).toMatchObject({
       terminal: "completed",
       sending: false,

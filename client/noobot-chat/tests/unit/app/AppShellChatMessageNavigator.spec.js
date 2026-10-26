@@ -13,6 +13,7 @@ import AppShellLayout from "../../../src/app/shell/AppShellLayout.vue";
 import AppShellDrawers from "../../../src/app/shell/AppShellDrawers.vue";
 import { openChatMessageNavigator } from "../../../src/app/state/chatMessageNavigatorState.js";
 import { createElementPlusMountOptions } from "../fixtures/elementPlusStubs.js";
+import { createTurnRuntimeRegistryState } from "../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
@@ -95,6 +96,17 @@ describe("AppShell chat message navigator", () => {
           h("div", [
             h(AppShellLayout, {
               isMobile: true,
+              sidebarCollapsed: false,
+              mobileSidebarOpen: false,
+              userId: "",
+              connectCode: "",
+              connecting: false,
+              connected: true,
+              sending: false,
+              loadingSessions: false,
+              sessions: [],
+              activeSessionId: "",
+              turnRuntimeRegistry: createTurnRuntimeRegistryState(),
               chatMessageNavItems: [{ id: "message-1", title: "Message 1" }],
               shouldRenderMessageInChat: () => true,
               authFetch: vi.fn(),
@@ -104,6 +116,8 @@ describe("AppShell chat message navigator", () => {
               isImageMime: () => false,
               deleteMonotonicMessage: vi.fn(),
               resendMonotonicMessage: vi.fn(),
+              stopExecution: vi.fn(),
+              fetchExecutionReport: vi.fn(),
               translate: (key) => key,
               onMobileChatNavigatorTriggerClick: openNavigator,
             }),

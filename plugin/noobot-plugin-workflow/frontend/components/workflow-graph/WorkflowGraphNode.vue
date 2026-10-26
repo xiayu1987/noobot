@@ -6,7 +6,10 @@
 <script setup>
 import WorkflowGraphStatusBadge from "./WorkflowGraphStatusBadge.vue";
 import { useWorkflowLocale } from "../../i18n/index.js";
-import { text } from "@noobot/shared/value";
+import {
+  WORKFLOW_NODE_TYPE,
+  WORKFLOW_STATE_TYPE,
+} from "@noobot/event-protocol/workflow-runtime-event";
 
 defineProps({
   nodeItem: { type: Object, default: () => ({}) },
@@ -14,63 +17,29 @@ defineProps({
   selected: { type: Boolean, default: false },
   styleObj: { type: Object, default: () => ({}) },
   clickable: { type: Boolean, default: true },
-  boundaryType: { type: String, default: "" },
   expanded: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["click"]);
 const { translate } = useWorkflowLocale();
 
-function normalizeText(value = "") {
-  return text(value).toLowerCase();
+const STATE_TYPE_VIEW = Object.freeze({
+  [WORKFLOW_STATE_TYPE.START]: { icon: "▶", labelKey: "workflow.stateStart" },
+  [WORKFLOW_STATE_TYPE.END]: { icon: "●", labelKey: "workflow.stateEnd" },
+  [WORKFLOW_STATE_TYPE.BRANCH]: { icon: "◇", labelKey: "workflow.stateBranch" },
+  [WORKFLOW_STATE_TYPE.MERGE]: { icon: "◆", labelKey: "workflow.stateMerge" },
+});
+
+function isStateNode(nodeItem = {}) {
+  return nodeItem?.type === WORKFLOW_NODE_TYPE.STATE;
 }
 
-function isStartName(value = "") {
-  const normalized = normalizeText(value);
-  if (!normalized) return false;
-  return normalized === "start" || normalized === normalizeText(translate("workflow.stateStart"));
+function isActionNode(nodeItem = {}) {
+  return nodeItem?.type === WORKFLOW_NODE_TYPE.ACTION;
 }
 
-function isEndName(value = "") {
-  const normalized = normalizeText(value);
-  if (!normalized) return false;
-  return normalized === "end" || normalized === normalizeText(translate("workflow.stateEnd"));
-}
-
-function isStateNode(nodeItem = {}, boundaryType = "") {
-  if (boundaryType) return true;
-  const type = text(nodeItem?.type).toLowerCase();
-  if (type === "state") return true;
-  return Number(nodeItem?.nodeType) === 0;
-}
-
-function resolveStateTypeKey(nodeItem = {}, boundaryType = "") {
-  if (boundaryType === "start") return "start";
-  if (boundaryType === "end") return "end";
-  const nodeId = text(nodeItem?.nodeId).toLowerCase();
-  const nodeName = String(nodeItem?.nodeName || "");
-  const stateType = Number(nodeItem?.stateType);
-  if (stateType === 1 || nodeId === "end" || isEndName(nodeName)) return "end";
-  if (stateType === 2) return "branch";
-  if (stateType === 3) return "merge";
-  if (stateType === 0 && (nodeId === "start" || isStartName(nodeName))) {
-    return "start";
-  }
-  return "normal";
-}
-
-function resolveStateTypeLabel(nodeItem = {}, boundaryType = "") {
-  const key = resolveStateTypeKey(nodeItem, boundaryType);
-  if (key === "start") return translate("workflow.stateStart");
-  if (key === "end") return translate("workflow.stateEnd");
-  if (key === "branch") return translate("workflow.stateBranch");
-  if (key === "merge") return translate("workflow.stateMerge");
-  return translate("workflow.stateNormal");
-}
-
-function isActionNode(nodeItem = {}, boundaryType = "") {
-  if (boundaryType) return false;
-  return !isStateNode(nodeItem, boundaryType);
+function hasActionNodeStates(nodeItem = {}) {
+  return isActionNode(nodeItem) && nodeItem.actionNodeStates.length > 0;
 }
 
 function handleClick(nodeItem = {}, clickable = true) {
@@ -83,60 +52,40 @@ function handleClick(nodeItem = {}, clickable = true) {
   <div
     class="workflow-node"
     :class="{
-      'is-running': String(nodeItem?._status || '').trim() === 'running',
+      'is-running': nodeItem.status === 'running',
       'is-selected': selected,
-      'is-boundary': Boolean(boundaryType),
-      'is-state-node': isStateNode(nodeItem, boundaryType),
-      [`state-${resolveStateTypeKey(nodeItem, boundaryType)}`]: isStateNode(nodeItem, boundaryType),
-      [`boundary-${String(boundaryType || '').trim()}`]: Boolean(boundaryType),
+      'is-state-node': isStateNode(nodeItem),
+      [`state-${nodeItem.stateType}`]: isStateNode(nodeItem),
       'is-clickable': clickable,
       'is-expanded': expanded,
     }"
     :style="styleObj"
     @click="handleClick(nodeItem, clickable)"
   >
-    <div v-if="isActionNode(nodeItem, boundaryType)" class="workflow-node-index">
+    <div v-if="isActionNode(nodeItem)" class="workflow-node-index">
       {{ nodeIndex + 1 }}
     </div>
     <div
-      v-else-if="isStateNode(nodeItem, boundaryType)"
+      v-else-if="isStateNode(nodeItem)"
       class="workflow-node-state-icon"
-      :class="`state-icon-${resolveStateTypeKey(nodeItem, boundaryType)}`"
+      :class="`state-icon-${nodeItem.stateType}`"
     >
-      <span v-if="resolveStateTypeKey(nodeItem, boundaryType) === 'start'">▶</span>
-      <span v-else-if="resolveStateTypeKey(nodeItem, boundaryType) === 'end'">●</span>
-      <span v-else-if="resolveStateTypeKey(nodeItem, boundaryType) === 'branch'">◇</span>
-      <span v-else-if="resolveStateTypeKey(nodeItem, boundaryType) === 'merge'">◆</span>
-      <span v-else>•</span>
+      <span>{{ STATE_TYPE_VIEW[nodeItem.stateType].icon }}</span>
     </div>
     <div class="workflow-node-main">
-      <div class="workflow-node-name">
-        {{
-          nodeItem?.nodeName ||
-          nodeItem?.nodeId ||
-          translate("workflow.nodeFallback", { index: nodeIndex + 1 })
-        }}
-      </div>
+      <div class="workflow-node-name">{{ nodeItem.nodeName }}</div>
       <div
-        v-if="!boundaryType && Number(nodeItem?.parallelWave || 0) > 0"
+        v-if="isActionNode(nodeItem) && nodeItem.parallelWave > 0"
         class="workflow-node-parallel"
       >
         {{
           translate("workflow.parallelOrder", {
-            wave: Number(nodeItem?.parallelWave || 0),
-            order: Number(nodeItem?.waveOrder || 0) + 1,
+            wave: nodeItem.parallelWave,
+            order: nodeItem.waveOrder + 1,
           })
         }}
       </div>
-      <div
-        v-if="
-          !boundaryType &&
-          isActionNode(nodeItem, boundaryType) &&
-          Array.isArray(nodeItem?.actionNodeStates) &&
-          nodeItem.actionNodeStates.length
-        "
-        class="workflow-node-runtime-hint"
-      >
+      <div v-if="hasActionNodeStates(nodeItem)" class="workflow-node-runtime-hint">
         {{ translate("workflow.runtimeState") }}
         ·
         {{
@@ -145,21 +94,12 @@ function handleClick(nodeItem = {}, clickable = true) {
           })
         }}
       </div>
-      <div v-if="!boundaryType && isStateNode(nodeItem, boundaryType)" class="workflow-node-kind">
-        {{ resolveStateTypeLabel(nodeItem, boundaryType) }}
+      <div v-if="isStateNode(nodeItem)" class="workflow-node-kind">
+        {{ translate(STATE_TYPE_VIEW[nodeItem.stateType].labelKey) }}
       </div>
     </div>
-    <WorkflowGraphStatusBadge v-if="!boundaryType" :status="nodeItem?._status || 'pending'" />
-    <span
-      v-if="
-        !boundaryType &&
-        isActionNode(nodeItem, boundaryType) &&
-        Array.isArray(nodeItem?.actionNodeStates) &&
-        nodeItem.actionNodeStates.length
-      "
-      class="workflow-node-expand-icon"
-      >↗</span
-    >
+    <WorkflowGraphStatusBadge v-if="isActionNode(nodeItem)" :status="nodeItem.status" />
+    <span v-if="hasActionNodeStates(nodeItem)" class="workflow-node-expand-icon">↗</span>
   </div>
 </template>
 
@@ -194,8 +134,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node.is-state-node.state-start,
-.workflow-node.is-state-node.state-end,
-.workflow-node.is-boundary {
+.workflow-node.is-state-node.state-end {
   border-radius: var(--noobot-radius-pill);
 }
 
@@ -221,39 +160,6 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node.is-expanded {
   z-index: 3;
   border-color: color-mix(in srgb, var(--noobot-accent) 95%, transparent);
-}
-
-.workflow-node.is-boundary {
-  justify-content: center;
-  font-weight: var(--noobot-font-weight-bold);
-  letter-spacing: var(--noobot-letter-spacing-caps);
-  cursor: default;
-}
-
-.workflow-node.boundary-start {
-  background: color-mix(
-    in srgb,
-    var(--noobot-status-success) 12%,
-    var(--noobot-msg-assistant-bg) 88%
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-status-success) 36%,
-    var(--noobot-msg-assistant-border) 64%
-  );
-  border-radius: var(--noobot-radius-pill);
-  clip-path: none;
-}
-
-.workflow-node.boundary-end {
-  background: color-mix(in srgb, var(--noobot-accent) 12%, var(--noobot-msg-assistant-bg) 88%);
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-accent) 40%,
-    var(--noobot-msg-assistant-border) 60%
-  );
-  border-radius: var(--noobot-radius-pill);
-  clip-path: none;
 }
 
 .workflow-node-index,

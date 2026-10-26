@@ -36,7 +36,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const runtimeView = getRuntimeView(messageItem);
     const startedAt = parseAnyTimeMs(runtimeView.startedAt);
-    const finishedAt = parseAnyTimeMs(runtimeView.finishedAt);
+    const finishedAt = parseAnyTimeMs(runtimeView.thinkingFinishedAt);
     const durationMs = resolveThinkingDurationMs({
       messageStartedAt: startedAt,
       messageFinishedAt: finishedAt,
@@ -51,9 +51,9 @@ export function useThinkingRuntime(props, getRuntimeView) {
       messagePending: messageItem?.pending === true,
       runtimeState: runtimeView.state,
       running: runtimeView.running,
-      timingFound: Boolean(runtimeView.startedAt || runtimeView.finishedAt),
-      thinkingStartedAt: runtimeView.startedAt || "",
-      thinkingFinishedAt: runtimeView.finishedAt || "",
+      timingFound: Boolean(runtimeView.thinkingFinishedAt),
+      startedAt: runtimeView.startedAt,
+      thinkingFinishedAt: runtimeView.thinkingFinishedAt,
       startedAtMs: startedAt,
       finishedAtMs: finishedAt,
       nowMs: nowTick.value,
@@ -67,8 +67,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
   }
 
   function getThinkingModelLoopRound(messageItem = {}) {
-    const round = Number(getRuntimeView(messageItem)?.modelLoopRound || 0);
-    return Number.isFinite(round) && round > 0 ? round : 0;
+    return getRuntimeView(messageItem).modelLoopRound;
   }
 
   function startTimer() {

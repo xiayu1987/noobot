@@ -12,64 +12,86 @@ import {
 import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
+  workflowSessionSnapshotEventId,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { text, isFunction, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
 
-function mergeSessionSnapshotBody(session, sessionSummary) {
-  const {
-    sessionId: _sessionId,
-    parentSessionId: _parentSessionId,
-    ...snapshot
-  } = { ...session, ...sessionSummary };
-  return snapshot;
+export const WORKFLOW_ROUTE_ERROR_CODE = Object.freeze({
+  QUERY_INVALID: "WORKFLOW_ROUTE_QUERY_INVALID",
+  QUERY_REQUIRED: "WORKFLOW_ROUTE_QUERY_REQUIRED",
+  REPORT_NOT_FOUND: "WORKFLOW_ROUTE_REPORT_NOT_FOUND",
+});
+
+function routeError(message, statusCode, code) {
+  return Object.assign(new Error(message), { statusCode, code });
+}
+
+function readOptionalQuery(query, name, httpStatus) {
+  if (!Object.hasOwn(query, name)) return "";
+  const value = query[name];
+  if (!isCanonicalText(value)) {
+    throw routeError(
+      `${name} query is invalid`,
+      httpStatus.BAD_REQUEST,
+      WORKFLOW_ROUTE_ERROR_CODE.QUERY_INVALID,
+    );
+  }
+  return value;
+}
+
+function readRequiredQuery(query, name, httpStatus) {
+  const value = readOptionalQuery(query, name, httpStatus);
+  if (!value) {
+    throw routeError(
+      `${name} is required`,
+      httpStatus.BAD_REQUEST,
+      WORKFLOW_ROUTE_ERROR_CODE.QUERY_REQUIRED,
+    );
+  }
+  return value;
 }
 
 function createSessionSnapshotEnvelope({
   authoritySessionId,
   dialogProcessId,
-  aggregateVersion,
-  session,
   sessionSummary,
   meta,
-  childSessionId,
 }) {
   if (!isPlainObject(meta)) {
     throw new Error("workflow session snapshot is missing session metadata");
   }
   const { workflowRunId, nodeExecutionId, turnScopeId, executionId } = meta;
-  const snapshot = mergeSessionSnapshotBody(session, sessionSummary);
+  const {
+    sessionId: nodeSessionId,
+    parentSessionId: _parentSessionId,
+    aggregateVersion,
+    updatedAt,
+    ...snapshot
+  } = sessionSummary;
   return createWorkflowRuntimeEnvelope({
     eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
     authoritySessionId,
     turnScopeId,
     executionId,
-    eventId: `workflow-session-snapshot:${childSessionId}:${aggregateVersion}`,
+    eventId: workflowSessionSnapshotEventId({ nodeSessionId, aggregateVersion }),
     workflowRunId,
     sequence: aggregateVersion,
     aggregateVersion,
-    occurredAt: session.updatedAt,
+    occurredAt: updatedAt,
     producer: { type: "service", id: "workflow-session-read-model" },
     causality: { correlationId: workflowRunId },
     payload: {
       ...snapshot,
       workflowRunId,
       nodeExecutionId,
-      nodeSessionId: childSessionId,
+      nodeSessionId,
       dialogProcessId,
       turnScopeId,
     },
   });
 }
 
-function logDetail({
-  userId = "",
-  sessionId = "",
-  dialogProcessId = "",
-  traceId = "",
-  event = "",
-  level = "debug",
-  data = {},
-} = {}) {
+function logDetail({ userId, sessionId, dialogProcessId, traceId, event, level, data }) {
   return writeRuntimeEvent({
     scope: "session",
     source: "service",
@@ -78,23 +100,24 @@ function logDetail({
     level,
     debugType: "workflow-diagnostics",
     event,
-    userId: text(userId),
-    sessionId: text(sessionId),
-    dialogProcessId: text(dialogProcessId),
-    data: {
-      traceId: text(traceId),
-      ...(data && typeof data === "object" ? data : {}),
-    },
+    userId,
+    sessionId,
+    dialogProcessId,
+    data: { traceId, ...data },
   });
 }
 
 function createThinkingDetailHandler(sessions, httpStatus) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId = text(req.query?.dialogProcessId);
-    const turnScopeId = text(req.query?.turnScopeId);
+    const dialogProcessId = readOptionalQuery(req.query, "dialogProcessId", httpStatus);
+    const turnScopeId = readOptionalQuery(req.query, "turnScopeId", httpStatus);
     if (!dialogProcessId && !turnScopeId) {
-      throw routeError("dialogProcessId or turnScopeId is required", httpStatus.BAD_REQUEST);
+      throw routeError(
+        "dialogProcessId or turnScopeId is required",
+        httpStatus.BAD_REQUEST,
+        WORKFLOW_ROUTE_ERROR_CODE.QUERY_REQUIRED,
+      );
     }
     const detail = await sessions.readThinkingDetail({
       userId,
@@ -105,56 +128,53 @@ function createThinkingDetailHandler(sessions, httpStatus) {
     });
     res.json({
       ok: true,
-      userId: text(userId),
-      rootSessionId: text(sessionId),
-      dialogProcessId: text(routeDialogProcessId),
+      userId,
+      rootSessionId: sessionId,
+      dialogProcessId: routeDialogProcessId,
       ...detail,
     });
   };
 }
 
-function routeError(message, statusCode) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
 function createExecutionReportHandler(sessions, httpStatus) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId = text(req.query?.dialogProcessId);
-    if (!dialogProcessId) {
-      throw routeError("dialogProcessId is required", httpStatus.BAD_REQUEST);
-    }
+    const dialogProcessId = readRequiredQuery(req.query, "dialogProcessId", httpStatus);
     const report = await sessions.readExecutionReport({
       userId,
       segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
       dialogProcessId,
       locale: req.locale,
     });
-    if (!report) throw routeError("execution report not found", httpStatus.NOT_FOUND);
+    if (!report) {
+      throw routeError(
+        "execution report not found",
+        httpStatus.NOT_FOUND,
+        WORKFLOW_ROUTE_ERROR_CODE.REPORT_NOT_FOUND,
+      );
+    }
     res.json({ ok: true, report });
   };
 }
 
-export function createWorkflowServiceRouteHandlers(context = {}) {
-  const sessions = context?.ports?.sessions;
-  const httpStatus = context?.ports?.http?.status;
+export function createWorkflowServiceRouteHandlers(context) {
+  const sessions = context.ports.sessions;
+  const httpStatus = context.ports.http.status;
   if (
-    !sessions ||
+    !isPlainObject(sessions) ||
     !isFunction(sessions.readSnapshot) ||
     !isFunction(sessions.readThinkingDetail) ||
     !isFunction(sessions.readExecutionReport)
   ) {
     throw new Error("workflow service session ports are required");
   }
-  if (!Number.isInteger(httpStatus?.BAD_REQUEST) || !Number.isInteger(httpStatus?.NOT_FOUND)) {
+  if (!Number.isInteger(httpStatus.BAD_REQUEST) || !Number.isInteger(httpStatus.NOT_FOUND)) {
     throw new Error("workflow service http status port is required");
   }
 
   const sessionDetailHandler = async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;
-    const traceId = text(req.query?.traceId);
+    const traceId = readOptionalQuery(req.query, "traceId", httpStatus);
     let snapshot;
     try {
       snapshot = await sessions.readSnapshot({
@@ -170,15 +190,11 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
         traceId,
         event: "service.workflowNodeDetail.snapshotFailed",
         level: "error",
-        data: {
-          errorName: String(error?.name || "Error"),
-          errorMessage: String(error?.message || error || ""),
-          errorCode: String(error?.code || ""),
-        },
+        data: { errorName: error.name, errorMessage: error.message, errorCode: error.code },
       });
       throw error;
     }
-    const { session, sessionSummary, task, executionLogs, meta, childSessionId } = snapshot;
+    const { sessionSummary, executionLogs, meta } = snapshot;
     const aggregateVersion = sessionSummary.aggregateVersion;
     if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
       throw new Error("workflow session snapshot is missing an authoritative aggregateVersion");
@@ -186,11 +202,8 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     const snapshotEnvelope = createSessionSnapshotEnvelope({
       authoritySessionId: sessionId,
       dialogProcessId,
-      aggregateVersion,
-      session,
       sessionSummary,
       meta,
-      childSessionId,
     });
     void logDetail({
       userId,
@@ -198,25 +211,22 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       dialogProcessId,
       traceId,
       event: "service.workflowNodeDetail.snapshotLoaded",
+      level: "debug",
       data: {
-        childSessionId,
-        snapshotSessionId: session.sessionId,
-        summarySessionId: sessionSummary.sessionId,
+        nodeSessionId: sessionSummary.sessionId,
         messageCount: sessionSummary.messages.length,
         executionLogCount: executionLogs.length,
       },
     });
     res.json({
       ok: true,
-      userId: text(userId),
-      sessionId: text(sessionId),
-      dialogProcessId: text(dialogProcessId),
+      userId,
+      sessionId,
+      dialogProcessId,
       workflowSession: {
         aggregateVersion,
         snapshotEnvelope,
-        session,
         sessionSummary,
-        task,
         executionLogs,
         meta,
       },

@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { DSL_DEFAULTS, DSL_PROTOCOL, DSL_TYPES } from "./constants.js";
+import {
+  WORKFLOW_NODE_TYPE,
+  WORKFLOW_STATE_TYPE,
+  isWorkflowNodeType,
+  isWorkflowStateType,
+} from "@noobot/event-protocol/workflow-runtime-event";
+import { DSL_PROTOCOL } from "./constants.js";
 import {
   DSL_ERROR_MESSAGE,
   dslMessage,
@@ -13,7 +19,6 @@ import {
   dslLineError,
   normalizeDslLocale,
 } from "./error-messages.js";
-import { getWorkflowDslDefaultNodeNames } from "../core/i18n.js";
 import { text } from "@noobot/shared/value";
 
 function stripCodeFence(sourceText = "") {
@@ -117,50 +122,12 @@ function parseNodeAttachmentRefs(value = "") {
     .filter(Boolean);
 }
 
-function toStateType(value = "") {
-  const key = text(value).toLowerCase();
-  if (key === "start") return 0;
-  if (key === "end") return 1;
-  if (key === "branch") return 2;
-  if (key === "merge") return 3;
-  if (key === "normal") return 0;
-  const n = Number(value);
-  if (Number.isFinite(n) && n >= 0) return Math.floor(n);
-  return 0;
-}
-
 export function parseWorkflowDslText(inputText = "", options = {}) {
   return parseWorkflowDslTextWithOptions(inputText, options);
 }
 
-function resolveDslDefaultNodeNames(locale = "zh-CN") {
-  return getWorkflowDslDefaultNodeNames(normalizeDslLocale(locale));
-}
-
-function promoteBranchAndMergeStateTypes(semantic) {
-  const outgoingCount = new Map();
-  const incomingCount = new Map();
-  for (const edge of semantic.flowtos) {
-    outgoingCount.set(edge.from, Number(outgoingCount.get(edge.from) || 0) + 1);
-    incomingCount.set(edge.to, Number(incomingCount.get(edge.to) || 0) + 1);
-  }
-  for (const node of semantic.nodes) {
-    if ((text(node?.type) || DSL_TYPES.NODE_STATE).toLowerCase() !== DSL_TYPES.NODE_STATE) {
-      continue;
-    }
-    const id = text(node?.id);
-    if (Number(outgoingCount.get(id) || 0) > 1 && Number(node.stateType) === 0) {
-      node.stateType = 2;
-    }
-    if (Number(incomingCount.get(id) || 0) > 1 && Number(node.stateType) === 1) {
-      node.stateType = 3;
-    }
-  }
-}
-
 function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
   const locale = normalizeDslLocale(options?.locale || "en-US");
-  const { startName, endName } = resolveDslDefaultNodeNames(locale);
   const normalized = stripCodeFence(inputText);
   if (!normalized) {
     throw new Error(dslError(dslMessage(DSL_ERROR_MESSAGE.EMPTY_TEXT, { locale }), { locale }));
@@ -200,19 +167,36 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
     if (head === DSL_PROTOCOL.CMD_NODE) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const id = text(attrs.id);
-      const type = (text(attrs.type) || DSL_TYPES.NODE_STATE).toLowerCase();
-      const name = text(attrs.name) || id;
+      const type = text(attrs.type);
+      const name = text(attrs.name);
       if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.NODE_ID_REQUIRED, { locale }));
+      if (!name) {
+        failWithLocale(
+          lineNo,
+          dslMessage(DSL_ERROR_MESSAGE.NODE_NAME_REQUIRED, { locale, params: { id } }),
+        );
+      }
       if (nodeSet.has(id)) {
         failWithLocale(
           lineNo,
           dslMessage(DSL_ERROR_MESSAGE.NODE_ID_DUPLICATE, { locale, params: { id } }),
         );
       }
-      if (![DSL_TYPES.NODE_STATE, DSL_TYPES.NODE_ACTION].includes(type)) {
+      if (!isWorkflowNodeType(type)) {
         failWithLocale(
           lineNo,
           dslMessage(DSL_ERROR_MESSAGE.NODE_TYPE_INVALID, { locale, params: { type } }),
+        );
+      }
+      const isState = type === WORKFLOW_NODE_TYPE.STATE;
+      const stateType = text(attrs.stateType);
+      if (isState ? !isWorkflowStateType(stateType) : stateType) {
+        failWithLocale(
+          lineNo,
+          dslMessage(DSL_ERROR_MESSAGE.STATE_TYPE_INVALID, {
+            locale,
+            params: { id, stateType },
+          }),
         );
       }
       nodeSet.add(id);
@@ -222,7 +206,7 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
         id,
         name,
         type,
-        stateType: toStateType(attrs.stateType || ""),
+        ...(isState ? { stateType } : {}),
         ...(task ? { task } : {}),
         ...(attachments.length ? { attachments } : {}),
       });
@@ -274,23 +258,12 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
     }
   }
 
-  promoteBranchAndMergeStateTypes(semantic);
-
-  if (!semantic.nodes.some((n) => n.id === DSL_DEFAULTS.START_NODE_ID)) {
-    semantic.nodes.unshift({
-      id: DSL_DEFAULTS.START_NODE_ID,
-      name: startName,
-      type: DSL_TYPES.NODE_STATE,
-      stateType: DSL_DEFAULTS.STATE_TYPE_START,
-    });
-  }
-  if (!semantic.nodes.some((n) => n.id === DSL_DEFAULTS.END_NODE_ID)) {
-    semantic.nodes.push({
-      id: DSL_DEFAULTS.END_NODE_ID,
-      name: endName,
-      type: DSL_TYPES.NODE_STATE,
-      stateType: DSL_DEFAULTS.STATE_TYPE_END,
-    });
+  const countStateType = (stateType) =>
+    semantic.nodes.filter((node) => node.stateType === stateType).length;
+  if (countStateType(WORKFLOW_STATE_TYPE.START) !== 1 || !countStateType(WORKFLOW_STATE_TYPE.END)) {
+    throw new Error(
+      dslError(dslMessage(DSL_ERROR_MESSAGE.BOUNDARY_NODE_INVALID, { locale }), { locale }),
+    );
   }
 
   return semantic;

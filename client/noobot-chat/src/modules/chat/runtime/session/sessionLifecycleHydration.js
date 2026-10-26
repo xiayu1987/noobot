@@ -19,10 +19,6 @@ export function installSessionLifecycleHydration({
   function hydrateSessionLifecycle(sessionItem) {
     const snapshot = sessionItem?.turnLifecycleSnapshot;
     const sessionId = sessionRuntimeId(sessionItem);
-    const timingResult = chatStore.applyTurnTimingSnapshot({
-      sessionId,
-      turnTimings: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings : [],
-    });
     logThinkingReplayDebug("frontend.lifecycle.hydrateStarted", () => ({
       requestedSessionId: text(sessionItem?.sessionId),
       runtimeSessionId: sessionId,
@@ -35,11 +31,6 @@ export function installSessionLifecycleHydration({
       replacedTurnScopeIds: (Array.isArray(snapshot?.replacedTurns) ? snapshot.replacedTurns : [])
         .map((replacement) => text(replacement?.turnScopeId))
         .filter(Boolean),
-      turnTimingsCount: Array.isArray(sessionItem?.turnTimings)
-        ? sessionItem.turnTimings.length
-        : 0,
-      timingSnapshotApplied: timingResult?.applied === true,
-      timingSnapshotReason: timingResult?.reason || "",
     }));
     if (isObjectLike(snapshot)) {
       const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
@@ -91,7 +82,6 @@ export function installSessionLifecycleHydration({
         sessionItem,
         runtimeSessionId: sessionRuntimeId(sessionItem),
         turnLifecycleSnapshot: sessionItem?.turnLifecycleSnapshot,
-        turnTimings: sessionItem?.turnTimings,
         turnScopeIdsSignature: (sessionItem?.messages || [])
           .map(getMessageTurnScopeId)
           .join("\u0000"),

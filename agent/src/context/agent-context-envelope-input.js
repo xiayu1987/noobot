@@ -4,7 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeParentSessionId } from "@noobot/session-protocol";
+export function projectAgentContextIdentity(identity, runConfig) {
+  return {
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    rootSessionId: identity.rootSessionId,
+    parentSessionId: identity.parentSessionId,
+    dialogProcessId: identity.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    runId: runConfig.executionId,
+    presentationMessageId: runConfig.presentationMessageId,
+  };
+}
 
 export function createAgentContextEnvelopeInput({
   identity,
@@ -20,16 +31,7 @@ export function createAgentContextEnvelopeInput({
   userMetaBackwrites,
 }) {
   return {
-    identity: {
-      userId: identity.userId,
-      sessionId: identity.sessionId,
-      rootSessionId: identity.rootSessionId,
-      parentSessionId: normalizeParentSessionId(identity.parentSessionId),
-      dialogProcessId: identity.dialogProcessId,
-      turnScopeId: runConfig.turnScopeId,
-      runId: runConfig.executionId,
-      presentationMessageId: runConfig.presentationMessageId,
-    },
+    identity: projectAgentContextIdentity(identity, runConfig),
     environment: {
       os: {
         platform: staticInfo.platform,

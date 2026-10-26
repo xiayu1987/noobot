@@ -90,8 +90,8 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
   }
   const persistenceScope = system.persistenceScope;
   const committed = await runtime.sessionManager.commitAuthorityEvent({
-    userId: text(system.userId),
-    sessionId: text(system.sessionId),
+    userId: system.userId,
+    sessionId: system.sessionId,
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
     identity: {
       eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,

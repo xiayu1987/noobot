@@ -21,10 +21,7 @@ import {
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
-import {
-  applyTurnTimingUpdate,
-  selectTurnMessageRuntime,
-} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
 
 function channelDelivery(transportEvent) {
@@ -200,12 +197,6 @@ describe("useChatEngine.send-stream", () => {
       const assistant = assistantMessage(activeSession);
       assistant.pending = false;
       assistant.channelState = { state: FrontendRunState.FRONTEND_COMPLETED };
-      applyTurnTimingUpdate(turnRuntimeRegistry.value, {
-        sessionId: "s-late-completed",
-        turnScopeId: payload.identity.turnScopeId,
-        dialogProcessId: "dp-late-completed",
-        startedAt: "2026-07-15T10:00:00.000Z",
-      });
       emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "completed", {
         turnScopeId: payload.identity.turnScopeId,
       });
@@ -226,7 +217,6 @@ describe("useChatEngine.send-stream", () => {
       startedAt: expect.any(String),
       finishedAt: "",
     });
-    expect(runtime.startedAt).not.toBe("2026-07-15T10:00:00.000Z");
   });
 
   it("send carries turnScopeId through backend payload and ignores stale unscoped terminal state", async () => {

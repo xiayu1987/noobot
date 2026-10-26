@@ -22,8 +22,8 @@ export async function prepareTurnInput({ attachmentService, buildContextPayload 
   const userMessageAttachments = await resolveAttachments({
     attachmentService,
     userMessageAttachments: buildContextPayload.userMessageAttachments,
-    userId: buildContextPayload.userId,
-    sessionId: buildContextPayload.sessionId,
+    userId: buildContextPayload.runtimeIdentity.userId,
+    sessionId: buildContextPayload.runtimeIdentity.sessionId,
   });
   return { userMessageAttachments };
 }
@@ -34,8 +34,8 @@ export async function prepareAgentTurnExecution(engine, { buildContextPayload: p
       ? await prepareStoppedSnapshotResumeTurnExecution(engine, { payload })
       : await engine.agentRuntimeFacade.prepareTurnExecution({ buildContextPayload: payload });
   const enrichedAttachments = await enrichUserInputAttachmentsFromIndex(engine.workspaceService, {
-    userId: payload.userId,
-    sessionId: payload.sessionId,
+    userId: payload.runtimeIdentity.userId,
+    sessionId: payload.runtimeIdentity.sessionId,
     attachments: payload.userMessageAttachments,
   });
   return {
@@ -51,9 +51,9 @@ function buildStoppedResumeIdentity(payload) {
     throw new Error("stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId");
   }
   return {
-    userId: payload.userId,
-    sessionId: payload.sessionId,
-    parentSessionId: payload.parentSessionId,
+    userId: payload.runtimeIdentity.userId,
+    sessionId: payload.runtimeIdentity.sessionId,
+    parentSessionId: payload.runtimeIdentity.parentSessionId,
     dialogProcessId: resumeDialogProcessId,
     turnScopeId: resumeTurnScopeId,
   };
@@ -61,8 +61,8 @@ function buildStoppedResumeIdentity(payload) {
 
 async function restoreSnapshotUserAttachmentFacts(engine, payload, messageBlocks) {
   const sessionSource = await engine.session.getSessionContextSource({
-    userId: payload.userId,
-    sessionId: payload.sessionId,
+    userId: payload.runtimeIdentity.userId,
+    sessionId: payload.runtimeIdentity.sessionId,
     persistenceScope: payload.persistenceScope,
   });
   return restoreSnapshotUserAttachmentFactsFromSessionAuthority(
@@ -123,13 +123,15 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, { payloa
   );
   const continuedIncrementalMessages = projectSnapshotIncrementalToContinuation(
     hydratedMessageBlocks.incremental,
-    { dialogProcessId: payload.dialogProcessId, turnScopeId: payload.turnScopeId },
+    {
+      dialogProcessId: payload.runtimeIdentity.dialogProcessId,
+      turnScopeId: payload.runtimeIdentity.turnScopeId,
+    },
   );
   const agentContext = await payload.contextBuilder.buildAgentContext(
     hydratedMessageBlocks.system,
     hydratedMessageBlocks.history,
     {
-      dialogProcessId: payload.dialogProcessId,
       attachments: payload.userMessageAttachments,
       incrementalMessages: continuedIncrementalMessages,
       userMetaBackwrites: snapshot.userMetaBackwrites,

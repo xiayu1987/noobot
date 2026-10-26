@@ -289,7 +289,9 @@ export function createUserInteractionBridge({
           if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
           clearTimeout(requestItem.timer);
           requestItem.state = "rejected";
-          rejectInteraction(new Error(`invalid interaction request: ${validation.reason}`));
+          rejectInteraction(
+            new Error(`invalid interaction request: ${validation.errors.join(",")}`),
+          );
           return;
         }
         void commitInteractionRequest({

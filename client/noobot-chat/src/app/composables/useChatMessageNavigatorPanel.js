@@ -34,8 +34,8 @@ export function useChatMessageNavigatorPanel({
   const presentationMessages = computed(() =>
     selectTurnPresentations({
       activeSession: activeSession?.value || {},
-      workflowRegistry: workflowNodeStateRegistry?.value || workflowNodeStateRegistry || {},
-      turnRuntimeRegistry: turnRuntimeRegistry?.value || turnRuntimeRegistry || {},
+      workflowRegistry: workflowNodeStateRegistry.value,
+      turnRuntimeRegistry: turnRuntimeRegistry.value,
     }),
   );
   const chatMessageNavItems = computed(() =>

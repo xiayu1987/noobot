@@ -33,12 +33,10 @@ test("patch_file: schema path hints only describe the active path view", async (
 
   const superHostTool = createFileTool({
     agentContext: buildAgentContext(basePath, "super-root-user", {
+      identity: { userId: "super-root-user", sessionId: "s-1" },
       runtime: {
         systemRuntime: {
           persistenceScope: null,
-          userId: "super-root-user",
-          sessionId: "s-1",
-          rootSessionId: "s-1",
           isSuperUser: true,
           config: {},
         },
@@ -56,12 +54,10 @@ test("patch_file: schema path hints only describe the active path view", async (
 
   const sandboxTool = createFileTool({
     agentContext: buildAgentContext(basePath, "super-root-user", {
+      identity: { userId: "super-root-user", sessionId: "s-1" },
       runtime: {
         systemRuntime: {
           persistenceScope: null,
-          userId: "super-root-user",
-          sessionId: "s-1",
-          rootSessionId: "s-1",
           isSuperUser: true,
           config: {},
         },
@@ -280,13 +276,11 @@ test("patch_file: 超级管理员也不能使用虚拟 project 路径猜测项�
   await fs.writeFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "one\ntwo\n", "utf8");
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "admin", {
+      identity: { userId: "admin", sessionId: "s-1" },
       runtime: {
         systemRuntime: {
           persistenceScope: null,
           isSuperUser: true,
-          userId: "admin",
-          sessionId: "s-1",
-          rootSessionId: "s-1",
         },
       },
     }),

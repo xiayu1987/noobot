@@ -3,21 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { SESSION_RUN_EVENT } from "./constants.js";
 import { normalizeSessionRunEvent } from "./eventNormalization.js";
 import { isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
 import {
-  canonicalSessionId,
-  canonicalTurnScopeId as turnKey,
   createTurnRuntimeRegistryState,
   ensureSessionBucket,
   executionTurnKey,
   findTurnByScope,
   isTurnRuntimeDeleted,
   resolveTurnRoute as resolveRoute,
-  runtimeText as text,
 } from "./turnRuntimeRegistryIdentity.js";
-import { resolveSessionTurnRuntime } from "./turnRuntimeSelectors.js";
+import { selectCurrentTurnRuntime } from "./turnRuntimeSelectors.js";
 
 function resolveTurnRuntimeConflict({
   current,
@@ -116,7 +115,9 @@ function projectTurn({ current, transition, event, sessionId, turnScopeId }) {
 
 function commitProjectedTurn(registry, turn) {
   const bucket = ensureSessionBucket(registry, turn.sessionId);
-  const sourceScope = turnKey(turn.continuationSource?.turnScopeId);
+  const sourceScope = turn.continuationSource
+    ? requireCanonicalTurnScopeId(turn.continuationSource.turnScopeId)
+    : "";
   if (sourceScope && sourceScope !== turn.turnScopeId) {
     const sourceTurn = bucket.turns[sourceScope];
     if (sourceTurn && sourceTurn.terminal === "user_stopped") {
@@ -125,7 +126,7 @@ function commitProjectedTurn(registry, turn) {
   }
   bucket.turns[turn.turnScopeId] = turn;
   if (!turn.terminal) bucket.activeTurnScopeId = turn.turnScopeId;
-  else if (turnKey(bucket.activeTurnScopeId) === turn.turnScopeId) bucket.activeTurnScopeId = "";
+  else if (bucket.activeTurnScopeId === turn.turnScopeId) bucket.activeTurnScopeId = "";
   if (turn.dialogProcessId) {
     registry.routeIndex[turn.dialogProcessId] = {
       sessionId: turn.sessionId,
@@ -140,7 +141,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   if (!next.routeIndex) next.routeIndex = {};
   const event = normalizeSessionRunEvent(rawEvent);
   const route = resolveRoute(next, event.dialogProcessId);
-  const turnScopeId = turnKey(event.turnScopeId || route?.turnScopeId);
+  const turnScopeId = event.turnScopeId || route?.turnScopeId || "";
   const routedSessionId = text(event.sessionId || route?.sessionId);
   const observe = createObservation({
     registry: next,
@@ -149,7 +150,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     turnScopeId,
   });
   if (!turnScopeId) return observe({ turn: null, applied: false, reason: "missing_turn_identity" });
-  const requestedSessionId = canonicalSessionId(routedSessionId);
+  const requestedSessionId = text(routedSessionId);
   if (isTurnRuntimeDeleted(next, { sessionId: requestedSessionId, turnScopeId })) {
     return observe({
       turn: null,
@@ -170,8 +171,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     ignoresDialogRoute: event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   });
   if (conflictReason) return result({ turn: current, applied: false, reason: conflictReason });
-  const activeScope = text(next.sessions[canonicalSessionId(sessionId)]?.activeTurnScopeId);
-  const activeTurn = resolveSessionTurnRuntime(next, sessionId, activeScope);
+  const activeTurn = selectCurrentTurnRuntime(next, sessionId);
   if (!current && activeTurn && !isFinalTurnState(activeTurn.state, activeTurn)) {
     return result({ turn: activeTurn, applied: false, reason: "active_turn_conflict" });
   }

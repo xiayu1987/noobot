@@ -111,7 +111,7 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
   );
 });
 
-test("SessionMessageService.appendTurns stores thinking timing in turnTimings without message timing", async () => {
+test("SessionMessageService.appendTurns leaves turnTimings to the timing fact writer", async () => {
   const saved = [];
   const session = {
     ...createTestSessionRequiredFields(),
@@ -132,7 +132,13 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
     async findTurnView() {
       return { session, turnScopeIds: [] };
     },
+    async findById() {
+      return session;
+    },
     async saveTurnView(_userId, nextSession) {
+      saved.push(JSON.parse(JSON.stringify(nextSession)));
+    },
+    async save(_userId, nextSession) {
       saved.push(JSON.parse(JSON.stringify(nextSession)));
     },
   };
@@ -153,31 +159,17 @@ test("SessionMessageService.appendTurns stores thinking timing in turnTimings wi
         content: "done",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
-        thinkingStartedAt: "",
-        thinkingFinishedAt: "",
-        turnTimingThinkingStartedAt: "2026-07-08T15:45:58.275Z",
-        turnTimingThinkingFinishedAt: "2026-07-08T15:47:11.710Z",
-        turnTimingModelLoopRound: 6,
       },
     ],
   });
 
   assert.equal(saved.length, 1);
-  assert.equal(saved[0].messages[0].thinkingStartedAt, undefined);
-  assert.equal(saved[0].messages[0].thinkingFinishedAt, undefined);
-  assert.equal(saved[0].messages[0].modelLoopRound, undefined);
-  assert.deepEqual(saved[0].turnTimings, [
-    {
-      turnScopeId: "turn-1",
-      dialogProcessId: "dp-1",
-      thinkingStartedAt: "2026-07-08T15:45:58.275Z",
-      thinkingFinishedAt: "2026-07-08T15:47:11.710Z",
-      modelLoopRound: 6,
-    },
-  ]);
+  assert.equal(Object.hasOwn(saved[0].messages[0], "thinkingStartedAt"), false);
+  assert.equal(Object.hasOwn(saved[0].messages[0], "thinkingFinishedAt"), false);
+  assert.deepEqual(saved[0].turnTimings, []);
 });
 
-test("SessionMessageService.appendTurns keeps existing turn timing when later same-turn appends pass empty timing", async () => {
+test("SessionMessageService.upsertTurnTiming is first-write-wins and rejects conflicting facts", async () => {
   const saved = [];
   const session = {
     ...createTestSessionRequiredFields(),
@@ -198,7 +190,13 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
     async findTurnView() {
       return { session, turnScopeIds: [] };
     },
+    async findById() {
+      return session;
+    },
     async saveTurnView(_userId, nextSession) {
+      saved.push(JSON.parse(JSON.stringify(nextSession)));
+    },
+    async save(_userId, nextSession) {
       saved.push(JSON.parse(JSON.stringify(nextSession)));
     },
   };
@@ -207,53 +205,28 @@ test("SessionMessageService.appendTurns keeps existing turn timing when later sa
     now: () => "2026-06-07T00:00:00.000Z",
   });
 
-  await service.appendTurns({
+  const timing = {
     userId: "u1",
     sessionId: "s1",
-    turns: [
-      {
-        messageUid: "sm_guidance",
-        role: "user",
-        content: "injected guidance",
-        turnScopeId: "turn-1",
-        dialogProcessId: "dp-1",
-        thinkingStartedAt: "",
-        thinkingFinishedAt: "",
-        turnTimingThinkingStartedAt: "2026-07-08T16:29:24.453Z",
-        turnTimingThinkingFinishedAt: "2026-07-08T16:30:44.744Z",
-        injectedMessage: true,
-      },
-    ],
-  });
-  await service.appendTurns({
-    userId: "u1",
-    sessionId: "s1",
-    turns: [
-      {
-        messageUid: "sm_done",
-        role: "assistant",
-        presentationMessageId: "pm_fx3",
-        modelMessageId: "mm_session_message_service__3",
-        content: "done",
-        turnScopeId: "turn-1",
-        dialogProcessId: "dp-1",
-        thinkingStartedAt: "",
-        thinkingFinishedAt: "",
-        turnTimingThinkingStartedAt: "",
-        turnTimingThinkingFinishedAt: "",
-      },
-    ],
-  });
+    turnScopeId: "turn-1",
+    dialogProcessId: "dp-1",
+    thinkingFinishedAt: "2026-07-08T16:30:44.744Z",
+    modelLoopRound: 4,
+  };
 
-  assert.equal(saved.length, 2);
-  assert.equal(saved[1].messages[0].thinkingStartedAt, undefined);
-  assert.equal(saved[1].messages[1].thinkingStartedAt, undefined);
-  assert.deepEqual(saved[1].turnTimings, [
+  assert.equal((await service.upsertTurnTiming(timing)).upserted, true);
+  assert.equal((await service.upsertTurnTiming(timing)).reason, "unchanged");
+  await assert.rejects(
+    service.upsertTurnTiming({ ...timing, thinkingFinishedAt: "2026-07-08T16:31:00.000Z" }),
+    { code: "SESSION_TURN_TIMING_CONFLICT" },
+  );
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0].turnTimings, [
     {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
-      thinkingStartedAt: "2026-07-08T16:29:24.453Z",
       thinkingFinishedAt: "2026-07-08T16:30:44.744Z",
+      modelLoopRound: 4,
     },
   ]);
 });
@@ -280,7 +253,7 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
       {
         turnScopeId: "turn-delete",
         dialogProcessId: "dp-delete",
-        thinkingStartedAt: "2026-07-08T00:00:00.000Z",
+        thinkingFinishedAt: "2026-07-08T00:00:00.500Z",
       },
       {
         turnScopeId: "turn-keep",
@@ -355,7 +328,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
       {
         turnScopeId: "turn-old",
         dialogProcessId: "dp-old",
-        thinkingStartedAt: "2026-07-08T00:00:00.000Z",
+        thinkingFinishedAt: "2026-07-08T00:00:00.500Z",
       },
       {
         turnScopeId: "turn-keep",

@@ -5,7 +5,6 @@
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { ensureHarnessBucket } from "../bucket-utils.js";
-import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { clearAuxiliarySnapshotsForContext } from "../model/auxiliary-snapshot-store.js";
 import { text } from "@noobot/shared/value";
@@ -28,7 +27,7 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
   if (!holder) return false;
   const { bucket, state } = holder;
   const normalizedPoint = text(point).toLowerCase();
-  const dialogProcessId = resolveDialogProcessIdFromContext(ctx);
+  const dialogProcessId = ctx.dialogProcessId;
   const completedIds = Array.isArray(bucket.completedDialogProcessIds)
     ? bucket.completedDialogProcessIds
     : (bucket.completedDialogProcessIds = []);
@@ -67,7 +66,7 @@ export function isHarnessAgentTurnEnded(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const dialogProcessId = resolveDialogProcessIdFromContext(ctx);
+  const dialogProcessId = ctx.dialogProcessId;
   const activeDialogProcessId = text(state?.signals?.activeDialogProcessId);
   const completedIds = Array.isArray(bucket.completedDialogProcessIds)
     ? bucket.completedDialogProcessIds

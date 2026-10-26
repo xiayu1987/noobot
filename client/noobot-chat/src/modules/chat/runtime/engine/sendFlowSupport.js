@@ -5,8 +5,7 @@
  */
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import {
-  resolveSessionTurnRuntime,
-  sessionRuntimeId,
+  selectCurrentTurnRuntime,
   turnRuntimeDisplayState,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { isStageStatusStepState } from "../run-state-machine/statusStep.js";
@@ -22,8 +21,8 @@ export function isEventForCurrentTurn(data = {}, botMessage = {}) {
   return normalizeTrimmedString(data?.turnScopeId) === botTurnScopeId;
 }
 
-export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {
-  const sessionId = sessionRuntimeId(activeSession?.value);
-  const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry }) {
+  const sessionId = normalizeTrimmedString(activeSession.value?.sessionId);
+  const turn = selectCurrentTurnRuntime(turnRuntimeRegistry.value, sessionId);
   return isStageStatusStepState(turnRuntimeDisplayState(turn));
 }

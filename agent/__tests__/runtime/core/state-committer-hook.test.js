@@ -134,7 +134,7 @@ test("state-committer keeps one canonical assistant presentation per Turn", asyn
   const turnMessageStore = createUpdatableTurnStore();
   const runtime = installEmptyMessageEventMaterializer(
     createTestRuntime({
-      systemRuntime: { turnScopeId: "turn-canonical" },
+      identity: { turnScopeId: "turn-canonical" },
       persistCurrentTurnMessages: async () => {},
     }),
   );

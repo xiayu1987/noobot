@@ -5,7 +5,6 @@
  */
 import { normalizeTrimmedString } from "./utils.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
-import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import { enrichPersistedAttachmentsWithDraftMetadata } from "./resendAttachments.js";
 import {
   logResendDebug,
@@ -45,7 +44,6 @@ function applyReplacementProjection({
   sessionId,
   resendTurnScopeId,
   session,
-  replacedTurnScopeIds,
   applySessionDetail,
   activeSession,
 }) {
@@ -53,13 +51,9 @@ function applyReplacementProjection({
   logResendDebug("resend.detail.apply.before", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
-    mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   }));
-  applySessionDetail?.(sessionDetail, {
-    mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-    deletedTurnScopeIds: replacedTurnScopeIds,
-  });
+  applySessionDetail?.(sessionDetail);
 }
 
 function logMaterializationCommitted({
@@ -107,7 +101,6 @@ export async function projectResendReplacement(context) {
     sessionId,
     resendTurnScopeId,
     session,
-    replacedTurnScopeIds,
     applySessionDetail,
     activeSession,
   });

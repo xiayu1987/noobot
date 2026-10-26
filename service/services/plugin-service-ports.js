@@ -112,11 +112,8 @@ function createWorkspaceAssetWriter({ resolveRoot }) {
 
 function createWorkspaceAssetPort({ bot, pluginId }) {
   const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
-  const resolveRoot = (userId) => {
-    const workspacePath = text(bot?.getWorkspacePath?.(userId));
-    if (!workspacePath) throw new Error("workspace path not found");
-    return path.resolve(workspacePath, resolvePluginAssetsRelativePath(normalizedPluginId));
-  };
+  const resolveRoot = (userId) =>
+    path.resolve(bot.getWorkspacePath(userId), resolvePluginAssetsRelativePath(normalizedPluginId));
   const resolveVersionPath = (userId, assetId, version) =>
     path.resolve(
       resolveRoot(userId),
@@ -207,25 +204,26 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
 function createPluginSessionPort({ bot, pluginId, translateText }) {
   const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
   function resolveSessionDir({ userId, segments, locale = "" }) {
-    const notFound = () => new Error(translateText?.("common.notFound", locale) || "not found");
-    const workspacePath = text(bot?.getWorkspacePath?.(userId));
-    if (!workspacePath) throw notFound();
+    const workspacePath = bot.getWorkspacePath(userId);
     let relativeDir;
+    if (!Array.isArray(segments)) throw new TypeError("plugin session segments must be an array");
     try {
       relativeDir = resolvePluginDataRelativePath(
         normalizedPluginId,
-        ...(Array.isArray(segments) ? segments : []).map((item) => text(item)),
+        ...segments.map((item) => text(item)),
       );
-    } catch {
-      throw notFound();
+    } catch (cause) {
+      throw new Error(translateText("common.notFound", locale), { cause });
     }
     return { outputDir: path.resolve(workspacePath, relativeDir) };
   }
   return Object.freeze({
     async readSnapshot({ userId, segments, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
-      const snapshot = await readSessionArtifactSnapshot({ outputDir });
-      return { ...snapshot, childSessionId: snapshot.session.sessionId };
+      const { sessionSummary, executionLogs, meta } = await readSessionArtifactSnapshot({
+        outputDir,
+      });
+      return { sessionSummary, executionLogs, meta };
     },
     async readThinkingDetail({ userId, segments, dialogProcessId, turnScopeId, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
@@ -233,9 +231,7 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
         outputDir,
         includeExecutionLogs: false,
       });
-      const summaryMessage = (
-        Array.isArray(sessionSummary?.messages) ? sessionSummary.messages : []
-      ).find(
+      const summaryMessage = sessionSummary.messages.find(
         (message = {}) =>
           text(message?.turnScopeId) === text(turnScopeId) &&
           (!dialogProcessId || text(message?.dialogProcessId) === String(dialogProcessId).trim()),
@@ -261,7 +257,13 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
   });
 }
 
-export function createPluginServicePorts({ bot = null, translateText = null } = {}) {
+export function createPluginServicePorts({ bot, translateText }) {
+  if (!isFunction(bot?.getWorkspacePath)) {
+    throw new TypeError("createPluginServicePorts requires bot.getWorkspacePath");
+  }
+  if (!isFunction(translateText)) {
+    throw new TypeError("createPluginServicePorts requires translateText");
+  }
   return Object.freeze({
     http: Object.freeze({ status: HTTP_STATUS }),
     workspaceAssets: Object.freeze({

@@ -162,10 +162,7 @@ describe("useChatEngine.resend replace turn", () => {
       }),
       expect.any(Object),
     );
-    expect(applySessionDetail.mock.calls[0][1]).toEqual({
-      mode: "delete-confirmed",
-      deletedTurnScopeIds: ["client-turn:old"],
-    });
+    expect(applySessionDetail.mock.calls[0]).toHaveLength(1);
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(removeWorkflowOwnersForReplacedTurns).toHaveBeenCalledWith({
       parentSessionId: "local-resend-replace-success",

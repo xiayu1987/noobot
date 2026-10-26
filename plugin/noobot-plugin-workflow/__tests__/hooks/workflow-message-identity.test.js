@@ -16,8 +16,8 @@ const options = normalizeOptions({});
 function createCtx() {
   return {
     dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
     runConfig: {
-      turnScopeId: "turn-1",
       commandId: "cmd-1",
       executionId: "exec-1",
       rootExecutionId: "exec-1",
@@ -37,6 +37,8 @@ test("workflow message assigns messageUid and keeps it across phases", async () 
     ctx,
     agentResult,
     semanticText: "plan",
+    workflowPayload: { workflowRunId: "wf-1" },
+    nodeTransferEnvelopes: [],
   });
   assert.ok(planning.messageUid);
   const final = await publishWorkflowFinalMessage({
@@ -44,6 +46,8 @@ test("workflow message assigns messageUid and keeps it across phases", async () 
     ctx,
     agentResult,
     semanticText: "done",
+    workflowPayload: { workflowRunId: "wf-1" },
+    nodeTransferEnvelopes: [],
   });
   assert.equal(final.messageUid, planning.messageUid);
   assert.equal(agentResult.turnMessages.length, 1);
@@ -57,10 +61,19 @@ test("existing workflow message without messageUid is rejected", async () => {
     ctx,
     agentResult,
     semanticText: "plan",
+    workflowPayload: { workflowRunId: "wf-1" },
+    nodeTransferEnvelopes: [],
   });
   delete planning.messageUid;
   await assert.rejects(
-    publishWorkflowFinalMessage({ options, ctx, agentResult, semanticText: "done" }),
+    publishWorkflowFinalMessage({
+      options,
+      ctx,
+      agentResult,
+      semanticText: "done",
+      workflowPayload: { workflowRunId: "wf-1" },
+      nodeTransferEnvelopes: [],
+    }),
     /Existing workflow message requires a messageUid/,
   );
 });

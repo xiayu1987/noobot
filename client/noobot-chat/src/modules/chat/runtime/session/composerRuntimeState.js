@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import {
-  resolveSessionTurnRuntime,
-  selectSessionTurnRuntime,
-} from "../run-state-machine/turnRuntimeRegistry.js";
+import { projectTurnRuntimeView } from "../run-state-machine/turnRuntimeRegistry.js";
 import {
   COMPOSER_PRIMARY_ACTION,
   isSendBlockingStatusStepState,
@@ -19,16 +16,11 @@ import {
   TURN_RUNTIME_TERMINAL,
 } from "../sessionRunStateMachine.js";
 
-export function createComposerRuntimeState({
-  turnRuntimeRegistry,
-  resolveActiveSessionIdentity,
-  resolveActiveTurnScopeIdentity,
-}) {
+export function createComposerRuntimeState({ resolveActiveSessionIdentity, resolveActiveTurn }) {
   const composerActionState = computed(() => {
     const sessionId = resolveActiveSessionIdentity();
-    const turnScopeId = resolveActiveTurnScopeIdentity();
-    const turn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
-    const runtimeView = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
+    const turn = resolveActiveTurn();
+    const runtimeView = projectTurnRuntimeView(sessionId, turn);
     const displayState = runtimeView.displayState;
     const primaryAction = resolveComposerPrimaryAction(turn?.terminal);
     const userStopped = turn?.terminal === TURN_RUNTIME_TERMINAL.USER_STOPPED;
@@ -72,12 +64,7 @@ export function createComposerRuntimeState({
   });
 
   const activeSessionSending = computed(
-    () =>
-      selectSessionTurnRuntime(
-        turnRuntimeRegistry.value,
-        resolveActiveSessionIdentity(),
-        resolveActiveTurnScopeIdentity(),
-      ).sending,
+    () => projectTurnRuntimeView(resolveActiveSessionIdentity(), resolveActiveTurn()).sending,
   );
   const activeSessionCanStop = computed(() => composerActionState.value.canStop === true);
 

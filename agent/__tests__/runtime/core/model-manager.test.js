@@ -24,12 +24,13 @@ function createBoundModelRuntime(producerId) {
   const runtime = createTestRuntimeContext({
     sessionManager: createCanonicalMessageEventSessionManager({ producerId }),
     runConfig: { hookManager: null, executionId: "execution-1", commandId: "command-1" },
-    systemRuntime: {
+    identity: {
       userId: "user-1",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
     },
+    systemRuntime: {},
   });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-1",

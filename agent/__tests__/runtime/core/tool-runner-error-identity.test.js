@@ -6,10 +6,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeToolCall } from "./tool-runner.test-helpers.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 test("recoverable tool errors retain the complete execution identity", async () => {
   const logs = [];
   const result = await executeToolCall({
+    runtime: createTestRuntimeContext({
+      identity: {
+        userId: "user-1",
+        sessionId: "session-1",
+        parentSessionId: "parent-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        caller: SESSION_CALLER.USER,
+      },
+    }),
     call: { id: "call_identity", name: "demo_tool", args: {} },
     tool: {
       invoke: async () => {

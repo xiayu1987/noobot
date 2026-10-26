@@ -7,6 +7,8 @@ import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import { computed, reactive } from "vue";
 import { selectTurnPresentations } from "../../../../../../src/modules/chat/runtime/engine/turnPresentation.js";
+import { createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createWorkflowNodeStateRegistry } from "../../../../../../src/modules/chat/stores/workflowEventOperations.js";
 
 const SESSION_ID = "session-1";
 
@@ -85,6 +87,7 @@ function setup({ withEnvelope = false, terminal = "" } = {}) {
     ],
   });
   const turnRuntimeRegistry = reactive({
+    ...createTurnRuntimeRegistryState(),
     sessions: terminal
       ? { [SESSION_ID]: { turns: { "turn-0": { turnScopeId: "turn-0", terminal } } } }
       : {},
@@ -94,7 +97,7 @@ function setup({ withEnvelope = false, terminal = "" } = {}) {
     runs += 1;
     return selectTurnPresentations({
       activeSession: session,
-      workflowRegistry: {},
+      workflowRegistry: createWorkflowNodeStateRegistry(),
       turnRuntimeRegistry,
     });
   });

@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isCanonicalText, text as clean } from "@noobot/shared/value";
-import {
-  canonicalizeTurnScopeId,
-  isCanonicalTurnScopeId,
-} from "../identity/turn-scope-identity.js";
+import { isCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
 import { TURN_STATE } from "./turn-state.js";
 
 const TURN_STATES = new Set(Object.values(TURN_STATE));
@@ -16,9 +13,8 @@ export function collectTurnScopeIdErrors(
   turnScopeId,
   { missingCode = "missing_turn_scope_id", nonCanonicalCode = "non_canonical_turn_scope_id" } = {},
 ) {
-  if (!canonicalizeTurnScopeId(turnScopeId)) return [missingCode];
-  if (!isCanonicalTurnScopeId(turnScopeId)) return [nonCanonicalCode];
-  return [];
+  if (isCanonicalTurnScopeId(turnScopeId)) return [];
+  return turnScopeId == null || turnScopeId === "" ? [missingCode] : [nonCanonicalCode];
 }
 
 export function collectPositiveIntegerErrors(value, code, { minimum = 1 } = {}) {

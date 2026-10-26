@@ -18,7 +18,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
-import { text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../../helpers/session-message-facts.js";
@@ -127,7 +127,7 @@ export function createRunner({
   appendAgentMessages = async () => [],
   getSessionTurns = async () => [],
   bindSessionTurnAttachments = async () => ({}),
-  assertReusedUserTurnIdentity = async () => ({}),
+  assertReusedUserTurnIdentity = null,
   finalizeRunSession = async () => ({ answer: "ok" }),
   saveExecutionReport = async () => {},
   getExecutionTurnLogs = async () => [],
@@ -201,8 +201,7 @@ export function createRunner({
   const initializeCanonicalRunSessionRuntime = async (payload = {}) => {
     const initialized = await initializeRunSessionRuntime(payload);
     return {
-      ...(initialized || {}),
-      sessionManager: initialized?.sessionManager || sessionManager,
+      ...initialized,
       runtimeEventListener: {
         flush: async () => {},
         ...(initialized?.runtimeEventListener || payload?.eventListener || NOOP_EVENT_LISTENER),
@@ -211,21 +210,8 @@ export function createRunner({
   };
   const prepareCanonicalAgentTurnExecution = async (payload = {}) => {
     const prepared = await prepareAgentTurnExecution(payload);
-    const runtime = prepared.agentContext.bindings.runtime;
-    if (isObjectLike(runtime)) {
-      runtime.sessionManager = runtime.sessionManager || sessionManager;
-      const currentStore = runtime.currentTurnMessages;
-      const isCanonicalStore =
-        isFunction(currentStore?.push) &&
-        isFunction(currentStore?.updateLast) &&
-        isFunction(currentStore?.updateWhere) &&
-        isFunction(currentStore?.toArray);
-      if (!isCanonicalStore) {
-        runtime.currentTurnMessages = createCurrentTurnMessagesStore(
-          typeof currentStore?.toArray === "function" ? currentStore.toArray() : [],
-        );
-      }
-    }
+
+    prepared.agentContext.bindings.runtime.sessionManager = sessionManager;
     return prepared;
   };
   const runCanonicalAgent = async (payload = {}) => {
@@ -288,11 +274,10 @@ export function createRunner({
       userMessage,
     };
   };
-  const assertCanonicalReusedUserMessage = async (payload = {}) => {
-    const result = (await assertReusedUserTurnIdentity(payload)) || {};
-    const accepted = acceptedUserMessages.get(text(payload.turnScopeId));
-    return { ...result, userMessage: result.userMessage || accepted };
-  };
+
+  const assertCanonicalReusedUserMessage =
+    assertReusedUserTurnIdentity ??
+    (async (payload) => ({ userMessage: acceptedUserMessages.get(payload.turnScopeId) }));
   const runner = new SessionExecutionRunner({
     agentRunner: runCanonicalAgent,
     errorLogger: { async log() {} },

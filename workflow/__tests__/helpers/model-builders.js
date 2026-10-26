@@ -11,6 +11,7 @@ import ActionNode from "../../src/design/model/node/action-node.js";
 import CompositeNode from "../../src/design/model/node/composite-node.js";
 import StateNode from "../../src/design/model/node/state-node.js";
 import ENodeType from "../../src/design/model/node/enums/node-type.js";
+import EStateType from "../../src/design/model/node/enums/state-type.js";
 
 function linkFlow(flowName, fromNode, toNode) {
   const flow = new Flowto();
@@ -42,8 +43,8 @@ function createStateNode(name, stateType, model) {
 
 function buildSimpleModel() {
   const model = new Model();
-  const startNode = createStateNode("开始节点", 0, model);
-  const endNode = createStateNode("结束节点", 1, model);
+  const startNode = createStateNode("开始节点", EStateType.Start, model);
+  const endNode = createStateNode("结束节点", EStateType.End, model);
   const flow = linkFlow("开始到结束", startNode, endNode);
 
   model.setNodes([startNode, endNode]);
@@ -54,8 +55,8 @@ function buildSimpleModel() {
 
 function buildActionModel() {
   const model = new Model();
-  const startNode = createStateNode("开始节点", 0, model);
-  const endNode = createStateNode("结束节点", 1, model);
+  const startNode = createStateNode("开始节点", EStateType.Start, model);
+  const endNode = createStateNode("结束节点", EStateType.End, model);
 
   const actionNode = new ActionNode();
   actionNode.setName("审核节点");
@@ -73,15 +74,15 @@ function buildActionModel() {
 
 function buildBranchingActionModel() {
   const model = new Model();
-  const startNode = createStateNode("开始节点", 0, model);
+  const startNode = createStateNode("开始节点", EStateType.Start, model);
 
   const actionNode = new ActionNode();
   actionNode.setName("分支审核节点");
   actionNode.setNodeType(ENodeType.ActionNode);
   actionNode.setModel(model);
 
-  const endNodeA = createStateNode("结束节点A", 1, model);
-  const endNodeB = createStateNode("结束节点B", 1, model);
+  const endNodeA = createStateNode("结束节点A", EStateType.End, model);
+  const endNodeB = createStateNode("结束节点B", EStateType.End, model);
 
   const s2a = linkFlow("开始到分支审核", startNode, actionNode);
   const a2eA = linkFlow("分支到结束A", actionNode, endNodeA);
@@ -102,7 +103,7 @@ function buildBranchingActionModel() {
 
 function buildTwoActionModel() {
   const model = new Model();
-  const startNode = createStateNode("开始节点", 0, model);
+  const startNode = createStateNode("开始节点", EStateType.Start, model);
   const actionNodeA = new ActionNode();
   actionNodeA.setName("审核A");
   actionNodeA.setNodeType(ENodeType.ActionNode);
@@ -113,7 +114,7 @@ function buildTwoActionModel() {
   actionNodeB.setNodeType(ENodeType.ActionNode);
   actionNodeB.setModel(model);
 
-  const endNode = createStateNode("结束节点", 1, model);
+  const endNode = createStateNode("结束节点", EStateType.End, model);
 
   const s2a = linkFlow("开始到审核A", startNode, actionNodeA);
   const a2b = linkFlow("审核A到审核B", actionNodeA, actionNodeB);
@@ -134,8 +135,8 @@ function buildTwoActionModel() {
 
 function buildThreeActionModel() {
   const model = new Model();
-  const startNode = createStateNode("开始节点", 0, model);
-  const endNode = createStateNode("结束节点", 1, model);
+  const startNode = createStateNode("开始节点", EStateType.Start, model);
+  const endNode = createStateNode("结束节点", EStateType.End, model);
 
   const actionNodeA = new ActionNode();
   actionNodeA.setName("审核A");
@@ -174,8 +175,8 @@ function buildThreeActionModel() {
 
 function buildParallelActionModel() {
   const model = new Model();
-  const startParallelNode = createStateNode("并发开始节点", 2, model);
-  const endParallelNode = createStateNode("并发结束节点", 3, model);
+  const startParallelNode = createStateNode("并发开始节点", EStateType.Branch, model);
+  const endParallelNode = createStateNode("并发结束节点", EStateType.Merge, model);
 
   const actionNodeA = new ActionNode();
   actionNodeA.setName("并发审核A");
@@ -209,8 +210,8 @@ function buildParallelActionModel() {
 
 function buildParentChildCompositeModel() {
   const model = new Model();
-  const parentStartNode = createStateNode("主流程开始", 0, model);
-  const parentEndNode = createStateNode("主流程结束", 1, model);
+  const parentStartNode = createStateNode("主流程开始", EStateType.Start, model);
+  const parentEndNode = createStateNode("主流程结束", EStateType.End, model);
 
   const compositeNode = new CompositeNode();
   compositeNode.setName("子流程节点");
@@ -227,13 +228,13 @@ function buildParentChildCompositeModel() {
   const childStartNode = new StateNode();
   childStartNode.setName("子流程开始");
   childStartNode.setNodeType(ENodeType.StateNode);
-  childStartNode.setStateType(0);
+  childStartNode.setStateType(EStateType.Start);
   childStartNode.setModel(compositeNode);
 
   const childEndNode = new StateNode();
   childEndNode.setName("子流程结束");
   childEndNode.setNodeType(ENodeType.StateNode);
-  childEndNode.setStateType(1);
+  childEndNode.setStateType(EStateType.End);
   childEndNode.setModel(compositeNode);
 
   const childFlow = linkFlow("子流程开始到结束", childStartNode, childEndNode);

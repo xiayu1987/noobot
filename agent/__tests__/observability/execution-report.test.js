@@ -11,6 +11,11 @@ import { EXECUTION_REPORT_STATUS } from "@noobot/session-protocol/execution-repo
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 import { handleSessionRunFailure } from "../../src/bot/execution/runner/run-failure.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import {
+  HOOK_POINT,
+  HOOK_RUNTIME_IDENTITY_FIELDS,
+  createHookRuntimeIdentity,
+} from "@noobot/hook-protocol";
 
 function createFinalizer(session) {
   return new SessionExecutionFinalizer({
@@ -86,9 +91,8 @@ function failureContext(overrides = {}) {
       persistStoppedSnapshotFromRuntime: async () => ({ status: "skipped" }),
       resolvedRuntimeEventListener: null,
       resolvedRunConfig: { thinkingStartedAt: "2026-01-01T00:00:00.000Z" },
-      preparedBotHookManager: null,
-      resolvedUsedSessionId: "s1",
-      resolvedDialogProcessId: "dp1",
+      preparedBotHook: null,
+      initializedSession: { sessionId: "s1", dialogProcessId: "dp1" },
       errorLogger: { async log() {} },
       now: () => "2026-01-01T00:00:03.000Z",
       userId: "u1",
@@ -133,7 +137,7 @@ for (const [label, overrides, expectedStatus] of [
 }
 
 test("handleSessionRunFailure writes no report before the turn identity exists", async () => {
-  const { saved, context } = failureContext({ resolvedDialogProcessId: "" });
+  const { saved, context } = failureContext({ initializedSession: null });
   await assert.rejects(handleSessionRunFailure(context), /boom/);
   assert.equal(saved.length, 0);
 });
@@ -177,4 +181,37 @@ test("handleSessionRunFailure aggregates report write failures with the run fail
     assert.ok(errors.some((entry) => /report disk/.test(entry?.message)));
     return true;
   });
+});
+
+test("handleSessionRunFailure emits session_run_error only with the initialized protocol identity", async () => {
+  const emitted = [];
+  const identity = createHookRuntimeIdentity({
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn-1",
+    caller: SESSION_CALLER.USER,
+  });
+  const manager = {
+    on() {},
+    async emit(point, context) {
+      emitted.push({ point, context });
+      return { failures: [], outcomes: [] };
+    },
+  };
+  const { context } = failureContext({ preparedBotHook: { manager, identity } });
+  await assert.rejects(handleSessionRunFailure(context), /boom/);
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0].point, HOOK_POINT.BOT.SESSION_RUN_ERROR);
+  for (const field of HOOK_RUNTIME_IDENTITY_FIELDS) {
+    assert.equal(emitted[0].context[field], identity[field]);
+  }
+});
+
+test("handleSessionRunFailure rejects undeclared initialization state instead of guessing", async () => {
+  for (const overrides of [{ preparedBotHook: undefined }, { initializedSession: undefined }]) {
+    const { context } = failureContext(overrides);
+    await assert.rejects(handleSessionRunFailure(context), /must be null or/);
+  }
 });

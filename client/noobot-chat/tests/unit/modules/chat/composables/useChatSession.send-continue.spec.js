@@ -56,6 +56,7 @@ function settleStopped(store, session) {
       resolved: true,
       aggregateVersion: Number(session.aggregateVersion || 0),
       turn: {
+        continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
         dialogProcessId: assistant.dialogProcessId,

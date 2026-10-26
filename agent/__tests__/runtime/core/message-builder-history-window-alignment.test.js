@@ -60,7 +60,7 @@ function expectedDefaultHistoryContents() {
 test("buildContextMessages keeps explicit history dialog groups in natural order", () => {
   const messages = buildContextMessages(
     createMessageBuilderScope({
-      runtime: { systemRuntime: { dialogProcessId: "dlg_current" } },
+      runtime: { identity: { dialogProcessId: "dlg_current" } },
       history: sessionContextHistory([
         {
           role: "user",

@@ -18,8 +18,8 @@ import { text } from "@noobot/shared/value";
 
 export { resolveKeptAttachments } from "./resendAttachments.js";
 
-function resolveSessionId(activeSession, activeSessionId) {
-  return normalizeTrimmedString(activeSession?.value?.sessionId || activeSessionId?.value);
+function resolveSessionId(activeSessionId) {
+  return normalizeTrimmedString(activeSessionId.value);
 }
 
 function operationSeed({ sessionId, turnScopeId }) {
@@ -34,20 +34,6 @@ function operationSeed({ sessionId, turnScopeId }) {
 function ownsMessageOperation(messageOperationStore, operation = null) {
   if (!operation || typeof messageOperationStore?.getActiveOperation !== "function") return true;
   return messageOperationStore.getActiveOperation(operation.sessionId)?.opId === operation.opId;
-}
-
-function finalizePendingResendOperationFor({
-  activeSession,
-  activeSessionId,
-  messageOperationStore,
-}) {
-  const sessionId = resolveSessionId(activeSession, activeSessionId);
-  const operation =
-    messageOperationStore?.getActiveOperation(sessionId, "resend") ||
-    messageOperationStore?.getLatestOperation("resend");
-  if (!operation) return false;
-  messageOperationStore?.completeOperation(operation.opId);
-  return true;
 }
 
 function createTurnScopeId() {
@@ -70,9 +56,7 @@ export function createResendMessageTransaction({
   userId,
   turnRuntimeRegistry,
   removeWorkflowOwnersForReplacedTurns,
-} = {}) {
-  const finalizePendingResendOperation = () =>
-    finalizePendingResendOperationFor({ activeSession, activeSessionId, messageOperationStore });
+}) {
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     log: (event, payload) =>
@@ -96,7 +80,7 @@ export function createResendMessageTransaction({
     if (!userTargetMessage) return false;
     const originalSession = activeSession?.value;
     const originalInputValue = input?.value;
-    const sessionId = resolveSessionId(activeSession, activeSessionId);
+    const sessionId = resolveSessionId(activeSessionId);
     const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
     const operation = messageOperationStore?.registerOperation(
       operationSeed({
@@ -182,7 +166,6 @@ export function createResendMessageTransaction({
   }
 
   return {
-    finalizePendingResendOperation,
     resendMonotonicMessage,
   };
 }

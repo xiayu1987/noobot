@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function useWorkflowMeta(props) {
   const workflowMeta = computed(() =>
@@ -22,11 +22,7 @@ export function useWorkflowMeta(props) {
   );
 
   const semanticPreview = computed(() =>
-    String(
-      workflowMeta.value?.semanticTextPreview ||
-        workflowPayload.value?.interaction?.semanticTextPreview ||
-        "",
-    ).trim(),
+    text(workflowPayload.value?.interaction?.semanticTextPreview),
   );
 
   const semanticPreviewLineCount = computed(

@@ -7,7 +7,10 @@ import { randomUUID } from "node:crypto";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
-import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
+import {
+  commitTurnLifecycle,
+  selectAuthoritativeActiveTurn,
+} from "@noobot/authoritative-state/application";
 import {
   SESSION_ERROR_CODE,
   assertTurnAcceptanceUserMessage,
@@ -207,21 +210,23 @@ export async function getTurnLifecycleSnapshot({
   userId,
   sessionId,
   persistenceContext,
-  commandId = "",
+  commandId,
   knownSequence,
   terminalLimit,
-} = {}) {
+  resolveRecovery,
+}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
   const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
   if (!session) return { found: false, reason: SESSION_NOT_FOUND_REASON };
+  const recovery = await resolveRecovery(selectAuthoritativeActiveTurn(session.turnLifecycle));
   return {
     found: true,
     snapshot: createSessionTurnLifecycleSnapshot({
       session,
       commandId,
-      userId,
       knownSequence,
       terminalLimit,
+      recovery,
       generatedAt: this.now(),
     }),
   };
@@ -407,7 +412,6 @@ export async function upsertTurnTiming({
   persistenceContext,
   turnScopeId = "",
   dialogProcessId = "",
-  thinkingStartedAt = "",
   thinkingFinishedAt = "",
   modelLoopRound = 0,
 } = {}) {
@@ -422,7 +426,6 @@ export async function upsertTurnTiming({
       upsertSessionTurnTiming(session, {
         turnScopeId,
         dialogProcessId,
-        thinkingStartedAt,
         thinkingFinishedAt,
         modelLoopRound,
       });

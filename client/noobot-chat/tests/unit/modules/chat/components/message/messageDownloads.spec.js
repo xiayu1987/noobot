@@ -38,6 +38,8 @@ async function mountMessage(content, attachments = [attachment], userId = "admin
       formatTime: String,
       formatFileSize: String,
       isImageMime: () => false,
+      stopExecution: async () => true,
+      fetchExecutionReport: async () => null,
     },
     global: { plugins: [createPinia()], ...createElementPlusMountOptions({ "el-dialog": true }) },
   });

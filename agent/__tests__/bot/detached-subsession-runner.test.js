@@ -49,7 +49,7 @@ test("detached sub-session delegates execution and persistence to the main runne
     message: "hello",
     attachments: [{ name: "a.txt" }],
     systemMessageFactory: () => ["system"],
-    runConfigPatch: { turnScopeId: "turn-1", extra: true },
+    runConfigPatch: { extra: true },
     eventListener: {
       onEvent: (event) => events.push(event),
       forwardEvent: (event) => events.push(event),
@@ -442,7 +442,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope(),
     message: "hello",
-    runConfigPatch: { turnScopeId: "turn-persisted" },
+    runConfigPatch: {},
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy({
       sessionId: "sub-persisted",
@@ -548,7 +548,6 @@ test("detached sub-session does not inherit parent turn transaction identity", a
       },
     }),
     runConfigPatch: {
-      turnScopeId: "child-turn",
       workflowRunId: "workflow-run-1",
       workflowNodeExecutionId: "node-execution-1",
       presentationMessageId: "root-presentation-message-from-patch",
@@ -577,7 +576,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(runConfig.streaming, true);
   assert.equal(runConfig.workflowRunId, "workflow-run-1");
   assert.equal(runConfig.workflowNodeExecutionId, "node-execution-1");
-  assert.equal(runConfig.turnScopeId, "child-turn");
+  assert.equal(Object.hasOwn(runConfig, "turnScopeId"), false);
   assert.equal(runConfig.executionId, "agent:child-turn");
   assert.deepEqual(runConfig.selectedPlugins, ["harness", "workflow"]);
   assert.equal(calls.mergePayload.baseRunConfig.expectedAggregateVersion, undefined);

@@ -11,7 +11,9 @@ import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   applyTurnRuntimeEvent,
+  projectTurnRuntimeView,
   selectSessionTurnRuntime,
+  selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { mapSummaryToSession } from "../../../../../src/modules/session/model/list/sessionRecords.js";
 import {
@@ -98,7 +100,10 @@ describe("useChatSession summary and reconnect state", () => {
     );
 
     expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-snapshot", "t-snapshot"),
+      projectTurnRuntimeView(
+        "s-snapshot",
+        selectTurnRuntimeByScope(store.turnRuntimeRegistry, "s-snapshot", "t-snapshot"),
+      ),
     ).toMatchObject({
       sending: false,
       displayState: "",
@@ -165,7 +170,10 @@ describe("useChatSession summary and reconnect state", () => {
     );
 
     expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, sessionId, turnScopeId),
+      projectTurnRuntimeView(
+        sessionId,
+        selectTurnRuntimeByScope(store.turnRuntimeRegistry, sessionId, turnScopeId),
+      ),
     ).toMatchObject({
       sending: false,
       canStop: false,
@@ -296,7 +304,10 @@ describe("useChatSession summary and reconnect state", () => {
       "2026-07-24T05:42:07.698Z",
     );
     expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, sessionId, turnScopeId),
+      projectTurnRuntimeView(
+        sessionId,
+        selectTurnRuntimeByScope(store.turnRuntimeRegistry, sessionId, turnScopeId),
+      ),
     ).toMatchObject({
       sending: false,
       displayState: "",
@@ -454,7 +465,10 @@ describe("useChatSession summary and reconnect state", () => {
       0,
     );
     expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race"),
+      projectTurnRuntimeView(
+        "s-detail-race",
+        selectTurnRuntimeByScope(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race"),
+      ),
     ).toMatchObject({
       sending: false,
       canStop: false,
@@ -474,7 +488,10 @@ describe("useChatSession summary and reconnect state", () => {
       0,
     );
     expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race"),
+      projectTurnRuntimeView(
+        "s-detail-race",
+        selectTurnRuntimeByScope(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race"),
+      ),
     ).toMatchObject({
       sending: false,
       canStop: false,
@@ -525,8 +542,10 @@ describe("useChatSession summary and reconnect state", () => {
     await session.handleReconnect();
     await nextTick();
     expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId)
-        .terminal,
+      projectTurnRuntimeView(
+        "s-processing-race",
+        selectTurnRuntimeByScope(store.turnRuntimeRegistry, "s-processing-race", turnScopeId),
+      ).terminal,
     ).toBeNull();
     expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(
       0,
@@ -539,7 +558,10 @@ describe("useChatSession summary and reconnect state", () => {
       0,
     );
     expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId),
+      projectTurnRuntimeView(
+        "s-processing-race",
+        selectTurnRuntimeByScope(store.turnRuntimeRegistry, "s-processing-race", turnScopeId),
+      ),
     ).toMatchObject({
       terminal: null,
     });

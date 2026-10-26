@@ -27,9 +27,6 @@ const LENGTH_TIERS = deepFreeze({
     shortTrace: 1000,
     harnessPreview: 1200,
     sessionSummaryArrayItem: 500,
-    sessionSummarySmallJsonString: 500,
-    sessionSummaryDefaultJsonString: 2000,
-    sessionSummaryText: 4000,
     memoryParserCandidatePreview: 2000,
   },
   contextPreviewChars: {
@@ -51,6 +48,7 @@ const LENGTH_TIERS = deepFreeze({
     connectorCommandFile: 256 * KiB,
     nativeScriptResult: 256 * KiB,
     nativeScriptSource: 100 * KiB,
+    pluginMessagePayload: 256 * KiB,
     clientNonImagePreview: 1 * MiB,
     jsonlBuffer: 5 * MiB,
     directText: 8 * MiB,
@@ -158,6 +156,10 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     wrappedPayloadStringChars: LENGTH_TIERS.chars.wrappedPayload,
   },
 
+  pluginMessage: {
+    payloadBytes: LENGTH_TIERS.bytes.pluginMessagePayload,
+  },
+
   sessionLog: {
     maxPayloadBytes: LENGTH_TIERS.bytes.connectorCommandFile,
   },
@@ -184,18 +186,13 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     mcpTaskResultPreviewChars: LENGTH_TIERS.displayChars.shortTrace,
     harnessPreviewChars: LENGTH_TIERS.displayChars.harnessPreview,
 
-    sessionSummaryTextChars: LENGTH_TIERS.displayChars.sessionSummaryText,
-    sessionSummaryObjectFieldChars: LENGTH_TIERS.displayChars.shortTrace,
     sessionSummaryArrayItemChars: LENGTH_TIERS.displayChars.sessionSummaryArrayItem,
-    sessionSummaryDefaultJsonStringChars: LENGTH_TIERS.displayChars.sessionSummaryDefaultJsonString,
-    sessionSummarySmallJsonStringChars: LENGTH_TIERS.displayChars.sessionSummarySmallJsonString,
   },
 
   contextPreview: {
     planningCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
     planningContextGoalChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
     workflowCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
-    workflowPayloadPreviewChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
     workflowResultTextChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
     workflowSemanticTextPreviewChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
     harnessDynamicPolicyPromptChars: LENGTH_TIERS.contextPreviewChars.dynamicPolicyPrompt,

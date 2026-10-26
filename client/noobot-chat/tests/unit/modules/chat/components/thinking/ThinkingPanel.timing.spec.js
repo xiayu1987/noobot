@@ -21,6 +21,7 @@ function runtime(overrides = {}) {
     phase: "idle",
     startedAt: "",
     finishedAt: "",
+    thinkingFinishedAt: "",
     ...overrides,
   };
 }
@@ -60,7 +61,7 @@ describe("ThinkingPanel runtime timing", () => {
         terminal: true,
         phase: "completed",
         startedAt: "2026-06-22T10:00:00.000Z",
-        finishedAt: "2026-06-22T10:00:15.000Z",
+        thinkingFinishedAt: "2026-06-22T10:00:15.000Z",
       }),
     });
     expect(wrapper.text()).toContain("00:15");
@@ -77,7 +78,7 @@ describe("ThinkingPanel runtime timing", () => {
         runtime: runtime({
           terminal: true,
           startedAt: "2026-07-24T10:00:00.000Z",
-          finishedAt: "2026-07-24T10:00:12.000Z",
+          thinkingFinishedAt: "2026-07-24T10:00:12.000Z",
         }),
       },
     );
@@ -92,7 +93,7 @@ describe("ThinkingPanel runtime timing", () => {
         terminal: true,
         phase: "completed",
         startedAt: "2026-07-24T10:00:00.000Z",
-        finishedAt: "2026-07-24T10:00:12.000Z",
+        thinkingFinishedAt: "2026-07-24T10:00:12.000Z",
       }),
     });
 
@@ -116,7 +117,7 @@ describe("ThinkingPanel runtime timing", () => {
         terminal: true,
         phase: "completed",
         startedAt: "2026-06-22T10:00:00.000Z",
-        finishedAt: "2026-06-22T10:00:07.000Z",
+        thinkingFinishedAt: "2026-06-22T10:00:07.000Z",
       }),
     });
     await nextTick();
@@ -229,7 +230,7 @@ describe("ThinkingPanel runtime timing", () => {
           terminal: true,
           phase: "completed",
           startedAt: "2026-06-22T10:00:05.000Z",
-          finishedAt: "2026-06-22T10:00:12.000Z",
+          thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
         }),
       },
     );
@@ -241,14 +242,14 @@ describe("ThinkingPanel runtime timing", () => {
     const wrapper = mountThinkingPanel(
       thinkingMessage({
         sessionId: "workflow-child-session",
-        turnScopeId: "workflow-node_client-turn_a1",
+        turnScopeId: "workflow-node:client-turn_a1",
       }),
       {
         runtime: runtime({
           terminal: true,
           phase: "completed",
           startedAt: "2026-06-22T10:00:05.000Z",
-          finishedAt: "2026-06-22T10:00:12.000Z",
+          thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
         }),
       },
     );

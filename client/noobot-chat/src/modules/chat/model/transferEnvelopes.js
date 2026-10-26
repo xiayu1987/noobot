@@ -3,39 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  collectAllTransferEnvelopeLists,
-  getTransferAttachmentReferences as getCanonicalTransferAttachmentReferences,
-  mergeTransferEnvelopes,
-  normalizeTransferEnvelopes as normalizeCanonicalTransferEnvelopes,
-} from "@noobot/semantic-transfer-protocol";
-
-function normalizeTransferEnvelopes(value = null) {
-  return normalizeCanonicalTransferEnvelopes(value);
-}
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 function getMessageTransferEnvelopes(messageItem = {}) {
-  const pluginPayload = messageItem?.pluginMeta?.payload;
-  return mergeTransferEnvelopes(
-    ...collectAllTransferEnvelopeLists([
-      messageItem,
-      messageItem?.payload,
-      pluginPayload,
-      ...(pluginPayload?.execution?.nodeAgentRuns || []),
-      ...(pluginPayload?.nodeSessions || []),
-    ]),
-  );
+  return mergeTransferEnvelopes(messageItem.transferEnvelopes);
 }
 
-function getTransferAttachmentReferences(value = null) {
-  return getCanonicalTransferAttachmentReferences(value);
-}
-
-function getTransferAttachments(value = null) {
-  const envelopes = Array.isArray(value)
-    ? normalizeTransferEnvelopes(value)
-    : getMessageTransferEnvelopes(value);
-  return envelopes.flatMap((envelope) => {
+function getTransferAttachments(envelopes = []) {
+  return mergeTransferEnvelopes(envelopes).flatMap((envelope) => {
     if (envelope.payload.mode !== "attachment") return [];
     return envelope.payload.attachments.map((reference) => ({
       ...reference,
@@ -58,11 +33,4 @@ function getMessageTransferAttachments(messageItem = {}) {
   return getTransferAttachments(getMessageTransferEnvelopes(messageItem));
 }
 
-export {
-  getMessageTransferAttachments,
-  getMessageTransferEnvelopes,
-  getTransferAttachments,
-  getTransferAttachmentReferences,
-  mergeTransferEnvelopes,
-  normalizeTransferEnvelopes,
-};
+export { getMessageTransferAttachments, getMessageTransferEnvelopes };

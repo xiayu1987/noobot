@@ -53,8 +53,16 @@ export function createChatSession(options = {}) {
     apiKey: ref(""),
     allowUserInteraction: ref(true),
     safeConfirm: ref(true),
+    safeConfirmLevel: ref("low"),
+    sanitizeOutput: ref(true),
     streamOutput: ref(true),
     botScenario: ref(""),
+    selectedModel: ref(""),
+    memoryModel: ref(""),
+    pluginModelConfig: ref({}),
+    frontendThresholdsEnabled: ref(false),
+    summaryPolicy: ref({}),
+    selectedPlugins: ref([]),
     connected: ref(true),
     ensureConnected: vi.fn(() => true),
     authFetch: null,
@@ -67,7 +75,7 @@ export function createChatSession(options = {}) {
 }
 
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
-  useLocale: () => ({ translate: (key) => key }),
+  useLocale: () => ({ translate: (key) => key, locale: { value: "zh-CN" } }),
 }));
 vi.mock("../../../../../src/infrastructure/websocket/chatWebSocketClient", () => ({
   createChatWebSocketClient: () => wsClientMock,

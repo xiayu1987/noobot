@@ -13,8 +13,6 @@ export function tryAutoResolveReconnectInteraction({
   const request = normalizeInteractionRequestPayload?.(rawRequest || {}) || rawRequest || {};
   if (!isAutoResolvedInteraction?.(request)) return false;
   clearPendingInteraction?.(request);
-  if (interactionSubmitting?.value !== undefined) {
-    interactionSubmitting.value = false;
-  }
+  interactionSubmitting.value = false;
   return true;
 }

@@ -21,17 +21,16 @@ function createInput(overrides = {}) {
     abortSignal: null,
     persistenceContext: null,
     contextMode: "conversation",
-    userId: "u1",
-    sessionId: "s1",
-    parentSessionId: "",
-    dialogProcessId: "dp1",
-    parentDialogProcessId: "",
-    turnScopeId: "t1",
-    caller: SESSION_CALLER.USER,
+    runtimeIdentity: {
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "",
+      dialogProcessId: "dp1",
+      turnScopeId: "t1",
+      caller: SESSION_CALLER.USER,
+    },
     userConfig: {},
     resolvedRunConfig: {},
-    requestRunConfig: {},
-    scenarioResolvedRunConfig: {},
     ...overrides,
   };
 }
@@ -144,7 +143,7 @@ test("accepted user message binds canonical attachments before Context construct
   assert.deepEqual(result.currentUserMessage, bound);
   assert.deepEqual(result.buildContextPayload.currentUserMessage, bound);
   assert.deepEqual(result.buildContextPayload.userMessageAttachments, [attachment]);
-  assert.equal(result.buildContextPayload.turnScopeId, "t1");
+  assert.equal(result.buildContextPayload.runtimeIdentity.turnScopeId, "t1");
 });
 
 test("reused user turn canonicalizes attachments once before Context construction", async () => {

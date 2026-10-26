@@ -100,11 +100,13 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [],
-        systemRuntime: {
+        identity: {
           sessionId: "1b086a73-8617-4ca0-b0df-e1b741cc33b9",
           dialogProcessId: "dlg-current-71ad4373-replay",
-          parentDialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
           turnScopeId: "client-turn:current:71ad4373-replay",
+        },
+        systemRuntime: {
+          parentDialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
         },
       }),
       {
@@ -199,11 +201,12 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [],
-        systemRuntime: {
+        identity: {
           sessionId: "session-resume-lock",
           dialogProcessId: "dlg-current",
           turnScopeId: "client-turn:current",
         },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
@@ -292,11 +295,13 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [currentAttachment],
-        systemRuntime: {
+        identity: {
           sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
           dialogProcessId: currentDialogProcessId,
-          parentDialogProcessId: stoppedDialogProcessId,
           turnScopeId: currentTurnScopeId,
+        },
+        systemRuntime: {
+          parentDialogProcessId: stoppedDialogProcessId,
         },
       }),
       {
@@ -438,11 +443,13 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [attachmentC],
-        systemRuntime: {
+        identity: {
           sessionId: "1ec8e12c-6c66-4f93-b4dc-57680c5c627a",
           dialogProcessId: currentDialogProcessId,
-          parentDialogProcessId: firstResendDialogProcessId,
           turnScopeId: currentTurnScopeId,
+        },
+        systemRuntime: {
+          parentDialogProcessId: firstResendDialogProcessId,
         },
       }),
       {
@@ -572,11 +579,12 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
             name: "current.txt",
           },
         ],
-        systemRuntime: {
+        identity: {
           sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
           dialogProcessId: "dlg-current-first-continue",
           turnScopeId: "client-turn:current:first-continue",
         },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: ["snapshot system"], history, incremental: [] } },
     ),

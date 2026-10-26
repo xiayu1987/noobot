@@ -24,23 +24,18 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     allowedRoot: "runtime/agent/session",
   };
   const runtime = Object.assign(createTestRuntimeContext(), {
-    currentTurnMessages: {
-      items: [
-        {
-          messageUid: "sm_checkpoint",
-          role: "assistant",
-          type: "message",
-          content: "analysis",
-          presentationMessageId: "msg_chat_checkpoint",
-          chatPresentation: true,
-          activityTimeline: [{ eventId: "activity-checkpoint-1" }],
-          toolTimeline: [{ toolCallId: "tool-checkpoint-1" }],
-        },
-      ],
-      toArray() {
-        return this.items.slice();
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      {
+        messageUid: "sm_checkpoint",
+        role: "assistant",
+        type: "message",
+        content: "analysis",
+        presentationMessageId: "msg_chat_checkpoint",
+        chatPresentation: true,
+        activityTimeline: [{ eventId: "activity-checkpoint-1" }],
+        toolTimeline: [{ toolCallId: "tool-checkpoint-1" }],
       },
-    },
+    ]),
   });
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({

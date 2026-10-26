@@ -20,11 +20,7 @@ import {
   invokeWithToolsTurn as invokeWithToolsTurnProduction,
 } from "../../../src/runtime/turn/turn-executor.js";
 import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
-import {
-  createTestModelPort,
-  createLoopTurnIdentity,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
@@ -46,22 +42,12 @@ const TEST_MODEL_SPEC = Object.freeze(
 );
 
 function invokeNoToolsTurn(args = {}) {
-  prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    createLoopTurnIdentity(args.loopState),
-    "presentation-message-filter-cases-a",
-  );
+  prepareTestTurnExecution(args.modelState, args.loopState, "presentation-message-filter-cases-a");
   return invokeNoToolsTurnProduction(args);
 }
 
 function invokeWithToolsTurn(args = {}) {
-  prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    createLoopTurnIdentity(args.loopState),
-    "presentation-message-filter-cases-a",
-  );
+  prepareTestTurnExecution(args.modelState, args.loopState, "presentation-message-filter-cases-a");
   return invokeWithToolsTurnProduction(args);
 }
 
@@ -99,7 +85,6 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
       ],
     },
     traces: [],
-    dialogProcessId: "d1",
     maxTurns: 1,
   };
 
@@ -167,7 +152,6 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d2",
     maxTurns: 1,
   };
 
@@ -237,7 +221,6 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-current",
     maxTurns: 1,
   };
   await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
@@ -299,7 +282,6 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
     messageBlocks: { system: [], history: [], incremental: [current] },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-current",
     maxTurns: 1,
   };
 
@@ -380,7 +362,6 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     messageBlocks: { system: [], history: [], incremental: [current, toolCall, toolResult] },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-summary",
     maxTurns: 1,
   };
 

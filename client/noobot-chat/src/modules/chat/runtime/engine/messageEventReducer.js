@@ -27,10 +27,8 @@ import {
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
-import {
-  getMessageTransferEnvelopes,
-  mergeTransferEnvelopes,
-} from "../../model/transferEnvelopes.js";
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
 import { getMessageAttachments } from "../../model/messageModel.js";
 
 export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({

@@ -151,7 +151,6 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   }
   appendTurnContextControlMessage({
     runtime,
-    loopState,
     content: tEngine(runtime, "phaseSummaryPrompt"),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
   });
@@ -191,7 +190,6 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
   systemRuntime.taskCheckLoopCount = 0;
   appendTurnContextControlMessage({
     runtime,
-    loopState,
     content: tEngine(runtime, "taskCheckPrompt"),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
   });
@@ -217,7 +215,6 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   systemRuntime.helpPromptLoopCount = 0;
   appendTurnContextControlMessage({
     runtime,
-    loopState,
     content: tEngine(runtime, "helpToolLoopPrompt", {
       loopCount: nextCount,
       threshold,
@@ -244,7 +241,6 @@ export function maybePromptHelpToolByFailure({ modelState, loopState, hasHelpCal
   if (failureCount < threshold) return false;
   appendTurnContextControlMessage({
     runtime,
-    loopState,
     content: tEngine(runtime, "toolConsecutiveFailureHelpPrompt", {
       failureCount,
       threshold,

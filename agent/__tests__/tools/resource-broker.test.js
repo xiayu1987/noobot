@@ -19,7 +19,7 @@ import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 function runtime(basePath) {
   return createTestRuntimeContext({
     basePath,
-    systemRuntime: { userId: "admin", sessionId: "s-1", rootSessionId: "s-1" },
+    identity: { userId: "admin", sessionId: "s-1" },
   });
 }
 

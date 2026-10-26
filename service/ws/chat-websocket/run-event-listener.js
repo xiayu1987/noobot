@@ -63,7 +63,7 @@ function auditEnvelopeIdentity(canonicalEnvelope, eventData) {
 function auditWorkflowRuntime(canonicalEnvelope) {
   if (canonicalEnvelope?.protocol.family !== WORKFLOW_RUNTIME_FAMILY) return {};
   const { identity, ordering, payload } = canonicalEnvelope;
-  const audit = { workflowRunId: payload.workflowRunId, workflowRevision: ordering.revision };
+  const audit = { workflowRunId: payload.workflowRunId };
   if (identity.eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
     return {
       ...audit,
@@ -72,7 +72,12 @@ function auditWorkflowRuntime(canonicalEnvelope) {
     };
   }
   if (identity.eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
-    return { ...audit, nodeExecutionId: payload.nodeExecutionId, workflowStatus: payload.status };
+    return {
+      ...audit,
+      workflowRevision: ordering.revision,
+      nodeExecutionId: payload.nodeExecutionId,
+      workflowStatus: payload.status,
+    };
   }
   return audit;
 }

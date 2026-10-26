@@ -18,7 +18,6 @@ export function createWorkflowNodeDetailTraceId() {
 
 export function summarizeWorkflowNodeIdentity(node = {}) {
   return {
-    sessionId: text(node?.sessionId),
     nodeSessionId: text(node?.nodeSessionId),
     dialogProcessId: resolveWorkflowDialogProcessId(node),
     turnScopeId: text(node?.turnScopeId),
@@ -45,11 +44,11 @@ export function logWorkflowNodeDetailProjection(
     nodeExecutionId: text(runtimeNode?.nodeExecutionId),
     stage,
   };
-  props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.projected", {
+  props.logWorkflowDiagnostics("frontend.workflowNodeDetail.projected", {
     ...identity,
-    isolatedNodeSessionId: resolveIsolatedNodeSessionId(nodeItem, runtimeNode),
+    isolatedNodeSessionId: resolveIsolatedNodeSessionId(runtimeNode),
     executionSessionId,
-    subSessionMessageRegistryVersion: Number(props.subSessionMessageRegistryVersion || 0),
+    subSessionMessageRegistryVersion: props.subSessionMessageRegistryVersion,
     messageCount: messages.length,
     messages: messages.map((message = {}) => ({
       messageUid: text(message?.messageUid),

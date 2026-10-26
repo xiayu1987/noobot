@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   TURN_EVENT,
   TURN_PHASE,
+  TURN_RECOVERY_ACTION,
   TURN_STATE,
   createEmptyTurnLifecycle,
 } from "@noobot/session-protocol";
@@ -224,7 +225,6 @@ test("terminal resolution reads status from the Turn without returning messages"
       {
         turnScopeId: "t1",
         dialogProcessId: "dp1",
-        thinkingStartedAt: "2026-07-17T23:59:30.000Z",
         thinkingFinishedAt: "2026-07-18T00:00:00.000Z",
       },
     ],
@@ -436,6 +436,7 @@ test("snapshot reloads authoritative state without mutating sequence and support
     commandId: "snapshot-1",
     knownSequence: before,
     terminalLimit: 10,
+    resolveRecovery: async () => TURN_RECOVERY_ACTION.NONE,
   });
   assert.equal(result.found, true);
   assert.equal(result.snapshot.unchanged, true);
@@ -480,6 +481,7 @@ test("summary and reconnect snapshots share action-failure presentation scope", 
       commandId: "snapshot-action-failure",
       knownSequence: 0,
       terminalLimit: 10,
+      resolveRecovery: async () => TURN_RECOVERY_ACTION.NONE,
     })
   ).snapshot;
   const projectTerminalScopes = (snapshot) =>

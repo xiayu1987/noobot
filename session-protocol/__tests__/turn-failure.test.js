@@ -32,6 +32,7 @@ test("turn failure carries only code, message and retryable", () => {
 test("snapshotTurn drops failure.phase; phase stays on the turn", () => {
   const snapshot = snapshotTurn({
     turnScopeId: "turn:t1",
+    continuedByTurnScopeId: "",
     phase: TURN_PHASE.PROCESSING,
     failure: { phase: TURN_PHASE.PROCESSING, code: "x", message: "m", retryable: false },
   });

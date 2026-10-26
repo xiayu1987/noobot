@@ -9,6 +9,7 @@
     "./points": "./src/points.js",
     "./runtime": "./src/runtime.js",
     "./phase-status": "./src/phase-status.js",
+    "./runtime-identity": "./src/runtime-identity.js",
     "./package.json": "./package.json"
   },
   "scripts": {

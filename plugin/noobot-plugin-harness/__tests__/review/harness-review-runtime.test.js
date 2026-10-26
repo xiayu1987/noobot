@@ -158,8 +158,6 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     },
   ];
   const ctx = {
-    userId: "u-spoofed",
-    sessionId: "s-spoofed",
     result: {
       output: "done",
       turnMessages: [{ role: "assistant", content: "done", type: "message" }],

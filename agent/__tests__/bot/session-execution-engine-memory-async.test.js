@@ -17,11 +17,12 @@ function createEngine({
   maybeSummarize = async () => undefined,
   globalConfig = {},
   appendTurns = async (payload = {}) => ({ appended: true, reason: "", turns: payload.turns }),
+  upsertTurnTiming = async () => {},
 } = {}) {
   const session = {
     async appendExecutionLog() {},
     appendTurns,
-    async upsertTurnTiming() {},
+    upsertTurnTiming,
     async saveCurrentTurnTasks() {},
     async getExecutionTurnLogs() {
       return [];
@@ -82,22 +83,31 @@ function buildFinalizeInput(userConfig = {}) {
   };
 }
 
-test("_finalizeRunSession forwards thinkingStartedAt to turn timing persistence", async () => {
+test("_finalizeRunSession persists only thinking finish facts to turn timing", async () => {
   const appendTurnPayloads = [];
+  const timingPayloads = [];
   const engine = createEngine({
     appendTurns: async (payload = {}) => {
       appendTurnPayloads.push(...payload.turns);
       return { appended: true, reason: "", turns: payload.turns };
     },
+    upsertTurnTiming: async (payload) => timingPayloads.push(payload),
   });
 
   await engine._finalizeRunSession(buildFinalizeInput({ memory: { postprocess_async: true } }));
 
   assert.equal(appendTurnPayloads.length, 1);
-  assert.equal(appendTurnPayloads[0].turnTimingThinkingStartedAt, "2026-07-08T16:49:44.113Z");
-  assert.ok(appendTurnPayloads[0].turnTimingThinkingFinishedAt);
-  assert.equal(appendTurnPayloads[0].thinkingStartedAt, "");
-  assert.equal(appendTurnPayloads[0].thinkingFinishedAt, "");
+  for (const key of [
+    "thinkingStartedAt",
+    "thinkingFinishedAt",
+    "turnTimingThinkingStartedAt",
+    "turnTimingThinkingFinishedAt",
+  ]) {
+    assert.equal(Object.hasOwn(appendTurnPayloads[0], key), false);
+  }
+  assert.equal(timingPayloads.length, 1);
+  assert.ok(timingPayloads[0].thinkingFinishedAt);
+  assert.equal(Object.hasOwn(timingPayloads[0], "thinkingStartedAt"), false);
 });
 
 async function waitFor(predicate, timeoutMs = 500) {

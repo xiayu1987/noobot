@@ -13,11 +13,7 @@ import {
   invokeNoToolsTurn as invokeNoToolsTurnProduction,
   invokeWithToolsTurn as invokeWithToolsTurnProduction,
 } from "../../../src/runtime/turn/turn-executor.js";
-import {
-  createTestModelPort,
-  createLoopTurnIdentity,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
@@ -39,22 +35,12 @@ function contextMessage(native = {}, metadata = {}) {
 }
 
 function invokeNoToolsTurn(args = {}) {
-  prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    createLoopTurnIdentity(args.loopState),
-    "presentation-message-filter-cases-c",
-  );
+  prepareTestTurnExecution(args.modelState, args.loopState, "presentation-message-filter-cases-c");
   return invokeNoToolsTurnProduction(args);
 }
 
 function invokeWithToolsTurn(args = {}) {
-  prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    createLoopTurnIdentity(args.loopState),
-    "presentation-message-filter-cases-c",
-  );
+  prepareTestTurnExecution(args.modelState, args.loopState, "presentation-message-filter-cases-c");
   return invokeWithToolsTurnProduction(args);
 }
 
@@ -99,7 +85,6 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-stream-disabled",
     maxTurns: 1,
   };
 
@@ -133,7 +118,6 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
       incremental: [contextMessage({ role: "user", content: "go" })],
     },
     traces: [],
-    dialogProcessId: "d-reasoning-no-tools",
     maxTurns: 1,
   };
 
@@ -172,7 +156,6 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
     },
     traces: [],
     tools: [{ name: "execute_script" }],
-    dialogProcessId: "d-reasoning-tools",
     maxTurns: 1,
   };
 

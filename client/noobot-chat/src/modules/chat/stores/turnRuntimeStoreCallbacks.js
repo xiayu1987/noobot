@@ -13,7 +13,6 @@ import {
 
 export function createTurnRuntimeStoreCallbacks({
   sessions,
-  activeSession,
   turnRuntimeRegistry,
   getSubSessions,
   closePendingInteractionsForTerminalTurn,
@@ -32,7 +31,6 @@ export function createTurnRuntimeStoreCallbacks({
     );
     const mainSessionProjection = projectTurnRuntimeToMessages({
       sessions,
-      activeSession,
       turnRuntimeRegistry,
       turn,
     });

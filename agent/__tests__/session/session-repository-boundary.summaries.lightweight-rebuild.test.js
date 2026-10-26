@@ -224,6 +224,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
             internalState: { huge: true },
             payload: {
               workflowRunId: "workflow-run-1",
+              runMeta: { sessionId: "A", dialogProcessId: "dp-workflow" },
               semantic: {
                 nodes: [
                   { id: "start", type: "state", stateType: "start", name: "Start" },
@@ -231,31 +232,17 @@ test("session display summary should keep chat view lightweight and rebuild stal
                 ],
                 flowtos: [{ from: "start", to: "act", extra: { keep: true } }],
               },
-              execution: {
-                completed: true,
-                status: "success",
-                nodeAgentRuns: [
-                  {
-                    stepId: "step-act",
-                    nodeSessionId: "session-act",
-                    step: { nodeId: "act", nodeName: "Action", type: "action" },
-                    nodeResultTransferEnvelopes: [workflowTransferEnvelope],
-                    nodeResultText: "large node result should be dropped".repeat(80),
-                  },
-                ],
-              },
               nodeSessions: [
                 {
                   nodeId: "act",
                   nodeName: "Action",
+                  nodeExecutionId: "run-act_act_1",
                   dialogProcessId: "dialog-act",
-                  sessionId: "session-act",
+                  nodeSessionId: "session-act",
                   status: "succeeded",
-                  transferEnvelopes: [workflowTransferEnvelope],
-                  nodeResultText: "large node session result should be dropped".repeat(80),
                 },
               ],
-              diagnostics: { huge: "debug detail should be dropped" },
+              interaction: { semanticTextPreview: "workflow semantic response" },
             },
           },
           transferEnvelopes: [workflowTransferEnvelope],
@@ -456,25 +443,24 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(workflowMessage.content.endsWith(workflowContentTail), true);
     assert.equal(workflowMessage.content.includes(`${workflowContentTail}…`), false);
     assert.equal(workflowMessage.pluginMeta.source, "workflow-plugin");
-    assert.equal(workflowMessage.pluginMeta.nodeName, "Done");
+    assert.equal("nodeName" in workflowMessage.pluginMeta, false);
     assert.equal("internalState" in workflowMessage.pluginMeta, false);
-    assert.equal(workflowMessage.pluginMeta.payload.execution.completed, true);
-    assert.equal(workflowMessage.pluginMeta.payload.execution.status, "success");
-    assert.equal(
-      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeSessionId,
-      "session-act",
-    );
-    assert.equal(workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].step.nodeId, "act");
-    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].status, "succeeded");
-    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].dialogProcessId, "dialog-act");
-    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].nodeId, "act");
+    assert.deepEqual(Object.keys(workflowMessage.pluginMeta.payload).sort(), [
+      "interaction",
+      "nodeSessions",
+      "runMeta",
+      "semantic",
+      "workflowRunId",
+    ]);
+    assert.deepEqual(workflowMessage.pluginMeta.payload.nodeSessions[0], {
+      nodeId: "act",
+      nodeName: "Action",
+      nodeExecutionId: "run-act_act_1",
+      dialogProcessId: "dialog-act",
+      nodeSessionId: "session-act",
+      status: "succeeded",
+    });
     assert.equal(workflowMessage.pluginMeta.payload.semantic.nodes.length, 2);
-    assert.equal(
-      "nodeResultText" in workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0],
-      false,
-    );
-    assert.equal("nodeResultText" in workflowMessage.pluginMeta.payload.nodeSessions[0], false);
-    assert.equal("diagnostics" in workflowMessage.pluginMeta.payload, false);
     assert.equal("transferEnvelopes" in workflowMessage, true);
     assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
     assert.equal(workflowMessage.transferEnvelopes[0].protocol, "noobot.semantic-transfer");
@@ -489,14 +475,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
     );
     assert.equal("files" in workflowMessage.transferEnvelopes[0], false);
     assert.equal(
-      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0]
-        .payload.attachments[0].identity.attachmentId,
-      "att-workflow-1",
+      JSON.stringify(workflowMessage.pluginMeta.payload).includes("TransferEnvelopes"),
+      false,
     );
     assert.equal(
-      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].payload.attachments[0]
-        .identity.attachmentId,
-      "att-workflow-1",
+      JSON.stringify(workflowMessage.pluginMeta.payload).includes("transferEnvelopes"),
+      false,
     );
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);
 

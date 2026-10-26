@@ -24,14 +24,14 @@ const props = defineProps({
   selectedExecutionId: { type: String, default: "" },
   executionDirectory: { type: Array, default: () => [] },
   attemptExecutionIds: { type: Array, default: () => [] },
-  stopExecution: { type: Function, default: null },
-  fetchExecutionReport: { type: Function, default: null },
+  stopExecution: { type: Function, required: true },
+  fetchExecutionReport: { type: Function, required: true },
   selectedRuntimeNode: { type: Object, default: null },
   selectedRuntimeStep: { type: Object, default: null },
-  selectedRuntimeBoxes: { type: Array, default: () => [] },
+  selectedActionNodeStates: { type: Array, default: () => [] },
   selectedGraphDialogProcessId: { type: String, default: "" },
   displayNodeMessages: { type: Array, default: () => [] },
-  logWorkflowDiagnostics: { type: Function, default: null },
+  logWorkflowDiagnostics: { type: Function, required: true },
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
@@ -96,13 +96,7 @@ const selectedExecution = computed(() => {
 });
 
 const canStopSelectedExecution = computed(() =>
-  Boolean(
-    props.stopExecution &&
-    props.selectedExecutionId &&
-    selectedExecution.value?.capabilities?.canStop === true &&
-    selectedExecution.value?.terminal !== true &&
-    selectedExecution.value?.lifecycle?.terminal !== true,
-  ),
+  Boolean(props.selectedExecutionId && selectedExecution.value?.capabilities?.canStop === true),
 );
 
 async function stopSelectedExecution() {
@@ -176,7 +170,7 @@ watch(
     props.displayNodeMessages
       .map(
         (item = {}) =>
-          `${String(item?.content || "").length}:${JSON.stringify(item?.thinking || null).length}:${Array.isArray(item?.thinkingSteps) ? item.thinkingSteps.length : 0}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}:${JSON.stringify(item?.turnTimings || item?.timings || null).length}`,
+          `${String(item?.content || "").length}:${JSON.stringify(item?.thinking || null).length}:${Array.isArray(item?.thinkingSteps) ? item.thinkingSteps.length : 0}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}`,
       )
       .join("|"),
   ],
@@ -199,8 +193,8 @@ watch(
     nodeStatus: String(props.selectedRuntimeNode?.status || ""),
     selectedStepId: String(props.selectedRuntimeStep?.stepId || ""),
     selectedStepStatus: String(props.selectedRuntimeStep?.status || ""),
-    runtimeBoxCount: props.selectedRuntimeBoxes.length,
-    runtimeStepCount: props.selectedRuntimeBoxes.reduce(
+    actionNodeStateCount: props.selectedActionNodeStates.length,
+    runtimeStepCount: props.selectedActionNodeStates.reduce(
       (count, box = {}) => count + (Array.isArray(box?.steps) ? box.steps.length : 0),
       0,
     ),
@@ -219,23 +213,10 @@ watch(
       status: String(message?.status || message?.state || ""),
       contentLength: String(message?.content || "").length,
     })),
-    timingCount: props.displayNodeMessages.reduce(
-      (count, message = {}) =>
-        count +
-        (Array.isArray(message?.turnTimings || message?.timings)
-          ? (message.turnTimings || message.timings).length
-          : 0),
-      0,
-    ),
-    sessionTimingCount: props.selectedNodeSessionDocs.reduce(
-      (count, session = {}) =>
-        count + (Array.isArray(session?.turnTimings) ? session.turnTimings.length : 0),
-      0,
-    ),
   }),
   (renderState) => {
     if (!renderState.visible) return;
-    props.logWorkflowDiagnostics?.("frontend.workflowRender.nodeDrawerCommitted", renderState);
+    props.logWorkflowDiagnostics("frontend.workflowRender.nodeDrawerCommitted", renderState);
   },
   { immediate: true, flush: "post" },
 );
@@ -341,19 +322,19 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             </div>
             <div class="workflow-runtime-panel-body">
               <div
-                v-for="(stateBox, stateIndex) in selectedRuntimeBoxes"
-                :key="`${String(selectedRuntimeNode?.nodeId || resolveDialogProcessId(selectedRuntimeNode) || '')}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
+                v-for="stateBox in selectedActionNodeStates"
+                :key="stateBox.nodeExecutionId"
                 class="workflow-runtime-state-box"
               >
                 <div class="workflow-runtime-state-title">
-                  <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
+                  <span>{{ resolveStateBoxLabel(stateBox) }}</span>
                   <span class="workflow-runtime-state-count">
                     {{ translate("workflow.stepCount", { count: (stateBox?.steps || []).length }) }}
                   </span>
                 </div>
                 <button
                   v-for="(stepItem, stepIndex) in stateBox?.steps || []"
-                  :key="`${String(stepItem?.stepId || resolveDialogProcessId(stepItem) || stepIndex)}-${stepIndex}`"
+                  :key="stepItem.nodeExecutionId"
                   type="button"
                   class="workflow-runtime-step-box"
                   :class="[
@@ -367,9 +348,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
                   :disabled="!stepHasSession(stepItem)"
                   @click.stop="$emit('runtime-step-click', stepItem)"
                 >
-                  <span class="workflow-runtime-step-name">{{
-                    resolveStepLabel(stepItem, stepIndex)
-                  }}</span>
+                  <span class="workflow-runtime-step-name">{{ resolveStepLabel(stepIndex) }}</span>
                   <span class="workflow-runtime-step-status">{{
                     resolveStatusLabel(stepItem)
                   }}</span>
@@ -648,12 +627,13 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   background: color-mix(in srgb, var(--noobot-text-muted) 12%, transparent);
 }
 
-.workflow-runtime-step-box.success .workflow-runtime-step-status {
+.workflow-runtime-step-box.succeeded .workflow-runtime-step-status {
   color: color-mix(in srgb, var(--noobot-status-success) 78%, var(--noobot-text-primary) 22%);
   background: color-mix(in srgb, var(--noobot-status-success) 14%, transparent 86%);
 }
 
-.workflow-runtime-step-box.failed .workflow-runtime-step-status {
+.workflow-runtime-step-box.failed .workflow-runtime-step-status,
+.workflow-runtime-step-box.stopped .workflow-runtime-step-status {
   color: color-mix(in srgb, var(--noobot-status-error) 82%, var(--noobot-text-primary) 18%);
   background: color-mix(in srgb, var(--noobot-status-error) 12%, transparent);
 }

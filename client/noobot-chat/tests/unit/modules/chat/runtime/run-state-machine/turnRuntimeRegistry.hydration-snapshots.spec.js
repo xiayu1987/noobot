@@ -6,15 +6,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { nextTick, ref } from "vue";
 import {
-  createTurnRuntimeRegistryState,
-  resolveSessionTurnRuntime,
-  resolveLatestContinuableStoppedTurn,
-  resolveTurnRuntimeByScope,
-  selectSessionTurnRuntime,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
   applyTurnTimingSnapshot,
+  createTurnRuntimeRegistryState,
   isTurnRuntimeDeleted,
+  resolveLatestContinuableStoppedTurn,
+  resolveTurnRuntimeByScope,
+  selectCurrentTurnRuntime,
+  selectSessionTurnRuntime,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { AGENT_CHANNEL_STATE } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { backendState, settleTerminal, snapshot } from "./turnRuntimeRegistryTestFixtures.js";
@@ -133,14 +133,12 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
         {
           turnScopeId: "client-turn:first",
           dialogProcessId: "dp-first",
-          thinkingStartedAt: "2026-07-21T10:00:00.000Z",
           thinkingFinishedAt: "2026-07-21T10:00:15.000Z",
           modelLoopRound: 7,
         },
         {
           turnScopeId: "client-turn:second",
           dialogProcessId: "dp-second",
-          thinkingStartedAt: "2026-07-21T11:00:00.000Z",
           thinkingFinishedAt: "2026-07-21T11:00:09.000Z",
         },
       ],
@@ -151,20 +149,22 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       hydratedTurnScopeIds: ["client-turn:first", "client-turn:second"],
     });
     const first = resolveTurnRuntimeByScope(registry, "client-turn:first", { sessionId: "s1" });
-    expect(first).toMatchObject({
-      startedAt: "2026-07-21T10:00:00.000Z",
-      finishedAt: "2026-07-21T10:00:15.000Z",
+    expect(first.timing).toEqual({
+      turnScopeId: "client-turn:first",
+      dialogProcessId: "dp-first",
+      thinkingFinishedAt: "2026-07-21T10:00:15.000Z",
       modelLoopRound: 7,
     });
-    expect(first).not.toHaveProperty("state");
-    expect(first).not.toHaveProperty("terminal");
+    for (const field of ["state", "terminal", "startedAt", "finishedAt"]) {
+      expect(first).not.toHaveProperty(field);
+    }
     expect(
-      resolveTurnRuntimeByScope(registry, "client-turn:second", { sessionId: "s1" })?.finishedAt,
-    ).toBe("2026-07-21T11:00:09.000Z");
-    expect(
-      resolveTurnRuntimeByScope(registry, "client-turn:second", { sessionId: "s1" })
-        ?.modelLoopRound,
-    ).toBe(0);
+      resolveTurnRuntimeByScope(registry, "client-turn:second", { sessionId: "s1" })?.timing,
+    ).toEqual({
+      turnScopeId: "client-turn:second",
+      dialogProcessId: "dp-second",
+      thinkingFinishedAt: "2026-07-21T11:00:09.000Z",
+    });
   });
 
   it("deduplicates a timing snapshot whose values already match the live turn", () => {
@@ -180,8 +180,12 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
             turnScopeId: "client-turn:live",
             dialogProcessId: "dp-live",
             startedAt: "2026-07-21T12:00:00.000Z",
-            finishedAt: "2026-07-21T12:00:05.000Z",
-            modelLoopRound: 2,
+            timing: {
+              turnScopeId: "client-turn:live",
+              dialogProcessId: "dp-live",
+              thinkingFinishedAt: "2026-07-21T12:00:05.000Z",
+              modelLoopRound: 2,
+            },
           },
         },
       },
@@ -193,7 +197,6 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
           {
             turnScopeId: "client-turn:live",
             dialogProcessId: "dp-live",
-            thinkingStartedAt: "2026-07-21T12:00:00.000Z",
             thinkingFinishedAt: "2026-07-21T12:00:05.000Z",
             modelLoopRound: 2,
           },
@@ -207,12 +210,14 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     expect(
       applyTurnTimingSnapshot(registry, {
         sessionId: "s1",
-        turnTimings: [{ turnScopeId: "client-turn:round-only", modelLoopRound: 4 }],
+        turnTimings: [
+          { turnScopeId: "client-turn:round-only", dialogProcessId: "dp-round", modelLoopRound: 4 },
+        ],
       }),
     ).toMatchObject({ applied: true, hydratedTurnScopeIds: ["client-turn:round-only"] });
     expect(
       resolveTurnRuntimeByScope(registry, "client-turn:round-only", { sessionId: "s1" }),
-    ).toMatchObject({ startedAt: "", finishedAt: "", modelLoopRound: 4 });
+    ).toMatchObject({ timing: { dialogProcessId: "dp-round", modelLoopRound: 4 } });
   });
 
   it("strictly validates snapshots and rejects same-sequence content conflicts", () => {
@@ -412,7 +417,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     expect(lateOldTerminal.applied).toBe(true);
     expect(resolveLatestContinuableStoppedTurn(registry, "s1")?.turnScopeId).toBe("turn-b");
     expect(registry.sessions.s1.activeTurnScopeId).toBe("");
-    expect(resolveSessionTurnRuntime(registry, "s1")?.turnScopeId).toBe("turn-b");
+    expect(selectCurrentTurnRuntime(registry, "s1")?.turnScopeId).toBe("turn-b");
   });
 
   it("does not let a replayed terminal Turn replace the active continuation", () => {
@@ -514,7 +519,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
 
     expect(result.applied).toBe(true);
     expect(registry.sessions.s1.activeTurnScopeId).toBe("t2");
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+    expect(selectCurrentTurnRuntime(registry, "s1")).toMatchObject({
       turnScopeId: "t2",
       state: "frontend_processing",
       canStop: true,
@@ -536,12 +541,10 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       onTurnCommitted: vi.fn(() => null),
       onTurnEvaluated: vi.fn(),
     });
-    const resolveActiveTurnScopeIdentity = () =>
-      turnRuntimeRegistry.value.sessions.s1?.activeTurnScopeId || "";
+    const resolveActiveTurn = () => selectCurrentTurnRuntime(turnRuntimeRegistry.value, "s1");
     const { composerActionState } = createComposerRuntimeState({
-      turnRuntimeRegistry,
       resolveActiveSessionIdentity: () => "s1",
-      resolveActiveTurnScopeIdentity,
+      resolveActiveTurn,
     });
     expect(composerActionState.value.canStop).toBe(false);
 
@@ -567,7 +570,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     );
     await nextTick();
 
-    expect(resolveActiveTurnScopeIdentity()).toBe("t2");
+    expect(resolveActiveTurn()?.turnScopeId).toBe("t2");
     expect(composerActionState.value).toMatchObject({
       displayState: "sending",
       canStop: true,
@@ -586,7 +589,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       seq: 999,
     });
 
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+    expect(selectCurrentTurnRuntime(registry, "s1")).toMatchObject({
       state: "frontend_processing",
       lifecycleObserved: true,
       terminal: null,

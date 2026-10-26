@@ -59,7 +59,7 @@ export function useReconnectReplay({
   let { replayHydrationPromise } = reconnectReplayContext;
 
   const isDeletedTurn = ({ sessionId = "", turnScopeId = "" } = {}) =>
-    isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, {
+    isTurnRuntimeDeleted(turnRuntimeRegistry.value, {
       sessionId,
       turnScopeId,
     });

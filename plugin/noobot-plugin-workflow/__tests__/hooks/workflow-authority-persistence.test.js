@@ -65,9 +65,17 @@ test("workflow authority commit uses the protocol persistence scope", async () =
     payload: { workflowRunId: "workflow-run-1", turnScopeId: "turn-child-1" },
     orderingDomain: "workflow",
     orderingScopeId: "workflow-run-1",
+    revision: 1,
+    executionId: "execution-1",
   });
 
   assert.equal(result, envelope);
+  assert.deepEqual(commits[0].ordering, {
+    domain: "workflow",
+    scopeId: "workflow-run-1",
+    revision: 1,
+  });
+  assert.equal(commits[0].identity.executionId, "execution-1");
   assert.equal(commits.length, 1);
   assert.equal(commits[0].persistenceScope, persistenceScope);
   assert.equal(commits[0].identity.turnScopeId, "turn-child-1");

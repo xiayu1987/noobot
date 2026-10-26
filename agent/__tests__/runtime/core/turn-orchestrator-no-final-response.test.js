@@ -45,10 +45,11 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
     },
     activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
   });
-  const systemRuntime = { sessionId: "session-1", turnScopeId: "scope-1" };
+  const systemRuntime = {};
   const events = [];
   const promptedListeners = [];
   const runtime = createTestRuntimeContext({
+    identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
     systemRuntime,
     sealUserInterjectionQueueIfEmpty: () => true,
     consumeUserInterjections: async () => [],

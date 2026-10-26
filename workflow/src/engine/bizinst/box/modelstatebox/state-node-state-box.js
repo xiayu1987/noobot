@@ -5,19 +5,20 @@
  */
 
 import NodeStateBoxBase from "./node-state-box-base.js";
+import EStateType from "../../../../design/model/node/enums/state-type.js";
 
 class StateNodeStateBox extends NodeStateBoxBase {
   canForwardChange(bizinst) {
     const stateType = this.getNode().getStateType();
-    if (stateType === 2) return true;
-    if (stateType === 3) return this._countTotalCurrentSteps(bizinst) <= 1;
+    if (stateType === EStateType.Branch) return true;
+    if (stateType === EStateType.Merge) return this._countTotalCurrentSteps(bizinst) <= 1;
     return true;
   }
 
   canBackwardChange(bizinst) {
     const stateType = this.getNode().getStateType();
-    if (stateType === 2) return this._countTotalCurrentSteps(bizinst) <= 1;
-    if (stateType === 3) return true;
+    if (stateType === EStateType.Branch) return this._countTotalCurrentSteps(bizinst) <= 1;
+    if (stateType === EStateType.Merge) return true;
     return true;
   }
 

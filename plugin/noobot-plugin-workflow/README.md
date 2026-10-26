@@ -26,61 +26,23 @@ END
 
 `EDGE` 不支持条件属性，出现 `when`/`condition` 时解析直接报错。
 
-## 编排产物（统一 payload）
+## 消息 payload
 
-插件会把统一编排结果写入 `agentResult.workflow`，协议版本：
-
-- `protocolVersion: "workflow.orchestration.v2"`
-
-结构示例：
+插件消息落盘在 `message.pluginMeta`，只含 `source`/`kind`/`phase`/`payload`。`payload` 由 `src/core/orchestration-payload.js` 构建，enrichment 补入 `nodeSessions`：
 
 ```json
 {
-  "protocolVersion": "workflow.orchestration.v2",
-  "status": "succeeded",
-  "interactionId": "wf_u1_s1_1748960000000_ab12cd",
-  "timestamp": "2026-06-03T15:00:00.000Z",
-  "runMeta": {
-    "userId": "u1",
-    "sessionId": "s1",
-    "parentSessionId": "",
-    "dialogProcessId": "d1",
-    "hookPoint": "before_agent_dispatch",
-    "locale": "zh-CN"
-  },
-  "orchestration": {
-    "semanticPurpose": "workflow_semantic",
-    "semanticModel": "qwen3_6_plus"
-  },
-  "interaction": {
-    "sourceTextPreview": "...",
-    "semanticTextPreview": "..."
-  },
-  "phaseTimeline": [
-    { "phase": "hook_received", "status": "succeeded", "startedAt": "...", "endedAt": "..." },
-    { "phase": "semantic_resolution", "status": "succeeded", "startedAt": "...", "endedAt": "..." },
-    { "phase": "workflow_execution", "status": "succeeded", "startedAt": "...", "endedAt": "..." },
-    { "phase": "payload_build", "status": "succeeded", "startedAt": "...", "endedAt": "..." }
-  ],
-  "retryMeta": {
-    "policy": "single_shot",
-    "maxAttempts": 1,
-    "attempts": 1,
-    "retried": false,
-    "history": [{ "attempt": 1, "status": "succeeded", "timestamp": "..." }]
-  },
-  "semantic": {},
-  "execution": {},
-  "artifacts": {
-    "semantic": {},
-    "execution": {}
-  },
-  "diagnostics": {
-    "invokerTraceCount": 2,
-    "error": null
-  }
+  "workflowRunId": "run-1",
+  "runMeta": { "sessionId": "s1", "dialogProcessId": "d1" },
+  "semantic": { "nodes": [], "flowtos": [] },
+  "nodeSessions": [],
+  "interaction": { "semanticTextPreview": "..." }
 }
 ```
+
+- 写入前经 `@noobot/plugin-protocol/plugin-message-payload` 的 `requirePluginMessagePayload` 校验：纯 JSON、禁止任何信封字段、体积上限 `LENGTH_THRESHOLDS.pluginMessage.payloadBytes`（256 KiB），违反即拒绝，不截断。
+- 语义传输信封只放在消息级 `message.transferEnvelopes`，节点信封与最终附件信封经协议 `mergeTransferEnvelopes` 合并。
+- 主系统摘要原样透传 `payload`，不感知其形状。
 
 ## 配置契约
 

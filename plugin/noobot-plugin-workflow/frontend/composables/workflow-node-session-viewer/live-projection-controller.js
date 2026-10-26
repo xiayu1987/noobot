@@ -13,7 +13,7 @@ import {
 } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { createWorkflowNodeViewKey } from "../../runtime/workflowNodeSessionRuntime.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-import { text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 function uniqueExecutions(detail = {}) {
   return [
@@ -25,37 +25,38 @@ function uniqueExecutions(detail = {}) {
   });
 }
 
-function logUnavailable({ props, runtimeNodeSessions, nodeItem, stage, extra = {} }) {
-  const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
-  props.logWorkflowDiagnostics?.(`frontend.workflowNodeDetail.${stage}`, {
-    sessionId: resolveIsolatedNodeSessionId(nodeItem, runtimeNode),
-    dialogProcessId:
-      resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem),
-    turnScopeId: text(runtimeNode?.turnScopeId || nodeItem?.turnScopeId),
-    workflowRunId: text(runtimeNode?.workflowRunId || nodeItem?.workflowRunId),
-    nodeExecutionId: text(runtimeNode?.nodeExecutionId || nodeItem?.nodeExecutionId),
-    runtimeNodeCount: Array.isArray(runtimeNodeSessions?.value)
-      ? runtimeNodeSessions.value.length
-      : 0,
-    ...extra,
+function describeRuntimeNode(runtimeNode) {
+  return {
+    nodeSessionId: resolveIsolatedNodeSessionId(runtimeNode),
+    dialogProcessId: resolveWorkflowDialogProcessId(runtimeNode),
+    turnScopeId: text(runtimeNode.turnScopeId),
+    workflowRunId: text(runtimeNode.workflowRunId),
+    nodeExecutionId: text(runtimeNode.nodeExecutionId),
+  };
+}
+
+function logUnavailable({ props, runtimeNodeSessions, stage, fields }) {
+  props.logWorkflowDiagnostics(`frontend.workflowNodeDetail.${stage}`, {
+    runtimeNodeCount: runtimeNodeSessions.value.length,
+    ...fields,
   });
 }
 
 function buildLiveProjection({ props, runtimeNodeSessions, nodeViewTransaction, refs }) {
   const registry = props.subSessionMessageRegistry;
-  const registryVersion = Number(props.subSessionMessageRegistryVersion || 0);
+  const registryVersion = props.subSessionMessageRegistryVersion;
   const viewKey = nodeViewTransaction.state.ownerKey;
   const transactionPhase = text(nodeViewTransaction.state.phase);
   const selectedStep = refs.selectedRuntimeStep.value;
-  const unavailable = (reason, extra = {}) => ({
+  const unavailable = (reason, nodeFields = {}) => ({
     available: false,
     reason,
     viewKey,
     transactionPhase,
-    selectedStep,
+    selectedRuntimeStepPresent: Boolean(selectedStep),
+    nodeFields,
     subSessionMessageRegistry: registry,
     subSessionMessageRegistryVersion: registryVersion,
-    ...extra,
   });
   if (!["loading", "live"].includes(transactionPhase)) return unavailable("transaction_not_active");
   if (!viewKey) return unavailable("missing_transaction_owner");
@@ -67,57 +68,33 @@ function buildLiveProjection({ props, runtimeNodeSessions, nodeViewTransaction, 
     selectExecutionDetail: props.selectExecutionDetail,
     allowEmptyMessages: false,
   });
-  if (detail)
-    return {
-      available: true,
-      viewKey,
-      detail,
-      subSessionMessageRegistry: registry,
-      subSessionMessageRegistryVersion: registryVersion,
-    };
-  const runtimeNode = resolveRuntimeNodeSession(selectedStep, runtimeNodeSessions);
-  const sessionId = resolveIsolatedNodeSessionId(selectedStep, runtimeNode);
-  if (!sessionId)
-    return unavailable("missing_session_identity", { runtimeNodeFound: Boolean(runtimeNode) });
-  if (typeof props.selectSessionMessages !== "function") {
-    return unavailable("missing_session_selector", {
-      sessionId,
-      runtimeNodeFound: Boolean(runtimeNode),
-    });
-  }
-  const sessionDoc = props.selectSessionMessages(sessionId);
-  if (!isObjectLike(sessionDoc)) {
-    return unavailable("session_projection_unavailable", {
-      sessionId,
-      runtimeNodeFound: Boolean(runtimeNode),
-    });
+  if (!detail) {
+    return unavailable(
+      "unified_projection_unavailable",
+      describeRuntimeNode(resolveRuntimeNodeSession(selectedStep, runtimeNodeSessions)),
+    );
   }
   return {
     available: true,
     viewKey,
-    detail: {
-      sessionId,
-      sessionSummary: sessionDoc,
-      messages: sessionDoc.messages || [],
-      rawMessages: sessionDoc.rawMessages || [],
-    },
+    detail,
+    selectedStep,
     subSessionMessageRegistry: registry,
     subSessionMessageRegistryVersion: registryVersion,
   };
 }
 
-function logObserved({ props, refs, projection }) {
-  const detail = projection.detail;
-  const selectedStep = refs.selectedRuntimeStep.value || {};
-  props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.liveProjectionObserved", {
-    sessionId: text(detail.sessionId || detail.sessionSummary?.sessionId),
+function logObserved({ props, projection }) {
+  const { detail, selectedStep } = projection;
+  props.logWorkflowDiagnostics("frontend.workflowNodeDetail.liveProjectionObserved", {
+    sessionId: text(detail.sessionId),
     dialogProcessId: resolveWorkflowDialogProcessId(selectedStep),
     turnScopeId: text(selectedStep.turnScopeId),
     workflowRunId: text(selectedStep.workflowRunId),
     nodeExecutionId: text(selectedStep.nodeExecutionId),
-    messageCount: Array.isArray(detail.messages) ? detail.messages.length : 0,
-    subSessionMessageRegistryVersion: Number(projection.subSessionMessageRegistryVersion || 0),
-    messages: (Array.isArray(detail.messages) ? detail.messages : []).map((message = {}) => ({
+    messageCount: detail.messages.length,
+    subSessionMessageRegistryVersion: projection.subSessionMessageRegistryVersion,
+    messages: detail.messages.map((message) => ({
       messageUid: text(message.messageUid),
       presentationMessageId: text(message.presentationMessageId),
       role: text(message.role),
@@ -129,26 +106,23 @@ function logObserved({ props, refs, projection }) {
 
 function applyObservedProjection(context, projection) {
   const { props, refs, runtimeNodeSessions, nodeViewTransaction } = context;
-  if (!projection?.available) {
-    const selectedStep = projection?.selectedStep || refs.selectedRuntimeStep.value || {};
+  if (!projection.available) {
     logUnavailable({
       props,
       runtimeNodeSessions,
-      nodeItem: selectedStep,
       stage: "liveProjectionUnavailable",
-      extra: {
-        reason: text(projection?.reason) || "projection_state_unavailable",
-        transactionPhase: text(projection?.transactionPhase || nodeViewTransaction.state.phase),
-        transactionOwnerKey: text(projection?.viewKey || nodeViewTransaction.state.ownerKey),
-        selectedRuntimeStepPresent: Boolean(selectedStep && Object.keys(selectedStep).length),
-        runtimeNodeFound: projection?.runtimeNodeFound === true,
-        sessionSelectorAvailable: isFunction(props.selectSessionMessages),
-        subSessionMessageRegistryVersion: Number(projection?.subSessionMessageRegistryVersion || 0),
+      fields: {
+        reason: projection.reason,
+        transactionPhase: projection.transactionPhase,
+        transactionOwnerKey: text(projection.viewKey),
+        selectedRuntimeStepPresent: projection.selectedRuntimeStepPresent,
+        subSessionMessageRegistryVersion: projection.subSessionMessageRegistryVersion,
+        ...projection.nodeFields,
       },
     });
     return;
   }
-  logObserved({ props, refs, projection });
+  logObserved({ props, projection });
   logWorkflowNodeDetailProjection(
     { props, runtimeNodeSessions },
     "live-watch",
@@ -158,7 +132,6 @@ function applyObservedProjection(context, projection) {
   if (!nodeViewTransaction.merge(projection.viewKey, projection.detail)) return;
   if (projection.detail.executionId)
     refs.selectedExecutionId.value = text(projection.detail.executionId);
-  if (!Array.isArray(projection.detail.attemptExecutionIds)) return;
   const nextAttempts = projection.detail.attemptExecutionIds.map(text);
   if (JSON.stringify(refs.attemptExecutionIds.value) !== JSON.stringify(nextAttempts)) {
     refs.attemptExecutionIds.value = nextAttempts;
@@ -166,9 +139,9 @@ function applyObservedProjection(context, projection) {
 }
 
 export function createLiveProjectionController(context) {
-  const { props, workflowPayload, runtimeNodeSessions, nodeViewTransaction, refs } = context;
-  function applyAvailable(nodeItem = refs.selectedNode.value || {}) {
-    const viewKey = createWorkflowNodeViewKey(nodeItem, workflowPayload.value);
+  const { props, runtimeNodeSessions, nodeViewTransaction, refs } = context;
+  function applyAvailable(nodeItem) {
+    const viewKey = createWorkflowNodeViewKey(nodeItem);
     if (
       !["loading", "live"].includes(nodeViewTransaction.state.phase) ||
       nodeViewTransaction.state.ownerKey !== viewKey
@@ -185,21 +158,21 @@ export function createLiveProjectionController(context) {
       logUnavailable({
         props,
         runtimeNodeSessions,
-        nodeItem,
         stage: "unifiedUnavailable",
-        extra: { stage: "live-apply" },
+        fields: {
+          stage: "live-apply",
+          ...describeRuntimeNode(resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions)),
+        },
       });
       return false;
     }
     logWorkflowNodeDetailProjection({ props, runtimeNodeSessions }, "live-apply", nodeItem, detail);
     if (!nodeViewTransaction.merge(viewKey, detail)) return false;
     refs.selectedExecutionId.value = text(detail.executionId);
-    refs.attemptExecutionIds.value = Array.isArray(detail.attemptExecutionIds)
-      ? detail.attemptExecutionIds
-      : [];
+    refs.attemptExecutionIds.value = detail.attemptExecutionIds;
     refs.executionDirectory.value = uniqueExecutions(detail);
     if (detail.execution) {
-      const hasMessages = Array.isArray(detail.messages) && detail.messages.length > 0;
+      const hasMessages = detail.messages.length > 0;
       refs.viewerState.value = isTerminalExecutionProjection(detail.execution)
         ? hasMessages
           ? "ready"

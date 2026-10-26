@@ -491,3 +491,35 @@ test("deleting one session does not invalidate another session display summary",
     assert.equal(display.sessions[0].messages[0].content, "keep me");
   });
 });
+
+test("summary session detail projects an unreadable tree child as unavailable without attachment projection", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-summary-unreadable-child";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createTestSessionServices({ workspaceRoot });
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "root",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "child",
+      parentSessionId: "root",
+      caller: SESSION_CALLER.BOT,
+    });
+    const childDir = path.join(workspaceRoot, userId, "runtime", "session", "root", "child");
+    await writeFile(path.join(childDir, "session.json"), "{invalid-json", "utf8");
+
+    const detail = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "root",
+    });
+    const child = detail.sessions.find((item) => item.sessionId === "child");
+    assert.equal(child.availability, "unavailable");
+    assert.equal("messages" in child, false);
+    assert.equal(child.depth, 2);
+    assert.equal(typeof child.unavailableReason.code, "string");
+  });
+});

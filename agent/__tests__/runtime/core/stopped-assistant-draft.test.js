@@ -21,11 +21,8 @@ function createStopRuntime({ aborted = false } = {}) {
   if (aborted) controller.abort(new Error("user stop"));
   const runtime = createTestRuntimeContext({
     abortSignal: controller.signal,
-    systemRuntime: {
-      sessionId: "session-1",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-    },
+    identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    systemRuntime: {},
   });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "pm_presentation",

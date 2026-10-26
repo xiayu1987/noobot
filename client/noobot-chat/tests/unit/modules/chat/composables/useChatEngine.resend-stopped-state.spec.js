@@ -20,7 +20,8 @@ import {
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   applyTurnRuntimeEvent,
-  selectSessionTurnRuntime,
+  projectTurnRuntimeView,
+  selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -41,6 +42,7 @@ describe("useChatEngine.resend stopped state", () => {
           resolved: true,
           aggregateVersion: 12,
           turn: {
+            continuedByTurnScopeId: "",
             sessionId,
             turnScopeId: stoppedTurnScopeId,
             dialogProcessId: "dp-immediate-stop",
@@ -373,6 +375,7 @@ describe("useChatEngine.resend stopped state", () => {
             resolved: true,
             aggregateVersion: terminalResolutionCount,
             turn: {
+              continuedByTurnScopeId: "",
               sessionId,
               turnScopeId,
               dialogProcessId: `dp-${turnScopeId}`,
@@ -436,10 +439,9 @@ describe("useChatEngine.resend stopped state", () => {
     expect(stream.mock.calls[0][0].identity.turnScopeId).toBe(firstReplaceScope);
     expect(stream.mock.calls[1][0].identity.turnScopeId).toBe(committedSecondReplaceScope);
     expect(stoppedTurns[0].dialogProcessId).not.toBe(stoppedTurns[1].dialogProcessId);
-    const secondRuntime = selectSessionTurnRuntime(
-      turnRuntimeRegistry.value,
+    const secondRuntime = projectTurnRuntimeView(
       sessionId,
-      secondReplaceScope,
+      selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, secondReplaceScope),
     );
     expect(secondRuntime).toMatchObject({
       terminal: "user_stopped",

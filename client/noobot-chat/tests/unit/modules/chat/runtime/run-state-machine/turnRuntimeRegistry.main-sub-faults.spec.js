@@ -96,6 +96,7 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
       resolved: true,
       aggregateVersion: 1,
       turn: {
+        continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
         dialogProcessId: `dp-${turnScopeId}`,

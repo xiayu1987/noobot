@@ -42,6 +42,12 @@ const event = (sequence, eventId = `event-${sequence}`, overrides = {}) => {
 const snapshot = (sequence = 2) =>
   createTurnSnapshotEnvelope(
     createTurnLifecycleSnapshot({
+      activeTurnScopeId: "",
+      activeTurn: null,
+      recentTerminalTurns: [],
+      replacedTurns: [],
+      unchanged: false,
+      recovery: "none",
       commandId: "snapshot-command",
       sessionId: "session-1",
       sequence,

@@ -4,16 +4,39 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
+import { ref } from "vue";
 
 import { buildChatPayload } from "../../../../../../src/modules/chat/runtime/engine/payload.js";
 
+const PREFERENCE_DEFAULTS = Object.freeze({
+  allowUserInteraction: undefined,
+  safeConfirm: undefined,
+  safeConfirmLevel: undefined,
+  sanitizeOutput: undefined,
+  botScenario: "",
+  selectedModel: "",
+  memoryModel: "",
+  pluginModelConfig: null,
+  frontendThresholdsEnabled: false,
+  summaryPolicy: null,
+  locale: "",
+  selectedPlugins: [],
+});
+
 function buildRequiredPayload(options) {
+  const preferenceRefs = Object.fromEntries(
+    Object.entries(PREFERENCE_DEFAULTS).map(([key, fallback]) => [
+      key,
+      ref(key in options ? options[key] : fallback),
+    ]),
+  );
   return buildChatPayload({
     activeSession: { value: { sessionId: "session-1", isLocal: false } },
     userMessageId: `user-message:${options.turnScopeId}`,
     presentationMessageId: `assistant-message:${options.turnScopeId}`,
     expectedAggregateVersion: 0,
     ...options,
+    ...preferenceRefs,
   });
 }
 
@@ -79,7 +102,7 @@ describe("buildChatPayload model preferences", () => {
       buildRequiredPayload({
         message: "x",
         turnScopeId: "turn-1",
-        safeConfirmLevel: { value: "HIGH" },
+        safeConfirmLevel: "HIGH",
       }).preferences.confirmationLevel,
     ).toBe("high");
     expect(
@@ -111,7 +134,7 @@ describe("buildChatPayload model preferences", () => {
         workflow: { semanticModel: "workflow-programming" },
       },
       locale: "zh-CN",
-      selectedPlugins: { value: ["harness", "workflow"] },
+      selectedPlugins: [" harness ", "workflow", ""],
     });
 
     expect(payload).toMatchObject({
@@ -154,17 +177,6 @@ describe("buildChatPayload model preferences", () => {
 
     expect(payload.preferences.summaryPolicy).toEqual({ phaseSummaryLoopTurns: 1 });
     expect(payload.preferences.frontendThresholdsEnabled).toBe(true);
-  });
-
-  it("accepts selectedPlugins as a plain array", () => {
-    const payload = buildRequiredPayload({
-      userId: "admin",
-      message: "hello",
-      turnScopeId: "turn-1",
-      selectedPlugins: [" harness ", "workflow", ""],
-    });
-
-    expect(payload.preferences.selectedPlugins).toEqual(["harness", "workflow"]);
   });
 
   it("carries the preallocated assistant message identity once in presentation", () => {

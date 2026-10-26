@@ -5,6 +5,7 @@
  */
 
 import { compileWorkflowSemantic } from "./lib/compiler.js";
+import EStateType from "./design/model/node/enums/state-type.js";
 import {
   startWorkflowInstance,
   startWorkflowInstanceById,
@@ -18,6 +19,7 @@ import {
 
 export {
   compileWorkflowSemantic,
+  EStateType,
   startWorkflowInstance,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
@@ -30,6 +32,7 @@ export {
 
 export default {
   compileWorkflowSemantic,
+  EStateType,
   startWorkflowInstance,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,

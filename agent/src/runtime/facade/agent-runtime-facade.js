@@ -21,16 +21,11 @@ export class AgentRuntimeFacade {
   }
 
   async prepareTurnExecution({ buildContextPayload }) {
-    const { mode, userId, sessionId, caller, parentSessionId } = buildContextPayload;
-    const { eventListener, dialogProcessId, runConfig, contextBuilder } = buildContextPayload;
+    const { mode, runtimeIdentity, eventListener, runConfig, contextBuilder } = buildContextPayload;
     const agentContext = await this.contextFactory.buildAgentContextFromBuilder({
       mode,
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
+      runtimeIdentity,
       eventListener,
-      dialogProcessId,
       runConfig,
       contextBuilder,
     });

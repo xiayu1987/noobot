@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveLatestContinuableStoppedTurn,
-  resolveSessionTurnRuntime,
+  selectCurrentTurnRuntime,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   reduceTurnRuntimeEvent as reduceNormalizedTurnRuntimeEvent,
@@ -38,7 +38,7 @@ describe("turn runtime sequence", () => {
       { turnScopeId: "older", state: "processing", lifecycleSeq: 0, seq: 99, updatedAtMs: 1 },
       { turnScopeId: "newer", state: "processing", lifecycleSeq: 5, updatedAtMs: 1 },
     ]);
-    expect(resolveSessionTurnRuntime(registry, "s1")?.turnScopeId).toBe("newer");
+    expect(selectCurrentTurnRuntime(registry, "s1")?.turnScopeId).toBe("newer");
   });
 
   it("orders stopped turns by lifecycle sequence only", () => {

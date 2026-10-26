@@ -28,12 +28,10 @@ function createContext(
     },
   };
   return buildAgentContext(basePath, "u-risk", {
+    identity: { userId: "u-risk", sessionId: "s-risk" },
     runtime: {
       systemRuntime: {
         persistenceScope: null,
-        userId: "u-risk",
-        sessionId: "s-risk",
-        rootSessionId: "s-risk",
         config: { safeConfirm, safeConfirmLevel },
       },
       userInteractionBridge: bridge,

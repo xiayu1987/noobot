@@ -14,6 +14,7 @@ import {
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
+  workflowSessionSnapshotEventId,
 } from "@noobot/event-protocol/workflow-runtime-event";
 
 test("constructs the canonical workflow snapshot envelope at its producing boundary", () => {
@@ -22,7 +23,10 @@ test("constructs the canonical workflow snapshot envelope at its producing bound
     authoritySessionId: "root-session",
     turnScopeId: "workflow-node:node-1",
     executionId: "agent:node-1",
-    eventId: "snapshot:child-session:4",
+    eventId: workflowSessionSnapshotEventId({
+      nodeSessionId: "child-session",
+      aggregateVersion: 4,
+    }),
     workflowRunId: "run-1",
     causality: { correlationId: "run-1" },
     sequence: 4,
@@ -36,6 +40,12 @@ test("constructs the canonical workflow snapshot envelope at its producing bound
       turnScopeId: "workflow-node:node-1",
       messages: [],
       turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+        activeTurnScopeId: "",
+        activeTurn: null,
+        recentTerminalTurns: [],
+        replacedTurns: [],
+        unchanged: false,
+        recovery: "none",
         commandId: "snapshot:child-session:4",
         sessionId: "child-session",
         sequence: 4,
@@ -49,6 +59,27 @@ test("constructs the canonical workflow snapshot envelope at its producing bound
   assert.equal(envelope.identity.sessionId, "root-session");
   assert.equal(envelope.ordering.domain, WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT);
   assert.equal(envelope.ordering.aggregateVersion, 4);
+  assert.equal(envelope.identity.eventId, "workflow-session-snapshot:child-session:4");
+});
+
+test("rejects a snapshot whose eventId is not derived from its node session and version", () => {
+  const envelope = snapshotWithMessages([]);
+  const forged = { ...envelope, identity: { ...envelope.identity, eventId: "snapshot:other:5" } };
+  assert.equal(
+    validateWorkflowRuntimeEnvelope(forged).errors.includes("invalid_snapshot_event_id"),
+    true,
+  );
+});
+
+test("snapshot eventId factory rejects non-canonical identity", () => {
+  assert.throws(
+    () => workflowSessionSnapshotEventId({ nodeSessionId: " s ", aggregateVersion: 1 }),
+    TypeError,
+  );
+  assert.throws(
+    () => workflowSessionSnapshotEventId({ nodeSessionId: "s", aggregateVersion: 0 }),
+    TypeError,
+  );
 });
 
 function snapshotWithMessages(messages) {
@@ -57,7 +88,10 @@ function snapshotWithMessages(messages) {
     authoritySessionId: "root-session",
     turnScopeId: "workflow-node:node-1",
     executionId: "agent:node-1",
-    eventId: "snapshot:child-session:5",
+    eventId: workflowSessionSnapshotEventId({
+      nodeSessionId: "child-session",
+      aggregateVersion: 5,
+    }),
     workflowRunId: "run-1",
     causality: { correlationId: "run-1" },
     sequence: 5,
@@ -71,6 +105,12 @@ function snapshotWithMessages(messages) {
       turnScopeId: "workflow-node:node-1",
       messages,
       turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+        activeTurnScopeId: "",
+        activeTurn: null,
+        recentTerminalTurns: [],
+        replacedTurns: [],
+        unchanged: false,
+        recovery: "none",
         commandId: "snapshot:child-session:5",
         sessionId: "child-session",
         sequence: 5,
@@ -193,7 +233,7 @@ test("requires canonical workflow execution and turn scope identity", () => {
     },
     {
       sessionId: "session-1",
-      turnScopeId: "workflow-node_node-1",
+      turnScopeId: " workflow-node:node-1",
       executionId: " run-1",
       domain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
     },
@@ -242,6 +282,65 @@ test("node state execution identity lives only on the envelope", () => {
     },
   );
   assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope).errors, ["unknown_node_state_field"]);
+});
+
+test("rejects node state without a positive ordering revision", () => {
+  for (const revision of [undefined, 0, 1.5]) {
+    const envelope = workflowEnvelope(
+      WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+      { workflowRunId: "run-1", turnScopeId: "workflow-node:node-1", status: "running" },
+      {
+        sessionId: "session-1",
+        turnScopeId: "workflow-node:node-1",
+        executionId: "node-1",
+        domain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+        revision,
+      },
+    );
+    assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope).errors, ["invalid_node_revision"]);
+  }
+});
+
+test("rejects a planning envelope that carries an ordering revision", () => {
+  const envelope = workflowEnvelope(
+    WORKFLOW_RUNTIME_EVENT.PLANNING,
+    {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      presentationMessageId: "assistant-1",
+      workflowRunId: "run-1",
+      workflowPayload: {
+        semantic: { nodes: [{ id: "node-1" }], flowtos: [] },
+        nodeSessions: [
+          {
+            nodeExecutionId: "node-1",
+            eventId: "workflow_node_state:run-1:node-1:1",
+            status: "ready",
+            revision: 1,
+            sequence: 1,
+          },
+        ],
+      },
+    },
+    {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      executionId: "run-1",
+      domain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
+      revision: 1,
+    },
+  );
+  assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope).errors, [
+    "planning_revision_forbidden",
+  ]);
+});
+
+test("rejects a snapshot envelope that carries an ordering revision", () => {
+  const envelope = snapshotWithMessages([]);
+  const withRevision = { ...envelope, ordering: { ...envelope.ordering, revision: 1 } };
+  assert.deepEqual(validateWorkflowRuntimeEnvelope(withRevision).errors, [
+    "snapshot_revision_forbidden",
+  ]);
 });
 
 test("planning nodes live only in workflowPayload and carry only node fact fields", () => {

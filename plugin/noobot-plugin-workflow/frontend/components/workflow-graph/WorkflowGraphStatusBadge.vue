@@ -6,30 +6,21 @@
 <script setup>
 import { computed } from "vue";
 import { useWorkflowLocale } from "../../i18n/index.js";
-import { text } from "@noobot/shared/value";
+import {
+  resolveWorkflowNodeStatus,
+  resolveWorkflowNodeStatusLabelKey,
+} from "../../runtime/workflowRuntimeStatus.js";
 
 const props = defineProps({
-  status: { type: String, default: "pending" },
+  status: { type: String, required: true },
 });
 const { translate } = useWorkflowLocale();
 
-const normalizedStatus = computed(() => text(props.status).toLowerCase());
+const statusLabel = computed(() =>
+  translate(resolveWorkflowNodeStatusLabelKey({ status: props.status })),
+);
 
-const statusLabel = computed(() => {
-  if (normalizedStatus.value === "success") return translate("workflow.statusSuccess");
-  if (normalizedStatus.value === "failed" || normalizedStatus.value === "error") {
-    return translate("workflow.statusFailed");
-  }
-  if (normalizedStatus.value === "running") return translate("workflow.statusRunning");
-  return translate("workflow.statusPending");
-});
-
-const statusClass = computed(() => {
-  if (normalizedStatus.value === "success") return "success";
-  if (normalizedStatus.value === "failed" || normalizedStatus.value === "error") return "failed";
-  if (normalizedStatus.value === "running") return "running";
-  return "pending";
-});
+const statusClass = computed(() => resolveWorkflowNodeStatus({ status: props.status }));
 </script>
 
 <template>
@@ -49,13 +40,14 @@ const statusClass = computed(() => {
   line-height: var(--noobot-line-height-compact);
 }
 
-.workflow-node-status.success {
+.workflow-node-status.succeeded {
   color: var(--noobot-status-success);
   background: color-mix(in srgb, var(--noobot-status-success) 12%, transparent);
   border-color: color-mix(in srgb, var(--noobot-status-success) 28%, transparent);
 }
 
-.workflow-node-status.failed {
+.workflow-node-status.failed,
+.workflow-node-status.stopped {
   color: var(--noobot-status-error);
   background: color-mix(in srgb, var(--noobot-status-error) 12%, transparent);
   border-color: color-mix(in srgb, var(--noobot-status-error) 28%, transparent);

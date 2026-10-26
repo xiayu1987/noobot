@@ -15,11 +15,11 @@ import {
   summarizeStateMachineMessage,
   summarizeStateMachineTurn,
 } from "../../../debug/loggers/stateMachineLogger.js";
-import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import { selectTurnRuntimeByScope } from "../run-state-machine/turnRuntimeRegistry.js";
 
 const sessionMessages = (ctx) =>
-  Array.isArray(ctx.activeSession?.value?.messages) ? ctx.activeSession.value.messages : [];
-const debugMessages = (ctx) => summarizeDebugMessages(ctx.activeSession?.value?.messages);
+  Array.isArray(ctx.activeSession.value?.messages) ? ctx.activeSession.value.messages : [];
+const debugMessages = (ctx) => summarizeDebugMessages(ctx.activeSession.value?.messages);
 const errorText = (error) => String(error?.message || error || "");
 
 function logBegin(ctx, { reuseExistingUserTurn, allowDuringResend, hasText, uploadCount }) {
@@ -144,8 +144,8 @@ function logCleanup(ctx, { pendingInteractionRequest, interactionSubmitting }) {
   logStateMachineDebug("stateMachine.send.cleanup", () => {
     const messages = sessionMessages(ctx);
     const runtime = ctx.runtimeView();
-    const turn = resolveSessionTurnRuntime(
-      ctx.turnRuntimeRegistry?.value,
+    const turn = selectTurnRuntimeByScope(
+      ctx.turnRuntimeRegistry.value,
       ctx.sessionId,
       ctx.turnScopeId,
     );
@@ -155,8 +155,8 @@ function logCleanup(ctx, { pendingInteractionRequest, interactionSubmitting }) {
       runtime: summarizeStateMachineTurn(turn, runtime),
       pendingMessageCount: messages.filter((message) => message?.pending === true).length,
       messageCount: messages.length,
-      interactionPending: Boolean(pendingInteractionRequest?.value),
-      interactionSubmitting: interactionSubmitting?.value === true,
+      interactionPending: Boolean(pendingInteractionRequest.value),
+      interactionSubmitting: interactionSubmitting.value === true,
     };
   });
 }

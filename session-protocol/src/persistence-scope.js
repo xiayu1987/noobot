@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 const SESSION_PERSISTENCE_SCOPE_FIELDS = Object.freeze([
   "scopeId",
@@ -20,19 +20,18 @@ export function validateSessionPersistenceScope(source) {
   if (!isPlainObject(source)) {
     return { valid: false, errors: ["invalid_persistence_scope"], scope: null };
   }
-  const scope = Object.freeze(
-    Object.fromEntries(
-      SESSION_PERSISTENCE_SCOPE_FIELDS.map((field) => [field, text(source[field])]),
-    ),
-  );
   const errors = [];
   if (Object.keys(source).some((key) => !SESSION_PERSISTENCE_SCOPE_FIELDS.includes(key))) {
     errors.push("unknown_persistence_scope_field");
   }
-  if (SESSION_PERSISTENCE_SCOPE_FIELDS.some((field) => !scope[field])) {
+  if (SESSION_PERSISTENCE_SCOPE_FIELDS.some((field) => !isCanonicalText(source[field]))) {
     errors.push("incomplete_persistence_scope");
   }
-  return { valid: errors.length === 0, errors, scope: errors.length === 0 ? scope : null };
+  if (errors.length > 0) return { valid: false, errors, scope: null };
+  const scope = Object.freeze(
+    Object.fromEntries(SESSION_PERSISTENCE_SCOPE_FIELDS.map((field) => [field, source[field]])),
+  );
+  return { valid: true, errors, scope };
 }
 
 export function createSessionPersistenceScope(source) {

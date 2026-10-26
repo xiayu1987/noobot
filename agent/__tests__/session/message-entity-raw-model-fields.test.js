@@ -291,7 +291,7 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
   );
 });
 
-test("normalizeMessageEntity preserves thinking timing fields", () => {
+test("normalizeMessageEntity drops thinking timing fields owned by turn facts", () => {
   const normalized = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_29",
@@ -303,6 +303,6 @@ test("normalizeMessageEntity preserves thinking timing fields", () => {
     thinkingFinishedAt: " 2026-07-08T10:00:03.500Z ",
   });
 
-  assert.equal(normalized.thinkingStartedAt, "2026-07-08T10:00:00.000Z");
-  assert.equal(normalized.thinkingFinishedAt, "2026-07-08T10:00:03.500Z");
+  assert.equal(Object.hasOwn(normalized, "thinkingStartedAt"), false);
+  assert.equal(Object.hasOwn(normalized, "thinkingFinishedAt"), false);
 });

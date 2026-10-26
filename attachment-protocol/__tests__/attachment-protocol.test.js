@@ -23,6 +23,7 @@ import {
   ATTACHMENT_RELATION_TYPE,
   mergeAttachmentsByIdentity,
   reduceAttachmentLifecycle,
+  validateAttachmentLifecycleEvent,
 } from "../src/index.js";
 import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "../src/mime.js";
 
@@ -172,6 +173,18 @@ test("lifecycle events require stable identity and versioned attachment event id
     () => createAttachmentLifecycleEvent({ ...event, identity: { ...identity, sessionId: "" } }),
     /invalid_attachment_session_id/,
   );
+  assert.deepEqual(validateAttachmentLifecycleEvent(event), { valid: true, errors: [] });
+  assert.deepEqual(validateAttachmentLifecycleEvent({ ...event, eventVersion: 2 }), {
+    valid: false,
+    errors: ["unsupported_attachment_event_version"],
+  });
+  const brokenSource = {
+    ...event,
+    get eventType() {
+      throw new Error("source_read_failed");
+    },
+  };
+  assert.throws(() => validateAttachmentLifecycleEvent(brokenSource), /source_read_failed/);
 });
 
 test("persisted records are explicitly versioned and relations are source-bound", () => {

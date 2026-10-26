@@ -46,6 +46,7 @@ import { migrateCanonicalCommandReceipts } from "./command-receipt-migration.js"
 import { migrateMessageIdentity } from "./message-identity-migration.js";
 import { migrateTurnTerminalDescription } from "./terminal-description-migration.js";
 import { migrateMessageErrorText } from "./message-error-text-migration.js";
+import { migrateTurnTimingLifecycleStart } from "./turn-timing-lifecycle-start-migration.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 import {
   assertLegacyAuthorityEventOutbox,
@@ -786,6 +787,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateMutationReceipts,
   migrateDocumentMessages,
   migrateMessageErrorText,
+  migrateTurnTimingLifecycleStart,
   migrateMessageIdentity,
   migrateReplacedTurns,
   dropLegacyTerminalCommits,

@@ -6,7 +6,7 @@
 <script setup>
 import SharedChatMessageItem from "../message/SharedChatMessageItem.vue";
 import { BaseEmptyHint } from "../../../../shared/public-api/ui.js";
-import { getMessageTurnScopeId, normalizeTurnScopeIdKey } from "../../model/messageIdentity.js";
+import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
 import { text } from "@noobot/shared/value";
 
@@ -30,7 +30,7 @@ function openThinkingDetails(payload = {}, messageItem = {}) {
 }
 
 function messageRenderKey(messageItem = {}, messageIndex = 0) {
-  const turnScopeKey = normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
+  const turnScopeKey = getMessageTurnScopeId(messageItem);
   const role = text(messageItem?.role) || "message";
   return `${props.executionId}-${turnScopeKey || "unscoped"}-${role}-${messageIndex}`;
 }

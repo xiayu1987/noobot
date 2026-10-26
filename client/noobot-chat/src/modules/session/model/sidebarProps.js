@@ -5,16 +5,16 @@
  */
 
 export const sharedSidebarProps = {
-  sidebarCollapsed: { type: Boolean, default: false },
-  isMobile: { type: Boolean, default: false },
-  mobileSidebarOpen: { type: Boolean, default: false },
-  userId: { type: String, default: "" },
-  connectCode: { type: String, default: "" },
-  connecting: { type: Boolean, default: false },
-  connected: { type: Boolean, default: false },
-  sending: { type: Boolean, default: false },
-  loadingSessions: { type: Boolean, default: false },
-  sessions: { type: Array, default: () => [] },
-  activeSessionId: { type: String, default: "" },
-  turnRuntimeRegistry: { type: Object, default: () => ({}) },
+  sidebarCollapsed: { type: Boolean, required: true },
+  isMobile: { type: Boolean, required: true },
+  mobileSidebarOpen: { type: Boolean, required: true },
+  userId: { type: String, required: true },
+  connectCode: { type: String, required: true },
+  connecting: { type: Boolean, required: true },
+  connected: { type: Boolean, required: true },
+  sending: { type: Boolean, required: true },
+  loadingSessions: { type: Boolean, required: true },
+  sessions: { type: Array, required: true },
+  activeSessionId: { type: String, required: true },
+  turnRuntimeRegistry: { type: Object, required: true },
 };

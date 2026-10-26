@@ -27,11 +27,8 @@ test("authoritative final event owns generated attachment envelopes before persi
     eventListener: { onEvent: (event = {}) => events.push(event) },
     sessionManager: createCanonicalMessageEventSessionManager(),
     runConfig: { hookManager: null, commandId: "command-1", turnScopeId: "turn-1" },
-    systemRuntime: {
-      sessionId: "session-1",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-    },
+    identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    systemRuntime: {},
   });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-1",
@@ -176,11 +173,12 @@ test("authoritative final completion retains classified checkpoint call-result p
       commandId: "command-checkpoint",
       turnScopeId: "turn-checkpoint",
     },
-    systemRuntime: {
+    identity: {
       sessionId: "session-checkpoint",
       dialogProcessId: "dialog-checkpoint",
       turnScopeId: "turn-checkpoint",
     },
+    systemRuntime: {},
   });
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "final-presentation",

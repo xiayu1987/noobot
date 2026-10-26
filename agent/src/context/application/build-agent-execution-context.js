@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { createAgentContextEnvelope } from "@noobot/context-protocol/agent-context/envelope";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { buildTools } from "../../tools/index.js";
 import { createRuntimeContext } from "../../runtime/runtime-context-factory.js";
 import { createMainFlowControlPort } from "../../runtime/main-flow-control.js";
@@ -85,7 +84,7 @@ export async function buildAgentExecutionContext({
   });
   const tools = await buildTools({
     sessionId: identity.sessionId,
-    parentSessionId: normalizeParentSessionId(identity.parentSessionId),
+    parentSessionId: identity.parentSessionId,
     agentContext: executionScope,
   });
   if (!Array.isArray(tools)) throw new TypeError("buildTools must return an array of tools");

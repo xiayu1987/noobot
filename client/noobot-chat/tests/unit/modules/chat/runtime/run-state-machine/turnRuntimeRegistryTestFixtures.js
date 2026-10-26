@@ -125,6 +125,7 @@ export function settleTerminal(
         summaryVersion: resolvedSummaryVersion,
         failure: terminalFailure,
         finalizeIntent,
+        continuedByTurnScopeId: "",
         startedAt,
         finishedAt,
         capabilities: { actionLocked: false, canStop: false },
@@ -142,6 +143,7 @@ export function snapshot(overrides = {}) {
       ? {
           sessionId,
           presentationMessageId: `msg-${turn.turnScopeId}`,
+          continuedByTurnScopeId: "",
           startedAt: "2026-01-01T00:00:00.000Z",
           ...turn,
         }

@@ -8,44 +8,48 @@ import {
   createWorkflowNodeTurnScopeId,
 } from "@noobot/session-protocol/turn-scope-identity";
 import { deriveAgentExecutionId, deriveTurnCommandId } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import {
+  WORKFLOW_NODE_STATUS,
+  WORKFLOW_NODE_TYPE,
+} from "@noobot/event-protocol/workflow-runtime-event";
+import { isCanonicalText } from "@noobot/shared/value";
 
-function safeId(value = "") {
-  return text(value).replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+function requireCanonical(value, label) {
+  if (!isCanonicalText(value)) throw new TypeError(`${label} is required`);
+  return value;
 }
 
-const WORKFLOW_RUN_IDENTITY_FIELDS = Object.freeze([
-  "turnScopeId",
+function safeId(value) {
+  return value.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+const WORKFLOW_ACCEPTED_RUN_FIELDS = Object.freeze([
   "commandId",
   "executionId",
   "rootExecutionId",
   "presentationMessageId",
 ]);
 
-export function resolveWorkflowRunIdentity(ctx = {}) {
-  const runConfig = ctx?.runConfig;
-  const identity = {};
-  for (const field of WORKFLOW_RUN_IDENTITY_FIELDS) {
-    const value = text(runConfig?.[field]);
-    if (!value) throw new TypeError(`workflow runConfig.${field} is required`);
-    identity[field] = value;
+export function resolveWorkflowRunIdentity(ctx) {
+  const { runConfig } = ctx;
+  const identity = { turnScopeId: requireCanonical(ctx.turnScopeId, "workflow hook turnScopeId") };
+  for (const field of WORKFLOW_ACCEPTED_RUN_FIELDS) {
+    identity[field] = requireCanonical(runConfig[field], `workflow runConfig.${field}`);
   }
   return { ...identity, workflowRunId: identity.executionId };
 }
 
-export function createWorkflowNodeIdentity({ workflowRunId = "", node = {}, attempt = 1 } = {}) {
-  const runId = text(workflowRunId);
-  if (!runId) throw new TypeError("workflow run id is required");
-  const nodeId = text(node?.id);
-  if (!nodeId) throw new TypeError("workflow node id is required");
+export function createWorkflowNodeIdentity({ workflowRunId, node, attempt }) {
+  requireCanonical(workflowRunId, "workflow run id");
+  const nodeId = requireCanonical(node.id, "workflow node id");
   if (!Number.isInteger(attempt) || attempt < 1) {
     throw new TypeError("workflow node attempt must be a positive integer");
   }
-  const nodeExecutionId = `${safeId(runId)}_${safeId(nodeId)}_${attempt}`;
+  const nodeExecutionId = `${safeId(workflowRunId)}_${safeId(nodeId)}_${attempt}`;
   const dialogProcessId = createWorkflowNodeDialogProcessId(nodeExecutionId);
   const turnScopeId = createWorkflowNodeTurnScopeId(nodeExecutionId);
   return {
-    workflowRunId: runId,
+    workflowRunId,
     nodeExecutionId,
     nodeId,
     attempt,
@@ -56,23 +60,21 @@ export function createWorkflowNodeIdentity({ workflowRunId = "", node = {}, atte
   };
 }
 
-export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic = {} } = {}) {
-  const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
-  const flowtos = Array.isArray(semantic?.flowtos) ? semantic.flowtos : [];
-  const nodeById = new Map(nodes.map((node = {}) => [text(node?.id), node]));
-  return nodes.map((node = {}) => {
-    const identity = createWorkflowNodeIdentity({ workflowRunId, node });
-    const nodeType = text(node?.type).toLowerCase();
-    const executable = nodeType === "action";
+export function buildWorkflowPlanningNodeSessions({ workflowRunId, semantic }) {
+  const { nodes, flowtos } = semantic;
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const isActionNode = (node) => node.type === WORKFLOW_NODE_TYPE.ACTION;
+  return nodes.filter(isActionNode).map((node) => {
+    const identity = createWorkflowNodeIdentity({ workflowRunId, node, attempt: 1 });
     const dependencies = flowtos
-      .filter((edge = {}) => text(edge?.to) === identity.nodeId)
-      .map((edge = {}) => text(edge?.from))
-      .filter((dependencyId) => nodeById.get(dependencyId)?.type === "action");
+      .filter((edge) => edge.to === identity.nodeId)
+      .map((edge) => edge.from)
+      .filter((dependencyId) => isActionNode(nodeById.get(dependencyId)));
     return {
       ...identity,
-      nodeName: text(node?.name),
+      nodeName: node.name,
       dependencies,
-      status: executable ? (dependencies.length ? "pending" : "ready") : "pending",
+      status: dependencies.length ? WORKFLOW_NODE_STATUS.PENDING : WORKFLOW_NODE_STATUS.READY,
     };
   });
 }

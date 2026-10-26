@@ -435,7 +435,6 @@ describe("sub-session realtime message projection", () => {
     const sessionId = "child-terminal-snapshot";
     store.applyWorkflowRuntimeEvent(
       canonicalWorkflowSessionSnapshot({
-        eventId: "child-terminal-snapshot-1",
         executionId: "agent-execution-child-terminal-snapshot",
         nodeSessionId: sessionId,
         authoritySessionId: "root-session",
@@ -444,18 +443,12 @@ describe("sub-session realtime message projection", () => {
         aggregateVersion: 1,
         status: "succeeded",
         messages: [],
-        turnTimings: [
-          {
-            turnScopeId: "workflow-node_node-1",
-            thinkingStartedAt: "2026-07-31T08:42:28.213Z",
-          },
-        ],
+        turnTimings: [],
       }),
       { source: "test_snapshot" },
     );
     store.applyWorkflowRuntimeEvent(
       canonicalWorkflowSessionSnapshot({
-        eventId: "child-terminal-snapshot-2",
         executionId: "agent-execution-child-terminal-snapshot",
         nodeSessionId: sessionId,
         authoritySessionId: "root-session",
@@ -465,11 +458,17 @@ describe("sub-session realtime message projection", () => {
         status: "completed",
         messages: [],
         turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+          activeTurnScopeId: "",
+          activeTurn: null,
+          replacedTurns: [],
+          unchanged: false,
+          recovery: "none",
           commandId: "test-snapshot:child-terminal-snapshot:2",
           sessionId,
           sequence: 2,
           recentTerminalTurns: [
             {
+              continuedByTurnScopeId: "",
               sessionId,
               turnScopeId: "workflow-node:node-1",
               presentationMessageId: "message-1",
@@ -488,7 +487,7 @@ describe("sub-session realtime message projection", () => {
         turnTimings: [
           {
             turnScopeId: "workflow-node:node-1",
-            thinkingStartedAt: "2026-07-31T08:42:28.213Z",
+            dialogProcessId: "dialog-1",
             thinkingFinishedAt: "2026-07-31T08:43:59.859Z",
           },
         ],
@@ -511,6 +510,7 @@ describe("sub-session realtime message projection", () => {
       turnScopeId: "workflow-node:node-1",
       startedAt: "2026-07-31T08:42:28.213Z",
       finishedAt: "2026-07-31T08:43:59.859Z",
+      thinkingFinishedAt: "2026-07-31T08:43:59.859Z",
       terminal: "completed",
     });
   });

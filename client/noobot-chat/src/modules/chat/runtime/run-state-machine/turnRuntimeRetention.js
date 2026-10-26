@@ -3,32 +3,30 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { text } from "@noobot/shared/value";
 import {
-  canonicalSessionId,
-  canonicalTurnScopeId,
-  runtimeText,
-  tombstoneTurnRuntime,
-} from "./turnRuntimeRegistryIdentity.js";
+  requireCanonicalTurnScopeId,
+  requireOptionalCanonicalTurnScopeId,
+} from "@noobot/session-protocol/turn-scope-identity";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { tombstoneTurnRuntime } from "./turnRuntimeRegistryIdentity.js";
 import {
   resolveLatestContinuableStoppedTurn,
-  resolveSessionTurnRuntime,
+  selectCurrentTurnRuntime,
   resolveTurnRuntimeByScope,
 } from "./turnRuntimeSelectors.js";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
 export const DEFAULT_TERMINAL_MAX_AGE_MS = TIME_THRESHOLDS.client.terminalTurnRetentionMs;
 
-export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}) {
-  if (!registry) return false;
-  const scope = canonicalTurnScopeId(turnScopeId);
-  const expectedSessionId = canonicalSessionId(sessionId);
+export function removeTurnRuntime(registry, turnScopeId, { sessionId }) {
+  const scope = requireOptionalCanonicalTurnScopeId(turnScopeId);
+  const expectedSessionId = text(sessionId);
   const turn = resolveTurnRuntimeByScope(registry, scope, { sessionId: expectedSessionId });
   if (!turn || (expectedSessionId && turn.sessionId !== expectedSessionId)) return false;
-  const bucket = registry?.sessions?.[turn.sessionId];
-  if (!bucket) return false;
+  const bucket = registry.sessions[turn.sessionId];
   delete bucket.turns[scope];
-  if (turn.dialogProcessId && registry.routeIndex?.[turn.dialogProcessId]?.turnScopeId === scope) {
+  if (turn.dialogProcessId && registry.routeIndex[turn.dialogProcessId]?.turnScopeId === scope) {
     delete registry.routeIndex[turn.dialogProcessId];
   }
   if (bucket.activeTurnScopeId === scope) bucket.activeTurnScopeId = "";
@@ -36,16 +34,9 @@ export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}
   return true;
 }
 
-export function confirmTurnRuntimeDeletion(registry, turnScopeIds = [], { sessionId = "" } = {}) {
-  if (!registry) return { applied: false, confirmedTurnScopeIds: [], removedTurnScopeIds: [] };
-  const id = canonicalSessionId(sessionId);
-  const scopes = [
-    ...new Set(
-      (Array.isArray(turnScopeIds) ? turnScopeIds : [turnScopeIds])
-        .map(canonicalTurnScopeId)
-        .filter(Boolean),
-    ),
-  ];
+export function confirmTurnRuntimeDeletion(registry, turnScopeIds, { sessionId }) {
+  const id = text(sessionId);
+  const scopes = [...new Set(turnScopeIds.map(requireCanonicalTurnScopeId))];
   const confirmedTurnScopeIds = [];
   const removedTurnScopeIds = [];
   for (const scope of scopes) {
@@ -60,18 +51,18 @@ export function confirmTurnRuntimeDeletion(registry, turnScopeIds = [], { sessio
 }
 
 export function removeSessionRuntime(registry, sessionId) {
-  const id = canonicalSessionId(sessionId);
-  const bucket = registry?.sessions?.[id];
-  const hadTombstones = Boolean(registry?.deletedTurnScopeIdsBySession?.[id]);
+  const id = text(sessionId);
+  const bucket = registry.sessions[id];
+  const hadTombstones = Boolean(registry.deletedTurnScopeIdsBySession[id]);
   if (!bucket && !hadTombstones) return false;
-  for (const turn of Object.values(bucket?.turns || {})) {
-    const route = registry.routeIndex?.[runtimeText(turn?.dialogProcessId)];
-    if (route?.sessionId === id && route?.turnScopeId === turn.turnScopeId) {
+  for (const turn of bucket ? Object.values(bucket.turns) : []) {
+    const route = registry.routeIndex[turn.dialogProcessId];
+    if (route?.sessionId === id && route.turnScopeId === turn.turnScopeId) {
       delete registry.routeIndex[turn.dialogProcessId];
     }
   }
   delete registry.sessions[id];
-  delete registry.deletedTurnScopeIdsBySession?.[id];
+  delete registry.deletedTurnScopeIdsBySession[id];
   return true;
 }
 
@@ -79,23 +70,19 @@ export function pruneTerminalTurns(
   registry,
   {
     sessionId,
-    referencedTurnScopeIds = [],
+    referencedTurnScopeIds,
     retainCount = DEFAULT_TERMINAL_RETAIN_PER_SESSION,
     maxAgeMs = DEFAULT_TERMINAL_MAX_AGE_MS,
     nowMs = Date.now(),
-  } = {},
+  },
 ) {
-  const id = runtimeText(sessionId);
-  const bucket = registry?.sessions?.[id];
+  const id = text(sessionId);
+  const bucket = registry.sessions[id];
   if (!bucket) return { removedTurnScopeIds: [] };
-  const referenced = new Set(
-    Array.from(referencedTurnScopeIds || [], canonicalTurnScopeId).filter(Boolean),
-  );
-  const selectedScope = runtimeText(resolveSessionTurnRuntime(registry, id)?.turnScopeId);
-  const latestStoppedScope = runtimeText(
-    resolveLatestContinuableStoppedTurn(registry, id)?.turnScopeId,
-  );
-  const terminalTurns = Object.values(bucket.turns || {})
+  const referenced = new Set(referencedTurnScopeIds.map(requireCanonicalTurnScopeId));
+  const selectedScope = text(selectCurrentTurnRuntime(registry, id)?.turnScopeId);
+  const latestStoppedScope = text(resolveLatestContinuableStoppedTurn(registry, id)?.turnScopeId);
+  const terminalTurns = Object.values(bucket.turns)
     .filter((turn) => Boolean(turn.terminal))
     .sort(
       (left, right) =>
@@ -105,7 +92,7 @@ export function pruneTerminalTurns(
   const removedTurnScopeIds = [];
   let retainedUnprotectedCount = 0;
   for (const turn of terminalTurns) {
-    const scope = runtimeText(turn.turnScopeId);
+    const scope = text(turn.turnScopeId);
     if (scope === selectedScope || scope === latestStoppedScope || referenced.has(scope)) continue;
     const finishedAtMs = Number(turn.finishedAtMs || turn.updatedAtMs || 0);
     const tooOld = maxAgeMs >= 0 && finishedAtMs > 0 && Number(nowMs) - finishedAtMs > maxAgeMs;

@@ -12,8 +12,8 @@ import {
   createTurnTerminalResolution,
 } from "@noobot/session-protocol";
 import {
-  applyTurnRuntimeEvent,
   applyTurnLifecycleEnvelope,
+  applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
   selectSessionTurnRuntime,
@@ -352,6 +352,7 @@ describe("terminalResolutionCoordinator", () => {
       resolved: true,
       aggregateVersion: 1,
       turn: {
+        continuedByTurnScopeId: "",
         sessionId: "s-1",
         turnScopeId: "t-1",
         dialogProcessId: "dp-1",

@@ -88,7 +88,7 @@ describe("session message view", () => {
       }),
     ).toBe(true);
   });
-  it("hides workflow node messages in both canonical and transport turn scope encodings", () => {
+  it("hides workflow node messages by their single canonical turn scope encoding", () => {
     const activeSession = { value: { sessionId: "session-1", messages: [] } };
     const view = createSessionMessageView({
       sessions: { value: [] },
@@ -103,14 +103,6 @@ describe("session message view", () => {
         role: "assistant",
         type: "message",
         turnScopeId: "workflow-node:run-1_n1_1",
-        content: "节点输出",
-      }),
-    ).toBe(false);
-    expect(
-      view.shouldRenderMessageInChat({
-        role: "assistant",
-        type: "message",
-        turnScopeId: "workflow-node_run-1_n1_1",
         content: "节点输出",
       }),
     ).toBe(false);

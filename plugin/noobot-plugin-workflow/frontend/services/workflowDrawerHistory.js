@@ -10,7 +10,7 @@ import { text } from "@noobot/shared/value";
 export const WORKFLOW_DIALOG_PROCESS_QUERY_KEY = "workflowDialogProcessId";
 export const WORKFLOW_ROOT_SESSION_QUERY_KEY = "workflowRootSessionId";
 
-export function buildWorkflowDrawerRoute(nodeItem = {}, workflowPayload = {}, patch = {}) {
+export function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
   const dialogProcessId = String(
     Object.prototype.hasOwnProperty.call(patch, "dialogProcessId")
       ? patch.dialogProcessId
@@ -19,7 +19,7 @@ export function buildWorkflowDrawerRoute(nodeItem = {}, workflowPayload = {}, pa
   const rootSessionId = String(
     Object.prototype.hasOwnProperty.call(patch, "rootSessionId")
       ? patch.rootSessionId
-      : nodeItem?.rootSessionId || workflowPayload?.runMeta?.sessionId || "",
+      : nodeItem.rootSessionId,
   ).trim();
   return { dialogProcessId, rootSessionId };
 }
@@ -50,11 +50,7 @@ export function writeWorkflowDrawerQuery(route = {}) {
   history.replaceState(history.state, "", nextUrl);
 }
 
-export function useWorkflowDrawerHistory({ workflowPayload, flowNodes }) {
-  function buildDrawerRoute(nodeItem = {}, patch = {}) {
-    return buildWorkflowDrawerRoute(nodeItem, workflowPayload.value, patch);
-  }
-
+export function useWorkflowDrawerHistory({ flowNodes }) {
   function collectWorkflowSessionTargets() {
     const targets = [];
     for (const nodeItem of Array.isArray(flowNodes.value) ? flowNodes.value : []) {
@@ -77,16 +73,14 @@ export function useWorkflowDrawerHistory({ workflowPayload, flowNodes }) {
     return (
       collectWorkflowSessionTargets().find((target = {}) => {
         const targetDialogProcessId = resolveWorkflowDialogProcessId(target);
-        const targetRootSessionId = text(
-          target?.rootSessionId || workflowPayload.value?.runMeta?.sessionId,
-        );
+        const targetRootSessionId = text(target.rootSessionId);
         return targetDialogProcessId === dialogProcessId && targetRootSessionId === rootSessionId;
       }) || null
     );
   }
 
   return {
-    buildWorkflowDrawerRoute: buildDrawerRoute,
+    buildWorkflowDrawerRoute,
     findWorkflowSessionTarget,
   };
 }

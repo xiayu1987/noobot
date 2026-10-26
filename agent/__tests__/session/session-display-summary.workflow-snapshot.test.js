@@ -11,7 +11,7 @@ import {
   WORKFLOW_RUNTIME_EVENT,
   createWorkflowRuntimeEnvelope,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { TURN_RECOVERY_ACTION, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 
@@ -70,10 +70,63 @@ test("display summary messages are admissible as workflow session snapshot messa
         commandId: "snapshot:child-session:3",
         sessionId: "child-session",
         sequence: 3,
+        activeTurnScopeId: "",
+        activeTurn: null,
+        recentTerminalTurns: [],
+        replacedTurns: [],
+        unchanged: false,
+        recovery: TURN_RECOVERY_ACTION.NONE,
         generatedAt: "2026-08-19T00:00:00.000Z",
       }),
       turnTimings: [],
     },
   });
   assert.equal(envelope.payload.messages.length, 2);
+});
+
+function buildWorkflowSummary(payload) {
+  return buildSessionDisplaySummary({
+    ...createTestSessionRequiredFields(),
+    sessionId: "root-session",
+    aggregateVersion: 1,
+    messages: [
+      {
+        sessionId: "root-session",
+        messageUid: "sm_workflow",
+        presentationMessageId: "pm_workflow",
+        dialogProcessId: "dp-1",
+        role: "assistant",
+        type: "message",
+        content: "workflow",
+        chatPresentation: true,
+        turnScopeId: "turn-1",
+        pluginMeta: { pluginId: "workflow", payload },
+      },
+    ],
+  });
+}
+
+test("display summary passes plugin payload through unchanged", () => {
+  const failure = { source: "workflow", code: "WORKFLOW_NODE_EXECUTION_FAILED", message: "boom" };
+  const payload = {
+    workflowRunId: "run-1",
+    runMeta: { sessionId: "root-session", dialogProcessId: "dp-1" },
+    semantic: { nodes: [], flowtos: [] },
+    nodeSessions: [{ nodeId: "node-1", nodeSessionId: "child-1", status: "failed", failure }],
+    interaction: { semanticTextPreview: "preview" },
+  };
+  const summary = buildWorkflowSummary(payload);
+
+  assert.deepEqual(summary.messages[0].pluginMeta.payload, payload);
+});
+
+test("display summary rejects transfer envelopes inside plugin payload", () => {
+  assert.throws(
+    () =>
+      buildWorkflowSummary({
+        workflowRunId: "run-1",
+        nodeSessions: [{ nodeId: "node-1", transferEnvelopes: [] }],
+      }),
+    { code: "PLUGIN_MESSAGE_PAYLOAD_INVALID" },
+  );
 });

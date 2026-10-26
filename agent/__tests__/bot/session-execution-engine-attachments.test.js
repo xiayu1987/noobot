@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 
@@ -47,8 +48,14 @@ test("_prepareAgentTurnExecution takes canonical payload attachments as the sing
       contextBuilder: CONTEXT_BUILDER,
       runConfig: NON_RESUME_RUN_CONFIG,
       persistenceScope: null,
-      userId: "admin",
-      sessionId: "session-payload-1",
+      runtimeIdentity: {
+        userId: "admin",
+        sessionId: "session-payload-1",
+        parentSessionId: "",
+        dialogProcessId: "dialog-test",
+        turnScopeId: "turn-test",
+        caller: SESSION_CALLER.USER,
+      },
       userMessageAttachments: [
         {
           attachmentId: "att-payload-1",
@@ -92,7 +99,14 @@ test("_prepareAgentTurnExecution preserves explicit empty payload userMessageAtt
       contextBuilder: CONTEXT_BUILDER,
       runConfig: NON_RESUME_RUN_CONFIG,
       persistenceScope: null,
-      userId: "admin",
+      runtimeIdentity: {
+        userId: "admin",
+        sessionId: "session-empty-attachments",
+        parentSessionId: "",
+        dialogProcessId: "dialog-test",
+        turnScopeId: "turn-test",
+        caller: SESSION_CALLER.USER,
+      },
       userMessageAttachments: [],
     },
   });
@@ -153,8 +167,14 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
       contextBuilder: CONTEXT_BUILDER,
       runConfig: NON_RESUME_RUN_CONFIG,
       persistenceScope: null,
-      userId: "admin",
-      sessionId,
+      runtimeIdentity: {
+        userId: "admin",
+        sessionId,
+        parentSessionId: "",
+        dialogProcessId: "dialog-test",
+        turnScopeId: "turn-test",
+        caller: SESSION_CALLER.USER,
+      },
       userMessageAttachments: [
         {
           attachmentId: "att-rich",
@@ -194,8 +214,14 @@ test("_prepareAgentTurnExecution fails closed when attachment enrichment has no 
         contextBuilder: CONTEXT_BUILDER,
         runConfig: NON_RESUME_RUN_CONFIG,
         persistenceScope: null,
-        userId: "admin",
-        sessionId: "session-missing-workspace-service",
+        runtimeIdentity: {
+          userId: "admin",
+          sessionId: "session-missing-workspace-service",
+          parentSessionId: "",
+          dialogProcessId: "dialog-test",
+          turnScopeId: "turn-test",
+          caller: SESSION_CALLER.USER,
+        },
         userMessageAttachments: [
           {
             attachmentId: "att-missing-workspace-service",
@@ -223,9 +249,14 @@ test("_prepareAgentTurnExecution keeps explicit empty payload attachments withou
       contextBuilder: CONTEXT_BUILDER,
       runConfig: NON_RESUME_RUN_CONFIG,
       persistenceScope: null,
-      userId: "admin",
-      sessionId: "session-delete",
-      turnScopeId: "turn-delete",
+      runtimeIdentity: {
+        userId: "admin",
+        sessionId: "session-delete",
+        parentSessionId: "",
+        dialogProcessId: "dialog-test",
+        turnScopeId: "turn-delete",
+        caller: SESSION_CALLER.USER,
+      },
       userMessageAttachments: [],
     },
   });

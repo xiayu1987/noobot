@@ -112,7 +112,5 @@ export async function resolveSemanticText({ options, ctx, signal, sourceText }) 
   return {
     text: resolvedText,
     traceCount: Array.isArray(result?.traces) ? result.traces.length : 0,
-    requestMessages: semanticMessages,
-    toolAllowlist: availableToolNames,
   };
 }

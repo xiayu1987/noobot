@@ -5,7 +5,10 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTurnLifecycleSnapshot } from "@noobot/session-protocol/turn-lifecycle";
+import {
+  TURN_RECOVERY_ACTION,
+  createTurnLifecycleSnapshot,
+} from "@noobot/session-protocol/turn-lifecycle";
 import { createMessageQueryHandlers } from "../../ws/chat-websocket/message-query-handlers.js";
 
 function createHarness({ userId = "user-q", readSnapshot, finalize } = {}) {
@@ -54,8 +57,14 @@ const errorCodes = (events) => events.map(({ data }) => data?.error?.code);
 const snapshot = (overrides = {}) =>
   createTurnLifecycleSnapshot({
     commandId: "cmd-1",
-    userId: "user-q",
     sessionId: "session-q",
+    sequence: 7,
+    activeTurnScopeId: "",
+    activeTurn: null,
+    recentTerminalTurns: [],
+    replacedTurns: [],
+    unchanged: false,
+    recovery: TURN_RECOVERY_ACTION.NONE,
     generatedAt: "2026-07-30T00:00:00.000Z",
     ...overrides,
   });

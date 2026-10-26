@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
+import { createHookRuntimeIdentity } from "@noobot/hook-protocol/runtime-identity";
 import { filePath as path, resolveRuntimePathContext } from "@noobot/path-resolver";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 import {
@@ -56,17 +56,8 @@ export function buildStaticInfo({ runtimeBasePath, identity, globalConfig }) {
   };
 }
 
-export function buildDynamicInfo({
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  rootSessionId = "",
-  caller = "user",
-  dialogProcessId = "",
-  runConfig = {},
-  now = new Date().toISOString(),
-} = {}) {
-  const normalizedTurnScopeId = text(runConfig?.turnScopeId);
+export function buildDynamicInfo({ identity, runConfig, now }) {
+  const runtimeIdentity = createHookRuntimeIdentity(identity);
   const toolPolicy =
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
       ? { ...runConfig.toolPolicy }
@@ -87,13 +78,7 @@ export function buildDynamicInfo({
     selectedConnectorIds,
   };
   return {
-    userId: text(userId),
-    sessionId: text(sessionId),
-    parentSessionId: normalizeParentSessionId(parentSessionId),
-    rootSessionId: text(rootSessionId),
-    caller: text(caller) || "user",
-    dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-    turnScopeId: normalizedTurnScopeId,
+    ...runtimeIdentity,
     now,
     config,
   };

@@ -4,81 +4,67 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "@noobot/shared/value";
+import { HOOK_RUNTIME_IDENTITY_FIELDS } from "@noobot/hook-protocol/runtime-identity";
+import { AGENT_CONTEXT_IDENTITY_SHAPE } from "@noobot/context-protocol/agent-context/schema";
 
-const IDENTITY_KEYS = Object.freeze([
-  "userId",
-  "sessionId",
-  "rootSessionId",
-  "parentSessionId",
-  "dialogProcessId",
-  "turnScopeId",
-  "runId",
-  "presentationMessageId",
-]);
+const ENVELOPE_IDENTITY_FIELDS = Object.freeze(Object.keys(AGENT_CONTEXT_IDENTITY_SHAPE));
+const SHARED_IDENTITY_FIELDS = Object.freeze(
+  ENVELOPE_IDENTITY_FIELDS.filter((field) => HOOK_RUNTIME_IDENTITY_FIELDS.includes(field)),
+);
+const ENVELOPE_ONLY_FIELDS = Object.freeze(
+  ENVELOPE_IDENTITY_FIELDS.filter((field) => !SHARED_IDENTITY_FIELDS.includes(field)),
+);
+const RUN_CONFIG_IDENTITY_KEYS = Object.freeze(["executionId", "presentationMessageId"]);
 
-const SYSTEM_RUNTIME_IDENTITY_KEYS = Object.freeze([
-  "userId",
-  "sessionId",
-  "rootSessionId",
-  "parentSessionId",
-  "dialogProcessId",
-  "turnScopeId",
-]);
+function assertExactFields(value, fields, label) {
+  if (!isPlainObject(value)) {
+    throw new TypeError(`${label} must be a plain object`);
+  }
+  const keys = Object.keys(value).sort().join(",");
+  if (keys !== [...fields].sort().join(",")) {
+    throw new TypeError(`${label} must have exactly: ${fields.join(", ")}`);
+  }
+}
 
-const RUN_CONFIG_IDENTITY_KEYS = Object.freeze([
-  "turnScopeId",
-  "executionId",
-  "presentationMessageId",
-]);
-
-export function createTestTurnIdentity(label) {
+export function createTestEnvelopeIdentity(runtimeIdentity, envelopeOnly) {
+  assertExactFields(envelopeOnly, ENVELOPE_ONLY_FIELDS, "test envelope-only identity");
   return Object.freeze({
-    userId: `user-${label}`,
-    sessionId: `session-${label}`,
-    rootSessionId: `session-${label}`,
-    parentSessionId: "",
-    dialogProcessId: `dialog-${label}`,
-    turnScopeId: `turn-${label}`,
-    runId: `run-${label}`,
-    presentationMessageId: `presentation-${label}`,
+    ...Object.fromEntries(SHARED_IDENTITY_FIELDS.map((field) => [field, runtimeIdentity[field]])),
+    ...envelopeOnly,
   });
 }
 
-export function overrideTestTurnIdentity(identity, overrides) {
-  const unknown = Object.keys(overrides).filter((key) => !IDENTITY_KEYS.includes(key));
-  if (unknown.length > 0) {
-    throw new TypeError(`unknown test turn identity keys: ${unknown.join(", ")}`);
+export function deriveTestTurnIdentity(runtime, { runId, presentationMessageId }) {
+  const { sessionId, parentSessionId } = runtime.systemRuntime;
+  if (parentSessionId !== "") {
+    throw new TypeError("child session test identity requires an explicit envelope identity");
   }
-  return Object.freeze({ ...identity, ...overrides });
+  return createTestEnvelopeIdentity(runtime.systemRuntime, {
+    rootSessionId: sessionId,
+    runId,
+    presentationMessageId,
+  });
 }
 
-function assertCompleteIdentity(identity) {
-  const keys = Object.keys(identity).sort();
-  if (keys.join(",") !== [...IDENTITY_KEYS].sort().join(",")) {
-    throw new TypeError(`test turn identity must have exactly: ${IDENTITY_KEYS.join(", ")}`);
-  }
-}
-
-export function applyTestIdentityToRuntime(runtime, identity) {
+export function bindTestIdentityToRuntime(runtime, identity) {
   if (!isPlainObject(runtime.systemRuntime) || !isPlainObject(runtime.runConfig)) {
     throw new TypeError("test runtime requires plain systemRuntime and runConfig objects");
   }
-  assertCompleteIdentity(identity);
-  const preset = [
-    ...SYSTEM_RUNTIME_IDENTITY_KEYS.filter((key) => key in runtime.systemRuntime),
-    ...RUN_CONFIG_IDENTITY_KEYS.filter((key) => key in runtime.runConfig),
-  ];
-  if (preset.length > 0) {
+  assertExactFields(identity, ENVELOPE_IDENTITY_FIELDS, "test turn identity");
+  const conflicts = SHARED_IDENTITY_FIELDS.filter(
+    (field) => runtime.systemRuntime[field] !== identity[field],
+  );
+  if (conflicts.length > 0) {
     throw new TypeError(
-      `identity must be passed via the identity option, not runtime: ${preset.join(", ")}`,
+      `test turn identity conflicts with runtime identity: ${conflicts.join(", ")}; pass it via createTestRuntimeContext({ identity })`,
     );
   }
-  for (const key of SYSTEM_RUNTIME_IDENTITY_KEYS) {
-    runtime.systemRuntime[key] = identity[key];
+  const preset = RUN_CONFIG_IDENTITY_KEYS.filter((key) => key in runtime.runConfig);
+  if (preset.length > 0) {
+    throw new TypeError(`run identity must not be preset on runConfig: ${preset.join(", ")}`);
   }
   runtime.runConfig = {
     ...runtime.runConfig,
-    turnScopeId: identity.turnScopeId,
     executionId: identity.runId,
     presentationMessageId: identity.presentationMessageId,
   };

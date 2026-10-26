@@ -80,11 +80,11 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     sessionId: "s1",
     parentSessionId: "",
     dialogProcessId: "d1",
+    turnScopeId: "root-turn-1",
     userMessage: "请给我一个审批工作流",
     runConfig: {
       locale: "zh-CN",
       streaming: false,
-      turnScopeId: "root-turn-1",
       presentationMessageId: "assistant-presentation-1",
     },
     agentContext: {
@@ -149,12 +149,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
   assert.equal(String(subCall?.message || "").trim(), "请输出：节点A执行完成");
   assert.equal(subCall?.runConfigPatch?.streaming, false);
-  assert.match(
-    String(subCall?.runConfigPatch?.turnScopeId || ""),
-    /^workflow-node:agent_root-turn-1_/,
-  );
-  assert.equal(subCall?.strategy?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
-  assert.equal(subCall?.metadata?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
+
+  assert.match(subCall.strategy.turnScopeId, /^workflow-node:agent_root-turn-1_/);
+  assert.equal(Object.hasOwn(subCall.runConfigPatch, "turnScopeId"), false);
+  assert.equal(subCall.metadata.turnScopeId, subCall.strategy.turnScopeId);
   assert.equal(typeof subCall?.eventListener?.onEvent, "function");
   assert.match(
     String(subCall?.strategy?.relativeDir || ""),
@@ -163,8 +161,13 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
 
   assert.ok(workflowTurn(agentResult).pluginMeta.payload);
   assert.ok(String(workflowTurn(agentResult).pluginMeta.payload?.workflowRunId || "").trim());
-  assert.equal("workflowRunId" in workflowTurn(agentResult).pluginMeta.payload.execution, false);
-  assert.equal("instanceId" in workflowTurn(agentResult).pluginMeta.payload.execution, false);
+  assert.deepEqual(Object.keys(workflowTurn(agentResult).pluginMeta.payload).sort(), [
+    "interaction",
+    "nodeSessions",
+    "runMeta",
+    "semantic",
+    "workflowRunId",
+  ]);
   assert.equal(workflowTurn(agentResult).pluginMeta.payload?.runMeta?.dialogProcessId, "d1");
   assert.equal("planningDialog" in workflowTurn(agentResult).pluginMeta.payload, false);
   assert.match(
@@ -173,15 +176,23 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
   assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.dialogId, undefined);
   assert.equal(
-    "nodeDialogProcessId" in
-      workflowTurn(agentResult).pluginMeta.payload.execution.nodeAgentRuns[0],
+    "nodeDialogProcessId" in workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0],
     false,
   );
   assert.equal(Array.isArray(workflowTurn(agentResult).pluginMeta.payload?.nodeSessions), true);
   assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions.length, 1);
-  assert.equal(workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(
-    workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0]?.sessionId,
+    "rootSessionId" in workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0],
+    false,
+  );
+  assert.equal(
+    "parentSessionId" in workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0],
+    false,
+  );
+  assert.equal("sessionId" in workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0], false);
+  assert.equal(workflowTurn(agentResult).pluginMeta.payload.runMeta.sessionId, "s1");
+  assert.equal(
+    workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0].nodeSessionId,
     subSessionCalls[0].strategy.sessionId,
   );
   assert.equal(
@@ -330,19 +341,12 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
   const agentResult = dispatchOutcome?.result;
   assert.ok(workflowTurn(agentResult).pluginMeta.payload);
   assert.equal(fallbackArtifactCalls.length, 0);
-  assert.equal(workflowTurn(agentResult).pluginMeta.payload?.transferEnvelopes?.length >= 1, true);
+  assert.equal(workflowTurn(agentResult).transferEnvelopes.length >= 1, true);
+  assert.equal(workflowTurn(agentResult).transferEnvelopes[0].protocol, "noobot.semantic-transfer");
+  assert.equal("transferEnvelopes" in workflowTurn(agentResult).pluginMeta.payload, false);
   assert.equal(
-    workflowTurn(agentResult).pluginMeta.payload?.transferEnvelopes?.[0]?.protocol,
-    "noobot.semantic-transfer",
-  );
-  assert.equal(
-    workflowTurn(agentResult).pluginMeta.payload?.nodeSessions?.[0]?.transferEnvelopes?.length >= 1,
-    true,
-  );
-  assert.equal(
-    workflowTurn(agentResult).pluginMeta.payload?.nodeSessions?.[0]?.transferEnvelopes?.[0]
-      ?.protocol,
-    "noobot.semantic-transfer",
+    "transferEnvelopes" in workflowTurn(agentResult).pluginMeta.payload.nodeSessions[0],
+    false,
   );
   const workflowTurnMessage = workflowTurn(agentResult);
   assert.equal(workflowTurnMessage?.chatPresentation, true);
@@ -450,11 +454,6 @@ test("workflow hook routes final attachment summary composition through semantic
   const transferEnvelopes = Array.isArray(workflowTurnMessage?.transferEnvelopes)
     ? workflowTurnMessage.transferEnvelopes
     : [];
-  const workflowPayloadTransferEnvelopes = Array.isArray(
-    workflowTurn(agentResult).pluginMeta.payload?.transferEnvelopes,
-  )
-    ? workflowTurn(agentResult).pluginMeta.payload.transferEnvelopes
-    : [];
   assert.equal(
     transferEnvelopes.some(
       (item = {}) =>
@@ -463,14 +462,7 @@ test("workflow hook routes final attachment summary composition through semantic
     ),
     true,
   );
-  assert.equal(
-    workflowPayloadTransferEnvelopes.some(
-      (item = {}) =>
-        String(item?.payload?.attachments?.[0]?.identity?.attachmentId || "").trim() ===
-        "wf-semantic-final-1",
-    ),
-    true,
-  );
+  assert.equal("transferEnvelopes" in workflowTurn(agentResult).pluginMeta.payload, false);
   const workflowContent = String(workflowTurnMessage?.content || "");
   assert.match(workflowContent, /final-summary\.md/);
   assert.doesNotMatch(workflowContent, /node-summary\.md/);

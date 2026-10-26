@@ -22,7 +22,6 @@ export {
   createTurnTerminalResolution,
   collectTurnReplacementTombstoneErrors,
   isAuthoritativeTurnLifecycleEnvelope,
-  validateSessionEvent,
   validateSessionProvisionIntent,
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleReceipt,

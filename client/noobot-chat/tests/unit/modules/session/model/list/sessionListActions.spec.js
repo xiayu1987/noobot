@@ -49,7 +49,7 @@ function createHarness(overrides = {}) {
     activeSessionId: ref("s1"),
     loadingSessions: ref(false),
     loadingSessionDetail: ref(false),
-    sending: ref(false),
+    turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
     userId: ref("u1"),
     authFetch: vi.fn(),
     ensureConnected: vi.fn(() => true),

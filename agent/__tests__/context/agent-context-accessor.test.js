@@ -23,8 +23,10 @@ import {
 } from "../helpers/agent-execution-scope.js";
 
 test("agent context accessors separate the runtime execution root from the logical display root", () => {
-  const systemRuntime = { sessionId: "runtime-session" };
-  const runtime = createTestRuntimeContext({ basePath: "/host/workspaces/u1", systemRuntime });
+  const runtime = createTestRuntimeContext({
+    basePath: "/host/workspaces/u1",
+    identity: { sessionId: "runtime-session" },
+  });
   const tools = [{ name: "read_file" }];
   const scope = createTestAgentExecutionScope(runtime, {
     identity: {
@@ -41,7 +43,8 @@ test("agent context accessors separate the runtime execution root from the logic
     tools,
   });
   assert.equal(getRuntimeFromAgentContext(scope), runtime);
-  assert.equal(getSystemRuntimeFromAgentContext(scope), systemRuntime);
+  assert.equal(getSystemRuntimeFromAgentContext(scope), runtime.systemRuntime);
+  assert.equal(getSystemRuntimeFromAgentContext(scope).sessionId, "runtime-session");
   assert.equal(getToolsFromAgentContext(scope), tools);
   assert.equal(getBasePathFromAgentContext(scope), "/host/workspaces/u1");
   assert.equal(scope.context.environment.workspace.basePath, "/workspace");

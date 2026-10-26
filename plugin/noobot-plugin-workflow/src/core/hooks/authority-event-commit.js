@@ -32,15 +32,15 @@ async function dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope 
 }
 
 export async function commitWorkflowRuntimeEvent({
-  ctx = {},
-  eventType = "",
-  commandId = "",
-  payload = {},
-  orderingDomain = "",
-  orderingScopeId = "",
-  revision = 1,
-  executionId = "",
-} = {}) {
+  ctx,
+  eventType,
+  commandId,
+  payload,
+  orderingDomain,
+  orderingScopeId,
+  revision,
+  executionId,
+}) {
   const runtime = resolveWorkflowCommitRuntime(ctx);
   const sessionManager = requireWorkflowCommitCapability(runtime);
   if (!isCanonicalText(commandId)) {

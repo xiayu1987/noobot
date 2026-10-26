@@ -134,7 +134,6 @@ export function createTurnOrchestrator({
       if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted !== true) {
         appendTurnContextControlMessage({
           runtime,
-          loopState,
           content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
           internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TOOL_LOOP_LIMIT_FINALIZE_PROMPT,
         });
@@ -214,7 +213,6 @@ export function createTurnOrchestrator({
         const isTaskSummary = rejectedControlToolBatch.controlToolName === TOOL_NAME.TASK_SUMMARY;
         appendTurnContextControlMessage({
           runtime,
-          loopState,
           content: tEngine(
             runtime,
             isTaskSummary ? "taskSummarySingleToolPrompt" : "taskCheckSingleToolPrompt",

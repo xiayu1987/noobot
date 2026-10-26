@@ -13,6 +13,7 @@ import {
   getEventFamily,
   validateInteractionAuthority,
   validateInteractionRequestPayload,
+  validateInteractionResponsePayload,
   INTERACTION_LIFECYCLE,
   isTerminalInteractionLifecycle,
   createEventEnvelope,
@@ -285,6 +286,35 @@ test("interaction request requires stable identity and a complete payload", () =
   );
   assert.equal(validateInteractionRequestPayload({ ...base, timeoutMs: 0 }).valid, false);
   assert.equal(validateInteractionRequestPayload({ ...base, timeoutMs: 1000 }).valid, true);
+});
+
+test("interaction payload validators return the registry {valid, errors} shape", () => {
+  const base = {
+    requestId: "request-1",
+    dialogProcessId: "process-1",
+    interactionType: "approval",
+  };
+  assert.deepEqual(validateInteractionRequestPayload(base), { valid: true, errors: [] });
+  assert.deepEqual(validateInteractionRequestPayload(null), {
+    valid: false,
+    errors: ["payload_not_object"],
+  });
+  assert.deepEqual(validateInteractionRequestPayload({ interactionType: "approval" }), {
+    valid: false,
+    errors: ["missing_request_id", "missing_dialog_process_id"],
+  });
+  assert.deepEqual(validateInteractionRequestPayload({ ...base, timeoutMs: 0 }), {
+    valid: false,
+    errors: ["invalid_timeout_ms"],
+  });
+  assert.deepEqual(validateInteractionResponsePayload({ requestId: "request-1" }), {
+    valid: false,
+    errors: ["missing_dialog_process_id"],
+  });
+  assert.deepEqual(validateInteractionResponsePayload(undefined), {
+    valid: false,
+    errors: ["payload_not_object"],
+  });
 });
 
 test("turn lifecycle envelope causality must equal the payload causality", () => {

@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import {
   TRANSFER_ENVELOPE_FIELD,
   TRANSFER_ENVELOPE_FIELDS,
-  collectAllTransferEnvelopeLists,
   isTransferEnvelopeField,
   readTransferEnvelopeList,
 } from "../src/index.js";
@@ -24,6 +23,7 @@ test("does not expose field priority lists or fallback pickers", () => {
     "TRANSFER_FIRST_FIELDS",
     "pickTransferEnvelopeList",
     "collectTransferEnvelopeLists",
+    "collectAllTransferEnvelopeLists",
   ]) {
     assert.equal(name in protocol, false, name);
   }
@@ -63,13 +63,4 @@ test("readTransferEnvelopeList rejects missing or malformed carriers", () => {
     () => readTransferEnvelopeList({ attachments: [] }, "attachments"),
     /transfer_envelope_field_invalid:attachments/,
   );
-});
-
-test("collectAllTransferEnvelopeLists takes every field without priority", () => {
-  const sources = [
-    { nodeResultTransferEnvelopes: ["a"], transferEnvelopes: ["b"] },
-    { transferEnvelopes: [] },
-    undefined,
-  ];
-  assert.deepEqual(collectAllTransferEnvelopeLists(sources), ["b", "a"]);
 });

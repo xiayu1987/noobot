@@ -3,14 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateExecutionIdentity } from "@noobot/session-protocol/execution-lifecycle";
 import {
-  canonicalTurnScopeId,
-  executionTurnKey,
-  isTurnRuntimeDeleted,
-  runtimeText,
-} from "./turnRuntimeRegistryIdentity.js";
-import { isObjectLike } from "@noobot/shared/value";
+  compareExecutionVersion,
+  projectExecutionRecord,
+  validateExecutionRecord,
+} from "@noobot/session-protocol/execution-lifecycle";
+import { executionTurnKey, isTurnRuntimeDeleted } from "./turnRuntimeRegistryIdentity.js";
+import { isObjectLike, text } from "@noobot/shared/value";
 
 export function runtimeFingerprint(value = {}) {
   const normalize = (input) => {
@@ -25,57 +24,24 @@ export function runtimeFingerprint(value = {}) {
   return JSON.stringify(normalize(value));
 }
 
-export function applyExecutionProjection(registry, source = {}) {
-  const validation = validateExecutionIdentity(source);
+export function applyExecutionProjection(registry, source) {
+  const validation = validateExecutionRecord(source);
   if (!validation.valid) {
-    return { applied: false, reason: "invalid_execution_identity", errors: validation.errors };
+    return { applied: false, reason: "invalid_execution_record", errors: validation.errors };
   }
-  const current = registry.executions?.[validation.identity.executionId];
-  const rawTurnScopeId = runtimeText(validation.identity?.turnScopeId || source?.turnScopeId);
-  const canonicalScopeId = canonicalTurnScopeId(rawTurnScopeId);
-  if (
-    isTurnRuntimeDeleted(registry, {
-      sessionId: validation.identity?.sessionId || source?.sessionId,
-      turnScopeId: canonicalScopeId,
-    })
-  ) {
+  const execution = projectExecutionRecord(source);
+  if (isTurnRuntimeDeleted(registry, execution)) {
     return { applied: false, reason: "deleted_turn_tombstoned" };
   }
-  const execution = {
-    ...(current || {}),
-    ...source,
-    ...validation.identity,
-    ...(canonicalScopeId ? { turnScopeId: canonicalScopeId } : {}),
-    ...(rawTurnScopeId && rawTurnScopeId !== canonicalScopeId
-      ? { protocolTurnScopeId: rawTurnScopeId }
-      : {}),
-  };
-  if (
-    current &&
-    (Number(current.revision || 0) > Number(execution.revision || 0) ||
-      (Number(current.revision || 0) === Number(execution.revision || 0) &&
-        Number(current.sequence || 0) > Number(execution.sequence || 0)))
-  ) {
-    return { applied: false, reason: "stale_execution" };
+  const current = registry.executions[execution.executionId];
+  const order = current ? compareExecutionVersion(execution, current) : 1;
+  if (order < 0) return { applied: false, reason: "stale_execution" };
+  if (order === 0) {
+    return runtimeFingerprint(current) === runtimeFingerprint(execution)
+      ? { applied: false, deduplicated: true, reason: "duplicate_execution" }
+      : { applied: false, reason: "execution_sequence_conflict" };
   }
-  if (
-    current &&
-    Number(current.revision || 0) === Number(execution.revision || 0) &&
-    Number(current.sequence || 0) === Number(execution.sequence || 0)
-  ) {
-    const currentComparable = { ...current };
-    const executionComparable = { ...execution };
-    delete currentComparable._projectionFingerprint;
-    delete executionComparable._projectionFingerprint;
-    if (runtimeFingerprint(currentComparable) === runtimeFingerprint(executionComparable)) {
-      return { applied: false, deduplicated: true, reason: "duplicate_execution" };
-    }
-    return { applied: false, reason: "execution_sequence_conflict" };
-  }
-  if (!registry.executions) registry.executions = {};
-  if (!registry.executionIdByTurnScopeId) registry.executionIdByTurnScopeId = {};
-  if (!registry.childExecutionIdsByParentId) registry.childExecutionIdsByParentId = {};
-  const previousParentExecutionId = runtimeText(current?.parentExecutionId);
+  const previousParentExecutionId = text(current?.parentExecutionId);
   if (previousParentExecutionId && previousParentExecutionId !== execution.parentExecutionId) {
     registry.childExecutionIdsByParentId[previousParentExecutionId] = (
       registry.childExecutionIdsByParentId[previousParentExecutionId] || []
@@ -120,11 +86,16 @@ export function applyExecutionTree(registry, payload) {
 }
 
 export function selectExecution(registry, executionId) {
-  return registry?.executions?.[runtimeText(executionId)] || null;
+  return registry.executions[text(executionId)] || null;
+}
+
+export function selectTurnExecution(registry, sessionId, turnScopeId) {
+  const executionId = registry.executionIdByTurnScopeId[executionTurnKey(sessionId, turnScopeId)];
+  return executionId ? selectExecution(registry, executionId) : null;
 }
 
 export function selectExecutionChildren(registry, executionId) {
-  return (registry?.childExecutionIdsByParentId?.[runtimeText(executionId)] || [])
-    .map((id) => registry?.executions?.[id])
+  return (registry.childExecutionIdsByParentId[text(executionId)] || [])
+    .map((id) => registry.executions[id])
     .filter(Boolean);
 }

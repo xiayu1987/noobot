@@ -20,7 +20,7 @@ export function resolveRuntimeTransferIdentity({
   const { runConfig, systemRuntime } = runtime;
   const presentationMessageId = safeStr(runConfig.presentationMessageId);
   const resolvedSessionId = safeStr(systemRuntime.sessionId);
-  const turnScopeId = safeStr(runConfig.turnScopeId);
+  const turnScopeId = safeStr(systemRuntime.turnScopeId);
   const runId = safeStr(runConfig.executionId);
   if (
     !presentationMessageId ||

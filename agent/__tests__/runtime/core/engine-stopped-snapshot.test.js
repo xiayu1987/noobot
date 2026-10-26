@@ -52,12 +52,14 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
         events.push(event);
       },
     },
-    systemRuntime: {
+    identity: {
       userId: "admin",
       sessionId: "session-engine-stop",
       parentSessionId: "parent-session-engine-stop",
       dialogProcessId: "dialog-engine-stop",
       turnScopeId: "turn-engine-stop",
+    },
+    systemRuntime: {
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
     },

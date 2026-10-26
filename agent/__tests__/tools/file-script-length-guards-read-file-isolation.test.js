@@ -97,9 +97,10 @@ test("read_file: configured super user id does not bypass isolation when runtime
   await fs.writeFile(otherUserFile, "secret", "utf8");
 
   const agentContext = buildAgentContext(basePath, superUserId, {
+    identity: { userId: superUserId, sessionId: "s-1" },
     runtime: {
       globalConfig: { workspaceRoot, super_admin: { user_id: superUserId } },
-      systemRuntime: { userId: superUserId, sessionId: "s-1", rootSessionId: "s-1", config: {} },
+      systemRuntime: { config: {} },
     },
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
@@ -127,12 +128,10 @@ test("read_file: non-true super user runtime flag does not bypass isolation", as
   await fs.writeFile(otherUserFile, "secret", "utf8");
 
   const agentContext = buildAgentContext(basePath, superUserId, {
+    identity: { userId: superUserId, sessionId: "s-1" },
     runtime: {
       globalConfig: { workspaceRoot, super_admin: { user_id: superUserId } },
       systemRuntime: {
-        userId: superUserId,
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: "true",
         config: {},
       },
@@ -162,11 +161,9 @@ test("read_file: configured super user can read another user workspace through h
   await fs.writeFile(otherUserFile, "visible", "utf8");
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -208,11 +205,9 @@ test("read_file: sandboxed super user in docker user scope cannot read another u
   await fs.writeFile(otherUserFile, "hidden", "utf8");
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -293,11 +288,9 @@ test("read_file: super user can read an absolute file outside workspace root", a
   await fs.writeFile(outsideFile, "visible-outside", "utf8");
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -334,11 +327,9 @@ test("read_file: global sandbox forbids super user host paths without widening m
   await fs.writeFile(outsideFile, "hidden-outside", "utf8");
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -380,11 +371,9 @@ test("read_file: configured super user cross-workspace read still respects mustE
   await fs.mkdir(basePath, { recursive: true });
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -424,11 +413,9 @@ test("read_file: runtime sandbox mappings cannot grant file access", async () =>
   await fs.writeFile(mountedFile, "mounted-ok", "utf8");
 
   const agentContext = buildAgentContext(basePath, "primary-user", {
+    identity: { userId: "primary-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
-        userId: "primary-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         config: {
           sandboxPathMappings: [
             {

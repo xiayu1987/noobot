@@ -44,10 +44,13 @@ test("session display summary materializes the active Turn presentation in the z
       activeTurnScopeId: "turn-active",
       turns: {
         "turn-active": {
+          revision: 1,
+          sequence: 1,
           turnScopeId: "turn-active",
           presentationMessageId: "presentation-active",
           dialogProcessId: "dialog-active",
           state: "processing",
+          startedAt: "2026-07-31T02:53:40.000Z",
           updatedAt: "2026-07-31T02:53:42.225Z",
         },
       },
@@ -119,6 +122,7 @@ test("session display summary materializes stopped Turn details on its stable pr
       activeTurnScopeId: "",
       turns: {
         "turn-stopped": {
+          revision: 1,
           turnScopeId: "turn-stopped",
           dialogProcessId: "dialog-stopped",
           presentationMessageId: "presentation-stopped",
@@ -179,10 +183,12 @@ test("full and summary Session Detail expose the same canonical active Turn mess
       sequence: 1,
       turns: {
         "turn-active-full": {
+          revision: 1,
           turnScopeId: "turn-active-full",
           presentationMessageId: "presentation-active-full",
           dialogProcessId: "dialog-active-full",
           state: "processing",
+          startedAt: "2026-07-31T03:04:00.000Z",
           sequence: 1,
           updatedAt: "2026-07-31T03:04:06.000Z",
         },
@@ -295,11 +301,14 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
       sequence: 1,
       turns: {
         [turnScopeId]: {
+          revision: 1,
+          sequence: 1,
           sessionId: "active-timeline-session",
           turnScopeId,
           dialogProcessId: "dialog-active-timeline",
           presentationMessageId,
           state: "processing",
+          startedAt: "2026-07-31T03:10:00.000Z",
         },
       },
     },

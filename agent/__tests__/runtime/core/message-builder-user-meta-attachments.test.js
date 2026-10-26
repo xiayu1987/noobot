@@ -49,11 +49,8 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
             size: 1407731,
           }),
         ],
-        systemRuntime: {
-          sessionId: "session-a",
-          dialogProcessId: "dialog-a",
-          turnScopeId: "turn-a",
-        },
+        identity: { sessionId: "session-a", dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
@@ -83,11 +80,8 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
-        systemRuntime: {
-          sessionId: "session-a",
-          dialogProcessId: "dialog-a",
-          turnScopeId: "turn-a",
-        },
+        identity: { sessionId: "session-a", dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
@@ -108,11 +102,8 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
         toolAttachments: [
           { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
         ],
-        systemRuntime: {
-          sessionId: "session-a",
-          dialogProcessId: "dialog-a",
-          turnScopeId: "turn-a",
-        },
+        identity: { sessionId: "session-a", dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
@@ -138,11 +129,8 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
         toolAttachments: [
           { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
         ],
-        systemRuntime: {
-          sessionId: "session-a",
-          dialogProcessId: "dialog-a",
-          turnScopeId: "turn-a",
-        },
+        identity: { sessionId: "session-a", dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
@@ -176,11 +164,8 @@ test("buildContextMessages does not use fallback meta attachments as current use
         toolAttachments: [
           { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
         ],
-        systemRuntime: {
-          sessionId: "session-a",
-          dialogProcessId: "dialog-a",
-          turnScopeId: "turn-a",
-        },
+        identity: { sessionId: "session-a", dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
+        systemRuntime: {},
       }),
       {
         messageBlocks: {
@@ -234,10 +219,8 @@ test("buildContextMessages projects only model attachment metadata", () => {
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [richAttachment],
-        systemRuntime: {
-          sessionId: "session-rich",
-          dialogProcessId: "dialog-rich",
-        },
+        identity: { sessionId: "session-rich", dialogProcessId: "dialog-rich" },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
@@ -311,11 +294,12 @@ test("buildContextMessages keeps complete metadata per historical user turn with
             mimeType: "application/docx",
           }),
         ],
-        systemRuntime: {
+        identity: {
           sessionId: "current-session",
           dialogProcessId: "current-dialog",
           turnScopeId: "current-turn",
         },
+        systemRuntime: {},
       }),
       {
         messageBlocks: {
@@ -464,11 +448,12 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
-        systemRuntime: {
+        identity: {
           sessionId: "current-session",
           dialogProcessId: "dialog-current",
           turnScopeId: "turn-current",
         },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
@@ -509,11 +494,12 @@ test("buildContextMessages discards classified user_meta without inferring from 
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [],
-        systemRuntime: {
+        identity: {
           sessionId: "s1",
           dialogProcessId: "dialog-current",
           turnScopeId: "turn-current",
         },
+        systemRuntime: {},
       }),
       {
         messageBlocks: {
@@ -567,11 +553,12 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [userAttachment("attachment-b", "s1", { name: "continue.docx" })],
-        systemRuntime: {
+        identity: {
           sessionId: "s1",
           dialogProcessId: "dialog-continue",
           turnScopeId: "turn-continue",
         },
+        systemRuntime: {},
       }),
       {
         messageBlocks: {
@@ -672,7 +659,8 @@ test("buildContextMessages does not project frontend user metadata for internal 
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
-        systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child" },
+        identity: { sessionId: "child", dialogProcessId: "dialog-child" },
+        systemRuntime: {},
       }),
       {
         messageBlocks: {
@@ -705,11 +693,12 @@ test("buildContextMessages does not project frontend user metadata for internal 
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
-        systemRuntime: {
+        identity: {
           sessionId: "child",
           dialogProcessId: "dialog-child",
           caller: SESSION_CALLER.BOT,
         },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),

@@ -31,16 +31,15 @@ export const WORKFLOW_I18N_KEYSET = Object.freeze({
     NO_EDGE: "workflowDslErrorNoEdge",
     NODE_ID_REQUIRED: "workflowDslErrorNodeIdRequired",
     NODE_ID_DUPLICATE: "workflowDslErrorNodeIdDuplicate",
+    NODE_NAME_REQUIRED: "workflowDslErrorNodeNameRequired",
     NODE_TYPE_INVALID: "workflowDslErrorNodeTypeInvalid",
+    STATE_TYPE_INVALID: "workflowDslErrorStateTypeInvalid",
+    BOUNDARY_NODE_INVALID: "workflowDslErrorBoundaryNodeInvalid",
     EDGE_FROM_TO_REQUIRED: "workflowDslErrorEdgeFromToRequired",
     EDGE_CONDITION_UNSUPPORTED: "workflowDslErrorEdgeConditionUnsupported",
     EDGE_UNDEFINED_NODE: "workflowDslErrorEdgeUndefinedNode",
     UNKNOWN_COMMAND: "workflowDslErrorUnknownCommand",
     LINE_LABEL: "workflowDslLineLabel",
-  }),
-  DSL_DEFAULT_NODE: Object.freeze({
-    START_NAME: "workflowDslDefaultStartNodeName",
-    END_NAME: "workflowDslDefaultEndNodeName",
   }),
   INPUT: Object.freeze({
     DEFAULT_LABEL: "workflowInputDefaultLabel",
@@ -119,14 +118,17 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowDslErrorNoEdge: "未找到 EDGE",
     workflowDslErrorNodeIdRequired: "NODE 必须包含 id=<id>",
     workflowDslErrorNodeIdDuplicate: "重复的 NODE id: {id}",
+    workflowDslErrorNodeNameRequired: "NODE {id} 必须包含 name=<名称>",
     workflowDslErrorNodeTypeInvalid: "NODE type 必须是 state/action，当前: {type}",
+    workflowDslErrorStateTypeInvalid:
+      "NODE {id}：type=state 必须声明 stateType=start/end/branch/merge，type=action 不得声明 stateType，当前: {stateType}",
+    workflowDslErrorBoundaryNodeInvalid:
+      "工作流必须恰好声明一个 stateType=start 节点，并至少声明一个 stateType=end 节点",
     workflowDslErrorEdgeFromToRequired: "EDGE 必须包含 from=<id> 和 to=<id>",
     workflowDslErrorEdgeConditionUnsupported: "EDGE 暂不支持条件",
     workflowDslErrorEdgeUndefinedNode: "EDGE 引用了未定义节点 ({from} -> {to})",
     workflowDslErrorUnknownCommand: "未知命令: {command}",
     workflowDslLineLabel: "第{lineNo}行",
-    workflowDslDefaultStartNodeName: "开始",
-    workflowDslDefaultEndNodeName: "结束",
   }),
   [WORKFLOW_LOCALE.EN_US]: Object.freeze({
     workflowNoDescription: "(no description)",
@@ -173,14 +175,17 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowDslErrorNoEdge: "no EDGE",
     workflowDslErrorNodeIdRequired: "NODE requires id=<id>",
     workflowDslErrorNodeIdDuplicate: "duplicate NODE id: {id}",
+    workflowDslErrorNodeNameRequired: "NODE {id} requires name=<name>",
     workflowDslErrorNodeTypeInvalid: "NODE type must be state/action, got: {type}",
+    workflowDslErrorStateTypeInvalid:
+      "NODE {id}: type=state requires stateType=start/end/branch/merge and type=action must not declare stateType, got: {stateType}",
+    workflowDslErrorBoundaryNodeInvalid:
+      "workflow must declare exactly one stateType=start node and at least one stateType=end node",
     workflowDslErrorEdgeFromToRequired: "EDGE requires from=<id> to=<id>",
     workflowDslErrorEdgeConditionUnsupported: "EDGE condition is not supported",
     workflowDslErrorEdgeUndefinedNode: "EDGE references undefined node ({from} -> {to})",
     workflowDslErrorUnknownCommand: "unknown command: {command}",
     workflowDslLineLabel: "line {lineNo}",
-    workflowDslDefaultStartNodeName: "Start",
-    workflowDslDefaultEndNodeName: "End",
   }),
 });
 
@@ -191,13 +196,15 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
     "只输出 DSL，不要 JSON，不要 markdown，不要解释。",
     "",
     "DSL 指令：",
-    '- NODE id=... type=state|action name="..." [stateType=start|end|branch|merge] [task="..."] [attachments="..."]',
+    '- NODE id=... type=state stateType=start|end|branch|merge name="..."',
+    '- NODE id=... type=action name="..." [task="..."] [attachments="..."]',
+    "- type 必填；type=state 必须声明 stateType，type=action 不得声明 stateType。",
     "- EDGE from=... to=...",
     "- END",
     "",
     "语义：",
     "- 串行：action 按 EDGE 顺序依次执行。",
-    "- 结构约束：流程边界与并发控制状态节点必须形成闭合结构。每个工作流应包含 stateType=start 与 stateType=end 作为起止边界；引入 stateType=branch 并发分叉时，必须在各分支完成后通过对应的 stateType=merge 汇聚，形成 branch -> actions -> merge 的闭合并发段，避免悬空 branch 或 merge。",
+    "- 结构约束：流程边界与并发控制状态节点必须形成闭合结构。每个工作流必须显式声明 stateType=start 与 stateType=end 作为起止边界；引入 stateType=branch 并发分叉时，必须在各分支完成后通过对应的 stateType=merge 汇聚，形成 branch -> actions -> merge 的闭合并发段，避免悬空 branch 或 merge。",
     "- 并发：使用 stateType=branch 分出多个 action，使用 stateType=merge 汇聚。",
     "- action 必须写 task，task 是子 agent 可直接执行的任务描述。",
     "- 节点边界遵循用户原意：用户明确要求一个 action/child/node 完成多步时，必须把全部步骤保留在同一个 action task 中，不得按步骤拆成多个 action；仅当用户明确要求多个节点时才拆分。",
@@ -230,13 +237,15 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
     "Output DSL only. No JSON, no markdown, no explanation.",
     "",
     "DSL directives:",
-    '- NODE id=... type=state|action name="..." [stateType=start|end|branch|merge] [task="..."] [attachments="..."]',
+    '- NODE id=... type=state stateType=start|end|branch|merge name="..."',
+    '- NODE id=... type=action name="..." [task="..."] [attachments="..."]',
+    "- type is required; type=state must declare stateType; type=action must not declare stateType.",
     "- EDGE from=... to=...",
     "- END",
     "",
     "Semantics:",
     "- Sequential: action nodes execute by EDGE order.",
-    "- Structural constraints: workflow boundary and concurrency-control state nodes must form closed constructs. Each workflow should include stateType=start and stateType=end as start/end boundaries; when introducing a stateType=branch parallel split, join all branches with the corresponding stateType=merge after branch actions complete, forming a closed branch -> actions -> merge segment; avoid dangling branch or merge nodes.",
+    "- Structural constraints: workflow boundary and concurrency-control state nodes must form closed constructs. Each workflow must explicitly declare stateType=start and stateType=end as start/end boundaries; when introducing a stateType=branch parallel split, join all branches with the corresponding stateType=merge after branch actions complete, forming a closed branch -> actions -> merge segment; avoid dangling branch or merge nodes.",
     "- Parallel: split via stateType=branch and merge via stateType=merge.",
     "- action must have task; task should be directly executable by sub-agent.",
     "- Preserve user-defined node boundaries: when one action/child/node is explicitly requested to perform multiple steps, keep every step in one action task; split only when the user explicitly requests multiple nodes.",
@@ -304,20 +313,4 @@ export function getWorkflowDefaultSemanticPrompt(locale = WORKFLOW_LOCALE.ZH_CN)
     DEFAULT_SEMANTIC_PROMPT_BY_LOCALE[normalizedLocale] ||
       DEFAULT_SEMANTIC_PROMPT_BY_LOCALE[WORKFLOW_LOCALE.ZH_CN],
   );
-}
-
-export function getWorkflowDslDefaultNodeNames(locale = WORKFLOW_LOCALE.ZH_CN) {
-  const normalizedLocale = normalizeWorkflowLocale(locale);
-  const startName =
-    tWorkflow(normalizedLocale, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.START_NAME) ||
-    tWorkflow(WORKFLOW_LOCALE.EN_US, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.START_NAME) ||
-    "Start";
-  const endName =
-    tWorkflow(normalizedLocale, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.END_NAME) ||
-    tWorkflow(WORKFLOW_LOCALE.EN_US, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.END_NAME) ||
-    "End";
-  return {
-    startName: text(startName),
-    endName: text(endName),
-  };
 }

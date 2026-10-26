@@ -10,19 +10,14 @@ import {
   INTERACTION_SEQUENCE_DOMAIN,
   validateInteractionRequestPayload,
 } from "@noobot/event-protocol";
-import { text as clean } from "@noobot/shared/value";
 
 export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents }) {
   return async function commitInteractionRequest({ userId, payload, persistenceScope }) {
     const validation = validateInteractionRequestPayload(payload);
-    if (!validation.valid) throw new TypeError(`invalid interaction request: ${validation.reason}`);
+    if (!validation.valid)
+      throw new TypeError(`invalid interaction request: ${validation.errors.join(",")}`);
     const { session } = resolveBot();
-    const sessionId = clean(payload.sessionId);
-    const turnScopeId = clean(payload.turnScopeId);
-    const requestId = clean(payload.requestId);
-    if (!clean(userId) || !sessionId || !turnScopeId) {
-      throw new TypeError("interaction authority commit requires user, session and Turn identity");
-    }
+    const { sessionId, turnScopeId, requestId } = payload;
     const domainPayload = {
       ...payload,
       sessionId: undefined,
@@ -31,7 +26,7 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
     delete domainPayload.sessionId;
     delete domainPayload.turnScopeId;
     const committed = await session.commitAuthorityEvent({
-      userId: clean(userId),
+      userId,
       sessionId,
       family: EVENT_FAMILY.INTERACTION_REQUEST,
       identity: {
@@ -46,7 +41,7 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
     });
     const committedEnvelope = requireCommittedAuthorityEvent(committed);
     const dispatch = await dispatchAuthorityEvents({
-      userId: clean(userId),
+      userId,
       sessionId,
       persistenceScope,
     });

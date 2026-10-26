@@ -282,7 +282,8 @@ export async function invokeNoToolsTurn({
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const modelContext = requireActiveModelContext(modelState.runtime);
   const messages = modelContext.messages;
-  const { traces, tools, currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
+  const { traces, tools, currentTurnMessages, currentTurnTasks } = loopState;
+  const { dialogProcessId } = modelContext.activeTurnIdentity;
   const { runtime } = modelState;
   const { eventListener } = runtime;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);

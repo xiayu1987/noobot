@@ -5,15 +5,14 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  areTurnScopeIdsEquivalent,
   getMessageContentIdentity,
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-  getMessageTurnScopeIdKey,
   getMessageExplicitTurnIdentity,
   isSameMessageIdentity,
   isSameExplicitMessageTurn,
-  normalizeTurnScopeIdKey,
 } from "../../../../../src/modules/chat/model/messageIdentity.js";
 
 describe("messageIdentity", () => {
@@ -36,16 +35,16 @@ describe("messageIdentity", () => {
     expect(getMessageContentIdentity({ lc_kwargs: { content: "x" } })).toBe("");
   });
 
-  it("normalizes workflow-node turn scope keys for persisted/runtime matching", () => {
-    expect(normalizeTurnScopeIdKey("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1")).toBe(
-      "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
-    );
+  it("keys workflow-node turn scopes by their single canonical encoding", () => {
     expect(
       getMessageTurnScopeId({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }),
     ).toBe("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1");
     expect(
-      getMessageTurnScopeIdKey({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }),
-    ).toBe("workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1");
+      areTurnScopeIdsEquivalent(
+        "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1",
+        "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
+      ),
+    ).toBe(false);
   });
 
   it("does not treat user and assistant in the same turn scope as the same message", () => {

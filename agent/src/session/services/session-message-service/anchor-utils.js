@@ -43,8 +43,6 @@ export function clearReplacementUserRuntimeState(message = {}) {
     "status",
     "terminalOutcome",
     "state",
-    "thinkingFinishedAt",
-    "thinkingStartedAt",
     "__noobotRuntimeRunStateKey",
   ]) {
     delete nextMessage[key];

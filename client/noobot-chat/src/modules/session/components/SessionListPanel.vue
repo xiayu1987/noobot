@@ -12,12 +12,12 @@ import { selectSessionTurnRuntime } from "../../chat/runtime/run-state-machine/t
 import { text } from "@noobot/shared/value";
 
 const props = defineProps({
-  sessions: { type: Array, default: () => [] },
-  activeSessionId: { type: String, default: "" },
-  turnRuntimeRegistry: { type: Object, default: () => ({}) },
-  sending: { type: Boolean, default: false },
-  collapsed: { type: Boolean, default: false },
-  isMobile: { type: Boolean, default: false },
+  sessions: { type: Array, required: true },
+  activeSessionId: { type: String, required: true },
+  turnRuntimeRegistry: { type: Object, required: true },
+  sending: { type: Boolean, required: true },
+  collapsed: { type: Boolean, required: true },
+  isMobile: { type: Boolean, required: true },
 });
 
 const emit = defineEmits(["select-session", "delete-session", "rename-session"]);

@@ -6,8 +6,9 @@
 import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
+  workflowSessionSnapshotEventId,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { createTurnLifecycleSnapshot, TURN_RECOVERY_ACTION } from "@noobot/session-protocol";
 
 const FIXTURE_OCCURRED_AT = "2026-01-01T00:00:00.000Z";
 const FIXTURE_PRODUCER = Object.freeze({ type: "test", id: "client-workflow-runtime-fixture" });
@@ -19,7 +20,6 @@ const FIXTURE_ENVELOPE_DEFAULTS = Object.freeze({
   occurredAt: FIXTURE_OCCURRED_AT,
 });
 const ORDERING_DEFAULTS = Object.freeze({
-  [WORKFLOW_RUNTIME_EVENT.PLANNING]: Object.freeze({ revision: 1 }),
   [WORKFLOW_RUNTIME_EVENT.NODE_STATE]: Object.freeze({ revision: 1 }),
   [WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT]: Object.freeze({ aggregateVersion: 1 }),
 });
@@ -65,11 +65,18 @@ export function canonicalWorkflowNodeStateEvent({ nodeExecutionId, ...nodeRecord
 export function canonicalWorkflowSessionSnapshot({ nodeSessionId, ...snapshotFields }) {
   const aggregateVersion = snapshotFields.aggregateVersion ?? 1;
   return canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT, {
+    eventId: workflowSessionSnapshotEventId({ nodeSessionId, aggregateVersion }),
     turnTimings: [],
     turnLifecycleSnapshot: createTurnLifecycleSnapshot({
       commandId: "test-snapshot-command",
       sessionId: nodeSessionId,
       sequence: aggregateVersion,
+      activeTurnScopeId: "",
+      activeTurn: null,
+      recentTerminalTurns: [],
+      replacedTurns: [],
+      unchanged: false,
+      recovery: TURN_RECOVERY_ACTION.NONE,
       generatedAt: FIXTURE_OCCURRED_AT,
     }),
     ...snapshotFields,

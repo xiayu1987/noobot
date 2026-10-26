@@ -18,9 +18,12 @@ import {
 } from "../session-display-source-revision.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { requireSessionAggregateVersion } from "@noobot/session-protocol";
-import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
+import {
+  TURN_RECOVERY_ACTION,
+  TURN_SNAPSHOT_TERMINAL_LIMIT,
+} from "@noobot/session-protocol/turn-lifecycle";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 30;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 32;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 function isValidTransferEnvelopeList(value) {
@@ -105,7 +108,8 @@ function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
     commandId: `session-summary:${sessionId}:${lifecycle.sequence}`,
     knownSequence: 0,
     terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT,
-    generatedAt: text(session.updatedAt),
+    recovery: TURN_RECOVERY_ACTION.NONE,
+    generatedAt: session.updatedAt,
   });
 }
 

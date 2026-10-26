@@ -11,21 +11,12 @@ import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { createHookManager } from "@noobot/hook-protocol";
-import {
-  createTestModelPort,
-  createLoopTurnIdentity,
-  prepareTestTurnExecution,
-} from "./turn-runtime-test-helper.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function runFunctionCallLoop(args = {}) {
-  prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    createLoopTurnIdentity(args.loopState),
-    "presentation-orchestrator-tool-pairs",
-  );
+  prepareTestTurnExecution(args.modelState, args.loopState, "presentation-orchestrator-tool-pairs");
   return runFunctionCallLoopProduction(args);
 }
 
@@ -69,7 +60,6 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     tools: tool ? [tool] : [],
     messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
-    dialogProcessId: "dialog-1",
     maxTurns,
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,

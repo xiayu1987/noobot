@@ -110,12 +110,13 @@ function createContext({
       turnScopeId: "turn-test",
       executionId: "agent:turn-test",
     },
-    systemRuntime: {
+    identity: {
       userId: "test-user",
       sessionId: "session-test",
       dialogProcessId: "dialog-test",
       turnScopeId: "turn-test",
     },
+    systemRuntime: {},
   });
   runtime.modelHost = createTestModelHost({ modelPort, modelSpec });
   return {

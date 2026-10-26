@@ -10,7 +10,6 @@ import {
   BaseSectionHeader,
   useMobileViewport,
 } from "../../../../shared/public-api/ui.js";
-import { executionReportService } from "../../../../infrastructure/api/thinking/executionReportService.js";
 import { getMessageDialogProcessId, getMessageSessionId } from "../../model/messageIdentity.js";
 import { buildExecutionReportView } from "../../model/executionReportModel.js";
 import { useOverlayHistory } from "../../../../shared/composables/useOverlayHistory.js";
@@ -20,7 +19,7 @@ const props = defineProps({
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
   translate: { type: Function, required: true },
-  fetchExecutionReport: { type: Function, default: null },
+  fetchExecutionReport: { type: Function, required: true },
 });
 const emit = defineEmits(["update:visible"]);
 useOverlayHistory(
@@ -54,10 +53,7 @@ async function loadReport() {
       sessionId: getMessageSessionId(props.messageItem),
       dialogProcessId: getMessageDialogProcessId(props.messageItem),
     };
-    report.value =
-      typeof props.fetchExecutionReport === "function"
-        ? await props.fetchExecutionReport(request)
-        : await executionReportService.getReport(request);
+    report.value = await props.fetchExecutionReport(request);
   } catch (error) {
     errorText.value = String(error?.message || error);
   } finally {

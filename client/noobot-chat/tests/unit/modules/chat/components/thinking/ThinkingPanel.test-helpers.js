@@ -169,7 +169,7 @@ const ElTabPaneStub = defineComponent({
 
 export function mountThinkingPanel(messageItem, props = {}, { stubs = {} } = {}) {
   return mount(ThinkingPanel, {
-    props: { messageItem, allMessages: [], ...props },
+    props: { messageItem, allMessages: [], fetchExecutionReport: async () => null, ...props },
     global: {
       stubs: {
         BaseThinkingPanelShell: {

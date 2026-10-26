@@ -140,7 +140,6 @@ test("session execution preserves every user interjection into the next model hi
       for (const interjection of interjections) {
         appendUserInterjectionMessage({
           runtime,
-          loopState: { modelContext, dialogProcessId },
           interjection: {
             ...interjection,
             receivedAt: `2026-09-18T00:00:0${interjection.interjectionSequence}.000Z`,

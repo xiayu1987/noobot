@@ -56,11 +56,12 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
-        systemRuntime: {
+        identity: {
           sessionId: "session-thought-signature",
           dialogProcessId: "dialog-thought-signature",
           turnScopeId: "turn-thought-signature",
         },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
@@ -100,11 +101,12 @@ test("buildContextMessages restores OpenAI Responses reasoning output sequence",
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
-        systemRuntime: {
+        identity: {
           sessionId: "session-responses",
           dialogProcessId: "dialog-responses",
           turnScopeId: "turn-responses",
         },
+        systemRuntime: {},
       }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),

@@ -11,6 +11,7 @@ import StateNode from "../src/design/model/node/state-node.js";
 import ENodeType from "../src/design/model/node/enums/node-type.js";
 import Business from "../src/engine/bizinst/business.js";
 import BizinstTreeControlCenter from "../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js";
+import EStateType from "../src/design/model/node/enums/state-type.js";
 
 function buildSimpleModel() {
   const model = new Model();
@@ -18,13 +19,13 @@ function buildSimpleModel() {
   const startNode = new StateNode();
   startNode.setName("开始节点");
   startNode.setNodeType(ENodeType.StateNode);
-  startNode.setStateType(0);
+  startNode.setStateType(EStateType.Start);
   startNode.setModel(model);
 
   const endNode = new StateNode();
   endNode.setName("结束节点");
   endNode.setNodeType(ENodeType.StateNode);
-  endNode.setStateType(1);
+  endNode.setStateType(EStateType.End);
   endNode.setModel(model);
 
   const flowto = new Flowto();

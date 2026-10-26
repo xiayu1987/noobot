@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { createEmptyTurnLifecycle, TURN_RECOVERY_ACTION } from "@noobot/session-protocol";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -138,6 +138,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
           "scope-keep": {
             turnScopeId: "scope-keep",
             presentationMessageId: "presentation-keep",
+            dialogProcessId: "dialog-keep",
             state: "completed",
             revision: 1,
             sequence: 1,
@@ -145,6 +146,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
           "scope-delete": {
             turnScopeId: "scope-delete",
             presentationMessageId: "presentation-delete",
+            dialogProcessId: "dialog-delete",
             state: "stop_completed",
             revision: 2,
             sequence: 2,
@@ -194,6 +196,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
     commandId: "snapshot-after-delete",
     knownSequence: 0,
     terminalLimit: 10,
+    resolveRecovery: async () => TURN_RECOVERY_ACTION.NONE,
   });
   assert.deepEqual(
     summary.messages.map((message) => message.turnScopeId),
@@ -231,12 +234,14 @@ test("SessionMessageService.deleteFromMessage clears a survivor's reference to t
       sequence: 2,
       turns: {
         source: {
+          revision: 1,
           turnScopeId: "source",
           dialogProcessId: "source-dialog",
           state: "stop_completed",
           sequence: 1,
         },
         continuation: {
+          revision: 1,
           turnScopeId: "continuation",
           dialogProcessId: "continuation-dialog",
           state: "completed",

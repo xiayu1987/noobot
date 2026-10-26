@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 import { SESSION_RUN_EVENT } from "./constants.js";
 import { isFinalTurnState } from "./turnReducer.js";
 import { projectAuthoritativeTurnTerminal } from "./authoritativeTurnProjection.js";
@@ -11,7 +12,7 @@ import {
   validateTurnLifecycleSnapshot,
   validateTurnTerminalResolution,
 } from "@noobot/session-protocol";
-import { ensureSessionBucket, runtimeText as text } from "./turnRuntimeRegistryIdentity.js";
+import { ensureSessionBucket } from "./turnRuntimeRegistryIdentity.js";
 import {
   applyExecutionProjection,
   runtimeFingerprint as executionFingerprint,

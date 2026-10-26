@@ -3,37 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import { mergeTurnTimingRecord, normalizeTurnTimingRecord } from "@noobot/session-protocol";
 import { normalizeAnchorValue } from "./anchor-utils.js";
 
 function resolveTurnTimingKey(item = {}) {
   return normalizeAnchorValue(item?.turnScopeId);
 }
 
-export function upsertSessionTurnTiming(session = {}, timing = {}) {
-  const turnScopeId = normalizeAnchorValue(timing?.turnScopeId);
-  const dialogProcessId = normalizeDialogProcessId(timing?.dialogProcessId);
-  const thinkingStartedAt = normalizeAnchorValue(timing?.thinkingStartedAt);
-  const thinkingFinishedAt = normalizeAnchorValue(timing?.thinkingFinishedAt);
-  const modelLoopRoundValue = Number(timing?.modelLoopRound || 0);
-  const modelLoopRound =
-    Number.isFinite(modelLoopRoundValue) && modelLoopRoundValue > 0 ? modelLoopRoundValue : 0;
-  if (!turnScopeId || (!thinkingStartedAt && !thinkingFinishedAt && !modelLoopRound)) return;
-  const incoming = {
-    turnScopeId,
-    dialogProcessId,
-    ...(thinkingStartedAt ? { thinkingStartedAt } : {}),
-    ...(thinkingFinishedAt ? { thinkingFinishedAt } : {}),
-    ...(modelLoopRound ? { modelLoopRound } : {}),
-  };
-  const incomingKey = resolveTurnTimingKey(incoming);
-  let matched = false;
-  session.turnTimings = session.turnTimings.map((item) => {
-    if (resolveTurnTimingKey(item) !== incomingKey) return item;
-    matched = true;
-    return { ...item, ...incoming };
-  });
-  if (!matched) session.turnTimings.push(incoming);
+export function upsertSessionTurnTiming(session, timing) {
+  const incoming = normalizeTurnTimingRecord(timing);
+  const index = session.turnTimings.findIndex(
+    (item) => resolveTurnTimingKey(item) === incoming.turnScopeId,
+  );
+  if (index < 0) {
+    session.turnTimings.push(incoming);
+    return;
+  }
+  session.turnTimings[index] = mergeTurnTimingRecord(session.turnTimings[index], incoming);
 }
 
 export function pruneSessionTurnTimings(session) {

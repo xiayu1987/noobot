@@ -39,7 +39,7 @@ export function resetNoFinalResponseRetryStreak(runtime = {}) {
   }
 }
 
-export function recoverMainFlowNoFinalResponse({ error, modelState, loopState, turn }) {
+export function recoverMainFlowNoFinalResponse({ error, modelState, turn }) {
   const { runtime } = modelState;
   const { eventListener } = runtime;
   if (!isRecoverableNoFinalResponse(error, runtime)) return false;
@@ -53,7 +53,6 @@ export function recoverMainFlowNoFinalResponse({ error, modelState, loopState, t
   const consecutive = readCounter(runtime, "noFinalResponseRetryConsecutiveCount") + 1;
   appendTurnContextControlMessage({
     runtime,
-    loopState,
     content: tEngine(runtime, "noFinalResponseRetryPrompt", { ordinal }),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.NO_FINAL_RESPONSE_RETRY_PROMPT,
   });

@@ -18,7 +18,6 @@ import { buildFinalWorkflowPayload } from "./payload-builder.js";
 import { receiveWorkflowSource } from "./source-receiver.js";
 import { runSemanticResolutionStage } from "./semantic-stage.js";
 import { runWorkflowExecutionStage } from "./execution-stage.js";
-import { createWorkflowRetryMeta, markWorkflowRetrySucceeded } from "./retry-meta.js";
 import {
   createBotDispatchHandled,
   createBotDispatchPass,
@@ -35,7 +34,6 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
     modelLoopRound: 0,
   });
   const phaseTracker = createPhaseTracker();
-  const retryMeta = createWorkflowRetryMeta();
 
   const { sourceText, skipped } = await receiveWorkflowSource({
     options,
@@ -49,7 +47,7 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
   ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_before_agent_dispatch" });
 
   try {
-    const { semanticResolution, semanticText } = await runSemanticResolutionStage({
+    const { semanticText } = await runSemanticResolutionStage({
       options,
       ctx,
       signal,
@@ -66,12 +64,8 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       options,
       ctx,
       agentResult,
-      sourceText,
       semanticText,
       semantic,
-      semanticResolution,
-      phaseTracker,
-      retryMeta,
       workflowRunId,
       planningNodeSessions: initialNodeStateSnapshot.nodes,
     });
@@ -86,19 +80,13 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       initialNodeStateSnapshot,
       phaseTracker,
     });
-    markWorkflowRetrySucceeded(retryMeta);
-    const { workflowPayload } = await buildFinalWorkflowPayload({
+    const { workflowPayload, nodeTransferEnvelopes } = await buildFinalWorkflowPayload({
       workflowRunId,
-      options,
       ctx,
       signal,
-      sourceText,
       semanticText,
       semantic,
-      execution,
-      semanticResolution,
       phaseTracker,
-      retryMeta,
       nodeAgentRuns,
       nodeStateSnapshot,
     });
@@ -107,9 +95,9 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       options,
       ctx,
       agentResult,
-      sourceText,
       semanticText,
       workflowPayload,
+      nodeTransferEnvelopes,
       execution,
     });
     return createBotDispatchHandled({ owner: "workflow", result: agentResult });

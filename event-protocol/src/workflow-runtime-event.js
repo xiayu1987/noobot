@@ -53,12 +53,44 @@ export function isWorkflowNodeTerminalStatus(value) {
   return WORKFLOW_NODE_TERMINAL_STATUSES.has(value);
 }
 
+export const WORKFLOW_NODE_TYPE = Object.freeze({
+  STATE: "state",
+  ACTION: "action",
+});
+
+export const WORKFLOW_STATE_TYPE = Object.freeze({
+  START: "start",
+  END: "end",
+  BRANCH: "branch",
+  MERGE: "merge",
+});
+
+const WORKFLOW_NODE_TYPES = Object.freeze(new Set(Object.values(WORKFLOW_NODE_TYPE)));
+const WORKFLOW_STATE_TYPES = Object.freeze(new Set(Object.values(WORKFLOW_STATE_TYPE)));
+
+export function isWorkflowNodeType(value) {
+  return WORKFLOW_NODE_TYPES.has(value);
+}
+
+export function isWorkflowStateType(value) {
+  return WORKFLOW_STATE_TYPES.has(value);
+}
+
 export function workflowSequenceDomainForEvent(eventType) {
   if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) return WORKFLOW_SEQUENCE_DOMAIN.PLANNING;
   if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) return WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
   if (eventType === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT)
     return WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT;
   return "";
+}
+
+export function workflowSessionSnapshotEventId({ nodeSessionId, aggregateVersion }) {
+  if (!isCanonicalText(nodeSessionId) || !isPositiveInteger(aggregateVersion)) {
+    throw new TypeError(
+      "workflow session snapshot event id requires nodeSessionId and aggregateVersion",
+    );
+  }
+  return `${WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT}:${nodeSessionId}:${aggregateVersion}`;
 }
 
 export function createWorkflowRuntimeEnvelope({
@@ -91,8 +123,8 @@ export function createWorkflowRuntimeEnvelope({
       domain: workflowSequenceDomainForEvent(eventType),
       scopeId: workflowRunId,
       sequence,
-      ...(revision === undefined ? {} : { revision }),
-      ...(aggregateVersion === undefined ? {} : { aggregateVersion }),
+      revision,
+      aggregateVersion,
     },
     producer,
     occurredAt,
@@ -246,11 +278,26 @@ function validateSessionSnapshotFields(envelope, payload, errors) {
   if (hasSessionOwnershipField(payload)) errors.push("invalid_snapshot_session_field");
   if (!isPositiveInteger(envelope?.ordering?.aggregateVersion))
     errors.push("invalid_aggregate_version");
+  else if (
+    isCanonicalText(payload.nodeSessionId) &&
+    envelope.identity.eventId !==
+      workflowSessionSnapshotEventId({
+        nodeSessionId: payload.nodeSessionId,
+        aggregateVersion: envelope.ordering.aggregateVersion,
+      })
+  )
+    errors.push("invalid_snapshot_event_id");
   if (!Array.isArray(payload.messages)) errors.push("invalid_snapshot_messages");
   else if (payload.messages.some((message) => !isCanonicalSnapshotMessage(message)))
     errors.push("missing_snapshot_message_identity");
   validateSnapshotLifecycle(payload, errors);
   if (!Array.isArray(payload?.turnTimings)) errors.push("invalid_turn_timings");
+}
+
+function validateRevisionAbsent(envelope, error, errors) {
+  if (isPlainObject(envelope?.ordering) && Object.hasOwn(envelope.ordering, "revision")) {
+    errors.push(error);
+  }
 }
 
 export function validateWorkflowRuntimeEnvelope(envelope) {
@@ -263,12 +310,14 @@ export function validateWorkflowRuntimeEnvelope(envelope) {
   validateEnvelopeIdentity(envelope, eventType, payload, errors);
   if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
     validatePlanningFields(payload, errors);
+    validateRevisionAbsent(envelope, "planning_revision_forbidden", errors);
   }
   if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
     validateNodeStateFields(envelope, payload, errors);
   }
   if (eventType === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
     validateSessionSnapshotFields(envelope, payload, errors);
+    validateRevisionAbsent(envelope, "snapshot_revision_forbidden", errors);
   }
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }

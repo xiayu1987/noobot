@@ -337,7 +337,7 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(props.messageItem).toBe(sameUserRenderItem);
   });
 
-  it("keeps stopped actions after reload when transport and canonical turn identities differ", () => {
+  it("keeps stopped actions after reload for a workflow node turn identity", () => {
     const action = getMonotonicAction();
     const userMessage = {
       role: "user",
@@ -348,7 +348,7 @@ describe("noobot-chat monotonic message action rules", () => {
     const stoppedAssistant = {
       role: "assistant",
       sessionId: "session-canonical",
-      turnScopeId: "workflow-node_client-turn_stop-after-refresh",
+      turnScopeId: "workflow-node:client-turn:stop-after-refresh",
       channelState: { state: "user_stopped" },
       pending: false,
     };

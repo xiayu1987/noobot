@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import EStateType from "../../../../design/model/node/enums/state-type.js";
+
 class ModelBox {
   constructor() {
     this.model = null;
@@ -19,7 +21,7 @@ class ModelBox {
     for (const node of nodes) {
       if (typeof node.getStateType === "function") {
         const stateType = node.getStateType();
-        if (stateType === 0 || stateType === 2) return node;
+        if (stateType === EStateType.Start || stateType === EStateType.Branch) return node;
       }
     }
     return null;
@@ -29,7 +31,7 @@ class ModelBox {
     for (const node of nodes) {
       if (typeof node.getStateType === "function") {
         const stateType = node.getStateType();
-        if (stateType === 1 || stateType === 3) return node;
+        if (stateType === EStateType.End || stateType === EStateType.Merge) return node;
       }
     }
     return null;

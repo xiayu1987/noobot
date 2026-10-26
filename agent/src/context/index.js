@@ -26,7 +26,7 @@ import { isAbortError } from "../shared/utils/error-utils.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/constants.js";
 import { MEMORY_SUMMARY_STAGE } from "../memory/stage-runner.js";
 import { text, isFunction, isPlainObject } from "@noobot/shared/value";
-import { requireSessionCaller } from "@noobot/shared/session-caller";
+import { createHookRuntimeIdentity } from "@noobot/hook-protocol/runtime-identity";
 
 function normalizeAdditionalSystemMessages(input) {
   return input.map((item) => text(item)).filter(Boolean);
@@ -45,10 +45,7 @@ const CONTEXT_BUILDER_INPUT_FIELDS = Object.freeze({
     "userInteractionBridge",
   ]),
   sessionContext: Object.freeze([
-    "userId",
-    "sessionId",
-    "caller",
-    "parentSessionId",
+    "runtimeIdentity",
     "userMessageAttachments",
     "systemMessages",
     "runConfig",
@@ -101,10 +98,7 @@ export class ContextBuilder {
       globalConfig,
       userConfig,
       eventListener,
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
+      runtimeIdentity,
       userMessageAttachments,
       sessionManager,
       memoryService,
@@ -121,16 +115,8 @@ export class ContextBuilder {
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
     this.eventListener = eventListener;
-    if (!text(userId) || !text(sessionId)) {
-      throw new TypeError("ContextBuilder requires userId and sessionId");
-    }
-    if (typeof parentSessionId !== "string") {
-      throw new TypeError("ContextBuilder parentSessionId must be a string");
-    }
-    this.userId = userId;
-    this.sessionId = sessionId;
-    this.caller = requireSessionCaller(caller);
-    this.parentSessionId = parentSessionId;
+
+    this.runtimeIdentity = createHookRuntimeIdentity(runtimeIdentity);
     this.userMessageAttachments = userMessageAttachments;
     this.sessionManager = sessionManager;
     this.memoryService = memoryService;
@@ -171,7 +157,7 @@ export class ContextBuilder {
   _resolveRuntimeBasePath() {
     if (this._runtimeBasePathCache) return this._runtimeBasePathCache;
     this._runtimeBasePathCache = resolveRuntimeBasePath({
-      userId: this.userId,
+      userId: this.runtimeIdentity.userId,
       globalConfig: this.globalConfig,
     });
     return this._runtimeBasePathCache;
@@ -187,21 +173,21 @@ export class ContextBuilder {
   async buildAgentContext(
     systemMessages,
     conversationMessages,
-    { dialogProcessId, attachments, incrementalMessages, userMetaBackwrites },
+    { attachments, incrementalMessages, userMetaBackwrites },
   ) {
     const effectiveSystemMessages = [...systemMessages, ...this.additionalSystemMessages];
     const resolvedRuntimeBasePath = this._resolveRuntimeBasePath();
     const resolvedRootSessionId = await resolveRootSessionId({
       sessionManager: this.sessionManager,
-      userId: this.userId,
-      sessionId: this.sessionId,
-      parentSessionId: this.parentSessionId,
+      userId: this.runtimeIdentity.userId,
+      sessionId: this.runtimeIdentity.sessionId,
+      parentSessionId: this.runtimeIdentity.parentSessionId,
     });
 
     const runtimeStaticInfo = buildStaticInfo({
       runtimeBasePath: resolvedRuntimeBasePath,
       identity: resolveContextIdentityInfo({
-        userId: this.userId,
+        userId: this.runtimeIdentity.userId,
         globalConfig: this.globalConfig,
       }),
       globalConfig: this.globalConfig,
@@ -213,12 +199,7 @@ export class ContextBuilder {
     const allEnabledProviders = resolveAllEnabledProviders(effectiveConfig);
     const systemRuntime = {
       ...buildSystemRuntime({
-        userId: this.userId,
-        sessionId: this.sessionId,
-        parentSessionId: this.parentSessionId,
-        caller: this.caller,
-        dialogProcessId,
-        rootSessionId: resolvedRootSessionId,
+        identity: this.runtimeIdentity,
         runConfig: this.runConfig,
         botManager: this.botManager,
         staticInfo: runtimeStaticInfo,
@@ -228,13 +209,7 @@ export class ContextBuilder {
       persistenceScope: this.persistenceScope,
     };
     return buildAgentExecutionContext({
-      identity: {
-        userId: this.userId,
-        sessionId: this.sessionId,
-        rootSessionId: resolvedRootSessionId,
-        parentSessionId: this.parentSessionId,
-        dialogProcessId,
-      },
+      identity: { ...this.runtimeIdentity, rootSessionId: resolvedRootSessionId },
       globalConfig: this.globalConfig,
       userConfig: this.userConfig,
       eventListener: this.eventListener,
@@ -258,26 +233,20 @@ export class ContextBuilder {
     });
   }
 
-  async _resolveSessionRecords({ dialogProcessId }) {
+  async _resolveSessionRecords() {
     return this.sessionManager.getContextProjection({
-      userId: this.userId,
-      sessionId: this.sessionId,
+      userId: this.runtimeIdentity.userId,
+      sessionId: this.runtimeIdentity.sessionId,
       persistenceScope: this.persistenceScope,
-      currentDialogProcessId: dialogProcessId,
-      currentTurnScopeId: text(this.runConfig.turnScopeId),
+      currentDialogProcessId: this.runtimeIdentity.dialogProcessId,
+      currentTurnScopeId: this.runtimeIdentity.turnScopeId,
     });
   }
 
-  async _buildSystemContext({ dialogProcessId, longMemory }) {
+  async _buildSystemContext({ longMemory }) {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     return buildSystemContext({
-      identity: {
-        userId: this.userId,
-        sessionId: this.sessionId,
-        parentSessionId: this.parentSessionId,
-        dialogProcessId,
-      },
-      caller: this.caller,
+      identity: this.runtimeIdentity,
       globalConfig: this.globalConfig,
       userConfig: this.userConfig,
       runConfig: this.runConfig,
@@ -285,7 +254,6 @@ export class ContextBuilder {
       effectiveConfig: this._getEffectiveConfig(),
       runtimeBasePath,
       longMemory,
-      sessionManager: this.sessionManager,
       skillService: this.skillService,
       botManager: this.botManager,
       userMessageAttachments: this.userMessageAttachments,
@@ -298,18 +266,18 @@ export class ContextBuilder {
     try {
       return await resolveLongMemory({
         memoryService: this.memoryService,
-        userId: this.userId,
+        userId: this.runtimeIdentity.userId,
       });
     } catch (error) {
       if (isAbortError(error, this.abortSignal)) throw error;
       emitEvent(this.eventListener, BOT_MANAGE_LOG_EVENT.MEMORY_INJECTION_FAILED, {
-        sessionId: this.sessionId || "",
+        sessionId: this.runtimeIdentity.sessionId,
         stage: MEMORY_SUMMARY_STAGE.LONG_MEMORY,
         error: error?.message || String(error),
       });
       await this.errorLogger.log({
-        userId: this.userId,
-        sessionId: this.sessionId || "",
+        userId: this.runtimeIdentity.userId,
+        sessionId: this.runtimeIdentity.sessionId,
         source: BOT_MANAGE_LOG_SOURCE.MEMORY_INJECTION,
         event: BOT_MANAGE_LOG_EVENT.MEMORY_INJECTION_FAILED,
         error,
@@ -319,34 +287,27 @@ export class ContextBuilder {
     }
   }
 
-  async _buildSessionContext({ dialogProcessId, mode }) {
-    const sessionProjection = await this._resolveSessionRecords({ dialogProcessId });
+  async _buildSessionContext({ mode }) {
+    const sessionProjection = await this._resolveSessionRecords();
     const sessionRecords = sessionProjection.messages;
     emitModelContextTrace(this.eventListener, "context_records_resolved", {
       mode,
       records: summarizeDiagnosticMessages(sessionRecords),
     });
     const longMemory = await this._resolveLongMemoryForInjection();
-    const { systemContext, attachments } = await this._buildSystemContext({
-      dialogProcessId,
-      longMemory,
-    });
+    const { systemContext, attachments } = await this._buildSystemContext({ longMemory });
     return this.buildAgentContext(systemContext, sessionRecords, {
-      dialogProcessId,
       attachments,
       incrementalMessages: [],
       userMetaBackwrites: [],
     });
   }
 
-  async buildNewSessionContext({ dialogProcessId }) {
-    return this._buildSessionContext({ dialogProcessId, mode: AGENT_CONTEXT_MODE.NEW_SESSION });
+  async buildNewSessionContext() {
+    return this._buildSessionContext({ mode: AGENT_CONTEXT_MODE.NEW_SESSION });
   }
 
-  async buildExistingSessionContext({ dialogProcessId }) {
-    return this._buildSessionContext({
-      dialogProcessId,
-      mode: AGENT_CONTEXT_MODE.EXISTING_SESSION,
-    });
+  async buildExistingSessionContext() {
+    return this._buildSessionContext({ mode: AGENT_CONTEXT_MODE.EXISTING_SESSION });
   }
 }

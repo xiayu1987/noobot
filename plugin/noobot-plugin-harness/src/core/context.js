@@ -9,18 +9,17 @@ import path from "node:path";
 import { resolveHookClientEmitter } from "@noobot/context-protocol/assembly/hook-context";
 
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
-import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { safeId } from "../data/record-builders.js";
 import { normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION, resolveHarnessRunsRelativePath } from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 import { text, isFunction } from "@noobot/shared/value";
 
-function extractRunId(ctx = {}) {
-  return safeId(resolveDialogProcessIdFromContext(ctx) || ctx.sessionId || "run");
+function extractRunId(ctx) {
+  return safeId(ctx.dialogProcessId);
 }
 
-export function createRunPaths(ctx = {}, options = {}) {
+export function createRunPaths(ctx, options) {
   const basePath = text(options.basePath);
   if (!basePath) throw new TypeError("harness run paths require options.basePath");
   const runId = extractRunId(ctx);

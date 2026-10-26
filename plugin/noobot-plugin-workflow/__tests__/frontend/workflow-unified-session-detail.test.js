@@ -21,6 +21,7 @@ import {
 import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
+  workflowSessionSnapshotEventId,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot, deriveAgentExecutionId } from "@noobot/session-protocol";
 
@@ -30,7 +31,7 @@ function snapshotEnvelope(sessionId, turnScopeId, messages = []) {
     authoritySessionId: "root-session-a",
     turnScopeId,
     executionId: deriveAgentExecutionId({ turnScopeId }),
-    eventId: `snapshot:${sessionId}:1`,
+    eventId: workflowSessionSnapshotEventId({ nodeSessionId: sessionId, aggregateVersion: 1 }),
     workflowRunId: "workflow-run-a",
     sequence: 1,
     aggregateVersion: 1,
@@ -44,6 +45,12 @@ function snapshotEnvelope(sessionId, turnScopeId, messages = []) {
       turnScopeId,
       messages,
       turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+        activeTurnScopeId: "",
+        activeTurn: null,
+        recentTerminalTurns: [],
+        replacedTurns: [],
+        unchanged: false,
+        recovery: "none",
         commandId: `snapshot:${sessionId}:1`,
         sessionId,
         sequence: 1,
@@ -57,10 +64,10 @@ function snapshotEnvelope(sessionId, turnScopeId, messages = []) {
 const runtimeNode = {
   workflowRunId: "run-1",
   nodeExecutionId: "node-exec-a",
-  sessionId: "child-session-a",
-  parentSessionId: "parent-session",
+  nodeSessionId: "child-session-a",
   dialogProcessId: "wf_node_node-exec-a",
   turnScopeId: "workflow-node:node-exec-a",
+  activeChildExecutionId: "agent-exec-a",
   status: "running",
 };
 
@@ -78,10 +85,6 @@ test("realtime projection cannot erase persisted user messages", () => {
           turnScopeId: "turn-1",
         },
       ],
-      sessionSummary: {
-        sessionId: "child-session-a",
-        turnTimings: [{ turnScopeId: "turn-1", thinkingStartedAt: "2026-07-20T00:00:00.000Z" }],
-      },
     },
     {
       sessionId: "child-session-a",
@@ -94,12 +97,24 @@ test("realtime projection cannot erase persisted user messages", () => {
           turnScopeId: "turn-1",
         },
       ],
-      sessionSummary: { sessionId: "child-session-a", messages: [] },
     },
   );
 
   assert.deepEqual(merged.messages.map(resolveMessageViewKey), ["user-1", "assistant-1"]);
   assert.equal(merged.messages[1].content, "streamed");
+  assert.equal(Object.hasOwn(merged, "turnTimings"), false);
+  assert.equal(Object.hasOwn(merged, "sessionSummary"), false);
+});
+
+test("rejects a detail that still carries content through sessionSummary", () => {
+  assert.throws(
+    () =>
+      mergeUnifiedSessionDetail(
+        { sessionId: "child-session-a", messages: [] },
+        { sessionId: "child-session-a", messages: [], sessionSummary: { messages: [] } },
+      ),
+    TypeError,
+  );
 });
 
 test("running child Execution creates a view-only placeholder", () => {
@@ -109,7 +124,7 @@ test("running child Execution creates a view-only placeholder", () => {
   const placeholder = createRunningAssistantPlaceholderViewModel(messages, {
     sessionId: "child-session-a",
     turnScopeId: "turn-1",
-    state: "running",
+    running: true,
   });
 
   assert.deepEqual(
@@ -136,7 +151,7 @@ test("running placeholder view model inherits the persisted child user identity"
       sessionId: "root-session",
       dialogProcessId: "planned-dialog",
       turnScopeId: "child-turn",
-      state: "running",
+      running: true,
     },
   );
 
@@ -157,7 +172,7 @@ test("running placeholder view model is absent beside a real assistant or in ter
   assert.equal(
     createRunningAssistantPlaceholderViewModel(realMessages, {
       turnScopeId: "turn-1",
-      state: "running",
+      running: true,
     }),
     null,
   );
@@ -165,7 +180,7 @@ test("running placeholder view model is absent beside a real assistant or in ter
   assert.equal(
     createRunningAssistantPlaceholderViewModel(userOnly, {
       turnScopeId: "turn-1",
-      state: "completed",
+      running: false,
     }),
     null,
   );
@@ -177,7 +192,7 @@ test("real assistant message merges without a synthetic placeholder entity", () 
     {},
     {
       sessionId: "child-session-a",
-      execution: { state: "running" },
+      execution: { state: "processing" },
       messages: [{ messageUid: "user-1", role: "user", turnScopeId }],
     },
   );
@@ -202,13 +217,12 @@ test("terminal child state does not persist a thinking placeholder as a message"
   const turnScopeId = "turn-1";
   const running = {
     sessionId: "child-session-a",
-    execution: { state: "running" },
+    execution: { state: "processing" },
     messages: [{ messageUid: "user-1", role: "user", turnScopeId }],
   };
   const completed = mergeUnifiedSessionDetail(running, {
     sessionId: "child-session-a",
-    execution: { state: "running" },
-    sessionSummary: { status: "succeeded" },
+    execution: { state: "processing" },
     messages: [{ messageUid: "user-1", role: "user", turnScopeId }],
   });
 
@@ -247,20 +261,21 @@ function selectSessionMessages(sessionId) {
   };
 }
 
-test("never treats the workflow parent session as a node child session", () => {
+test("reads the node child session only from the protocol nodeSessionId", () => {
   const node = {
     sessionId: "main-session",
     rootSessionId: "main-session",
     nodeExecutionId: "node-a",
   };
-  assert.equal(resolveIsolatedNodeSessionId(node, node), "");
+  assert.equal(resolveIsolatedNodeSessionId(node), "");
   assert.equal(
-    resolveIsolatedNodeSessionId(node, { ...node, nodeSessionId: "child-session" }),
+    resolveIsolatedNodeSessionId({ ...node, nodeSessionId: "child-session" }),
     "child-session",
   );
   const detail = buildUnifiedSessionDetail({
-    nodeItem: node,
-    runtimeNodeSessions: [node],
+    selectExecutionDetail: () => null,
+    nodeItem: { nodeExecutionId: "node-a" },
+    runtimeNodeSessions: { value: [node] },
     selectSessionMessages: () => {
       throw new Error("must not read the parent session");
     },
@@ -271,12 +286,18 @@ test("never treats the workflow parent session as a node child session", () => {
 test("prefers authoritative child Execution detail and exposes its complete subtree", () => {
   const node = {
     nodeExecutionId: "node-exec-a",
+    nodeSessionId: "child-session-a",
     activeChildExecutionId: "agent:attempt-2",
     attemptExecutionIds: ["agent:attempt-1", "agent:attempt-2"],
   };
-  assert.deepEqual(resolveNodeChildExecutionIds(node), ["agent:attempt-2", "agent:attempt-1"]);
+  const nodeItem = { nodeExecutionId: "node-exec-a" };
+  assert.deepEqual(resolveNodeChildExecutionIds(nodeItem, { value: [node] }), [
+    "agent:attempt-2",
+    "agent:attempt-1",
+  ]);
   const detail = buildUnifiedSessionDetail({
-    nodeItem: node,
+    nodeItem,
+    runtimeNodeSessions: { value: [node] },
     selectExecutionDetail: (executionId) =>
       executionId === "agent:attempt-2"
         ? {
@@ -286,15 +307,17 @@ test("prefers authoritative child Execution detail and exposes its complete subt
               turnScopeId: "turn-a",
               state: "processing",
             },
-            session: { sessionId: "child-session-a" },
-            messages: [
-              {
-                role: "assistant",
-                messageUid: "sm-m-execution",
-                presentationMessageId: "m-execution",
-                content: "authoritative",
-              },
-            ],
+            session: {
+              sessionId: "child-session-a",
+              messages: [
+                {
+                  role: "assistant",
+                  messageUid: "sm-m-execution",
+                  presentationMessageId: "m-execution",
+                  content: "authoritative",
+                },
+              ],
+            },
             children: [{ executionId: "agent:grandchild" }],
             descendants: [
               { executionId: "agent:grandchild" },
@@ -318,27 +341,24 @@ test("prefers authoritative child Execution detail and exposes its complete subt
 test("does not let a root-bound Execution overwrite the isolated workflow node session", () => {
   const turnScopeId = "workflow-node:node-exec-a";
   const detail = buildUnifiedSessionDetail({
-    nodeItem: {
-      rootSessionId: "root-session",
-      nodeExecutionId: "node-exec-a",
-      activeChildExecutionId: "agent:attempt-1",
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: {
+      value: [
+        {
+          nodeExecutionId: "node-exec-a",
+          nodeSessionId: "child-session-a",
+          turnScopeId,
+          dialogProcessId: "wf-node-a",
+          status: "running",
+          activeChildExecutionId: "agent:attempt-1",
+        },
+      ],
     },
-    runtimeNodeSessions: [
-      {
-        nodeExecutionId: "node-exec-a",
-        sessionId: "child-session-a",
-        parentSessionId: "root-session",
-        turnScopeId,
-        dialogProcessId: "wf-node-a",
-        status: "running",
-        activeChildExecutionId: "agent:attempt-1",
-      },
-    ],
     selectExecutionDetail: () => ({
       execution: {
         executionId: "agent:attempt-1",
         sessionId: "root-session",
-        state: "running",
+        state: "processing",
       },
       session: { sessionId: "root-session" },
       messages: [
@@ -366,7 +386,7 @@ test("does not let a root-bound Execution overwrite the isolated workflow node s
   const placeholder = createRunningAssistantPlaceholderViewModel(detail.messages, {
     sessionId: detail.sessionId,
     turnScopeId,
-    state: "running",
+    running: true,
   });
   assert.equal(placeholder.viewKey, `workflow-node-running:${turnScopeId}`);
   assert.equal(placeholder.sessionId, "child-session-a");
@@ -378,23 +398,20 @@ test("does not let a root-bound Execution overwrite the isolated workflow node s
 
 test("keeps a REST-hydrated child snapshot when its local Execution still points at root", () => {
   const detail = buildUnifiedSessionDetail({
-    nodeItem: {
-      rootSessionId: "root-session",
-      nodeExecutionId: "node-exec-a",
-      activeChildExecutionId: "agent:attempt-1",
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: {
+      value: [
+        {
+          nodeExecutionId: "node-exec-a",
+          nodeSessionId: "child-session-a",
+          turnScopeId: "workflow-node:node-exec-a",
+          status: "running",
+          activeChildExecutionId: "agent:attempt-1",
+        },
+      ],
     },
-    runtimeNodeSessions: [
-      {
-        nodeExecutionId: "node-exec-a",
-        sessionId: "child-session-a",
-        parentSessionId: "root-session",
-        turnScopeId: "workflow-node:node-exec-a",
-        status: "running",
-        activeChildExecutionId: "agent:attempt-1",
-      },
-    ],
     selectExecutionDetail: () => ({
-      execution: { executionId: "agent:attempt-1", sessionId: "root-session", state: "running" },
+      execution: { executionId: "agent:attempt-1", sessionId: "root-session", state: "processing" },
       session: { sessionId: "root-session" },
       messages: [{ messageUid: "root-user", role: "user", turnScopeId: "root-turn" }],
     }),
@@ -403,10 +420,9 @@ test("keeps a REST-hydrated child snapshot when its local Execution still points
 
   assert.equal(detail.sessionId, "child-session-a");
   assert.deepEqual(detail.messages, []);
-  assert.deepEqual(detail.rawMessages, []);
 });
 
-test("keeps authoritative child Execution timing facts for a running assistant placeholder", () => {
+test("does not copy session turn timings into the Execution node detail", () => {
   const turnScopeId = "workflow-node:node-exec-a";
   const turnTimings = [
     {
@@ -416,62 +432,61 @@ test("keeps authoritative child Execution timing facts for a running assistant p
     },
   ];
   const detail = buildUnifiedSessionDetail({
-    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent:attempt-1" },
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: { value: [{ ...runtimeNode, activeChildExecutionId: "agent:attempt-1" }] },
     selectExecutionDetail: () => ({
       execution: {
         executionId: "agent:attempt-1",
         sessionId: "child-session-a",
         turnScopeId,
-        turnTimings,
       },
-      session: { sessionId: "child-session-a" },
-      messages: [
-        {
-          messageUid: "sm-assistant-1",
-          presentationMessageId: "assistant-1",
-          role: "assistant",
-          turnScopeId,
-        },
-      ],
+      session: {
+        sessionId: "child-session-a",
+        turnTimings,
+        messages: [
+          {
+            messageUid: "sm-assistant-1",
+            presentationMessageId: "assistant-1",
+            role: "assistant",
+            turnScopeId,
+          },
+        ],
+      },
     }),
   });
 
-  assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
+  assert.equal(Object.hasOwn(detail, "turnTimings"), false);
   assert.deepEqual(detail.messages.map(resolveMessageViewKey), ["assistant-1"]);
 });
 
 test("uses only the node's preallocated session when authoritative child Execution is missing", () => {
   const detail = buildUnifiedSessionDetail({
-    nodeItem: {
-      nodeExecutionId: "node-a",
-      activeChildExecutionId: "agent:missing",
-      sessionId: "legacy-session",
+    nodeItem: { nodeExecutionId: "node-a" },
+    runtimeNodeSessions: {
+      value: [
+        {
+          nodeExecutionId: "node-a",
+          nodeSessionId: "node-session",
+          activeChildExecutionId: "agent:missing",
+        },
+      ],
     },
     selectExecutionDetail: () => null,
     selectSessionMessages: () => ({
-      sessionId: "legacy-session",
-      messages: [{ role: "assistant", messageUid: "sm-legacy", presentationMessageId: "legacy" }],
+      sessionId: "node-session",
+      messages: [{ role: "assistant", messageUid: "sm-node", presentationMessageId: "node" }],
     }),
   });
   assert.equal(detail.executionId, "agent:missing");
-  assert.equal(detail.sessionId, "legacy-session");
-  assert.deepEqual(detail.messages.map(resolveMessageViewKey), ["legacy"]);
+  assert.equal(detail.sessionId, "node-session");
+  assert.deepEqual(detail.messages.map(resolveMessageViewKey), ["node"]);
 });
 
 test("hydrates child messages when the local Execution projection has not arrived", () => {
   const hydrated = hydrateExecutionSessionDetail(
     {
       sessionId: "child-session-a",
-      sessionSummary: { sessionId: "child-session-a", messages: [] },
       messages: [
-        {
-          role: "assistant",
-          messageUid: "sm-live-child-message",
-          presentationMessageId: "live-child-message",
-          content: "running",
-        },
-      ],
-      rawMessages: [
         {
           role: "assistant",
           messageUid: "sm-live-child-message",
@@ -484,53 +499,42 @@ test("hydrates child messages when the local Execution projection has not arrive
       executionId: "agent:starting",
     },
   );
-  assert.equal(hydrated.sessionSummary.executionId, "agent:starting");
-  assert.equal(hydrated.sessionSummary.turnRuntime, undefined);
-  assert.deepEqual(hydrated.sessionSummary.messages.map(resolveMessageViewKey), [
-    "live-child-message",
-  ]);
-  assert.deepEqual(hydrated.rawMessages.map(resolveMessageViewKey), ["live-child-message"]);
+  assert.equal(hydrated.sessionMetadata.executionId, "agent:starting");
+  assert.equal(hydrated.sessionMetadata.turnRuntime, undefined);
+  assert.deepEqual(hydrated.messages.map(resolveMessageViewKey), ["live-child-message"]);
 });
 
-test("resolves runtime node by nodeExecutionId before legacy keys", () => {
+test("resolves runtime node strictly by nodeExecutionId", () => {
   const resolved = resolveRuntimeNodeSession(
-    {
-      nodeExecutionId: "node-exec-a",
-      dialogProcessId: "legacy-dialog",
-      sessionId: "legacy-session",
-    },
-    [{ dialogProcessId: "legacy-dialog", sessionId: "wrong" }, runtimeNode],
+    { nodeExecutionId: "node-exec-a" },
+    { value: [{ dialogProcessId: "wf_node_node-exec-a", nodeSessionId: "wrong" }, runtimeNode] },
   );
-  assert.equal(resolved.sessionId, "child-session-a");
-  assert.equal(resolved.turnScopeId, "workflow-node:node-exec-a");
+  assert.equal(resolved.nodeSessionId, "child-session-a");
+  assert.throws(
+    () =>
+      resolveRuntimeNodeSession(
+        { dialogProcessId: "wf_node_node-exec-a" },
+        { value: [{ dialogProcessId: "wf_node_node-exec-a", nodeSessionId: "wrong" }] },
+      ),
+    /workflow runtime node requires nodeExecutionId/,
+  );
 });
 
 test("builds content-only unified detail with scoped messages", () => {
   const detail = buildUnifiedSessionDetail({
-    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
-    runtimeNodeSessions: [runtimeNode],
+    selectExecutionDetail: () => null,
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: { value: [runtimeNode] },
     selectSessionMessages,
-    turnRuntimeRegistry: {
-      sessions: {
-        "child-session-a": {
-          turns: {
-            "workflow-node:node-exec-a": {
-              turnScopeId: "workflow-node:node-exec-a",
-              phase: "processing",
-            },
-          },
-        },
-      },
-    },
   });
   assert.equal(detail.sessionId, "child-session-a");
-  assert.equal(detail.sessionSummary.turnScopeId, "workflow-node:node-exec-a");
-  assert.equal(detail.sessionSummary.turnRuntime, undefined);
+  assert.equal(detail.sessionMetadata.turnScopeId, "workflow-node:node-exec-a");
+  assert.equal(detail.sessionMetadata.turnRuntime, undefined);
   assert.deepEqual(detail.messages.map(resolveMessageViewKey), ["m-1"]);
   assert.deepEqual(detail.messages[0].toolLogs, [{ id: "tool-1" }]);
 });
 
-test("copies persisted turn facts from realtime child session projection", () => {
+test("does not copy session turn timings into the realtime child node detail", () => {
   const turnScopeId = "workflow-node:node-exec-a";
   const turnTimings = [
     {
@@ -540,8 +544,9 @@ test("copies persisted turn facts from realtime child session projection", () =>
     },
   ];
   const detail = buildUnifiedSessionDetail({
-    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
-    runtimeNodeSessions: [runtimeNode],
+    selectExecutionDetail: () => null,
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: { value: [runtimeNode] },
     selectSessionMessages: () => ({
       sessionId: "child-session-a",
       turnTimings,
@@ -554,40 +559,28 @@ test("copies persisted turn facts from realtime child session projection", () =>
         },
       ],
     }),
-    turnRuntimeRegistry: {},
   });
 
-  assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
+  assert.equal(Object.hasOwn(detail, "turnTimings"), false);
   assert.deepEqual(detail.messages.map(resolveMessageViewKey), ["assistant-1"]);
 });
 
 test("allows an empty preallocated session without copying lifecycle runtime", () => {
   const detail = buildUnifiedSessionDetail({
-    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
-    runtimeNodeSessions: [runtimeNode],
+    selectExecutionDetail: () => null,
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: { value: [runtimeNode] },
     selectSessionMessages: () => ({ sessionId: "child-session-a", messages: [] }),
-    turnRuntimeRegistry: {
-      sessions: {
-        "child-session-a": {
-          turns: {
-            "workflow-node:node-exec-a": {
-              turnScopeId: "workflow-node:node-exec-a",
-              phase: "action",
-            },
-          },
-        },
-      },
-    },
   });
   assert.equal(detail.sessionId, "child-session-a");
   assert.equal(detail.messages.length, 0);
-  assert.equal(detail.sessionSummary.turnRuntime, undefined);
+  assert.equal(detail.sessionMetadata.turnRuntime, undefined);
 });
 
 test("uses the preallocated session realtime projection before Execution projection arrives", () => {
   const detail = buildUnifiedSessionDetail({
-    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
-    runtimeNodeSessions: [runtimeNode],
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: { value: [runtimeNode] },
     selectExecutionDetail: () => null,
     selectSessionMessages: () => ({
       sessionId: "child-session-a",
@@ -608,7 +601,6 @@ test("uses the preallocated session realtime projection before Execution project
         },
       ],
     }),
-    turnRuntimeRegistry: {},
   });
 
   assert.equal(detail.executionId, "agent-exec-a");
@@ -618,11 +610,10 @@ test("uses the preallocated session realtime projection before Execution project
 
 test("allows the preallocated child session to mount before its first realtime message", () => {
   const detail = buildUnifiedSessionDetail({
-    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
-    runtimeNodeSessions: [runtimeNode],
+    nodeItem: { nodeExecutionId: "node-exec-a" },
+    runtimeNodeSessions: { value: [runtimeNode] },
     selectExecutionDetail: () => null,
     selectSessionMessages: () => ({ sessionId: "child-session-a", messages: [] }),
-    turnRuntimeRegistry: {},
   });
 
   assert.equal(detail.executionId, "agent-exec-a");
@@ -630,37 +621,27 @@ test("allows the preallocated child session to mount before its first realtime m
   assert.deepEqual(detail.messages, []);
 });
 
-test("returns null so caller can use REST fallback for legacy missing unified data", () => {
-  const detail = buildUnifiedSessionDetail({
-    nodeItem: { dialogProcessId: "legacy-dialog" },
-    runtimeNodeSessions: [],
-    selectSessionMessages: () => null,
-    turnRuntimeRegistry: {},
-  });
-  assert.equal(detail, null);
+test("rejects a node without a runtime node session instead of falling back", () => {
+  assert.throws(
+    () =>
+      buildUnifiedSessionDetail({
+        selectExecutionDetail: () => null,
+        nodeItem: { dialogProcessId: "legacy-dialog" },
+        runtimeNodeSessions: { value: [] },
+        selectSessionMessages: () => null,
+      }),
+    /workflow runtime node requires nodeExecutionId/,
+  );
 });
 
 test("supports ref-like runtime node sessions without copying registry runtime", () => {
   const detail = buildUnifiedSessionDetail({
+    selectExecutionDetail: () => null,
     nodeItem: { nodeExecutionId: "node-exec-a" },
     runtimeNodeSessions: { value: [runtimeNode] },
     selectSessionMessages,
-    turnRuntimeRegistry: {
-      value: {
-        sessions: {
-          "child-session-a": {
-            turns: {
-              "workflow-node:node-exec-a": {
-                turnScopeId: "workflow-node:node-exec-a",
-                phase: "completion",
-              },
-            },
-          },
-        },
-      },
-    },
   });
-  assert.equal(detail.sessionSummary.turnRuntime, undefined);
+  assert.equal(detail.sessionMetadata.turnRuntime, undefined);
 });
 
 for (const state of ["processing", "completed"]) {
@@ -686,6 +667,7 @@ for (const state of ["processing", "completed"]) {
     ];
     const detail = await fetchExecutionSessionDetail({
       props: {
+        logWorkflowDiagnostics: () => {},
         userId: "user-1",
         workflowSessionService: {
           getThinkingDetail: async () => null,
@@ -700,17 +682,6 @@ for (const state of ["processing", "completed"]) {
                   workflowSession: {
                     aggregateVersion: 1,
                     snapshotEnvelope: snapshotEnvelope("child-session-a", turnScopeId, messages),
-                    session: {
-                      sessionId: "child-session-a",
-                      state,
-                      messages,
-                      turnTimings: [
-                        {
-                          turnScopeId: `turn-${state}`,
-                          thinkingStartedAt: "2026-07-20T00:00:00.000Z",
-                        },
-                      ],
-                    },
                     sessionSummary: {
                       sessionId: "child-session-a",
                       state,
@@ -722,6 +693,7 @@ for (const state of ["processing", "completed"]) {
                         },
                       ],
                     },
+                    executionLogs: [],
                   },
                 };
               },
@@ -732,6 +704,7 @@ for (const state of ["processing", "completed"]) {
       translate: (key) => key,
       sessionId: "child-session-a",
       rootSessionId: "root-session-a",
+      traceId: "trace-1",
       dialogProcessId: "workflow-node-a",
     });
 
@@ -739,45 +712,53 @@ for (const state of ["processing", "completed"]) {
       "/api/internal/workflow/session/user-1/root-session-a/workflow-node-a",
     ]);
     assert.equal(detail.sessionId, "child-session-a");
-    assert.equal(detail.sessionSummary.state, state);
+    assert.equal(detail.sessionMetadata.state, state);
+    assert.equal(Object.hasOwn(detail.sessionMetadata, "messages"), false);
     assert.deepEqual(
       detail.messages.map(({ messageUid }) => messageUid),
       [`sm-user-${state}`, `sm-message-${state}`],
     );
-    assert.equal(detail.sessionSummary.turnTimings[0].turnScopeId, `turn-${state}`);
-    assert.equal(detail.turnTimings, undefined);
+    assert.equal(Object.hasOwn(detail, "turnTimings"), false);
   });
 }
 
-test("classifies an unmaterialized Execution session as pending", async () => {
-  const detail = await fetchExecutionSessionDetail({
-    props: {
-      userId: "user-1",
-      workflowSessionService: {
-        getThinkingDetail: async () => null,
-        getDetail: async () => ({
-          ok: true,
-          async json() {
-            return { ok: true, workflowSession: { aggregateVersion: 1 } };
-          },
-        }),
+test("rejects a workflow session payload without the snapshot carrier", async () => {
+  await assert.rejects(
+    fetchExecutionSessionDetail({
+      props: {
+        logWorkflowDiagnostics: () => {},
+        userId: "user-1",
+        workflowSessionService: {
+          getThinkingDetail: async () => null,
+          getDetail: async () => ({
+            ok: true,
+            async json() {
+              return {
+                ok: true,
+                workflowSession: {
+                  aggregateVersion: 1,
+                  snapshotEnvelope: snapshotEnvelope("child-session-x", "workflow-node:x"),
+                  executionLogs: [],
+                },
+              };
+            },
+          }),
+        },
       },
-    },
-    translate: (key) => key,
-    sessionId: "child-session-pending",
-    rootSessionId: "root-session-a",
-    dialogProcessId: "workflow-node-a",
-  });
-  assert.deepEqual(detail, {
-    state: "pending",
-    reason: "session_not_materialized",
-    sessionId: "child-session-pending",
-  });
+      translate: (key) => key,
+      sessionId: "child-session-x",
+      rootSessionId: "root-session-a",
+      traceId: "trace-1",
+      dialogProcessId: "workflow-node-a",
+    }),
+    /sessionSummary must carry a sessionId/,
+  );
 });
 
 test("classifies a materialized Execution session without messages as empty", async () => {
   const detail = await fetchExecutionSessionDetail({
     props: {
+      logWorkflowDiagnostics: () => {},
       userId: "user-1",
       workflowSessionService: {
         getThinkingDetail: async () => null,
@@ -789,7 +770,8 @@ test("classifies a materialized Execution session without messages as empty", as
               workflowSession: {
                 aggregateVersion: 1,
                 snapshotEnvelope: snapshotEnvelope("child-session-empty", "workflow-node:empty"),
-                session: { sessionId: "child-session-empty", messages: [] },
+                sessionSummary: { sessionId: "child-session-empty", messages: [], turnTimings: [] },
+                executionLogs: [],
               },
             };
           },
@@ -799,6 +781,7 @@ test("classifies a materialized Execution session without messages as empty", as
     translate: (key) => key,
     sessionId: "child-session-empty",
     rootSessionId: "root-session-a",
+    traceId: "trace-1",
     dialogProcessId: "workflow-node-a",
   });
   assert.equal(detail.state, "empty");
@@ -810,6 +793,7 @@ test("keeps a Session service failure distinct from pending", async () => {
     () =>
       fetchExecutionSessionDetail({
         props: {
+          logWorkflowDiagnostics: () => {},
           userId: "user-1",
           workflowSessionService: {
             getThinkingDetail: async () => null,
@@ -824,6 +808,7 @@ test("keeps a Session service failure distinct from pending", async () => {
         translate: (key) => key,
         sessionId: "child-session-failed",
         rootSessionId: "root-session-a",
+        traceId: "trace-1",
         dialogProcessId: "workflow-node-a",
       }),
     /permission denied/,

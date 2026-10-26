@@ -25,7 +25,7 @@ Model Node
 - `nodeId: string` 模型节点ID
 - `type: "action" | "state"` 节点类型
 - `stateType: number` 状态节点类型（可选）
-- `status: "success" | "failed" | "error" | "running" | "pending"`（可选）
+- `status`：协议 `WORKFLOW_NODE_STATUS` 取值 `pending | ready | running | succeeded | failed | stopped | skipped`（可选，缺省视为 `pending`）
 - `transition: number`（可选，排序）
 - `parallelWave: number`（可选，并行层）
 - `waveOrder: number`（可选，并行层内顺序）
@@ -43,8 +43,8 @@ Model Node
           dialogProcessId: "...", // 子 agent 对话流程ID，用于打开 session
           sessionId: "...",
           rootSessionId: "...",
-          stepStatus: "success",
-          stepFailure: null,
+          status: "failed", // 协议 WORKFLOW_NODE_STATUS
+          failure: { source: "...", code: "...", message: "..." }, // 仅 failed/stopped 携带，其余为 null
         },
       ],
     },

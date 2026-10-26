@@ -16,7 +16,6 @@ import {
   resolveAuxiliarySequenceIdentity,
 } from "@noobot/context-protocol/assembly/auxiliary-sequence";
 import { buildHarnessInjectedMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
-import { resolveDialogProcessIdFromContext } from "../../src/capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { markHarnessTurnLifecycle } from "../../src/capabilities/handlers/shared/runtime/lifecycle-utils.js";
 import { contextMessage } from "../helpers/context-message.js";
 
@@ -51,13 +50,6 @@ test("buildHarnessInjectedMessage includes dialogProcessId when provided", () =>
   assert.equal(message.additional_kwargs.injectedMessageType, "relay_test");
   assert.equal(message.additional_kwargs.dialogProcessId, "dlg_1");
   assert.ok(message.additional_kwargs.messageUid);
-});
-
-test("resolveDialogProcessIdFromContext reads the explicit hook identity", () => {
-  const dialogProcessId = resolveDialogProcessIdFromContext({
-    dialogProcessId: "dlg_explicit",
-  });
-  assert.equal(dialogProcessId, "dlg_explicit");
 });
 
 test("resolveCapabilityModelMessages preserves authoritative resolver output without plugin-side filtering", () => {

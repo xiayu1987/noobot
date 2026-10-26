@@ -12,7 +12,6 @@ function upstreamStep(stepId) {
   return {
     nodeId: `node-${stepId}`,
     nodeName: `Node ${stepId}`,
-    nodeType: 1,
     actionNodeStateId: `ans-${stepId}`,
     stepId,
     stepIndex: 0,

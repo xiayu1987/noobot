@@ -126,12 +126,10 @@ test("patch_file: super user can patch an absolute file outside workspace root",
   await fs.mkdir(basePath, { recursive: true });
   await fs.writeFile(outsideFile, "one\ntwo\n", "utf8");
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
         persistenceScope: null,
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -182,12 +180,10 @@ test("patch_file: sharedTools cannot remap a Windows host path", async () => {
   await fs.mkdir(basePath, { recursive: true });
   await fs.writeFile(outsideFile, "one\ntwo\n", "utf8");
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
         persistenceScope: null,
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -240,12 +236,10 @@ test("patch_file: apply_patch also rejects sharedTools host remapping", async ()
   await fs.mkdir(basePath, { recursive: true });
   await fs.writeFile(outsideFile, "one\ntwo\n", "utf8");
   const agentContext = buildAgentContext(basePath, "super-root-user", {
+    identity: { userId: "super-root-user", sessionId: "s-1" },
     runtime: {
       systemRuntime: {
         persistenceScope: null,
-        userId: "super-root-user",
-        sessionId: "s-1",
-        rootSessionId: "s-1",
         isSuperUser: true,
         config: {},
       },
@@ -821,13 +815,11 @@ test("patch_file: 超级管理员也不扫描项目根解析虚拟路径", async
   }
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "admin", {
+      identity: { userId: "admin", sessionId: "s-1" },
       runtime: {
         systemRuntime: {
           persistenceScope: null,
           isSuperUser: true,
-          userId: "admin",
-          sessionId: "s-1",
-          rootSessionId: "s-1",
         },
       },
     }),
