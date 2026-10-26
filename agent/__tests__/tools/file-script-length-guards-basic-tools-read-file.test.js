@@ -228,19 +228,7 @@ test("read_file: 相对路径固定基于用户 workspace", async () => {
   );
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "u-test", {
-      runtime: {
-        systemRuntime: {
-          staticInfo: {
-            directories: {
-              view: "host",
-              rootDirectory: repoPath,
-              currentDirectory: repoPath,
-              opsWorkdir: path.join(repoPath, "runtime/ops_workdir"),
-              allowedRoots: [workspacePath],
-            },
-          },
-        },
-      },
+      runtime: {},
     }),
   });
   const readTool = tools.find((item) => item?.name === "read_file");
@@ -273,17 +261,6 @@ test("read_file: host 模式拒绝未配置的 /project 沙箱路径", async () 
     agentContext: buildAgentContext(workspacePath, "u-test", {
       runtime: {
         globalConfig: { security: { executionIsolation: { mode: "host" } } },
-        systemRuntime: {
-          staticInfo: {
-            directories: {
-              view: "host",
-              rootDirectory: repoPath,
-              currentDirectory: repoPath,
-              opsWorkdir: path.join(repoPath, "runtime/ops_workdir"),
-              allowedRoots: [workspacePath],
-            },
-          },
-        },
       },
     }),
   });

@@ -27,8 +27,7 @@ function createStopRuntime({ aborted = false } = {}) {
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "pm_presentation",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   runtime.currentTurnMessages = createCurrentTurnMessagesStore();
   runtime.persisted = 0;

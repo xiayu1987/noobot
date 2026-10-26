@@ -32,8 +32,7 @@ export function createMessageEventStreamState() {
   return {
     activePresentationMessageId: "",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
     activeAssistantDraft: null,
     activeTurn: 0,
   };
@@ -50,50 +49,63 @@ function runtimeState(runtime) {
 }
 
 function assertRequestedStreamIdentity(identity) {
-  for (const [, identityKey] of STREAM_IDENTITY_BINDINGS) {
-    if (typeof identity[identityKey] !== "string") {
-      throw new TypeError(`turn message event ${identityKey} must be a string`);
+  for (const key of ["presentationMessageId", "parentSessionId"]) {
+    if (typeof identity[key] !== "string") {
+      throw new TypeError(`turn message event ${key} must be a string`);
     }
   }
   if (!identity.presentationMessageId) {
     throw new Error("turn message event identity is incomplete");
   }
-  if (Boolean(identity.workflowRunId) !== Boolean(identity.nodeExecutionId)) {
-    throw new Error("turn message event workflow identity is incomplete");
+  const ownership = identity.workflowNodeOwnership;
+  if (ownership !== null && !isPlainObject(ownership)) {
+    throw new TypeError(
+      "turn message event workflowNodeOwnership must be projectWorkflowNodeOwnership output",
+    );
   }
-  if (identity.workflowRunId && !identity.parentSessionId) {
+  if (ownership !== null && !identity.parentSessionId) {
     throw new Error("turn message event workflow parent session identity is incomplete");
   }
 }
 
-const STREAM_IDENTITY_BINDINGS = Object.freeze([
-  ["activePresentationMessageId", "presentationMessageId"],
-  ["parentSessionId", "parentSessionId"],
-  ["workflowRunId", "workflowRunId"],
-  ["nodeExecutionId", "nodeExecutionId"],
-]);
+function sameWorkflowNodeOwnership(current, next) {
+  if (current === null || next === null) return current === next;
+  return (
+    current.workflowRunId === next.workflowRunId && current.nodeExecutionId === next.nodeExecutionId
+  );
+}
 
 function assertStreamIdentityCompatible(stream, identity) {
-  for (const [streamKey, identityKey] of STREAM_IDENTITY_BINDINGS) {
-    const current = stream[streamKey];
-    if (current && current !== identity[identityKey]) {
-      throw new Error(`turn message event ${identityKey} conflict`);
-    }
+  if (
+    stream.activePresentationMessageId &&
+    stream.activePresentationMessageId !== identity.presentationMessageId
+  ) {
+    throw new Error("turn message event presentationMessageId conflict");
+  }
+  if (stream.parentSessionId && stream.parentSessionId !== identity.parentSessionId) {
+    throw new Error("turn message event parentSessionId conflict");
+  }
+  if (
+    stream.workflowNodeOwnership !== null &&
+    !sameWorkflowNodeOwnership(stream.workflowNodeOwnership, identity.workflowNodeOwnership)
+  ) {
+    throw new Error("turn message event workflowNodeOwnership conflict");
   }
 }
 
 export function bindAssistantMessageEventStream(
   runtime,
-  { presentationMessageId, parentSessionId, workflowRunId, nodeExecutionId },
+  { presentationMessageId, parentSessionId, workflowNodeOwnership },
 ) {
   const state = runtimeState(runtime);
-  const identity = { presentationMessageId, parentSessionId, workflowRunId, nodeExecutionId };
+  const identity = { presentationMessageId, parentSessionId, workflowNodeOwnership };
   assertRequestedStreamIdentity(identity);
   const stream = state.messageEventStream;
   assertStreamIdentityCompatible(stream, identity);
-  for (const [streamKey, identityKey] of STREAM_IDENTITY_BINDINGS) {
-    stream[streamKey] = identity[identityKey];
-  }
+  stream.activePresentationMessageId = presentationMessageId;
+  stream.parentSessionId = parentSessionId;
+  stream.workflowNodeOwnership =
+    workflowNodeOwnership === null ? null : Object.freeze({ ...workflowNodeOwnership });
   return stream;
 }
 
@@ -172,8 +184,7 @@ function createMessageEventPayload(runtime, eventType, data) {
     eventType,
     parentSessionId: stream.parentSessionId,
     dialogProcessId: state.dialogProcessId,
-    ...(stream.workflowRunId ? { workflowRunId: stream.workflowRunId } : {}),
-    ...(stream.nodeExecutionId ? { nodeExecutionId: stream.nodeExecutionId } : {}),
+    ...(stream.workflowNodeOwnership === null ? {} : stream.workflowNodeOwnership),
     presentationMessageId,
     ...(modelMessageId ? { modelMessageId } : {}),
   });

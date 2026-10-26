@@ -8,9 +8,9 @@ import assert from "node:assert/strict";
 
 import {
   resolveLlmForTurn,
-  resolveCurrentModelInfo,
   createStreamingCallbacks,
 } from "../../../src/models/runtime/model-manager.js";
+import { resolveCurrentModelInfo } from "../../../src/models/runtime/current-model-info.js";
 import {
   beginAssistantMessageEventStream,
   bindAssistantMessageEventStream,
@@ -35,17 +35,15 @@ function createBoundModelRuntime(producerId) {
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-1",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   initializeCurrentTurnMessageEventProjection(runtime);
   return runtime;
 }
 
-test("resolveCurrentModelInfo should return trimmed alias/name", () => {
+test("resolveCurrentModelInfo projects the active model spec", () => {
   const result = resolveCurrentModelInfo({
-    activeModelAlias: " openai ",
-    activeModelName: " gpt-4o ",
+    activeModelSpec: { alias: "openai", model: "gpt-4o" },
   });
   assert.deepEqual(result, {
     modelAlias: "openai",
@@ -105,135 +103,83 @@ test("streaming callbacks require an active model message stream", () => {
 });
 
 test("resolveLlmForTurn should switch model by runtimeModel and emit model_switched", () => {
-  const previousApiKey = process.env.OPENAI_API_KEY;
-  process.env.OPENAI_API_KEY = "test-key";
-  try {
-    const events = [];
-    const modelState = {
-      llm: { id: "old-llm" },
-      activeModelName: "gpt-4o",
-      activeModelAlias: "openai",
-      runtime: {
-        eventListener: {
-          onEvent(payload = {}) {
-            events.push(payload);
+  const events = [];
+  const modelState = {
+    activeModelSpec: { alias: "openai", model: "gpt-4o" },
+    runtime: {
+      eventListener: {
+        onEvent(payload = {}) {
+          events.push(payload);
+        },
+      },
+      globalConfig: {
+        defaultProvider: "openai",
+        providers: {
+          openai: {
+            model: "gpt-4o",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            enabled: true,
+          },
+          anthropic: {
+            model: "gpt-4.1-mini",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            enabled: true,
           },
         },
-        globalConfig: {
-          defaultProvider: "openai",
-          providers: {
-            openai: {
-              model: "gpt-4o",
-              reasoning_effort_parameter: "reasoning_effort",
-              reasoning_effort_options: ["none", "low", "medium", "high"],
-              providerId: "openai",
-              adapterId: "openai-compatible",
-              enabled: true,
-            },
-            anthropic: {
-              model: "gpt-4.1-mini",
-              reasoning_effort_parameter: "reasoning_effort",
-              reasoning_effort_options: ["none", "low", "medium", "high"],
-              providerId: "anthropic",
-              adapterId: "openai-compatible",
-              enabled: true,
-            },
-          },
-        },
-        userConfig: {},
-        runtimeModel: "anthropic",
       },
-      defaultModelSpec: {
-        alias: "openai",
-        model: "gpt-4o",
-        reasoning_effort_parameter: "reasoning_effort",
-        reasoning_effort_options: ["none", "low", "medium", "high"],
-      },
-    };
+      userConfig: {},
+      runtimeModel: "anthropic",
+    },
+    defaultModelSpec: { alias: "openai", model: "gpt-4o" },
+  };
 
-    resolveLlmForTurn(modelState);
+  resolveLlmForTurn(modelState);
 
-    assert.equal(modelState.activeModelAlias, "anthropic");
-    assert.equal(modelState.activeModelName, "gpt-4.1-mini");
-    assert.equal(modelState.llm?.id, "old-llm");
-    assert.equal(modelState.activeModelSpec?.alias, "anthropic");
-    const switched = events.find((item) => item?.event === "model_switched");
-    assert.ok(switched);
-    assert.equal(switched?.data?.alias, "anthropic");
-    assert.equal(switched?.data?.model, "gpt-4.1-mini");
-  } finally {
-    if (previousApiKey === undefined) {
-      delete process.env.OPENAI_API_KEY;
-    } else {
-      process.env.OPENAI_API_KEY = previousApiKey;
-    }
-  }
+  assert.equal(modelState.activeModelSpec.alias, "anthropic");
+  assert.equal(modelState.activeModelSpec.model, "gpt-4.1-mini");
+  const switched = events.find((item) => item?.event === "model_switched");
+  assert.equal(switched.data.alias, "anthropic");
+  assert.equal(switched.data.model, "gpt-4.1-mini");
 });
 
-test("resolveLlmForTurn should select the canonical defaultModelSpec without creating a model client", () => {
-  const previousApiKey = process.env.OPENAI_API_KEY;
-  process.env.OPENAI_API_KEY = "test-key";
-  try {
-    const events = [];
-    const modelState = {
-      llm: { id: "old-llm" },
-      activeModelName: "scenario-default-model",
-      activeModelAlias: "scenario_default",
-      runtime: {
-        eventListener: {
-          onEvent(payload = {}) {
-            events.push(payload);
+test("resolveLlmForTurn should select the canonical defaultModelSpec without runtimeModel", () => {
+  const events = [];
+  const modelState = {
+    activeModelSpec: { alias: "scenario_default", model: "scenario-default-model" },
+    runtime: {
+      eventListener: {
+        onEvent(payload = {}) {
+          events.push(payload);
+        },
+      },
+      globalConfig: {
+        defaultProvider: "scenario_default",
+        providers: {
+          scenario_default: {
+            model: "scenario-default-model",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            enabled: true,
+          },
+          selected_alias: {
+            model: "selected-model",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            enabled: true,
           },
         },
-        globalConfig: {
-          defaultProvider: "scenario_default",
-          providers: {
-            scenario_default: {
-              model: "scenario-default-model",
-              reasoning_effort_parameter: "reasoning_effort",
-              reasoning_effort_options: ["none", "low", "medium", "high"],
-              providerId: "scenario_default",
-              adapterId: "openai-compatible",
-              enabled: true,
-            },
-            selected_alias: {
-              model: "selected-model",
-              reasoning_effort_parameter: "reasoning_effort",
-              reasoning_effort_options: ["none", "low", "medium", "high"],
-              providerId: "selected_alias",
-              adapterId: "openai-compatible",
-              enabled: true,
-            },
-          },
-        },
-        userConfig: {},
       },
-      defaultModelSpec: {
-        alias: "selected_alias",
-        model: "selected-model",
-        reasoning_effort_parameter: "reasoning_effort",
-        reasoning_effort_options: ["none", "low", "medium", "high"],
-        providerId: "selected_alias",
-        adapterId: "openai-compatible",
-        enabled: true,
-      },
-    };
+      userConfig: {},
+    },
+    defaultModelSpec: { alias: "selected_alias", model: "selected-model" },
+  };
 
-    resolveLlmForTurn(modelState);
+  resolveLlmForTurn(modelState);
 
-    assert.equal(modelState.activeModelAlias, "selected_alias");
-    assert.equal(modelState.activeModelName, "selected-model");
-    assert.equal(modelState.llm?.id, "old-llm");
-    assert.equal(modelState.activeModelSpec?.model, "selected-model");
-    const switched = events.find((item) => item?.event === "model_switched");
-    assert.ok(switched);
-    assert.equal(switched?.data?.alias, "selected_alias");
-    assert.equal(switched?.data?.model, "selected-model");
-  } finally {
-    if (previousApiKey === undefined) {
-      delete process.env.OPENAI_API_KEY;
-    } else {
-      process.env.OPENAI_API_KEY = previousApiKey;
-    }
-  }
+  assert.equal(modelState.activeModelSpec, modelState.defaultModelSpec);
+  const switched = events.find((item) => item?.event === "model_switched");
+  assert.equal(switched.data.alias, "selected_alias");
+  assert.equal(switched.data.model, "selected-model");
 });

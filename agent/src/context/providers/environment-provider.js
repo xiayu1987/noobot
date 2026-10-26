@@ -6,15 +6,10 @@
 import { createHookRuntimeIdentity } from "@noobot/hook-protocol/runtime-identity";
 import { filePath as path, resolveRuntimePathContext } from "@noobot/path-resolver";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
-import {
-  SECURITY_RISK_LEVEL,
-  normalizeSecurityRiskLevel,
-} from "@noobot/security-assessment-protocol";
-import { hasOwnConfigKey, normalizeBoolean } from "../../config/index.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { isConfiguredSuperUser } from "../../shared/utils/super-user.js";
 import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapter.js";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, text } from "@noobot/shared/value";
 
 export function resolveRuntimeBasePath({ userId, globalConfig }) {
   if (!text(userId) || !text(globalConfig.workspaceRoot)) {
@@ -23,9 +18,12 @@ export function resolveRuntimeBasePath({ userId, globalConfig }) {
   return path.resolve(globalConfig.workspaceRoot, userId);
 }
 
-export function resolveContextIdentityInfo({ userId = "", globalConfig = {} } = {}) {
+export function resolveContextIdentityInfo({ userId, globalConfig }) {
+  if (!isCanonicalText(userId)) {
+    throw new TypeError("resolveContextIdentityInfo requires canonical userId");
+  }
   return {
-    userId: text(userId),
+    userId,
     isSuperUser: isConfiguredSuperUser({ globalConfig, userId }),
   };
 }
@@ -64,16 +62,11 @@ export function buildDynamicInfo({ identity, runConfig, now }) {
       : null;
   const selectedConnectorIds = normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds);
   const config = {
-    allowUserInteraction: runConfig?.allowUserInteraction !== false,
-    safeConfirm: runConfig?.safeConfirm !== false,
-    sanitizeOutput: runConfig?.sanitizeOutput !== false,
-    safeConfirmLevel: normalizeSecurityRiskLevel(
-      runConfig?.safeConfirmLevel,
-      SECURITY_RISK_LEVEL.LOW,
-    ),
-    ...(hasOwnConfigKey(runConfig, "streaming")
-      ? { streaming: normalizeBoolean(runConfig?.streaming, false) }
-      : {}),
+    allowUserInteraction: runConfig.allowUserInteraction,
+    safeConfirm: runConfig.safeConfirm,
+    sanitizeOutput: runConfig.sanitizeOutput,
+    safeConfirmLevel: runConfig.safeConfirmLevel,
+    streaming: runConfig.streaming,
     ...(toolPolicy ? { toolPolicy } : {}),
     selectedConnectorIds,
   };

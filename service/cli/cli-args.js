@@ -89,8 +89,8 @@ function resolveAction(values, positionals) {
 }
 
 function buildPreferences(values, { interactive }) {
-  const confirmationLevel = values["confirm-level"];
-  if (confirmationLevel && !SECURITY_RISK_LEVELS.includes(confirmationLevel)) {
+  const safeConfirmLevel = values["confirm-level"];
+  if (safeConfirmLevel && !SECURITY_RISK_LEVELS.includes(safeConfirmLevel)) {
     throw new CliUsageError(`--confirm-level must be one of ${SECURITY_RISK_LEVELS.join("|")}`);
   }
   const summaryPolicy = {
@@ -103,7 +103,7 @@ function buildPreferences(values, { interactive }) {
     sanitizeOutput: values.sanitize,
     streaming: values.stream,
     frontendThresholdsEnabled: false,
-    ...(confirmationLevel ? { confirmationLevel } : {}),
+    ...(safeConfirmLevel ? { safeConfirmLevel } : {}),
     locale: values.locale || "",
     scenario: values.scenario || "",
     selectedModel: values.model || "",

@@ -15,7 +15,7 @@ import {
   createBotDispatchHandled,
   createTestAgentExecutionScope,
 } from "./runner-bot-hook.fixtures.js";
-import { createModelResponse } from "@noobot/model-protocol";
+import { stubModelTransport } from "../../helpers/test-model-config.js";
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 import { BOT_DISPATCH_ROOT_OWNER } from "@noobot/agent-transport-protocol/bot-dispatch";
 import { projectAgentContextIdentity } from "../../../src/context/agent-context-envelope-input.js";
@@ -31,41 +31,7 @@ function workflowRunIdentity(workflowRunId) {
   };
 }
 
-function createCompletedModelResponse(request, text) {
-  const output = {
-    text,
-    reasoning: "",
-    toolCalls: [],
-    finishReason: "stop",
-    usage: {},
-  };
-  return createModelResponse({
-    invocation: {
-      ...request.invocation,
-      requestId: "request-before-dispatch",
-      invocationId: "invocation-before-dispatch",
-      sessionId: "s1",
-      parentSessionId: "",
-      dialogProcessId: "dp1",
-      turnScopeId: "turn-workflow-semantic",
-      runId: "agent:turn-workflow-semantic",
-    },
-    output,
-    attempts: [
-      {
-        attempt: 1,
-        status: "completed",
-        kind: "response",
-        streaming: false,
-        output,
-      },
-    ],
-    model: request.model,
-    provider: { operatorId: "openai", adapterId: "openai-compatible" },
-  });
-}
-
-test("before-dispatch capability events use the bound Turn message domain", async () => {
+test("before-dispatch capability events use the bound Turn message domain", async (t) => {
   const botHookManager = createTestBotHookManager();
   const events = [];
   const capabilityModelInvoker = createAgentCapabilityModelInvoker({
@@ -91,20 +57,9 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
         { ...runtimeIdentity, rootSessionId: runtimeIdentity.sessionId },
         acceptedRunConfig,
       );
-      const modelPort = {
-        async invoke(request) {
-          return createCompletedModelResponse(request, "WORKFLOW_DSL/1\nEND");
-        },
-      };
       const runtimeAgentContext = createTestAgentExecutionScope(
         Object.assign(createTestRuntimeContext({ identity: runtimeIdentity }), {
           eventListener: buildContextPayload.eventListener,
-          modelHost: {
-            modelSpec: { alias: "test", model: "test", format: "openai_compatible" },
-            modelPort,
-            modelState: {},
-            invocationIdentity,
-          },
         }),
         { identity: invocationIdentity },
       );
@@ -112,6 +67,8 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
     },
   });
 
+  const restoreFetch = stubModelTransport("WORKFLOW_DSL/1\nEND");
+  t.after(restoreFetch);
   await runner.runAcceptedSession({
     userId: "u1",
     sessionId: "s1",

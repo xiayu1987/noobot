@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { executeMcpTask } from "../../../src/integrations/mcp/task-runner.js";
 import { createTestModelHost } from "../../helpers/test-model-host.js";
+import { TEST_RUN_PREFERENCES } from "../../helpers/run-preferences.js";
 
 function createJsonResponse(payload = {}, { status = 200, headers = {} } = {}) {
   return {
@@ -111,7 +112,10 @@ test("executeMcpTask sends the resolved Qwen ModelSpec through the host ModelPor
     mcpName: "fake",
     task: "do it",
     fetchImpl: createMcpFetch(),
-    runtime: { modelHost: createTestModelHost({ modelPort, modelSpec: QWEN_MODEL }) },
+    runtime: {
+      runConfig: { ...TEST_RUN_PREFERENCES },
+      modelHost: createTestModelHost({ modelPort, modelSpec: QWEN_MODEL }),
+    },
   });
 
   assert.equal(result.ok, true);
@@ -128,7 +132,10 @@ test("executeMcpTask preserves the explicitly selected OpenAI-compatible ModelSp
     mcpName: "fake",
     task: "do it",
     fetchImpl: createMcpFetch(),
-    runtime: { modelHost: createTestModelHost({ modelPort, modelSpec: OPENAI_MODEL }) },
+    runtime: {
+      runConfig: { ...TEST_RUN_PREFERENCES },
+      modelHost: createTestModelHost({ modelPort, modelSpec: OPENAI_MODEL }),
+    },
   });
 
   assert.equal(result.ok, true);

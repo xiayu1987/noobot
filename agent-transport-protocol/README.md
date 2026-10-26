@@ -38,7 +38,7 @@ The Service maps these values unchanged to `runConfig.summaryPolicy`; the Agent 
 ## Boundary rules
 
 - The service derives `userId` from authenticated HTTP or WebSocket identity. Client commands cannot provide it.
-- The service always enables safe confirmation. The client may provide only `preferences.confirmationLevel`.
+- Safe confirmation is a user preference: `preferences.safeConfirm` toggles it and `preferences.safeConfirmLevel` (`low|medium|high|critical`) sets the minimum risk that requires confirmation. The service maps both unchanged into `runConfig`; the Agent validates them with `assertRunConfigPreferences` and reads no other source.
 - Clients cannot provide internal runtime fields such as `thinkingStartedAt`, `runTimeoutMs`, plugin instances, hooks, tool policies, or execution ownership.
 - Unknown top-level fields, unknown nested protocol fields, irrelevant command sections, legacy actions, and unsupported protocol versions are rejected.
 - `pluginModelConfig`, attachment entries, and interaction response bodies are intentionally opaque payloads owned by their respective plugin, attachment, and interaction contracts.

@@ -761,7 +761,6 @@
       }
     }
   },
-  "streaming": true,
   "super_admin": {
     "user_id": "admin",
     "connect_code": "change-your-connect-code"

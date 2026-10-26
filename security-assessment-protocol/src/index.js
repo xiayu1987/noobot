@@ -229,17 +229,14 @@ export function raiseSecurityAssessment(assessment, evidence) {
   });
 }
 
-export function shouldRequireSecurityConfirmation({
-  enabled = true,
-  confirmationLevel = "low",
-  riskLevel,
-} = {}) {
-  if (enabled === false) return false;
-  const normalizedRisk = normalizeSecurityRiskLevel(riskLevel);
-  if (!normalizedRisk) return false;
-  const normalizedConfirmation = normalizeSecurityRiskLevel(
-    confirmationLevel,
-    SECURITY_RISK_LEVEL.LOW,
-  );
-  return securityRiskRank(normalizedRisk) >= CONFIRMATION_MINIMUM_RISK[normalizedConfirmation];
+export function shouldRequireSecurityConfirmation({ safeConfirm, safeConfirmLevel, riskLevel }) {
+  if (typeof safeConfirm !== "boolean") throw new TypeError("safeConfirm must be boolean");
+  if (!Object.hasOwn(CONFIRMATION_MINIMUM_RISK, safeConfirmLevel)) {
+    throw new TypeError(`unsupported safeConfirmLevel: ${safeConfirmLevel}`);
+  }
+  if (!Object.hasOwn(RISK_ORDER, riskLevel)) {
+    throw new TypeError(`unsupported riskLevel: ${riskLevel}`);
+  }
+  if (!safeConfirm) return false;
+  return RISK_ORDER[riskLevel] >= CONFIRMATION_MINIMUM_RISK[safeConfirmLevel];
 }

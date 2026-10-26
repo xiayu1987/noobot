@@ -42,8 +42,7 @@ function bindTestTurn(runtime, suffix) {
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: `presentation-${suffix}`,
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   initializeCurrentTurnMessageEventProjection(runtime);
   return runtime;

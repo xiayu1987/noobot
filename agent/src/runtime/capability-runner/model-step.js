@@ -19,7 +19,7 @@ export function createCapabilityModelStep({
 }) {
   const { modelPort } = requireRuntimeModelHost(runtime);
   const presentation = requireCapabilityActivity(activity);
-  const streaming = runtime?.runConfig?.streaming === true;
+  const { streaming } = runtime.runConfig;
   return async function invokeStep(messages, binding = null) {
     const modelActivity =
       presentation &&

@@ -22,7 +22,7 @@ import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { isFunction, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
 
 const SESSION_RUN_PAYLOAD_FIELDS = Object.freeze([
   "userId",
@@ -66,9 +66,12 @@ function assertSessionRunPayload(payload) {
   if (!isPlainObject(payload.runConfig)) {
     throw new TypeError("session run payload runConfig must be a plain object");
   }
-  for (const field of ["parentDialogProcessId", "dialogProcessId", "turnScopeId"]) {
-    if (typeof payload[field] !== "string") {
-      throw new TypeError(`session run payload ${field} must be a string`);
+  if (!isCanonicalText(payload.turnScopeId)) {
+    throw new TypeError("session run payload turnScopeId must be canonical text");
+  }
+  for (const field of ["parentDialogProcessId", "dialogProcessId"]) {
+    if (payload[field] !== "" && !isCanonicalText(payload[field])) {
+      throw new TypeError(`session run payload ${field} must be empty or canonical text`);
     }
   }
 }

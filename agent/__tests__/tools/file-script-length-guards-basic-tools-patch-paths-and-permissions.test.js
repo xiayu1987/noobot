@@ -747,7 +747,7 @@ test("patch_file: 不扫描父工作区猜测唯一子项目", async () => {
   );
 });
 
-test("patch_file: staticInfo rootDirectory 不改变 workspace 相对路径基准", async () => {
+test("patch_file: 相对路径固定基于用户 workspace", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-directory-"));
   const repoPath = path.join(workspacePath, "noobot");
   await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
@@ -768,15 +768,6 @@ test("patch_file: staticInfo rootDirectory 不改变 workspace 相对路径基�
       runtime: {
         systemRuntime: {
           persistenceScope: null,
-          staticInfo: {
-            directories: {
-              view: "host",
-              rootDirectory: repoPath,
-              currentDirectory: repoPath,
-              opsWorkdir: path.join(repoPath, "runtime/ops_workdir"),
-              allowedRoots: [workspacePath],
-            },
-          },
         },
       },
     }),

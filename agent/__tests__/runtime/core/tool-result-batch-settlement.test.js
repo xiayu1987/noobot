@@ -51,8 +51,7 @@ function createRuntime(abortSignal = new AbortController().signal) {
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-tool-batch",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   initializeCurrentTurnMessageEventProjection(runtime);
   return bindTestDispatchLifecycle(runtime);

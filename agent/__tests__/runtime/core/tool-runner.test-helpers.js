@@ -34,8 +34,7 @@ export function executeToolCall({
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   initializeCurrentTurnMessageEventProjection(runtime);
   if (runtime.eventListener && !runtime.sessionManager) {

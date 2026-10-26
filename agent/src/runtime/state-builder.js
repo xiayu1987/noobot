@@ -13,7 +13,6 @@ import {
 } from "../context/agent-context-accessor.js";
 import {
   normalizeSystemRuntimeCounters,
-  resolveEffectiveModelSpec,
   resolvePhaseSummaryLoopTurns,
   resolveTaskCheckLoopTurns,
 } from "./run-config/index.js";
@@ -33,7 +32,8 @@ import {
   composeContextProjectionKey,
   resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
-import { initializeAgentModelHost } from "./model-port-host.js";
+import { requireRuntimeModelHost } from "./model-port-host.js";
+import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
 import { text } from "@noobot/shared/value";
 
 function resolveLoopConfig(resolvers, runConfig) {
@@ -59,29 +59,30 @@ function resolveActiveTurnIdentity(currentUserMessage, identity) {
   return { dialogProcessId: identity.dialogProcessId, turnScopeId: identity.turnScopeId };
 }
 
-function resolveInvocationIdentity(identity) {
-  return {
-    sessionId: identity.sessionId,
-    parentSessionId: identity.parentSessionId,
-    dialogProcessId: identity.dialogProcessId,
-    turnScopeId: identity.turnScopeId,
-    runId: identity.runId,
-  };
-}
+const MODEL_HOST_IDENTITY_FIELDS = Object.freeze([
+  "sessionId",
+  "parentSessionId",
+  "dialogProcessId",
+  "turnScopeId",
+  "runId",
+]);
 
-function assertRuntimeIdentityConsistent(sys, invocationIdentity) {
+function assertRuntimeIdentityConsistent(sys, identity) {
   for (const field of ["sessionId", "parentSessionId", "dialogProcessId", "turnScopeId"]) {
-    if (sys[field] !== invocationIdentity[field]) {
+    if (sys[field] !== identity[field]) {
       throw new Error(`runtime ${field} conflicts with agent context identity`);
     }
   }
 }
 
-function applySelectedModel(modelState, agentContext, selectedModelSpec) {
-  modelState.agentContext = agentContext;
-  modelState.activeModelName = selectedModelSpec?.model || "";
-  modelState.activeModelAlias = selectedModelSpec?.alias || "";
-  modelState.activeModelSpec = selectedModelSpec;
+function requireTurnModelHost(runtime, identity) {
+  const modelHost = requireRuntimeModelHost(runtime);
+  for (const field of MODEL_HOST_IDENTITY_FIELDS) {
+    if (modelHost.invocationIdentity[field] !== identity[field]) {
+      throw new Error(`runtime model host ${field} conflicts with agent context identity`);
+    }
+  }
+  return modelHost;
 }
 
 function createAgentModelContext({
@@ -200,7 +201,6 @@ function emitAgentStateDiagnostics({
 export function createStateBuilder({
   buildContextMessageBlocksFn = buildContextMessageBlocks,
   normalizeSystemRuntimeCountersFn = normalizeSystemRuntimeCounters,
-  resolveEffectiveModelSpecFn = resolveEffectiveModelSpec,
   resolvePhaseSummaryLoopTurnsFn = resolvePhaseSummaryLoopTurns,
   resolveTaskCheckLoopTurnsFn = resolveTaskCheckLoopTurns,
 } = {}) {
@@ -221,16 +221,12 @@ export function createStateBuilder({
     const messageBlocks = buildContextMessageBlocksFn(agentContext, { currentUserMessage });
 
     const activeTurnIdentity = resolveActiveTurnIdentity(currentUserMessage, context.identity);
-    const invocationIdentity = resolveInvocationIdentity(context.identity);
-    assertRuntimeIdentityConsistent(sys, invocationIdentity);
+    assertRuntimeIdentityConsistent(sys, context.identity);
 
-    const modelHost = initializeAgentModelHost({
-      runtime,
-      invocationIdentity,
-      resolveModelSpec: resolveEffectiveModelSpecFn,
-    });
-    const modelState = modelHost.modelState;
-    applySelectedModel(modelState, agentContext, modelHost.modelSpec);
+    const modelHost = requireTurnModelHost(runtime, context.identity);
+    const { modelState } = modelHost;
+    modelState.agentContext = agentContext;
+    applyActiveModelSpec(modelState, modelHost.modelSpec, { source: "turn_state" });
 
     const modelContext = createAgentModelContext({
       runtime,

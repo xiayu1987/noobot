@@ -15,12 +15,12 @@ function runtime(sanitizeOutput) {
   return createTestRuntimeContext({ systemRuntime: { config: { sanitizeOutput } } });
 }
 
-test("tool runner sanitizes successful output by default and preserves it when disabled", async () => {
+test("tool runner sanitizes successful output when enabled and preserves it when disabled", async () => {
   const tool = { invoke: async () => email };
   const sanitized = await executeToolCall({
     call: { id: "call-sanitized", name: "demo" },
     tool,
-    runtime: runtime(undefined),
+    runtime: runtime(true),
   });
   const raw = await executeToolCall({
     call: { id: "call-raw", name: "demo" },

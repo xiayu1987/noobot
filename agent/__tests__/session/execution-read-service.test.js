@@ -64,7 +64,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
             executionId: "agent:child",
             parentExecutionId: "agent:root",
             rootExecutionId: "agent:root",
-            origin: { type: "workflow_node", workflowNodeExecutionId: "node-1" },
+            origin: { type: "workflow_node", nodeExecutionId: "node-1" },
           }),
         },
       },

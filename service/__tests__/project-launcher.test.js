@@ -344,7 +344,7 @@ test("project launcher recursively adds new global nodes without replacing confi
   assert.equal(config.security.execution_isolation.sandbox.image, "example/default-image");
   assert.equal(config.super_admin.user_id, "owner");
   assert.equal(config.super_admin.connect_code, "configured-secret");
-  assert.deepEqual(config.streaming, { enabled: true, transport: "sse" });
+  assert.equal(config.streaming, undefined);
   assert.equal(config.attachments, undefined);
   assert.equal(config.session, undefined);
   assert.equal(Object.hasOwn(config.tools, "set_skill_task"), false);

@@ -12,87 +12,71 @@ import {
 import { createLlmDeltaVisibilityFilter } from "../../events/llm-filter.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { resolveModelSpecByName } from "../index.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
-function updateModelState(modelState, spec, shouldSwitch) {
-  modelState.activeModelName = text(spec.model);
-  modelState.activeModelAlias = text(spec?.alias);
-  modelState.activeModelSpec = spec && typeof spec === "object" ? { ...spec } : null;
-  if (shouldSwitch) {
-    emitEvent(modelState.runtime.eventListener, "model_switched", {
-      alias: spec?.alias || "",
-      model: spec?.model || "",
-    });
+function requireResolvedModelSpec(spec, source) {
+  if (!isPlainObject(spec) || !text(spec.model)) {
+    throw new TypeError(`model spec not resolved: ${source}`);
   }
+  return spec;
+}
+
+export function applyActiveModelSpec(modelState, spec, { source }) {
+  const resolvedSpec = requireResolvedModelSpec(spec, source);
+  modelState.activeModelSpec = resolvedSpec;
+  return resolvedSpec;
 }
 
 export function resolveLlmForTurn(modelState) {
   const { runtime, defaultModelSpec } = modelState;
-  const { globalConfig, userConfig } = runtime;
-  const runtimeModel = text(runtime?.runtimeModel);
-
-  let targetSpec = null;
-  let shouldSwitch = false;
-
-  if (runtimeModel) {
-    targetSpec = resolveModelSpecByName({
-      modelName: runtimeModel,
-      globalConfig,
-      userConfig,
-    });
-    if (targetSpec?.model && targetSpec.model !== modelState.activeModelName) {
-      shouldSwitch = true;
-    }
-  } else if (defaultModelSpec?.model && defaultModelSpec.model !== modelState.activeModelName) {
-    targetSpec = defaultModelSpec;
-    shouldSwitch = true;
-  } else if (defaultModelSpec?.model) {
-    targetSpec = defaultModelSpec;
-    shouldSwitch = false;
-  }
-
-  if (!targetSpec?.model) return;
-
-  updateModelState(modelState, targetSpec, shouldSwitch);
+  const runtimeModel = text(runtime.runtimeModel);
+  const targetSpec = runtimeModel
+    ? requireResolvedModelSpec(
+        resolveModelSpecByName({
+          modelName: runtimeModel,
+          globalConfig: runtime.globalConfig,
+          userConfig: runtime.userConfig,
+        }),
+        `runtimeModel ${runtimeModel}`,
+      )
+    : requireResolvedModelSpec(defaultModelSpec, "defaultModelSpec");
+  if (targetSpec.model === modelState.activeModelSpec.model) return;
+  applyActiveModelSpec(modelState, targetSpec, { source: "turn" });
+  emitEvent(runtime.eventListener, "model_switched", {
+    alias: targetSpec.alias,
+    model: targetSpec.model,
+  });
 }
 
-export function resolveCurrentModelInfo(modelState = {}) {
-  return {
-    modelAlias: text(modelState?.activeModelAlias),
-    modelName: text(modelState?.activeModelName),
-  };
-}
-
-export function createStreamingCallbacks(eventListener = null, runtime = {}) {
+export function createStreamingCallbacks(eventListener, runtime) {
   if (!hasEventListener(eventListener)) return undefined;
   const visibilityFilter = createLlmDeltaVisibilityFilter();
-  const emitVisibleDelta = (value = "") => {
-    const inputText = String(value || "");
-    if (!inputText) return null;
-    appendAssistantDraftContent(runtime, inputText);
-    return emitMessageEvent(eventListener, runtime, "llm_delta", { text: inputText });
+  const emitVisibleDelta = (visibleText) => {
+    if (!visibleText) return null;
+    appendAssistantDraftContent(runtime, visibleText);
+    return emitMessageEvent(eventListener, runtime, "llm_delta", { text: visibleText });
   };
   return [
     {
-      handleLLMNewToken: (token) => emitVisibleDelta(visibilityFilter.push(String(token || ""))),
+      handleLLMNewToken: (token) => emitVisibleDelta(visibilityFilter.push(token)),
       handleLLMEnd: () => emitVisibleDelta(visibilityFilter.flush()),
     },
   ];
 }
 
 export function createModelActivity(
-  eventListener = null,
-  runtime = {},
+  eventListener,
+  runtime,
   {
-    activityKind = "model_analysis",
-    activityEventType = MESSAGE_EVENT_TYPE.THINKING,
-    purpose = "",
-    pluginFlow = "",
-    chain = "",
-    relayCorrelationId = "",
+    activityKind,
+    activityEventType,
+    purpose,
+    pluginFlow,
+    chain,
+    relayCorrelationId,
     activityId = randomUUID(),
-    streaming = false,
-  } = {},
+    streaming,
+  },
 ) {
   const activity = {
     activityId,
@@ -106,8 +90,7 @@ export function createModelActivity(
     return { callbacks: undefined, complete: async () => null };
   }
   const visibilityFilter = createLlmDeltaVisibilityFilter();
-  const emitVisibleDelta = (value = "") => {
-    const inputText = String(value || "");
+  const emitVisibleDelta = (inputText) => {
     if (!inputText) return null;
     return emitMessageEvent(eventListener, runtime, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA, {
       ...activity,
@@ -119,8 +102,7 @@ export function createModelActivity(
     callbacks: streaming
       ? [
           {
-            handleLLMNewToken: (token) =>
-              emitVisibleDelta(visibilityFilter.push(String(token || ""))),
+            handleLLMNewToken: (token) => emitVisibleDelta(visibilityFilter.push(token)),
             handleLLMEnd: () => emitVisibleDelta(visibilityFilter.flush()),
           },
         ]

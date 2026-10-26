@@ -277,8 +277,7 @@ test("state-committer checkpoints assistant and tool records with presentation i
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "msg_chat_checkpoint",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   const committer = createStateCommitter({
     modelContext: createTestModelContext("dp_checkpoint", "turn-checkpoint"),

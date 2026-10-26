@@ -103,11 +103,11 @@ describe("buildChatPayload model preferences", () => {
         message: "x",
         turnScopeId: "turn-1",
         safeConfirmLevel: "HIGH",
-      }).preferences.confirmationLevel,
+      }).preferences.safeConfirmLevel,
     ).toBe("high");
     expect(
       buildRequiredPayload({ message: "x", turnScopeId: "turn-1", safeConfirmLevel: "invalid" })
-        .preferences.confirmationLevel,
+        .preferences.safeConfirmLevel,
     ).toBe("low");
   });
   it("writes selectedModel and current scenario pluginModelConfig to preferences", () => {

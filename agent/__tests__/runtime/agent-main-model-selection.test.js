@@ -7,31 +7,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveEffectiveModelSpec } from "../../src/runtime/run-config/config-resolver.js";
-import { createStateBuilder } from "../../src/runtime/state-builder.js";
-import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { initializeAgentModelHost } from "../../src/runtime/model-port-host.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 const globalConfig = {
   providers: {
     scenario_default: {
       enabled: true,
-      providerId: "scenario_default",
-      adapterId: "openai-compatible",
       model: "scenario-default-model",
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["none", "low", "medium", "high"],
-      apiKey: "test-key",
-      baseUrl: "http://localhost/scenario",
+      api_key: "test-key",
+      base_url: "http://localhost/scenario",
     },
     selected_alias: {
       enabled: true,
-      providerId: "selected_alias",
-      adapterId: "openai-compatible",
       model: "selected-model",
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["none", "low", "medium", "high"],
-      apiKey: "test-key",
-      baseUrl: "http://localhost/selected",
+      api_key: "test-key",
+      base_url: "http://localhost/selected",
     },
   },
   scenarios: {
@@ -75,23 +70,19 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
       providers: {
         scenario_model_alias: {
           enabled: true,
-          providerId: "scenario_model_alias",
-          adapterId: "openai-compatible",
           model: "scenario-model",
           reasoning_effort_parameter: "reasoning_effort",
           reasoning_effort_options: ["none", "low", "medium", "high"],
-          apiKey: "test-key",
-          baseUrl: "http://localhost/scenario-model",
+          api_key: "test-key",
+          base_url: "http://localhost/scenario-model",
         },
         system_default: {
           enabled: true,
-          providerId: "system_default",
-          adapterId: "openai-compatible",
           model: "system-default-model",
           reasoning_effort_parameter: "reasoning_effort",
           reasoning_effort_options: ["none", "low", "medium", "high"],
-          apiKey: "test-key",
-          baseUrl: "http://localhost/system",
+          api_key: "test-key",
+          base_url: "http://localhost/system",
         },
       },
       scenarios: {
@@ -112,74 +103,37 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
   assert.equal(spec.model, "scenario-model");
 });
 
-function buildStateWithRunConfig(runConfig) {
-  let received = null;
-  const builder = createStateBuilder({
-    buildContextMessageBlocksFn: () => ({ system: [], history: [], incremental: [], messages: [] }),
-    normalizeSystemRuntimeCountersFn: () => {},
-    resolveEffectiveModelSpecFn: (params) => {
-      received = params;
-      return { alias: "selected_alias", model: "selected-model" };
-    },
-    resolvePhaseSummaryLoopTurnsFn: () => 1,
+function initializeHostWithRunConfig(runConfig) {
+  const runtime = createTestRuntimeContext({
+    globalConfig,
+    userConfig: {},
+    runConfig: { hookManager: null, ...runConfig },
   });
-
-  builder({
-    agentContext: createTestAgentExecutionScope(
-      createTestRuntimeContext({
-        globalConfig,
-        userConfig: {},
-        runConfig,
-        identity: {
-          sessionId: "s1",
-          dialogProcessId: "dialog-model-selection",
-          turnScopeId: "turn-model-selection",
-        },
-        systemRuntime: {},
-      }),
-      {
-        identity: {
-          sessionId: "s1",
-          dialogProcessId: "dialog-model-selection",
-          turnScopeId: "turn-model-selection",
-          userId: "u-test",
-          rootSessionId: "s1",
-          parentSessionId: "",
-          runId: "r-1",
-          presentationMessageId: "m-1",
-        },
-      },
-    ),
-    currentUserMessage: {
-      messageUid: "sm_model_selection",
-      role: "user",
-      content: "hi",
+  return initializeAgentModelHost({
+    runtime,
+    invocationIdentity: {
+      sessionId: "s1",
+      parentSessionId: "",
       dialogProcessId: "dialog-model-selection",
       turnScopeId: "turn-model-selection",
+      runId: "r-1",
     },
   });
-
-  return received;
 }
 
-test("state builder reads selectedModel and scenario only from canonical runConfig fields", () => {
-  const received = buildStateWithRunConfig({
-    hookManager: null,
-    selectedModel: "top_level_alias",
-    scenario: "top_level_scenario",
-  });
-
-  assert.equal(received.selectedModel, "top_level_alias");
-  assert.equal(received.scenario, "top_level_scenario");
-});
-
-test("state builder accepts canonical selectedModel and scenario", () => {
-  const received = buildStateWithRunConfig({
-    hookManager: null,
+test("model host resolves the canonical runConfig selectedModel before the scenario model", () => {
+  const host = initializeHostWithRunConfig({
     selectedModel: "selected_alias",
     scenario: "programming",
   });
 
-  assert.equal(received.selectedModel, "selected_alias");
-  assert.equal(received.scenario, "programming");
+  assert.equal(host.modelSpec.alias, "selected_alias");
+  assert.equal(host.modelState.activeModelSpec, host.modelSpec);
+  assert.equal(host.modelState.defaultModelSpec, host.modelSpec);
+});
+
+test("model host resolves the canonical runConfig scenario model without selectedModel", () => {
+  const host = initializeHostWithRunConfig({ selectedModel: "", scenario: "programming" });
+
+  assert.equal(host.modelSpec.alias, "scenario_default");
 });

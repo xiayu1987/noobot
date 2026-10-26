@@ -22,14 +22,7 @@ import { resolveServices } from "../providers/service-provider.js";
 import { resolveSkills } from "../providers/skills-resolver.js";
 import { loadSystemPrompt } from "../providers/system-prompt-loader.js";
 
-export function buildSystemRuntime({
-  identity,
-  runConfig,
-  botManager,
-  staticInfo = null,
-  isSuperUser,
-  now,
-}) {
+export function buildSystemRuntime({ identity, runConfig, botManager, isSuperUser, now }) {
   if (typeof isSuperUser !== "boolean") {
     throw new TypeError("buildSystemRuntime requires boolean isSuperUser");
   }
@@ -39,11 +32,7 @@ export function buildSystemRuntime({
     startupDependencies === null
       ? dynamicInfo
       : { ...dynamicInfo, desktopDependencySources: startupDependencies.sourceSummary };
-  return {
-    ...runtimeWithStartup,
-    ...(staticInfo && typeof staticInfo === "object" ? { staticInfo } : {}),
-    isSuperUser,
-  };
+  return { ...runtimeWithStartup, isSuperUser };
 }
 
 export async function buildSystemContext({

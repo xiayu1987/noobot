@@ -59,12 +59,10 @@ export function createChatRunService({ normalizeLocale, defaultLocale } = {}) {
     const runConfig = {
       allowUserInteraction: preferences.allowUserInteraction,
       safeConfirm: preferences.safeConfirm,
-      safeConfirmLevel: preferences.confirmationLevel,
+      safeConfirmLevel: preferences.safeConfirmLevel,
       sanitizeOutput: preferences.sanitizeOutput,
-      ...(Object.prototype.hasOwnProperty.call(preferences, "streaming")
-        ? { streaming: preferences.streaming }
-        : {}),
-      frontendThresholdsEnabled: preferences.frontendThresholdsEnabled === true,
+      streaming: preferences.streaming,
+      frontendThresholdsEnabled: preferences.frontendThresholdsEnabled,
       locale: normalizeLocale(preferences.locale, defaultLocale),
       ...(preferences.scenario ? { scenario: preferences.scenario } : {}),
       ...(preferences.selectedModel ? { selectedModel: preferences.selectedModel } : {}),

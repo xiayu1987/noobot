@@ -6,17 +6,21 @@
 
 import {
   SECURITY_RISK_LEVEL,
+  SECURITY_RISK_LEVELS,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 const SUMMARY_POLICY_KEYS = Object.freeze(["phaseSummaryLoopTurns", "taskCheckLoopTurns"]);
-const PREFERENCE_KEYS = new Set([
+const PREFERENCE_FLAG_KEYS = Object.freeze([
   "allowUserInteraction",
   "safeConfirm",
   "sanitizeOutput",
   "streaming",
+]);
+const PREFERENCE_KEYS = new Set([
+  ...PREFERENCE_FLAG_KEYS,
   "frontendThresholdsEnabled",
-  "confirmationLevel",
+  "safeConfirmLevel",
   "locale",
   "scenario",
   "selectedModel",
@@ -56,8 +60,8 @@ function summaryPolicy(value) {
 }
 
 export function createRunPreferences(input = {}) {
-  const confirmationLevel = normalizeSecurityRiskLevel(
-    input.confirmationLevel,
+  const safeConfirmLevel = normalizeSecurityRiskLevel(
+    input.safeConfirmLevel,
     SECURITY_RISK_LEVEL.LOW,
   );
   const normalizedPluginModelConfig = pluginModelConfig(input.pluginModelConfig);
@@ -66,11 +70,9 @@ export function createRunPreferences(input = {}) {
     allowUserInteraction: input.allowUserInteraction !== false,
     safeConfirm: input.safeConfirm !== false,
     sanitizeOutput: input.sanitizeOutput !== false,
-    ...(Object.prototype.hasOwnProperty.call(input, "streaming")
-      ? { streaming: input.streaming === true }
-      : {}),
+    streaming: input.streaming === true,
     frontendThresholdsEnabled: input.frontendThresholdsEnabled === true,
-    confirmationLevel,
+    safeConfirmLevel,
     locale: clean(input.locale),
     scenario: clean(input.scenario),
     selectedModel: clean(input.selectedModel),
@@ -81,6 +83,27 @@ export function createRunPreferences(input = {}) {
   };
 }
 
+function validateExecutionPreferenceFields(source) {
+  const errors = [];
+  for (const key of PREFERENCE_FLAG_KEYS) {
+    if (typeof source[key] !== "boolean") errors.push(`invalid_${key}`);
+  }
+  if (typeof source.frontendThresholdsEnabled !== "boolean") {
+    errors.push("invalid_frontend_thresholds_enabled");
+  }
+  if (!SECURITY_RISK_LEVELS.includes(source.safeConfirmLevel)) {
+    errors.push("invalid_safe_confirm_level");
+  }
+  return errors;
+}
+
+export function assertRunConfigPreferences(runConfig) {
+  if (!isPlainObject(runConfig)) throw new TypeError("run_config_not_object");
+  const errors = validateExecutionPreferenceFields(runConfig);
+  if (errors.length) throw new TypeError(`invalid_run_config_preferences:${errors.join(",")}`);
+  return runConfig;
+}
+
 export function validateRunPreferences(preferences) {
   const errors = [];
   if (!isPlainObject(preferences)) {
@@ -89,21 +112,7 @@ export function validateRunPreferences(preferences) {
   for (const key of Object.keys(preferences)) {
     if (!PREFERENCE_KEYS.has(key)) errors.push(`unknown_preferences_field:${key}`);
   }
-  for (const key of ["allowUserInteraction", "safeConfirm", "sanitizeOutput"]) {
-    if (typeof preferences[key] !== "boolean") errors.push(`invalid_${key}`);
-  }
-  if (
-    Object.prototype.hasOwnProperty.call(preferences, "streaming") &&
-    typeof preferences.streaming !== "boolean"
-  ) {
-    errors.push("invalid_streaming");
-  }
-  if (typeof preferences.frontendThresholdsEnabled !== "boolean") {
-    errors.push("invalid_frontend_thresholds_enabled");
-  }
-  if (!normalizeSecurityRiskLevel(preferences.confirmationLevel)) {
-    errors.push("invalid_confirmation_level");
-  }
+  errors.push(...validateExecutionPreferenceFields(preferences));
   if (
     !Array.isArray(preferences.selectedPlugins) ||
     preferences.selectedPlugins.some((item) => typeof item !== "string")

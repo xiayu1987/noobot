@@ -132,9 +132,9 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.deepEqual(subSessionCalls[0].metadata.origin, {
     type: "workflow_node",
     workflowRunId: identity.workflowRunId,
-    workflowNodeExecutionId: identity.nodeExecutionId,
+    nodeExecutionId: identity.nodeExecutionId,
   });
-  for (const field of ["turnScopeId", "workflowRunId", "workflowNodeExecutionId"]) {
+  for (const field of ["turnScopeId", "workflowRunId", "nodeExecutionId"]) {
     assert.equal(Object.hasOwn(subSessionCalls[0].runConfigPatch, field), false);
   }
   assert.equal(subSessionCalls[0].metadata.nodeExecutionId, identity.nodeExecutionId);

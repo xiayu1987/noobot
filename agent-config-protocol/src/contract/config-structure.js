@@ -251,7 +251,6 @@ export const CONFIG_STRUCTURE = object({
     { user_id: string(), connect_code: string() },
     { itemType: EXPLICIT, access: SYSTEM, policy: GLOBAL_ONLY },
   ),
-  streaming: boolean({ policy: GLOBAL_ONLY }),
   security: SECURITY_STRUCTURE,
 
   attachments: object(

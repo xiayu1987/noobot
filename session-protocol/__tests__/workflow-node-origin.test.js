@@ -11,7 +11,7 @@ import {
   projectWorkflowNodeOwnership,
 } from "@noobot/session-protocol/execution-lifecycle";
 
-const nodeOrigin = { workflowRunId: "workflow:run-1", workflowNodeExecutionId: "node-exec-1" };
+const nodeOrigin = { workflowRunId: "workflow:run-1", nodeExecutionId: "node-exec-1" };
 
 test("workflow node origin projects the single node ownership pair", () => {
   const origin = createWorkflowNodeOrigin(nodeOrigin);
@@ -33,9 +33,9 @@ test("non-node origins carry no node ownership", () => {
 test("incomplete or non-canonical workflow node origins are rejected", () => {
   for (const patch of [
     { workflowRunId: undefined },
-    { workflowNodeExecutionId: "" },
+    { nodeExecutionId: "" },
     { workflowRunId: " workflow:run-1" },
-    { workflowNodeExecutionId: 7 },
+    { nodeExecutionId: 7 },
   ]) {
     const input = { ...nodeOrigin, ...patch };
     assert.throws(() => createWorkflowNodeOrigin(input), { code: "EXECUTION_ORIGIN_INVALID" });

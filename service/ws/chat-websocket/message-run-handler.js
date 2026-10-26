@@ -156,7 +156,7 @@ function createRunHandler(context) {
     if (await bindExistingRun(context, run, onRunBound)) return { rebound: true };
     reserveRun(context, run, onRunBound);
     const accepted = await acceptRunCommand(context, command, run);
-    const active = await activateRun(context, command, run, accepted);
+    const active = await activateRun(context, command, run);
     await executeAcceptedRun(context, run, accepted, active);
   };
 }

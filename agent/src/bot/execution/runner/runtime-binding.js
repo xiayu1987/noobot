@@ -90,12 +90,10 @@ export async function bindAgentDispatchRuntime({
     runtime: dispatchRuntime,
     invocationIdentity: getAgentContextEnvelope(runtimeAgentContext).identity,
   });
-  const workflowNodeOwnership = projectWorkflowNodeOwnership(lifecycle.origin);
   bindAssistantMessageEventStream(dispatchRuntime, {
     presentationMessageId,
     parentSessionId,
-    workflowRunId: workflowNodeOwnership?.workflowRunId ?? "",
-    nodeExecutionId: workflowNodeOwnership?.nodeExecutionId ?? "",
+    workflowNodeOwnership: projectWorkflowNodeOwnership(lifecycle.origin),
   });
   applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
   syncLifecycleRuntimeState(dispatchRuntime, lifecycle);

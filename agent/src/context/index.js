@@ -202,7 +202,6 @@ export class ContextBuilder {
         identity: this.runtimeIdentity,
         runConfig: this.runConfig,
         botManager: this.botManager,
-        staticInfo: runtimeStaticInfo,
         isSuperUser: runtimeStaticInfo.identity.isSuperUser,
         now: this._now(),
       }),

@@ -37,7 +37,7 @@ test("send maps flags onto run preferences", () => {
   assert.equal(invocation.message, "hi");
   assert.equal(invocation.preferences.selectedModel, "gpt");
   assert.deepEqual(invocation.preferences.selectedPlugins, ["a", "b"]);
-  assert.equal(invocation.preferences.confirmationLevel, "high");
+  assert.equal(invocation.preferences.safeConfirmLevel, "high");
   assert.equal(invocation.preferences.safeConfirm, false);
   assert.equal(invocation.preferences.allowUserInteraction, true);
   assert.equal(invocation.preferences.frontendThresholdsEnabled, false);

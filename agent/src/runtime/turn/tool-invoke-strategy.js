@@ -42,7 +42,7 @@ export function createBoundLlmToolChoiceInvoker({
       effectiveModelSpec,
     );
     const boundToolOverrides = resolveBoundToolModelRequestOverrides(effectiveModelSpec);
-    const streaming = runtime?.runConfig?.streaming === true;
+    const { streaming } = runtime.runConfig;
     const modelActivity = createModelActivity(runtime.eventListener, runtime, {
       activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
       activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,

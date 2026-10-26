@@ -548,8 +548,6 @@ test("detached sub-session does not inherit parent turn transaction identity", a
       },
     }),
     runConfigPatch: {
-      workflowRunId: "workflow-run-1",
-      workflowNodeExecutionId: "node-execution-1",
       presentationMessageId: "root-presentation-message-from-patch",
     },
     metadata: DETACHED_REQUEST_METADATA,
@@ -574,8 +572,6 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message-from-patch");
   assert.equal(runConfig[LEGACY_MESSAGE_ID], undefined);
   assert.equal(runConfig.streaming, true);
-  assert.equal(runConfig.workflowRunId, "workflow-run-1");
-  assert.equal(runConfig.workflowNodeExecutionId, "node-execution-1");
   assert.equal(Object.hasOwn(runConfig, "turnScopeId"), false);
   assert.equal(runConfig.executionId, "agent:child-turn");
   assert.deepEqual(runConfig.selectedPlugins, ["harness", "workflow"]);

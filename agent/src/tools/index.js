@@ -77,7 +77,7 @@ function hasEnabledMultimodalParsingProvider(effectiveConfig = {}) {
 async function buildToolsDefault(ctx) {
   const runtime = getRuntimeFromAgentContext(ctx.agentContext);
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
-  const allowUserInteraction = runtime?.systemRuntime?.config?.allowUserInteraction !== false;
+  const { allowUserInteraction } = runtime.systemRuntime.config;
   const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(effectiveConfig);
   const enableMultimodalParseTool = hasEnabledMultimodalParsingProvider(effectiveConfig);
   const baseTools = [

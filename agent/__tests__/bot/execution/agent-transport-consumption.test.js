@@ -68,7 +68,7 @@ test("Agent transport consumption proves normalized fields reached their runtime
     allowUserInteraction: false,
     sanitizeOutput: true,
     streaming: false,
-    confirmationLevel: "high",
+    safeConfirmLevel: "high",
     locale: "zh-CN",
     scenario: "programming",
     selectedModel: "model-main",

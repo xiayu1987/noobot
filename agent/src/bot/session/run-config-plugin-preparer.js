@@ -185,7 +185,7 @@ export class RunConfigPluginPreparer {
     const basePath =
       text(options.basePath) || this.workspaceService.getWorkspacePath(requireUserId(userId));
     const next = { ...options, enabled: true, mode: "on", basePath };
-    next.frontendThresholdsEnabled = runConfig?.frontendThresholdsEnabled === true;
+    next.frontendThresholdsEnabled = runConfig.frontendThresholdsEnabled;
     const agentContributions = contributionsForSurface(entry.manifest, PLUGIN_SURFACE.AGENT);
     const registeredHooks = agentContributions?.hooks?.registers || [];
     const hasAgentLifecycle = registeredHooks.some(({ point }) =>

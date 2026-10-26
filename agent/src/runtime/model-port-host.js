@@ -15,6 +15,7 @@ import {
 } from "@noobot/model-protocol";
 import { emitEvent } from "../events/index.js";
 import { resolveEffectiveModelSpec } from "./run-config/index.js";
+import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 function resolveCredential(modelSpec = {}) {
@@ -131,48 +132,44 @@ export function requireRuntimeModelHost(runtime) {
   return host;
 }
 
-export function initializeAgentModelHost({
-  runtime,
-  invocationIdentity,
-  resolveModelSpec = resolveEffectiveModelSpec,
-} = {}) {
+export function initializeAgentModelHost({ runtime, invocationIdentity }) {
   if (!isPlainObject(runtime)) {
     throw new TypeError("agent model host requires runtime");
   }
+  if (!isPlainObject(invocationIdentity)) {
+    throw new TypeError("agent model host requires invocationIdentity");
+  }
   const identity = Object.freeze({
-    sessionId: text(invocationIdentity?.sessionId),
-    parentSessionId: text(invocationIdentity?.parentSessionId),
-    dialogProcessId: text(invocationIdentity?.dialogProcessId),
-    turnScopeId: text(invocationIdentity?.turnScopeId),
-    runId: text(invocationIdentity?.runId),
+    sessionId: text(invocationIdentity.sessionId),
+    parentSessionId: text(invocationIdentity.parentSessionId),
+    dialogProcessId: text(invocationIdentity.dialogProcessId),
+    turnScopeId: text(invocationIdentity.turnScopeId),
+    runId: text(invocationIdentity.runId),
   });
   for (const field of ["sessionId", "dialogProcessId", "turnScopeId", "runId"]) {
     if (!identity[field]) throw new TypeError(`agent model host identity.${field} is required`);
   }
-
-  const existing = runtime.modelHost;
-  if (existing) {
-    for (const field of Object.keys(identity)) {
-      if (text(existing.invocationIdentity?.[field]) !== identity[field]) {
-        throw new TypeError(`agent model host identity.${field} conflict`);
-      }
-    }
-    return existing;
+  if (runtime.modelHost) {
+    throw new TypeError("agent model host already initialized");
   }
 
   const { globalConfig, userConfig, runConfig } = runtime;
-  const modelSpec = resolveModelSpec({
-    globalConfig,
-    userConfig,
-    selectedModel: runConfig.selectedModel,
-    scenario: runConfig.scenario,
-  });
   const modelState = {
-    activeModelSpec: modelSpec,
-    defaultModelSpec: modelSpec,
+    defaultModelSpec: null,
     runtime,
     invocationIdentity: identity,
   };
+  const modelSpec = applyActiveModelSpec(
+    modelState,
+    resolveEffectiveModelSpec({
+      globalConfig,
+      userConfig,
+      selectedModel: runConfig.selectedModel,
+      scenario: runConfig.scenario,
+    }),
+    { source: "model_host" },
+  );
+  modelState.defaultModelSpec = modelSpec;
   const modelPort = createAgentModelPort(modelState);
   modelState.modelPort = modelPort;
   const host = Object.freeze({
@@ -183,8 +180,8 @@ export function initializeAgentModelHost({
   });
   runtime.modelHost = host;
   emitEvent(runtime.eventListener, "model_selected", {
-    alias: modelSpec?.alias || "",
-    model: modelSpec?.model || "",
+    alias: modelSpec.alias,
+    model: modelSpec.model,
   });
   return host;
 }

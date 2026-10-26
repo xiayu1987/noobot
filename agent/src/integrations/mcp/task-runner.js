@@ -96,8 +96,8 @@ export async function executeMcpTask({
   const traces = [];
   const maxTurns = TURN_THRESHOLDS.subTasks.mcpTaskMaxTurns;
   for (let turn = 1; turn <= maxTurns; turn += 1) {
-    const streaming = runtime?.runConfig?.streaming === true;
-    const modelActivity = createModelActivity(runtime?.eventListener, runtime, {
+    const { streaming } = runtime.runConfig;
+    const modelActivity = createModelActivity(runtime.eventListener, runtime, {
       activityKind: ACTIVITY_KIND.MCP_MODEL_ANALYSIS,
       activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       purpose: "mcp_tool_execution",

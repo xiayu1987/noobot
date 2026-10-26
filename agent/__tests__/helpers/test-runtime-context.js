@@ -9,6 +9,8 @@ import {
 } from "../../src/runtime/runtime-context-factory.js";
 import { HOOK_RUNTIME_IDENTITY_FIELDS } from "@noobot/hook-protocol/runtime-identity";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { TEST_RUN_PREFERENCES } from "./run-preferences.js";
+import { TEST_MODEL_GLOBAL_CONFIG } from "./test-model-config.js";
 
 export const TEST_RUNTIME_IDENTITY = Object.freeze({
   userId: "u-test",
@@ -22,7 +24,7 @@ export const TEST_RUNTIME_IDENTITY = Object.freeze({
 function createDefaultRuntimeContextInput() {
   return {
     basePath: "",
-    globalConfig: {},
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG },
     userConfig: {},
     eventListener: null,
     sessionManager: null,
@@ -80,5 +82,6 @@ export function createTestRuntimeContext(options = {}) {
     );
   }
   Object.assign(input.systemRuntime, { ...TEST_RUNTIME_IDENTITY, ...identityOverrides });
+  input.systemRuntime.config = { ...TEST_RUN_PREFERENCES, ...input.systemRuntime.config };
   return Object.assign(createRuntimeContext(input), mounted);
 }

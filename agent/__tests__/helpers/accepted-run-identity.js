@@ -6,6 +6,7 @@
 import { deriveAgentExecutionId, EXECUTION_KIND } from "@noobot/session-protocol";
 import { MESSAGE_FIELD_SCHEMA } from "@noobot/session-protocol/message-identity-schema";
 import { text } from "@noobot/shared/value";
+import { TEST_RUN_PREFERENCES } from "./run-preferences.js";
 
 export function createAcceptedRunIdentity(turnScopeId, overrides = {}) {
   const scopeId = text(turnScopeId);
@@ -15,6 +16,7 @@ export function createAcceptedRunIdentity(turnScopeId, overrides = {}) {
     overrides.presentationMessageId ??
     `${MESSAGE_FIELD_SCHEMA.presentationMessageId.prefix}${scopeId}`;
   return {
+    ...TEST_RUN_PREFERENCES,
     presentationMessageId,
     userMessageId: `${MESSAGE_FIELD_SCHEMA.userMessageId.prefix}${scopeId}`,
     commandId: `cmd_${scopeId}`,

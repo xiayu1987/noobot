@@ -28,7 +28,7 @@ import {
 
 function runtimeForTurn({
   presentationMessageId = "presentation-1",
-  streamIdentity = { parentSessionId: "", workflowRunId: "", nodeExecutionId: "" },
+  streamIdentity = { parentSessionId: "", workflowNodeOwnership: null },
 } = {}) {
   let sequence = 0;
   const runtime = createTestRuntimeContext({
@@ -77,8 +77,7 @@ test("message event payload identity comes only from the bound stream", async ()
   const runtime = runtimeForTurn({
     streamIdentity: {
       parentSessionId: "parent-bound",
-      workflowRunId: "run-bound",
-      nodeExecutionId: "node-bound",
+      workflowNodeOwnership: { workflowRunId: "run-bound", nodeExecutionId: "node-bound" },
     },
   });
   runtime.systemRuntime.dialogProcessId = "dialog-bound";
@@ -199,8 +198,7 @@ test("Turn message event identity is immutable after binding", () => {
       bindAssistantMessageEventStream(runtime, {
         presentationMessageId: "presentation-other",
         parentSessionId: "",
-        workflowRunId: "",
-        nodeExecutionId: "",
+        workflowNodeOwnership: null,
       }),
     /presentationMessageId conflict/,
   );
@@ -213,8 +211,6 @@ test("workflow ownership is immutable and emitted by the common message stream",
       executionId: "execution-1",
       commandId: "command-1",
       presentationMessageId: "workflow-presentation",
-      workflowRunId: "workflow-run-1",
-      workflowNodeExecutionId: "node-execution-1",
     },
     identity: {
       sessionId: "child-session",
@@ -255,8 +251,7 @@ test("workflow ownership is immutable and emitted by the common message stream",
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "workflow-presentation",
     parentSessionId: "root-session",
-    workflowRunId: "workflow-run-1",
-    nodeExecutionId: "node-execution-1",
+    workflowNodeOwnership: { workflowRunId: "workflow-run-1", nodeExecutionId: "node-execution-1" },
   });
   initializeCurrentTurnMessageEventProjection(runtime);
   beginAssistantMessageEventStream(runtime, { turn: 0 });
@@ -271,10 +266,12 @@ test("workflow ownership is immutable and emitted by the common message stream",
       bindAssistantMessageEventStream(runtime, {
         presentationMessageId: "workflow-presentation",
         parentSessionId: "root-session",
-        workflowRunId: "workflow-run-1",
-        nodeExecutionId: "node-execution-2",
+        workflowNodeOwnership: {
+          workflowRunId: "workflow-run-1",
+          nodeExecutionId: "node-execution-2",
+        },
       }),
-    /nodeExecutionId conflict/,
+    /workflowNodeOwnership conflict/,
   );
 });
 

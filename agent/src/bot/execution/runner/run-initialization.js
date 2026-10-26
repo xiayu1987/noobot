@@ -16,8 +16,9 @@ import {
   resolveInitialLifecycleState,
 } from "../../../runtime/lifecycle/state-machine.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text, isFunction } from "@noobot/shared/value";
 import { AGENT_CONTEXT_MODE } from "@noobot/context-protocol";
+import { assertRunConfigPreferences } from "@noobot/agent-transport-protocol/run-preferences";
 
 const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
   "presentationMessageId",
@@ -28,7 +29,9 @@ const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 function requireAcceptedRunIdentity(runConfig) {
-  const missing = REQUIRED_RUN_IDENTITY_FIELDS.filter((field) => !text(runConfig?.[field]));
+  const missing = REQUIRED_RUN_IDENTITY_FIELDS.filter(
+    (field) => !isCanonicalText(runConfig[field]),
+  );
   if (missing.length > 0) {
     const error = new Error(`session run requires accepted identity: ${missing.join(",")}`);
     error.statusCode = 400;
@@ -60,28 +63,21 @@ export async function initializeSessionRun({
 }) {
   const normalizedMessage = normalizeRunMessage(message);
   validateRunInput({ userId, sessionId, caller, parentSessionId });
-  const normalizedRequestTurnScopeId = text(requestedTurnScopeId);
-  if (!normalizedRequestTurnScopeId) {
-    const error = new Error("session run requires turnScopeId");
-    error.statusCode = 400;
-    error.code = "MISSING_TURN_SCOPE_ID";
-    throw error;
-  }
-  if (runConfig?.reuseExistingUserTurn === true && !text(requestedDialogProcessId)) {
+  if (runConfig.reuseExistingUserTurn === true && !requestedDialogProcessId) {
     const error = new Error("reused Turn requires its precommitted dialogProcessId");
     error.statusCode = 400;
     error.code = "MISSING_REUSED_TURN_DIALOG_PROCESS_ID";
     throw error;
   }
-  if (runConfig?.reuseExistingUserTurn === true) {
+  if (runConfig.reuseExistingUserTurn === true) {
     if (!isFunction(assertReusedUserTurnIdentity)) {
       throw new Error("assertReusedUserTurnIdentity is required before reused Turn initialization");
     }
     await assertReusedUserTurnIdentity({
       userId,
       sessionId,
-      turnScopeId: normalizedRequestTurnScopeId,
-      dialogProcessId: text(requestedDialogProcessId),
+      turnScopeId: requestedTurnScopeId,
+      dialogProcessId: requestedDialogProcessId,
       persistenceScope,
     });
   }
@@ -92,7 +88,7 @@ export async function initializeSessionRun({
     caller,
     eventListener,
     dialogProcessId: requestedDialogProcessId,
-    turnScopeId: normalizedRequestTurnScopeId,
+    turnScopeId: requestedTurnScopeId,
     persistenceScope,
   });
   const {
@@ -113,9 +109,10 @@ export async function initializeSessionRun({
   });
 
   assertNoHookRuntimeIdentityFields(resolvedRunConfig, "runConfig");
-  const turnScopeId = normalizedRequestTurnScopeId;
+  assertRunConfigPreferences(resolvedRunConfig);
+  const turnScopeId = requestedTurnScopeId;
   const { presentationMessageId } = requireAcceptedRunIdentity(resolvedRunConfig);
-  const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
+  const resumeFromStoppedSnapshot = resolvedRunConfig.resumeFromStoppedSnapshot === true;
   const lifecycle = createAgentLifecycleMachine({
     eventListener: runtimeEventListener,
     now,
@@ -124,18 +121,18 @@ export async function initializeSessionRun({
       dialogProcessId,
       turnScopeId,
       resumeFromStoppedSnapshot,
-      executionId: text(resolvedRunConfig.executionId),
-      executionKind: text(resolvedRunConfig.executionKind),
+      executionId: resolvedRunConfig.executionId,
+      executionKind: resolvedRunConfig.executionKind,
       parentExecutionId: text(resolvedRunConfig.parentExecutionId),
-      rootExecutionId: text(resolvedRunConfig.rootExecutionId),
+      rootExecutionId: resolvedRunConfig.rootExecutionId,
       origin: isPlainObject(resolvedRunConfig.origin) ? { ...resolvedRunConfig.origin } : {},
       stage: text(resolvedRunConfig.stage),
     },
   });
   lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));
   if (
-    !text(resolvedRunConfig?.runtimeModel) &&
-    !text(resolvedRunConfig?.selectedModel) &&
+    !text(resolvedRunConfig.runtimeModel) &&
+    !text(resolvedRunConfig.selectedModel) &&
     text(currentSessionModelAlias)
   ) {
     resolvedRunConfig.runtimeModel = text(currentSessionModelAlias);

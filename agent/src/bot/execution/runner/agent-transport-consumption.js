@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { text } from "@noobot/shared/value";
 
 const clean = (value = "") => text(value);
@@ -47,12 +46,10 @@ function pluginModelConfigKeys(pluginModelConfig) {
 
 function summarizePreferences(resolvedRunConfig) {
   return {
-    allowUserInteraction: resolvedRunConfig?.allowUserInteraction !== false,
-    sanitizeOutput: resolvedRunConfig?.sanitizeOutput !== false,
-    streaming: Object.hasOwn(resolvedRunConfig || {}, "streaming")
-      ? resolvedRunConfig.streaming === true
-      : null,
-    confirmationLevel: normalizeSecurityRiskLevel(resolvedRunConfig?.safeConfirmLevel),
+    allowUserInteraction: resolvedRunConfig.allowUserInteraction,
+    sanitizeOutput: resolvedRunConfig.sanitizeOutput,
+    streaming: resolvedRunConfig.streaming,
+    safeConfirmLevel: resolvedRunConfig.safeConfirmLevel,
     locale: clean(resolvedRunConfig?.locale),
     scenario: clean(resolvedRunConfig?.scenario),
     selectedModel: clean(resolvedRunConfig?.selectedModel),

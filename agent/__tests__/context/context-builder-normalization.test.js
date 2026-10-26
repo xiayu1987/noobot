@@ -12,6 +12,7 @@ import { buildContextMessageBlocks } from "../../src/context/assembly/message-bu
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 import { createTestBotManager, testHeadlessStartupContext } from "../helpers/test-bot-manager.js";
 import { TEST_RUNTIME_IDENTITY } from "../helpers/test-runtime-context.js";
+import { TEST_RUN_PREFERENCES } from "../helpers/run-preferences.js";
 
 function systemRuntimeIdentity(overrides) {
   return { ...TEST_RUNTIME_IDENTITY, ...overrides };
@@ -40,6 +41,7 @@ function createContextSessionManager() {
 
 function executionRunConfig(turnScopeId, extra = {}) {
   return {
+    ...TEST_RUN_PREFERENCES,
     hookManager: null,
     executionId: `run:${turnScopeId}`,
     presentationMessageId: `message:${turnScopeId}`,
@@ -553,6 +555,7 @@ test("buildSystemRuntime projects the explicit isSuperUser identity fact", () =>
     identity: systemRuntimeIdentity({ userId: "super-root-user", dialogProcessId: "dp-super" }),
     botManager: createTestBotManager(),
     isSuperUser: true,
+    runConfig: { ...TEST_RUN_PREFERENCES },
   });
 
   assert.equal(runtime.isSuperUser, true);
@@ -577,6 +580,7 @@ test("buildSystemRuntime injects redacted desktop dependency source summary", ()
   const runtime = buildSystemRuntime({
     identity: systemRuntimeIdentity({ userId: "u1", sessionId: "s1", dialogProcessId: "dp-deps" }),
     isSuperUser: false,
+    runConfig: { ...TEST_RUN_PREFERENCES },
     botManager: {
       startupContext: {
         ...testHeadlessStartupContext,
@@ -623,6 +627,7 @@ test("buildSystemRuntime ignores runConfig identity overrides", () => {
     botManager: createTestBotManager(),
     isSuperUser: false,
     runConfig: {
+      ...TEST_RUN_PREFERENCES,
       systemRuntimePatch: { isSuperUser: true, userId: "super-root-user" },
     },
   });

@@ -6,11 +6,7 @@
 import { createExecutionAbortReason, EXECUTION_ABORT_TYPE } from "@noobot/session-protocol";
 import { attachRunTransport, registerActiveRun } from "../run-registry.js";
 import { recordServiceWebSocketLifecycle } from "../runtime-events.js";
-import {
-  resolveEffectiveRunTimeoutMs,
-  resolveEffectiveStreamingEnabled,
-  summarizePluginConfig,
-} from "../run-config.js";
+import { resolveEffectiveRunTimeoutMs, summarizePluginConfig } from "../run-config.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -91,7 +87,7 @@ export function reserveRun(context, run, onRunBound) {
   return runHandle;
 }
 
-export async function activateRun(context, command, run, accepted) {
+export async function activateRun(context, command, run) {
   const runMeta = createRunMeta(context, command, run);
   context.state.currentRunMeta = runMeta;
   const runHandle = registerActiveRun(
@@ -105,10 +101,5 @@ export async function activateRun(context, command, run, accepted) {
     runConfig: run.normalizedRunConfig,
   });
   if (!context.state.currentAbortSignal.aborted) scheduleTimeout(context, runMeta, runTimeoutMs);
-  const textStreamingEnabled = await resolveEffectiveStreamingEnabled({
-    bot: accepted.activeBot,
-    userId: run.userId,
-    runConfig: run.normalizedRunConfig,
-  });
-  return { runTimeoutMs, runMeta, runHandle, textStreamingEnabled };
+  return { runTimeoutMs, runMeta, runHandle };
 }

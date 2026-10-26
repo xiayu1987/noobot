@@ -33,8 +33,7 @@ test("authoritative final event owns generated attachment envelopes before persi
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-1",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   initializeCurrentTurnMessageEventProjection(runtime);
   beginAssistantMessageEventStream(runtime, { turn: 0 });
@@ -183,8 +182,7 @@ test("authoritative final completion retains classified checkpoint call-result p
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "final-presentation",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   initializeCurrentTurnMessageEventProjection(runtime);
   beginAssistantMessageEventStream(runtime, { turn: 0 });

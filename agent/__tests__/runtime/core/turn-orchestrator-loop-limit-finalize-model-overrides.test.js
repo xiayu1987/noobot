@@ -75,8 +75,6 @@ function createModelState(modelPort, defaultModelSpec = null) {
   );
   const modelState = {
     modelPort,
-    activeModelName: String(resolvedModelSpec?.model || "test-model"),
-    activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
     runtime: createTestRuntimeContext({
       sessionManager: createCanonicalMessageEventSessionManager(),
       systemRuntime: { config: { safeConfirm: true } },

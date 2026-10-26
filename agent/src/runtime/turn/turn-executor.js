@@ -16,10 +16,8 @@ import {
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
-import {
-  createStreamingCallbacks,
-  resolveCurrentModelInfo,
-} from "../../models/runtime/model-manager.js";
+import { createStreamingCallbacks } from "../../models/runtime/model-manager.js";
+import { resolveCurrentModelInfo } from "../../models/runtime/current-model-info.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
@@ -103,8 +101,8 @@ function syncMessagesFromBlocks(runtime) {
   return modelContext.messages;
 }
 
-function requestedStreaming(modelState = {}) {
-  return modelState?.runtime?.runConfig?.streaming === true;
+function requestedStreaming(modelState) {
+  return modelState.runtime.runConfig.streaming;
 }
 
 async function invokeNoToolsModel({

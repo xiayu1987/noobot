@@ -10,6 +10,7 @@ import { isFunction, text } from "@noobot/shared/value";
 const RETIRED_CONFIG_PATHS = Object.freeze(
   [
     ["configParams"],
+    ["streaming"],
     ["attachments", "attachment_models"],
     ["attachments", "limits"],
     ["attachments", "storage"],

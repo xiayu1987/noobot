@@ -117,7 +117,7 @@ function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
     now: text(dynamicInfo.now),
     caller: text(dynamicInfo.caller) || "user",
     config: {
-      allowUserInteraction: config.allowUserInteraction !== false,
+      allowUserInteraction: config.allowUserInteraction,
     },
   };
 }

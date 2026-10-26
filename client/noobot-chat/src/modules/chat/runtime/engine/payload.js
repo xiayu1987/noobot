@@ -5,10 +5,6 @@
  */
 import { normalizeTrimmedString } from "./utils.js";
 import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
-import {
-  SECURITY_RISK_LEVEL,
-  normalizeSecurityRiskLevel,
-} from "@noobot/security-assessment-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 
 function normalizeSelectedPluginKeys(selectedPlugins) {
@@ -17,7 +13,6 @@ function normalizeSelectedPluginKeys(selectedPlugins) {
     .filter(Boolean);
 }
 
-const trueUnlessFalse = (source) => source.value !== false;
 const plainObjectOrNull = (source) => (isPlainObject(source.value) ? source.value : null);
 
 function resolveCommandType({ continueFromStopped, reuseExistingUserTurn }) {
@@ -33,15 +28,12 @@ function buildPreferences(options) {
   const pluginModelConfig = plainObjectOrNull(options.pluginModelConfig);
   const summaryPolicy = plainObjectOrNull(options.summaryPolicy);
   return {
-    allowUserInteraction: trueUnlessFalse(options.allowUserInteraction),
-    safeConfirm: trueUnlessFalse(options.safeConfirm),
-    sanitizeOutput: trueUnlessFalse(options.sanitizeOutput),
-    confirmationLevel: normalizeSecurityRiskLevel(
-      options.safeConfirmLevel.value,
-      SECURITY_RISK_LEVEL.LOW,
-    ),
+    allowUserInteraction: options.allowUserInteraction.value,
+    safeConfirm: options.safeConfirm.value,
+    sanitizeOutput: options.sanitizeOutput.value,
+    safeConfirmLevel: options.safeConfirmLevel.value,
     streaming: options.requestedTextStreaming,
-    frontendThresholdsEnabled: options.frontendThresholdsEnabled.value === true,
+    frontendThresholdsEnabled: options.frontendThresholdsEnabled.value,
     ...(scenario ? { scenario } : {}),
     ...(selectedModel ? { selectedModel } : {}),
     ...(memoryModel ? { memoryModel } : {}),

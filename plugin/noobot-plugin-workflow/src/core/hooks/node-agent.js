@@ -25,12 +25,7 @@ import {
   buildWorkflowInputAttachmentSystemMessage,
   buildWorkflowUpstreamAttachmentSystemMessage,
 } from "./node-upstream-messages.js";
-import {
-  hasOwnObjectKey,
-  isWorkflowAbortError,
-  throwIfWorkflowAborted,
-  withTimeout,
-} from "./runtime.js";
+import { isWorkflowAbortError, throwIfWorkflowAborted, withTimeout } from "./runtime.js";
 import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
@@ -226,11 +221,7 @@ function buildWorkflowNodeRunConfigPatch(ctx) {
     selectedPlugins.includes("harness") ||
     harness.enabled === true ||
     text(harness.mode).toLowerCase() === "on";
-  const patch = {
-    ...(hasOwnObjectKey(parentRunConfig, "streaming")
-      ? { streaming: parentRunConfig.streaming }
-      : {}),
-  };
+  const patch = { streaming: parentRunConfig.streaming };
   if (!harnessEnabled) return patch;
   return {
     ...patch,
@@ -266,7 +257,7 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     rootExecutionId: runIdentity.rootExecutionId,
     origin: createWorkflowNodeOrigin({
       workflowRunId: identity.workflowRunId,
-      workflowNodeExecutionId: identity.nodeExecutionId,
+      nodeExecutionId: identity.nodeExecutionId,
     }),
     nodeExecutionId: identity.nodeExecutionId,
     commandId: identity.commandId,

@@ -148,10 +148,8 @@ export function createProtocolTestCommand(payload = {}) {
     preferences: {
       allowUserInteraction: config.allowUserInteraction,
       sanitizeOutput: config.sanitizeOutput,
-      ...(Object.prototype.hasOwnProperty.call(config, "streaming")
-        ? { streaming: config.streaming }
-        : {}),
-      confirmationLevel: config.safeConfirmLevel,
+      streaming: config.streaming,
+      safeConfirmLevel: config.safeConfirmLevel,
       locale: config.locale,
       scenario: config.scenario,
       selectedModel: config.selectedModel,

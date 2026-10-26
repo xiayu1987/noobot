@@ -132,13 +132,42 @@ test("confirmation policy covers the complete risk and preference matrix", () =>
     high: [false, true, true, true],
     critical: [true, true, true, true],
   };
-  for (const confirmationLevel of levels) {
+  for (const safeConfirmLevel of levels) {
     levels.forEach((riskLevel, index) => {
       assert.equal(
-        shouldRequireSecurityConfirmation({ confirmationLevel, riskLevel }),
-        expected[confirmationLevel][index],
+        shouldRequireSecurityConfirmation({ safeConfirm: true, safeConfirmLevel, riskLevel }),
+        expected[safeConfirmLevel][index],
       );
     });
   }
-  assert.equal(shouldRequireSecurityConfirmation({ enabled: false, riskLevel: "critical" }), false);
+  assert.equal(
+    shouldRequireSecurityConfirmation({
+      safeConfirm: false,
+      safeConfirmLevel: "low",
+      riskLevel: "critical",
+    }),
+    false,
+  );
+  assert.throws(
+    () => shouldRequireSecurityConfirmation({ safeConfirmLevel: "low", riskLevel: "low" }),
+    /safeConfirm must be boolean/,
+  );
+  assert.throws(
+    () =>
+      shouldRequireSecurityConfirmation({
+        safeConfirm: true,
+        safeConfirmLevel: "LOW",
+        riskLevel: "low",
+      }),
+    /unsupported safeConfirmLevel/,
+  );
+  assert.throws(
+    () =>
+      shouldRequireSecurityConfirmation({
+        safeConfirm: true,
+        safeConfirmLevel: "low",
+        riskLevel: "",
+      }),
+    /unsupported riskLevel/,
+  );
 });

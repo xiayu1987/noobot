@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
 import { createModelContext } from "@noobot/context-protocol";
 import {
   readContextMessageValue,
@@ -133,7 +134,7 @@ test("runSession persists stopped model message snapshot from runtime candidate 
     caller: SESSION_CALLER.USER,
   });
   const runtime = Object.assign(createTestRuntimeContext(), {
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: activeContextFor({
       system: [{ type: "system", content: "system" }],
       history: [],
@@ -182,7 +183,7 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   );
 
   const loaded = await loadStoppedModelMessageSnapshot({
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     identity: {
       userId: "u1",
       sessionId: "session-used",
@@ -228,7 +229,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
     caller: SESSION_CALLER.USER,
   });
   const runtime = Object.assign(createTestRuntimeContext(), {
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: activeContextFor({
       system: [{ type: "system", content: "system second" }],
       history: [{ type: "ai", content: "previous assistant" }],
@@ -269,7 +270,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
   );
 
   const loaded = await loadStoppedModelMessageSnapshot({
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     identity: {
       userId: "u1",
       sessionId: "session-used",
@@ -303,7 +304,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   });
   const abortController = new AbortController();
   const runtime = Object.assign(createTestRuntimeContext(), {
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: activeContextFor({
       system: [{ type: "system", content: "system" }],
       history: [],
@@ -355,7 +356,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   );
 
   const loaded = await loadStoppedModelMessageSnapshot({
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     identity: {
       userId: "u1",
       sessionId: "session-used",
@@ -411,7 +412,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
     },
   });
   const runtime = Object.assign(createTestRuntimeContext(), {
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: modelContext,
     stoppedModelMessageSnapshotCandidate: {
       userId: "u1",
@@ -471,7 +472,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
   const stoppedEvent = findStoppedLifecycleEvent(events);
   const identity = stoppedEvent?.data?.stoppedSnapshotPersistence?.identity;
   const loaded = await loadStoppedModelMessageSnapshot({
-    globalConfig: { workspaceRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     identity,
   });
   const restoredInterjections = loaded.messageBlocks.incremental.filter(

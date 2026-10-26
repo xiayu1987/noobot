@@ -11,7 +11,7 @@ import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { requireActiveModelContext } from "../active-model-context.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
-import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
+import { resolveCurrentModelInfo } from "../../models/runtime/current-model-info.js";
 
 export async function commitNoToolsTurnState({
   modelState,

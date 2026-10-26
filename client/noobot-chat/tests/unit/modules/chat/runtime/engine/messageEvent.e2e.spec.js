@@ -100,8 +100,10 @@ describe("authoritative message event end-to-end fidelity", () => {
     bindAssistantMessageEventStream(runtime, {
       presentationMessageId,
       parentSessionId: "parent-session",
-      workflowRunId: "workflow-run-1",
-      nodeExecutionId: "node-execution-1",
+      workflowNodeOwnership: {
+        workflowRunId: "workflow-run-1",
+        nodeExecutionId: "node-execution-1",
+      },
     });
     const modelMessageId = beginAssistantMessageEventStream(runtime, { turn: 1 });
     expect(modelMessageId).not.toBe(presentationMessageId);

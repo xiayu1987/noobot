@@ -141,8 +141,7 @@ export function prepareTestTurnExecution(modelState, loopState, presentationMess
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: identity.presentationMessageId,
     parentSessionId: identity.parentSessionId,
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   bindActiveTurnIdentity(runtime.activeMessageContext, identity);
   modelState.agentContext = createTestAgentExecutionScope(runtime, {

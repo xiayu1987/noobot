@@ -6,6 +6,7 @@
 import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -299,7 +300,10 @@ test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager inste
 test("global plugin defaults do not activate a plugin absent from selectedPlugins", () => {
   const tempRoot = "/tmp/noobot-global-plugin-test";
   const engine = createTestSessionExecutionEngine({
-    globalConfig: { plugins: { harness: { enabled: true, mode: "on", trace: false } } },
+    globalConfig: {
+      ...TEST_MODEL_GLOBAL_CONFIG,
+      plugins: { harness: { enabled: true, mode: "on", trace: false } },
+    },
     workspaceService: createWorkspaceService(tempRoot),
   });
 
@@ -395,7 +399,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   });
 
   const engine = createTestSessionExecutionEngine({
-    globalConfig: { workspaceRoot: tempRoot },
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot: tempRoot },
     session,
     memory: {
       async captureDialogToShortMemory() {},

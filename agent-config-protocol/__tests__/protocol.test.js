@@ -437,6 +437,7 @@ test("current config migration removes every retired config path and prunes empt
     multimodal: {
       parsing: { default_models: { image: "vision" } },
     },
+    streaming: true,
     session: {
       use_last_running_task_range: false,
       use_last_completed_task_range: false,
@@ -479,6 +480,7 @@ test("current config migration removes every retired config path and prunes empt
   });
   assert.deepEqual(migrateConfigFileToCurrentProtocol(migrated), migrated);
   assert.equal(Object.hasOwn(migrated, "attachments"), false);
+  assert.equal(Object.hasOwn(migrated, "streaming"), false);
 });
 
 test("current config migration preserves active tool and runtime configuration", () => {

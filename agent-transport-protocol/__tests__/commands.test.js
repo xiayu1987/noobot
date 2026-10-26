@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AGENT_COMMAND,
+  assertRunConfigPreferences,
   createInteractionResponseCommand,
   createTurnInterjectionCommand,
   createTurnRunCommand,
@@ -295,6 +296,46 @@ test("run preferences preserve an explicit disabled safety confirmation", () => 
 
   assert.equal(command.preferences.safeConfirm, false);
   assert.equal(parseAgentCommand(command), command);
+});
+
+test("run preferences carry safeConfirmLevel and reject invalid levels", () => {
+  const command = createTurnRunCommand({
+    commandType: AGENT_COMMAND.SEND,
+    identity: { sessionId: "session-1", turnScopeId: "turn-confirm-level" },
+    input: { message: "hello", attachments: [] },
+    preferences: { safeConfirmLevel: "HIGH" },
+    presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
+    concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 0 },
+  });
+  assert.equal(command.preferences.safeConfirmLevel, "high");
+  command.preferences.safeConfirmLevel = "HIGH";
+  assert.throws(() => parseAgentCommand(command), /invalid_safe_confirm_level/);
+  command.preferences.safeConfirmLevel = "high";
+  command.preferences.confirmationLevel = "high";
+  assert.throws(() => parseAgentCommand(command), /unknown_preferences_field:confirmationLevel/);
+});
+
+test("runConfig preference contract requires every execution preference explicitly", () => {
+  const runConfig = {
+    allowUserInteraction: true,
+    safeConfirm: true,
+    sanitizeOutput: false,
+    frontendThresholdsEnabled: false,
+    safeConfirmLevel: "medium",
+    selectedPlugins: [],
+  };
+  assert.equal(assertRunConfigPreferences(runConfig), runConfig);
+  assert.throws(() => assertRunConfigPreferences(null), /run_config_not_object/);
+  const { safeConfirm: _omitted, ...missingFlag } = runConfig;
+  assert.throws(() => assertRunConfigPreferences(missingFlag), /invalid_safeConfirm/);
+  assert.throws(
+    () => assertRunConfigPreferences({ ...runConfig, safeConfirmLevel: undefined }),
+    /invalid_safe_confirm_level/,
+  );
+  assert.throws(
+    () => assertRunConfigPreferences({ ...runConfig, streaming: "yes" }),
+    /invalid_streaming/,
+  );
 });
 
 test("run transport carries connector selection only as new Session creation state", () => {

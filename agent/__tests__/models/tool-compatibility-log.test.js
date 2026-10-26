@@ -17,8 +17,7 @@ import {
 test("buildToolCompatibilityLogLine includes model and tools", () => {
   const line = buildToolCompatibilityLogLine({
     modelState: {
-      activeModelAlias: "codex",
-      activeModelName: "gpt-5.3-codex",
+      activeModelSpec: { alias: "codex", model: "gpt-5.3-codex" },
     },
     runtime: {
       userId: "primary-user",
@@ -40,8 +39,7 @@ test("appendToolCompatibilityLog writes file under workspace root", async () => 
   const root = await mkdtemp(path.join(tmpdir(), "noobot-workspace-"));
   const logPath = await appendToolCompatibilityLog({
     modelState: {
-      activeModelAlias: "codex",
-      activeModelName: "gpt-5.3-codex",
+      activeModelSpec: { alias: "codex", model: "gpt-5.3-codex" },
     },
     runtime: { globalConfig: { workspaceRoot: root } },
     event: "tool_binding_adapter_dropped_tools",

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TEST_RUN_PREFERENCES } from "../../helpers/run-preferences.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -59,7 +60,7 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
     runConfig: { hookManager: null, executionId, presentationMessageId },
     identity,
     systemRuntime: {
-      config: {},
+      config: { ...TEST_RUN_PREFERENCES },
       isSuperUser: false,
       sessionDir: path.join(basePath, "runtime", "session", identity.sessionId),
       persistenceScope: null,

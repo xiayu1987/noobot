@@ -339,8 +339,7 @@ function bindPresentation(runtime) {
   bindAssistantMessageEventStream(runtime, {
     presentationMessageId: "presentation-test",
     parentSessionId: "",
-    workflowRunId: "",
-    nodeExecutionId: "",
+    workflowNodeOwnership: null,
   });
   initializeCurrentTurnMessageEventProjection(runtime);
 }

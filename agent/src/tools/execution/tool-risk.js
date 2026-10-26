@@ -104,11 +104,11 @@ export async function confirmToolOperation({
   const effectiveRiskLevel = getToolRiskLevel(
     assessToolOperation({ toolName, declaredRiskLevel, serverEvidence }),
   );
-  const config = runtime?.systemRuntime?.config || {};
+  const { config } = runtime.systemRuntime;
   if (
     !shouldRequireSecurityConfirmation({
-      enabled: config.safeConfirm,
-      confirmationLevel: config.safeConfirmLevel,
+      safeConfirm: config.safeConfirm,
+      safeConfirmLevel: config.safeConfirmLevel,
       riskLevel: effectiveRiskLevel,
     })
   )

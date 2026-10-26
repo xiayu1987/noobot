@@ -365,7 +365,7 @@ function toolInvocationConfig(state) {
 }
 
 async function sanitizeToolOutput(state) {
-  if (state.runtime?.systemRuntime?.config?.sanitizeOutput === false) return;
+  if (!state.runtime.systemRuntime.config.sanitizeOutput) return;
   state.toolResultText = await sanitizeToolResultText(state.toolResultText);
 }
 

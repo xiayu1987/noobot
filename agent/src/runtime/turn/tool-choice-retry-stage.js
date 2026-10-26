@@ -5,7 +5,7 @@
  */
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { emitEvent } from "../../events/index.js";
-import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
+import { resolveCurrentModelInfo } from "../../models/runtime/current-model-info.js";
 import { isRequiredToolChoiceUnsupportedError } from "./tool-choice-strategy.js";
 
 export function applyRequiredToolChoiceUnsupportedRetryDecision({

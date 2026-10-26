@@ -51,8 +51,8 @@ export function isExecutionQueryTargetValid(
 
 export const WORKFLOW_NODE_ORIGIN_TYPE = "workflow_node";
 
-export function createWorkflowNodeOrigin({ workflowRunId, workflowNodeExecutionId }) {
-  const origin = { type: WORKFLOW_NODE_ORIGIN_TYPE, workflowRunId, workflowNodeExecutionId };
+export function createWorkflowNodeOrigin({ workflowRunId, nodeExecutionId }) {
+  const origin = { type: WORKFLOW_NODE_ORIGIN_TYPE, workflowRunId, nodeExecutionId };
   projectWorkflowNodeOwnership(origin);
   return origin;
 }
@@ -64,16 +64,14 @@ export function projectWorkflowNodeOwnership(origin) {
     });
   }
   if (origin.type !== WORKFLOW_NODE_ORIGIN_TYPE) return null;
-  const { workflowRunId, workflowNodeExecutionId } = origin;
-  if (!isCanonicalText(workflowRunId) || !isCanonicalText(workflowNodeExecutionId)) {
+  const { workflowRunId, nodeExecutionId } = origin;
+  if (!isCanonicalText(workflowRunId) || !isCanonicalText(nodeExecutionId)) {
     throw Object.assign(
-      new TypeError(
-        "workflow node origin requires canonical workflowRunId and workflowNodeExecutionId",
-      ),
+      new TypeError("workflow node origin requires canonical workflowRunId and nodeExecutionId"),
       { code: "EXECUTION_ORIGIN_INVALID" },
     );
   }
-  return { workflowRunId, nodeExecutionId: workflowNodeExecutionId };
+  return { workflowRunId, nodeExecutionId };
 }
 
 export function deriveAgentExecutionId({ turnScopeId }) {

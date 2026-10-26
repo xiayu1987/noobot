@@ -7,6 +7,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
+import { resolveCurrentModelInfo } from "../runtime/current-model-info.js";
 
 export function buildToolCompatibilityLogLine({ modelState, runtime, event, tools }) {
   return JSON.stringify({
@@ -15,8 +16,7 @@ export function buildToolCompatibilityLogLine({ modelState, runtime, event, tool
     userId: text(runtime?.systemRuntime?.userId),
     sessionId: text(runtime?.systemRuntime?.sessionId),
     parentSessionId: normalizeParentSessionId(runtime?.systemRuntime?.parentSessionId),
-    modelAlias: text(modelState?.activeModelAlias),
-    modelName: text(modelState?.activeModelName),
+    ...resolveCurrentModelInfo(modelState),
     tools: Array.isArray(tools) ? tools.map((t) => text(t)).filter(Boolean) : [],
   });
 }

@@ -8,6 +8,8 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runAgentTurn } from "../../../src/runtime/engine.js";
+import { initializeAgentModelHost } from "../../../src/runtime/model-port-host.js";
+import { getAgentContextEnvelope } from "../../../src/context/agent-context-accessor.js";
 import { createHookManager } from "@noobot/hook-protocol";
 
 test("runAgentTurn completes terminal hooks before the runner seals a stopped snapshot", async () => {
@@ -30,20 +32,6 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
     id: "test.engine-stop.on-error",
   });
   const runtime = createTestRuntimeContext({
-    globalConfig: {
-      defaultProvider: "test_model",
-      providers: {
-        test_model: {
-          enabled: true,
-          operatorId: "openai",
-          model: "test-model",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          api_key: "test-key",
-          baseUrl: "http://localhost/test",
-        },
-      },
-    },
     userConfig: {},
     runConfig: { turnScopeId: "turn-engine-stop", hookManager },
     abortSignal: stopController.signal,
@@ -75,6 +63,10 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       runId: "r-1",
       presentationMessageId: "m-1",
     },
+  });
+  initializeAgentModelHost({
+    runtime,
+    invocationIdentity: getAgentContextEnvelope(agentContext).identity,
   });
 
   await assert.rejects(

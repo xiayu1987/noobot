@@ -11,11 +11,12 @@ import assert from "node:assert/strict";
 import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
 
 import { createStateBuilder } from "../../../src/runtime/state-builder.js";
+import { initializeAgentModelHost } from "../../../src/runtime/model-port-host.js";
+import { getAgentContextEnvelope } from "../../../src/context/agent-context-accessor.js";
 
 function createRuntime({ eventListener }) {
   return createTestRuntimeContext({
     eventListener,
-    globalConfig: {},
     userConfig: {},
     runConfig: { hookManager: null },
     identity: {
@@ -75,7 +76,6 @@ test("state-builder canonicalizes model messages and block views through one sto
       messages: [system, history, currentUserForMessages],
     }),
     normalizeSystemRuntimeCountersFn: () => {},
-    resolveEffectiveModelSpecFn: () => ({ model: "test-model", alias: "test" }),
     resolvePhaseSummaryLoopTurnsFn: () => 0,
   });
 
@@ -93,6 +93,10 @@ test("state-builder canonicalizes model messages and block views through one sto
       runId: "r-1",
       presentationMessageId: "m-1",
     },
+  });
+  initializeAgentModelHost({
+    runtime,
+    invocationIdentity: getAgentContextEnvelope(agentContext).identity,
   });
 
   buildAgentState({
